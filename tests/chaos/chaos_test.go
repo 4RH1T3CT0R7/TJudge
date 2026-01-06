@@ -4,10 +4,12 @@
 package chaos
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -161,7 +163,7 @@ func TestChaos_ConnectionRecovery(t *testing.T) {
 		// Simulate network issues by making requests with very short timeout
 		shortClient := &http.Client{Timeout: 1 * time.Millisecond}
 		for i := 0; i < 10; i++ {
-			shortClient.Get(config.APIURL + "/health")
+			_, _ = shortClient.Get(config.APIURL + "/health")
 		}
 
 		// Wait a bit
@@ -299,7 +301,6 @@ func TestChaos_ResourceExhaustion(t *testing.T) {
 
 	t.Run("ConnectionExhaustion", func(t *testing.T) {
 		// Create many clients to exhaust connections
-		var clients []*http.Client
 		var responses []*http.Response
 
 		for i := 0; i < 200; i++ {
@@ -310,7 +311,6 @@ func TestChaos_ResourceExhaustion(t *testing.T) {
 					MaxIdleConnsPerHost: 1,
 				},
 			}
-			clients = append(clients, client)
 
 			resp, err := client.Get(config.APIURL + "/health")
 			if err == nil {
@@ -443,9 +443,9 @@ func TestChaos_ErrorInjection(t *testing.T) {
 			string([]byte{0x00, 0x01, 0x02}), // Binary garbage
 		}
 
-		for _, body := range malformedBodies {
+		for _, malformed := range malformedBodies {
 			req, _ := http.NewRequest("POST", config.APIURL+"/api/v1/auth/login",
-				nil)
+				strings.NewReader(malformed))
 			req.Header.Set("Content-Type", "application/json")
 
 			resp, err := client.Do(req)
@@ -468,7 +468,7 @@ func TestChaos_ErrorInjection(t *testing.T) {
 		}
 
 		req, _ := http.NewRequest("POST", config.APIURL+"/api/v1/auth/register",
-			nil)
+			bytes.NewReader(largePayload))
 		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
@@ -505,11 +505,11 @@ func TestChaos_ConcurrentStateMutations(t *testing.T) {
 				defer wg.Done()
 
 				username := fmt.Sprintf("chaos_user_%d_%d", timestamp, idx)
-				body := fmt.Sprintf(`{"username":"%s","email":"%s@test.com","password":"SecurePass123!"}`,
+				reqBody := fmt.Sprintf(`{"username":"%s","email":"%s@test.com","password":"SecurePass123!"}`,
 					username, username)
 
 				req, _ := http.NewRequest("POST", config.APIURL+"/api/v1/auth/register",
-					nil)
+					strings.NewReader(reqBody))
 				req.Header.Set("Content-Type", "application/json")
 
 				resp, err := client.Do(req)
