@@ -209,18 +209,8 @@ func (c *Config) Validate() error {
 
 // Load загружает конфигурацию из переменных окружения
 func Load() (*Config, error) {
-	// Загружаем .env файл если существует
-	if err := godotenv.Load(); err != nil {
-		fmt.Printf("[CONFIG DEBUG] Failed to load .env: %v\n", err)
-		fmt.Printf("[CONFIG DEBUG] Working directory: ")
-		if wd, err := os.Getwd(); err == nil {
-			fmt.Println(wd)
-		}
-	} else {
-		fmt.Println("[CONFIG DEBUG] .env loaded successfully")
-	}
-	fmt.Printf("[CONFIG DEBUG] DB_HOST=%s DB_USER=%s DB_NAME=%s\n",
-		os.Getenv("DB_HOST"), os.Getenv("DB_USER"), os.Getenv("DB_NAME"))
+	// Загружаем .env файл если существует (игнорируем ошибку если файла нет)
+	_ = godotenv.Load()
 
 	cfg := &Config{
 		Server: ServerConfig{
