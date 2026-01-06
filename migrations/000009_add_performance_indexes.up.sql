@@ -37,8 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_matches_tournament_created ON matches(tournament_
 -- Rating history indexes
 CREATE INDEX IF NOT EXISTS idx_rating_history_program ON rating_history(program_id);
 CREATE INDEX IF NOT EXISTS idx_rating_history_tournament ON rating_history(tournament_id);
-CREATE INDEX IF NOT EXISTS idx_rating_history_program_date ON rating_history(program_id, changed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_rating_history_tournament_date ON rating_history(tournament_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rating_history_program_date ON rating_history(program_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rating_history_tournament_date ON rating_history(tournament_id, created_at DESC);
 
 -- Add comments for documentation
 COMMENT ON INDEX idx_tournaments_status_game IS 'Composite index for filtering tournaments by status and game type';
