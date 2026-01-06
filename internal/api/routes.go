@@ -7,6 +7,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/web"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -20,6 +21,8 @@ type Server struct {
 	tournamentHandler *handlers.TournamentHandler
 	programHandler    *handlers.ProgramHandler
 	matchHandler      *handlers.MatchHandler
+	gameHandler       *handlers.GameHandler
+	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
@@ -34,6 +37,8 @@ func NewServer(
 	tournamentHandler *handlers.TournamentHandler,
 	programHandler *handlers.ProgramHandler,
 	matchHandler *handlers.MatchHandler,
+	gameHandler *handlers.GameHandler,
+	teamHandler *handlers.TeamHandler,
 	wsHandler *handlers.WebSocketHandler,
 	authService middleware.AuthService,
 	rateLimiter middleware.RateLimiter,
@@ -47,6 +52,8 @@ func NewServer(
 		tournamentHandler: tournamentHandler,
 		programHandler:    programHandler,
 		matchHandler:      matchHandler,
+		gameHandler:       gameHandler,
+		teamHandler:       teamHandler,
 		wsHandler:         wsHandler,
 		authService:       authService,
 		rateLimiter:       rateLimiter,
@@ -125,6 +132,8 @@ func (s *Server) setupRoutes() {
 			r.Get("/{id}", s.tournamentHandler.Get)
 			r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
 			r.Get("/{id}/matches", s.tournamentHandler.GetMatches)
+			r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
+			r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
 
 			// Защищённые маршруты
 			r.Group(func(r chi.Router) {
@@ -135,6 +144,52 @@ func (s *Server) setupRoutes() {
 				r.Post("/{id}/start", s.tournamentHandler.Start)
 				r.Post("/{id}/complete", s.tournamentHandler.Complete)
 				r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
+				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
+
+				// Админские маршруты для турниров
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireAdmin())
+					r.Post("/{id}/games", s.gameHandler.AddGameToTournament)
+					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
+				})
+			})
+		})
+
+		// Game routes
+		r.Route("/games", func(r chi.Router) {
+			// Публичные маршруты
+			r.Get("/", s.gameHandler.List)
+			r.Get("/{id}", s.gameHandler.Get)
+			r.Get("/name/{name}", s.gameHandler.GetByName)
+
+			// Админские маршруты
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(middleware.RequireAdmin())
+
+				r.Post("/", s.gameHandler.Create)
+				r.Put("/{id}", s.gameHandler.Update)
+				r.Delete("/{id}", s.gameHandler.Delete)
+			})
+		})
+
+		// Team routes
+		r.Route("/teams", func(r chi.Router) {
+			r.Use(middleware.Auth(s.authService, s.log))
+
+			r.Post("/", s.teamHandler.Create)
+			r.Post("/join", s.teamHandler.JoinByCode)
+			r.Get("/{id}", s.teamHandler.Get)
+			r.Put("/{id}", s.teamHandler.UpdateName)
+			r.Get("/{id}/members", s.teamHandler.GetMembers)
+			r.Post("/{id}/leave", s.teamHandler.Leave)
+			r.Delete("/{id}/members/{userId}", s.teamHandler.RemoveMember)
+			r.Get("/{id}/invite", s.teamHandler.GetInviteLink)
+
+			// Админские маршруты
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireAdmin())
+				r.Delete("/{id}", s.teamHandler.Delete)
 			})
 		})
 
@@ -164,6 +219,9 @@ func (s *Server) setupRoutes() {
 			r.Get("/stats", s.wsHandler.GetStats)
 		})
 	})
+
+	// Serve frontend static files (SPA with fallback to index.html)
+	s.router.Handle("/*", web.Handler())
 }
 
 // Handler возвращает HTTP handler

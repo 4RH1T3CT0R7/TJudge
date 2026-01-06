@@ -75,12 +75,16 @@ services:
       - LOG_FORMAT=json
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
+      - PROGRAMS_PATH=/data/programs
+      - BASE_URL=http://localhost:8080
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - programs_data:/data/programs
     networks:
       - tjudge-network
     healthcheck:
@@ -126,6 +130,7 @@ services:
       - LOG_FORMAT=json
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
+      - PROGRAMS_PATH=/data/programs
     depends_on:
       postgres:
         condition: service_healthy
@@ -134,6 +139,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - programs_data:/data/programs
     networks:
       - tjudge-network
     deploy:
@@ -300,6 +306,7 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
+  programs_data:
 
 networks:
   tjudge-network:

@@ -13,6 +13,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/domain/game"
+	"github.com/bmstu-itstech/tjudge/internal/domain/team"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
@@ -86,6 +88,8 @@ func main() {
 	programRepo := db.NewProgramRepository(database)
 	tournamentRepo := db.NewTournamentRepository(database)
 	matchRepo := db.NewMatchRepository(database)
+	gameRepo := db.NewGameRepository(database)
+	teamRepo := db.NewTeamRepository(database)
 
 	// Инициализируем кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
@@ -121,11 +125,16 @@ func main() {
 		log,
 	)
 
+	gameService := game.NewService(gameRepo, log)
+	teamService := team.NewService(teamRepo, tournamentRepo, log)
+
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
 	programHandler := handlers.NewProgramHandler(programRepo, log)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, log)
+	gameHandler := handlers.NewGameHandler(gameService, log)
+	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 
 	// Создаём API сервер
@@ -134,6 +143,8 @@ func main() {
 		tournamentHandler,
 		programHandler,
 		matchHandler,
+		gameHandler,
+		teamHandler,
 		wsHandler,
 		authService,
 		rateLimiter,

@@ -16,11 +16,18 @@ type Config struct {
 	Redis     RedisConfig     `yaml:"redis"`
 	Worker    WorkerConfig    `yaml:"worker"`
 	Executor  ExecutorConfig  `yaml:"executor"`
+	Storage   StorageConfig   `yaml:"storage"`
 	JWT       JWTConfig       `yaml:"jwt"`
 	Logging   LoggingConfig   `yaml:"logging"`
 	Metrics   MetricsConfig   `yaml:"metrics"`
 	CORS      CORSConfig      `yaml:"cors"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
+}
+
+// StorageConfig - конфигурация хранения файлов
+type StorageConfig struct {
+	ProgramsPath string `yaml:"programs_path"`
+	MaxFileSize  int64  `yaml:"max_file_size"` // В байтах
 }
 
 // ServerConfig - конфигурация HTTP сервера
@@ -29,6 +36,7 @@ type ServerConfig struct {
 	ReadTimeout     time.Duration `yaml:"read_timeout"`
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
+	BaseURL         string        `yaml:"base_url"` // Базовый URL для ссылок (например, для приглашений в команду)
 }
 
 // DatabaseConfig - конфигурация PostgreSQL
@@ -218,6 +226,7 @@ func Load() (*Config, error) {
 			ReadTimeout:     getEnvDuration("READ_TIMEOUT", 30*time.Second),
 			WriteTimeout:    getEnvDuration("WRITE_TIMEOUT", 30*time.Second),
 			ShutdownTimeout: getEnvDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+			BaseURL:         getEnv("BASE_URL", "http://localhost:8080"),
 		},
 		Database: DatabaseConfig{
 			Host:           getEnv("DB_HOST", "localhost"),
@@ -257,6 +266,10 @@ func Load() (*Config, error) {
 			SeccompProfile:    getEnv("EXECUTOR_SECCOMP_PROFILE", ""),
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),
 			CPUSetCPUs:        getEnv("EXECUTOR_CPUSET_CPUS", ""),
+		},
+		Storage: StorageConfig{
+			ProgramsPath: getEnv("PROGRAMS_PATH", "/data/programs"),
+			MaxFileSize:  int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrFile("JWT_SECRET", "change-this-secret-in-production"), // Поддержка Docker secrets

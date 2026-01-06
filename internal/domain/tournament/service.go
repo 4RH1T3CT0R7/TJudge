@@ -122,7 +122,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 
 	// Кэшируем
 	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
-		s.log.LogError("Failed to cache tournament", err)
+		s.log.Error("Failed to cache tournament", zap.Error(err))
 	}
 
 	return tournament, nil
@@ -144,7 +144,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament
 
 	// Кэшируем
 	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
-		s.log.LogError("Failed to cache tournament", err)
+		s.log.Error("Failed to cache tournament", zap.Error(err))
 	}
 
 	return tournament, nil
@@ -227,7 +227,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 
 		// Добавляем в leaderboard кэш
 		if err := s.leaderboardCache.UpdateRating(ctx, req.TournamentID, req.ProgramID, 1500); err != nil {
-			s.log.LogError("Failed to update leaderboard cache", err)
+			s.log.Error("Failed to update leaderboard cache", zap.Error(err))
 		}
 
 		return nil
@@ -281,7 +281,8 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		// Добавляем матчи в очередь
 		for _, match := range matches {
 			if err := s.queueManager.Enqueue(ctx, match); err != nil {
-				s.log.LogError("Failed to enqueue match", err,
+				s.log.Error("Failed to enqueue match",
+					zap.Error(err),
 					zap.String("match_id", match.ID.String()),
 				)
 				// Продолжаем, даже если какой-то матч не удалось добавить в очередь
@@ -397,7 +398,7 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 	// Обновляем кэш
 	for _, entry := range leaderboard {
 		if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
-			s.log.LogError("Failed to update leaderboard cache", err)
+			s.log.Error("Failed to update leaderboard cache", zap.Error(err))
 		}
 	}
 
@@ -435,7 +436,8 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 
 	// Добавляем в очередь
 	if err := s.queueManager.Enqueue(ctx, match); err != nil {
-		s.log.LogError("Failed to enqueue match", err,
+		s.log.Error("Failed to enqueue match",
+			zap.Error(err),
 			zap.String("match_id", match.ID.String()),
 		)
 		// Не возвращаем ошибку, матч всё равно создан
@@ -454,4 +456,117 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 // GetMatches получает матчи турнира
 func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
 	return s.matchRepo.GetByTournamentID(ctx, tournamentID, limit, offset)
+}
+
+// ProgramRepository интерфейс для работы с программами (для оптимизированного round-robin)
+type ProgramRepository interface {
+	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error)
+}
+
+// ScheduleNewProgramMatchesRequest запрос на создание матчей для новой программы
+type ScheduleNewProgramMatchesRequest struct {
+	TournamentID uuid.UUID
+	GameID       uuid.UUID
+	NewProgramID uuid.UUID
+	TeamID       uuid.UUID
+}
+
+// ScheduleNewProgramMatches создаёт матчи для новой программы против всех существующих
+// Это оптимизированный round-robin - вместо генерации всех матчей заново,
+// создаются только матчи с новой программой
+func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNewProgramMatchesRequest, programRepo ProgramRepository) error {
+	// Используем distributed lock для предотвращения гонок при создании матчей
+	lockKey := fmt.Sprintf("tournament:schedule:%s:%s", req.TournamentID.String(), req.GameID.String())
+
+	return s.distributedLock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+		// Получаем турнир
+		tournament, err := s.GetByID(ctx, req.TournamentID)
+		if err != nil {
+			return err
+		}
+
+		// Проверяем статус турнира
+		if tournament.Status != domain.TournamentActive && tournament.Status != domain.TournamentPending {
+			return errors.ErrConflict.WithMessage("cannot schedule matches for completed tournament")
+		}
+
+		// Получаем все программы в турнире для данной игры
+		programs, err := programRepo.GetByTournamentAndGame(ctx, req.TournamentID, req.GameID)
+		if err != nil {
+			return fmt.Errorf("failed to get programs: %w", err)
+		}
+
+		// Создаём матчи только против других программ (не своей команды)
+		var matches []*domain.Match
+		now := time.Now()
+
+		for _, prog := range programs {
+			// Пропускаем свою программу и программы своей команды
+			if prog.ID == req.NewProgramID {
+				continue
+			}
+			if prog.TeamID != nil && *prog.TeamID == req.TeamID {
+				continue
+			}
+
+			match := &domain.Match{
+				ID:           uuid.New(),
+				TournamentID: req.TournamentID,
+				Program1ID:   req.NewProgramID,
+				Program2ID:   prog.ID,
+				GameType:     tournament.GameType,
+				Status:       domain.MatchPending,
+				Priority:     domain.PriorityHigh, // Новые матчи с высоким приоритетом
+				CreatedAt:    now,
+			}
+
+			if err := match.Validate(); err != nil {
+				s.log.Error("Invalid match generated",
+					zap.Error(err),
+					zap.String("program1_id", req.NewProgramID.String()),
+					zap.String("program2_id", prog.ID.String()),
+				)
+				continue
+			}
+
+			matches = append(matches, match)
+		}
+
+		if len(matches) == 0 {
+			s.log.Info("No new matches to schedule",
+				zap.String("tournament_id", req.TournamentID.String()),
+				zap.String("program_id", req.NewProgramID.String()),
+			)
+			return nil
+		}
+
+		// Создаём матчи в БД
+		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
+			return fmt.Errorf("failed to create matches: %w", err)
+		}
+
+		// Добавляем матчи в очередь
+		for _, match := range matches {
+			if err := s.queueManager.Enqueue(ctx, match); err != nil {
+				s.log.Error("Failed to enqueue match",
+					zap.Error(err),
+					zap.String("match_id", match.ID.String()),
+				)
+			}
+		}
+
+		s.log.Info("New program matches scheduled",
+			zap.String("tournament_id", req.TournamentID.String()),
+			zap.String("program_id", req.NewProgramID.String()),
+			zap.Int("matches_created", len(matches)),
+		)
+
+		// Отправляем broadcast обновление
+		s.broadcaster.Broadcast(req.TournamentID, "matches_created", map[string]interface{}{
+			"program_id":    req.NewProgramID.String(),
+			"matches_count": len(matches),
+		})
+
+		return nil
+	})
 }
