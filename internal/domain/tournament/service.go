@@ -1,0 +1,457 @@
+package tournament
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/google/uuid"
+	"go.uber.org/zap"
+)
+
+// TournamentRepository интерфейс для работы с турнирами
+type TournamentRepository interface {
+	Create(ctx context.Context, tournament *domain.Tournament) error
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+	List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error)
+	Update(ctx context.Context, tournament *domain.Tournament) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error
+	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
+	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
+	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+}
+
+// MatchRepository интерфейс для работы с матчами
+type MatchRepository interface {
+	Create(ctx context.Context, match *domain.Match) error
+	CreateBatch(ctx context.Context, matches []*domain.Match) error
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
+}
+
+// QueueManager интерфейс для работы с очередями
+type QueueManager interface {
+	Enqueue(ctx context.Context, match *domain.Match) error
+}
+
+// Broadcaster интерфейс для broadcast обновлений
+type Broadcaster interface {
+	Broadcast(tournamentID uuid.UUID, messageType string, payload interface{})
+}
+
+// DistributedLock интерфейс для распределённых блокировок
+type DistributedLock interface {
+	WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error
+}
+
+// Service - сервис управления турнирами
+type Service struct {
+	tournamentRepo   TournamentRepository
+	matchRepo        MatchRepository
+	queueManager     QueueManager
+	tournamentCache  *cache.TournamentCache
+	leaderboardCache *cache.LeaderboardCache
+	broadcaster      Broadcaster
+	distributedLock  DistributedLock
+	log              *logger.Logger
+}
+
+// NewService создаёт новый сервис турниров
+func NewService(
+	tournamentRepo TournamentRepository,
+	matchRepo MatchRepository,
+	queueManager QueueManager,
+	tournamentCache *cache.TournamentCache,
+	leaderboardCache *cache.LeaderboardCache,
+	broadcaster Broadcaster,
+	distributedLock DistributedLock,
+	log *logger.Logger,
+) *Service {
+	return &Service{
+		tournamentRepo:   tournamentRepo,
+		matchRepo:        matchRepo,
+		queueManager:     queueManager,
+		tournamentCache:  tournamentCache,
+		leaderboardCache: leaderboardCache,
+		broadcaster:      broadcaster,
+		distributedLock:  distributedLock,
+		log:              log,
+	}
+}
+
+// CreateRequest - запрос на создание турнира
+type CreateRequest struct {
+	Name            string                 `json:"name"`
+	GameType        string                 `json:"game_type"`
+	MaxParticipants *int                   `json:"max_participants,omitempty"`
+	StartTime       *time.Time             `json:"start_time,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// Create создаёт новый турнир
+func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tournament, error) {
+	tournament := &domain.Tournament{
+		ID:              uuid.New(),
+		Name:            req.Name,
+		GameType:        req.GameType,
+		Status:          domain.TournamentPending,
+		MaxParticipants: req.MaxParticipants,
+		StartTime:       req.StartTime,
+		Metadata:        req.Metadata,
+	}
+
+	// Валидация
+	if err := tournament.Validate(); err != nil {
+		return nil, errors.ErrValidation.WithError(err)
+	}
+
+	// Сохраняем в БД
+	if err := s.tournamentRepo.Create(ctx, tournament); err != nil {
+		return nil, fmt.Errorf("failed to create tournament: %w", err)
+	}
+
+	s.log.Info("Tournament created",
+		zap.String("tournament_id", tournament.ID.String()),
+		zap.String("name", tournament.Name),
+		zap.String("game_type", tournament.GameType),
+	)
+
+	// Кэшируем
+	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
+		s.log.LogError("Failed to cache tournament", err)
+	}
+
+	return tournament, nil
+}
+
+// GetByID получает турнир по ID
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
+	// Проверяем кэш
+	cached, err := s.tournamentCache.Get(ctx, id)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
+
+	// Получаем из БД
+	tournament, err := s.tournamentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Кэшируем
+	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
+		s.log.LogError("Failed to cache tournament", err)
+	}
+
+	return tournament, nil
+}
+
+// List получает список турниров с фильтрацией
+func (s *Service) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
+	// Устанавливаем лимит по умолчанию
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+
+	// Получаем из БД
+	tournaments, err := s.tournamentRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return tournaments, nil
+}
+
+// JoinRequest - запрос на участие в турнире
+type JoinRequest struct {
+	TournamentID uuid.UUID `json:"tournament_id"`
+	ProgramID    uuid.UUID `json:"program_id"`
+}
+
+// Join добавляет участника в турнир
+func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
+	// Используем distributed lock для предотвращения race condition
+	// при проверке лимита участников
+	lockKey := fmt.Sprintf("tournament:join:%s", req.TournamentID.String())
+
+	return s.distributedLock.WithLock(ctx, lockKey, 5*time.Second, func(ctx context.Context) error {
+		// Получаем турнир
+		tournament, err := s.GetByID(ctx, req.TournamentID)
+		if err != nil {
+			return err
+		}
+
+		// Проверяем статус турнира
+		if tournament.Status != domain.TournamentPending {
+			return errors.ErrTournamentStarted
+		}
+
+		// Проверяем лимит участников
+		if tournament.MaxParticipants != nil {
+			count, err := s.tournamentRepo.GetParticipantsCount(ctx, req.TournamentID)
+			if err != nil {
+				return fmt.Errorf("failed to get participants count: %w", err)
+			}
+
+			if count >= *tournament.MaxParticipants {
+				return errors.ErrTournamentFull
+			}
+		}
+
+		// Добавляем участника
+		participant := &domain.TournamentParticipant{
+			ID:           uuid.New(),
+			TournamentID: req.TournamentID,
+			ProgramID:    req.ProgramID,
+			Rating:       1500, // Начальный рейтинг ELO
+		}
+
+		if err := s.tournamentRepo.AddParticipant(ctx, participant); err != nil {
+			return fmt.Errorf("failed to add participant: %w", err)
+		}
+
+		s.log.Info("Participant joined tournament",
+			zap.String("tournament_id", req.TournamentID.String()),
+			zap.String("program_id", req.ProgramID.String()),
+		)
+
+		// Инвалидируем кэш
+		_ = s.tournamentCache.Invalidate(ctx, req.TournamentID)
+
+		// Добавляем в leaderboard кэш
+		if err := s.leaderboardCache.UpdateRating(ctx, req.TournamentID, req.ProgramID, 1500); err != nil {
+			s.log.LogError("Failed to update leaderboard cache", err)
+		}
+
+		return nil
+	})
+}
+
+// Start запускает турнир и генерирует матчи
+func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
+	// Используем distributed lock для предотвращения одновременного старта
+	lockKey := fmt.Sprintf("tournament:start:%s", tournamentID.String())
+
+	return s.distributedLock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+		// Получаем турнир
+		tournament, err := s.GetByID(ctx, tournamentID)
+		if err != nil {
+			return err
+		}
+
+		// Проверяем статус
+		if tournament.Status != domain.TournamentPending {
+			return errors.ErrConflict.WithMessage("tournament already started or completed")
+		}
+
+		// Получаем список участников
+		participants, err := s.tournamentRepo.GetParticipants(ctx, tournamentID)
+		if err != nil {
+			return fmt.Errorf("failed to get participants: %w", err)
+		}
+
+		// Проверяем минимальное количество участников
+		if len(participants) < 2 {
+			return errors.ErrValidation.WithMessage("tournament needs at least 2 participants to start")
+		}
+
+		s.log.Info("Starting tournament with participants",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.Int("participants_count", len(participants)),
+		)
+
+		// Генерируем расписание матчей (round-robin)
+		matches, err := s.generateRoundRobinMatches(tournament, participants)
+		if err != nil {
+			return fmt.Errorf("failed to generate matches: %w", err)
+		}
+
+		// Создаём матчи в БД
+		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
+			return fmt.Errorf("failed to create matches: %w", err)
+		}
+
+		// Добавляем матчи в очередь
+		for _, match := range matches {
+			if err := s.queueManager.Enqueue(ctx, match); err != nil {
+				s.log.LogError("Failed to enqueue match", err,
+					zap.String("match_id", match.ID.String()),
+				)
+				// Продолжаем, даже если какой-то матч не удалось добавить в очередь
+			}
+		}
+
+		// Обновляем статус турнира
+		now := time.Now()
+		tournament.Status = domain.TournamentActive
+		tournament.StartTime = &now
+
+		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
+			return fmt.Errorf("failed to update tournament: %w", err)
+		}
+
+		s.log.Info("Tournament started with matches",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.Int("matches_created", len(matches)),
+		)
+
+		// Инвалидируем кэш
+		_ = s.tournamentCache.Invalidate(ctx, tournamentID)
+
+		// Отправляем broadcast обновление
+		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
+			"status":        tournament.Status,
+			"matches_count": len(matches),
+			"start_time":    tournament.StartTime,
+		})
+
+		return nil
+	})
+}
+
+// generateRoundRobinMatches генерирует матчи по системе round-robin (каждый с каждым)
+func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, participants []*domain.TournamentParticipant) ([]*domain.Match, error) {
+	var matches []*domain.Match
+	now := time.Now()
+
+	// Каждый участник играет с каждым
+	for i := 0; i < len(participants); i++ {
+		for j := i + 1; j < len(participants); j++ {
+			match := &domain.Match{
+				ID:           uuid.New(),
+				TournamentID: tournament.ID,
+				Program1ID:   participants[i].ProgramID,
+				Program2ID:   participants[j].ProgramID,
+				GameType:     tournament.GameType,
+				Status:       domain.MatchPending,
+				Priority:     domain.PriorityMedium, // По умолчанию средний приоритет
+				CreatedAt:    now,
+			}
+
+			if err := match.Validate(); err != nil {
+				return nil, fmt.Errorf("invalid match generated: %w", err)
+			}
+
+			matches = append(matches, match)
+		}
+	}
+
+	return matches, nil
+}
+
+// Complete завершает турнир
+func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
+	tournament, err := s.GetByID(ctx, tournamentID)
+	if err != nil {
+		return err
+	}
+
+	if tournament.Status != domain.TournamentActive {
+		return errors.ErrConflict.WithMessage("tournament is not active")
+	}
+
+	now := time.Now()
+	tournament.Status = domain.TournamentCompleted
+	tournament.EndTime = &now
+
+	if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
+		return fmt.Errorf("failed to complete tournament: %w", err)
+	}
+
+	s.log.Info("Tournament completed",
+		zap.String("tournament_id", tournamentID.String()),
+	)
+
+	_ = s.tournamentCache.Invalidate(ctx, tournamentID)
+
+	// Отправляем broadcast обновление
+	s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
+		"status":   tournament.Status,
+		"end_time": tournament.EndTime,
+	})
+
+	return nil
+}
+
+// GetLeaderboard получает таблицу лидеров турнира
+func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+	// Проверяем кэш
+	cached, err := s.leaderboardCache.GetTop(ctx, tournamentID, limit)
+	if err == nil && cached != nil && len(cached) > 0 {
+		return cached, nil
+	}
+
+	// Получаем из БД
+	leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Обновляем кэш
+	for _, entry := range leaderboard {
+		if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
+			s.log.LogError("Failed to update leaderboard cache", err)
+		}
+	}
+
+	return leaderboard, nil
+}
+
+// CreateMatch создаёт матч и добавляет в очередь
+func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error) {
+	// Получаем турнир для game_type
+	tournament, err := s.GetByID(ctx, tournamentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tournament: %w", err)
+	}
+
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tournamentID,
+		Program1ID:   program1ID,
+		Program2ID:   program2ID,
+		GameType:     tournament.GameType,
+		Status:       domain.MatchPending,
+		Priority:     priority,
+		CreatedAt:    time.Now(),
+	}
+
+	// Валидация
+	if err := match.Validate(); err != nil {
+		return nil, errors.ErrValidation.WithError(err)
+	}
+
+	// Сохраняем в БД
+	if err := s.matchRepo.Create(ctx, match); err != nil {
+		return nil, fmt.Errorf("failed to create match: %w", err)
+	}
+
+	// Добавляем в очередь
+	if err := s.queueManager.Enqueue(ctx, match); err != nil {
+		s.log.LogError("Failed to enqueue match", err,
+			zap.String("match_id", match.ID.String()),
+		)
+		// Не возвращаем ошибку, матч всё равно создан
+	}
+
+	s.log.Info("Match created",
+		zap.String("match_id", match.ID.String()),
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_type", tournament.GameType),
+		zap.String("priority", string(priority)),
+	)
+
+	return match, nil
+}
+
+// GetMatches получает матчи турнира
+func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
+	return s.matchRepo.GetByTournamentID(ctx, tournamentID, limit, offset)
+}

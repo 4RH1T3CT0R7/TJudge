@@ -1,0 +1,20 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Link to trace from request_id
+        - datasourceUid: tempo
+          matcherRegex: "request_id=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+        # Link to related logs by tournament_id
+        - matcherRegex: "tournament_id=(\\w+)"
+          name: TournamentID
+          url: ""

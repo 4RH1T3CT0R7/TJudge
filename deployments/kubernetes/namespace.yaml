@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tjudge
+  labels:
+    app.kubernetes.io/name: tjudge
+    app.kubernetes.io/part-of: tjudge-system

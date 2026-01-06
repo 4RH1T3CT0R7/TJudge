@@ -1,0 +1,188 @@
+# ServiceMonitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tjudge-api
+  namespace: tjudge
+  labels:
+    app.kubernetes.io/name: api
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tjudge-worker
+  namespace: tjudge
+  labels:
+    app.kubernetes.io/name: worker
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+
+---
+# PrometheusRule for alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tjudge-alerts
+  namespace: tjudge
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: tjudge.api
+      rules:
+        - alert: TJudgeAPIDown
+          expr: up{job="tjudge-api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TJudge API is down"
+            description: "TJudge API instance {{ $labels.instance }} has been down for more than 1 minute."
+
+        - alert: TJudgeHighLatency
+          expr: histogram_quantile(0.99, sum(rate(tjudge_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "TJudge API high latency"
+            description: "TJudge API p99 latency is above 1 second."
+
+        - alert: TJudgeHighErrorRate
+          expr: sum(rate(tjudge_http_requests_total{code=~"5.."}[5m])) / sum(rate(tjudge_http_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "TJudge API high error rate"
+            description: "TJudge API error rate is above 5%."
+
+    - name: tjudge.worker
+      rules:
+        - alert: TJudgeWorkerDown
+          expr: up{job="tjudge-worker"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TJudge Worker is down"
+            description: "TJudge Worker instance {{ $labels.instance }} has been down for more than 1 minute."
+
+        - alert: TJudgeHighQueueSize
+          expr: tjudge_queue_size > 1000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "TJudge queue size is high"
+            description: "TJudge match queue has more than 1000 items."
+
+        - alert: TJudgeCriticalQueueSize
+          expr: tjudge_queue_size > 5000
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TJudge queue size is critical"
+            description: "TJudge match queue has more than 5000 items. Consider scaling workers."
+
+        - alert: TJudgeHighMatchFailureRate
+          expr: sum(rate(tjudge_matches_total{status="failed"}[5m])) / sum(rate(tjudge_matches_total[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "TJudge high match failure rate"
+            description: "More than 10% of matches are failing."
+
+    - name: tjudge.infrastructure
+      rules:
+        - alert: TJudgePostgresDown
+          expr: pg_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TJudge PostgreSQL is down"
+            description: "TJudge PostgreSQL database is not responding."
+
+        - alert: TJudgeRedisDown
+          expr: redis_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "TJudge Redis is down"
+            description: "TJudge Redis cache is not responding."
+
+        - alert: TJudgePodRestartLoop
+          expr: increase(kube_pod_container_status_restarts_total{namespace="tjudge"}[1h]) > 5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "TJudge pod restart loop"
+            description: "Pod {{ $labels.pod }} has restarted more than 5 times in the last hour."
+
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tjudge-grafana-dashboard
+  namespace: tjudge
+  labels:
+    grafana_dashboard: "1"
+data:
+  tjudge-overview.json: |
+    {
+      "title": "TJudge Overview",
+      "uid": "tjudge-overview",
+      "schemaVersion": 38,
+      "refresh": "10s",
+      "panels": [
+        {
+          "title": "Request Rate",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "targets": [{"expr": "sum(rate(tjudge_http_requests_total[5m]))"}]
+        },
+        {
+          "title": "Error Rate",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+          "targets": [{"expr": "sum(rate(tjudge_http_requests_total{code=~\"5..\"}[5m])) / sum(rate(tjudge_http_requests_total[5m])) * 100"}]
+        },
+        {
+          "title": "Queue Size",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+          "targets": [{"expr": "sum(tjudge_queue_size)"}]
+        },
+        {
+          "title": "Active Workers",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+          "targets": [{"expr": "sum(tjudge_active_workers)"}]
+        }
+      ]
+    }

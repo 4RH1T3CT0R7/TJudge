@@ -1,0 +1,102 @@
+version: '3.8'
+
+# Blue environment for blue-green deployment
+# This file defines the "blue" instance of the application
+
+services:
+  api-blue:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-api:${VERSION:-latest}
+    container_name: tjudge-api-blue
+    environment:
+      - ENVIRONMENT=production
+      - INSTANCE_COLOR=blue
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=tjudge
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - DB_NAME=tjudge
+      - DB_MAX_CONNECTIONS=100
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - METRICS_ENABLED=true
+      - METRICS_PORT=9090
+    secrets:
+      - db_password
+      - redis_password
+      - jwt_secret
+    networks:
+      - tjudge-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+      replicas: 2
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+  worker-blue:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-worker:${VERSION:-latest}
+    container_name: tjudge-worker-blue
+    environment:
+      - ENVIRONMENT=production
+      - INSTANCE_COLOR=blue
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=tjudge
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - DB_NAME=tjudge
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - WORKER_MIN=20
+      - WORKER_MAX=200
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+      - METRICS_ENABLED=true
+      - METRICS_PORT=9090
+      - EXECUTOR_DOCKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-executor:${VERSION:-latest}
+      - EXECUTOR_TIMEOUT=60s
+    secrets:
+      - db_password
+      - redis_password
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - tjudge-network
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 1G
+      replicas: 2
+    restart: unless-stopped
+
+secrets:
+  db_password:
+    external: true
+  jwt_secret:
+    external: true
+  redis_password:
+    external: true
+
+networks:
+  tjudge-network:
+    external: true

@@ -1,0 +1,214 @@
+name: CD
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/tjudge
+
+jobs:
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      api_image: ${{ steps.meta-api.outputs.tags }}
+      worker_image: ${{ steps.meta-worker.outputs.tags }}
+      executor_image: ${{ steps.meta-executor.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # API Image
+      - name: Extract metadata for API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Worker Image
+      - name: Extract metadata for Worker
+        id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/worker/Dockerfile
+          push: true
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Executor Image (tjudge-cli)
+      - name: Extract metadata for Executor
+        id: meta-executor
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-executor
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Executor image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/tjudge/Dockerfile
+          push: true
+          tags: ${{ steps.meta-executor.outputs.tags }}
+          labels: ${{ steps.meta-executor.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.tjudge.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.STAGING_KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update deployment images
+        run: |
+          kubectl set image deployment/tjudge-api api=${{ needs.build-and-push.outputs.api_image }} -n tjudge-staging
+          kubectl set image deployment/tjudge-worker worker=${{ needs.build-and-push.outputs.worker_image }} -n tjudge-staging
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/tjudge-api -n tjudge-staging --timeout=300s
+          kubectl rollout status deployment/tjudge-worker -n tjudge-staging --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          API_URL="https://staging.tjudge.example.com"
+          curl -f "$API_URL/health" || exit 1
+          echo "Smoke tests passed"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build-and-push, deploy-staging]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://tjudge.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.PRODUCTION_KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create backup before deployment
+        run: |
+          kubectl exec -n tjudge-prod deploy/tjudge-api -- /app/backup.sh || true
+
+      - name: Update deployment images
+        run: |
+          kubectl set image deployment/tjudge-api api=${{ needs.build-and-push.outputs.api_image }} -n tjudge-prod
+          kubectl set image deployment/tjudge-worker worker=${{ needs.build-and-push.outputs.worker_image }} -n tjudge-prod
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/tjudge-api -n tjudge-prod --timeout=600s
+          kubectl rollout status deployment/tjudge-worker -n tjudge-prod --timeout=600s
+
+      - name: Run smoke tests
+        run: |
+          API_URL="https://tjudge.example.com"
+          curl -f "$API_URL/health" || exit 1
+          echo "Production smoke tests passed"
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Deployment to production successful!"
+          # Add notification logic (Slack, Discord, etc.)
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          kubectl rollout undo deployment/tjudge-api -n tjudge-prod
+          kubectl rollout undo deployment/tjudge-worker -n tjudge-prod

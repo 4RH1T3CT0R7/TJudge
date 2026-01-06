@@ -1,0 +1,71 @@
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  shutdown_timeout: 10s
+
+database:
+  host: localhost
+  port: 5432
+  user: tjudge
+  password: secret
+  name: tjudge
+  max_connections: 50
+  max_idle: 10
+  max_lifetime: 1h
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 100
+
+worker:
+  min_workers: 10
+  max_workers: 1000
+  queue_size: 10000
+  timeout: 30s
+  retry_attempts: 3
+  retry_delay: 5s
+
+executor:
+  tjudge_path: /usr/local/bin/tjudge-cli
+  timeout: 30s
+  cpu_quota: 100000      # 100ms
+  memory_limit: 536870912  # 512MB
+  pids_limit: 100
+  network_disabled: true
+
+jwt:
+  secret: change-this-secret-in-production
+  access_ttl: 15m
+  refresh_ttl: 168h  # 7 days
+
+logging:
+  level: info
+  format: json
+  output: stdout
+
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+
+cors:
+  allowed_origins:
+    - http://localhost:3000
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+  allowed_headers:
+    - Content-Type
+    - Authorization
+  max_age: 3600
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 100
+  burst: 200

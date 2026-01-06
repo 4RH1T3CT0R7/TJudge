@@ -1,0 +1,51 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+secrets/
+
+# Build artifacts
+dist/
+build/
+coverage.out
+coverage.html
+
+# Logs
+*.log
+logs/
+
+# Data directories (Docker volumes)
+postgres_data/
+redis_data/
+prometheus_data/
+grafana_data/
+loki_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Claude
+claude.md

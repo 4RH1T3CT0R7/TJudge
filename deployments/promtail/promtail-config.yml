@@ -1,0 +1,77 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape logs from Docker containers
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Only scrape TJudge containers
+      - source_labels: ['__meta_docker_container_name']
+        regex: 'tjudge-.*'
+        action: keep
+
+      # Extract service name from container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: 'tjudge-(.*)'
+        target_label: 'service'
+
+      # Add container ID
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'container_id'
+
+      # Add container image
+      - source_labels: ['__meta_docker_container_image']
+        target_label: 'image'
+
+      # Add container log path
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            timestamp: ts
+            message: msg
+            caller: caller
+            error: error
+            user_id: user_id
+            request_id: request_id
+            tournament_id: tournament_id
+            match_id: match_id
+            program_id: program_id
+
+      # Extract timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+      # Add labels from parsed fields
+      - labels:
+          level:
+          service:
+          stream:
+
+      # Output stage
+      - output:
+          source: message
+
+  # Scrape system logs (optional)
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log

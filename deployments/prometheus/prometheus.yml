@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'tjudge'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # TJudge API metrics
+  - job_name: 'tjudge-api'
+    static_configs:
+      - targets: ['api:9090']
+        labels:
+          service: 'api'
+          instance: 'api-1'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # TJudge Worker metrics
+  - job_name: 'tjudge-worker'
+    static_configs:
+      - targets: ['worker:9090']
+        labels:
+          service: 'worker'
+          instance: 'worker-1'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Alertmanager metrics
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']

@@ -1,0 +1,42 @@
+# Конфигурация шифрования секретов Kubernetes at rest
+# Применяется на уровне kube-apiserver
+#
+# ВАЖНО: Этот файл должен быть размещён на master-нодах
+# и настроен через флаг --encryption-provider-config
+#
+# Инструкции по настройке:
+# 1. Сгенерируйте ключ шифрования:
+#    head -c 32 /dev/urandom | base64
+#
+# 2. Замените <BASE64_ENCODED_SECRET> на сгенерированный ключ
+#
+# 3. Скопируйте файл на все master-ноды:
+#    /etc/kubernetes/encryption-config.yaml
+#
+# 4. Добавьте флаг в kube-apiserver manifest:
+#    --encryption-provider-config=/etc/kubernetes/encryption-config.yaml
+#
+# 5. Перешифруйте существующие секреты:
+#    kubectl get secrets -n tjudge -o json | kubectl replace -f -
+
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+      - secrets
+      - configmaps
+    providers:
+      # AES-GCM — рекомендуемый провайдер (быстрый и безопасный)
+      - aesgcm:
+          keys:
+            - name: key1
+              # Замените на реальный ключ: head -c 32 /dev/urandom | base64
+              secret: <BASE64_ENCODED_SECRET>
+      # Fallback на AES-CBC для совместимости
+      - aescbc:
+          keys:
+            - name: key1
+              secret: <BASE64_ENCODED_SECRET>
+      # Identity провайдер для чтения незашифрованных секретов
+      # (должен быть последним для миграции)
+      - identity: {}

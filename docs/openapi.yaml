@@ -1,0 +1,788 @@
+openapi: 3.0.3
+info:
+  title: TJudge API
+  description: |
+    API турнирной системы TJudge для соревнований программных ботов.
+
+    ## Аутентификация
+    Все защищённые эндпоинты требуют JWT токен в заголовке:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Лимиты
+    - 100 запросов/минуту на IP
+    - WebSocket: 1 соединение на турнир на пользователя
+  version: 1.0.0
+  contact:
+    name: BMSTU ITS Tech
+    url: https://github.com/bmstu-itstech/tjudge
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development
+  - url: https://api.tjudge.example.com/api/v1
+    description: Production
+
+tags:
+  - name: auth
+    description: Аутентификация и авторизация
+  - name: programs
+    description: Управление программами (ботами)
+  - name: tournaments
+    description: Управление турнирами
+  - name: matches
+    description: Информация о матчах
+  - name: websocket
+    description: Real-time обновления
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - auth
+      summary: Регистрация пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: Вход в систему
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - auth
+      summary: Обновление токена
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Токены обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/logout:
+    post:
+      tags:
+        - auth
+      summary: Выход из системы
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Успешный выход
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/me:
+    get:
+      tags:
+        - auth
+      summary: Информация о текущем пользователе
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /programs:
+    get:
+      tags:
+        - programs
+      summary: Список программ пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список программ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Program'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+    post:
+      tags:
+        - programs
+      summary: Создание программы
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProgramRequest'
+      responses:
+        '201':
+          description: Программа создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /programs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - programs
+      summary: Получение программы
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Данные программы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      tags:
+        - programs
+      summary: Обновление программы
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProgramRequest'
+      responses:
+        '200':
+          description: Программа обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      tags:
+        - programs
+      summary: Удаление программы
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Программа удалена
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /tournaments:
+    get:
+      tags:
+        - tournaments
+      summary: Список турниров
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, completed]
+        - name: game_type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список турниров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentListResponse'
+    post:
+      tags:
+        - tournaments
+      summary: Создание турнира
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTournamentRequest'
+      responses:
+        '201':
+          description: Турнир создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tournament'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /tournaments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - tournaments
+      summary: Получение турнира
+      responses:
+        '200':
+          description: Данные турнира
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tournament'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /tournaments/{id}/join:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - tournaments
+      summary: Присоединение к турниру
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinTournamentRequest'
+      responses:
+        '200':
+          description: Успешное присоединение
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /tournaments/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags:
+        - tournaments
+      summary: Старт турнира
+      description: Генерирует round-robin расписание матчей
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Турнир запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tournament'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /tournaments/{id}/leaderboard:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - tournaments
+      summary: Таблица лидеров
+      responses:
+        '200':
+          description: Таблица лидеров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Leaderboard'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /tournaments/{id}/matches:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - tournaments
+      summary: Матчи турнира
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Список матчей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Match'
+
+  /matches/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - matches
+      summary: Получение матча
+      responses:
+        '200':
+          description: Данные матча
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /matches/statistics:
+    get:
+      tags:
+        - matches
+      summary: Статистика матчей
+      responses:
+        '200':
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchStatistics'
+
+  /ws/tournaments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags:
+        - websocket
+      summary: WebSocket подписка на турнир
+      description: |
+        Подключение через WebSocket для real-time обновлений.
+        Авторизация через query параметр: `?token=<jwt>`
+
+        Получаемые сообщения:
+        - `tournament_started` — турнир начат
+        - `match_completed` — матч завершён
+        - `tournament_completed` — турнир завершён
+      responses:
+        '101':
+          description: Switching Protocols
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Сервис работает
+
+  /metrics:
+    get:
+      summary: Prometheus метрики
+      responses:
+        '200':
+          description: Метрики в формате Prometheus
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin]
+        created_at:
+          type: string
+          format: date-time
+
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+
+    Program:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        language:
+          type: string
+          enum: [python, go, cpp, java]
+        game_type:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    CreateProgramRequest:
+      type: object
+      required: [name, language, source_code, game_type]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        language:
+          type: string
+          enum: [python, go, cpp, java]
+        source_code:
+          type: string
+        game_type:
+          type: string
+
+    UpdateProgramRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        source_code:
+          type: string
+        is_active:
+          type: boolean
+
+    Tournament:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        creator_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        game_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, completed]
+        max_participants:
+          type: integer
+        iterations_per_match:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    CreateTournamentRequest:
+      type: object
+      required: [name, game_type]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        game_type:
+          type: string
+        max_participants:
+          type: integer
+          default: 16
+        iterations_per_match:
+          type: integer
+          default: 1000
+
+    JoinTournamentRequest:
+      type: object
+      required: [program_id]
+      properties:
+        program_id:
+          type: string
+          format: uuid
+
+    TournamentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tournament'
+        next_cursor:
+          type: string
+        has_more:
+          type: boolean
+
+    Leaderboard:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              rank:
+                type: integer
+              program_id:
+                type: string
+                format: uuid
+              program_name:
+                type: string
+              rating:
+                type: integer
+              wins:
+                type: integer
+              losses:
+                type: integer
+              draws:
+                type: integer
+
+    Match:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tournament_id:
+          type: string
+          format: uuid
+        program1_id:
+          type: string
+          format: uuid
+        program2_id:
+          type: string
+          format: uuid
+        winner_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        iterations:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    MatchStatistics:
+      type: object
+      properties:
+        total:
+          type: integer
+        pending:
+          type: integer
+        running:
+          type: integer
+        completed:
+          type: integer
+        failed:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+  responses:
+    ValidationError:
+      description: Ошибка валидации
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Неверные данные
+              details:
+                field: email
+                reason: неверный формат
+
+    UnauthorizedError:
+      description: Не авторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Требуется аутентификация
+
+    ForbiddenError:
+      description: Доступ запрещён
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: FORBIDDEN
+              message: Недостаточно прав
+
+    NotFoundError:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Ресурс не найден
+
+    ConflictError:
+      description: Конфликт ресурсов
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: CONFLICT
+              message: Ресурс уже существует

@@ -1,0 +1,262 @@
+groups:
+  # Алерты для API сервера
+  - name: tjudge-api
+    rules:
+      # API сервер недоступен
+      - alert: APIServerDown
+        expr: up{job="tjudge-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "API сервер недоступен"
+          description: "API сервер {{ $labels.instance }} не отвечает более 1 минуты."
+
+      # Высокая latency API
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="tjudge-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Высокая latency API"
+          description: "95-й перцентиль latency API превышает 1 секунду."
+
+      # Критическая latency API
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="tjudge-api"}[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Критическая latency API"
+          description: "95-й перцентиль latency API превышает 5 секунд."
+
+      # Высокий процент ошибок
+      - alert: HighErrorRate
+        expr: |
+          (sum(rate(http_requests_total{job="tjudge-api", status=~"5.."}[5m])) /
+           sum(rate(http_requests_total{job="tjudge-api"}[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Высокий процент ошибок API"
+          description: "Более 5% запросов завершаются с ошибкой 5xx."
+
+      # Критический процент ошибок
+      - alert: CriticalErrorRate
+        expr: |
+          (sum(rate(http_requests_total{job="tjudge-api", status=~"5.."}[5m])) /
+           sum(rate(http_requests_total{job="tjudge-api"}[5m]))) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Критический процент ошибок API"
+          description: "Более 20% запросов завершаются с ошибкой 5xx."
+
+  # Алерты для Worker
+  - name: tjudge-worker
+    rules:
+      # Worker недоступен
+      - alert: WorkerDown
+        expr: up{job="tjudge-worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Worker недоступен"
+          description: "Worker {{ $labels.instance }} не отвечает более 1 минуты."
+
+      # Большая очередь матчей
+      - alert: HighMatchQueueSize
+        expr: tjudge_match_queue_size > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "Большая очередь матчей"
+          description: "В очереди более 1000 матчей, ожидающих обработки."
+
+      # Критический размер очереди
+      - alert: CriticalMatchQueueSize
+        expr: tjudge_match_queue_size > 5000
+        for: 2m
+        labels:
+          severity: critical
+          service: worker
+        annotations:
+          summary: "Критический размер очереди матчей"
+          description: "В очереди более 5000 матчей. Система перегружена."
+
+      # Высокий процент ошибок матчей
+      - alert: HighMatchErrorRate
+        expr: |
+          (sum(rate(tjudge_matches_failed_total[5m])) /
+           sum(rate(tjudge_matches_processed_total[5m]))) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "Высокий процент ошибок матчей"
+          description: "Более 10% матчей завершаются с ошибкой."
+
+      # Медленная обработка матчей
+      - alert: SlowMatchProcessing
+        expr: histogram_quantile(0.95, rate(tjudge_match_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: worker
+        annotations:
+          summary: "Медленная обработка матчей"
+          description: "95% матчей обрабатываются дольше 30 секунд."
+
+  # Алерты для инфраструктуры
+  - name: infrastructure
+    rules:
+      # PostgreSQL недоступен
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL недоступен"
+          description: "PostgreSQL не отвечает более 1 минуты."
+
+      # Много соединений к PostgreSQL
+      - alert: HighPostgreSQLConnections
+        expr: pg_stat_activity_count > 40
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Много соединений к PostgreSQL"
+          description: "Количество соединений к PostgreSQL превышает 40."
+
+      # Redis недоступен
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis недоступен"
+          description: "Redis не отвечает более 1 минуты."
+
+      # Высокое использование памяти Redis
+      - alert: HighRedisMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Высокое использование памяти Redis"
+          description: "Redis использует более 80% выделенной памяти."
+
+  # Алерты для ресурсов
+  - name: resources
+    rules:
+      # Высокая загрузка CPU
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU"
+          description: "CPU загружен более чем на 80% на {{ $labels.instance }}."
+
+      # Критическая загрузка CPU
+      - alert: CriticalCPUUsage
+        expr: |
+          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критическая загрузка CPU"
+          description: "CPU загружен более чем на 95% на {{ $labels.instance }}."
+
+      # Мало свободной памяти
+      - alert: LowMemory
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало свободной памяти"
+          description: "Доступно менее 20% памяти на {{ $labels.instance }}."
+
+      # Критически мало памяти
+      - alert: CriticalLowMemory
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критически мало свободной памяти"
+          description: "Доступно менее 10% памяти на {{ $labels.instance }}."
+
+      # Мало места на диске
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало места на диске"
+          description: "Доступно менее 20% дискового пространства на {{ $labels.instance }}."
+
+  # Бизнес-алерты
+  - name: business
+    rules:
+      # Нет активных турниров
+      - alert: NoActiveTournaments
+        expr: tjudge_active_tournaments == 0
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Нет активных турниров"
+          description: "В системе нет активных турниров уже 1 час."
+
+      # Резкое падение количества матчей
+      - alert: MatchRateDrop
+        expr: |
+          (sum(rate(tjudge_matches_processed_total[1h])) /
+           sum(rate(tjudge_matches_processed_total[1h] offset 1h))) < 0.5
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Резкое падение количества матчей"
+          description: "Скорость обработки матчей упала более чем на 50%."
+
+      # Много pending матчей
+      - alert: ManyPendingMatches
+        expr: tjudge_matches_pending > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много ожидающих матчей"
+          description: "Более 500 матчей ожидают обработки более 15 минут."

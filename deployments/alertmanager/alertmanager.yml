@@ -1,0 +1,95 @@
+global:
+  # Интервал разрешения алертов
+  resolve_timeout: 5m
+
+  # SMTP настройки (настроить для production)
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertmanager@tjudge.local'
+  # smtp_auth_username: 'alertmanager'
+  # smtp_auth_password: 'password'
+
+  # Slack webhook (настроить для production)
+  # slack_api_url: 'https://hooks.slack.com/services/xxx/yyy/zzz'
+
+# Маршрутизация алертов
+route:
+  # Поле для группировки алертов
+  group_by: ['alertname', 'severity', 'service']
+
+  # Время ожидания перед отправкой первого уведомления
+  group_wait: 30s
+
+  # Интервал между уведомлениями о новых алертах в группе
+  group_interval: 5m
+
+  # Интервал повторной отправки уведомлений
+  repeat_interval: 4h
+
+  # Получатель по умолчанию
+  receiver: 'default-receiver'
+
+  # Дочерние маршруты
+  routes:
+    # Критические алерты
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Алерты о базе данных
+    - match:
+        service: database
+      receiver: 'database-receiver'
+
+    # Алерты о высокой нагрузке
+    - match:
+        alertname: HighLoad
+      receiver: 'ops-receiver'
+
+# Получатели уведомлений
+receivers:
+  - name: 'default-receiver'
+    # Webhook для интеграций (Telegram, Discord и т.д.)
+    webhook_configs:
+      - url: 'http://host.docker.internal:8081/webhook/alerts'
+        send_resolved: true
+
+  - name: 'critical-receiver'
+    webhook_configs:
+      - url: 'http://host.docker.internal:8081/webhook/critical'
+        send_resolved: true
+    # Email для критических алертов (настроить для production)
+    # email_configs:
+    #   - to: 'oncall@tjudge.local'
+    #     send_resolved: true
+
+  - name: 'database-receiver'
+    webhook_configs:
+      - url: 'http://host.docker.internal:8081/webhook/database'
+        send_resolved: true
+
+  - name: 'ops-receiver'
+    webhook_configs:
+      - url: 'http://host.docker.internal:8081/webhook/ops'
+        send_resolved: true
+
+# Правила подавления алертов
+inhibit_rules:
+  # Подавляем warning если есть critical для того же сервиса
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+
+  # Подавляем алерты если кластер недоступен
+  - source_match:
+      alertname: 'ClusterDown'
+    target_match_re:
+      alertname: '.+'
+    equal: ['cluster']
+
+# Шаблоны (опционально)
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

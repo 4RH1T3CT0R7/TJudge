@@ -1,0 +1,92 @@
+#include <tunables/global>
+
+profile tjudge-executor flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Deny network access
+  deny network,
+
+  # Deny raw sockets
+  deny network raw,
+
+  # Deny packet sockets
+  deny network packet,
+
+  # Allow reading basic system files
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+  /etc/ld.so.cache r,
+  /etc/localtime r,
+
+  # Allow reading shared libraries
+  /lib/** r,
+  /lib64/** r,
+  /usr/lib/** r,
+  /usr/lib64/** r,
+
+  # Allow execution of tjudge-cli
+  /usr/local/bin/tjudge-cli ix,
+
+  # Allow reading programs from mounted volume
+  /programs/** r,
+
+  # Allow /tmp with restrictions
+  /tmp/ rw,
+  /tmp/** rwk,
+  deny /tmp/** x,
+
+  # Deny writing to system directories
+  deny /bin/** w,
+  deny /sbin/** w,
+  deny /usr/** w,
+  deny /etc/** w,
+  deny /dev/** w,
+  deny /sys/** w,
+  deny /proc/** w,
+
+  # Deny mount operations
+  deny mount,
+  deny umount,
+
+  # Deny ptrace
+  deny ptrace,
+
+  # Deny capability escalation
+  deny capability sys_admin,
+  deny capability sys_module,
+  deny capability sys_rawio,
+  deny capability sys_ptrace,
+  deny capability net_admin,
+  deny capability net_raw,
+  deny capability dac_override,
+  deny capability dac_read_search,
+  deny capability setuid,
+  deny capability setgid,
+  deny capability chown,
+  deny capability fowner,
+  deny capability fsetid,
+  deny capability kill,
+  deny capability setpcap,
+  deny capability linux_immutable,
+  deny capability net_bind_service,
+  deny capability net_broadcast,
+  deny capability ipc_lock,
+  deny capability ipc_owner,
+  deny capability sys_chroot,
+  deny capability sys_boot,
+  deny capability lease,
+  deny capability audit_write,
+  deny capability audit_control,
+  deny capability syslog,
+  deny capability mac_override,
+  deny capability mac_admin,
+
+  # Allow reading /proc/self for basic process info
+  /proc/self/status r,
+  /proc/self/stat r,
+  /proc/self/maps r,
+
+  # Signals
+  signal (receive) set=(kill term int),
+}

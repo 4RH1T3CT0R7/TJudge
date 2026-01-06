@@ -1,0 +1,72 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+build/
+
+# Test files
+*_test.go
+testdata/
+coverage.txt
+coverage.html
+*.test
+
+# Development
+.env
+.env.local
+.env.*.local
+tmp/
+temp/
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Deployment
+deployments/
+k8s/
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Specific directories to exclude from build context
+postgres_data/
+redis_data/
+prometheus_data/
+grafana_data/
+loki_data/
