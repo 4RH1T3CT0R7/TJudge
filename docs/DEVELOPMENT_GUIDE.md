@@ -1,76 +1,75 @@
-# TJudge Development Guide
+# TJudge - Руководство разработчика
 
-## Quick Start
+## Быстрый старт
 
-### 1. Prerequisites
+### 1. Требования
 
 - Go 1.24+
 - Docker & Docker Compose
 - Make
 
-### 2. Start Development Environment
+### 2. Запуск окружения разработки
 
 ```bash
-# Start database and cache
+# Запустить базу данных и кэш
 docker compose up -d postgres redis
 
-# Run migrations
+# Применить миграции
 make migrate-up
 
-# Start API server with hot reload
+# Запустить API сервер с hot reload
 make dev
 ```
 
-Server will be available at: http://localhost:8080
+Сервер доступен по адресу: http://localhost:8080
 
-### 3. Verify Installation
+### 3. Проверка работоспособности
 
 ```bash
 curl http://localhost:8080/health
-# Output: OK
+# Вывод: OK
 ```
 
 ---
 
-## Make Commands
+## Команды Make
 
-| Command | Description |
-|---------|-------------|
-| `make dev` | Start API with hot reload (air) |
-| `make build` | Build all binaries |
-| `make test` | Run unit tests |
-| `make test-integration` | Run integration tests |
-| `make test-e2e` | Run E2E tests |
-| `make lint` | Run linter (golangci-lint) |
-| `make migrate-up` | Apply database migrations |
-| `make migrate-down` | Rollback migrations |
-| `make docker-up` | Start all services in Docker |
-| `make docker-down` | Stop all Docker services |
-| `make clean` | Remove build artifacts |
+| Команда | Описание |
+|---------|----------|
+| `make dev` | Запуск API с hot reload (air) |
+| `make build` | Сборка всех бинарников |
+| `make test` | Запуск unit тестов |
+| `make test-integration` | Запуск интеграционных тестов |
+| `make test-e2e` | Запуск E2E тестов |
+| `make lint` | Запуск линтера (golangci-lint) |
+| `make migrate-up` | Применить миграции БД |
+| `make migrate-down` | Откатить миграции |
+| `make docker-up` | Запустить все сервисы в Docker |
+| `make docker-down` | Остановить Docker сервисы |
+| `make clean` | Удалить артефакты сборки |
 
 ---
 
-## API Endpoints
+## API Эндпоинты
 
 ### Health Check
 ```
 GET /health
 ```
 
-### Authentication
+### Аутентификация
 
 ```bash
-# Register new user
-POST /api/v1/auth/register
-Content-Type: application/json
+# Регистрация нового пользователя
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "player1",
+    "email": "player1@example.com",
+    "password": "SecurePass123!"
+  }'
 
-{
-  "username": "player1",
-  "email": "player1@example.com",
-  "password": "SecurePass123!"
-}
-
-# Response:
+# Ответ:
 {
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
@@ -83,172 +82,159 @@ Content-Type: application/json
 ```
 
 ```bash
-# Login
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "username": "player1",
-  "password": "SecurePass123!"
-}
+# Вход
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "player1",
+    "password": "SecurePass123!"
+  }'
 ```
 
 ```bash
-# Refresh token
-POST /api/v1/auth/refresh
-Content-Type: application/json
-
-{
-  "refresh_token": "eyJ..."
-}
+# Обновление токена
+curl -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "eyJ..."}'
 ```
 
 ```bash
-# Get current user (requires auth)
-GET /api/v1/auth/me
-Authorization: Bearer <access_token>
+# Получить текущего пользователя (требуется авторизация)
+curl http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer <access_token>"
 ```
 
 ```bash
-# Logout
-POST /api/v1/auth/logout
-Authorization: Bearer <access_token>
+# Выход
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H "Authorization: Bearer <access_token>"
 ```
 
-### Tournaments
+### Турниры
 
 ```bash
-# List tournaments (public)
-GET /api/v1/tournaments
-GET /api/v1/tournaments?game_type=tictactoe&status=active&limit=10
+# Список турниров (публичный)
+curl http://localhost:8080/api/v1/tournaments
+curl "http://localhost:8080/api/v1/tournaments?game_type=tictactoe&status=active&limit=10"
 
-# Get tournament by ID (public)
-GET /api/v1/tournaments/{id}
+# Получить турнир по ID (публичный)
+curl http://localhost:8080/api/v1/tournaments/{id}
 
-# Get leaderboard (public)
-GET /api/v1/tournaments/{id}/leaderboard
+# Таблица лидеров (публичный)
+curl http://localhost:8080/api/v1/tournaments/{id}/leaderboard
 
-# Get tournament matches (public)
-GET /api/v1/tournaments/{id}/matches
-```
-
-```bash
-# Create tournament (auth required)
-POST /api/v1/tournaments
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "My Tournament",
-  "description": "Tournament description",
-  "game_type": "tictactoe",
-  "max_participants": 16
-}
+# Матчи турнира (публичный)
+curl http://localhost:8080/api/v1/tournaments/{id}/matches
 ```
 
 ```bash
-# Join tournament (auth required)
-POST /api/v1/tournaments/{id}/join
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "program_id": "uuid-of-your-program"
-}
+# Создать турнир (требуется авторизация)
+curl -X POST http://localhost:8080/api/v1/tournaments \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Мой турнир",
+    "description": "Описание турнира",
+    "game_type": "tictactoe",
+    "max_participants": 16
+  }'
 ```
 
 ```bash
-# Start tournament (auth required, organizer only)
-POST /api/v1/tournaments/{id}/start
-Authorization: Bearer <access_token>
-```
-
-### Programs
-
-All program endpoints require authentication.
-
-```bash
-# Create program
-POST /api/v1/programs
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "My Bot",
-  "code_path": "path/to/code",
-  "language": "python",
-  "game_type": "tictactoe"
-}
+# Присоединиться к турниру (требуется авторизация)
+curl -X POST http://localhost:8080/api/v1/tournaments/{id}/join \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"program_id": "uuid-вашей-программы"}'
 ```
 
 ```bash
-# List your programs
-GET /api/v1/programs
-Authorization: Bearer <access_token>
-
-# Get program by ID
-GET /api/v1/programs/{id}
-Authorization: Bearer <access_token>
-
-# Update program
-PUT /api/v1/programs/{id}
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "Updated Bot Name",
-  "code_path": "new/path"
-}
-
-# Delete program
-DELETE /api/v1/programs/{id}
-Authorization: Bearer <access_token>
+# Запустить турнир (требуется авторизация, только организатор)
+curl -X POST http://localhost:8080/api/v1/tournaments/{id}/start \
+  -H "Authorization: Bearer <access_token>"
 ```
 
-### Matches
+### Программы (боты)
+
+Все эндпоинты программ требуют авторизации.
 
 ```bash
-# List matches
-GET /api/v1/matches
-GET /api/v1/matches?tournament_id={id}&status=completed
-
-# Get match by ID
-GET /api/v1/matches/{id}
-
-# Get statistics
-GET /api/v1/matches/statistics
+# Создать программу
+curl -X POST http://localhost:8080/api/v1/programs \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Мой бот",
+    "code_path": "path/to/code",
+    "language": "python",
+    "game_type": "tictactoe"
+  }'
 ```
 
-### WebSocket (Real-time updates)
+```bash
+# Список ваших программ
+curl http://localhost:8080/api/v1/programs \
+  -H "Authorization: Bearer <access_token>"
+
+# Получить программу по ID
+curl http://localhost:8080/api/v1/programs/{id} \
+  -H "Authorization: Bearer <access_token>"
+
+# Обновить программу
+curl -X PUT http://localhost:8080/api/v1/programs/{id} \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Новое имя бота"}'
+
+# Удалить программу
+curl -X DELETE http://localhost:8080/api/v1/programs/{id} \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Матчи
+
+```bash
+# Список матчей
+curl http://localhost:8080/api/v1/matches
+curl "http://localhost:8080/api/v1/matches?tournament_id={id}&status=completed"
+
+# Получить матч по ID
+curl http://localhost:8080/api/v1/matches/{id}
+
+# Статистика
+curl http://localhost:8080/api/v1/matches/statistics
+```
+
+### WebSocket (обновления в реальном времени)
 
 ```javascript
-// Connect to tournament updates
+// Подключение к обновлениям турнира
 const ws = new WebSocket('ws://localhost:8080/api/v1/ws/tournaments/{tournament_id}');
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  console.log('Update:', data);
+  console.log('Обновление:', data);
 };
 ```
 
 ---
 
-## Configuration
+## Конфигурация
 
-Configuration is loaded from environment variables. Create `.env` file:
+Конфигурация загружается из переменных окружения. Создайте файл `.env`:
 
 ```env
-# Environment
+# Окружение
 ENVIRONMENT=development
 
-# API Server
+# API Сервер
 API_PORT=8080
 READ_TIMEOUT=30s
 WRITE_TIMEOUT=30s
 
-# Database (PostgreSQL)
+# База данных (PostgreSQL)
 DB_HOST=localhost
-DB_PORT=5433          # Note: 5433 to avoid conflict with local PostgreSQL
+DB_PORT=5433          # 5433 чтобы избежать конфликта с локальным PostgreSQL
 DB_USER=tjudge
 DB_PASSWORD=secret
 DB_NAME=tjudge
@@ -261,11 +247,11 @@ REDIS_PASSWORD=
 REDIS_DB=0
 
 # JWT
-JWT_SECRET=your-secret-key-change-in-production
+JWT_SECRET=ваш-секретный-ключ-измените-в-продакшене
 JWT_ACCESS_TTL=1h
 JWT_REFRESH_TTL=168h
 
-# Logging
+# Логирование
 LOG_LEVEL=debug       # debug, info, warn, error
 LOG_FORMAT=console    # console, json
 
@@ -275,172 +261,172 @@ RATE_LIMIT_ENABLED=false
 
 ---
 
-## Common Issues & Solutions
+## Частые проблемы и решения
 
 ### 1. "role tjudge does not exist"
 
-**Problem:** Local PostgreSQL is running on port 5432, conflicting with Docker.
+**Проблема:** Локальный PostgreSQL работает на порту 5432, конфликтуя с Docker.
 
-**Solution:**
+**Решение:**
 ```bash
-# Check what's on port 5432
+# Проверить что на порту 5432
 lsof -i :5432
 
-# If local postgres is running, use port 5433 for Docker
-# In docker-compose.yml:
+# Если работает локальный postgres, используйте порт 5433 для Docker
+# В docker-compose.yml:
 ports:
   - "5433:5432"
 
-# In .env:
+# В .env:
 DB_PORT=5433
 ```
 
 ### 2. "air: command not found"
 
-**Problem:** Air is not in PATH.
+**Проблема:** Air не в PATH.
 
-**Solution:**
+**Решение:**
 ```bash
-# Air is installed in ~/go/bin
+# Air установлен в ~/go/bin
 export PATH=$PATH:~/go/bin
 
-# Or add to .zshrc / .bashrc
+# Или добавьте в .zshrc / .bashrc
 echo 'export PATH=$PATH:~/go/bin' >> ~/.zshrc
 ```
 
-### 3. Migrations fail
+### 3. Миграции не работают
 
-**Problem:** Database not running or wrong credentials.
+**Проблема:** База данных не запущена или неверные credentials.
 
-**Solution:**
+**Решение:**
 ```bash
-# Check if postgres is running
+# Проверить что postgres работает
 docker compose ps
 
-# Check connection
+# Проверить подключение
 docker exec tjudge-postgres pg_isready -U tjudge
 
-# Restart containers
+# Перезапустить контейнеры
 docker compose down -v
 docker compose up -d postgres redis
 ```
 
-### 4. "connection refused" on localhost:8080
+### 4. "connection refused" на localhost:8080
 
-**Problem:** Server not running or crashed.
+**Проблема:** Сервер не запущен или упал.
 
-**Solution:**
+**Решение:**
 ```bash
-# Check if something else uses port 8080
+# Проверить что занимает порт 8080
 lsof -i :8080
 
-# Check server logs in terminal where make dev is running
-# Look for FATAL or ERROR messages
+# Проверить логи сервера в терминале где запущен make dev
+# Искать FATAL или ERROR сообщения
 ```
 
-### 5. "Internal server error" on API calls
+### 5. "Internal server error" на API запросах
 
-**Problem:** Usually database tables missing.
+**Проблема:** Обычно отсутствуют таблицы в БД.
 
-**Solution:**
+**Решение:**
 ```bash
-# Run migrations
+# Запустить миграции
 make migrate-up
 
-# Check migration status
+# Проверить статус миграций
 docker exec tjudge-postgres psql -U tjudge -d tjudge -c "\dt"
 ```
 
-### 6. Docker containers unhealthy
+### 6. Docker контейнеры unhealthy
 
-**Problem:** Service failed to start properly.
+**Проблема:** Сервис не смог запуститься.
 
-**Solution:**
+**Решение:**
 ```bash
-# Check logs
+# Проверить логи
 docker compose logs postgres
 docker compose logs redis
 
-# Full reset
+# Полный сброс
 docker compose down -v
 docker compose up -d postgres redis
 ```
 
 ---
 
-## Project Structure
+## Структура проекта
 
 ```
 TJudge/
 ├── cmd/
-│   ├── api/            # API server entry point
-│   ├── worker/         # Background worker entry point
-│   └── migrations/     # Migration tool
+│   ├── api/            # Точка входа API сервера
+│   ├── worker/         # Точка входа фонового воркера
+│   └── migrations/     # Инструмент миграций
 ├── internal/
 │   ├── api/            # HTTP handlers, routes, middleware
-│   ├── config/         # Configuration loading
-│   ├── domain/         # Business logic (auth, tournament, rating)
-│   ├── infrastructure/ # DB, cache, queue implementations
-│   ├── websocket/      # WebSocket hub and clients
-│   └── worker/         # Background job processing
-├── pkg/                # Shared packages (logger, errors, metrics)
-├── migrations/         # SQL migration files
+│   ├── config/         # Загрузка конфигурации
+│   ├── domain/         # Бизнес-логика (auth, tournament, rating)
+│   ├── infrastructure/ # Реализации DB, cache, queue
+│   ├── websocket/      # WebSocket hub и клиенты
+│   └── worker/         # Обработка фоновых задач
+├── pkg/                # Общие пакеты (logger, errors, metrics)
+├── migrations/         # SQL файлы миграций
 ├── tests/
-│   ├── integration/    # Integration tests
-│   ├── e2e/            # End-to-end tests
-│   └── chaos/          # Chaos/stress tests
+│   ├── integration/    # Интеграционные тесты
+│   ├── e2e/            # End-to-end тесты
+│   └── chaos/          # Chaos/stress тесты
 ├── docker/             # Dockerfiles
-├── deployments/        # Kubernetes, Prometheus configs
-└── docs/               # Documentation
+├── deployments/        # Kubernetes, Prometheus конфиги
+└── docs/               # Документация
 ```
 
 ---
 
-## Testing
+## Тестирование
 
 ```bash
-# Unit tests
+# Unit тесты
 make test
 
-# With coverage
+# С покрытием
 make test-coverage
 
-# Integration tests (requires running DB)
+# Интеграционные тесты (требуется запущенная БД)
 RUN_INTEGRATION=true make test-integration
 
-# E2E tests (requires running server)
+# E2E тесты (требуется запущенный сервер)
 make test-e2e
 
-# Linting
+# Линтер
 make lint
 ```
 
 ---
 
-## Metrics & Monitoring
+## Метрики и мониторинг
 
-Metrics endpoint: http://localhost:9090/metrics
+Эндпоинт метрик: http://localhost:9090/metrics
 
-Available metrics:
-- `tjudge_http_requests_total` - HTTP request count
-- `tjudge_http_request_duration_seconds` - Request latency
-- `tjudge_matches_total` - Processed matches
-- `tjudge_match_duration_seconds` - Match execution time
-- `tjudge_queue_size` - Queue size by priority
-- `tjudge_active_workers` - Active worker count
-- `tjudge_cache_hits_total` / `tjudge_cache_misses_total` - Cache statistics
+Доступные метрики:
+- `tjudge_http_requests_total` - Количество HTTP запросов
+- `tjudge_http_request_duration_seconds` - Латентность запросов
+- `tjudge_matches_total` - Обработанные матчи
+- `tjudge_match_duration_seconds` - Время выполнения матча
+- `tjudge_queue_size` - Размер очереди по приоритетам
+- `tjudge_active_workers` - Количество активных воркеров
+- `tjudge_cache_hits_total` / `tjudge_cache_misses_total` - Статистика кэша
 
 ---
 
-## Full Docker Deployment
+## Полный Docker деплой
 
-To run everything in Docker:
+Для запуска всего в Docker:
 
 ```bash
-# Start all services
+# Запустить все сервисы
 docker compose up -d
 
-# Services:
+# Сервисы:
 # - postgres (5433)
 # - redis (6379)
 # - api (8080)
@@ -450,3 +436,17 @@ docker compose up -d
 ```
 
 Grafana: http://localhost:3000 (admin/admin)
+
+---
+
+## Веб-интерфейс и админка
+
+**ВАЖНО:** Текущая версия проекта - это **только API (бэкенд)**.
+
+Веб-интерфейс и админ-панель **не реализованы**.
+
+Для полноценного веб-приложения необходимо создать:
+1. **Frontend** (React/Vue/Next.js) - пользовательский интерфейс
+2. **Admin Panel** - панель администратора для управления турнирами и пользователями
+
+Если требуется фронтенд, его нужно разработать отдельно, подключив к существующему API.
