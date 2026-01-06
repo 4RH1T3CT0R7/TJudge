@@ -121,8 +121,8 @@ clean:
 
 # Development mode (run with hot reload using air)
 dev:
-	@which air > /dev/null || (echo "Installing air..." && go install github.com/air-verse/air@latest)
-	air
+	@which air > /dev/null 2>&1 || (echo "Installing air..." && go install github.com/air-verse/air@latest)
+	@$(shell go env GOPATH)/bin/air
 
 # Format code
 fmt:
