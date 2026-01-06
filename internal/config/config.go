@@ -43,11 +43,19 @@ type DatabaseConfig struct {
 	MaxLifetime    time.Duration `yaml:"max_lifetime"`
 }
 
-// DSN возвращает строку подключения к PostgreSQL
+// DSN возвращает строку подключения к PostgreSQL (формат key=value)
 func (c DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		c.Host, c.Port, c.User, c.Password, c.Name,
+	)
+}
+
+// DSNURL возвращает строку подключения в URL формате (для golang-migrate)
+func (c DatabaseConfig) DSNURL() string {
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		c.User, c.Password, c.Host, c.Port, c.Name,
 	)
 }
 

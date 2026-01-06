@@ -26,7 +26,7 @@ func main() {
 	// Создаём экземпляр migrate
 	m, err := migrate.New(
 		"file://migrations",
-		cfg.Database.DSN(),
+		cfg.Database.DSNURL(),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create migrate instance: %v", err)
