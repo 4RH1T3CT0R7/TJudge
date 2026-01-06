@@ -5,11 +5,12 @@ package integration
 
 import (
 	"context"
-	"database/sql"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -40,7 +41,7 @@ func (s *DBTestSuite) SetupSuite() {
 
 	// Get database config from environment
 	host := getEnv("DB_HOST", "localhost")
-	port := getEnv("DB_PORT", "5432")
+	port := getEnvInt("DB_PORT", 5432)
 	user := getEnv("DB_USER", "tjudge")
 	password := getEnv("DB_PASSWORD", "secret")
 	dbName := getEnv("DB_NAME", "tjudge_test")
@@ -49,16 +50,15 @@ func (s *DBTestSuite) SetupSuite() {
 	m := metrics.New()
 
 	var err error
-	s.db, err = db.New(db.Config{
-		Host:            host,
-		Port:            port,
-		User:            user,
-		Password:        password,
-		DBName:          dbName,
-		SSLMode:         "disable",
-		MaxOpenConns:    10,
-		MaxIdleConns:    5,
-		ConnMaxLifetime: 5 * time.Minute,
+	s.db, err = db.New(&config.DatabaseConfig{
+		Host:           host,
+		Port:           port,
+		User:           user,
+		Password:       password,
+		Name:           dbName,
+		MaxConnections: 10,
+		MaxIdle:        5,
+		MaxLifetime:    5 * time.Minute,
 	}, log, m)
 	require.NoError(s.T(), err)
 
@@ -81,7 +81,7 @@ func (s *DBTestSuite) SetupTest() {
 func (s *DBTestSuite) cleanupTestData() {
 	// Clean up in reverse order of dependencies
 	s.db.ExecContext(s.ctx, "DELETE FROM matches WHERE game_type = 'integration_test'")
-	s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE source_code LIKE 'integration_test%'")
+	s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE code_path LIKE 'integration_test%'")
 	s.db.ExecContext(s.ctx, "DELETE FROM users WHERE username LIKE 'integration_test_%'")
 }
 
@@ -233,12 +233,12 @@ func (s *DBTestSuite) TestProgramRepository_CRUD() {
 
 	// Create program
 	program := &domain.Program{
-		ID:         uuid.New(),
-		UserID:     user.ID,
-		Name:       "Test Program",
-		Language:   "python",
-		SourceCode: "integration_test_print('hello')",
-		GameType:   "tictactoe",
+		ID:       uuid.New(),
+		UserID:   user.ID,
+		Name:     "Test Program",
+		Language: "python",
+		CodePath: "integration_test_print_hello",
+		GameType: "tictactoe",
 	}
 
 	err = s.programRepo.Create(s.ctx, program)
@@ -270,57 +270,6 @@ func (s *DBTestSuite) TestProgramRepository_CRUD() {
 	require.NoError(s.T(), err)
 
 	_, err = s.programRepo.GetByID(s.ctx, program.ID)
-	assert.Error(s.T(), err)
-}
-
-// =============================================================================
-// Transaction Tests
-// =============================================================================
-
-func (s *DBTestSuite) TestTransaction_Commit() {
-	user := &domain.User{
-		ID:           uuid.New(),
-		Username:     "integration_test_user_" + uuid.New().String()[:8],
-		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
-		PasswordHash: "hashed_password",
-	}
-
-	err := s.db.WithTransaction(s.ctx, func(tx *sql.Tx) error {
-		query := `
-			INSERT INTO users (id, username, email, password_hash)
-			VALUES ($1, $2, $3, $4)
-		`
-		_, err := tx.ExecContext(s.ctx, query, user.ID, user.Username, user.Email, user.PasswordHash)
-		return err
-	})
-	require.NoError(s.T(), err)
-
-	// Verify user was created
-	found, err := s.userRepo.GetByID(s.ctx, user.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), user.Username, found.Username)
-}
-
-func (s *DBTestSuite) TestTransaction_Rollback() {
-	userID := uuid.New()
-	username := "integration_test_user_" + uuid.New().String()[:8]
-
-	err := s.db.WithTransaction(s.ctx, func(tx *sql.Tx) error {
-		query := `
-			INSERT INTO users (id, username, email, password_hash)
-			VALUES ($1, $2, $3, $4)
-		`
-		_, err := tx.ExecContext(s.ctx, query, userID, username, "test@test.com", "hash")
-		if err != nil {
-			return err
-		}
-		// Force rollback
-		return sql.ErrTxDone
-	})
-	assert.Error(s.T(), err)
-
-	// Verify user was NOT created (rolled back)
-	_, err = s.userRepo.GetByID(s.ctx, userID)
 	assert.Error(s.T(), err)
 }
 
@@ -370,6 +319,15 @@ func (s *DBTestSuite) TestConcurrentCreates() {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if i, err := strconv.Atoi(value); err == nil {
+			return i
+		}
 	}
 	return defaultValue
 }

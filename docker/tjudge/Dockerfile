@@ -1,6 +1,6 @@
 # Multi-stage build для tjudge-cli
 # Stage 1: Сборка Rust приложения
-FROM rust:1.75-alpine AS builder
+FROM rust:1.85-alpine AS builder
 
 # Устанавливаем необходимые зависимости для сборки
 RUN apk add --no-cache musl-dev git

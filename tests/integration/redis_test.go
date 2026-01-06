@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -36,20 +37,19 @@ func (s *RedisTestSuite) SetupSuite() {
 	s.ctx = context.Background()
 
 	host := getEnv("REDIS_HOST", "localhost")
-	port := getEnv("REDIS_PORT", "6379")
+	port := getEnvInt("REDIS_PORT", 6379)
 	password := getEnv("REDIS_PASSWORD", "")
 
 	log, _ := logger.New("debug", "json")
 	m := metrics.New()
 
 	var err error
-	s.cache, err = cache.New(cache.Config{
-		Host:         host,
-		Port:         port,
-		Password:     password,
-		DB:           1, // Use DB 1 for tests
-		PoolSize:     10,
-		MinIdleConns: 5,
+	s.cache, err = cache.New(&config.RedisConfig{
+		Host:     host,
+		Port:     port,
+		Password: password,
+		DB:       1, // Use DB 1 for tests
+		PoolSize: 10,
 	}, log, m)
 	require.NoError(s.T(), err)
 
@@ -166,11 +166,11 @@ func (s *RedisTestSuite) TestMatchCache_SetGetMatch() {
 func (s *RedisTestSuite) TestMatchCache_SetGetResult() {
 	matchID := uuid.New()
 	result := &domain.MatchResult{
-		MatchID:     matchID,
-		WinnerID:    uuid.New(),
-		ScoreP1:     10,
-		ScoreP2:     5,
-		DetailsJSON: `{"moves": 42}`,
+		MatchID:  matchID,
+		Winner:   1,
+		Score1:   10,
+		Score2:   5,
+		Duration: 5 * time.Second,
 	}
 
 	err := s.matchCache.Set(s.ctx, matchID, result)
@@ -180,8 +180,8 @@ func (s *RedisTestSuite) TestMatchCache_SetGetResult() {
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), found)
 	assert.Equal(s.T(), result.MatchID, found.MatchID)
-	assert.Equal(s.T(), result.WinnerID, found.WinnerID)
-	assert.Equal(s.T(), result.ScoreP1, found.ScoreP1)
+	assert.Equal(s.T(), result.Winner, found.Winner)
+	assert.Equal(s.T(), result.Score1, found.Score1)
 }
 
 func (s *RedisTestSuite) TestMatchCache_Delete() {
