@@ -121,7 +121,7 @@ clean:
 
 # Development mode (run with hot reload using air)
 dev:
-	@which air > /dev/null || (echo "Installing air..." && go install github.com/cosmtrek/air@latest)
+	@which air > /dev/null || (echo "Installing air..." && go install github.com/air-verse/air@latest)
 	air
 
 # Format code
