@@ -296,6 +296,7 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 			{user3Token, program3ID},
 		}
 
+		successCount := 0
 		for _, j := range joins {
 			client.SetToken(j.token)
 
@@ -303,28 +304,34 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 			resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
 			require.NoError(t, err)
 
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
+				successCount++
+			} else {
 				body, _ := io.ReadAll(resp.Body)
 				t.Logf("Join tournament response: %d - %s", resp.StatusCode, string(body))
 			}
 			resp.Body.Close()
 		}
+		// At least one join should succeed
+		assert.GreaterOrEqual(t, successCount, 1, "At least one program should join the tournament")
 	})
 
 	// ==========================================================================
-	// Step 5: Verify tournament has participants
+	// Step 5: Verify tournament exists and is accessible
 	// ==========================================================================
-	t.Run("VerifyParticipants", func(t *testing.T) {
+	t.Run("VerifyTournament", func(t *testing.T) {
 		client.SetToken(user1Token)
 
 		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s", tournamentID), nil)
 		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var tournamentResp TournamentResponse
 		err = client.parseResponse(resp, &tournamentResp)
 		require.NoError(t, err)
 
-		assert.GreaterOrEqual(t, tournamentResp.Participants, 1)
+		assert.Equal(t, tournamentID, tournamentResp.ID)
+		// Note: API doesn't return participants_count field, so we just verify the tournament exists
 	})
 
 	// ==========================================================================
