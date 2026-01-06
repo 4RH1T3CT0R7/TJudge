@@ -226,54 +226,59 @@ func (s *RedisTestSuite) TestMatchCache_Exists() {
 // Leaderboard Cache Tests
 // =============================================================================
 
-func (s *RedisTestSuite) TestLeaderboardCache_SetGetTournament() {
+func (s *RedisTestSuite) TestLeaderboardCache_UpdateAndGetTop() {
 	tournamentID := uuid.New()
-	entries := []domain.LeaderboardEntry{
-		{ProgramID: uuid.New(), ProgramName: "Program 1", Rating: 1500, Rank: 1, Wins: 10, Losses: 2, Draws: 1},
-		{ProgramID: uuid.New(), ProgramName: "Program 2", Rating: 1400, Rank: 2, Wins: 8, Losses: 4, Draws: 1},
-		{ProgramID: uuid.New(), ProgramName: "Program 3", Rating: 1300, Rank: 3, Wins: 6, Losses: 5, Draws: 2},
-	}
+	program1 := uuid.New()
+	program2 := uuid.New()
+	program3 := uuid.New()
 
-	err := s.leaderboardCache.SetTournamentLeaderboard(s.ctx, tournamentID, entries)
+	// Update ratings for programs
+	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program1, 1500)
+	require.NoError(s.T(), err)
+	err = s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program2, 1400)
+	require.NoError(s.T(), err)
+	err = s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program3, 1300)
 	require.NoError(s.T(), err)
 
-	found, err := s.leaderboardCache.GetTournamentLeaderboard(s.ctx, tournamentID)
+	// Get top entries
+	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 10)
 	require.NoError(s.T(), err)
-	require.NotNil(s.T(), found)
-	assert.Len(s.T(), found, 3)
-	assert.Equal(s.T(), entries[0].Rating, found[0].Rating)
+	require.Len(s.T(), entries, 3)
+	assert.Equal(s.T(), 1500, entries[0].Rating)
 }
 
-func (s *RedisTestSuite) TestLeaderboardCache_SetGetGlobal() {
-	entries := []domain.LeaderboardEntry{
-		{ProgramID: uuid.New(), ProgramName: "Top 1", Rating: 2000, Rank: 1},
-		{ProgramID: uuid.New(), ProgramName: "Top 2", Rating: 1900, Rank: 2},
-	}
+func (s *RedisTestSuite) TestLeaderboardCache_IncrementRating() {
+	tournamentID := uuid.New()
+	programID := uuid.New()
 
-	err := s.leaderboardCache.SetGlobalLeaderboard(s.ctx, entries)
+	// Set initial rating
+	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, programID, 1500)
 	require.NoError(s.T(), err)
 
-	found, err := s.leaderboardCache.GetGlobalLeaderboard(s.ctx)
+	// Increment rating
+	err = s.leaderboardCache.IncrementRating(s.ctx, tournamentID, programID, 100)
 	require.NoError(s.T(), err)
-	require.NotNil(s.T(), found)
-	assert.Len(s.T(), found, 2)
+
+	// Verify
+	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 1)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), entries, 1)
+	assert.Equal(s.T(), 1600, entries[0].Rating)
 }
 
-func (s *RedisTestSuite) TestLeaderboardCache_InvalidateTournament() {
+func (s *RedisTestSuite) TestLeaderboardCache_ClearTournament() {
 	tournamentID := uuid.New()
-	entries := []domain.LeaderboardEntry{
-		{ProgramID: uuid.New(), ProgramName: "Program 1", Rating: 1500, Rank: 1},
-	}
+	programID := uuid.New()
 
-	err := s.leaderboardCache.SetTournamentLeaderboard(s.ctx, tournamentID, entries)
+	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, programID, 1500)
 	require.NoError(s.T(), err)
 
-	err = s.leaderboardCache.InvalidateTournamentLeaderboard(s.ctx, tournamentID)
+	err = s.leaderboardCache.Clear(s.ctx, tournamentID)
 	require.NoError(s.T(), err)
 
-	found, err := s.leaderboardCache.GetTournamentLeaderboard(s.ctx, tournamentID)
+	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 10)
 	require.NoError(s.T(), err)
-	assert.Nil(s.T(), found)
+	assert.Len(s.T(), entries, 0)
 }
 
 // =============================================================================
@@ -281,34 +286,35 @@ func (s *RedisTestSuite) TestLeaderboardCache_InvalidateTournament() {
 // =============================================================================
 
 func (s *RedisTestSuite) TestDistributedLock_LockUnlock() {
-	lock := cache.NewDistributedLock(s.cache, "test:lock:basic", 5*time.Second)
+	lock := cache.NewDistributedLock(s.cache)
+	lockKey := "test:lock:basic"
+	ttl := 5 * time.Second
 
-	acquired, err := lock.TryLock(s.ctx)
+	token, err := lock.Lock(s.ctx, lockKey, ttl)
 	require.NoError(s.T(), err)
-	assert.True(s.T(), acquired)
+	assert.NotEmpty(s.T(), token)
 
 	// Try to acquire again - should fail
-	acquired, err = lock.TryLock(s.ctx)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), acquired)
+	_, err = lock.Lock(s.ctx, lockKey, ttl)
+	assert.Error(s.T(), err)
 
 	// Unlock
-	err = lock.Unlock(s.ctx)
+	err = lock.Unlock(s.ctx, lockKey, token)
 	require.NoError(s.T(), err)
 
 	// Should be able to acquire again
-	acquired, err = lock.TryLock(s.ctx)
+	token2, err := lock.Lock(s.ctx, lockKey, ttl)
 	require.NoError(s.T(), err)
-	assert.True(s.T(), acquired)
+	assert.NotEmpty(s.T(), token2)
 
-	lock.Unlock(s.ctx)
+	_ = lock.Unlock(s.ctx, lockKey, token2)
 }
 
 func (s *RedisTestSuite) TestDistributedLock_WithLock() {
-	lock := cache.NewDistributedLock(s.cache, "test:lock:withlock", 5*time.Second)
+	lock := cache.NewDistributedLock(s.cache)
 
 	executed := false
-	err := lock.WithLock(s.ctx, func() error {
+	err := lock.WithLock(s.ctx, "test:lock:withlock", 5*time.Second, func(ctx context.Context) error {
 		executed = true
 		return nil
 	})
@@ -317,21 +323,23 @@ func (s *RedisTestSuite) TestDistributedLock_WithLock() {
 }
 
 func (s *RedisTestSuite) TestDistributedLock_TTLExpiration() {
-	lock := cache.NewDistributedLock(s.cache, "test:lock:ttl", 100*time.Millisecond)
+	lock := cache.NewDistributedLock(s.cache)
+	lockKey := "test:lock:ttl"
+	ttl := 100 * time.Millisecond
 
-	acquired, err := lock.TryLock(s.ctx)
+	token, err := lock.Lock(s.ctx, lockKey, ttl)
 	require.NoError(s.T(), err)
-	assert.True(s.T(), acquired)
+	assert.NotEmpty(s.T(), token)
 
 	// Wait for TTL to expire
 	time.Sleep(200 * time.Millisecond)
 
 	// Lock should have expired, can acquire again
-	acquired, err = lock.TryLock(s.ctx)
+	token2, err := lock.Lock(s.ctx, lockKey, ttl)
 	require.NoError(s.T(), err)
-	assert.True(s.T(), acquired)
+	assert.NotEmpty(s.T(), token2)
 
-	lock.Unlock(s.ctx)
+	_ = lock.Unlock(s.ctx, lockKey, token2)
 }
 
 func (s *RedisTestSuite) TestDistributedLock_ConcurrentAccess() {
@@ -342,8 +350,8 @@ func (s *RedisTestSuite) TestDistributedLock_ConcurrentAccess() {
 
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			lock := cache.NewDistributedLock(s.cache, lockKey, 5*time.Second)
-			err := lock.WithLock(s.ctx, func() error {
+			lock := cache.NewDistributedLock(s.cache)
+			err := lock.WithLock(s.ctx, lockKey, 5*time.Second, func(ctx context.Context) error {
 				// Critical section
 				current := counter
 				time.Sleep(10 * time.Millisecond) // Simulate work
