@@ -1,10 +1,16 @@
 package metrics
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	instance *Metrics
+	once     sync.Once
 )
 
 // Metrics содержит все метрики приложения
@@ -36,8 +42,16 @@ type Metrics struct {
 	CacheMisses *prometheus.CounterVec
 }
 
-// New создаёт новый экземпляр метрик
+// New создаёт или возвращает существующий экземпляр метрик (singleton)
 func New() *Metrics {
+	once.Do(func() {
+		instance = newMetrics()
+	})
+	return instance
+}
+
+// newMetrics создаёт новый экземпляр метрик (внутренняя функция)
+func newMetrics() *Metrics {
 	return &Metrics{
 		// Match метрики
 		MatchesTotal: promauto.NewCounterVec(

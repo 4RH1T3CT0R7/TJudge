@@ -91,6 +91,7 @@ func (s *WebSocketTestSuite) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := websocket.NewClient(s.hub, conn, tournamentID, userID, s.log)
+	client.Register() // Register client with hub before starting pumps
 	go client.WritePump()
 	go client.ReadPump()
 }
