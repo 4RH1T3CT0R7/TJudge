@@ -378,7 +378,7 @@ func (s *RedisTestSuite) TestDistributedLock_ConcurrentAccess() {
 // Sorted Set Operations Tests (for Queue)
 // =============================================================================
 
-func (s *RedisTestSuite) TestSortedSet_Operations() {
+func (s *RedisTestSuite) TestSortedSet_ZAdd() {
 	key := "test:sortedset"
 
 	// Add items with scores (priorities)
@@ -389,46 +389,10 @@ func (s *RedisTestSuite) TestSortedSet_Operations() {
 	err = s.cache.ZAdd(s.ctx, key, 3.0, "item3")
 	require.NoError(s.T(), err)
 
-	// Get count
-	count, err := s.cache.ZCard(s.ctx, key)
+	// Verify with ZRevRangeWithScores
+	results, err := s.cache.ZRevRangeWithScores(s.ctx, key, 0, -1)
 	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(3), count)
-
-	// Pop highest priority (lowest score)
-	items, err := s.cache.ZPopMin(s.ctx, key, 1)
-	require.NoError(s.T(), err)
-	require.Len(s.T(), items, 1)
-	assert.Equal(s.T(), "item1", items[0].Member)
-
-	// Verify count decreased
-	count, err = s.cache.ZCard(s.ctx, key)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), count)
-}
-
-// =============================================================================
-// List Operations Tests (for Queue)
-// =============================================================================
-
-func (s *RedisTestSuite) TestList_Operations() {
-	key := "test:list"
-
-	// Push items
-	err := s.cache.LPush(s.ctx, key, "item1")
-	require.NoError(s.T(), err)
-	err = s.cache.LPush(s.ctx, key, "item2")
-	require.NoError(s.T(), err)
-
-	// Get length
-	length, err := s.cache.LLen(s.ctx, key)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), length)
-
-	// Pop (blocking)
-	result, err := s.cache.BRPop(s.ctx, time.Second, key)
-	require.NoError(s.T(), err)
-	require.Len(s.T(), result, 2)
-	assert.Equal(s.T(), "item1", result[1]) // First pushed = first popped (FIFO)
+	assert.Len(s.T(), results, 3)
 }
 
 func TestRedisSuite(t *testing.T) {

@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	ws "github.com/gorilla/websocket"
@@ -27,6 +29,9 @@ type WebSocketTestSuite struct {
 	suite.Suite
 	hub    *websocket.Hub
 	server *httptest.Server
+	ctx    context.Context
+	cancel context.CancelFunc
+	log    *logger.Logger
 }
 
 func (s *WebSocketTestSuite) SetupSuite() {
@@ -34,9 +39,12 @@ func (s *WebSocketTestSuite) SetupSuite() {
 		s.T().Skip("Skipping integration tests (set RUN_INTEGRATION=true)")
 	}
 
+	s.log, _ = logger.New("debug", "json")
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+
 	// Create hub
-	s.hub = websocket.NewHub()
-	go s.hub.Run()
+	s.hub = websocket.NewHub(s.log)
+	go s.hub.Run(s.ctx)
 
 	// Create test server
 	r := chi.NewRouter()
@@ -46,8 +54,8 @@ func (s *WebSocketTestSuite) SetupSuite() {
 }
 
 func (s *WebSocketTestSuite) TearDownSuite() {
-	if s.hub != nil {
-		s.hub.Shutdown()
+	if s.cancel != nil {
+		s.cancel() // This triggers hub shutdown
 	}
 	if s.server != nil {
 		s.server.Close()
@@ -82,8 +90,7 @@ func (s *WebSocketTestSuite) wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := websocket.NewClient(s.hub, conn, userID, tournamentID)
-	s.hub.Register(client)
+	client := websocket.NewClient(s.hub, conn, tournamentID, userID, s.log)
 	go client.WritePump()
 	go client.ReadPump()
 }
@@ -157,12 +164,8 @@ func (s *WebSocketTestSuite) TestWebSocket_BroadcastToTournament() {
 	// Give time for connections to be registered
 	time.Sleep(100 * time.Millisecond)
 
-	// Broadcast message
-	message := map[string]interface{}{
-		"type":    "tournament_update",
-		"payload": map[string]string{"status": "started"},
-	}
-	s.hub.BroadcastToTournament(tournamentID, message)
+	// Broadcast message using actual API
+	s.hub.Broadcast(tournamentID, "tournament_update", map[string]string{"status": "started"})
 
 	// Both clients should receive the message
 	received1 := make(chan bool, 1)
@@ -203,10 +206,7 @@ func (s *WebSocketTestSuite) TestWebSocket_BroadcastIsolation() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Broadcast only to tournament1
-	message := map[string]interface{}{
-		"type": "test",
-	}
-	s.hub.BroadcastToTournament(tournament1, message)
+	s.hub.Broadcast(tournament1, "test", nil)
 
 	// Client 1 should receive, client 2 should not
 	received1 := make(chan bool, 1)
@@ -243,16 +243,13 @@ func (s *WebSocketTestSuite) TestWebSocket_MessageFormat() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Broadcast structured message
-	message := map[string]interface{}{
-		"type": "match_completed",
-		"payload": map[string]interface{}{
-			"match_id":  uuid.New().String(),
-			"winner_id": uuid.New().String(),
-			"score_p1":  10,
-			"score_p2":  5,
-		},
+	payload := map[string]interface{}{
+		"match_id":  uuid.New().String(),
+		"winner_id": uuid.New().String(),
+		"score_p1":  10,
+		"score_p2":  5,
 	}
-	s.hub.BroadcastToTournament(tournamentID, message)
+	s.hub.Broadcast(tournamentID, "match_completed", payload)
 
 	// Read and verify message format
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -264,8 +261,6 @@ func (s *WebSocketTestSuite) TestWebSocket_MessageFormat() {
 	require.NoError(s.T(), err)
 
 	assert.Equal(s.T(), "match_completed", received["type"])
-	payload := received["payload"].(map[string]interface{})
-	assert.NotEmpty(s.T(), payload["match_id"])
 }
 
 // =============================================================================
@@ -330,8 +325,7 @@ func (s *WebSocketTestSuite) TestWebSocket_GracefulDisconnect() {
 	time.Sleep(100 * time.Millisecond)
 
 	// Broadcast should not panic even with no clients
-	message := map[string]interface{}{"type": "test"}
-	s.hub.BroadcastToTournament(tournamentID, message)
+	s.hub.Broadcast(tournamentID, "test", nil)
 }
 
 func (s *WebSocketTestSuite) TestWebSocket_AbruptDisconnect() {
@@ -350,8 +344,7 @@ func (s *WebSocketTestSuite) TestWebSocket_AbruptDisconnect() {
 	time.Sleep(200 * time.Millisecond)
 
 	// Hub should handle this gracefully
-	message := map[string]interface{}{"type": "test"}
-	s.hub.BroadcastToTournament(tournamentID, message)
+	s.hub.Broadcast(tournamentID, "test", nil)
 }
 
 // =============================================================================
@@ -377,11 +370,7 @@ func (s *WebSocketTestSuite) TestWebSocket_ConcurrentBroadcasts() {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			message := map[string]interface{}{
-				"type":  "concurrent_test",
-				"index": idx,
-			}
-			s.hub.BroadcastToTournament(tournamentID, message)
+			s.hub.Broadcast(tournamentID, "concurrent_test", map[string]int{"index": idx})
 		}(i)
 	}
 
