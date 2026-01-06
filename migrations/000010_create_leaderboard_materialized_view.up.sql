@@ -37,7 +37,6 @@ LEFT JOIN LATERAL (
     WHERE (m.program1_id = p.id OR m.program2_id = p.id)
       AND m.status = 'completed'
 ) stats ON true
-WHERE p.deleted_at IS NULL
 ORDER BY rating DESC, total_matches DESC;
 
 -- Create index on materialized view for fast lookups
@@ -88,7 +87,6 @@ LEFT JOIN LATERAL (
       AND m.tournament_id = tp.tournament_id
       AND m.status = 'completed'
 ) stats ON true
-WHERE p.deleted_at IS NULL
 ORDER BY tp.tournament_id, rating DESC, total_matches DESC;
 
 -- Create indexes on tournament leaderboard
