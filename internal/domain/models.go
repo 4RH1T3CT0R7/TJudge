@@ -27,14 +27,62 @@ type User struct {
 
 // Program представляет программу-бота пользователя
 type Program struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	UserID    uuid.UUID `json:"user_id" db:"user_id"`
-	Name      string    `json:"name" db:"name"`
-	GameType  string    `json:"game_type" db:"game_type"`
-	CodePath  string    `json:"code_path" db:"code_path"`
-	Language  string    `json:"language" db:"language"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID           uuid.UUID  `json:"id" db:"id"`
+	UserID       uuid.UUID  `json:"user_id" db:"user_id"`
+	Name         string     `json:"name" db:"name"`
+	GameType     string     `json:"game_type" db:"game_type"`
+	CodePath     string     `json:"code_path" db:"code_path"`
+	Language     string     `json:"language" db:"language"`
+	TeamID       *uuid.UUID `json:"team_id,omitempty" db:"team_id"`
+	TournamentID *uuid.UUID `json:"tournament_id,omitempty" db:"tournament_id"`
+	GameID       *uuid.UUID `json:"game_id,omitempty" db:"game_id"`
+	FilePath     *string    `json:"file_path,omitempty" db:"file_path"`
+	ErrorMessage *string    `json:"error_message,omitempty" db:"error_message"`
+	Version      int        `json:"version" db:"version"`
+	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// Game представляет игру в системе
+type Game struct {
+	ID          uuid.UUID `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`                 // Уникальное название [a-z0-9_]+
+	DisplayName string    `json:"display_name" db:"display_name"` // Название для отображения
+	Rules       string    `json:"rules" db:"rules"`               // Правила в формате Markdown
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Team представляет команду в турнире
+type Team struct {
+	ID           uuid.UUID `json:"id" db:"id"`
+	TournamentID uuid.UUID `json:"tournament_id" db:"tournament_id"`
+	Name         string    `json:"name" db:"name"`
+	Code         string    `json:"code" db:"code"` // 6-8 символов уникальный код
+	LeaderID     uuid.UUID `json:"leader_id" db:"leader_id"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// TeamMember представляет участника команды
+type TeamMember struct {
+	ID       uuid.UUID `json:"id" db:"id"`
+	TeamID   uuid.UUID `json:"team_id" db:"team_id"`
+	UserID   uuid.UUID `json:"user_id" db:"user_id"`
+	JoinedAt time.Time `json:"joined_at" db:"joined_at"`
+}
+
+// TeamWithMembers - команда с участниками для API ответов
+type TeamWithMembers struct {
+	Team
+	Members []User `json:"members"`
+}
+
+// TournamentGame - связь турнира с игрой
+type TournamentGame struct {
+	TournamentID uuid.UUID `json:"tournament_id" db:"tournament_id"`
+	GameID       uuid.UUID `json:"game_id" db:"game_id"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
 // TournamentStatus - статус турнира
@@ -51,15 +99,26 @@ const (
 type Tournament struct {
 	ID              uuid.UUID              `json:"id" db:"id"`
 	Name            string                 `json:"name" db:"name"`
+	Code            string                 `json:"code" db:"code"` // 6-8 символов уникальный код
+	Description     string                 `json:"description" db:"description"`
 	GameType        string                 `json:"game_type" db:"game_type"`
 	Status          TournamentStatus       `json:"status" db:"status"`
 	MaxParticipants *int                   `json:"max_participants,omitempty" db:"max_participants"`
+	MaxTeamSize     int                    `json:"max_team_size" db:"max_team_size"`
+	IsPermanent     bool                   `json:"is_permanent" db:"is_permanent"`
+	CreatorID       *uuid.UUID             `json:"creator_id,omitempty" db:"creator_id"`
 	StartTime       *time.Time             `json:"start_time,omitempty" db:"start_time"`
 	EndTime         *time.Time             `json:"end_time,omitempty" db:"end_time"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
 	Version         int                    `json:"version" db:"version"`
 	CreatedAt       time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time              `json:"updated_at" db:"updated_at"`
+}
+
+// TournamentWithGames - турнир с играми для API ответов
+type TournamentWithGames struct {
+	Tournament
+	Games []Game `json:"games"`
 }
 
 // TournamentParticipant представляет участника турнира
@@ -162,4 +221,33 @@ type LeaderboardEntry struct {
 	Losses      int       `json:"losses"`
 	Draws       int       `json:"draws"`
 	TotalGames  int       `json:"total_games"`
+}
+
+// TeamLeaderboardEntry - запись в таблице лидеров для команд
+type TeamLeaderboardEntry struct {
+	Rank       int       `json:"rank"`
+	TeamID     uuid.UUID `json:"team_id"`
+	TeamName   string    `json:"team_name"`
+	TotalScore int       `json:"total_score"` // Сумма позиций по всем играм
+	GameScores []struct {
+		GameID   uuid.UUID `json:"game_id"`
+		GameName string    `json:"game_name"`
+		Rating   int       `json:"rating"`
+		Position int       `json:"position"`
+	} `json:"game_scores"`
+}
+
+// GameFilter - фильтр для списка игр
+type GameFilter struct {
+	Name   string
+	Limit  int
+	Offset int
+}
+
+// TeamFilter - фильтр для списка команд
+type TeamFilter struct {
+	TournamentID *uuid.UUID
+	LeaderID     *uuid.UUID
+	Limit        int
+	Offset       int
 }

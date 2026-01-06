@@ -19,13 +19,15 @@ import (
 
 // Executor выполняет матчи в изолированных Docker контейнерах
 type Executor struct {
-	config       config.ExecutorConfig
-	dockerClient *client.Client
-	log          *logger.Logger
+	config        config.ExecutorConfig
+	dockerClient  *client.Client
+	programsPath  string // Путь к директории с программами на хосте
+	containerPath string // Путь внутри контейнера
+	log           *logger.Logger
 }
 
 // NewExecutor создаёт новый executor
-func NewExecutor(cfg config.ExecutorConfig, log *logger.Logger) (*Executor, error) {
+func NewExecutor(cfg config.ExecutorConfig, programsPath string, log *logger.Logger) (*Executor, error) {
 	// Создаём Docker клиент
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -33,9 +35,11 @@ func NewExecutor(cfg config.ExecutorConfig, log *logger.Logger) (*Executor, erro
 	}
 
 	return &Executor{
-		config:       cfg,
-		dockerClient: cli,
-		log:          log,
+		config:        cfg,
+		dockerClient:  cli,
+		programsPath:  programsPath,
+		containerPath: "/programs", // Фиксированный путь внутри контейнера
+		log:           log,
 	}, nil
 }
 
@@ -44,16 +48,22 @@ func (e *Executor) Execute(ctx context.Context, match *domain.Match, program1Pat
 	e.log.Info("Executing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("game_type", match.GameType),
+		zap.String("program1", program1Path),
+		zap.String("program2", program2Path),
 	)
 
 	start := time.Now()
+
+	// Преобразуем пути к программам для использования внутри контейнера
+	containerProgram1 := e.hostToContainerPath(program1Path)
+	containerProgram2 := e.hostToContainerPath(program2Path)
 
 	// Создаём контекст с таймаутом
 	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
 
 	// Запускаем матч в Docker контейнере
-	result, err := e.runInDocker(execCtx, match.GameType, program1Path, program2Path)
+	result, err := e.runInDocker(execCtx, match.GameType, containerProgram1, containerProgram2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run match: %w", err)
 	}
@@ -116,6 +126,10 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 				{Name: "core", Soft: 0, Hard: 0},
 				{Name: "fsize", Soft: 10485760, Hard: 10485760},
 			},
+		},
+		// Монтируем директорию с программами (только для чтения)
+		Binds: []string{
+			fmt.Sprintf("%s:%s:ro", e.programsPath, e.containerPath),
 		},
 		NetworkMode:    "none", // Отключаем сеть
 		ReadonlyRootfs: true,   // Только для чтения root filesystem
@@ -283,10 +297,21 @@ func (e *Executor) cleanup(containerID string) {
 		Force: true,
 	})
 	if err != nil {
-		e.log.LogError("Failed to remove container", err,
+		e.log.Error("Failed to remove container",
+			zap.Error(err),
 			zap.String("container_id", containerID),
 		)
 	}
+}
+
+// hostToContainerPath преобразует путь на хосте в путь внутри контейнера
+func (e *Executor) hostToContainerPath(hostPath string) string {
+	// Если путь начинается с programsPath, заменяем на containerPath
+	if strings.HasPrefix(hostPath, e.programsPath) {
+		return strings.Replace(hostPath, e.programsPath, e.containerPath, 1)
+	}
+	// Если путь не в programsPath, оставляем как есть (для обратной совместимости)
+	return hostPath
 }
 
 // buildCommand формирует команду для запуска tjudge-cli

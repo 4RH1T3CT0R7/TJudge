@@ -167,3 +167,47 @@ func (r *ProgramRepository) CheckOwnership(ctx context.Context, programID, userI
 
 	return exists, nil
 }
+
+// GetByTournamentAndGame получает все программы турнира для конкретной игры
+func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+	query := `
+		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
+		       code_path, file_path, language, error_message, version, created_at, updated_at
+		FROM programs
+		WHERE tournament_id = $1 AND game_id = $2
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get programs by tournament and game")
+	}
+	defer rows.Close()
+
+	var programs []*domain.Program
+	for rows.Next() {
+		var p domain.Program
+		err := rows.Scan(
+			&p.ID,
+			&p.UserID,
+			&p.TeamID,
+			&p.TournamentID,
+			&p.GameID,
+			&p.Name,
+			&p.GameType,
+			&p.CodePath,
+			&p.FilePath,
+			&p.Language,
+			&p.ErrorMessage,
+			&p.Version,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan program")
+		}
+		programs = append(programs, &p)
+	}
+
+	return programs, nil
+}

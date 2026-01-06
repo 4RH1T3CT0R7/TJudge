@@ -92,8 +92,8 @@ func main() {
 	// Инициализируем rating service
 	ratingService := rating.NewService(ratingRepo, leaderboardCache, log)
 
-	// Инициализируем executor
-	exec, err := executor.NewExecutor(cfg.Executor, log)
+	// Инициализируем executor с путём к программам
+	exec, err := executor.NewExecutor(cfg.Executor, cfg.Storage.ProgramsPath, log)
 	if err != nil {
 		log.Fatal("Failed to create executor", zap.Error(err))
 	}

@@ -1,4 +1,21 @@
-# Build stage
+# Frontend build stage
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend files
+COPY web/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source
+COPY web/ ./
+
+# Build frontend
+RUN npm run build
+
+# Go build stage
 FROM golang:1.24-alpine AS builder
 
 # Install build dependencies
@@ -16,6 +33,9 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Copy frontend dist from frontend builder
+COPY --from=frontend-builder /frontend/dist ./internal/web/dist
+
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/api ./cmd/api
 
@@ -28,6 +48,9 @@ RUN apk --no-cache add ca-certificates wget
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser
+
+# Create programs directory
+RUN mkdir -p /data/programs && chown -R appuser:appuser /data
 
 WORKDIR /app
 

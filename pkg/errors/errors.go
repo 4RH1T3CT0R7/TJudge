@@ -55,6 +55,7 @@ var (
 	// Validation errors
 	ErrValidation   = New(http.StatusBadRequest, "Validation failed", nil)
 	ErrInvalidInput = New(http.StatusBadRequest, "Invalid input", nil)
+	ErrBadRequest   = New(http.StatusBadRequest, "Bad request", nil)
 	ErrMissingField = New(http.StatusBadRequest, "Missing required field", nil)
 
 	// Resource errors
@@ -128,4 +129,13 @@ func ToAppError(err error) *AppError {
 	}
 
 	return ErrInternal.WithError(err)
+}
+
+// IsNotFound проверяет, является ли ошибка типом "not found"
+func IsNotFound(err error) bool {
+	appErr := GetAppError(err)
+	if appErr != nil {
+		return appErr.Code == http.StatusNotFound
+	}
+	return false
 }
