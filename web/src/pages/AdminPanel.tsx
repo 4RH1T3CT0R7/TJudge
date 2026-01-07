@@ -36,10 +36,15 @@ export function AdminPanel() {
   const [tournamentForm, setTournamentForm] = useState({
     name: '',
     description: '',
+    game_type: '',
     max_team_size: 3,
+    max_participants: '',
     is_permanent: false,
+    start_time: '',
+    end_time: '',
   });
   const [isSavingTournament, setIsSavingTournament] = useState(false);
+  const [tournamentError, setTournamentError] = useState<string | null>(null);
 
   // Delete confirmation
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
@@ -115,15 +120,41 @@ export function AdminPanel() {
   };
 
   const handleCreateTournament = async () => {
-    if (!tournamentForm.name.trim()) return;
+    if (!tournamentForm.name.trim()) {
+      setTournamentError('Название обязательно');
+      return;
+    }
+    if (!tournamentForm.game_type.trim()) {
+      setTournamentError('Тип игры обязателен');
+      return;
+    }
 
     setIsSavingTournament(true);
+    setTournamentError(null);
+
     try {
-      const newTournament = await api.createTournament(tournamentForm);
+      const payload: Record<string, unknown> = {
+        name: tournamentForm.name,
+        game_type: tournamentForm.game_type,
+        description: tournamentForm.description || undefined,
+        max_team_size: tournamentForm.max_team_size,
+        is_permanent: tournamentForm.is_permanent,
+      };
+
+      // Add optional fields
+      if (tournamentForm.max_participants) {
+        payload.max_participants = parseInt(tournamentForm.max_participants, 10);
+      }
+      if (tournamentForm.start_time) {
+        payload.start_time = new Date(tournamentForm.start_time).toISOString();
+      }
+
+      const newTournament = await api.createTournament(payload);
       setTournaments([...tournaments, newTournament]);
       resetTournamentForm();
     } catch (err) {
       console.error('Failed to create tournament:', err);
+      setTournamentError('Не удалось создать турнир');
     } finally {
       setIsSavingTournament(false);
     }
@@ -141,9 +172,14 @@ export function AdminPanel() {
     setTournamentForm({
       name: '',
       description: '',
+      game_type: '',
       max_team_size: 3,
+      max_participants: '',
       is_permanent: false,
+      start_time: '',
+      end_time: '',
     });
+    setTournamentError(null);
   };
 
   const startEditGame = (game: Game) => {
@@ -355,12 +391,12 @@ export function AdminPanel() {
           {/* Tournament Form Modal */}
           {showTournamentForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">Создать турнир</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Название</label>
+                    <label className="block text-sm font-medium mb-1">Название *</label>
                     <input
                       type="text"
                       value={tournamentForm.name}
@@ -370,6 +406,27 @@ export function AdminPanel() {
                       className="input"
                       placeholder="Название турнира"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Тип игры *</label>
+                    <select
+                      value={tournamentForm.game_type}
+                      onChange={(e) =>
+                        setTournamentForm({ ...tournamentForm, game_type: e.target.value })
+                      }
+                      className="input"
+                    >
+                      <option value="">Выберите игру</option>
+                      {games.map((game) => (
+                        <option key={game.id} value={game.name}>
+                          {game.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Сначала создайте игру во вкладке "Игры"
+                    </p>
                   </div>
 
                   <div>
@@ -384,21 +441,66 @@ export function AdminPanel() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Макс. размер команды</label>
-                    <input
-                      type="number"
-                      value={tournamentForm.max_team_size}
-                      onChange={(e) =>
-                        setTournamentForm({
-                          ...tournamentForm,
-                          max_team_size: parseInt(e.target.value) || 1,
-                        })
-                      }
-                      className="input"
-                      min={1}
-                      max={10}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Макс. размер команды</label>
+                      <input
+                        type="number"
+                        value={tournamentForm.max_team_size}
+                        onChange={(e) =>
+                          setTournamentForm({
+                            ...tournamentForm,
+                            max_team_size: parseInt(e.target.value) || 1,
+                          })
+                        }
+                        className="input"
+                        min={1}
+                        max={10}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Макс. участников</label>
+                      <input
+                        type="number"
+                        value={tournamentForm.max_participants}
+                        onChange={(e) =>
+                          setTournamentForm({
+                            ...tournamentForm,
+                            max_participants: e.target.value,
+                          })
+                        }
+                        className="input"
+                        min={2}
+                        placeholder="Без ограничений"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Дата начала</label>
+                      <input
+                        type="datetime-local"
+                        value={tournamentForm.start_time}
+                        onChange={(e) =>
+                          setTournamentForm({ ...tournamentForm, start_time: e.target.value })
+                        }
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Дата окончания</label>
+                      <input
+                        type="datetime-local"
+                        value={tournamentForm.end_time}
+                        onChange={(e) =>
+                          setTournamentForm({ ...tournamentForm, end_time: e.target.value })
+                        }
+                        className="input"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -418,6 +520,12 @@ export function AdminPanel() {
                       Постоянный турнир (всегда принимает новых участников)
                     </label>
                   </div>
+
+                  {tournamentError && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      {tournamentError}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2 mt-6">
@@ -426,7 +534,7 @@ export function AdminPanel() {
                   </button>
                   <button
                     onClick={handleCreateTournament}
-                    disabled={isSavingTournament || !tournamentForm.name.trim()}
+                    disabled={isSavingTournament}
                     className="btn btn-primary"
                   >
                     {isSavingTournament ? 'Создание...' : 'Создать'}

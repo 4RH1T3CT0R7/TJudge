@@ -22,9 +22,9 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, isInitialized } = useAuthStore();
 
-  if (isLoading) {
+  if (!isInitialized || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Загрузка...</p>
@@ -40,15 +40,21 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
-  const { fetchUser, isAuthenticated } = useAuthStore();
+  const { initialize, isInitialized, isLoading } = useAuthStore();
 
   useEffect(() => {
-    // Fetch user on app load if we have a token
-    const token = localStorage.getItem('access_token');
-    if (token && !isAuthenticated) {
-      fetchUser();
-    }
-  }, [fetchUser, isAuthenticated]);
+    // Initialize auth state on app load
+    initialize();
+  }, [initialize]);
+
+  // Show loading while initializing auth
+  if (!isInitialized && isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Загрузка...</p>
+      </div>
+    );
+  }
 
   return (
     <Routes>

@@ -7,18 +7,21 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
+  initialize: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isLoading: false,
       isAuthenticated: false,
+      isInitialized: false,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -60,10 +63,37 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false });
         }
       },
+
+      // Initialize auth state on app start
+      initialize: async () => {
+        const state = get();
+        if (state.isInitialized) return;
+
+        // Check if we have a token in localStorage
+        const hasToken = localStorage.getItem('access_token');
+        if (hasToken) {
+          set({ isLoading: true });
+          try {
+            const user = await api.getMe();
+            set({ user, isAuthenticated: true, isInitialized: true });
+          } catch {
+            // Token is invalid, clear it
+            api.clearTokens();
+            set({ user: null, isAuthenticated: false, isInitialized: true });
+          } finally {
+            set({ isLoading: false });
+          }
+        } else {
+          set({ isInitialized: true });
+        }
+      },
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated
+      }),
     }
   )
 );

@@ -30,17 +30,22 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *domain.To
 	}
 
 	query := `
-		INSERT INTO tournaments (id, name, game_type, status, max_participants, start_time, end_time, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO tournaments (id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at, version
 	`
 
 	err = r.db.QueryRowContext(ctx, query,
 		tournament.ID,
+		tournament.Code,
 		tournament.Name,
+		tournament.Description,
 		tournament.GameType,
 		tournament.Status,
 		tournament.MaxParticipants,
+		tournament.MaxTeamSize,
+		tournament.IsPermanent,
+		tournament.CreatorID,
 		tournament.StartTime,
 		tournament.EndTime,
 		metadata,
@@ -59,7 +64,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 	var metadataJSON []byte
 
 	query := `
-		SELECT id, name, game_type, status, max_participants, start_time, end_time,
+		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
 		       metadata, version, created_at, updated_at
 		FROM tournaments
 		WHERE id = $1
@@ -67,10 +72,15 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&tournament.ID,
+		&tournament.Code,
 		&tournament.Name,
+		&tournament.Description,
 		&tournament.GameType,
 		&tournament.Status,
 		&tournament.MaxParticipants,
+		&tournament.MaxTeamSize,
+		&tournament.IsPermanent,
+		&tournament.CreatorID,
 		&tournament.StartTime,
 		&tournament.EndTime,
 		&metadataJSON,
@@ -98,7 +108,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 // List получает список турниров с фильтрацией и пагинацией
 func (r *TournamentRepository) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
 	query := `
-		SELECT id, name, game_type, status, max_participants, start_time, end_time,
+		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
 		       metadata, version, created_at, updated_at
 		FROM tournaments
 		WHERE 1=1
@@ -147,10 +157,15 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 
 		err := rows.Scan(
 			&tournament.ID,
+			&tournament.Code,
 			&tournament.Name,
+			&tournament.Description,
 			&tournament.GameType,
 			&tournament.Status,
 			&tournament.MaxParticipants,
+			&tournament.MaxTeamSize,
+			&tournament.IsPermanent,
+			&tournament.CreatorID,
 			&tournament.StartTime,
 			&tournament.EndTime,
 			&metadataJSON,
@@ -453,7 +468,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 
 	// Базовый запрос
 	query := `
-		SELECT id, name, game_type, status, max_participants, start_time, end_time,
+		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
 		       metadata, version, created_at, updated_at
 		FROM tournaments
 		WHERE 1=1
@@ -513,10 +528,15 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 
 		err := rows.Scan(
 			&tournament.ID,
+			&tournament.Code,
 			&tournament.Name,
+			&tournament.Description,
 			&tournament.GameType,
 			&tournament.Status,
 			&tournament.MaxParticipants,
+			&tournament.MaxTeamSize,
+			&tournament.IsPermanent,
+			&tournament.CreatorID,
 			&tournament.StartTime,
 			&tournament.EndTime,
 			&metadataJSON,

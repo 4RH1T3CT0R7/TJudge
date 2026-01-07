@@ -86,20 +86,43 @@ func NewService(
 // CreateRequest - запрос на создание турнира
 type CreateRequest struct {
 	Name            string                 `json:"name"`
+	Description     string                 `json:"description,omitempty"`
 	GameType        string                 `json:"game_type"`
 	MaxParticipants *int                   `json:"max_participants,omitempty"`
+	MaxTeamSize     int                    `json:"max_team_size,omitempty"`
+	IsPermanent     bool                   `json:"is_permanent,omitempty"`
 	StartTime       *time.Time             `json:"start_time,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// generateCode генерирует уникальный код турнира (6-8 символов)
+func generateCode() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // без похожих символов I,O,0,1
+	code := make([]byte, 6)
+	for i := range code {
+		code[i] = charset[uuid.New()[i]%byte(len(charset))]
+	}
+	return string(code)
+}
+
 // Create создаёт новый турнир
 func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tournament, error) {
+	// Устанавливаем значения по умолчанию
+	maxTeamSize := req.MaxTeamSize
+	if maxTeamSize <= 0 {
+		maxTeamSize = 1
+	}
+
 	tournament := &domain.Tournament{
 		ID:              uuid.New(),
+		Code:            generateCode(),
 		Name:            req.Name,
+		Description:     req.Description,
 		GameType:        req.GameType,
 		Status:          domain.TournamentPending,
 		MaxParticipants: req.MaxParticipants,
+		MaxTeamSize:     maxTeamSize,
+		IsPermanent:     req.IsPermanent,
 		StartTime:       req.StartTime,
 		Metadata:        req.Metadata,
 	}
