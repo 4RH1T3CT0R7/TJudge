@@ -116,6 +116,12 @@
     @apply focus:ring-green-500;
   }
 
+  .btn-warning {
+    @apply bg-amber-500 text-white;
+    @apply hover:bg-amber-600 hover:shadow-md;
+    @apply focus:ring-amber-500;
+  }
+
   /* Simple inputs */
   .input {
     @apply w-full px-3 py-2 bg-white border border-gray-300 rounded-lg;

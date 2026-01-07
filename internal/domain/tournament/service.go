@@ -34,6 +34,7 @@ type MatchRepository interface {
 	CreateBatch(ctx context.Context, matches []*domain.Match) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
+	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
 
 // QueueManager интерфейс для работы с очередями
@@ -665,6 +666,45 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 	s.log.Info("Admin triggered all matches",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.Int("total_pending", len(matches)),
+		zap.Int("enqueued", enqueued),
+	)
+
+	return enqueued, nil
+}
+
+// RetryFailedMatches сбрасывает failed матчи в pending и ставит их в очередь
+func (s *Service) RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	// Сбрасываем все failed матчи в pending
+	resetCount, err := s.matchRepo.ResetFailedMatches(ctx, tournamentID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to reset failed matches: %w", err)
+	}
+
+	if resetCount == 0 {
+		return 0, nil
+	}
+
+	// Получаем все pending матчи и ставим в очередь
+	matches, err := s.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending matches: %w", err)
+	}
+
+	enqueued := 0
+	for _, match := range matches {
+		if err := s.queueManager.Enqueue(ctx, match); err != nil {
+			s.log.Error("Failed to enqueue match",
+				zap.Error(err),
+				zap.String("match_id", match.ID.String()),
+			)
+			continue
+		}
+		enqueued++
+	}
+
+	s.log.Info("Admin retried failed matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int64("reset_count", resetCount),
 		zap.Int("enqueued", enqueued),
 	)
 

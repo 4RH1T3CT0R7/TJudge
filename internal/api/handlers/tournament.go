@@ -29,6 +29,7 @@ type TournamentService interface {
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
 
 // TournamentHandler обрабатывает запросы турниров
@@ -443,6 +444,36 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "started",
+		"enqueued": enqueued,
+	})
+}
+
+// RetryFailedMatches перезапускает все неудачные матчи турнира
+// POST /api/v1/tournaments/:id/retry-matches
+func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	enqueued, err := h.tournamentService.RetryFailedMatches(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to retry failed matches", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Retried failed matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int("enqueued", enqueued),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "retried",
 		"enqueued": enqueued,
 	})
 }

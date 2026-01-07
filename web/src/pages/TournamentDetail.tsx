@@ -127,6 +127,7 @@ export function TournamentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRunningMatches, setIsRunningMatches] = useState(false);
+  const [isRetryingMatches, setIsRetryingMatches] = useState(false);
 
   // Join modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -288,6 +289,25 @@ export function TournamentDetail() {
     }
   };
 
+  const handleRetryFailedMatches = async () => {
+    if (!tournament) return;
+
+    setIsRetryingMatches(true);
+    setActionError(null);
+    try {
+      const result = await api.retryFailedMatches(tournament.id);
+      setActionError(null);
+      alert(`Перезапущено ${result.enqueued} неудачных матчей`);
+      await loadTournamentData();
+    } catch (err: unknown) {
+      console.error('Failed to retry matches:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Не удалось перезапустить матчи';
+      setActionError(errorMessage);
+    } finally {
+      setIsRetryingMatches(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -415,14 +435,23 @@ export function TournamentDetail() {
               </button>
             )}
             {isAdmin && tournament.status === 'active' && (
-              <button
-                onClick={handleRunAllMatches}
-                disabled={isRunningMatches}
-                className="btn btn-primary"
-              >
-                <PlayIcon />
-                {isRunningMatches ? 'Запуск...' : 'Запустить раунды'}
-              </button>
+              <>
+                <button
+                  onClick={handleRunAllMatches}
+                  disabled={isRunningMatches}
+                  className="btn btn-primary"
+                >
+                  <PlayIcon />
+                  {isRunningMatches ? 'Запуск...' : 'Запустить раунды'}
+                </button>
+                <button
+                  onClick={handleRetryFailedMatches}
+                  disabled={isRetryingMatches}
+                  className="btn btn-warning"
+                >
+                  {isRetryingMatches ? 'Перезапуск...' : 'Перезапустить неудачные'}
+                </button>
+              </>
             )}
           </div>
         </div>

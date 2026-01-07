@@ -1,4 +1,14 @@
 services:
+  # TJudge CLI - образ для запуска матчей
+  tjudge-cli:
+    build:
+      context: .
+      dockerfile: docker/tjudge/Dockerfile
+    image: tjudge-cli:latest
+    # Этот сервис не запускается, только собирается образ
+    profiles:
+      - build-only
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
@@ -114,6 +124,7 @@ services:
       context: .
       dockerfile: docker/worker/Dockerfile
     container_name: tjudge-worker
+    user: root  # Required for Docker socket access on macOS
     ports:
       - "9091:9090"  # Metrics port
     environment:

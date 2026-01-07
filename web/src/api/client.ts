@@ -169,6 +169,13 @@ class ApiClient {
     return data;
   }
 
+  async retryFailedMatches(tournamentId: string): Promise<{ status: string; enqueued: number }> {
+    const { data } = await this.client.post<{ status: string; enqueued: number }>(
+      `/tournaments/${tournamentId}/retry-matches`
+    );
+    return data;
+  }
+
   async getTournamentMatches(tournamentId: string, limit = 50, offset = 0): Promise<Match[]> {
     const { data } = await this.client.get<Match[]>(`/tournaments/${tournamentId}/matches`, {
       params: { limit, offset },

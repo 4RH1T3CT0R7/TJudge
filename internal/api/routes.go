@@ -158,6 +158,7 @@ func (s *Server) setupRoutes() {
 					r.Post("/{id}/games", s.gameHandler.AddGameToTournament)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
 					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
+					r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)
 				})
 			})
 		})

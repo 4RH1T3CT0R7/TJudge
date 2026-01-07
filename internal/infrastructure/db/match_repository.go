@@ -181,6 +181,28 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 	return matches, nil
 }
 
+// ResetFailedMatches сбрасывает все failed матчи турнира в pending
+func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
+	query := `
+		UPDATE matches
+		SET status = $1, error_message = NULL, started_at = NULL, completed_at = NULL,
+		    score1 = NULL, score2 = NULL, winner = NULL
+		WHERE tournament_id = $2 AND status = $3
+	`
+
+	result, err := r.db.ExecContext(ctx, query, domain.MatchPending, tournamentID, domain.MatchFailed)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to reset failed matches")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get rows affected")
+	}
+
+	return rows, nil
+}
+
 // GetPending получает ожидающие матчи по приоритету
 func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.Match, error) {
 	var matches []*domain.Match
