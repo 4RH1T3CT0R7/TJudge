@@ -149,6 +149,9 @@ func main() {
 		// Продолжаем работу, это не критическая ошибка
 	}
 
+	// Запускаем периодическое восстановление
+	recoveryService.Start()
+
 	// Запускаем worker pool
 	pool.Start()
 	log.Info("Worker pool started",
@@ -192,6 +195,9 @@ func main() {
 	// Ждём сигнала остановки
 	<-quit
 	log.Info("Shutting down worker pool...")
+
+	// Останавливаем recovery service
+	recoveryService.Stop()
 
 	// Останавливаем leaderboard refresher
 	leaderboardRefresher.Stop()

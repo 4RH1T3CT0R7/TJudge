@@ -58,13 +58,18 @@ func NewRecoveryService(
 	if cfg.BatchSize == 0 {
 		cfg.BatchSize = 1000
 	}
+	if cfg.PeriodicInterval == 0 {
+		cfg.PeriodicInterval = 5 * time.Minute
+	}
 
 	return &RecoveryService{
-		matchRepo:     matchRepo,
-		queueManager:  queueManager,
-		log:           log,
-		stuckDuration: cfg.StuckDuration,
-		batchSize:     cfg.BatchSize,
+		matchRepo:        matchRepo,
+		queueManager:     queueManager,
+		log:              log,
+		stuckDuration:    cfg.StuckDuration,
+		batchSize:        cfg.BatchSize,
+		periodicInterval: cfg.PeriodicInterval,
+		stopCh:           make(chan struct{}),
 	}
 }
 
@@ -179,4 +184,64 @@ func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error
 	)
 
 	return enqueued, nil
+}
+
+// Start запускает периодическое восстановление в фоне
+func (s *RecoveryService) Start() {
+	s.log.Info("Starting periodic recovery service",
+		zap.Duration("interval", s.periodicInterval),
+		zap.Duration("stuck_threshold", s.stuckDuration),
+	)
+
+	go s.runPeriodic()
+}
+
+// Stop останавливает периодическое восстановление
+func (s *RecoveryService) Stop() {
+	s.log.Info("Stopping periodic recovery service...")
+	close(s.stopCh)
+}
+
+// runPeriodic выполняет периодическую проверку застрявших матчей
+func (s *RecoveryService) runPeriodic() {
+	ticker := time.NewTicker(s.periodicInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			s.log.Info("Periodic recovery service stopped")
+			return
+		case <-ticker.C:
+			s.runPeriodicRecovery()
+		}
+	}
+}
+
+// runPeriodicRecovery выполняет одну итерацию периодического восстановления
+func (s *RecoveryService) runPeriodicRecovery() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Только восстанавливаем застрявшие running матчи
+	// Pending матчи уже должны быть в очереди после startup recovery
+	stuckRecovered, err := s.recoverStuckRunning(ctx)
+	if err != nil {
+		s.log.LogError("Periodic recovery failed", err)
+		return
+	}
+
+	if stuckRecovered > 0 {
+		// Если были застрявшие матчи, добавляем их в очередь
+		enqueued, err := s.enqueuePendingMatches(ctx)
+		if err != nil {
+			s.log.LogError("Failed to enqueue recovered matches", err)
+			return
+		}
+
+		s.log.Info("Periodic recovery completed",
+			zap.Int("stuck_recovered", stuckRecovered),
+			zap.Int("enqueued", enqueued),
+		)
+	}
 }
