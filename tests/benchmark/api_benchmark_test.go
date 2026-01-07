@@ -34,22 +34,32 @@ var (
 	testHandler http.Handler
 	setupOnce   bool
 	testToken   string
+	setupErr    error
 )
 
 // setupTestServer initializes the test server with all dependencies
 func setupTestServer(b *testing.B) {
+	if setupErr != nil {
+		b.Skipf("Setup failed previously: %v", setupErr)
+		return
+	}
+
 	if setupOnce {
 		return
 	}
 
 	cfg, err := config.Load()
 	if err != nil {
-		b.Fatalf("Failed to load config: %v", err)
+		setupErr = err
+		b.Skipf("Failed to load config: %v", err)
+		return
 	}
 
 	log, err := logger.New("error", "json")
 	if err != nil {
-		b.Fatalf("Failed to create logger: %v", err)
+		setupErr = err
+		b.Skipf("Failed to create logger: %v", err)
+		return
 	}
 
 	m := metrics.New()
@@ -57,13 +67,17 @@ func setupTestServer(b *testing.B) {
 	// Connect to database
 	database, err := db.New(&cfg.Database, log, m)
 	if err != nil {
-		b.Fatalf("Failed to connect to database: %v", err)
+		setupErr = err
+		b.Skipf("Database not available: %v", err)
+		return
 	}
 
 	// Connect to Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {
-		b.Fatalf("Failed to connect to Redis: %v", err)
+		setupErr = err
+		b.Skipf("Redis not available: %v", err)
+		return
 	}
 
 	// Initialize repositories

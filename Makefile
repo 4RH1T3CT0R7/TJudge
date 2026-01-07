@@ -153,12 +153,9 @@ test-e2e:
 # Run performance benchmarks
 benchmark:
 	@echo "Running performance benchmarks..."
+	@echo "Note: Benchmarks requiring DB/Redis will be skipped if services are not running"
 	@echo ""
-	@echo "=== API Benchmarks ==="
-	go test -tags=benchmark -bench=. -benchmem ./tests/benchmark/... 2>/dev/null || echo "Note: Some benchmarks require running services"
-	@echo ""
-	@echo "=== Worker Benchmarks ==="
-	go test -tags=benchmark -bench=BenchmarkWorker -benchmem ./tests/benchmark/... 2>/dev/null || true
+	go test -tags=benchmark -bench=. -benchmem -benchtime=1s ./tests/benchmark/...
 
 # Run benchmark with specific pattern
 benchmark-api:

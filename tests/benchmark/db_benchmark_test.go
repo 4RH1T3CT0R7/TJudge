@@ -19,30 +19,35 @@ import (
 
 var (
 	dbOnce         sync.Once
-	database       *db.Database
+	database       *db.DB
 	userRepo       *db.UserRepository
 	tournamentRepo *db.TournamentRepository
 	matchRepo      *db.MatchRepository
 	programRepo    *db.ProgramRepository
 )
 
+var dbSetupErr error
+
 func setupDatabase(b *testing.B) {
 	dbOnce.Do(func() {
 		cfg, err := config.Load()
 		if err != nil {
-			b.Fatalf("Failed to load config: %v", err)
+			dbSetupErr = err
+			return
 		}
 
 		log, err := logger.New("error", "json")
 		if err != nil {
-			b.Fatalf("Failed to create logger: %v", err)
+			dbSetupErr = err
+			return
 		}
 
 		m := metrics.New()
 
 		database, err = db.New(&cfg.Database, log, m)
 		if err != nil {
-			b.Fatalf("Failed to connect to database: %v", err)
+			dbSetupErr = err
+			return
 		}
 
 		userRepo = db.NewUserRepository(database)
@@ -50,6 +55,13 @@ func setupDatabase(b *testing.B) {
 		matchRepo = db.NewMatchRepository(database)
 		programRepo = db.NewProgramRepository(database)
 	})
+
+	if dbSetupErr != nil {
+		b.Skipf("Database not available: %v", dbSetupErr)
+	}
+	if database == nil {
+		b.Skip("Database not initialized")
+	}
 }
 
 // BenchmarkDBHealth measures database health check performance
@@ -174,24 +186,23 @@ func BenchmarkMatchCreate(b *testing.B) {
 
 	ctx := context.Background()
 
-	// Get existing tournament and programs
+	// Get existing tournament
 	tournaments, err := tournamentRepo.List(ctx, domain.TournamentFilter{Limit: 1})
 	if err != nil || len(tournaments) == 0 {
 		b.Skip("No tournaments found for benchmark")
 	}
 
-	programs, err := programRepo.List(ctx, tournaments[0].ID)
-	if err != nil || len(programs) < 2 {
-		b.Skip("Not enough programs found for benchmark")
-	}
+	// Create two test program IDs
+	program1ID := uuid.New()
+	program2ID := uuid.New()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		match := &domain.Match{
 			ID:           uuid.New(),
 			TournamentID: tournaments[0].ID,
-			Program1ID:   programs[0].ID,
-			Program2ID:   programs[1].ID,
+			Program1ID:   program1ID,
+			Program2ID:   program2ID,
 			GameType:     tournaments[0].GameType,
 			Status:       domain.MatchPending,
 			Priority:     domain.PriorityMedium,
@@ -210,7 +221,7 @@ func BenchmarkLeaderboardGet(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		matchRepo.GetLeaderboard(ctx, tournamentID, 100)
+		tournamentRepo.GetLeaderboard(ctx, tournamentID, 100)
 	}
 }
 
@@ -224,21 +235,21 @@ func BenchmarkLeaderboardGetParallel(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			matchRepo.GetLeaderboard(ctx, tournamentID, 100)
+			tournamentRepo.GetLeaderboard(ctx, tournamentID, 100)
 		}
 	})
 }
 
-// BenchmarkProgramList measures program listing performance
-func BenchmarkProgramList(b *testing.B) {
+// BenchmarkProgramGetByUserID measures program listing by user performance
+func BenchmarkProgramGetByUserID(b *testing.B) {
 	setupDatabase(b)
 
 	ctx := context.Background()
-	tournamentID := uuid.New()
+	userID := uuid.New()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		programRepo.List(ctx, tournamentID)
+		programRepo.GetByUserID(ctx, userID)
 	}
 }
 
