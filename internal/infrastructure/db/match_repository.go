@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -763,6 +764,54 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 // GetMatchCursor возвращает курсор для матча (для использования с pagination.NewConnection)
 func GetMatchCursor(match *domain.Match) (*pagination.Cursor, error) {
 	return pagination.NewTimestampCursor(match.CreatedAt), nil
+}
+
+// GetStuckRunning получает матчи, застрявшие в статусе running дольше указанного времени
+func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error) {
+	var matches []*domain.Match
+
+	query := `
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		       score1, score2, winner, error_message, started_at, completed_at, created_at
+		FROM matches
+		WHERE status = $1 AND started_at < $2
+		ORDER BY started_at ASC
+		LIMIT $3
+	`
+
+	threshold := time.Now().Add(-stuckDuration)
+
+	rows, err := r.db.QueryContext(ctx, query, domain.MatchRunning, threshold, limit)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get stuck running matches")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var match domain.Match
+		err := rows.Scan(
+			&match.ID,
+			&match.TournamentID,
+			&match.Program1ID,
+			&match.Program2ID,
+			&match.GameType,
+			&match.Status,
+			&match.Priority,
+			&match.Score1,
+			&match.Score2,
+			&match.Winner,
+			&match.ErrorMessage,
+			&match.StartedAt,
+			&match.CompletedAt,
+			&match.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan match")
+		}
+		matches = append(matches, &match)
+	}
+
+	return matches, nil
 }
 
 // MatchStatistics - статистика матчей

@@ -132,6 +132,23 @@ func main() {
 		m,
 	)
 
+	// Инициализируем recovery service и восстанавливаем застрявшие матчи
+	recoveryService := worker.NewRecoveryService(
+		matchRepo,
+		queueManager,
+		log,
+		worker.RecoveryConfig{
+			StuckDuration: cfg.Worker.Timeout * 2, // Матч считается застрявшим после 2x таймаута
+			BatchSize:     1000,
+		},
+	)
+
+	// Запускаем восстановление при старте
+	if err := recoveryService.RecoverOnStartup(context.Background()); err != nil {
+		log.Error("Failed to recover matches on startup", zap.Error(err))
+		// Продолжаем работу, это не критическая ошибка
+	}
+
 	// Запускаем worker pool
 	pool.Start()
 	log.Info("Worker pool started",
