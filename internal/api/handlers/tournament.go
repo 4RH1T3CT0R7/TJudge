@@ -28,6 +28,7 @@ type TournamentService interface {
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
@@ -414,6 +415,30 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, matches)
+}
+
+// GetMatchesByRounds обрабатывает получение матчей турнира сгруппированных по раундам
+// GET /api/v1/tournaments/:id/matches/rounds
+func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем ID турнира из URL
+	idStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Получаем матчи по раундам
+	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to get matches by rounds", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, rounds)
 }
 
 // RunAllMatches запускает все ожидающие матчи турнира

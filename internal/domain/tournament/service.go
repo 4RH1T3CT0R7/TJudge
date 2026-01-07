@@ -35,6 +35,8 @@ type MatchRepository interface {
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
+	GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
 }
 
 // QueueManager интерфейс для работы с очередями
@@ -294,8 +296,17 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			zap.Int("participants_count", len(participants)),
 		)
 
+		// Получаем следующий номер раунда
+		roundNumber, err := s.matchRepo.GetNextRoundNumber(ctx, tournamentID)
+		if err != nil {
+			s.log.Warn("Failed to get next round number, using 1",
+				zap.Error(err),
+			)
+			roundNumber = 1
+		}
+
 		// Генерируем расписание матчей (round-robin)
-		matches, err := s.generateRoundRobinMatches(tournament, participants)
+		matches, err := s.generateRoundRobinMatches(tournament, participants, roundNumber)
 		if err != nil {
 			return fmt.Errorf("failed to generate matches: %w", err)
 		}
@@ -345,14 +356,20 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 }
 
 // generateRoundRobinMatches генерирует матчи по системе round-robin (каждый с каждым)
-// Каждая пара играет 1 матч, итерации выполняются внутри tjudge-cli через параметр -i
-func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, participants []*domain.TournamentParticipant) ([]*domain.Match, error) {
+// Каждая пара играет 2 матча (AB и BA), итерации выполняются внутри tjudge-cli через параметр -i
+// Рейтинг = сумма очков из всех матчей
+func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, participants []*domain.TournamentParticipant, roundNumber int) ([]*domain.Match, error) {
 	var matches []*domain.Match
 	now := time.Now()
 
-	// Каждый участник играет с каждым (1 матч на пару)
+	// Каждый участник играет с каждым в обе стороны (AB и BA)
 	for i := 0; i < len(participants); i++ {
-		for j := i + 1; j < len(participants); j++ {
+		for j := 0; j < len(participants); j++ {
+			// Пропускаем матч против себя
+			if i == j {
+				continue
+			}
+
 			match := &domain.Match{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
@@ -361,6 +378,7 @@ func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, parti
 				GameType:     tournament.GameType,
 				Status:       domain.MatchPending,
 				Priority:     domain.PriorityMedium,
+				RoundNumber:  roundNumber,
 				CreatedAt:    now,
 			}
 
@@ -512,6 +530,11 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 // GetMatches получает матчи турнира
 func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
 	return s.matchRepo.GetByTournamentID(ctx, tournamentID, limit, offset)
+}
+
+// GetMatchesByRounds получает матчи турнира сгруппированные по раундам
+func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
+	return s.matchRepo.GetMatchesByRounds(ctx, tournamentID)
 }
 
 // ProgramRepository интерфейс для работы с программами (для оптимизированного round-robin)
@@ -675,8 +698,17 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 			return 0, errors.ErrValidation.WithMessage("need at least 2 participants to run matches")
 		}
 
+		// Получаем следующий номер раунда
+		roundNumber, err := s.matchRepo.GetNextRoundNumber(ctx, tournamentID)
+		if err != nil {
+			s.log.Warn("Failed to get next round number, using 1",
+				zap.Error(err),
+			)
+			roundNumber = 1
+		}
+
 		// Генерируем новый раунд матчей
-		matches, err = s.generateRoundRobinMatches(tournament, participants)
+		matches, err = s.generateRoundRobinMatches(tournament, participants, roundNumber)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate matches: %w", err)
 		}
@@ -688,6 +720,7 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 
 		s.log.Info("Generated new round of matches",
 			zap.String("tournament_id", tournamentID.String()),
+			zap.Int("round_number", roundNumber),
 			zap.Int("matches_count", len(matches)),
 		)
 	}

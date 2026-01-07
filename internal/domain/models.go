@@ -179,6 +179,7 @@ type Match struct {
 	GameType     string        `json:"game_type" db:"game_type"`
 	Status       MatchStatus   `json:"status" db:"status"`
 	Priority     MatchPriority `json:"priority" db:"priority"`
+	RoundNumber  int           `json:"round_number" db:"round_number"` // Номер раунда для группировки
 	Score1       *int          `json:"score1,omitempty" db:"score1"`
 	Score2       *int          `json:"score2,omitempty" db:"score2"`
 	Winner       *int          `json:"winner,omitempty" db:"winner"`
@@ -186,6 +187,18 @@ type Match struct {
 	StartedAt    *time.Time    `json:"started_at,omitempty" db:"started_at"`
 	CompletedAt  *time.Time    `json:"completed_at,omitempty" db:"completed_at"`
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
+}
+
+// MatchRound представляет группу матчей одного раунда
+type MatchRound struct {
+	RoundNumber    int       `json:"round_number"`
+	TotalMatches   int       `json:"total_matches"`
+	CompletedCount int       `json:"completed_count"`
+	PendingCount   int       `json:"pending_count"`
+	RunningCount   int       `json:"running_count"`
+	FailedCount    int       `json:"failed_count"`
+	Matches        []*Match  `json:"matches"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // RatingHistory представляет историю изменения рейтинга

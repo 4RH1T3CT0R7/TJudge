@@ -377,21 +377,49 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 }
 
 // getLeaderboardFallback - fallback метод для получения leaderboard без materialized view
+// Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	query := `
+		WITH program_stats AS (
+			SELECT
+				p.id as program_id,
+				p.name as program_name,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = p.id AND m.winner = 1) OR
+					(m.program2_id = p.id AND m.winner = 2)
+				) as wins,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = p.id AND m.winner = 2) OR
+					(m.program2_id = p.id AND m.winner = 1)
+				) as losses,
+				COUNT(*) FILTER (WHERE m.winner = 0 AND m.status = 'completed') as draws,
+				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games,
+				COALESCE(SUM(
+					CASE
+						WHEN m.program1_id = p.id THEN COALESCE(m.score1, 0)
+						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0)
+						ELSE 0
+					END
+				), 0) as total_score
+			FROM tournament_participants tp
+			JOIN programs p ON tp.program_id = p.id
+			LEFT JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
+				AND m.tournament_id = $1
+				AND m.status = 'completed'
+			WHERE tp.tournament_id = $1
+			GROUP BY p.id, p.name
+		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY tp.rating DESC) as rank,
-			tp.program_id,
-			p.name as program_name,
-			tp.rating,
-			tp.wins,
-			tp.losses,
-			tp.draws,
-			(tp.wins + tp.losses + tp.draws) as total_games
-		FROM tournament_participants tp
-		JOIN programs p ON tp.program_id = p.id
-		WHERE tp.tournament_id = $1
-		ORDER BY tp.rating DESC
+			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
+			program_id,
+			program_name,
+			total_score as rating,
+			wins,
+			losses,
+			draws,
+			total_games
+		FROM program_stats
+		ORDER BY total_score DESC, wins DESC
 		LIMIT $2
 	`
 
@@ -580,8 +608,10 @@ func GetTournamentCursor(tournament *domain.Tournament) (*pagination.Cursor, err
 }
 
 // GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
+// Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
 	// Получаем все команды и программы в турнире со статистикой по каждой игре
+	// Рейтинг = сумма очков (score1 когда program1, score2 когда program2)
 	query := `
 		WITH team_programs AS (
 			SELECT DISTINCT ON (p.team_id, p.game_id)
@@ -615,7 +645,14 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 					(m.program2_id = tp.program_id AND m.winner = 1)
 				) as losses,
 				COUNT(*) FILTER (WHERE m.winner = 0 AND m.status = 'completed') as draws,
-				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games
+				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games,
+				COALESCE(SUM(
+					CASE
+						WHEN m.program1_id = tp.program_id THEN COALESCE(m.score1, 0)
+						WHEN m.program2_id = tp.program_id THEN COALESCE(m.score2, 0)
+						ELSE 0
+					END
+				), 0) as total_score
 			FROM team_programs tp
 			LEFT JOIN matches m ON (m.program1_id = tp.program_id OR m.program2_id = tp.program_id)
 				AND m.tournament_id = $1
@@ -634,7 +671,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 					json_build_object(
 						'game_id', game_id,
 						'game_name', game_name,
-						'rating', 1500 + (wins - losses) * 32,
+						'rating', total_score,
 						'wins', wins,
 						'losses', losses,
 						'draws', draws,
@@ -644,7 +681,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				SUM(wins) as total_wins,
 				SUM(losses) as total_losses,
 				SUM(total_games) as total_games,
-				SUM(1500 + (wins - losses) * 32) as total_rating
+				SUM(total_score) as total_rating
 			FROM game_stats
 			GROUP BY group_key, team_id, team_name, program_id, program_name
 		)
@@ -707,8 +744,10 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 
 // GetLeaderboardByGameType получает таблицу лидеров для конкретной игры в турнире
 // gameType - имя игры (game.name), используется для фильтрации матчей
+// Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
 	// Получаем рейтинг на основе результатов матчей для конкретной игры
+	// Рейтинг = сумма очков (score1 когда program1, score2 когда program2)
 	query := `
 		WITH game_stats AS (
 			SELECT
@@ -739,16 +778,16 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			GROUP BY p.id, p.name
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY wins DESC, total_score DESC, losses ASC) as rank,
+			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
 			program_id,
 			program_name,
-			(1500 + (wins - losses) * 32) as rating,
+			total_score as rating,
 			wins,
 			losses,
 			draws,
 			total_games
 		FROM game_stats
-		ORDER BY wins DESC, total_score DESC, losses ASC
+		ORDER BY total_score DESC, wins DESC
 		LIMIT $3
 	`
 

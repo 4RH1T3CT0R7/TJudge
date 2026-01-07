@@ -301,24 +301,9 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Создаём матчи для новой программы (round-robin с существующими программами)
-	if h.matchScheduler != nil {
-		if err := h.matchScheduler.ScheduleNewProgramMatches(r.Context(), tournamentID, gameID, programID, teamID); err != nil {
-			h.log.Error("Failed to schedule matches for new program",
-				zap.Error(err),
-				zap.String("program_id", programID.String()),
-				zap.String("tournament_id", tournamentID.String()),
-				zap.String("game_id", gameID.String()),
-			)
-			// Не возвращаем ошибку - программа создана, матчи можно создать позже
-		} else {
-			h.log.Info("Matches scheduled for new program",
-				zap.String("program_id", programID.String()),
-				zap.String("tournament_id", tournamentID.String()),
-				zap.String("game_id", gameID.String()),
-			)
-		}
-	}
+	// ВАЖНО: Матчи НЕ создаются автоматически при загрузке программы!
+	// Администратор должен вручную запустить матчи через кнопку "Run All Matches"
+	// POST /api/v1/tournaments/{id}/run-matches
 
 	h.log.Info("Program uploaded",
 		zap.String("program_id", program.ID.String()),

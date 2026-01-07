@@ -97,6 +97,7 @@ export interface Match {
   program2_id: string;
   game_type: string;
   status: MatchStatus;
+  round_number: number;
   score1?: number;
   score2?: number;
   winner?: number;
@@ -104,6 +105,18 @@ export interface Match {
   error_message?: string;
   started_at?: string;
   completed_at?: string;
+  created_at: string;
+}
+
+// MatchRound - группа матчей одного раунда
+export interface MatchRound {
+  round_number: number;
+  total_matches: number;
+  completed_count: number;
+  pending_count: number;
+  running_count: number;
+  failed_count: number;
+  matches: Match[];
   created_at: string;
 }
 

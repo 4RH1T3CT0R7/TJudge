@@ -133,6 +133,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
 			r.Get("/{id}/cross-game-leaderboard", s.tournamentHandler.GetCrossGameLeaderboard)
 			r.Get("/{id}/matches", s.tournamentHandler.GetMatches)
+			r.Get("/{id}/matches/rounds", s.tournamentHandler.GetMatchesByRounds)
 			r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
 			r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
 

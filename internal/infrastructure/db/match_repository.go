@@ -25,8 +25,8 @@ func NewMatchRepository(db *DB) *MatchRepository {
 // Create создаёт новый матч
 func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error {
 	query := `
-		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
@@ -37,6 +37,7 @@ func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error
 		match.GameType,
 		match.Status,
 		match.Priority,
+		match.RoundNumber,
 		match.CreatedAt,
 	)
 
@@ -52,7 +53,7 @@ func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ma
 	var match domain.Match
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE id = $1
@@ -66,6 +67,7 @@ func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ma
 		&match.GameType,
 		&match.Status,
 		&match.Priority,
+		&match.RoundNumber,
 		&match.Score1,
 		&match.Score2,
 		&match.Winner,
@@ -90,11 +92,11 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	var matches []*domain.Match
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE tournament_id = $1
-		ORDER BY created_at DESC
+		ORDER BY round_number DESC, created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
@@ -114,6 +116,7 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -136,7 +139,7 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 	var matches []*domain.Match
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE tournament_id = $1 AND status = $2
@@ -165,6 +168,7 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -209,7 +213,7 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 	var matches []*domain.Match
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE status = $1
@@ -239,6 +243,7 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -373,8 +378,8 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 	defer func() { _ = tx.Rollback() }()
 
 	query := `
-		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	stmt, err := tx.PrepareContext(ctx, query)
@@ -392,6 +397,7 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 			match.GameType,
 			match.Status,
 			match.Priority,
+			match.RoundNumber,
 			match.CreatedAt,
 		)
 		if err != nil {
@@ -409,7 +415,7 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 // List получает список матчей с фильтрацией и пагинацией
 func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE 1=1
@@ -445,8 +451,8 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 		argCount++
 	}
 
-	// Сортировка (по умолчанию - сначала новые)
-	query += " ORDER BY created_at DESC"
+	// Сортировка (по умолчанию - сначала новые раунды)
+	query += " ORDER BY round_number DESC, created_at DESC"
 
 	// Пагинация
 	if filter.Limit > 0 {
@@ -476,6 +482,7 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -500,11 +507,11 @@ func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*dom
 	}
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE id = ANY($1)
-		ORDER BY created_at DESC
+		ORDER BY round_number DESC, created_at DESC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, ids)
@@ -524,6 +531,7 @@ func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*dom
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -655,7 +663,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 
 	// Базовый запрос
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE 1=1
@@ -704,9 +712,9 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 
 	// Сортировка
 	if pageReq.IsBackward() {
-		query += " ORDER BY created_at ASC"
+		query += " ORDER BY round_number ASC, created_at ASC"
 	} else {
-		query += " ORDER BY created_at DESC"
+		query += " ORDER BY round_number DESC, created_at DESC"
 	}
 
 	// Добавляем +1 к лимиту для определения hasNextPage
@@ -731,6 +739,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -771,7 +780,7 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 	var matches []*domain.Match
 
 	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE status = $1 AND started_at < $2
@@ -797,6 +806,7 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 			&match.GameType,
 			&match.Status,
 			&match.Priority,
+			&match.RoundNumber,
 			&match.Score1,
 			&match.Score2,
 			&match.Winner,
@@ -812,6 +822,111 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 	}
 
 	return matches, nil
+}
+
+// GetNextRoundNumber получает следующий номер раунда для турнира
+func (r *MatchRepository) GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	var maxRound sql.NullInt64
+
+	query := `SELECT MAX(round_number) FROM matches WHERE tournament_id = $1`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID).Scan(&maxRound)
+	if err != nil {
+		return 1, errors.Wrap(err, "failed to get max round number")
+	}
+
+	if !maxRound.Valid {
+		return 1, nil
+	}
+
+	return int(maxRound.Int64) + 1, nil
+}
+
+// GetMatchesByRounds получает матчи турнира сгруппированные по раундам
+func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
+	query := `
+		SELECT
+			round_number,
+			COUNT(*) as total_matches,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
+			COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
+			COUNT(*) FILTER (WHERE status = 'running') as running_count,
+			COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+			MIN(created_at) as created_at
+		FROM matches
+		WHERE tournament_id = $1
+		GROUP BY round_number
+		ORDER BY round_number DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get rounds")
+	}
+	defer rows.Close()
+
+	var rounds []*domain.MatchRound
+	for rows.Next() {
+		var round domain.MatchRound
+		err := rows.Scan(
+			&round.RoundNumber,
+			&round.TotalMatches,
+			&round.CompletedCount,
+			&round.PendingCount,
+			&round.RunningCount,
+			&round.FailedCount,
+			&round.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan round")
+		}
+		rounds = append(rounds, &round)
+	}
+
+	// Теперь получаем матчи для каждого раунда
+	for _, round := range rounds {
+		matchQuery := `
+			SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
+			       score1, score2, winner, error_message, started_at, completed_at, created_at
+			FROM matches
+			WHERE tournament_id = $1 AND round_number = $2
+			ORDER BY created_at ASC
+		`
+
+		matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, round.RoundNumber)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get matches for round")
+		}
+
+		for matchRows.Next() {
+			var match domain.Match
+			err := matchRows.Scan(
+				&match.ID,
+				&match.TournamentID,
+				&match.Program1ID,
+				&match.Program2ID,
+				&match.GameType,
+				&match.Status,
+				&match.Priority,
+				&match.RoundNumber,
+				&match.Score1,
+				&match.Score2,
+				&match.Winner,
+				&match.ErrorMessage,
+				&match.StartedAt,
+				&match.CompletedAt,
+				&match.CreatedAt,
+			)
+			if err != nil {
+				matchRows.Close()
+				return nil, errors.Wrap(err, "failed to scan match")
+			}
+			round.Matches = append(round.Matches, &match)
+		}
+		matchRows.Close()
+	}
+
+	return rounds, nil
 }
 
 // MatchStatistics - статистика матчей

@@ -262,7 +262,7 @@ func Load() (*Config, error) {
 			MemoryLimit:       int64(getEnvInt("EXECUTOR_MEMORY_LIMIT", 536870912)),
 			PidsLimit:         int64(getEnvInt("EXECUTOR_PIDS_LIMIT", 100)),
 			NetworkDisabled:   getEnvBool("EXECUTOR_NETWORK_DISABLED", true),
-			DefaultIterations: getEnvInt("EXECUTOR_DEFAULT_ITERATIONS", 1000),
+			DefaultIterations: getEnvInt("EXECUTOR_DEFAULT_ITERATIONS", 100),
 			Verbose:           getEnvBool("EXECUTOR_VERBOSE", false),
 			SeccompProfile:    getEnv("EXECUTOR_SECCOMP_PROFILE", ""),
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),

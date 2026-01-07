@@ -10,11 +10,12 @@ import type {
   Game,
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
+  MatchRound,
   WSMessage,
   LeaderboardUpdate,
 } from '../types';
 
-type TabType = 'info' | 'leaderboard' | 'games' | 'teams';
+type TabType = 'info' | 'leaderboard' | 'matches' | 'games' | 'teams';
 
 // Icons
 const InfoCircleIcon = () => (
@@ -95,6 +96,24 @@ const HashtagIcon = () => (
   </svg>
 );
 
+const FolderIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+  </svg>
+);
+
 const statusConfig: Record<TournamentStatus, {
   badge: string;
   label: string;
@@ -121,6 +140,7 @@ export function TournamentDetail() {
   const [games, setGames] = useState<Game[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [crossGameLeaderboard, setCrossGameLeaderboard] = useState<CrossGameLeaderboardEntry[]>([]);
+  const [matchRounds, setMatchRounds] = useState<MatchRound[]>([]);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [isLoading, setIsLoading] = useState(true);
@@ -168,17 +188,19 @@ export function TournamentDetail() {
       const tournamentData = await api.getTournament(id);
       setTournament(tournamentData);
 
-      const [teamsData, gamesData, leaderboardData, crossGameData] = await Promise.all([
+      const [teamsData, gamesData, leaderboardData, crossGameData, matchRoundsData] = await Promise.all([
         api.getTournamentTeams(id).catch(() => []),
         api.getTournamentGames(id).catch(() => []),
         api.getLeaderboard(id).catch(() => []),
         api.getCrossGameLeaderboard(id).catch(() => []),
+        api.getMatchesByRounds(id).catch(() => []),
       ]);
 
       setTeams(teamsData || []);
       setGames(gamesData || []);
       setLeaderboard(leaderboardData || []);
       setCrossGameLeaderboard(crossGameData || []);
+      setMatchRounds(matchRoundsData || []);
 
       if (isAuthenticated) {
         try {
@@ -334,9 +356,11 @@ export function TournamentDetail() {
     );
   }
 
+  const totalMatches = matchRounds.reduce((sum, r) => sum + r.total_matches, 0);
   const tabs: { id: TabType; label: string; icon: React.FC; count?: number }[] = [
     { id: 'info', label: 'Информация', icon: InfoCircleIcon },
     { id: 'leaderboard', label: 'Таблица', icon: ChartBarIcon },
+    { id: 'matches', label: 'Матчи', icon: FolderIcon, count: totalMatches },
     { id: 'games', label: 'Игры', icon: PuzzlePieceIcon, count: games.length },
     { id: 'teams', label: 'Команды', icon: UsersIcon, count: teams.length },
   ];
@@ -524,6 +548,10 @@ export function TournamentDetail() {
             isConnected={isConnected}
             onToggleFullscreen={toggleFullscreen}
           />
+        )}
+
+        {activeTab === 'matches' && (
+          <MatchesTab rounds={matchRounds} />
         )}
 
         {activeTab === 'games' && (
@@ -1110,5 +1138,327 @@ function TeamsTab({
         </div>
       )}
     </div>
+  );
+}
+
+// Matches Tab Component - отображает матчи, сгруппированные по раундам
+function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
+  const [expandedRounds, setExpandedRounds] = useState<Set<number>>(new Set());
+
+  const toggleRound = (roundNumber: number) => {
+    setExpandedRounds(prev => {
+      const next = new Set(prev);
+      if (next.has(roundNumber)) {
+        next.delete(roundNumber);
+      } else {
+        next.add(roundNumber);
+      }
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    setExpandedRounds(new Set(rounds.map(r => r.round_number)));
+  };
+
+  const collapseAll = () => {
+    setExpandedRounds(new Set());
+  };
+
+  if (rounds.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">
+          <FolderIcon />
+        </div>
+        <h3 className="empty-state-title">Нет матчей</h3>
+        <p className="empty-state-description">
+          Матчи появятся после запуска раундов
+        </p>
+      </div>
+    );
+  }
+
+  // Суммарная статистика по всем раундам
+  const totalStats = rounds.reduce(
+    (acc, round) => ({
+      total: acc.total + round.total_matches,
+      completed: acc.completed + round.completed_count,
+      pending: acc.pending + round.pending_count,
+      running: acc.running + round.running_count,
+      failed: acc.failed + round.failed_count,
+    }),
+    { total: 0, completed: 0, pending: 0, running: 0, failed: 0 }
+  );
+
+  return (
+    <div>
+      {/* Header with summary stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Матчи по раундам
+          </h2>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span className="text-gray-600 dark:text-gray-400">
+              Всего: <strong className="text-gray-900 dark:text-white">{totalStats.total}</strong>
+            </span>
+            <span className="text-emerald-600 dark:text-emerald-400">
+              Завершено: <strong>{totalStats.completed}</strong>
+            </span>
+            {totalStats.running > 0 && (
+              <span className="text-blue-600 dark:text-blue-400">
+                Выполняется: <strong>{totalStats.running}</strong>
+              </span>
+            )}
+            {totalStats.pending > 0 && (
+              <span className="text-yellow-600 dark:text-yellow-400">
+                В очереди: <strong>{totalStats.pending}</strong>
+              </span>
+            )}
+            {totalStats.failed > 0 && (
+              <span className="text-red-600 dark:text-red-400">
+                Ошибки: <strong>{totalStats.failed}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={expandAll} className="btn btn-secondary text-sm">
+            Развернуть все
+          </button>
+          <button onClick={collapseAll} className="btn btn-secondary text-sm">
+            Свернуть все
+          </button>
+        </div>
+      </div>
+
+      {/* Rounds list */}
+      <div className="space-y-3">
+        {rounds.map((round) => (
+          <RoundCard
+            key={round.round_number}
+            round={round}
+            isExpanded={expandedRounds.has(round.round_number)}
+            onToggle={() => toggleRound(round.round_number)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Компонент карточки раунда
+function RoundCard({
+  round,
+  isExpanded,
+  onToggle,
+}: {
+  round: MatchRound;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const getStatusColor = () => {
+    if (round.failed_count > 0) return 'border-l-red-500';
+    if (round.running_count > 0) return 'border-l-blue-500';
+    if (round.pending_count > 0) return 'border-l-yellow-500';
+    if (round.completed_count === round.total_matches) return 'border-l-emerald-500';
+    return 'border-l-gray-300 dark:border-l-gray-600';
+  };
+
+  const getProgressPercent = () => {
+    if (round.total_matches === 0) return 0;
+    return Math.round((round.completed_count / round.total_matches) * 100);
+  };
+
+  // Подсчёт статистики по победам/ничьим
+  const matchStats = round.matches.reduce(
+    (acc, match) => {
+      if (match.status === 'completed') {
+        if (match.winner === 1) acc.wins1++;
+        else if (match.winner === 2) acc.wins2++;
+        else acc.draws++;
+      }
+      return acc;
+    },
+    { wins1: 0, wins2: 0, draws: 0 }
+  );
+
+  return (
+    <div className={`card p-0 border-l-4 ${getStatusColor()} overflow-hidden`}>
+      {/* Round header - collapsible */}
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-gray-500 dark:text-gray-400">
+            {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          </div>
+          <div className="flex items-center gap-2">
+            <FolderIcon />
+            <span className="font-semibold text-gray-900 dark:text-white">
+              Раунд {round.round_number}
+            </span>
+          </div>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {round.total_matches} матчей
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* Mini stats badges */}
+          <div className="hidden sm:flex items-center gap-2 text-xs">
+            {round.completed_count > 0 && (
+              <span className="px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                {round.completed_count} завершено
+              </span>
+            )}
+            {round.running_count > 0 && (
+              <span className="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                {round.running_count} выполняется
+              </span>
+            )}
+            {round.pending_count > 0 && (
+              <span className="px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+                {round.pending_count} в очереди
+              </span>
+            )}
+            {round.failed_count > 0 && (
+              <span className="px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                {round.failed_count} ошибок
+              </span>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-300"
+              style={{ width: `${getProgressPercent()}%` }}
+            />
+          </div>
+          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
+            {getProgressPercent()}%
+          </span>
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="border-t border-gray-200 dark:border-gray-700">
+          {/* Round summary */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/30 flex flex-wrap gap-4 text-sm">
+            <span className="text-gray-600 dark:text-gray-400">
+              Дата: <strong className="text-gray-900 dark:text-white">
+                {new Date(round.created_at).toLocaleString('ru-RU')}
+              </strong>
+            </span>
+            {round.completed_count > 0 && (
+              <>
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  Побед P1: <strong>{matchStats.wins1}</strong>
+                </span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  Побед P2: <strong>{matchStats.wins2}</strong>
+                </span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Ничьих: <strong>{matchStats.draws}</strong>
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Matches table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100 dark:bg-gray-800/50">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Статус</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Программа 1</th>
+                  <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-400">Счёт</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Программа 2</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Игра</th>
+                </tr>
+              </thead>
+              <tbody>
+                {round.matches.map((match) => (
+                  <MatchRow key={match.id} match={match} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Компонент строки матча
+function MatchRow({ match }: { match: MatchRound['matches'][0] }) {
+  const getStatusBadge = () => {
+    switch (match.status) {
+      case 'completed':
+        return <span className="badge badge-green text-xs">Завершён</span>;
+      case 'running':
+        return <span className="badge badge-blue text-xs">Выполняется</span>;
+      case 'pending':
+        return <span className="badge badge-yellow text-xs">В очереди</span>;
+      case 'failed':
+        return <span className="badge badge-red text-xs">Ошибка</span>;
+      default:
+        return <span className="badge badge-gray text-xs">{match.status}</span>;
+    }
+  };
+
+  const getScoreDisplay = () => {
+    if (match.status !== 'completed') {
+      return <span className="text-gray-400">—</span>;
+    }
+
+    const score1Class = match.winner === 1 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : '';
+    const score2Class = match.winner === 2 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : '';
+
+    return (
+      <span className="font-mono">
+        <span className={score1Class}>{match.score1 ?? 0}</span>
+        <span className="text-gray-400 mx-1">:</span>
+        <span className={score2Class}>{match.score2 ?? 0}</span>
+      </span>
+    );
+  };
+
+  const getProgram1Class = () => {
+    if (match.status !== 'completed') return '';
+    return match.winner === 1 ? 'font-semibold text-emerald-600 dark:text-emerald-400' : '';
+  };
+
+  const getProgram2Class = () => {
+    if (match.status !== 'completed') return '';
+    return match.winner === 2 ? 'font-semibold text-emerald-600 dark:text-emerald-400' : '';
+  };
+
+  return (
+    <tr className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/30">
+      <td className="px-4 py-2">
+        {getStatusBadge()}
+      </td>
+      <td className={`px-4 py-2 ${getProgram1Class()}`}>
+        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+          {match.program1_id.slice(0, 8)}
+        </code>
+      </td>
+      <td className="px-4 py-2 text-center">
+        {getScoreDisplay()}
+      </td>
+      <td className={`px-4 py-2 ${getProgram2Class()}`}>
+        <code className="text-xs bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+          {match.program2_id.slice(0, 8)}
+        </code>
+      </td>
+      <td className="px-4 py-2">
+        <span className="text-gray-600 dark:text-gray-400">{match.game_type}</span>
+      </td>
+    </tr>
   );
 }

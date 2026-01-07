@@ -8,6 +8,7 @@ import type {
   Game,
   Program,
   Match,
+  MatchRound,
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
   ApiError,
@@ -180,6 +181,13 @@ class ApiClient {
     const { data } = await this.client.get<Match[]>(`/tournaments/${tournamentId}/matches`, {
       params: { limit, offset },
     });
+    return data;
+  }
+
+  async getMatchesByRounds(tournamentId: string): Promise<MatchRound[]> {
+    const { data } = await this.client.get<MatchRound[]>(
+      `/tournaments/${tournamentId}/matches/rounds`
+    );
     return data;
   }
 
