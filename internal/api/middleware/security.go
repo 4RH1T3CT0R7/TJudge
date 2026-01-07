@@ -35,7 +35,7 @@ func DefaultSecurityConfig() SecurityConfig {
 		XSSProtection:           true,
 		ContentTypeNosniff:      true,
 		XFrameOptions:           "DENY",
-		ContentSecurityPolicy:   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'",
+		ContentSecurityPolicy:   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'",
 		ReferrerPolicy:          "strict-origin-when-cross-origin",
 		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
 		PermissionsPolicy:       "camera=(), microphone=(), geolocation=()",
@@ -105,5 +105,5 @@ func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 
 // SecureHeaders применяет security headers с конфигурацией по умолчанию
 func SecureHeaders() func(http.Handler) http.Handler {
-	return SecurityHeaders(APISecurityConfig())
+	return SecurityHeaders(DefaultSecurityConfig())
 }

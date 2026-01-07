@@ -88,7 +88,7 @@ services:
     networks:
       - tjudge-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -261,12 +261,8 @@ services:
     networks:
       - tjudge-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    # Note: Loki image has no shell/wget/curl, so we disable health check
+    # Loki availability is checked by Promtail connection
     deploy:
       resources:
         limits:
@@ -286,8 +282,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/config.yml
     depends_on:
-      loki:
-        condition: service_healthy
+      - loki
     networks:
       - tjudge-network
     restart: unless-stopped
