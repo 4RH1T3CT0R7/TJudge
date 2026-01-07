@@ -138,8 +138,9 @@ func main() {
 		queueManager,
 		log,
 		worker.RecoveryConfig{
-			StuckDuration: cfg.Worker.Timeout * 2, // Матч считается застрявшим после 2x таймаута
-			BatchSize:     1000,
+			StuckDuration:    30 * time.Second, // Матч считается застрявшим после 30 секунд
+			BatchSize:        1000,
+			PeriodicInterval: 30 * time.Second, // Проверка каждые 30 секунд
 		},
 	)
 

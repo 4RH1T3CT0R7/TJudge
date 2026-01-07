@@ -388,7 +388,7 @@ export function TournamentDetail() {
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3 mb-3">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{tournament.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{tournament.name}</h1>
               <span className={config.badge}>
                 {config.label}
               </span>
@@ -398,10 +398,10 @@ export function TournamentDetail() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
               <HashtagIcon />
               <span>Код:</span>
-              <code className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-800 dark:text-gray-200">
+              <code className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-800 dark:text-white">
                 {tournament.code}
               </code>
             </div>
@@ -481,7 +481,7 @@ export function TournamentDetail() {
       )}
 
       {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 p-1">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 p-1.5">
         <nav className="flex gap-1 overflow-x-auto">
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
@@ -489,7 +489,7 @@ export function TournamentDetail() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab flex items-center gap-2 whitespace-nowrap rounded-lg ${
+                className={`tab flex items-center gap-2 whitespace-nowrap ${
                   activeTab === tab.id ? 'tab-active' : 'tab-inactive'
                 }`}
               >
@@ -498,7 +498,7 @@ export function TournamentDetail() {
                 {tab.count !== undefined && (
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     activeTab === tab.id
-                      ? 'bg-primary-200 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300'
+                      ? 'bg-white/20 text-white'
                       : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                   }`}>
                     {tab.count}
@@ -549,7 +549,7 @@ export function TournamentDetail() {
         <div className="modal-backdrop" onClick={() => setShowJoinModal(false)}>
           <div className="modal-content w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Участие в турнире</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Участие в турнире</h2>
               <button
                 onClick={() => setShowJoinModal(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -560,7 +560,7 @@ export function TournamentDetail() {
 
             <div className="space-y-6">
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Создать новую команду</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Создать новую команду</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -584,12 +584,12 @@ export function TournamentDetail() {
                   <div className="w-full border-t border-gray-200 dark:border-gray-600" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">или</span>
+                  <span className="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400">или</span>
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Присоединиться к существующей</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Присоединиться к существующей</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -633,7 +633,7 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
             <UsersIcon />
             <span>Макс. размер команды</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{tournament.max_team_size}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{tournament.max_team_size}</p>
         </div>
 
         {tournament.max_participants && (
@@ -642,7 +642,7 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
               <UsersIcon />
               <span>Макс. участников</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{tournament.max_participants}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{tournament.max_participants}</p>
           </div>
         )}
 
@@ -652,7 +652,7 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
               <CalendarIcon />
               <span>Начало</span>
             </div>
-            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
               {new Date(tournament.start_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
@@ -664,7 +664,7 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
               <CalendarIcon />
               <span>Окончание</span>
             </div>
-            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
               {new Date(tournament.end_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
@@ -675,7 +675,7 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
             <ClockIcon />
             <span>Создан</span>
           </div>
-          <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
             {new Date(tournament.created_at).toLocaleDateString('ru-RU')}
           </p>
         </div>
@@ -704,7 +704,7 @@ function LeaderboardTab({
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Рейтинг</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Рейтинг</h2>
           {isConnected && (
             <span className="online-indicator">
               Онлайн
@@ -778,7 +778,7 @@ function LeaderboardTable({
 
   return (
     <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
-      <table className={`w-full ${isDark ? 'text-white' : 'dark:text-gray-100'}`}>
+      <table className={`w-full ${isDark ? 'text-white' : 'dark:text-white'}`}>
         <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800/50'}>
           <tr>
             <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
@@ -877,7 +877,7 @@ function CrossGameLeaderboardTable({
 
   return (
     <div className="overflow-x-auto card p-0">
-      <table className="w-full dark:text-gray-100">
+      <table className="w-full dark:text-white">
         <thead className="bg-gray-50 dark:bg-gray-800/50">
           <tr>
             <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
@@ -972,7 +972,7 @@ function GamesTab({
         >
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                 {game.display_name}
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1083,7 +1083,7 @@ function TeamsTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{team.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">{team.name}</h3>
                     {myTeam?.id === team.id && (
                       <span className="badge badge-blue text-xs">Ваша</span>
                     )}

@@ -13,9 +13,9 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50 transition-colors duration-200">
+      <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-black/30 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             {/* Logo */}
@@ -27,14 +27,14 @@ export function Layout() {
             <nav className="flex items-center space-x-4">
               <Link
                 to="/tournaments"
-                className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
               >
                 Турниры
               </Link>
               {isAuthenticated && (
                 <Link
                   to="/games"
-                  className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Игры
                 </Link>
@@ -42,7 +42,7 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Админ
                 </Link>
@@ -70,7 +70,7 @@ export function Layout() {
 
               {isAuthenticated ? (
                 <>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{user?.username}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-200">{user?.username}</span>
                   <button
                     onClick={handleLogout}
                     className="btn btn-secondary text-sm"
@@ -99,7 +99,7 @@ export function Layout() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-gray-800 border-t dark:border-gray-700 mt-auto transition-colors duration-200">
+      <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <p className="text-center text-gray-500 dark:text-gray-400 text-sm">
             TJudge — Турнирная система по теории игр
