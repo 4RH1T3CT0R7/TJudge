@@ -12,7 +12,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api"
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
@@ -42,15 +41,6 @@ func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, t
 		TeamID:       teamID,
 	}
 	return a.tournamentService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
-}
-
-// programRepoAdapter адаптер для ProgramRepository
-type programRepoAdapter struct {
-	repo *db.ProgramRepository
-}
-
-func (a *programRepoAdapter) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
-	return a.repo.GetByTournamentAndGame(ctx, tournamentID, gameID)
 }
 
 func main() {

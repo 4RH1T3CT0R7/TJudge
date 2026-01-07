@@ -145,9 +145,9 @@ func main() {
 		metricsMux.Handle("/metrics", promhttp.Handler())
 
 		// Health check endpoint для worker
-		metricsMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		metricsMux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		})
 
 		metricsSrv = &http.Server{

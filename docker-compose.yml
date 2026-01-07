@@ -135,8 +135,8 @@ services:
       - DB_NAME=tjudge
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - WORKER_MIN=10
-      - WORKER_MAX=100
+      - WORKER_MIN=2
+      - WORKER_MAX=10
       - LOG_LEVEL=info
       - LOG_FORMAT=json
       - METRICS_ENABLED=true

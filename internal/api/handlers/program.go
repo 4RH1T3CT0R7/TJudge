@@ -228,7 +228,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		// Читаем первые байты чтобы проверить наличие shebang
 		firstBytes := make([]byte, 2)
 		n, _ := file.Read(firstBytes)
-		file.Seek(0, 0) // Возвращаемся в начало
+		_, _ = file.Seek(0, 0) // Возвращаемся в начало
 
 		// Если файл не начинается с #!, добавляем shebang
 		if n < 2 || string(firstBytes) != "#!" {
