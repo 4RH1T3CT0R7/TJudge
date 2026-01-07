@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark test-load
 
 # Default target
 help:
@@ -11,6 +11,9 @@ help:
 	@echo "  make test          - Run all tests"
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
+	@echo "  make test-e2e      - Run end-to-end tests"
+	@echo "  make benchmark     - Run performance benchmarks"
+	@echo "  make test-load     - Run load tests"
 	@echo "  make lint          - Run linters"
 	@echo "  make run-api       - Run API server"
 	@echo "  make run-worker    - Run worker"
@@ -147,11 +150,44 @@ test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
 
-# Load testing with k6
+# Run performance benchmarks
+benchmark:
+	@echo "Running performance benchmarks..."
+	@echo ""
+	@echo "=== API Benchmarks ==="
+	go test -tags=benchmark -bench=. -benchmem ./tests/benchmark/... 2>/dev/null || echo "Note: Some benchmarks require running services"
+	@echo ""
+	@echo "=== Worker Benchmarks ==="
+	go test -tags=benchmark -bench=BenchmarkWorker -benchmem ./tests/benchmark/... 2>/dev/null || true
+
+# Run benchmark with specific pattern
+benchmark-api:
+	@echo "Running API benchmarks..."
+	go test -tags=benchmark -bench=BenchmarkHealth -benchmem ./tests/benchmark/...
+
+benchmark-worker:
+	@echo "Running Worker benchmarks..."
+	go test -tags=benchmark -bench=BenchmarkWorkerPool -benchmem ./tests/benchmark/...
+
+benchmark-queue:
+	@echo "Running Queue benchmarks..."
+	go test -tags=benchmark -bench=BenchmarkQueue -benchmem ./tests/benchmark/...
+
+benchmark-db:
+	@echo "Running Database benchmarks..."
+	go test -tags=benchmark -bench=BenchmarkDB -benchmem ./tests/benchmark/...
+
+# Load testing
 test-load:
 	@echo "Running load tests..."
-	@which k6 > /dev/null || (echo "k6 not found. Install from https://k6.io/docs/getting-started/installation/" && exit 1)
-	k6 run tests/load/load_test.js
+	@echo "Make sure the API server is running on localhost:8080"
+	@echo ""
+	go test -tags=load -v -timeout=5m ./tests/load/...
+
+# Quick load test (shorter duration)
+test-load-quick:
+	@echo "Running quick load tests..."
+	go test -tags=load -v -short -timeout=2m ./tests/load/...
 
 # Security scan
 security:

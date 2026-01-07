@@ -559,11 +559,20 @@ docker-compose up -d --scale worker=5
 
 | Документ | Описание |
 |----------|----------|
+| **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** | **Полное руководство пользователя и администратора** |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Детальная архитектура |
 | [docs/API_GUIDE.md](docs/API_GUIDE.md) | Полное описание API |
 | [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) | Руководство по деплою |
 | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | Руководство разработчика |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
+
+### Быстрые ссылки
+
+- [Руководство пользователя](docs/USER_GUIDE.md#руководство-пользователя) — регистрация, участие в турнирах, загрузка программ
+- [Руководство администратора](docs/USER_GUIDE.md#руководство-администратора) — управление играми и турнирами
+- [Поддерживаемые игры](docs/USER_GUIDE.md#поддерживаемые-игры) — правила и примеры программ
+- [TJudge CLI](docs/USER_GUIDE.md#tjudge-cli) — использование CLI для запуска матчей
+- [API Reference](docs/USER_GUIDE.md#api-reference) — все эндпоинты API
 
 ---
 

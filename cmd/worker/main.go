@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/worker"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
@@ -136,6 +138,36 @@ func main() {
 		zap.Int("initial_workers", cfg.Worker.MinWorkers),
 	)
 
+	// Metrics server (если включен)
+	var metricsSrv *http.Server
+	if cfg.Metrics.Enabled {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+
+		// Health check endpoint для worker
+		metricsMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+
+		metricsSrv = &http.Server{
+			Addr:              fmt.Sprintf(":%d", cfg.Metrics.Port),
+			Handler:           metricsMux,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+
+		go func() {
+			log.Info("Metrics server listening",
+				zap.String("addr", metricsSrv.Addr),
+			)
+			if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error("Metrics server error", zap.Error(err))
+			}
+		}()
+	}
+
 	// Канал для graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -152,6 +184,15 @@ func main() {
 
 	// Ждём завершения worker pool
 	pool.Wait()
+
+	// Останавливаем metrics сервер
+	if metricsSrv != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+			log.Error("Metrics server forced to shutdown", zap.Error(err))
+		}
+	}
 
 	log.Info("Worker pool stopped gracefully",
 		zap.Int64("total_matches_processed", pool.GetMatchesProcessed()),
