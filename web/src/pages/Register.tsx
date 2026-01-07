@@ -1,6 +1,46 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { AxiosError } from 'axios';
+
+interface ApiErrorResponse {
+  error?: string;
+  message?: string;
+}
+
+// Валидация пароля (соответствует бэкенду)
+function validatePassword(password: string): string | null {
+  if (password.length < 8) {
+    return 'Пароль должен быть не менее 8 символов';
+  }
+  if (password.length > 128) {
+    return 'Пароль слишком длинный (максимум 128 символов)';
+  }
+
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasDigit = /[0-9]/.test(password);
+
+  if (!hasUpper || !hasLower || !hasDigit) {
+    return 'Пароль должен содержать заглавную букву, строчную букву и цифру';
+  }
+
+  return null;
+}
+
+// Валидация имени пользователя
+function validateUsername(username: string): string | null {
+  if (username.length < 3) {
+    return 'Имя пользователя должно быть не менее 3 символов';
+  }
+  if (username.length > 50) {
+    return 'Имя пользователя слишком длинное (максимум 50 символов)';
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    return 'Имя пользователя может содержать только буквы, цифры, _ и -';
+  }
+  return null;
+}
 
 export function Register() {
   const [username, setUsername] = useState('');
@@ -15,13 +55,22 @@ export function Register() {
     e.preventDefault();
     setError('');
 
-    if (password !== confirmPassword) {
-      setError('Пароли не совпадают');
+    // Валидация имени пользователя
+    const usernameError = validateUsername(username);
+    if (usernameError) {
+      setError(usernameError);
       return;
     }
 
-    if (password.length < 6) {
-      setError('Пароль должен быть не менее 6 символов');
+    // Валидация пароля
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Пароли не совпадают');
       return;
     }
 
@@ -29,7 +78,24 @@ export function Register() {
       await register(username, email, password);
       navigate('/tournaments');
     } catch (err) {
-      setError('Ошибка регистрации. Попробуйте снова.');
+      const axiosError = err as AxiosError<ApiErrorResponse>;
+      if (axiosError.response?.data?.error) {
+        const serverError = axiosError.response.data.error;
+        // Переводим серверные ошибки на русский
+        if (serverError.includes('already exists')) {
+          setError('Пользователь с таким именем или email уже существует');
+        } else if (serverError.includes('password')) {
+          setError('Пароль не соответствует требованиям безопасности');
+        } else if (serverError.includes('email')) {
+          setError('Неверный формат email');
+        } else if (serverError.includes('username')) {
+          setError('Неверный формат имени пользователя');
+        } else {
+          setError(serverError);
+        }
+      } else {
+        setError('Ошибка регистрации. Попробуйте снова.');
+      }
     }
   };
 
@@ -85,8 +151,11 @@ export function Register() {
               onChange={(e) => setPassword(e.target.value)}
               className="input"
               required
-              minLength={6}
+              minLength={8}
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Минимум 8 символов, заглавная и строчная буква, цифра
+            </p>
           </div>
 
           <div>
