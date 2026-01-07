@@ -241,6 +241,14 @@ class ApiClient {
     await this.client.delete(`/games/${id}`);
   }
 
+  async addGameToTournament(tournamentId: string, gameId: string): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/games`, { game_id: gameId });
+  }
+
+  async removeGameFromTournament(tournamentId: string, gameId: string): Promise<void> {
+    await this.client.delete(`/tournaments/${tournamentId}/games/${gameId}`);
+  }
+
   // Program endpoints
   async getPrograms(): Promise<Program[]> {
     const { data } = await this.client.get<Program[]>('/programs');

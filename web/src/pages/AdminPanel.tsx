@@ -43,6 +43,7 @@ export function AdminPanel() {
     start_time: '',
     end_time: '',
   });
+  const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
   const [isSavingTournament, setIsSavingTournament] = useState(false);
   const [tournamentError, setTournamentError] = useState<string | null>(null);
 
@@ -124,8 +125,8 @@ export function AdminPanel() {
       setTournamentError('Название обязательно');
       return;
     }
-    if (!tournamentForm.game_type.trim()) {
-      setTournamentError('Тип игры обязателен');
+    if (selectedGameIds.length === 0) {
+      setTournamentError('Выберите хотя бы одну игру');
       return;
     }
 
@@ -133,9 +134,11 @@ export function AdminPanel() {
     setTournamentError(null);
 
     try {
+      // Используем первую игру как game_type для совместимости
+      const firstGame = games.find(g => g.id === selectedGameIds[0]);
       const payload: Record<string, unknown> = {
         name: tournamentForm.name,
-        game_type: tournamentForm.game_type,
+        game_type: firstGame?.name || 'default',
         description: tournamentForm.description || undefined,
         max_team_size: tournamentForm.max_team_size,
         is_permanent: tournamentForm.is_permanent,
@@ -150,6 +153,16 @@ export function AdminPanel() {
       }
 
       const newTournament = await api.createTournament(payload);
+
+      // Добавляем выбранные игры в турнир
+      for (const gameId of selectedGameIds) {
+        try {
+          await api.addGameToTournament(newTournament.id, gameId);
+        } catch (err) {
+          console.error(`Failed to add game ${gameId} to tournament:`, err);
+        }
+      }
+
       setTournaments([...tournaments, newTournament]);
       resetTournamentForm();
     } catch (err) {
@@ -179,7 +192,16 @@ export function AdminPanel() {
       start_time: '',
       end_time: '',
     });
+    setSelectedGameIds([]);
     setTournamentError(null);
+  };
+
+  const toggleGameSelection = (gameId: string) => {
+    setSelectedGameIds(prev =>
+      prev.includes(gameId)
+        ? prev.filter(id => id !== gameId)
+        : [...prev, gameId]
+    );
   };
 
   const startEditGame = (game: Game) => {
@@ -409,24 +431,37 @@ export function AdminPanel() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Тип игры *</label>
-                    <select
-                      value={tournamentForm.game_type}
-                      onChange={(e) =>
-                        setTournamentForm({ ...tournamentForm, game_type: e.target.value })
-                      }
-                      className="input"
-                    >
-                      <option value="">Выберите игру</option>
-                      {games.map((game) => (
-                        <option key={game.id} value={game.name}>
-                          {game.display_name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Сначала создайте игру во вкладке "Игры"
-                    </p>
+                    <label className="block text-sm font-medium mb-2">Игры турнира *</label>
+                    {games.length === 0 ? (
+                      <p className="text-sm text-gray-500">
+                        Сначала создайте игры во вкладке "Игры"
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                        {games.map((game) => (
+                          <label
+                            key={game.id}
+                            className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedGameIds.includes(game.id)}
+                              onChange={() => toggleGameSelection(game.id)}
+                              className="w-4 h-4 text-primary-600 rounded"
+                            />
+                            <div>
+                              <span className="font-medium">{game.display_name}</span>
+                              <span className="text-xs text-gray-500 ml-2">({game.name})</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {selectedGameIds.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Выбрано игр: {selectedGameIds.length}
+                      </p>
+                    )}
                   </div>
 
                   <div>
