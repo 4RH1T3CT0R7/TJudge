@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin
 
 # Default target
 help:
@@ -20,6 +20,7 @@ help:
 	@echo "  make docker-down   - Stop Docker Compose"
 	@echo "  make migrate-up    - Apply database migrations"
 	@echo "  make migrate-down  - Rollback database migrations"
+	@echo "  make admin         - Make user admin (EMAIL=user@example.com)"
 	@echo "  make clean         - Clean build artifacts"
 
 # Download dependencies
@@ -159,3 +160,16 @@ security:
 	gosec ./...
 	@which govulncheck > /dev/null || (echo "Installing govulncheck..." && go install golang.org/x/vuln/cmd/govulncheck@latest)
 	govulncheck ./...
+
+# Make user admin by email
+admin:
+ifndef EMAIL
+	@echo "Usage: make admin EMAIL=user@example.com"
+	@exit 1
+endif
+	@echo "Making $(EMAIL) an admin..."
+	@docker exec tjudge-postgres psql -U tjudge -d tjudge -c \
+		"UPDATE users SET role = 'admin' WHERE email = '$(EMAIL)' RETURNING username, email, role;" \
+		|| echo "Failed to update user. Make sure the container is running and user exists."
+	@echo ""
+	@echo "Done! User must log out and log in again to get the new role."

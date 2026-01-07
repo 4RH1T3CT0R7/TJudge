@@ -54,8 +54,10 @@ type RegisterRequest struct {
 }
 
 // LoginRequest - запрос на вход
+// Можно указать username ИЛИ email для входа
 type LoginRequest struct {
 	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -135,8 +137,18 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 
 // Login выполняет вход пользователя
 func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
-	// Получаем пользователя по username
-	user, err := s.userRepo.GetByUsername(ctx, req.Username)
+	var user *domain.User
+	var err error
+
+	// Получаем пользователя по username или email
+	if req.Email != "" {
+		user, err = s.userRepo.GetByEmail(ctx, req.Email)
+	} else if req.Username != "" {
+		user, err = s.userRepo.GetByUsername(ctx, req.Username)
+	} else {
+		return nil, errors.ErrInvalidCredentials
+	}
+
 	if err != nil {
 		if errors.IsAppError(err) && errors.GetAppError(err).Code == 404 {
 			return nil, errors.ErrInvalidCredentials

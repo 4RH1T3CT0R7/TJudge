@@ -46,7 +46,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 	var user domain.User
 
 	query := `
-		SELECT id, username, email, password_hash, created_at, updated_at
+		SELECT id, username, email, password_hash, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -67,7 +67,7 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*d
 	var user domain.User
 
 	query := `
-		SELECT id, username, email, password_hash, created_at, updated_at
+		SELECT id, username, email, password_hash, role, created_at, updated_at
 		FROM users
 		WHERE username = $1
 	`
@@ -88,7 +88,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	var user domain.User
 
 	query := `
-		SELECT id, username, email, password_hash, created_at, updated_at
+		SELECT id, username, email, password_hash, role, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`

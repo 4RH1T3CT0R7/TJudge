@@ -72,6 +72,29 @@ docker-compose ps
 | **Grafana** | http://localhost:3000 | Мониторинг (admin/admin) |
 | **Prometheus** | http://localhost:9092 | Метрики |
 
+### Назначение администратора
+
+Для доступа к админ-панели нужен пользователь с ролью `admin`.
+
+**Способ 1: Через SQL (рекомендуется)**
+
+```bash
+# Сначала зарегистрируйте пользователя через веб-интерфейс, затем:
+docker exec tjudge-postgres psql -U tjudge -d tjudge -c \
+  "UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';"
+```
+
+**Способ 2: Через make команду**
+
+```bash
+# Назначить администратора по email
+make admin EMAIL=your-email@example.com
+```
+
+> **Важно:** После изменения роли в базе данных необходимо **выйти и войти заново** в веб-интерфейсе, чтобы получить новый JWT токен с обновлённой ролью.
+
+После назначения администратора в меню появится ссылка **"Админ"** (http://localhost:8080/admin).
+
 ### Локальная разработка
 
 ```bash
