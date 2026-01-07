@@ -49,6 +49,10 @@ export function AdminPanel() {
 
   // Delete confirmation
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
+  const [deleteTournamentId, setDeleteTournamentId] = useState<string | null>(null);
+
+  // Action errors
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     // Redirect non-admin users
@@ -117,6 +121,32 @@ export function AdminPanel() {
       setDeleteGameId(null);
     } catch (err) {
       console.error('Failed to delete game:', err);
+    }
+  };
+
+  const handleDeleteTournament = async (id: string) => {
+    try {
+      await api.deleteTournament(id);
+      setTournaments(tournaments.filter((t) => t.id !== id));
+      setDeleteTournamentId(null);
+      setActionError(null);
+    } catch (err: unknown) {
+      console.error('Failed to delete tournament:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось удалить турнир');
+    }
+  };
+
+  const handleStartTournament = async (id: string) => {
+    setActionError(null);
+    try {
+      await api.startTournament(id);
+      loadData();
+    } catch (err: unknown) {
+      console.error('Failed to start tournament:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const message = axiosErr.response?.data?.message || 'Не удалось запустить турнир';
+      setActionError(message);
     }
   };
 
@@ -579,6 +609,19 @@ export function AdminPanel() {
             </div>
           )}
 
+          {/* Action Error */}
+          {actionError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {actionError}
+              <button
+                onClick={() => setActionError(null)}
+                className="ml-2 text-red-500 hover:text-red-700"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -619,7 +662,7 @@ export function AdminPanel() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <a
                       href={`/tournaments/${tournament.id}`}
                       className="btn btn-secondary text-sm"
@@ -628,10 +671,7 @@ export function AdminPanel() {
                     </a>
                     {tournament.status === 'pending' && (
                       <button
-                        onClick={async () => {
-                          await api.startTournament(tournament.id);
-                          loadData();
-                        }}
+                        onClick={() => handleStartTournament(tournament.id)}
                         className="btn btn-primary text-sm"
                       >
                         Запустить
@@ -647,6 +687,33 @@ export function AdminPanel() {
                       >
                         Завершить
                       </button>
+                    )}
+                    {tournament.status !== 'active' && (
+                      <>
+                        {deleteTournamentId === tournament.id ? (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleDeleteTournament(tournament.id)}
+                              className="btn btn-danger text-sm"
+                            >
+                              Подтвердить
+                            </button>
+                            <button
+                              onClick={() => setDeleteTournamentId(null)}
+                              className="btn btn-secondary text-sm"
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteTournamentId(tournament.id)}
+                            className="btn btn-danger text-sm"
+                          >
+                            Удалить
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

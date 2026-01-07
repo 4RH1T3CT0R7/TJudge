@@ -142,6 +142,10 @@ class ApiClient {
     await this.client.post(`/tournaments/${id}/complete`);
   }
 
+  async deleteTournament(id: string): Promise<void> {
+    await this.client.delete(`/tournaments/${id}`);
+  }
+
   async getLeaderboard(tournamentId: string, limit = 100): Promise<LeaderboardEntry[]> {
     const { data } = await this.client.get<LeaderboardEntry[]>(
       `/tournaments/${tournamentId}/leaderboard`,

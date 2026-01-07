@@ -149,6 +149,7 @@ func (s *Server) setupRoutes() {
 				// Админские маршруты для турниров
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireAdmin())
+					r.Delete("/{id}", s.tournamentHandler.Delete)
 					r.Post("/{id}/games", s.gameHandler.AddGameToTournament)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
 				})

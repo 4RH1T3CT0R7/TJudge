@@ -20,6 +20,7 @@ type TournamentRepository interface {
 	List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error)
 	Update(ctx context.Context, tournament *domain.Tournament) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
@@ -400,6 +401,34 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 		"status":   tournament.Status,
 		"end_time": tournament.EndTime,
 	})
+
+	return nil
+}
+
+// Delete удаляет турнир
+func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
+	// Получаем турнир для проверки
+	tournament, err := s.GetByID(ctx, tournamentID)
+	if err != nil {
+		return err
+	}
+
+	// Нельзя удалить активный турнир
+	if tournament.Status == domain.TournamentActive {
+		return errors.ErrConflict.WithMessage("cannot delete active tournament")
+	}
+
+	// Удаляем из БД
+	if err := s.tournamentRepo.Delete(ctx, tournamentID); err != nil {
+		return fmt.Errorf("failed to delete tournament: %w", err)
+	}
+
+	s.log.Info("Tournament deleted",
+		zap.String("tournament_id", tournamentID.String()),
+	)
+
+	// Инвалидируем кэш
+	_ = s.tournamentCache.Invalidate(ctx, tournamentID)
 
 	return nil
 }

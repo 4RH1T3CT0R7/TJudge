@@ -23,6 +23,7 @@ type TournamentService interface {
 	Join(ctx context.Context, req *tournament.JoinRequest) error
 	Start(ctx context.Context, tournamentID uuid.UUID) error
 	Complete(ctx context.Context, tournamentID uuid.UUID) error
+	Delete(ctx context.Context, tournamentID uuid.UUID) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
@@ -230,6 +231,33 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+}
+
+// Delete обрабатывает удаление турнира
+// DELETE /api/v1/tournaments/:id
+func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем ID из URL
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Удаляем турнир
+	if err := h.tournamentService.Delete(r.Context(), id); err != nil {
+		h.log.LogError("Failed to delete tournament", err,
+			zap.String("tournament_id", id.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Tournament deleted",
+		zap.String("tournament_id", id.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetLeaderboard обрабатывает получение таблицы лидеров
