@@ -75,6 +75,19 @@ func (m *MockTournamentRepository) GetLeaderboard(ctx context.Context, tournamen
 	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
 }
 
+func (m *MockTournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockTournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.CrossGameLeaderboardEntry), args.Error(1)
+}
+
 type MockMatchRepository struct {
 	mock.Mock
 }
@@ -95,6 +108,27 @@ func (m *MockMatchRepository) GetByTournamentID(ctx context.Context, tournamentI
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetFailedByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, tournamentID)
+	return int64(args.Int(0)), args.Error(1)
 }
 
 type MockQueueManager struct {

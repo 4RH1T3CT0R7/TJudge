@@ -83,6 +83,8 @@ func (e *Executor) Execute(ctx context.Context, match *domain.Match, program1Pat
 		zap.Int("score1", result.Score1),
 		zap.Int("score2", result.Score2),
 		zap.Int("winner", result.Winner),
+		zap.Int("error_code", result.ErrorCode),
+		zap.String("error_message", result.ErrorMessage),
 		zap.Duration("duration", result.Duration),
 	)
 
@@ -144,7 +146,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		SecurityOpt:    securityOpts,
 		CapDrop:        []string{"ALL"}, // Убираем все capabilities
 		Tmpfs: map[string]string{
-			"/tmp": "rw,noexec,nosuid,size=64m", // Временная директория для записи
+			"/tmp": "rw,nosuid,size=64m", // Временная директория для записи (exec разрешён для Python)
 		},
 		AutoRemove: false, // Отключаем автоудаление чтобы получить логи
 	}
@@ -252,6 +254,12 @@ func sanitizeForDB(s string) string {
 
 // parseResult парсит результат выполнения tjudge-cli
 func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.MatchResult, error) {
+	e.log.Info("Parsing result",
+		zap.Int64("exit_code", exitCode),
+		zap.String("stdout", stdout),
+		zap.String("stderr", stderr),
+	)
+
 	result := &domain.MatchResult{
 		ErrorCode: int(exitCode),
 	}
@@ -334,10 +342,12 @@ func (e *Executor) hostToContainerPath(hostPath string) string {
 	return hostPath
 }
 
-// buildCommand формирует команду для запуска tjudge-cli
-// Формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
+// buildCommand формирует аргументы для запуска tjudge-cli
+// Контейнер уже имеет ENTRYPOINT ["tjudge-cli"], поэтому cmd содержит только аргументы
+// Формат: <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
-	cmd := []string{e.config.TJudgePath, gameType}
+	// Не включаем TJudgePath так как контейнер имеет ENTRYPOINT
+	cmd := []string{gameType}
 
 	// Добавляем количество итераций
 	if e.config.DefaultIterations > 0 {

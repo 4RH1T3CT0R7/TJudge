@@ -87,6 +87,29 @@ func (m *MockTournamentService) GetMatches(ctx context.Context, tournamentID uui
 	return args.Get(0).([]*domain.Match), args.Error(1)
 }
 
+func (m *MockTournamentService) Delete(ctx context.Context, tournamentID uuid.UUID) error {
+	args := m.Called(ctx, tournamentID)
+	return args.Error(0)
+}
+
+func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.CrossGameLeaderboardEntry), args.Error(1)
+}
+
+func (m *MockTournamentService) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockTournamentService) RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Int(0), args.Error(1)
+}
+
 func TestTournamentHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 

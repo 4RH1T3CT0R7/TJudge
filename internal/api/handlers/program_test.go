@@ -436,7 +436,15 @@ func TestProgramHandler_Delete(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
+		program := &domain.Program{
+			ID:       programID,
+			Name:     "test-program",
+			UserID:   userID,
+			FilePath: nil,
+		}
+
 		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
 		mockRepo.On("Delete", mock.Anything, programID).Return(nil)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
