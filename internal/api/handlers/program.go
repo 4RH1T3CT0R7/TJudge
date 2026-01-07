@@ -28,6 +28,7 @@ type ProgramRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
 	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
+	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error)
 }
 
 // TournamentParticipantAdder интерфейс для добавления участников в турнир
@@ -611,4 +612,64 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetVersions получает все версии программ для команды и игры
+// GET /api/v1/programs/versions?team_id=xxx&game_id=xxx
+func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.RequireUserID(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	teamIDStr := r.URL.Query().Get("team_id")
+	gameIDStr := r.URL.Query().Get("game_id")
+
+	if teamIDStr == "" || gameIDStr == "" {
+		writeError(w, errors.ErrInvalidInput.WithMessage("team_id and game_id are required"))
+		return
+	}
+
+	teamID, err := uuid.Parse(teamIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team_id"))
+		return
+	}
+
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game_id"))
+		return
+	}
+
+	// Получаем все версии программ
+	programs, err := h.programRepo.GetAllVersionsByTeamAndGame(r.Context(), teamID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to get program versions", err)
+		writeError(w, err)
+		return
+	}
+
+	// Проверяем что хотя бы одна программа принадлежит текущему пользователю
+	hasAccess := false
+	for _, p := range programs {
+		if p.UserID == userID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess && len(programs) > 0 {
+		writeError(w, errors.ErrForbidden.WithMessage("you don't have access to these programs"))
+		return
+	}
+
+	h.log.Info("Program versions fetched",
+		zap.String("team_id", teamID.String()),
+		zap.String("game_id", gameID.String()),
+		zap.Int("count", len(programs)),
+	)
+
+	writeJSON(w, http.StatusOK, programs)
 }

@@ -141,54 +141,54 @@ export function GameDetail() {
     <div>
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
-        <Link to="/tournaments" className="text-gray-500 hover:text-gray-700">
+        <Link to="/tournaments" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
           Турниры
         </Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <Link to={`/tournaments/${tournamentId}`} className="text-gray-500 hover:text-gray-700">
+        <span className="mx-2 text-gray-400 dark:text-gray-600">/</span>
+        <Link to={`/tournaments/${tournamentId}`} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
           Турнир
         </Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <span className="text-gray-900">{game.display_name}</span>
+        <span className="mx-2 text-gray-400 dark:text-gray-600">/</span>
+        <span className="text-gray-900 dark:text-gray-200">{game.display_name}</span>
       </nav>
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">{game.display_name}</h1>
-        <p className="text-gray-500">
-          ID игры: <code className="bg-gray-100 px-2 py-0.5 rounded">{game.name}</code>
+        <h1 className="text-2xl font-bold mb-2 dark:text-gray-100">{game.display_name}</h1>
+        <p className="text-gray-500 dark:text-gray-400">
+          ID игры: <code className="bg-gray-800 dark:bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('rules')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'rules'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
             Правила
           </button>
           <button
             onClick={() => setActiveTab('leaderboard')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'leaderboard'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
             Рейтинг ({leaderboard.length})
           </button>
           <button
             onClick={() => setActiveTab('matches')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'matches'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
             }`}
           >
             Матчи ({matches.length})
@@ -346,7 +346,7 @@ export function GameDetail() {
               {/* Previous Versions */}
               {programs.length > 1 && (
                 <div className="mt-6">
-                  <h3 className="font-medium mb-2">Предыдущие версии</h3>
+                  <h3 className="font-medium mb-2 dark:text-gray-100">Предыдущие версии</h3>
                   <div className="space-y-2">
                     {programs
                       .filter((p) => p.id !== currentProgram?.id)
@@ -354,12 +354,35 @@ export function GameDetail() {
                       .map((program) => (
                         <div
                           key={program.id}
-                          className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded"
+                          className="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded"
                         >
-                          <span>v{program.version}</span>
-                          <span className="text-gray-500">
-                            {new Date(program.created_at).toLocaleDateString('ru-RU')}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="dark:text-gray-100">v{program.version}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(program.created_at).toLocaleDateString('ru-RU')}
+                            </span>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const blob = await api.downloadProgram(program.id);
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = program.name || `program_v${program.version}`;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
+                              } catch (err) {
+                                console.error('Download failed:', err);
+                                alert('Не удалось скачать программу');
+                              }
+                            }}
+                            className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 text-xs font-medium"
+                          >
+                            Скачать
+                          </button>
                         </div>
                       ))}
                   </div>

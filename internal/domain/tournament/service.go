@@ -23,6 +23,7 @@ type TournamentRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
+	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
@@ -280,8 +281,8 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrConflict.WithMessage("tournament already started or completed")
 		}
 
-		// Получаем список участников
-		participants, err := s.tournamentRepo.GetParticipants(ctx, tournamentID)
+		// Получаем список участников (только последние версии программ каждой команды)
+		participants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
 		if err != nil {
 			return fmt.Errorf("failed to get participants: %w", err)
 		}
@@ -688,8 +689,8 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
-		// Получаем участников
-		participants, err := s.tournamentRepo.GetParticipants(ctx, tournamentID)
+		// Получаем участников (только последние версии программ каждой команды)
+		participants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get participants: %w", err)
 		}

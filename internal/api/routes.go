@@ -208,6 +208,7 @@ func (s *Server) setupRoutes() {
 
 			r.Post("/", s.programHandler.Create)
 			r.Get("/", s.programHandler.List)
+			r.Get("/versions", s.programHandler.GetVersions) // Список версий программ команды
 			r.Get("/{id}", s.programHandler.Get)
 			r.Get("/{id}/download", s.programHandler.Download)
 			r.Put("/{id}", s.programHandler.Update)

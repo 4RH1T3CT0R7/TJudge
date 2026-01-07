@@ -338,6 +338,13 @@ class ApiClient {
     return data;
   }
 
+  async getProgramVersions(teamId: string, gameId: string): Promise<Program[]> {
+    const { data } = await this.client.get<Program[]>('/programs/versions', {
+      params: { team_id: teamId, game_id: gameId },
+    });
+    return data;
+  }
+
   async deleteTeam(id: string): Promise<void> {
     await this.client.delete(`/teams/${id}`);
   }
