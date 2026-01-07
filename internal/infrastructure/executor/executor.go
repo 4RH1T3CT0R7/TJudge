@@ -139,10 +139,10 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			OomKillDisable: boolPtr(false),      // Разрешаем OOM killer
 			// BlkioWeight не поддерживается на macOS (cgroups v2)
 			Ulimits: []*container.Ulimit{
-				{Name: "nofile", Soft: 64, Hard: 64},
-				{Name: "nproc", Soft: 32, Hard: 32},
-				{Name: "core", Soft: 0, Hard: 0},
-				{Name: "fsize", Soft: 10485760, Hard: 10485760},
+				{Name: "nofile", Soft: 1024, Hard: 1024},        // Достаточно для Python + subprocess
+				{Name: "nproc", Soft: 64, Hard: 64},             // Достаточно для fork
+				{Name: "core", Soft: 0, Hard: 0},                // Без core dumps
+				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // 10MB max file size
 			},
 		},
 		// Монтируем директорию с программами (только для чтения)

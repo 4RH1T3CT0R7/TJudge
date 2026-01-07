@@ -3,13 +3,19 @@ package worker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+// ErrMatchNotFound используется когда матч не найден в БД (был удалён)
+// Это не ошибка обработки - матч просто нужно пропустить
+var ErrMatchNotFound = fmt.Errorf("match not found in database")
 
 // MatchRepository интерфейс для работы с матчами
 type MatchRepository interface {
@@ -78,6 +84,13 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 
 	// Обновляем статус на "running"
 	if err := p.matchRepo.UpdateStatus(ctx, match.ID, domain.MatchRunning); err != nil {
+		// Проверяем, не был ли матч удалён из БД
+		if isNotFoundError(err) {
+			p.log.Warn("Match not found in database, skipping (likely deleted)",
+				zap.String("match_id", match.ID.String()),
+			)
+			return ErrMatchNotFound
+		}
 		return fmt.Errorf("failed to update match status: %w", err)
 	}
 
@@ -153,4 +166,22 @@ func (p *Processor) updateRatings(ctx context.Context, match *domain.Match, resu
 	}
 
 	return nil
+}
+
+// isNotFoundError проверяет, является ли ошибка типом "not found"
+// Проверяет как AppError, так и строковое содержимое
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Проверяем через errors package
+	if errors.IsNotFound(err) {
+		return true
+	}
+
+	// Проверяем строковое содержимое (для wrapped errors)
+	errStr := err.Error()
+	return strings.Contains(errStr, "not found") ||
+		strings.Contains(errStr, "no rows")
 }

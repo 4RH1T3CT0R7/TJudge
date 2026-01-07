@@ -171,3 +171,122 @@ func (qm *QueueManager) Health(ctx context.Context) error {
 	_, err := qm.GetTotalQueueSize(ctx)
 	return err
 }
+
+// QueueStats статистика очередей
+type QueueStats struct {
+	High   int64 `json:"high"`
+	Medium int64 `json:"medium"`
+	Low    int64 `json:"low"`
+	Total  int64 `json:"total"`
+}
+
+// GetStats возвращает статистику всех очередей
+func (qm *QueueManager) GetStats(ctx context.Context) (*QueueStats, error) {
+	stats := &QueueStats{}
+
+	high, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	if err != nil {
+		return nil, err
+	}
+	stats.High = high
+
+	medium, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	if err != nil {
+		return nil, err
+	}
+	stats.Medium = medium
+
+	low, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	if err != nil {
+		return nil, err
+	}
+	stats.Low = low
+
+	stats.Total = stats.High + stats.Medium + stats.Low
+	return stats, nil
+}
+
+// PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД
+// Принимает функцию-валидатор, которая проверяет существование матча
+// Возвращает количество удалённых матчей
+func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error) {
+	var purged int64
+
+	priorities := []domain.MatchPriority{
+		domain.PriorityHigh,
+		domain.PriorityMedium,
+		domain.PriorityLow,
+	}
+
+	for _, priority := range priorities {
+		count, err := qm.purgeQueueInvalidMatches(ctx, priority, validator)
+		if err != nil {
+			qm.log.LogError("Failed to purge queue", err,
+				zap.String("priority", string(priority)),
+			)
+			continue
+		}
+		purged += count
+	}
+
+	qm.log.Info("Purged invalid matches from queues",
+		zap.Int64("purged_count", purged),
+	)
+
+	return purged, nil
+}
+
+// purgeQueueInvalidMatches очищает одну очередь от невалидных матчей
+func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority domain.MatchPriority, validator func(matchID string) bool) (int64, error) {
+	queueKey := qm.getQueueKey(priority)
+
+	// Получаем все элементы очереди
+	items, err := qm.cache.LRange(ctx, queueKey, 0, -1)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get queue items: %w", err)
+	}
+
+	if len(items) == 0 {
+		return 0, nil
+	}
+
+	// Собираем валидные матчи
+	var validMatches [][]byte
+	var purgedCount int64
+
+	for _, item := range items {
+		var match domain.Match
+		if err := json.Unmarshal([]byte(item), &match); err != nil {
+			// Невалидный JSON - пропускаем
+			purgedCount++
+			continue
+		}
+
+		// Проверяем существование матча
+		if validator(match.ID.String()) {
+			data, _ := json.Marshal(match)
+			validMatches = append(validMatches, data)
+		} else {
+			purgedCount++
+		}
+	}
+
+	// Если ничего не изменилось - выходим
+	if purgedCount == 0 {
+		return 0, nil
+	}
+
+	// Очищаем очередь и добавляем только валидные матчи
+	if err := qm.cache.Del(ctx, queueKey); err != nil {
+		return 0, fmt.Errorf("failed to clear queue: %w", err)
+	}
+
+	// Добавляем валидные матчи обратно (в обратном порядке для сохранения очерёдности)
+	for i := len(validMatches) - 1; i >= 0; i-- {
+		if err := qm.cache.LPush(ctx, queueKey, validMatches[i]); err != nil {
+			qm.log.LogError("Failed to re-enqueue valid match", err)
+		}
+	}
+
+	return purgedCount, nil
+}

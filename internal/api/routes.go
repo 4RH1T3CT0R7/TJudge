@@ -218,6 +218,16 @@ func (s *Server) setupRoutes() {
 			r.Get("/", s.matchHandler.List)
 			r.Get("/statistics", s.matchHandler.GetStatistics)
 			r.Get("/{id}", s.matchHandler.Get)
+
+			// Админские маршруты для управления очередью матчей
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(middleware.RequireAdmin())
+
+				r.Get("/queue/stats", s.matchHandler.GetQueueStats)
+				r.Post("/queue/clear", s.matchHandler.ClearQueue)
+				r.Post("/queue/purge", s.matchHandler.PurgeInvalidMatches)
+			})
 		})
 
 		// WebSocket routes (требуется аутентификация)

@@ -204,6 +204,16 @@ func (c *Cache) LLen(ctx context.Context, key string) (int64, error) {
 	return length, nil
 }
 
+// LRange возвращает элементы списка в диапазоне [start, stop]
+func (c *Cache) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
+	result, err := c.client.LRange(ctx, key, start, stop).Result()
+	if err != nil {
+		c.log.LogError("Redis LRANGE failed", err, zap.String("key", key))
+		return nil, err
+	}
+	return result, nil
+}
+
 // SetNX устанавливает значение только если ключа не существует (для distributed locks)
 func (c *Cache) SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
 	result, err := c.client.SetNX(ctx, key, value, ttl).Result()

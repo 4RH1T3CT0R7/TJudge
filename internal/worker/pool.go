@@ -206,6 +206,15 @@ func (p *Pool) processWithRetry(ctx context.Context, match *domain.Match) error 
 			return nil
 		}
 
+		// Если матч не найден в БД - пропускаем без retry
+		// Это означает, что матч или турнир был удалён
+		if err == ErrMatchNotFound {
+			p.log.Info("Match skipped (not found in database)",
+				zap.String("match_id", match.ID.String()),
+			)
+			return nil // Возвращаем nil чтобы не считать это ошибкой
+		}
+
 		lastErr = err
 		p.log.LogError("Match processing attempt failed", err,
 			zap.String("match_id", match.ID.String()),
