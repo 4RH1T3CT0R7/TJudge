@@ -47,5 +47,4 @@ Thumbs.db
 tmp/
 temp/
 
-# Claude notes (uncomment to ignore)
-# claude.md
+claude.md
