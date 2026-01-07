@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Team, User } from '../types';
-
-interface TeamWithMembers {
-  team: Team;
-  members: User[];
-}
+import type { TeamWithMembers } from '../types';
 
 export function TeamManagement() {
   const { id } = useParams<{ id: string }>();
@@ -48,7 +43,7 @@ export function TeamManagement() {
     try {
       const data = await api.getTeam(id);
       setTeamData(data);
-      setNewName(data.team.name);
+      setNewName(data.name);
     } catch (err) {
       setError('Не удалось загрузить данные команды');
       console.error(err);
@@ -64,7 +59,7 @@ export function TeamManagement() {
     try {
       await api.updateTeamName(id, newName.trim());
       setTeamData((prev) =>
-        prev ? { ...prev, team: { ...prev.team, name: newName.trim() } } : null
+        prev ? { ...prev, name: newName.trim() } : null
       );
       setIsEditing(false);
     } catch (err) {
@@ -113,7 +108,7 @@ export function TeamManagement() {
     setIsLeaving(true);
     try {
       await api.leaveTeam(id);
-      navigate(`/tournaments/${teamData?.team.tournament_id}`);
+      navigate(`/tournaments/${teamData?.tournament_id}`);
     } catch (err) {
       console.error('Failed to leave team:', err);
     } finally {
@@ -157,8 +152,8 @@ export function TeamManagement() {
     );
   }
 
-  const { team, members } = teamData;
-  const isLeader = user?.id === team.leader_id;
+  const { members } = teamData;
+  const isLeader = user?.id === teamData.leader_id;
   const isMember = members.some((m) => m.id === user?.id);
 
   return (
@@ -170,13 +165,13 @@ export function TeamManagement() {
         </Link>
         <span className="mx-2 text-gray-400">/</span>
         <Link
-          to={`/tournaments/${team.tournament_id}`}
+          to={`/tournaments/${teamData.tournament_id}`}
           className="text-gray-500 hover:text-gray-700"
         >
           Турнир
         </Link>
         <span className="mx-2 text-gray-400">/</span>
-        <span className="text-gray-900">{team.name}</span>
+        <span className="text-gray-900">{teamData.name}</span>
       </nav>
 
       {/* Team Header */}
@@ -201,7 +196,7 @@ export function TeamManagement() {
               <button
                 onClick={() => {
                   setIsEditing(false);
-                  setNewName(team.name);
+                  setNewName(teamData.name);
                 }}
                 className="btn btn-secondary"
               >
@@ -210,7 +205,7 @@ export function TeamManagement() {
             </div>
           ) : (
             <div>
-              <h1 className="text-2xl font-bold">{team.name}</h1>
+              <h1 className="text-2xl font-bold">{teamData.name}</h1>
               {isLeader && (
                 <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
                   Вы капитан
@@ -228,9 +223,9 @@ export function TeamManagement() {
 
         <div className="text-sm text-gray-500 space-y-1">
           <p>
-            Код команды: <code className="bg-gray-100 px-2 py-0.5 rounded">{team.code}</code>
+            Код команды: <code className="bg-gray-100 px-2 py-0.5 rounded">{teamData.code}</code>
           </p>
-          <p>Создана: {new Date(team.created_at).toLocaleDateString('ru-RU')}</p>
+          <p>Создана: {new Date(teamData.created_at).toLocaleDateString('ru-RU')}</p>
         </div>
       </div>
 
@@ -277,7 +272,7 @@ export function TeamManagement() {
               <div>
                 <p className="font-medium">
                   {member.username}
-                  {member.id === team.leader_id && (
+                  {member.id === teamData.leader_id && (
                     <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
                       Капитан
                     </span>

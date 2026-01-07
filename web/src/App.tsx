@@ -8,6 +8,7 @@ import { Register } from './pages/Register';
 import { Tournaments } from './pages/Tournaments';
 import { TournamentDetail } from './pages/TournamentDetail';
 import { GameDetail } from './pages/GameDetail';
+import { Games } from './pages/Games';
 import { TeamManagement } from './pages/TeamManagement';
 import { AdminPanel } from './pages/AdminPanel';
 import { useAuthStore } from './store/authStore';
@@ -65,6 +66,7 @@ function AppContent() {
         <Route path="tournaments" element={<Tournaments />} />
         <Route path="tournaments/:id" element={<TournamentDetail />} />
         <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
+        <Route path="games" element={<Games />} />
         <Route
           path="teams/:id"
           element={

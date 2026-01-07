@@ -52,8 +52,8 @@ export interface TeamMember {
   joined_at: string;
 }
 
-export interface TeamWithMembers {
-  team: Team;
+// TeamWithMembers - команда с участниками (поля Team встроены напрямую)
+export interface TeamWithMembers extends Team {
   members: User[];
 }
 
