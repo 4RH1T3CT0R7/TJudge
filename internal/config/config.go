@@ -26,8 +26,9 @@ type Config struct {
 
 // StorageConfig - конфигурация хранения файлов
 type StorageConfig struct {
-	ProgramsPath string `yaml:"programs_path"`
-	MaxFileSize  int64  `yaml:"max_file_size"` // В байтах
+	ProgramsPath     string `yaml:"programs_path"`
+	HostProgramsPath string `yaml:"host_programs_path"` // Путь на хосте для Docker-in-Docker
+	MaxFileSize      int64  `yaml:"max_file_size"`      // В байтах
 }
 
 // ServerConfig - конфигурация HTTP сервера
@@ -268,8 +269,9 @@ func Load() (*Config, error) {
 			CPUSetCPUs:        getEnv("EXECUTOR_CPUSET_CPUS", ""),
 		},
 		Storage: StorageConfig{
-			ProgramsPath: getEnv("PROGRAMS_PATH", "/data/programs"),
-			MaxFileSize:  int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
+			ProgramsPath:     getEnv("PROGRAMS_PATH", "/data/programs"),
+			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // Если пусто, используется ProgramsPath
+			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrFile("JWT_SECRET", "change-this-secret-in-production"), // Поддержка Docker secrets

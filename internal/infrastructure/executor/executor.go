@@ -19,27 +19,34 @@ import (
 
 // Executor выполняет матчи в изолированных Docker контейнерах
 type Executor struct {
-	config        config.ExecutorConfig
-	dockerClient  *client.Client
-	programsPath  string // Путь к директории с программами на хосте
-	containerPath string // Путь внутри контейнера
-	log           *logger.Logger
+	config           config.ExecutorConfig
+	dockerClient     *client.Client
+	programsPath     string // Путь к директории с программами внутри worker контейнера
+	hostProgramsPath string // Путь на реальном хосте для Docker-in-Docker
+	containerPath    string // Путь внутри контейнера tjudge-cli
+	log              *logger.Logger
 }
 
 // NewExecutor создаёт новый executor
-func NewExecutor(cfg config.ExecutorConfig, programsPath string, log *logger.Logger) (*Executor, error) {
+func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath string, log *logger.Logger) (*Executor, error) {
 	// Создаём Docker клиент
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
+	// Если hostProgramsPath не указан, используем programsPath
+	if hostProgramsPath == "" {
+		hostProgramsPath = programsPath
+	}
+
 	return &Executor{
-		config:        cfg,
-		dockerClient:  cli,
-		programsPath:  programsPath,
-		containerPath: "/programs", // Фиксированный путь внутри контейнера
-		log:           log,
+		config:           cfg,
+		dockerClient:     cli,
+		programsPath:     programsPath,
+		hostProgramsPath: hostProgramsPath,
+		containerPath:    "/programs", // Фиксированный путь внутри контейнера
+		log:              log,
 	}, nil
 }
 
@@ -128,8 +135,9 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			},
 		},
 		// Монтируем директорию с программами (только для чтения)
+		// Используем hostProgramsPath для Docker-in-Docker сценария
 		Binds: []string{
-			fmt.Sprintf("%s:%s:ro", e.programsPath, e.containerPath),
+			fmt.Sprintf("%s:%s:ro", e.hostProgramsPath, e.containerPath),
 		},
 		NetworkMode:    "none", // Отключаем сеть
 		ReadonlyRootfs: true,   // Только для чтения root filesystem

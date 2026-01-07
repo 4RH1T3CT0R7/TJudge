@@ -142,6 +142,7 @@ services:
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
+      - HOST_PROGRAMS_PATH=${PWD}/data/programs
     depends_on:
       postgres:
         condition: service_healthy
