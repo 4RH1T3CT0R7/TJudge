@@ -146,7 +146,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		Tmpfs: map[string]string{
 			"/tmp": "rw,noexec,nosuid,size=64m", // Временная директория для записи
 		},
-		AutoRemove: true, // Автоматически удаляем контейнер после остановки
+		AutoRemove: false, // Отключаем автоудаление чтобы получить логи
 	}
 
 	// Создаём контейнер
@@ -163,7 +163,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	}
 
 	containerID := resp.ID
-	defer e.cleanup(containerID)
+	defer e.cleanup(containerID) // Удаляем контейнер после получения логов
 
 	// Запускаем контейнер
 	if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
@@ -175,13 +175,19 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	select {
 	case err := <-errCh:
 		if err != nil {
+			// Пытаемся получить логи даже при ошибке
+			_, stderr, logErr := e.getContainerLogs(ctx, containerID)
+			if logErr == nil && stderr != "" {
+				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(stderr))
+			}
 			return nil, fmt.Errorf("error waiting for container: %w", err)
 		}
 	case status := <-statusCh:
 		// Получаем логи контейнера
 		stdout, stderr, err := e.getContainerLogs(ctx, containerID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get container logs: %w", err)
+			// Если не можем получить логи, возвращаем код выхода
+			return nil, fmt.Errorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
 
 		// Парсим результат

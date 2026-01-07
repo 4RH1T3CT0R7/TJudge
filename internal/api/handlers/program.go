@@ -90,8 +90,32 @@ func detectLanguage(filename string) string {
 		return "java"
 	case ".js":
 		return "javascript"
+	case ".rb":
+		return "ruby"
+	case ".php":
+		return "php"
+	case ".lua":
+		return "lua"
 	default:
 		return "unknown"
+	}
+}
+
+// getShebang возвращает shebang для интерпретируемых языков
+func getShebang(language string) string {
+	switch language {
+	case "python":
+		return "#!/usr/bin/env python3\n"
+	case "javascript":
+		return "#!/usr/bin/env node\n"
+	case "ruby":
+		return "#!/usr/bin/env ruby\n"
+	case "php":
+		return "#!/usr/bin/env php\n"
+	case "lua":
+		return "#!/usr/bin/env lua\n"
+	default:
+		return ""
 	}
 }
 
@@ -198,12 +222,36 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 	defer dst.Close()
 
+	// Добавляем shebang для интерпретируемых языков (если его нет)
+	shebang := getShebang(language)
+	if shebang != "" {
+		// Читаем первые байты чтобы проверить наличие shebang
+		firstBytes := make([]byte, 2)
+		n, _ := file.Read(firstBytes)
+		file.Seek(0, 0) // Возвращаемся в начало
+
+		// Если файл не начинается с #!, добавляем shebang
+		if n < 2 || string(firstBytes) != "#!" {
+			if _, err := dst.WriteString(shebang); err != nil {
+				h.log.Error("Failed to write shebang", zap.Error(err))
+				os.Remove(filePath)
+				writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
+				return
+			}
+		}
+	}
+
 	if _, err := io.Copy(dst, file); err != nil {
 		h.log.Error("Failed to write file", zap.Error(err))
 		// Удаляем частично записанный файл
 		os.Remove(filePath)
 		writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
 		return
+	}
+
+	// Делаем файл исполняемым
+	if err := os.Chmod(filePath, 0755); err != nil {
+		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
 
 	// Создаём запись в БД

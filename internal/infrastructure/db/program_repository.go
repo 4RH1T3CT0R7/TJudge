@@ -259,14 +259,16 @@ func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID
 	return version, nil
 }
 
-// GetByTournamentAndGame получает все программы турнира для конкретной игры
+// GetByTournamentAndGame получает только ПОСЛЕДНИЕ версии программ для каждой команды в турнире
 func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+	// Используем DISTINCT ON для получения только последней версии программы для каждой команды
 	query := `
-		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
+		SELECT DISTINCT ON (team_id)
+		       id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, error_message, version, created_at, updated_at
 		FROM programs
-		WHERE tournament_id = $1 AND game_id = $2
-		ORDER BY created_at DESC
+		WHERE tournament_id = $1 AND game_id = $2 AND team_id IS NOT NULL
+		ORDER BY team_id, version DESC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameID)
