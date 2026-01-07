@@ -313,7 +313,6 @@ volumes:
   prometheus_data:
   grafana_data:
   loki_data:
-  programs_data:
 
 networks:
   tjudge-network:
