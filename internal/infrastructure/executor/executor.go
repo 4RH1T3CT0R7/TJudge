@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"go.uber.org/zap"
 )
 
@@ -96,6 +96,15 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	// Формируем команду для tjudge-cli
 	// Формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
+
+	bindMount := fmt.Sprintf("%s:%s:ro", e.hostProgramsPath, e.containerPath)
+	e.log.Info("Creating container",
+		zap.Strings("cmd", cmd),
+		zap.String("bind_mount", bindMount),
+		zap.String("host_programs_path", e.hostProgramsPath),
+		zap.String("container_path", e.containerPath),
+		zap.String("image", e.config.DockerImage),
+	)
 
 	// Конфигурация контейнера
 	containerConfig := &container.Config{
@@ -192,6 +201,15 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			return nil, fmt.Errorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
 
+		e.log.Info("Container finished",
+			zap.String("container_id", containerID),
+			zap.Int64("exit_code", status.StatusCode),
+			zap.String("stdout", stdout),
+			zap.String("stderr", stderr),
+			zap.Int("stdout_len", len(stdout)),
+			zap.Int("stderr_len", len(stderr)),
+		)
+
 		// Парсим результат
 		return e.parseResult(status.StatusCode, stdout, stderr)
 	case <-ctx.Done():
@@ -208,6 +226,7 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
+		Follow:     false,
 	}
 
 	logs, err := e.dockerClient.ContainerLogs(ctx, containerID, options)
@@ -216,32 +235,11 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	}
 	defer logs.Close()
 
-	// Читаем логи
+	// Читаем логи используя stdcopy для демультиплексирования
 	var stdout, stderr bytes.Buffer
-
-	// Docker мультиплексирует stdout и stderr
-	// Первые 8 байт - заголовок, затем данные
-	buf := make([]byte, 8192)
-	for {
-		n, err := logs.Read(buf)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", "", err
-		}
-
-		if n > 8 {
-			// Байт 0 указывает тип потока: 1=stdout, 2=stderr
-			streamType := buf[0]
-			data := buf[8:n]
-
-			if streamType == 1 {
-				stdout.Write(data)
-			} else if streamType == 2 {
-				stderr.Write(data)
-			}
-		}
+	_, err = stdcopy.StdCopy(&stdout, &stderr, logs)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read container logs: %w", err)
 	}
 
 	return stdout.String(), stderr.String(), nil

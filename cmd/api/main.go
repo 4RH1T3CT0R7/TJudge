@@ -169,7 +169,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
 	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, matchScheduler, log)
-	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, log)
+	matchHandler := handlers.NewMatchHandlerWithProgramLookup(matchRepo, matchCache, programRepo, log)
 	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, log)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)

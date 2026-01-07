@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -29,11 +30,17 @@ type MatchCache interface {
 	SetMatch(ctx context.Context, match *domain.Match) error
 }
 
+// MatchProgramLookup интерфейс для получения владельца программы
+type MatchProgramLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
+}
+
 // MatchHandler обрабатывает запросы матчей
 type MatchHandler struct {
-	matchRepo  MatchRepository
-	matchCache MatchCache
-	log        *logger.Logger
+	matchRepo     MatchRepository
+	matchCache    MatchCache
+	programLookup MatchProgramLookup
+	log           *logger.Logger
 }
 
 // NewMatchHandler создаёт новый match handler
@@ -43,6 +50,77 @@ func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, log *logg
 		matchCache: matchCache,
 		log:        log,
 	}
+}
+
+// NewMatchHandlerWithProgramLookup создаёт match handler с возможностью фильтрации ошибок
+func NewMatchHandlerWithProgramLookup(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, log *logger.Logger) *MatchHandler {
+	return &MatchHandler{
+		matchRepo:     matchRepo,
+		matchCache:    matchCache,
+		programLookup: programLookup,
+		log:           log,
+	}
+}
+
+// filterMatchError фильтрует сообщение об ошибке матча в зависимости от прав пользователя
+// Если пользователь владеет программой, которая вызвала ошибку, или является админом - показываем полную ошибку
+// Иначе показываем "Программа оппонента завершилась с ошибкой"
+func (h *MatchHandler) filterMatchError(ctx context.Context, match *domain.Match, userID uuid.UUID, isAdmin bool) *domain.Match {
+	// Если нет ошибки или нет program lookup - возвращаем как есть
+	if match.ErrorMessage == nil || *match.ErrorMessage == "" || h.programLookup == nil {
+		return match
+	}
+
+	// Админы видят все ошибки
+	if isAdmin {
+		return match
+	}
+
+	// Определяем, какая программа вызвала ошибку
+	// Winner = 1 означает что программа 1 выиграла (программа 2 упала)
+	// Winner = 2 означает что программа 2 выиграла (программа 1 упала)
+	var failedProgramID uuid.UUID
+	if match.Winner != nil {
+		if *match.Winner == 1 {
+			failedProgramID = match.Program2ID
+		} else if *match.Winner == 2 {
+			failedProgramID = match.Program1ID
+		}
+	}
+
+	// Если не можем определить упавшую программу - скрываем ошибку
+	if failedProgramID == uuid.Nil {
+		opponentError := "Ошибка выполнения матча"
+		match.ErrorMessage = &opponentError
+		return match
+	}
+
+	// Проверяем владельца упавшей программы
+	program, err := h.programLookup.GetByID(ctx, failedProgramID)
+	if err != nil {
+		h.log.Warn("Failed to get program for error filtering", zap.Error(err))
+		opponentError := "Ошибка выполнения матча"
+		match.ErrorMessage = &opponentError
+		return match
+	}
+
+	// Если пользователь владеет упавшей программой - показываем полную ошибку
+	if program.UserID == userID {
+		return match
+	}
+
+	// Иначе показываем обезличенное сообщение
+	opponentError := "Программа оппонента завершилась с ошибкой"
+	match.ErrorMessage = &opponentError
+	return match
+}
+
+// filterMatchesErrors применяет фильтрацию ошибок к списку матчей
+func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*domain.Match, userID uuid.UUID, isAdmin bool) []*domain.Match {
+	for i, match := range matches {
+		matches[i] = h.filterMatchError(ctx, match, userID, isAdmin)
+	}
+	return matches
 }
 
 // Get обрабатывает получение матча
@@ -75,6 +153,12 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
+	// Фильтруем сообщение об ошибке в зависимости от прав пользователя
+	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	isAdmin := userRole == domain.RoleAdmin
+	match = h.filterMatchError(r.Context(), match, userID, isAdmin)
 
 	writeJSON(w, http.StatusOK, match)
 }
@@ -137,6 +221,12 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
+	// Фильтруем сообщения об ошибках в зависимости от прав пользователя
+	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	isAdmin := userRole == domain.RoleAdmin
+	matches = h.filterMatchesErrors(r.Context(), matches, userID, isAdmin)
 
 	writeJSON(w, http.StatusOK, matches)
 }
