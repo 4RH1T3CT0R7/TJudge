@@ -37,23 +37,28 @@ type AuthService interface {
 func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Извлекаем токен из заголовка Authorization
+			var token string
+
+			// Сначала проверяем заголовок Authorization
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				log.Info("Missing authorization header")
+			if authHeader != "" {
+				// Проверяем формат "Bearer <token>"
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && parts[0] == "Bearer" {
+					token = parts[1]
+				}
+			}
+
+			// Если токена нет в header, проверяем query параметр (для WebSocket)
+			if token == "" {
+				token = r.URL.Query().Get("token")
+			}
+
+			if token == "" {
+				log.Info("Missing authorization token")
 				writeError(w, errors.ErrUnauthorized)
 				return
 			}
-
-			// Проверяем формат "Bearer <token>"
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				log.Info("Invalid authorization header format")
-				writeError(w, errors.ErrUnauthorized.WithMessage("invalid authorization header format"))
-				return
-			}
-
-			token := parts[1]
 
 			// Валидируем токен
 			claims, err := authService.ValidateToken(token)
