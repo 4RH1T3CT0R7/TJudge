@@ -344,7 +344,11 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	})
 }
 
+// MatchesPerPair - количество матчей между каждой парой программ в раунде
+const MatchesPerPair = 10
+
 // generateRoundRobinMatches генерирует матчи по системе round-robin (каждый с каждым)
+// Каждая пара играет MatchesPerPair матчей
 func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, participants []*domain.TournamentParticipant) ([]*domain.Match, error) {
 	var matches []*domain.Match
 	now := time.Now()
@@ -352,22 +356,25 @@ func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, parti
 	// Каждый участник играет с каждым
 	for i := 0; i < len(participants); i++ {
 		for j := i + 1; j < len(participants); j++ {
-			match := &domain.Match{
-				ID:           uuid.New(),
-				TournamentID: tournament.ID,
-				Program1ID:   participants[i].ProgramID,
-				Program2ID:   participants[j].ProgramID,
-				GameType:     tournament.GameType,
-				Status:       domain.MatchPending,
-				Priority:     domain.PriorityMedium, // По умолчанию средний приоритет
-				CreatedAt:    now,
-			}
+			// Создаём MatchesPerPair матчей для каждой пары
+			for k := 0; k < MatchesPerPair; k++ {
+				match := &domain.Match{
+					ID:           uuid.New(),
+					TournamentID: tournament.ID,
+					Program1ID:   participants[i].ProgramID,
+					Program2ID:   participants[j].ProgramID,
+					GameType:     tournament.GameType,
+					Status:       domain.MatchPending,
+					Priority:     domain.PriorityMedium,
+					CreatedAt:    now,
+				}
 
-			if err := match.Validate(); err != nil {
-				return nil, fmt.Errorf("invalid match generated: %w", err)
-			}
+				if err := match.Validate(); err != nil {
+					return nil, fmt.Errorf("invalid match generated: %w", err)
+				}
 
-			matches = append(matches, match)
+				matches = append(matches, match)
+			}
 		}
 	}
 
