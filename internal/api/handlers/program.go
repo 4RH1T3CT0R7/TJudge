@@ -30,16 +30,22 @@ type ProgramRepository interface {
 	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
 }
 
+// TournamentParticipantAdder интерфейс для добавления участников в турнир
+type TournamentParticipantAdder interface {
+	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
-	programRepo ProgramRepository
-	uploadDir   string
-	maxFileSize int64
-	log         *logger.Logger
+	programRepo    ProgramRepository
+	tournamentRepo TournamentParticipantAdder
+	uploadDir      string
+	maxFileSize    int64
+	log            *logger.Logger
 }
 
 // NewProgramHandler создаёт новый program handler
-func NewProgramHandler(programRepo ProgramRepository, log *logger.Logger) *ProgramHandler {
+func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentParticipantAdder, log *logger.Logger) *ProgramHandler {
 	// Создаём директорию для загрузок
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
@@ -51,10 +57,11 @@ func NewProgramHandler(programRepo ProgramRepository, log *logger.Logger) *Progr
 	}
 
 	return &ProgramHandler{
-		programRepo: programRepo,
-		uploadDir:   uploadDir,
-		maxFileSize: 10 * 1024 * 1024, // 10MB
-		log:         log,
+		programRepo:    programRepo,
+		tournamentRepo: tournamentRepo,
+		uploadDir:      uploadDir,
+		maxFileSize:    10 * 1024 * 1024, // 10MB
+		log:            log,
 	}
 }
 
@@ -213,6 +220,30 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		os.Remove(filePath)
 		writeError(w, err)
 		return
+	}
+
+	// Автоматически регистрируем программу как участника турнира
+	if h.tournamentRepo != nil {
+		participant := &domain.TournamentParticipant{
+			ID:           uuid.New(),
+			TournamentID: tournamentID,
+			ProgramID:    programID,
+			Rating:       1500, // Начальный рейтинг ELO
+		}
+
+		if err := h.tournamentRepo.AddParticipant(r.Context(), participant); err != nil {
+			h.log.Warn("Failed to add program as tournament participant (may already exist)",
+				zap.Error(err),
+				zap.String("program_id", programID.String()),
+				zap.String("tournament_id", tournamentID.String()),
+			)
+			// Не возвращаем ошибку - программа уже создана, участие опционально
+		} else {
+			h.log.Info("Program registered as tournament participant",
+				zap.String("program_id", programID.String()),
+				zap.String("tournament_id", tournamentID.String()),
+			)
+		}
 	}
 
 	h.log.Info("Program uploaded",

@@ -8,6 +8,7 @@ import { Register } from './pages/Register';
 import { Tournaments } from './pages/Tournaments';
 import { TournamentDetail } from './pages/TournamentDetail';
 import { GameDetail } from './pages/GameDetail';
+import { GameView } from './pages/GameView';
 import { Games } from './pages/Games';
 import { TeamManagement } from './pages/TeamManagement';
 import { AdminPanel } from './pages/AdminPanel';
@@ -67,6 +68,7 @@ function AppContent() {
         <Route path="tournaments/:id" element={<TournamentDetail />} />
         <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
         <Route path="games" element={<Games />} />
+        <Route path="games/:id" element={<GameView />} />
         <Route
           path="teams/:id"
           element={

@@ -24,8 +24,11 @@ export function useWebSocket({
     const token = localStorage.getItem('access_token');
     if (!token) return;
 
+    // Build WebSocket URL based on current location
+    // This works with both Vite dev server (which proxies /api) and production
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/tournaments/${tournamentId}?token=${token}`;
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${tournamentId}?token=${token}`;
 
     const ws = new WebSocket(wsUrl);
 
