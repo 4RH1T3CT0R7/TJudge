@@ -52,10 +52,10 @@ type ProgramHandler struct {
 
 // NewProgramHandler создаёт новый program handler
 func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentParticipantAdder, matchScheduler MatchScheduler, log *logger.Logger) *ProgramHandler {
-	// Создаём директорию для загрузок
-	uploadDir := os.Getenv("UPLOAD_DIR")
+	// Создаём директорию для загрузок (используем PROGRAMS_PATH для согласованности с worker)
+	uploadDir := os.Getenv("PROGRAMS_PATH")
 	if uploadDir == "" {
-		uploadDir = "./uploads/programs"
+		uploadDir = "/data/programs"
 	}
 
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
