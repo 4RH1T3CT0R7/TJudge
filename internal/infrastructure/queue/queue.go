@@ -62,46 +62,41 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 // Dequeue извлекает матч из очереди с учётом приоритета
 // Проверяет очереди в порядке: HIGH -> MEDIUM -> LOW
 func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
-	priorities := []domain.MatchPriority{
-		domain.PriorityHigh,
-		domain.PriorityMedium,
-		domain.PriorityLow,
+	// Используем multi-key BRPOP для эффективного ожидания на всех очередях
+	// Redis вернёт первый доступный элемент из любой очереди (в порядке приоритета)
+	queueKeys := []string{
+		qm.getQueueKey(domain.PriorityHigh),
+		qm.getQueueKey(domain.PriorityMedium),
+		qm.getQueueKey(domain.PriorityLow),
 	}
 
-	for _, priority := range priorities {
-		queueKey := qm.getQueueKey(priority)
-
-		// Блокирующее чтение с таймаутом 1 секунда
-		result, err := qm.cache.BRPop(ctx, time.Second, queueKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to dequeue match: %w", err)
-		}
-
-		// Если очередь пустая, проверяем следующую
-		if result == nil {
-			continue
-		}
-
-		// Десериализуем матч
-		var match domain.Match
-		if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
-			qm.log.LogError("Failed to unmarshal match", err)
-			continue
-		}
-
-		// Обновляем метрики
-		qm.updateQueueSizeMetrics(ctx)
-
-		qm.log.Info("Match dequeued",
-			zap.String("match_id", match.ID.String()),
-			zap.String("priority", string(match.Priority)),
-		)
-
-		return &match, nil
+	// Блокирующее чтение с таймаутом 1 секунда на все очереди сразу
+	result, err := qm.cache.BRPop(ctx, time.Second, queueKeys...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dequeue match: %w", err)
 	}
 
-	// Все очереди пустые
-	return nil, nil
+	// Если все очереди пустые
+	if result == nil {
+		return nil, nil
+	}
+
+	// result[0] содержит имя очереди, result[1] - данные
+	var match domain.Match
+	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
+		qm.log.LogError("Failed to unmarshal match", err)
+		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
+	}
+
+	// Обновляем метрики
+	qm.updateQueueSizeMetrics(ctx)
+
+	qm.log.Info("Match dequeued",
+		zap.String("match_id", match.ID.String()),
+		zap.String("priority", string(match.Priority)),
+	)
+
+	return &match, nil
 }
 
 // GetQueueSize получает размер очереди по приоритету

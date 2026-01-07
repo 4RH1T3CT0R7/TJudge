@@ -154,6 +154,26 @@ var Standards = map[string]BenchmarkStandard{
 		ExpectedNsOp: 100_000, // 100µs
 		Category:     "Queue",
 	},
+	"BenchmarkQueuePriorities": {
+		Name:         "Queue Priorities",
+		Description:  "Priority queue operations",
+		ExpectedNsOp: 500_000, // 500µs
+		Category:     "Queue",
+	},
+
+	// Worker Pool Benchmarks
+	"BenchmarkWorkerPool_ProcessingLatency": {
+		Name:         "Processing Latency",
+		Description:  "10ms simulated processing latency",
+		ExpectedNsOp: 200_000_000, // 200ms (includes scaling overhead)
+		Category:     "Worker",
+	},
+	"BenchmarkWorkerPool_ScaleUp": {
+		Name:         "Worker Autoscaling",
+		Description:  "Autoscaling 1->16 workers with 200 matches",
+		ExpectedNsOp: 1_500_000_000, // 1.5s (200 matches, 5ms each, scaling overhead)
+		Category:     "Worker",
+	},
 
 	// Database Benchmarks
 	"BenchmarkDBHealth": {

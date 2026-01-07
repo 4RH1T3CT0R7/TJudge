@@ -99,8 +99,11 @@ func BenchmarkQueueDequeue(b *testing.B) {
 
 	ctx := context.Background()
 
-	// Pre-populate queue
-	for i := 0; i < 1000; i++ {
+	// Pre-populate queue with enough items for the benchmark
+	// We need at least b.N items, but b.N is not known in advance
+	// So we use a large batch and refill if needed
+	batchSize := 10000
+	for i := 0; i < batchSize; i++ {
 		match := &domain.Match{
 			ID:           uuid.New(),
 			TournamentID: uuid.New(),
@@ -114,9 +117,30 @@ func BenchmarkQueueDequeue(b *testing.B) {
 		queueManager.Enqueue(ctx, match)
 	}
 
+	dequeued := 0
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		queueManager.Dequeue(ctx)
+		dequeued++
+		// Refill queue if running low
+		if dequeued >= batchSize-100 {
+			b.StopTimer()
+			for j := 0; j < batchSize; j++ {
+				match := &domain.Match{
+					ID:           uuid.New(),
+					TournamentID: uuid.New(),
+					Program1ID:   uuid.New(),
+					Program2ID:   uuid.New(),
+					GameType:     "tictactoe",
+					Status:       domain.MatchPending,
+					Priority:     domain.PriorityMedium,
+					CreatedAt:    time.Now(),
+				}
+				queueManager.Enqueue(ctx, match)
+			}
+			dequeued = 0
+			b.StartTimer()
+		}
 	}
 }
 

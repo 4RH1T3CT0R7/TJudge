@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  /* BMSTU-inspired blue palette */
-  --color-primary-50: #f0f7ff;
-  --color-primary-100: #e0efff;
-  --color-primary-200: #c7e0ff;
-  --color-primary-300: #a0cbff;
-  --color-primary-400: #6ba8ff;
-  --color-primary-500: #3d7eff;
-  --color-primary-600: #1a5dc8;
-  --color-primary-700: #1549a3;
-  --color-primary-800: #123d86;
-  --color-primary-900: #0e2f66;
+  /* Softer emerald-teal palette for better dark mode */
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
 
   /* Animation durations */
   --animate-fade-in: fade-in 0.2s ease-out;
@@ -71,6 +71,7 @@
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 min-h-screen;
+    @apply dark:bg-gray-900 dark:text-gray-100;
   }
 
   html {
@@ -79,6 +80,7 @@
 
   *:focus-visible {
     @apply outline-none ring-2 ring-primary-500 ring-offset-1;
+    @apply dark:ring-offset-gray-900;
   }
 }
 
@@ -90,36 +92,40 @@
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     @apply transition-all duration-150 ease-out;
     @apply active:scale-[0.98];
+    @apply dark:focus:ring-offset-gray-900;
   }
 
   .btn-primary {
     @apply bg-primary-600 text-white;
-    @apply hover:bg-primary-700 hover:shadow-md;
-    @apply focus:ring-primary-500;
+    @apply hover:bg-primary-500 hover:shadow-lg hover:shadow-primary-500/25;
+    @apply focus:ring-primary-400;
+    @apply dark:bg-primary-500 dark:hover:bg-primary-400;
   }
 
   .btn-secondary {
     @apply bg-white text-gray-700 border border-gray-300;
     @apply hover:bg-gray-50 hover:border-gray-400;
     @apply focus:ring-gray-400;
+    @apply dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600;
+    @apply dark:hover:bg-gray-700 dark:hover:border-gray-500;
   }
 
   .btn-danger {
     @apply bg-red-600 text-white;
-    @apply hover:bg-red-700 hover:shadow-md;
-    @apply focus:ring-red-500;
+    @apply hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/25;
+    @apply focus:ring-red-400;
   }
 
   .btn-success {
     @apply bg-green-600 text-white;
-    @apply hover:bg-green-700 hover:shadow-md;
-    @apply focus:ring-green-500;
+    @apply hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/25;
+    @apply focus:ring-green-400;
   }
 
   .btn-warning {
     @apply bg-amber-500 text-white;
-    @apply hover:bg-amber-600 hover:shadow-md;
-    @apply focus:ring-amber-500;
+    @apply hover:bg-amber-400 hover:shadow-lg hover:shadow-amber-500/25;
+    @apply focus:ring-amber-400;
   }
 
   /* Simple inputs */
@@ -128,32 +134,40 @@
     @apply focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 outline-none;
     @apply placeholder:text-gray-400;
     @apply transition-colors duration-150;
+    @apply dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100;
+    @apply dark:placeholder:text-gray-500;
+    @apply dark:focus:border-primary-400 dark:focus:ring-primary-400/30;
   }
 
   .input:disabled {
     @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+    @apply dark:bg-gray-900 dark:text-gray-600;
   }
 
   /* Simple cards with animations */
   .card {
     @apply bg-white rounded-lg shadow-sm border border-gray-200 p-5;
+    @apply dark:bg-gray-800 dark:border-gray-700;
     animation: slide-up 0.3s ease-out;
   }
 
   .card-hover {
     @apply hover:shadow-md transition-all duration-200 ease-out;
     @apply hover:-translate-y-0.5;
+    @apply dark:hover:shadow-gray-900/50;
   }
 
   .card-interactive {
     @apply cursor-pointer transition-all duration-200 ease-out;
     @apply hover:shadow-md hover:border-primary-300 hover:-translate-y-0.5;
     @apply active:translate-y-0 active:shadow-sm;
+    @apply dark:hover:border-primary-500 dark:hover:shadow-gray-900/50;
   }
 
   /* Table styles */
   .table-row {
     @apply border-b border-gray-200 hover:bg-gray-50 transition-colors duration-100;
+    @apply dark:border-gray-700 dark:hover:bg-gray-700/50;
   }
 
   /* Badge styles */
@@ -163,32 +177,39 @@
 
   .badge-yellow {
     @apply bg-yellow-100 text-yellow-800;
+    @apply dark:bg-yellow-900/50 dark:text-yellow-300;
   }
 
   .badge-green {
     @apply bg-green-100 text-green-800;
+    @apply dark:bg-green-900/50 dark:text-green-300;
   }
 
   .badge-gray {
     @apply bg-gray-100 text-gray-700;
+    @apply dark:bg-gray-700 dark:text-gray-300;
   }
 
   .badge-blue {
     @apply bg-blue-100 text-blue-800;
+    @apply dark:bg-blue-900/50 dark:text-blue-300;
   }
 
   .badge-purple {
     @apply bg-purple-100 text-purple-800;
+    @apply dark:bg-purple-900/50 dark:text-purple-300;
   }
 
   /* Tab styles - defined in alert section below */
 
   .tab-active {
     @apply border-primary-600 text-primary-600;
+    @apply dark:border-primary-400 dark:text-primary-400;
   }
 
   .tab-inactive {
     @apply border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300;
+    @apply dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600;
   }
 
   /* Modal backdrop */
@@ -200,6 +221,7 @@
 
   .modal-content {
     @apply bg-white rounded-lg shadow-xl;
+    @apply dark:bg-gray-800 dark:shadow-gray-900/50;
     animation: scale-in 0.2s ease-out;
   }
 
@@ -211,9 +233,14 @@
     animation: shimmer 1.5s infinite ease-in-out;
   }
 
+  .dark .skeleton {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  }
+
   /* Stat card */
   .stat-card {
     @apply bg-white rounded-lg p-4 border border-gray-200;
+    @apply dark:bg-gray-800 dark:border-gray-700;
   }
 
   /* Online indicator with pulse ring */
@@ -236,15 +263,18 @@
   .nav-link {
     @apply px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150;
     @apply text-gray-600 hover:text-primary-600 hover:bg-gray-100;
+    @apply dark:text-gray-300 dark:hover:text-primary-400 dark:hover:bg-gray-800;
   }
 
   .nav-link-active {
     @apply text-primary-600 bg-primary-50;
+    @apply dark:text-primary-400 dark:bg-primary-900/30;
   }
 
   /* Hero section - simple solid color */
   .hero-gradient {
     @apply bg-primary-600;
+    @apply dark:bg-primary-700;
   }
 
   /* Feature card */
@@ -252,19 +282,23 @@
     @apply bg-white rounded-lg p-6 border border-gray-200;
     @apply hover:shadow-md hover:-translate-y-0.5;
     @apply transition-all duration-200 ease-out;
+    @apply dark:bg-gray-800 dark:border-gray-700 dark:hover:shadow-gray-900/50;
   }
 
   /* Leaderboard row highlight */
   .leaderboard-row-gold {
     @apply bg-yellow-50;
+    @apply dark:bg-yellow-900/20;
   }
 
   .leaderboard-row-silver {
     @apply bg-gray-100;
+    @apply dark:bg-gray-700/50;
   }
 
   .leaderboard-row-bronze {
     @apply bg-orange-50;
+    @apply dark:bg-orange-900/20;
   }
 
   /* Rank badge */
@@ -278,6 +312,7 @@
 
   .rank-silver {
     @apply bg-gray-300 text-gray-800;
+    @apply dark:bg-gray-500 dark:text-gray-100;
   }
 
   .rank-bronze {
@@ -286,25 +321,30 @@
 
   .rank-default {
     @apply bg-gray-100 text-gray-600;
+    @apply dark:bg-gray-700 dark:text-gray-300;
   }
 
   /* Code block */
   .code-block {
     @apply bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm;
+    @apply dark:bg-gray-900;
   }
 
   /* Divider */
   .divider {
     @apply border-t border-gray-200 my-4;
+    @apply dark:border-gray-700;
   }
 
   /* Section title */
   .section-title {
     @apply text-xl font-bold text-gray-900 mb-2;
+    @apply dark:text-gray-100;
   }
 
   .section-subtitle {
     @apply text-gray-600;
+    @apply dark:text-gray-400;
   }
 
   /* Empty state */
@@ -314,14 +354,17 @@
 
   .empty-state-icon {
     @apply w-12 h-12 mx-auto mb-3 text-gray-300;
+    @apply dark:text-gray-600;
   }
 
   .empty-state-title {
     @apply text-base font-semibold text-gray-600 mb-1;
+    @apply dark:text-gray-300;
   }
 
   .empty-state-description {
     @apply text-gray-500 text-sm;
+    @apply dark:text-gray-400;
   }
 
   /* Alert styles with slide-in animation */
@@ -332,18 +375,22 @@
 
   .alert-info {
     @apply bg-blue-50 border-blue-200 text-blue-800;
+    @apply dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300;
   }
 
   .alert-success {
     @apply bg-green-50 border-green-200 text-green-800;
+    @apply dark:bg-green-900/30 dark:border-green-700 dark:text-green-300;
   }
 
   .alert-warning {
     @apply bg-yellow-50 border-yellow-200 text-yellow-800;
+    @apply dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-300;
   }
 
   .alert-error {
     @apply bg-red-50 border-red-200 text-red-800;
+    @apply dark:bg-red-900/30 dark:border-red-700 dark:text-red-300;
   }
 
   /* Badge hover effect */
@@ -360,6 +407,7 @@
   .tab-active::after {
     content: '';
     @apply absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600;
+    @apply dark:bg-primary-400;
     animation: fade-in 0.2s ease-out;
   }
 }

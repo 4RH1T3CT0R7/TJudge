@@ -252,15 +252,11 @@ export function GameDetail() {
 
           {activeTab === 'matches' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Результаты матчей</h2>
+              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Результаты матчей</h2>
               {matches.length > 0 ? (
-                <div className="space-y-3">
-                  {matches.map((match) => (
-                    <MatchCard key={match.id} match={match} />
-                  ))}
-                </div>
+                <MatchGroups matches={matches} />
               ) : (
-                <p className="text-gray-500">Матчи ещё не проводились.</p>
+                <p className="text-gray-500 dark:text-gray-400">Матчи ещё не проводились.</p>
               )}
             </div>
           )}
@@ -396,74 +392,190 @@ export function GameDetail() {
   );
 }
 
-// Match card component
-function MatchCard({ match }: { match: Match }) {
-  const getStatusBadge = () => {
+// Match groups component - groups matches by program pair and shows iterations as tabs
+function MatchGroups({ matches }: { matches: Match[] }) {
+  // Group matches by program pair (program1_id + program2_id)
+  const groupedMatches: Record<string, Match[]> = {};
+
+  matches.forEach((match) => {
+    // Create a consistent key regardless of which program is first
+    const ids = [match.program1_id, match.program2_id].sort();
+    const key = ids.join('-');
+
+    if (!groupedMatches[key]) {
+      groupedMatches[key] = [];
+    }
+    groupedMatches[key].push(match);
+  });
+
+  // Sort matches within each group by created_at
+  Object.values(groupedMatches).forEach((group) => {
+    group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  });
+
+  const groupEntries = Object.entries(groupedMatches);
+
+  if (groupEntries.length === 0) {
+    return <p className="text-gray-500 dark:text-gray-400">Матчи ещё не проводились.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {groupEntries.map(([key, groupMatches]) => (
+        <MatchGroupCard key={key} matches={groupMatches} />
+      ))}
+    </div>
+  );
+}
+
+// Match group card with iteration tabs
+function MatchGroupCard({ matches }: { matches: Match[] }) {
+  const [activeIteration, setActiveIteration] = useState(0);
+  const activeMatch = matches[activeIteration];
+
+  // Calculate aggregate stats
+  const stats = {
+    completed: matches.filter((m) => m.status === 'completed').length,
+    pending: matches.filter((m) => m.status === 'pending').length,
+    running: matches.filter((m) => m.status === 'running').length,
+    failed: matches.filter((m) => m.status === 'failed').length,
+    total1: matches.reduce((sum, m) => sum + (m.score1 ?? 0), 0),
+    total2: matches.reduce((sum, m) => sum + (m.score2 ?? 0), 0),
+    wins1: matches.filter((m) => m.winner === 1).length,
+    wins2: matches.filter((m) => m.winner === 2).length,
+    draws: matches.filter((m) => m.winner === 0).length,
+  };
+
+  const getIterationStatus = (match: Match) => {
     switch (match.status) {
-      case 'pending':
-        return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Ожидание</span>;
-      case 'running':
-        return <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Выполняется</span>;
       case 'completed':
-        return <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">Завершён</span>;
+        if (match.winner === 1) return 'bg-green-500';
+        if (match.winner === 2) return 'bg-red-500';
+        return 'bg-gray-400';
+      case 'running':
+        return 'bg-blue-500 animate-pulse';
       case 'failed':
-        return <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Ошибка</span>;
+        return 'bg-red-600';
       default:
-        return null;
+        return 'bg-gray-300 dark:bg-gray-600';
     }
   };
 
-  const getWinnerLabel = () => {
-    if (match.status !== 'completed') return null;
-    if (match.winner === 0) return <span className="text-gray-500 text-sm">Ничья</span>;
-    if (match.winner === 1) return <span className="text-green-600 text-sm font-medium">Победа 1</span>;
-    if (match.winner === 2) return <span className="text-green-600 text-sm font-medium">Победа 2</span>;
-    return null;
-  };
-
   return (
-    <div className="p-3 bg-gray-50 rounded-lg">
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex items-center gap-2">
-          {getStatusBadge()}
-          {getWinnerLabel()}
+    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+      {/* Header with aggregate stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+        <div className="flex items-center gap-4">
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={matches[0]?.program1_id}>
+              Программа 1
+            </p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total1}</p>
+          </div>
+          <div className="text-center text-gray-400 dark:text-gray-500">
+            <span className="text-lg">vs</span>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={matches[0]?.program2_id}>
+              Программа 2
+            </p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total2}</p>
+          </div>
         </div>
-        <span className="text-xs text-gray-500">
-          {new Date(match.created_at).toLocaleString('ru-RU')}
-        </span>
+
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-green-600 dark:text-green-400" title="Победы 1">
+            W1: {stats.wins1}
+          </span>
+          <span className="text-gray-500 dark:text-gray-400" title="Ничьи">
+            D: {stats.draws}
+          </span>
+          <span className="text-red-600 dark:text-red-400" title="Победы 2">
+            W2: {stats.wins2}
+          </span>
+          <span className="text-gray-400 dark:text-gray-500">
+            ({stats.completed}/{matches.length})
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium truncate" title={match.program1_id}>
-            Программа 1
-          </p>
+      {/* Iteration tabs */}
+      <div className="mb-3">
+        <div className="flex flex-wrap gap-1.5">
+          {matches.map((match, index) => (
+            <button
+              key={match.id}
+              onClick={() => setActiveIteration(index)}
+              className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
+                activeIteration === index
+                  ? 'ring-2 ring-primary-500 ring-offset-1 dark:ring-offset-gray-800'
+                  : 'hover:scale-105'
+              }`}
+              title={`Итерация ${index + 1}: ${match.status}${match.winner !== undefined ? ` (Победа ${match.winner || 'Ничья'})` : ''}`}
+            >
+              <div className={`w-full h-full rounded-lg flex items-center justify-center text-white ${getIterationStatus(match)}`}>
+                {index + 1}
+              </div>
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="px-4 text-center">
-          {match.status === 'completed' || match.status === 'failed' ? (
-            <span className="font-bold text-lg">
-              {match.score1 ?? 'N/A'} : {match.score2 ?? 'N/A'}
+      {/* Active iteration details */}
+      {activeMatch && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Итерация {activeIteration + 1}
             </span>
-          ) : (
-            <span className="text-gray-400">vs</span>
+            <MatchStatusBadge status={activeMatch.status} />
+          </div>
+
+          <div className="flex items-center justify-center gap-4 py-2">
+            <span className={`text-xl font-bold ${activeMatch.winner === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+              {activeMatch.score1 ?? '-'}
+            </span>
+            <span className="text-gray-400">:</span>
+            <span className={`text-xl font-bold ${activeMatch.winner === 2 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+              {activeMatch.score2 ?? '-'}
+            </span>
+          </div>
+
+          {activeMatch.winner !== undefined && activeMatch.status === 'completed' && (
+            <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+              {activeMatch.winner === 0 ? 'Ничья' : `Победа Программы ${activeMatch.winner}`}
+            </p>
           )}
-        </div>
 
-        <div className="flex-1 text-right">
-          <p className="text-sm font-medium truncate" title={match.program2_id}>
-            Программа 2
+          {activeMatch.error_message && (
+            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-300">
+              {activeMatch.error_message}
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+            {new Date(activeMatch.created_at).toLocaleString('ru-RU')}
           </p>
-        </div>
-      </div>
-
-      {match.error_message && (
-        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-          {match.error_message}
         </div>
       )}
     </div>
   );
+}
+
+// Match status badge component
+function MatchStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'pending':
+      return <span className="text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300 px-2 py-0.5 rounded">Ожидание</span>;
+    case 'running':
+      return <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded">Выполняется</span>;
+    case 'completed':
+      return <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 px-2 py-0.5 rounded">Завершён</span>;
+    case 'failed':
+      return <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300 px-2 py-0.5 rounded">Ошибка</span>;
+    default:
+      return null;
+  }
 }
 
 // Simple Markdown renderer (for basic formatting)
