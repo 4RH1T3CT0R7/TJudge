@@ -131,9 +131,14 @@ func (s *Server) setupRoutes() {
 			r.Get("/", s.tournamentHandler.List)
 			r.Get("/{id}", s.tournamentHandler.Get)
 			r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
+			r.Get("/{id}/cross-game-leaderboard", s.tournamentHandler.GetCrossGameLeaderboard)
 			r.Get("/{id}/matches", s.tournamentHandler.GetMatches)
 			r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
 			r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
+
+			// Эндпоинты для конкретной игры в турнире
+			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
+			r.Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
 
 			// Защищённые маршруты
 			r.Group(func(r chi.Router) {
@@ -152,6 +157,7 @@ func (s *Server) setupRoutes() {
 					r.Delete("/{id}", s.tournamentHandler.Delete)
 					r.Post("/{id}/games", s.gameHandler.AddGameToTournament)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
+					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
 				})
 			})
 		})
@@ -201,6 +207,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/", s.programHandler.Create)
 			r.Get("/", s.programHandler.List)
 			r.Get("/{id}", s.programHandler.Get)
+			r.Get("/{id}/download", s.programHandler.Download)
 			r.Put("/{id}", s.programHandler.Update)
 			r.Delete("/{id}", s.programHandler.Delete)
 		})

@@ -130,6 +130,57 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	return matches, nil
 }
 
+// GetPendingByTournamentID получает ожидающие матчи турнира по приоритету
+func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error) {
+	var matches []*domain.Match
+
+	query := `
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority,
+		       score1, score2, winner, error_message, started_at, completed_at, created_at
+		FROM matches
+		WHERE tournament_id = $1 AND status = $2
+		ORDER BY
+			CASE priority
+				WHEN 'high' THEN 1
+				WHEN 'medium' THEN 2
+				WHEN 'low' THEN 3
+			END,
+			created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, domain.MatchPending)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get pending matches by tournament id")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var match domain.Match
+		err := rows.Scan(
+			&match.ID,
+			&match.TournamentID,
+			&match.Program1ID,
+			&match.Program2ID,
+			&match.GameType,
+			&match.Status,
+			&match.Priority,
+			&match.Score1,
+			&match.Score2,
+			&match.Winner,
+			&match.ErrorMessage,
+			&match.StartedAt,
+			&match.CompletedAt,
+			&match.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan match")
+		}
+		matches = append(matches, &match)
+	}
+
+	return matches, nil
+}
+
 // GetPending получает ожидающие матчи по приоритету
 func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.Match, error) {
 	var matches []*domain.Match

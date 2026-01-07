@@ -28,10 +28,22 @@ type GameService interface {
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 }
 
+// GameLeaderboardRepository интерфейс для получения рейтинга по игре
+type GameLeaderboardRepository interface {
+	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error)
+}
+
+// GameMatchRepository интерфейс для получения матчей по игре
+type GameMatchRepository interface {
+	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
+}
+
 // GameHandler обрабатывает запросы игр
 type GameHandler struct {
-	gameService GameService
-	log         *logger.Logger
+	gameService     GameService
+	leaderboardRepo GameLeaderboardRepository
+	matchRepo       GameMatchRepository
+	log             *logger.Logger
 }
 
 // NewGameHandler создаёт новый game handler
@@ -39,6 +51,16 @@ func NewGameHandler(gameService GameService, log *logger.Logger) *GameHandler {
 	return &GameHandler{
 		gameService: gameService,
 		log:         log,
+	}
+}
+
+// NewGameHandlerWithRepos создаёт game handler с репозиториями для расширенной функциональности
+func NewGameHandlerWithRepos(gameService GameService, leaderboardRepo GameLeaderboardRepository, matchRepo GameMatchRepository, log *logger.Logger) *GameHandler {
+	return &GameHandler{
+		gameService:     gameService,
+		leaderboardRepo: leaderboardRepo,
+		matchRepo:       matchRepo,
+		log:             log,
 	}
 }
 
@@ -274,4 +296,132 @@ func (h *GameHandler) RemoveGameFromTournament(w http.ResponseWriter, r *http.Re
 	)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetGameLeaderboard получает рейтинг по конкретной игре в турнире
+// GET /api/v1/tournaments/{id}/games/{gameId}/leaderboard
+func (h *GameHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.leaderboardRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("leaderboard repository not configured"))
+		return
+	}
+
+	// Получаем игру для её имени (game_type)
+	g, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game", err)
+		writeError(w, err)
+		return
+	}
+
+	// Получаем limit из query параметров
+	limit := 100
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+			limit = l
+		}
+	}
+
+	// Получаем рейтинг по игре
+	leaderboard, err := h.leaderboardRepo.GetLeaderboardByGameType(r.Context(), tournamentID, g.Name, limit)
+	if err != nil {
+		h.log.LogError("Failed to get game leaderboard", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+			zap.String("game_type", g.Name),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, leaderboard)
+}
+
+// GetGameMatches получает матчи по конкретной игре в турнире
+// GET /api/v1/tournaments/{id}/games/{gameId}/matches
+func (h *GameHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.matchRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("match repository not configured"))
+		return
+	}
+
+	// Получаем игру для её имени (game_type)
+	g, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game", err)
+		writeError(w, err)
+		return
+	}
+
+	// Получаем параметры фильтрации
+	filter := domain.MatchFilter{
+		TournamentID: &tournamentID,
+		GameType:     g.Name,
+	}
+
+	// Status filter
+	if status := r.URL.Query().Get("status"); status != "" {
+		filter.Status = domain.MatchStatus(status)
+	}
+
+	// Pagination
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+			limit = l
+		}
+	}
+	filter.Limit = limit
+
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+	filter.Offset = offset
+
+	// Получаем матчи
+	matches, err := h.matchRepo.List(r.Context(), filter)
+	if err != nil {
+		h.log.LogError("Failed to get game matches", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+			zap.String("game_type", g.Name),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, matches)
 }

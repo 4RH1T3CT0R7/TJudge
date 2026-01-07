@@ -35,17 +35,23 @@ type TournamentParticipantAdder interface {
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 }
 
+// MatchScheduler интерфейс для создания матчей
+type MatchScheduler interface {
+	ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
 	programRepo    ProgramRepository
 	tournamentRepo TournamentParticipantAdder
+	matchScheduler MatchScheduler
 	uploadDir      string
 	maxFileSize    int64
 	log            *logger.Logger
 }
 
 // NewProgramHandler создаёт новый program handler
-func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentParticipantAdder, log *logger.Logger) *ProgramHandler {
+func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentParticipantAdder, matchScheduler MatchScheduler, log *logger.Logger) *ProgramHandler {
 	// Создаём директорию для загрузок
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
@@ -59,6 +65,7 @@ func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentP
 	return &ProgramHandler{
 		programRepo:    programRepo,
 		tournamentRepo: tournamentRepo,
+		matchScheduler: matchScheduler,
 		uploadDir:      uploadDir,
 		maxFileSize:    10 * 1024 * 1024, // 10MB
 		log:            log,
@@ -246,6 +253,25 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Создаём матчи для новой программы (round-robin с существующими программами)
+	if h.matchScheduler != nil {
+		if err := h.matchScheduler.ScheduleNewProgramMatches(r.Context(), tournamentID, gameID, programID, teamID); err != nil {
+			h.log.Error("Failed to schedule matches for new program",
+				zap.Error(err),
+				zap.String("program_id", programID.String()),
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+			)
+			// Не возвращаем ошибку - программа создана, матчи можно создать позже
+		} else {
+			h.log.Info("Matches scheduled for new program",
+				zap.String("program_id", programID.String()),
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+			)
+		}
+	}
+
 	h.log.Info("Program uploaded",
 		zap.String("program_id", program.ID.String()),
 		zap.String("user_id", userID.String()),
@@ -412,6 +438,89 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, program)
+}
+
+// Download скачивает файл программы
+// GET /api/v1/programs/:id/download
+func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.RequireUserID(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
+		return
+	}
+
+	// Проверяем владение программой
+	isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
+	if err != nil {
+		h.log.LogError("Failed to check ownership", err)
+		writeError(w, err)
+		return
+	}
+	if !isOwner {
+		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
+		return
+	}
+
+	program, err := h.programRepo.GetByID(r.Context(), id)
+	if err != nil {
+		h.log.LogError("Failed to get program", err)
+		writeError(w, err)
+		return
+	}
+
+	// Проверяем наличие файла
+	if program.FilePath == nil || *program.FilePath == "" {
+		writeError(w, errors.ErrNotFound.WithMessage("program file not found"))
+		return
+	}
+
+	filePath := *program.FilePath
+
+	// Проверяем существование файла
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		h.log.Error("Program file does not exist", zap.String("path", filePath))
+		writeError(w, errors.ErrNotFound.WithMessage("program file not found on disk"))
+		return
+	}
+
+	// Открываем файл
+	file, err := os.Open(filePath)
+	if err != nil {
+		h.log.Error("Failed to open file", zap.Error(err))
+		writeError(w, errors.ErrInternal.WithMessage("failed to read file"))
+		return
+	}
+	defer file.Close()
+
+	// Определяем имя файла для скачивания
+	filename := filepath.Base(filePath)
+	if program.Name != "" {
+		ext := filepath.Ext(filePath)
+		filename = program.Name + ext
+	}
+
+	// Устанавливаем заголовки для скачивания
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	// Копируем файл в response
+	if _, err := io.Copy(w, file); err != nil {
+		h.log.Error("Failed to send file", zap.Error(err))
+		// Уже начали отправлять, не можем вернуть ошибку
+		return
+	}
+
+	h.log.Info("Program downloaded",
+		zap.String("program_id", id.String()),
+		zap.String("user_id", userID.String()),
+	)
 }
 
 // Delete обрабатывает удаление программы

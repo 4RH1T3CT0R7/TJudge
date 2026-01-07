@@ -122,6 +122,30 @@ export interface LeaderboardEntry {
   total_games: number;
 }
 
+// Cross-game leaderboard types
+export interface GameRatingInfo {
+  game_id: string;
+  game_name: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  total_games: number;
+}
+
+export interface CrossGameLeaderboardEntry {
+  rank: number;
+  team_id?: string;
+  team_name: string;
+  program_id: string;
+  program_name: string;
+  game_ratings: Record<string, GameRatingInfo>;
+  total_rating: number;
+  total_wins: number;
+  total_losses: number;
+  total_games: number;
+}
+
 // API response types
 export interface ApiError {
   code: number;

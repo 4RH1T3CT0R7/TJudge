@@ -12,6 +12,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api"
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
@@ -22,9 +23,35 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
+
+// matchSchedulerAdapter адаптер для tournament.Service.ScheduleNewProgramMatches
+type matchSchedulerAdapter struct {
+	tournamentService *tournament.Service
+	programRepo       *db.ProgramRepository
+}
+
+func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error {
+	req := &tournament.ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: newProgramID,
+		TeamID:       teamID,
+	}
+	return a.tournamentService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
+}
+
+// programRepoAdapter адаптер для ProgramRepository
+type programRepoAdapter struct {
+	repo *db.ProgramRepository
+}
+
+func (a *programRepoAdapter) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+	return a.repo.GetByTournamentAndGame(ctx, tournamentID, gameID)
+}
 
 func main() {
 	// Загружаем конфигурацию
@@ -128,12 +155,22 @@ func main() {
 	gameService := game.NewService(gameRepo, log)
 	teamService := team.NewService(teamRepo, tournamentRepo, log)
 
+	// Создаём адаптеры для репозиториев (для game handler)
+	// tournamentRepo уже реализует GetLeaderboardByGameType
+	// matchRepo уже реализует List
+
+	// Создаём адаптер для планирования матчей
+	matchScheduler := &matchSchedulerAdapter{
+		tournamentService: tournamentService,
+		programRepo:       programRepo,
+	}
+
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
-	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, log)
+	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, matchScheduler, log)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, log)
-	gameHandler := handlers.NewGameHandler(gameService, log)
+	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, log)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 

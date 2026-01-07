@@ -9,6 +9,7 @@ import type {
   Team,
   Game,
   LeaderboardEntry,
+  CrossGameLeaderboardEntry,
   WSMessage,
   LeaderboardUpdate,
 } from '../types';
@@ -119,11 +120,13 @@ export function TournamentDetail() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [crossGameLeaderboard, setCrossGameLeaderboard] = useState<CrossGameLeaderboardEntry[]>([]);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRunningMatches, setIsRunningMatches] = useState(false);
 
   // Join modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -164,15 +167,17 @@ export function TournamentDetail() {
       const tournamentData = await api.getTournament(id);
       setTournament(tournamentData);
 
-      const [teamsData, gamesData, leaderboardData] = await Promise.all([
+      const [teamsData, gamesData, leaderboardData, crossGameData] = await Promise.all([
         api.getTournamentTeams(id).catch(() => []),
         api.getTournamentGames(id).catch(() => []),
         api.getLeaderboard(id).catch(() => []),
+        api.getCrossGameLeaderboard(id).catch(() => []),
       ]);
 
       setTeams(teamsData || []);
       setGames(gamesData || []);
       setLeaderboard(leaderboardData || []);
+      setCrossGameLeaderboard(crossGameData || []);
 
       if (isAuthenticated) {
         try {
@@ -262,6 +267,24 @@ export function TournamentDetail() {
       setActionError(errorMessage);
     } finally {
       setIsCompleting(false);
+    }
+  };
+
+  const handleRunAllMatches = async () => {
+    if (!tournament) return;
+
+    setIsRunningMatches(true);
+    setActionError(null);
+    try {
+      const result = await api.runAllMatches(tournament.id);
+      setActionError(null);
+      alert(`Запущено ${result.enqueued} матчей`);
+    } catch (err: unknown) {
+      console.error('Failed to run matches:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Не удалось запустить матчи';
+      setActionError(errorMessage);
+    } finally {
+      setIsRunningMatches(false);
     }
   };
 
@@ -391,6 +414,16 @@ export function TournamentDetail() {
                 {isCompleting ? 'Завершение...' : 'Завершить турнир'}
               </button>
             )}
+            {isAdmin && tournament.status === 'active' && (
+              <button
+                onClick={handleRunAllMatches}
+                disabled={isRunningMatches}
+                className="btn btn-primary"
+              >
+                <PlayIcon />
+                {isRunningMatches ? 'Запуск...' : 'Запустить раунды'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -457,6 +490,8 @@ export function TournamentDetail() {
         {activeTab === 'leaderboard' && (
           <LeaderboardTab
             entries={leaderboard}
+            crossGameEntries={crossGameLeaderboard}
+            games={games}
             isConnected={isConnected}
             onToggleFullscreen={toggleFullscreen}
           />
@@ -623,13 +658,19 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
 // Leaderboard Tab Component
 function LeaderboardTab({
   entries,
+  crossGameEntries,
+  games,
   isConnected,
   onToggleFullscreen,
 }: {
   entries: LeaderboardEntry[];
+  crossGameEntries: CrossGameLeaderboardEntry[];
+  games: Game[];
   isConnected: boolean;
   onToggleFullscreen: () => void;
 }) {
+  const [showCrossGame, setShowCrossGame] = useState(true);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -641,12 +682,31 @@ function LeaderboardTab({
             </span>
           )}
         </div>
-        <button onClick={onToggleFullscreen} className="btn btn-secondary">
-          <ArrowsExpandIcon />
-          На весь экран
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCrossGame(true)}
+            className={`btn ${showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            По играм
+          </button>
+          <button
+            onClick={() => setShowCrossGame(false)}
+            className={`btn ${!showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            Общий
+          </button>
+          <button onClick={onToggleFullscreen} className="btn btn-secondary">
+            <ArrowsExpandIcon />
+            На весь экран
+          </button>
+        </div>
       </div>
-      <LeaderboardTable entries={entries} />
+
+      {showCrossGame ? (
+        <CrossGameLeaderboardTable entries={crossGameEntries} games={games} />
+      ) : (
+        <LeaderboardTable entries={entries} />
+      )}
     </div>
   );
 }
@@ -741,6 +801,105 @@ function LeaderboardTable({
               </td>
               <td className="px-6 py-4 text-right">
                 <span className="font-mono">{entry.total_games}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Cross-Game Leaderboard Table Component
+function CrossGameLeaderboardTable({
+  entries,
+  games,
+}: {
+  entries: CrossGameLeaderboardEntry[];
+  games: Game[];
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">
+          <ChartBarIcon />
+        </div>
+        <h3 className="empty-state-title">Пока нет результатов</h3>
+        <p className="empty-state-description">
+          Таблица обновится после завершения матчей
+        </p>
+      </div>
+    );
+  }
+
+  const getRankClass = (index: number) => {
+    if (index === 0) return 'rank-badge rank-gold';
+    if (index === 1) return 'rank-badge rank-silver';
+    if (index === 2) return 'rank-badge rank-bronze';
+    return 'rank-badge rank-default';
+  };
+
+  const getRowClass = (index: number) => {
+    if (index === 0) return 'leaderboard-row-gold';
+    if (index === 1) return 'leaderboard-row-silver';
+    if (index === 2) return 'leaderboard-row-bronze';
+    return '';
+  };
+
+  return (
+    <div className="overflow-x-auto card p-0">
+      <table className="w-full">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
+            <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Команда</th>
+            {games.map((game) => (
+              <th key={game.id} className="px-4 py-3 text-center font-semibold text-sm uppercase tracking-wide">
+                {game.display_name}
+              </th>
+            ))}
+            <th className="px-4 py-3 text-right font-semibold text-sm uppercase tracking-wide">Сумма</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, index) => (
+            <tr
+              key={entry.program_id}
+              className={`border-b border-gray-100 ${getRowClass(index)} transition-colors`}
+            >
+              <td className="px-4 py-3">
+                <span className={getRankClass(index)}>
+                  {entry.rank}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <span className="font-semibold">
+                  {entry.team_name || entry.program_name}
+                </span>
+              </td>
+              {games.map((game) => {
+                const gameRating = entry.game_ratings[game.id];
+                return (
+                  <td key={game.id} className="px-4 py-3 text-center">
+                    {gameRating ? (
+                      <div>
+                        <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
+                        <div className="text-xs text-gray-500">
+                          <span className="text-emerald-600">{gameRating.wins}П</span>
+                          {' / '}
+                          <span className="text-red-600">{gameRating.losses}Пр</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="px-4 py-3 text-right">
+                <span className="font-mono font-bold text-lg text-primary-600">
+                  {entry.total_rating}
+                </span>
               </td>
             </tr>
           ))}

@@ -9,6 +9,7 @@ import type {
   Program,
   Match,
   LeaderboardEntry,
+  CrossGameLeaderboardEntry,
   ApiError,
 } from '../types';
 
@@ -154,6 +155,20 @@ class ApiClient {
     return data;
   }
 
+  async getCrossGameLeaderboard(tournamentId: string): Promise<CrossGameLeaderboardEntry[]> {
+    const { data } = await this.client.get<CrossGameLeaderboardEntry[]>(
+      `/tournaments/${tournamentId}/cross-game-leaderboard`
+    );
+    return data;
+  }
+
+  async runAllMatches(tournamentId: string): Promise<{ status: string; enqueued: number }> {
+    const { data } = await this.client.post<{ status: string; enqueued: number }>(
+      `/tournaments/${tournamentId}/run-matches`
+    );
+    return data;
+  }
+
   async getTournamentMatches(tournamentId: string, limit = 50, offset = 0): Promise<Match[]> {
     const { data } = await this.client.get<Match[]>(`/tournaments/${tournamentId}/matches`, {
       params: { limit, offset },
@@ -253,6 +268,30 @@ class ApiClient {
     await this.client.delete(`/tournaments/${tournamentId}/games/${gameId}`);
   }
 
+  async getGameLeaderboard(tournamentId: string, gameId: string, limit = 100): Promise<LeaderboardEntry[]> {
+    const { data } = await this.client.get<LeaderboardEntry[]>(
+      `/tournaments/${tournamentId}/games/${gameId}/leaderboard`,
+      { params: { limit } }
+    );
+    return data;
+  }
+
+  async getGameMatches(
+    tournamentId: string,
+    gameId: string,
+    status?: string,
+    limit = 50,
+    offset = 0
+  ): Promise<Match[]> {
+    const params: Record<string, unknown> = { limit, offset };
+    if (status) params.status = status;
+    const { data } = await this.client.get<Match[]>(
+      `/tournaments/${tournamentId}/games/${gameId}/matches`,
+      { params }
+    );
+    return data;
+  }
+
   // Program endpoints
   async getPrograms(): Promise<Program[]> {
     const { data } = await this.client.get<Program[]>('/programs');
@@ -275,6 +314,17 @@ class ApiClient {
 
   async deleteProgram(id: string): Promise<void> {
     await this.client.delete(`/programs/${id}`);
+  }
+
+  async downloadProgram(id: string): Promise<Blob> {
+    const { data } = await this.client.get<Blob>(`/programs/${id}/download`, {
+      responseType: 'blob',
+    });
+    return data;
+  }
+
+  async deleteTeam(id: string): Promise<void> {
+    await this.client.delete(`/teams/${id}`);
   }
 
   // Match endpoints

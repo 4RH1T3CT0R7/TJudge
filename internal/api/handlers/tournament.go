@@ -25,8 +25,10 @@ type TournamentService interface {
 	Complete(ctx context.Context, tournamentID uuid.UUID) error
 	Delete(ctx context.Context, tournamentID uuid.UUID) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
+	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
 
 // TournamentHandler обрабатывает запросы турниров
@@ -338,6 +340,42 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, match)
 }
 
+// CrossGameLeaderboardEntry представляет строку кросс-игрового рейтинга
+type CrossGameLeaderboardEntry struct {
+	Rank        int            `json:"rank"`
+	TeamID      *uuid.UUID     `json:"team_id,omitempty"`
+	TeamName    string         `json:"team_name"`
+	ProgramName string         `json:"program_name"`
+	GameRatings map[string]int `json:"game_ratings"` // game_id -> rating
+	TotalRating int            `json:"total_rating"`
+	TotalWins   int            `json:"total_wins"`
+	TotalLosses int            `json:"total_losses"`
+	TotalGames  int            `json:"total_games"`
+}
+
+// GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
+// GET /api/v1/tournaments/:id/cross-game-leaderboard
+func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Получаем кросс-игровой рейтинг
+	entries, err := h.tournamentService.GetCrossGameLeaderboard(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to get cross-game leaderboard", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, entries)
+}
+
 // GetMatches обрабатывает получение списка матчей турнира
 // GET /api/v1/tournaments/:id/matches
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
@@ -375,4 +413,36 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, matches)
+}
+
+// RunAllMatches запускает все ожидающие матчи турнира
+// POST /api/v1/tournaments/:id/run-matches
+func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем ID турнира из URL
+	idStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Запускаем все матчи
+	enqueued, err := h.tournamentService.RunAllMatches(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to run all matches", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Started all pending matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int("enqueued", enqueued),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "started",
+		"enqueued": enqueued,
+	})
 }

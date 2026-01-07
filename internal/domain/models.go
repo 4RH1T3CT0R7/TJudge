@@ -237,6 +237,31 @@ type TeamLeaderboardEntry struct {
 	} `json:"game_scores"`
 }
 
+// CrossGameLeaderboardEntry - кросс-игровой рейтинг (команда - рейтинг по каждой игре - позиция)
+type CrossGameLeaderboardEntry struct {
+	Rank        int                       `json:"rank"`
+	TeamID      *uuid.UUID                `json:"team_id,omitempty"`
+	TeamName    string                    `json:"team_name"`
+	ProgramID   uuid.UUID                 `json:"program_id"`
+	ProgramName string                    `json:"program_name"`
+	GameRatings map[string]GameRatingInfo `json:"game_ratings"` // game_id -> rating info
+	TotalRating int                       `json:"total_rating"`
+	TotalWins   int                       `json:"total_wins"`
+	TotalLosses int                       `json:"total_losses"`
+	TotalGames  int                       `json:"total_games"`
+}
+
+// GameRatingInfo - информация о рейтинге в конкретной игре
+type GameRatingInfo struct {
+	GameID     uuid.UUID `json:"game_id"`
+	GameName   string    `json:"game_name"`
+	Rating     int       `json:"rating"`
+	Wins       int       `json:"wins"`
+	Losses     int       `json:"losses"`
+	Draws      int       `json:"draws"`
+	TotalGames int       `json:"total_games"`
+}
+
 // GameFilter - фильтр для списка игр
 type GameFilter struct {
 	Name   string

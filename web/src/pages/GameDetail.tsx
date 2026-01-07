@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Program, Team } from '../types';
+import type { Game, Program, Team, LeaderboardEntry, Match } from '../types';
 
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
@@ -11,8 +11,11 @@ export function GameDetail() {
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [currentProgram, setCurrentProgram] = useState<Program | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'rules' | 'leaderboard' | 'matches'>('rules');
 
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -35,6 +38,14 @@ export function GameDetail() {
     try {
       const gameData = await api.getGame(gameId);
       setGame(gameData);
+
+      // Load leaderboard and matches in parallel
+      const [leaderboardData, matchesData] = await Promise.all([
+        api.getGameLeaderboard(tournamentId, gameId).catch(() => []),
+        api.getGameMatches(tournamentId, gameId).catch(() => []),
+      ]);
+      setLeaderboard(leaderboardData || []);
+      setMatches(matchesData || []);
 
       if (isAuthenticated) {
         try {
@@ -149,19 +160,110 @@ export function GameDetail() {
         </p>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('rules')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'rules'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Правила
+          </button>
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'leaderboard'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Рейтинг ({leaderboard.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('matches')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'matches'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Матчи ({matches.length})
+          </button>
+        </nav>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Rules Section */}
+        {/* Main Content Section */}
         <div className="lg:col-span-2">
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Правила игры</h2>
-            {game.rules ? (
-              <div className="prose max-w-none">
-                <MarkdownRenderer content={game.rules} />
-              </div>
-            ) : (
-              <p className="text-gray-500">Правила для этой игры не указаны.</p>
-            )}
-          </div>
+          {activeTab === 'rules' && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-4">Правила игры</h2>
+              {game.rules ? (
+                <div className="prose max-w-none">
+                  <MarkdownRenderer content={game.rules} />
+                </div>
+              ) : (
+                <p className="text-gray-500">Правила для этой игры не указаны.</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'leaderboard' && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-4">Таблица рейтинга</h2>
+              {leaderboard.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-sm text-gray-500 border-b">
+                        <th className="pb-2 pr-4">#</th>
+                        <th className="pb-2 pr-4">Программа</th>
+                        <th className="pb-2 pr-4 text-center">Рейтинг</th>
+                        <th className="pb-2 pr-4 text-center">W</th>
+                        <th className="pb-2 pr-4 text-center">L</th>
+                        <th className="pb-2 pr-4 text-center">D</th>
+                        <th className="pb-2 text-center">Игр</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((entry) => (
+                        <tr key={entry.program_id} className="border-b border-gray-100">
+                          <td className="py-2 pr-4 font-medium">{entry.rank}</td>
+                          <td className="py-2 pr-4">{entry.program_name}</td>
+                          <td className="py-2 pr-4 text-center font-medium">{entry.rating}</td>
+                          <td className="py-2 pr-4 text-center text-green-600">{entry.wins}</td>
+                          <td className="py-2 pr-4 text-center text-red-600">{entry.losses}</td>
+                          <td className="py-2 pr-4 text-center text-gray-500">{entry.draws}</td>
+                          <td className="py-2 text-center">{entry.total_games}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-gray-500">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'matches' && (
+            <div className="card">
+              <h2 className="text-lg font-semibold mb-4">Результаты матчей</h2>
+              {matches.length > 0 ? (
+                <div className="space-y-3">
+                  {matches.map((match) => (
+                    <MatchCard key={match.id} match={match} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">Матчи ещё не проводились.</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Program Upload Section */}
@@ -187,6 +289,27 @@ export function GameDetail() {
                       <strong>Ошибка:</strong> {currentProgram.error_message}
                     </div>
                   )}
+                  <button
+                    onClick={async () => {
+                      try {
+                        const blob = await api.downloadProgram(currentProgram.id);
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = currentProgram.name || 'program';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                      } catch (err) {
+                        console.error('Download failed:', err);
+                        alert('Не удалось скачать программу');
+                      }
+                    }}
+                    className="btn btn-secondary w-full mt-2 text-sm"
+                  >
+                    Скачать программу
+                  </button>
                 </div>
               )}
 
@@ -269,6 +392,76 @@ export function GameDetail() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Match card component
+function MatchCard({ match }: { match: Match }) {
+  const getStatusBadge = () => {
+    switch (match.status) {
+      case 'pending':
+        return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Ожидание</span>;
+      case 'running':
+        return <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Выполняется</span>;
+      case 'completed':
+        return <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">Завершён</span>;
+      case 'failed':
+        return <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Ошибка</span>;
+      default:
+        return null;
+    }
+  };
+
+  const getWinnerLabel = () => {
+    if (match.status !== 'completed') return null;
+    if (match.winner === 0) return <span className="text-gray-500 text-sm">Ничья</span>;
+    if (match.winner === 1) return <span className="text-green-600 text-sm font-medium">Победа 1</span>;
+    if (match.winner === 2) return <span className="text-green-600 text-sm font-medium">Победа 2</span>;
+    return null;
+  };
+
+  return (
+    <div className="p-3 bg-gray-50 rounded-lg">
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center gap-2">
+          {getStatusBadge()}
+          {getWinnerLabel()}
+        </div>
+        <span className="text-xs text-gray-500">
+          {new Date(match.created_at).toLocaleString('ru-RU')}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-sm font-medium truncate" title={match.program1_id}>
+            Программа 1
+          </p>
+        </div>
+
+        <div className="px-4 text-center">
+          {match.status === 'completed' || match.status === 'failed' ? (
+            <span className="font-bold text-lg">
+              {match.score1 ?? 'N/A'} : {match.score2 ?? 'N/A'}
+            </span>
+          ) : (
+            <span className="text-gray-400">vs</span>
+          )}
+        </div>
+
+        <div className="flex-1 text-right">
+          <p className="text-sm font-medium truncate" title={match.program2_id}>
+            Программа 2
+          </p>
+        </div>
+      </div>
+
+      {match.error_message && (
+        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+          {match.error_message}
+        </div>
+      )}
     </div>
   );
 }

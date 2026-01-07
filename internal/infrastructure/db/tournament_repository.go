@@ -578,3 +578,208 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 func GetTournamentCursor(tournament *domain.Tournament) (*pagination.Cursor, error) {
 	return pagination.NewTimestampCursor(tournament.CreatedAt), nil
 }
+
+// GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
+func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	// Получаем все команды и программы в турнире со статистикой по каждой игре
+	query := `
+		WITH team_programs AS (
+			SELECT DISTINCT ON (p.team_id, p.game_id)
+				p.id as program_id,
+				p.name as program_name,
+				p.team_id,
+				t.name as team_name,
+				p.game_id,
+				g.name as game_name,
+				g.display_name as game_display_name
+			FROM programs p
+			LEFT JOIN teams t ON p.team_id = t.id
+			LEFT JOIN games g ON p.game_id = g.id
+			WHERE p.tournament_id = $1
+			ORDER BY p.team_id, p.game_id, p.version DESC
+		),
+		game_stats AS (
+			SELECT
+				tp.program_id,
+				tp.program_name,
+				tp.team_id,
+				tp.team_name,
+				tp.game_id,
+				tp.game_name,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = tp.program_id AND m.winner = 1) OR
+					(m.program2_id = tp.program_id AND m.winner = 2)
+				) as wins,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = tp.program_id AND m.winner = 2) OR
+					(m.program2_id = tp.program_id AND m.winner = 1)
+				) as losses,
+				COUNT(*) FILTER (WHERE m.winner = 0 AND m.status = 'completed') as draws,
+				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games
+			FROM team_programs tp
+			LEFT JOIN matches m ON (m.program1_id = tp.program_id OR m.program2_id = tp.program_id)
+				AND m.tournament_id = $1
+				AND m.status IN ('completed', 'failed')
+			GROUP BY tp.program_id, tp.program_name, tp.team_id, tp.team_name, tp.game_id, tp.game_name
+		),
+		aggregated AS (
+			SELECT
+				COALESCE(team_id::text, program_id::text) as group_key,
+				team_id,
+				team_name,
+				program_id,
+				program_name,
+				json_object_agg(
+					COALESCE(game_id::text, 'unknown'),
+					json_build_object(
+						'game_id', game_id,
+						'game_name', game_name,
+						'rating', 1500 + (wins - losses) * 32,
+						'wins', wins,
+						'losses', losses,
+						'draws', draws,
+						'total_games', total_games
+					)
+				) as game_ratings,
+				SUM(wins) as total_wins,
+				SUM(losses) as total_losses,
+				SUM(total_games) as total_games,
+				SUM(1500 + (wins - losses) * 32) as total_rating
+			FROM game_stats
+			GROUP BY group_key, team_id, team_name, program_id, program_name
+		)
+		SELECT
+			ROW_NUMBER() OVER (ORDER BY total_rating DESC, total_wins DESC) as rank,
+			team_id,
+			team_name,
+			program_id,
+			program_name,
+			game_ratings,
+			total_rating,
+			total_wins,
+			total_losses,
+			total_games
+		FROM aggregated
+		ORDER BY total_rating DESC, total_wins DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get cross-game leaderboard")
+	}
+	defer rows.Close()
+
+	var entries []*domain.CrossGameLeaderboardEntry
+	for rows.Next() {
+		var entry domain.CrossGameLeaderboardEntry
+		var gameRatingsJSON []byte
+
+		err := rows.Scan(
+			&entry.Rank,
+			&entry.TeamID,
+			&entry.TeamName,
+			&entry.ProgramID,
+			&entry.ProgramName,
+			&gameRatingsJSON,
+			&entry.TotalRating,
+			&entry.TotalWins,
+			&entry.TotalLosses,
+			&entry.TotalGames,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan cross-game leaderboard entry")
+		}
+
+		// Parse game ratings JSON
+		entry.GameRatings = make(map[string]domain.GameRatingInfo)
+		if gameRatingsJSON != nil {
+			var rawRatings map[string]domain.GameRatingInfo
+			if err := json.Unmarshal(gameRatingsJSON, &rawRatings); err == nil {
+				entry.GameRatings = rawRatings
+			}
+		}
+
+		entries = append(entries, &entry)
+	}
+
+	return entries, nil
+}
+
+// GetLeaderboardByGameType получает таблицу лидеров для конкретной игры в турнире
+// gameType - имя игры (game.name), используется для фильтрации матчей
+func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
+	// Получаем рейтинг на основе результатов матчей для конкретной игры
+	query := `
+		WITH game_stats AS (
+			SELECT
+				p.id as program_id,
+				p.name as program_name,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = p.id AND m.winner = 1) OR
+					(m.program2_id = p.id AND m.winner = 2)
+				) as wins,
+				COUNT(*) FILTER (WHERE
+					(m.program1_id = p.id AND m.winner = 2) OR
+					(m.program2_id = p.id AND m.winner = 1)
+				) as losses,
+				COUNT(*) FILTER (WHERE m.winner = 0 AND m.status = 'completed') as draws,
+				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games,
+				COALESCE(SUM(
+					CASE
+						WHEN m.program1_id = p.id THEN COALESCE(m.score1, 0)
+						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0)
+						ELSE 0
+					END
+				), 0) as total_score
+			FROM programs p
+			JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
+			WHERE m.tournament_id = $1
+			  AND m.game_type = $2
+			  AND m.status IN ('completed', 'failed')
+			GROUP BY p.id, p.name
+		)
+		SELECT
+			ROW_NUMBER() OVER (ORDER BY wins DESC, total_score DESC, losses ASC) as rank,
+			program_id,
+			program_name,
+			(1500 + (wins - losses) * 32) as rating,
+			wins,
+			losses,
+			draws,
+			total_games
+		FROM game_stats
+		ORDER BY wins DESC, total_score DESC, losses ASC
+		LIMIT $3
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType, limit)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get leaderboard by game type")
+	}
+	defer rows.Close()
+
+	var leaderboard []*domain.LeaderboardEntry
+	for rows.Next() {
+		var entry domain.LeaderboardEntry
+		err := rows.Scan(
+			&entry.Rank,
+			&entry.ProgramID,
+			&entry.ProgramName,
+			&entry.Rating,
+			&entry.Wins,
+			&entry.Losses,
+			&entry.Draws,
+			&entry.TotalGames,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan leaderboard entry")
+		}
+		leaderboard = append(leaderboard, &entry)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "rows iteration error")
+	}
+
+	return leaderboard, nil
+}

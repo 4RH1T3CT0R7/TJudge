@@ -25,6 +25,7 @@ type TournamentRepository interface {
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
 }
 
 // MatchRepository интерфейс для работы с матчами
@@ -32,6 +33,7 @@ type MatchRepository interface {
 	Create(ctx context.Context, match *domain.Match) error
 	CreateBatch(ctx context.Context, matches []*domain.Match) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
+	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
 }
 
 // QueueManager интерфейс для работы с очередями
@@ -621,4 +623,50 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 
 		return nil
 	})
+}
+
+// GetCrossGameLeaderboard возвращает кросс-игровой рейтинг турнира
+// (команда — рейтинг игры 1 — … — рейтинг игры N — позиция в турнире)
+func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	// Получаем все программы с их статистикой по играм
+	entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)
+	}
+
+	return entries, nil
+}
+
+// RunAllMatches запускает все pending матчи турнира (для админа)
+func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	// Получаем все pending матчи
+	matches, err := s.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending matches: %w", err)
+	}
+
+	if len(matches) == 0 {
+		return 0, nil
+	}
+
+	// Добавляем все матчи в очередь
+	enqueued := 0
+	for _, match := range matches {
+		if err := s.queueManager.Enqueue(ctx, match); err != nil {
+			s.log.Error("Failed to enqueue match",
+				zap.Error(err),
+				zap.String("match_id", match.ID.String()),
+			)
+			continue
+		}
+		enqueued++
+	}
+
+	s.log.Info("Admin triggered all matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int("total_pending", len(matches)),
+		zap.Int("enqueued", enqueued),
+	)
+
+	return enqueued, nil
 }
