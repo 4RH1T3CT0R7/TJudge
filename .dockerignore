@@ -49,7 +49,6 @@ Dockerfile*
 
 # Deployment
 deployments/
-k8s/
 
 # Data
 data/
