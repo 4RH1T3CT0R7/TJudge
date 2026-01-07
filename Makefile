@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark test-load
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load
 
 # Default target
 help:
@@ -12,7 +12,8 @@ help:
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
-	@echo "  make benchmark     - Run performance benchmarks"
+	@echo "  make benchmark           - Run performance benchmarks"
+	@echo "  make benchmark-interpret - Run benchmarks with interpretation"
 	@echo "  make test-load     - Run load tests"
 	@echo "  make lint          - Run linters"
 	@echo "  make run-api       - Run API server"
@@ -156,6 +157,11 @@ benchmark:
 	@echo "Note: Benchmarks requiring DB/Redis will be skipped if services are not running"
 	@echo ""
 	go test -tags=benchmark -bench=. -benchmem -benchtime=1s ./tests/benchmark/...
+
+# Run benchmarks with interpretation
+benchmark-interpret:
+	@echo "Running benchmarks with interpretation..."
+	@go run ./cmd/benchmark -run
 
 # Run benchmark with specific pattern
 benchmark-api:
