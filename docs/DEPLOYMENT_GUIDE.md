@@ -3,7 +3,7 @@
 ## Требования
 
 - Docker 20+
-- Docker Compose 2+ (или Kubernetes 1.25+)
+- Docker Compose 2+
 - PostgreSQL 15+ (или в контейнере)
 - Redis 7+ (или в контейнере)
 
@@ -11,9 +11,6 @@
 
 ```bash
 # Запуск всех сервисов
-make dev
-
-# Или вручную
 docker-compose up -d
 
 # Применение миграций
@@ -23,7 +20,7 @@ make migrate-up
 docker-compose logs -f api worker
 ```
 
-## Production (Docker Compose)
+## Production
 
 ### 1. Настройка секретов
 
@@ -32,6 +29,7 @@ mkdir -p secrets
 echo "your-db-password" > secrets/db_password.txt
 echo "your-jwt-secret-min-32-chars" > secrets/jwt_secret.txt
 echo "your-redis-password" > secrets/redis_password.txt
+chmod 600 secrets/*.txt
 ```
 
 ### 2. Деплой
@@ -63,46 +61,6 @@ curl http://localhost:8080/health
 ./scripts/rollback.sh
 ```
 
-## Production (Kubernetes)
-
-### 1. Создание Namespace и Secrets
-
-```bash
-kubectl create namespace tjudge
-
-# Создание секретов (замените значения!)
-kubectl create secret generic tjudge-secrets \
-  --from-literal=DB_PASSWORD=your-password \
-  --from-literal=JWT_SECRET=your-jwt-secret \
-  --from-literal=REDIS_PASSWORD=your-redis-password \
-  -n tjudge
-```
-
-### 2. Деплой
-
-```bash
-# Применение всех манифестов
-kubectl apply -k deployments/kubernetes/
-
-# Или по отдельности
-kubectl apply -f deployments/kubernetes/namespace.yaml
-kubectl apply -f deployments/kubernetes/configmap.yaml
-kubectl apply -f deployments/kubernetes/postgres.yaml
-kubectl apply -f deployments/kubernetes/redis.yaml
-kubectl apply -f deployments/kubernetes/api.yaml
-kubectl apply -f deployments/kubernetes/worker.yaml
-kubectl apply -f deployments/kubernetes/ingress.yaml
-kubectl apply -f deployments/kubernetes/hpa.yaml
-```
-
-### 3. Проверка
-
-```bash
-kubectl get pods -n tjudge
-kubectl get svc -n tjudge
-kubectl logs -f deployment/tjudge-api -n tjudge
-```
-
 ## Конфигурация
 
 ### Переменные окружения
@@ -117,8 +75,8 @@ kubectl logs -f deployment/tjudge-api -n tjudge
 | `REDIS_HOST` | Да | — | Хост Redis |
 | `REDIS_PASSWORD` | Нет | — | Пароль Redis |
 | `JWT_SECRET` | Да | — | Ключ подписи JWT (мин. 32 символа) |
-| `WORKER_MIN` | Нет | 5 | Минимум воркеров |
-| `WORKER_MAX` | Нет | 100 | Максимум воркеров |
+| `WORKER_MIN` | Нет | 2 | Минимум воркеров |
+| `WORKER_MAX` | Нет | 10 | Максимум воркеров |
 | `LOG_LEVEL` | Нет | info | debug, info, warn, error |
 | `RATE_LIMIT_RPM` | Нет | 100 | Запросов в минуту |
 
@@ -126,10 +84,10 @@ kubectl logs -f deployment/tjudge-api -n tjudge
 
 | Компонент | CPU | Память | Реплики |
 |-----------|-----|--------|---------|
-| API | 2 ядра | 2GB | 3+ |
-| Worker | 4 ядра | 4GB | 5+ |
-| PostgreSQL | 4 ядра | 8GB | 1 (+ реплики) |
-| Redis | 2 ядра | 4GB | 1 (+ sentinel) |
+| API | 2 ядра | 2GB | 1-3 |
+| Worker | 2 ядра | 2GB | 1-5 |
+| PostgreSQL | 2 ядра | 4GB | 1 |
+| Redis | 1 ядро | 1GB | 1 |
 
 ## Мониторинг
 
@@ -146,32 +104,12 @@ kubectl logs -f deployment/tjudge-api -n tjudge
 - **Database**: соединения, длительность запросов
 - **Cache**: hit rate, использование памяти
 
-### Алерты
-
-Настроенные алерты:
-- API/Worker недоступен
-- Высокий процент ошибок (>5%)
-- Высокая латентность (p99 >1с)
-- Размер очереди >1000
-- Память >80%
-
 ## Масштабирование
 
-### Ручное масштабирование
-
 ```bash
-# Docker Compose
-docker-compose up -d --scale worker=10
-
-# Kubernetes
-kubectl scale deployment tjudge-worker --replicas=10 -n tjudge
+# Увеличить количество воркеров
+docker-compose up -d --scale worker=5
 ```
-
-### Автомасштабирование (K8s)
-
-HPA настроен для:
-- API: 3-20 реплик, целевая загрузка CPU 70%
-- Worker: 5-50 реплик, целевая загрузка CPU 60% + размер очереди
 
 ## Резервное копирование
 
@@ -198,10 +136,10 @@ cp /data/dump.rdb /backup/
 ## Устранение неполадок
 
 ### API не запускается
+
 ```bash
 # Проверка логов
 docker logs tjudge-api
-kubectl logs deployment/tjudge-api -n tjudge
 
 # Частые проблемы:
 # - Ошибка подключения к БД: проверьте DB_HOST, учётные данные
@@ -210,6 +148,7 @@ kubectl logs deployment/tjudge-api -n tjudge
 ```
 
 ### Воркеры не обрабатывают задачи
+
 ```bash
 # Проверка размера очереди
 redis-cli LLEN queue:high
@@ -223,6 +162,7 @@ docker logs tjudge-worker
 ```
 
 ### Высокая латентность
+
 ```bash
 # Проверка метрик
 curl http://localhost:9090/metrics | grep duration
