@@ -245,6 +245,11 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	return stdout.String(), stderr.String(), nil
 }
 
+// sanitizeForDB очищает строку от символов, недопустимых в PostgreSQL (null bytes)
+func sanitizeForDB(s string) string {
+	return strings.ReplaceAll(s, "\x00", "")
+}
+
 // parseResult парсит результат выполнения tjudge-cli
 func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.MatchResult, error) {
 	result := &domain.MatchResult{
@@ -253,7 +258,8 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 
 	// Если есть ошибка
 	if exitCode != 0 {
-		result.ErrorMessage = strings.TrimSpace(stderr)
+		// Sanitize error message - remove null bytes that break PostgreSQL
+		result.ErrorMessage = sanitizeForDB(strings.TrimSpace(stderr))
 
 		// Определяем winner по коду ошибки
 		// 1 - ошибка программы 1, 2 - ошибка программы 2
