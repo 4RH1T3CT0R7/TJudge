@@ -53,8 +53,8 @@ export function Tournaments() {
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Турниры</h1>
-            <p className="text-gray-600 text-sm">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Турниры</h1>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
               Найдите турнир и присоединяйтесь к соревнованию
             </p>
           </div>
@@ -81,7 +81,7 @@ export function Tournaments() {
         </div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">
+          <p className="text-gray-500 dark:text-gray-300">
             {filter ? 'Турниры не найдены' : 'Пока нет доступных турниров'}
           </p>
         </div>
@@ -97,24 +97,24 @@ export function Tournaments() {
                 className="card card-hover block"
               >
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-base font-semibold text-gray-900 line-clamp-1">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 line-clamp-1">
                     {tournament.name}
                   </h3>
                   <span className={status.className}>{status.label}</span>
                 </div>
 
                 {tournament.description && (
-                  <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                  <p className="text-gray-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">
                     {tournament.description}
                   </p>
                 )}
 
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-300">
                   <div className="flex items-center gap-1">
                     <UsersIcon />
                     <span>До {tournament.max_team_size} чел.</span>
                   </div>
-                  <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">
                     {tournament.code}
                   </code>
                 </div>

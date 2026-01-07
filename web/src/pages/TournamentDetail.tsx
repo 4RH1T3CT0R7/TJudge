@@ -335,7 +335,7 @@ export function TournamentDetail() {
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">Загрузка турнира...</p>
+          <p className="text-gray-500 dark:text-gray-300">Загрузка турнира...</p>
         </div>
       </div>
     );
@@ -412,7 +412,7 @@ export function TournamentDetail() {
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3 mb-3">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{tournament.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{tournament.name}</h1>
               <span className={config.badge}>
                 {config.label}
               </span>
@@ -425,7 +425,7 @@ export function TournamentDetail() {
             <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
               <HashtagIcon />
               <span>Код:</span>
-              <code className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-800 dark:text-white">
+              <code className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-800 dark:text-gray-100">
                 {tournament.code}
               </code>
             </div>
@@ -577,7 +577,7 @@ export function TournamentDetail() {
         <div className="modal-backdrop" onClick={() => setShowJoinModal(false)}>
           <div className="modal-content w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Участие в турнире</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Участие в турнире</h2>
               <button
                 onClick={() => setShowJoinModal(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -588,7 +588,7 @@ export function TournamentDetail() {
 
             <div className="space-y-6">
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Создать новую команду</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Создать новую команду</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -612,12 +612,12 @@ export function TournamentDetail() {
                   <div className="w-full border-t border-gray-200 dark:border-gray-600" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400">или</span>
+                  <span className="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-300">или</span>
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Присоединиться к существующей</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Присоединиться к существующей</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -652,35 +652,35 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{tournament.description}</p>
         </div>
       ) : (
-        <p className="text-gray-500 dark:text-gray-400 mb-8">Описание не указано.</p>
+        <p className="text-gray-500 dark:text-gray-300 mb-8">Описание не указано.</p>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="stat-card">
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-300 text-sm mb-1">
             <UsersIcon />
             <span>Макс. размер команды</span>
           </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{tournament.max_team_size}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{tournament.max_team_size}</p>
         </div>
 
         {tournament.max_participants && (
           <div className="stat-card">
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-300 text-sm mb-1">
               <UsersIcon />
               <span>Макс. участников</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{tournament.max_participants}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{tournament.max_participants}</p>
           </div>
         )}
 
         {tournament.start_time && (
           <div className="stat-card">
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-300 text-sm mb-1">
               <CalendarIcon />
               <span>Начало</span>
             </div>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">
+            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {new Date(tournament.start_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
@@ -688,22 +688,22 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
 
         {tournament.end_time && (
           <div className="stat-card">
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-1">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-300 text-sm mb-1">
               <CalendarIcon />
               <span>Окончание</span>
             </div>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">
+            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {new Date(tournament.end_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
         )}
 
         <div className="stat-card">
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-300 text-sm mb-1">
             <ClockIcon />
             <span>Создан</span>
           </div>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">
+          <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
             {new Date(tournament.created_at).toLocaleDateString('ru-RU')}
           </p>
         </div>
@@ -732,7 +732,7 @@ function LeaderboardTab({
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Рейтинг</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Рейтинг</h2>
           {isConnected && (
             <span className="online-indicator">
               Онлайн
@@ -806,7 +806,7 @@ function LeaderboardTable({
 
   return (
     <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
-      <table className={`w-full ${isDark ? 'text-white' : 'dark:text-white'}`}>
+      <table className={`w-full ${isDark ? 'text-white' : 'dark:text-gray-100'}`}>
         <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800/50'}>
           <tr>
             <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
@@ -819,7 +819,7 @@ function LeaderboardTable({
               <span className="text-red-600 dark:text-red-400">Пр</span>
             </th>
             <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'}>Н</span>
+              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-300'}>Н</span>
             </th>
             <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Всего</th>
           </tr>
@@ -852,7 +852,7 @@ function LeaderboardTable({
                 <span className="font-semibold text-red-600 dark:text-red-400">{entry.losses}</span>
               </td>
               <td className="px-6 py-4 text-right">
-                <span className={`font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                <span className={`font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-300'}`}>
                   {entry.draws}
                 </span>
               </td>
@@ -905,7 +905,7 @@ function CrossGameLeaderboardTable({
 
   return (
     <div className="overflow-x-auto card p-0">
-      <table className="w-full dark:text-white">
+      <table className="w-full dark:text-gray-100">
         <thead className="bg-gray-50 dark:bg-gray-800/50">
           <tr>
             <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
@@ -941,7 +941,7 @@ function CrossGameLeaderboardTable({
                     {gameRating ? (
                       <div>
                         <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <div className="text-xs text-gray-500 dark:text-gray-300">
                           <span className="text-emerald-600 dark:text-emerald-400">{gameRating.wins}П</span>
                           {' / '}
                           <span className="text-red-600 dark:text-red-400">{gameRating.losses}Пр</span>
@@ -1000,10 +1000,10 @@ function GamesTab({
         >
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                 {game.display_name}
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-300">
                 <code className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{game.name}</code>
               </p>
             </div>
@@ -1013,7 +1013,7 @@ function GamesTab({
           </div>
 
           {game.rules && (
-            <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-3 mb-4">
+            <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3 mb-4">
               {game.rules.substring(0, 200)}...
             </p>
           )}
@@ -1111,12 +1111,12 @@ function TeamsTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">{team.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">{team.name}</h3>
                     {myTeam?.id === team.id && (
                       <span className="badge badge-blue text-xs">Ваша</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-500 dark:text-gray-300">
                     {new Date(team.created_at).toLocaleDateString('ru-RU')}
                   </p>
                 </div>
@@ -1196,12 +1196,12 @@ function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
       {/* Header with summary stats */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             Матчи по раундам
           </h2>
           <div className="flex flex-wrap gap-3 text-sm">
-            <span className="text-gray-600 dark:text-gray-400">
-              Всего: <strong className="text-gray-900 dark:text-white">{totalStats.total}</strong>
+            <span className="text-gray-600 dark:text-gray-300">
+              Всего: <strong className="text-gray-900 dark:text-gray-100">{totalStats.total}</strong>
             </span>
             <span className="text-emerald-600 dark:text-emerald-400">
               Завершено: <strong>{totalStats.completed}</strong>
@@ -1292,16 +1292,16 @@ function RoundCard({
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="text-gray-500 dark:text-gray-400">
+          <div className="text-gray-500 dark:text-gray-300">
             {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
           </div>
           <div className="flex items-center gap-2">
             <FolderIcon />
-            <span className="font-semibold text-gray-900 dark:text-white">
+            <span className="font-semibold text-gray-900 dark:text-gray-100">
               Раунд {round.round_number}
             </span>
           </div>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-gray-500 dark:text-gray-300">
             {round.total_matches} матчей
           </span>
         </div>
@@ -1338,7 +1338,7 @@ function RoundCard({
               style={{ width: `${getProgressPercent()}%` }}
             />
           </div>
-          <span className="text-sm font-mono text-gray-600 dark:text-gray-400 w-12 text-right">
+          <span className="text-sm font-mono text-gray-600 dark:text-gray-300 w-12 text-right">
             {getProgressPercent()}%
           </span>
         </div>
@@ -1349,8 +1349,8 @@ function RoundCard({
         <div className="border-t border-gray-200 dark:border-gray-700">
           {/* Round summary */}
           <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/30 flex flex-wrap gap-4 text-sm">
-            <span className="text-gray-600 dark:text-gray-400">
-              Дата: <strong className="text-gray-900 dark:text-white">
+            <span className="text-gray-600 dark:text-gray-300">
+              Дата: <strong className="text-gray-900 dark:text-gray-100">
                 {new Date(round.created_at).toLocaleString('ru-RU')}
               </strong>
             </span>
@@ -1362,7 +1362,7 @@ function RoundCard({
                 <span className="text-blue-600 dark:text-blue-400">
                   Побед P2: <strong>{matchStats.wins2}</strong>
                 </span>
-                <span className="text-gray-600 dark:text-gray-400">
+                <span className="text-gray-600 dark:text-gray-300">
                   Ничьих: <strong>{matchStats.draws}</strong>
                 </span>
               </>
@@ -1374,11 +1374,11 @@ function RoundCard({
             <table className="w-full text-sm">
               <thead className="bg-gray-100 dark:bg-gray-800/50">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Статус</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Программа 1</th>
-                  <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-400">Счёт</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Программа 2</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-400">Игра</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Статус</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Программа 1</th>
+                  <th className="px-4 py-2 text-center font-medium text-gray-600 dark:text-gray-300">Счёт</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Программа 2</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Игра</th>
                 </tr>
               </thead>
               <tbody>
@@ -1457,7 +1457,7 @@ function MatchRow({ match }: { match: MatchRound['matches'][0] }) {
         </code>
       </td>
       <td className="px-4 py-2">
-        <span className="text-gray-600 dark:text-gray-400">{match.game_type}</span>
+        <span className="text-gray-600 dark:text-gray-300">{match.game_type}</span>
       </td>
     </tr>
   );

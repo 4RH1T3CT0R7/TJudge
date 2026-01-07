@@ -27,14 +27,14 @@ export function Layout() {
             <nav className="flex items-center space-x-4">
               <Link
                 to="/tournaments"
-                className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
               >
                 Турниры
               </Link>
               {isAuthenticated && (
                 <Link
                   to="/games"
-                  className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Игры
                 </Link>
@@ -42,7 +42,7 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Админ
                 </Link>
@@ -54,7 +54,7 @@ export function Layout() {
               {/* Dark mode toggle */}
               <button
                 onClick={toggle}
-                className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDark ? (
@@ -70,7 +70,7 @@ export function Layout() {
 
               {isAuthenticated ? (
                 <>
-                  <span className="text-sm text-gray-700 dark:text-gray-200">{user?.username}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-100">{user?.username}</span>
                   <button
                     onClick={handleLogout}
                     className="btn btn-secondary text-sm"
@@ -101,7 +101,7 @@ export function Layout() {
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-gray-500 dark:text-gray-400 text-sm">
+          <p className="text-center text-gray-500 dark:text-gray-300 text-sm">
             TJudge — Турнирная система по теории игр
           </p>
         </div>

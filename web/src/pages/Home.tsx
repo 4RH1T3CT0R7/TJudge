@@ -32,10 +32,10 @@ export function Home() {
     <div>
       {/* Hero Section */}
       <div className="text-center py-12 md:py-16">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           Добро пожаловать в TJudge
         </h1>
-        <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+        <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
           Платформа для соревнований по теории игр.
           Создавайте команды, разрабатывайте стратегии и соревнуйтесь в турнирах.
         </p>
@@ -54,40 +54,40 @@ export function Home() {
       </div>
 
       {/* Features section */}
-      <div className="py-12 border-t border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">
+      <div className="py-12 border-t border-gray-200 dark:border-gray-700">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8 text-center">
           Возможности платформы
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="card">
-            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600 mb-4">
+            <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/50 rounded-lg flex items-center justify-center text-primary-600 dark:text-primary-400 mb-4">
               <UsersIcon />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Командные соревнования</h3>
-            <p className="text-gray-600 text-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Командные соревнования</h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
               Создавайте команды или присоединяйтесь по коду приглашения.
               Разрабатывайте стратегии вместе с товарищами.
             </p>
           </div>
 
           <div className="card">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-green-600 mb-4">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/50 rounded-lg flex items-center justify-center text-green-600 dark:text-green-400 mb-4">
               <ChartBarIcon />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Рейтинг в реальном времени</h3>
-            <p className="text-gray-600 text-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Рейтинг в реальном времени</h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
               Следите за обновлением таблицы лидеров по мере завершения матчей.
               Поддержка полноэкранного режима.
             </p>
           </div>
 
           <div className="card">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 mb-4">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/50 rounded-lg flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
               <PuzzlePieceIcon />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Множество игр</h3>
-            <p className="text-gray-600 text-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Множество игр</h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
               Турниры могут включать различные игры из теории игр.
               Правила отображаются в формате Markdown.
             </p>
@@ -97,7 +97,7 @@ export function Home() {
 
       {/* CTA Section */}
       {!isAuthenticated && (
-        <div className="py-12 border-t border-gray-200">
+        <div className="py-12 border-t border-gray-200 dark:border-gray-700">
           <div className="bg-primary-600 rounded-lg p-8 text-center">
             <h2 className="text-2xl font-bold text-white mb-3">
               Готовы к соревнованию?
