@@ -639,6 +639,7 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 }
 
 // RunAllMatches запускает все pending матчи турнира (для админа)
+// Если нет pending матчей, создаёт новый раунд round-robin матчей
 func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	// Получаем все pending матчи
 	matches, err := s.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
@@ -646,8 +647,48 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 
+	// Если нет pending матчей, создаём новый раунд
 	if len(matches) == 0 {
-		return 0, nil
+		s.log.Info("No pending matches, generating new round",
+			zap.String("tournament_id", tournamentID.String()),
+		)
+
+		// Получаем турнир
+		tournament, err := s.GetByID(ctx, tournamentID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get tournament: %w", err)
+		}
+
+		// Проверяем что турнир активен
+		if tournament.Status != domain.TournamentActive {
+			return 0, errors.ErrConflict.WithMessage("tournament is not active")
+		}
+
+		// Получаем участников
+		participants, err := s.tournamentRepo.GetParticipants(ctx, tournamentID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get participants: %w", err)
+		}
+
+		if len(participants) < 2 {
+			return 0, errors.ErrValidation.WithMessage("need at least 2 participants to run matches")
+		}
+
+		// Генерируем новый раунд матчей
+		matches, err = s.generateRoundRobinMatches(tournament, participants)
+		if err != nil {
+			return 0, fmt.Errorf("failed to generate matches: %w", err)
+		}
+
+		// Сохраняем матчи в БД
+		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
+			return 0, fmt.Errorf("failed to create matches: %w", err)
+		}
+
+		s.log.Info("Generated new round of matches",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.Int("matches_count", len(matches)),
+		)
 	}
 
 	// Добавляем все матчи в очередь
