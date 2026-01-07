@@ -111,14 +111,15 @@ export interface Match {
 export interface LeaderboardEntry {
   rank: number;
   program_id: string;
+  program_name: string;
   team_id?: string;
   team_name?: string;
-  username: string;
+  username?: string;
   rating: number;
   wins: number;
   losses: number;
   draws: number;
-  total_matches: number;
+  total_games: number;
 }
 
 // API response types

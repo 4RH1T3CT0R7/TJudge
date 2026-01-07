@@ -71,14 +71,17 @@ export function TournamentDetail() {
     setError(null);
 
     try {
-      const [tournamentData, teamsData, gamesData, leaderboardData] = await Promise.all([
-        api.getTournament(id),
-        api.getTournamentTeams(id),
-        api.getTournamentGames(id),
-        api.getLeaderboard(id),
+      // Load tournament data first (required)
+      const tournamentData = await api.getTournament(id);
+      setTournament(tournamentData);
+
+      // Load other data in parallel, but don't fail if they error
+      const [teamsData, gamesData, leaderboardData] = await Promise.all([
+        api.getTournamentTeams(id).catch(() => []),
+        api.getTournamentGames(id).catch(() => []),
+        api.getLeaderboard(id).catch(() => []),
       ]);
 
-      setTournament(tournamentData);
       setTeams(teamsData || []);
       setGames(gamesData || []);
       setLeaderboard(leaderboardData || []);
@@ -170,8 +173,10 @@ export function TournamentDetail() {
   ];
 
   const isCreator = user?.id === tournament.creator_id;
-  const canStart = isCreator && tournament.status === 'pending';
-  const canComplete = isCreator && tournament.status === 'active';
+  const isAdmin = user?.role === 'admin';
+  const canManage = isCreator || isAdmin;
+  const canStart = canManage && tournament.status === 'pending';
+  const canComplete = canManage && tournament.status === 'active';
 
   // Fullscreen leaderboard view
   if (isFullscreen) {
@@ -506,8 +511,10 @@ function LeaderboardTable({
               <td className="px-4 py-3">
                 {entry.team_name ? (
                   <span className="font-medium">{entry.team_name}</span>
-                ) : (
+                ) : entry.username ? (
                   <span className="font-medium">{entry.username}</span>
+                ) : (
+                  <span className="font-medium">{entry.program_name}</span>
                 )}
               </td>
               <td className="px-4 py-3 text-right font-mono font-medium">
@@ -523,7 +530,7 @@ function LeaderboardTable({
                 {entry.draws}
               </td>
               <td className="px-4 py-3 text-right font-mono">
-                {entry.total_matches}
+                {entry.total_games}
               </td>
             </tr>
           ))}
