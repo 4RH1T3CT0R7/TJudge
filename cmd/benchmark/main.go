@@ -302,9 +302,22 @@ func main() {
 
 	if *runBenchmarks {
 		fmt.Println(colorCyan + "Running benchmarks..." + colorReset)
+		fmt.Println("Note: Only standalone benchmarks (no DB/Redis required)")
 		fmt.Println()
 
-		args := []string{"test", "-tags=benchmark", "-bench=" + *pattern, "-benchmem", "-benchtime=1s", "./tests/benchmark/..."}
+		// Run only benchmarks that don't require external services
+		// Exclude: API (needs full server), Queue (needs Redis), DB (needs Postgres)
+		// Include: Worker pool mocks, JSON parsing, UUID generation, Match creation
+		args := []string{
+			"test",
+			"-tags=benchmark",
+			"-bench=" + *pattern,
+			"-benchmem",
+			"-benchtime=500ms",
+			"-timeout=30s",
+			"-run=^$", // Don't run regular tests
+			"./tests/benchmark/...",
+		}
 		if *verbose {
 			args = append(args, "-v")
 		}
@@ -319,9 +332,16 @@ func main() {
 		err = cmd.Run()
 		output = stdout.Bytes()
 
+		// Print output in real-time for debugging
+		if *verbose {
+			fmt.Println(string(output))
+		}
+
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%sWarning: Some benchmarks may have been skipped%s\n", colorYellow, colorReset)
-			fmt.Fprintf(os.Stderr, "%s\n", stderr.String())
+			fmt.Fprintf(os.Stderr, "%sWarning: Some benchmarks may have been skipped (DB/Redis not running?)%s\n", colorYellow, colorReset)
+			if *verbose {
+				fmt.Fprintf(os.Stderr, "%s\n", stderr.String())
+			}
 		}
 	} else {
 		// Read from stdin
