@@ -1,101 +1,181 @@
-# TJudge
+# Документация TJudge
 
-Высокопроизводительная турнирная система для соревнований программных ботов.
+Добро пожаловать в документацию турнирной системы TJudge!
 
-## Быстрый старт
+## Содержание
+
+### Для пользователей
+
+- [Быстрый старт](../README.md#-быстрый-старт) — запуск системы за 5 минут
+- [Возможности](../README.md#-возможности) — обзор функционала
+
+### Для разработчиков
+
+| Документ | Описание |
+|----------|----------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура системы, компоненты, взаимодействия |
+| [API_GUIDE.md](API_GUIDE.md) | Полное описание REST API и WebSocket |
+| [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Настройка окружения разработки |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Схема базы данных, миграции |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Правила контрибьютинга |
+
+### Для DevOps
+
+| Документ | Описание |
+|----------|----------|
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Деплой в Docker/Kubernetes |
+| [SECRETS_MANAGEMENT.md](SECRETS_MANAGEMENT.md) | Управление секретами |
+
+---
+
+## Быстрые ссылки
+
+### Запуск
 
 ```bash
-# Клонирование и запуск
-git clone https://github.com/bmstu-itstech/tjudge.git
-cd tjudge
-make dev
+# Docker Compose (рекомендуется)
+docker-compose up -d
 
-# API: http://localhost:8080
-# Grafana: http://localhost:3000 (admin/admin)
+# Локально
+make run-api      # API сервер
+make run-worker   # Worker
+cd web && npm run dev  # Фронтенд
 ```
 
-## Возможности
+### Основные URL
 
-- **Управление турнирами** — Round-robin турниры с рейтингом ELO
-- **Исполнение матчей** — Изолированные Docker-контейнеры с лимитами ресурсов
-- **Real-time обновления** — WebSocket для отслеживания прогресса турнира
-- **Высокая производительность** — 100+ матчей/сек, автомасштабирование воркеров
-- **Мониторинг** — Prometheus метрики, Grafana дашборды, Loki логи
+| Сервис | URL | Описание |
+|--------|-----|----------|
+| Веб-приложение | http://localhost:8080 | Основной интерфейс |
+| API | http://localhost:8080/api/v1 | REST API |
+| Grafana | http://localhost:3000 | Мониторинг |
+| Prometheus | http://localhost:9092 | Метрики |
 
-## Архитектура
+### Полезные команды
+
+```bash
+make help          # Справка по командам
+make test          # Запуск тестов
+make lint          # Проверка кода
+make migrate-up    # Применить миграции
+make docker-logs   # Просмотр логов
+```
+
+---
+
+## Структура проекта
+
+```
+tjudge/
+├── cmd/                    # Точки входа приложений
+│   ├── api/               # API сервер
+│   ├── worker/            # Worker для обработки матчей
+│   └── migrations/        # CLI для миграций
+├── internal/              # Внутренний код
+│   ├── api/              # HTTP handlers, middleware, routes
+│   ├── domain/           # Бизнес-логика
+│   ├── infrastructure/   # Внешние сервисы (DB, Redis, Docker)
+│   ├── worker/           # Пул воркеров
+│   ├── web/              # Встроенный фронтенд (embed)
+│   └── config/           # Конфигурация
+├── web/                  # React фронтенд
+│   ├── src/             # Исходный код
+│   └── dist/            # Собранное приложение
+├── pkg/                  # Переиспользуемые пакеты
+├── migrations/           # SQL миграции
+├── docker/              # Dockerfiles
+├── deployments/         # Конфигурации деплоя
+│   ├── grafana/        # Дашборды Grafana
+│   ├── prometheus/     # Конфиг Prometheus
+│   ├── loki/           # Конфиг Loki
+│   └── alertmanager/   # Алерты
+└── docs/                # Документация
+```
+
+---
+
+## Технологии
+
+### Backend
+
+| Технология | Версия | Назначение |
+|------------|--------|------------|
+| Go | 1.24+ | Язык программирования |
+| Chi | v5 | HTTP роутер |
+| pgx | v5 | PostgreSQL драйвер |
+| go-redis | v9 | Redis клиент |
+| zap | — | Структурированное логирование |
+| gorilla/websocket | — | WebSocket |
+
+### Frontend
+
+| Технология | Версия | Назначение |
+|------------|--------|------------|
+| React | 18+ | UI фреймворк |
+| TypeScript | 5+ | Типизация |
+| Tailwind CSS | 4 | Стилизация |
+| Vite | 7 | Сборщик |
+| Zustand | — | Стейт менеджмент |
+| React Query | — | Работа с данными |
+
+### Инфраструктура
+
+| Технология | Версия | Назначение |
+|------------|--------|------------|
+| PostgreSQL | 15+ | База данных |
+| Redis | 7+ | Кэш, очереди |
+| Docker | — | Контейнеризация |
+| Prometheus | — | Метрики |
+| Grafana | — | Визуализация |
+| Loki | — | Логи |
+
+---
+
+## Архитектура кратко
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Клиент    │────▶│     API     │────▶│  PostgreSQL │
+│  (React)    │◀────│   (Go)      │◀────│             │
 └─────────────┘     └──────┬──────┘     └─────────────┘
                           │
                     ┌─────▼─────┐
                     │   Redis   │
-                    │ (Очередь) │
+                    │ (очередь) │
                     └─────┬─────┘
                           │
               ┌───────────┼───────────┐
               ▼           ▼           ▼
         ┌─────────┐ ┌─────────┐ ┌─────────┐
         │ Worker  │ │ Worker  │ │ Worker  │
+        │ (Go)    │ │ (Go)    │ │ (Go)    │
         └────┬────┘ └────┬────┘ └────┬────┘
              │           │           │
-        ┌────▼────┐ ┌────▼────┐ ┌────▼────┐
-        │ Docker  │ │ Docker  │ │ Docker  │
-        │Executor │ │Executor │ │Executor │
-        └─────────┘ └─────────┘ └─────────┘
+        ┌────▼────────────▼───────────▼────┐
+        │         Docker Containers        │
+        │  (изолированное выполнение)      │
+        └──────────────────────────────────┘
 ```
 
-## Команды
+### Поток данных
 
-```bash
-make dev          # Запуск через Docker Compose
-make test         # Запуск всех тестов
-make build        # Сборка бинарников
-make lint         # Запуск линтера
-make migrate-up   # Применение миграций
-```
+1. **Пользователь** загружает программу через веб-интерфейс
+2. **API сервер** сохраняет программу и создаёт задачи на матчи
+3. **Redis** хранит очередь матчей
+4. **Worker** забирает матч из очереди
+5. **Docker Executor** запускает матч в изолированном контейнере
+6. **Результат** сохраняется в PostgreSQL
+7. **WebSocket** уведомляет клиентов об обновлении рейтинга
 
-## Конфигурация
+---
 
-Основные переменные окружения:
+## Поддержка
 
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `DB_HOST` | localhost | Хост PostgreSQL |
-| `REDIS_HOST` | localhost | Хост Redis |
-| `JWT_SECRET` | — | Ключ подписи JWT (обязательно) |
-| `WORKER_MIN` | 5 | Минимум воркеров |
-| `WORKER_MAX` | 100 | Максимум воркеров |
+- **Issues**: [GitHub Issues](https://github.com/bmstu-itstech/tjudge/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/bmstu-itstech/tjudge/discussions)
 
-Полный список в [.env.example](.env.example).
-
-## Обзор API
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| POST | `/api/v1/auth/register` | Регистрация |
-| POST | `/api/v1/auth/login` | Вход |
-| POST | `/api/v1/tournaments` | Создание турнира |
-| POST | `/api/v1/tournaments/:id/join` | Присоединение к турниру |
-| POST | `/api/v1/tournaments/:id/start` | Старт турнира |
-| GET | `/api/v1/tournaments/:id/leaderboard` | Таблица лидеров |
-| WS | `/api/v1/ws/tournaments/:id` | Real-time обновления |
-
-Полная документация в [API_GUIDE.md](API_GUIDE.md).
-
-## Деплой
-
-```bash
-# Docker Compose (production)
-docker-compose -f docker-compose.prod.yml up -d
-
-# Kubernetes
-kubectl apply -k deployments/kubernetes/
-```
-
-Подробности в [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
+---
 
 ## Лицензия
 
-MIT
+MIT License
