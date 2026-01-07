@@ -35,7 +35,7 @@ export function Home() {
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           Добро пожаловать в TJudge
         </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+        <p className="text-lg text-gray-600 dark:text-gray-200 mb-8 max-w-2xl mx-auto">
           Платформа для соревнований по теории игр.
           Создавайте команды, разрабатывайте стратегии и соревнуйтесь в турнирах.
         </p>
@@ -65,7 +65,7 @@ export function Home() {
               <UsersIcon />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Командные соревнования</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">
+            <p className="text-gray-600 dark:text-gray-200 text-sm">
               Создавайте команды или присоединяйтесь по коду приглашения.
               Разрабатывайте стратегии вместе с товарищами.
             </p>
@@ -76,7 +76,7 @@ export function Home() {
               <ChartBarIcon />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Рейтинг в реальном времени</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">
+            <p className="text-gray-600 dark:text-gray-200 text-sm">
               Следите за обновлением таблицы лидеров по мере завершения матчей.
               Поддержка полноэкранного режима.
             </p>
@@ -87,7 +87,7 @@ export function Home() {
               <PuzzlePieceIcon />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Множество игр</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">
+            <p className="text-gray-600 dark:text-gray-200 text-sm">
               Турниры могут включать различные игры из теории игр.
               Правила отображаются в формате Markdown.
             </p>

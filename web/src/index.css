@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Softer emerald-teal palette for better dark mode */
   --color-primary-50: #ecfdf5;
@@ -187,7 +190,7 @@
 
   .badge-gray {
     @apply bg-gray-100 text-gray-700;
-    @apply dark:bg-gray-700 dark:text-gray-300;
+    @apply dark:bg-gray-700 dark:text-gray-200;
   }
 
   .badge-blue {
@@ -208,7 +211,7 @@
 
   .tab-inactive {
     @apply bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900;
-    @apply dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100;
+    @apply dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-gray-100;
   }
 
   /* Modal backdrop */
@@ -262,7 +265,7 @@
   .nav-link {
     @apply px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150;
     @apply text-gray-600 hover:text-primary-600 hover:bg-gray-100;
-    @apply dark:text-gray-300 dark:hover:text-primary-400 dark:hover:bg-gray-800;
+    @apply dark:text-gray-200 dark:hover:text-primary-400 dark:hover:bg-gray-800;
   }
 
   .nav-link-active {
@@ -320,7 +323,7 @@
 
   .rank-default {
     @apply bg-gray-100 text-gray-600;
-    @apply dark:bg-gray-700 dark:text-gray-300;
+    @apply dark:bg-gray-700 dark:text-gray-200;
   }
 
   /* Code block */
@@ -343,7 +346,7 @@
 
   .section-subtitle {
     @apply text-gray-600;
-    @apply dark:text-gray-300;
+    @apply dark:text-gray-200;
   }
 
   /* Empty state */
@@ -363,7 +366,7 @@
 
   .empty-state-description {
     @apply text-gray-500 text-sm;
-    @apply dark:text-gray-300;
+    @apply dark:text-gray-200;
   }
 
   /* Alert styles with slide-in animation */

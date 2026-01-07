@@ -54,7 +54,7 @@ export function Tournaments() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Турниры</h1>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">
+            <p className="text-gray-600 dark:text-gray-200 text-sm">
               Найдите турнир и присоединяйтесь к соревнованию
             </p>
           </div>
@@ -81,7 +81,7 @@ export function Tournaments() {
         </div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500 dark:text-gray-300">
+          <p className="text-gray-500 dark:text-gray-200">
             {filter ? 'Турниры не найдены' : 'Пока нет доступных турниров'}
           </p>
         </div>
@@ -104,12 +104,12 @@ export function Tournaments() {
                 </div>
 
                 {tournament.description && (
-                  <p className="text-gray-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">
+                  <p className="text-gray-600 dark:text-gray-200 text-sm mb-3 line-clamp-2">
                     {tournament.description}
                   </p>
                 )}
 
-                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-300">
+                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-200">
                   <div className="flex items-center gap-1">
                     <UsersIcon />
                     <span>До {tournament.max_team_size} чел.</span>

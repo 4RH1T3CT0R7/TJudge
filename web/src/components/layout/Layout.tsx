@@ -54,7 +54,7 @@ export function Layout() {
               {/* Dark mode toggle */}
               <button
                 onClick={toggle}
-                className="p-2 rounded-lg text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg text-gray-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDark ? (
@@ -101,7 +101,7 @@ export function Layout() {
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-gray-500 dark:text-gray-300 text-sm">
+          <p className="text-center text-gray-500 dark:text-gray-200 text-sm">
             TJudge — Турнирная система по теории игр
           </p>
         </div>
