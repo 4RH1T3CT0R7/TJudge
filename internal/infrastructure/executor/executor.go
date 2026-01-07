@@ -125,8 +125,8 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			MemorySwap:     e.config.MemoryLimit, // Запрещаем swap
 			PidsLimit:      &e.config.PidsLimit,
 			CpusetCpus:     e.config.CPUSetCPUs, // Ограничиваем ядра CPU
-			BlkioWeight:    100,                 // Низкий приоритет I/O
 			OomKillDisable: boolPtr(false),      // Разрешаем OOM killer
+			// BlkioWeight не поддерживается на macOS (cgroups v2)
 			Ulimits: []*container.Ulimit{
 				{Name: "nofile", Soft: 64, Hard: 64},
 				{Name: "nproc", Soft: 32, Hard: 32},
