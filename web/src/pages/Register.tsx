@@ -16,12 +16,12 @@ export function Register() {
     setError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Пароли не совпадают');
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError('Пароль должен быть не менее 6 символов');
       return;
     }
 
@@ -29,14 +29,14 @@ export function Register() {
       await register(username, email, password);
       navigate('/tournaments');
     } catch (err) {
-      setError('Registration failed. Please try again.');
+      setError('Ошибка регистрации. Попробуйте снова.');
     }
   };
 
   return (
     <div className="max-w-md mx-auto">
       <div className="card">
-        <h1 className="text-2xl font-bold text-center mb-6">Register</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Регистрация</h1>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4">
@@ -47,7 +47,7 @@ export function Register() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              Username
+              Имя пользователя
             </label>
             <input
               type="text"
@@ -76,7 +76,7 @@ export function Register() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              Пароль
             </label>
             <input
               type="password"
@@ -91,7 +91,7 @@ export function Register() {
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
+              Подтвердите пароль
             </label>
             <input
               type="password"
@@ -108,14 +108,14 @@ export function Register() {
             disabled={isLoading}
             className="w-full btn btn-primary"
           >
-            {isLoading ? 'Registering...' : 'Register'}
+            {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-gray-600">
-          Already have an account?{' '}
+          Уже есть аккаунт?{' '}
           <Link to="/login" className="text-primary-600 hover:text-primary-700">
-            Login
+            Войти
           </Link>
         </p>
       </div>

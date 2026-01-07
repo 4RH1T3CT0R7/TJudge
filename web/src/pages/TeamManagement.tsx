@@ -50,7 +50,7 @@ export function TeamManagement() {
       setTeamData(data);
       setNewName(data.team.name);
     } catch (err) {
-      setError('Failed to load team data');
+      setError('Не удалось загрузить данные команды');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -141,7 +141,7 @@ export function TeamManagement() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Loading team...</p>
+        <p className="text-gray-500">Загрузка команды...</p>
       </div>
     );
   }
@@ -149,9 +149,9 @@ export function TeamManagement() {
   if (error || !teamData) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Team not found'}</p>
+        <p className="text-red-500">{error || 'Команда не найдена'}</p>
         <Link to="/tournaments" className="btn btn-secondary mt-4">
-          Back to Tournaments
+          Назад к турнирам
         </Link>
       </div>
     );
@@ -166,14 +166,14 @@ export function TeamManagement() {
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
         <Link to="/tournaments" className="text-gray-500 hover:text-gray-700">
-          Tournaments
+          Турниры
         </Link>
         <span className="mx-2 text-gray-400">/</span>
         <Link
           to={`/tournaments/${team.tournament_id}`}
           className="text-gray-500 hover:text-gray-700"
         >
-          Tournament
+          Турнир
         </Link>
         <span className="mx-2 text-gray-400">/</span>
         <span className="text-gray-900">{team.name}</span>
@@ -189,14 +189,14 @@ export function TeamManagement() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 className="input flex-1"
-                placeholder="Team name"
+                placeholder="Название команды"
               />
               <button
                 onClick={handleUpdateName}
                 disabled={isSaving || !newName.trim()}
                 className="btn btn-primary"
               >
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button
                 onClick={() => {
@@ -205,7 +205,7 @@ export function TeamManagement() {
                 }}
                 className="btn btn-secondary"
               >
-                Cancel
+                Отмена
               </button>
             </div>
           ) : (
@@ -213,7 +213,7 @@ export function TeamManagement() {
               <h1 className="text-2xl font-bold">{team.name}</h1>
               {isLeader && (
                 <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                  You are the leader
+                  Вы капитан
                 </span>
               )}
             </div>
@@ -221,23 +221,23 @@ export function TeamManagement() {
 
           {isLeader && !isEditing && (
             <button onClick={() => setIsEditing(true)} className="btn btn-secondary">
-              Edit Name
+              Изменить название
             </button>
           )}
         </div>
 
         <div className="text-sm text-gray-500 space-y-1">
           <p>
-            Team code: <code className="bg-gray-100 px-2 py-0.5 rounded">{team.code}</code>
+            Код команды: <code className="bg-gray-100 px-2 py-0.5 rounded">{team.code}</code>
           </p>
-          <p>Created: {new Date(team.created_at).toLocaleDateString()}</p>
+          <p>Создана: {new Date(team.created_at).toLocaleDateString('ru-RU')}</p>
         </div>
       </div>
 
       {/* Invite Section */}
       {isLeader && (
         <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Invite Members</h2>
+          <h2 className="text-lg font-semibold mb-4">Пригласить участников</h2>
 
           {showInvite && inviteLink ? (
             <div className="space-y-3">
@@ -249,19 +249,19 @@ export function TeamManagement() {
                   className="input flex-1 bg-gray-50"
                 />
                 <button onClick={handleCopyInvite} className="btn btn-primary">
-                  {copied ? 'Copied!' : 'Copy'}
+                  {copied ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
               <p className="text-sm text-gray-500">
-                Invite code: <code className="bg-gray-100 px-2 py-0.5 rounded">{inviteCode}</code>
+                Код приглашения: <code className="bg-gray-100 px-2 py-0.5 rounded">{inviteCode}</code>
               </p>
               <p className="text-xs text-gray-400">
-                Share this link with others to let them join your team.
+                Отправьте эту ссылку другим участникам для вступления в команду.
               </p>
             </div>
           ) : (
             <button onClick={handleGetInvite} className="btn btn-primary">
-              Get Invite Link
+              Получить ссылку приглашения
             </button>
           )}
         </div>
@@ -269,7 +269,7 @@ export function TeamManagement() {
 
       {/* Members List */}
       <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4">Team Members ({members.length})</h2>
+        <h2 className="text-lg font-semibold mb-4">Участники команды ({members.length})</h2>
 
         <div className="divide-y">
           {members.map((member) => (
@@ -279,12 +279,12 @@ export function TeamManagement() {
                   {member.username}
                   {member.id === team.leader_id && (
                     <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
-                      Leader
+                      Капитан
                     </span>
                   )}
                   {member.id === user?.id && (
                     <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                      You
+                      Вы
                     </span>
                   )}
                 </p>
@@ -299,13 +299,13 @@ export function TeamManagement() {
                         onClick={() => handleRemoveMember(member.id)}
                         className="btn btn-danger text-sm"
                       >
-                        Confirm
+                        Подтвердить
                       </button>
                       <button
                         onClick={() => setMemberToRemove(null)}
                         className="btn btn-secondary text-sm"
                       >
-                        Cancel
+                        Отмена
                       </button>
                     </div>
                   ) : (
@@ -313,7 +313,7 @@ export function TeamManagement() {
                       onClick={() => setMemberToRemove(member.id)}
                       className="text-red-600 hover:text-red-800 text-sm"
                     >
-                      Remove
+                      Удалить
                     </button>
                   )}
                 </>
@@ -326,14 +326,14 @@ export function TeamManagement() {
       {/* Leave Team */}
       {isMember && (
         <div className="card border-red-200">
-          <h2 className="text-lg font-semibold mb-4 text-red-600">Danger Zone</h2>
+          <h2 className="text-lg font-semibold mb-4 text-red-600">Опасная зона</h2>
 
           {confirmLeave ? (
             <div className="space-y-3">
               <p className="text-gray-600">
                 {isLeader
-                  ? 'You are the team leader. If you leave, leadership will be transferred to another member. If you are the last member, the team will be deleted.'
-                  : 'Are you sure you want to leave this team?'}
+                  ? 'Вы капитан команды. Если вы покинете команду, капитанство перейдёт к другому участнику. Если вы последний участник, команда будет удалена.'
+                  : 'Вы уверены, что хотите покинуть эту команду?'}
               </p>
               <div className="flex gap-2">
                 <button
@@ -341,19 +341,19 @@ export function TeamManagement() {
                   disabled={isLeaving}
                   className="btn btn-danger"
                 >
-                  {isLeaving ? 'Leaving...' : 'Yes, Leave Team'}
+                  {isLeaving ? 'Выход...' : 'Да, покинуть команду'}
                 </button>
                 <button
                   onClick={() => setConfirmLeave(false)}
                   className="btn btn-secondary"
                 >
-                  Cancel
+                  Отмена
                 </button>
               </div>
             </div>
           ) : (
             <button onClick={() => setConfirmLeave(true)} className="btn btn-danger">
-              Leave Team
+              Покинуть команду
             </button>
           )}
         </div>

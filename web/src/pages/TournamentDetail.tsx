@@ -21,6 +21,12 @@ const statusColors: Record<TournamentStatus, string> = {
   completed: 'bg-gray-100 text-gray-800',
 };
 
+const statusLabels: Record<TournamentStatus, string> = {
+  pending: 'Ожидание',
+  active: 'Активный',
+  completed: 'Завершён',
+};
+
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
   const { isAuthenticated, user } = useAuthStore();
@@ -88,7 +94,7 @@ export function TournamentDetail() {
         }
       }
     } catch (err) {
-      setError('Failed to load tournament data');
+      setError('Не удалось загрузить данные турнира');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -140,7 +146,7 @@ export function TournamentDetail() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Loading tournament...</p>
+        <p className="text-gray-500">Загрузка турнира...</p>
       </div>
     );
   }
@@ -148,19 +154,19 @@ export function TournamentDetail() {
   if (error || !tournament) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Tournament not found'}</p>
+        <p className="text-red-500">{error || 'Турнир не найден'}</p>
         <Link to="/tournaments" className="btn btn-secondary mt-4">
-          Back to Tournaments
+          Назад к турнирам
         </Link>
       </div>
     );
   }
 
   const tabs: { id: TabType; label: string }[] = [
-    { id: 'info', label: 'Info' },
-    { id: 'leaderboard', label: 'Leaderboard' },
-    { id: 'games', label: 'Games' },
-    { id: 'teams', label: 'Teams' },
+    { id: 'info', label: 'Информация' },
+    { id: 'leaderboard', label: 'Таблица' },
+    { id: 'games', label: 'Игры' },
+    { id: 'teams', label: 'Команды' },
   ];
 
   const isCreator = user?.id === tournament.creator_id;
@@ -173,16 +179,16 @@ export function TournamentDetail() {
       <div className="fixed inset-0 bg-gray-900 text-white z-50 overflow-auto">
         <div className="p-4">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">{tournament.name} - Leaderboard</h1>
+            <h1 className="text-3xl font-bold">{tournament.name} — Таблица лидеров</h1>
             <div className="flex items-center gap-4">
               {isConnected && (
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  Live
+                  Онлайн
                 </span>
               )}
               <button onClick={toggleFullscreen} className="btn bg-gray-700 text-white">
-                Exit Fullscreen
+                Выйти из полноэкранного режима
               </button>
             </div>
           </div>
@@ -200,23 +206,23 @@ export function TournamentDetail() {
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-bold">{tournament.name}</h1>
             <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[tournament.status]}`}>
-              {tournament.status}
+              {statusLabels[tournament.status]}
             </span>
             {tournament.is_permanent && (
               <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                Permanent
+                Постоянный
               </span>
             )}
           </div>
           <p className="text-gray-600">
-            Code: <code className="bg-gray-100 px-2 py-0.5 rounded">{tournament.code}</code>
+            Код: <code className="bg-gray-100 px-2 py-0.5 rounded">{tournament.code}</code>
           </p>
         </div>
 
         <div className="flex gap-2">
           {isAuthenticated && !myTeam && tournament.status === 'pending' && (
             <button onClick={() => setShowJoinModal(true)} className="btn btn-primary">
-              Join Tournament
+              Участвовать
             </button>
           )}
           {canStart && (
@@ -227,7 +233,7 @@ export function TournamentDetail() {
               }}
               className="btn btn-primary"
             >
-              Start Tournament
+              Запустить турнир
             </button>
           )}
           {canComplete && (
@@ -238,7 +244,7 @@ export function TournamentDetail() {
               }}
               className="btn btn-secondary"
             >
-              Complete Tournament
+              Завершить турнир
             </button>
           )}
         </div>
@@ -248,9 +254,9 @@ export function TournamentDetail() {
       {myTeam && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-blue-800">
-            Your team: <strong>{myTeam.name}</strong>
+            Ваша команда: <strong>{myTeam.name}</strong>
             <Link to={`/teams/${myTeam.id}`} className="ml-2 text-blue-600 hover:underline">
-              Manage Team
+              Управление командой
             </Link>
           </p>
         </div>
@@ -302,17 +308,17 @@ export function TournamentDetail() {
       {showJoinModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Join Tournament</h2>
+            <h2 className="text-xl font-bold mb-4">Участие в турнире</h2>
 
             <div className="space-y-4">
               <div>
-                <h3 className="font-medium mb-2">Create a new team</h3>
+                <h3 className="font-medium mb-2">Создать новую команду</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
-                    placeholder="Team name"
+                    placeholder="Название команды"
                     className="input flex-1"
                   />
                   <button
@@ -320,19 +326,19 @@ export function TournamentDetail() {
                     disabled={isJoining || !teamName.trim()}
                     className="btn btn-primary"
                   >
-                    Create
+                    Создать
                   </button>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <h3 className="font-medium mb-2">Or join an existing team</h3>
+                <h3 className="font-medium mb-2">Или присоединиться к существующей</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
-                    placeholder="Team invite code"
+                    placeholder="Код приглашения"
                     className="input flex-1"
                   />
                   <button
@@ -340,7 +346,7 @@ export function TournamentDetail() {
                     disabled={isJoining || !joinCode.trim()}
                     className="btn btn-secondary"
                   >
-                    Join
+                    Вступить
                   </button>
                 </div>
               </div>
@@ -350,7 +356,7 @@ export function TournamentDetail() {
               onClick={() => setShowJoinModal(false)}
               className="mt-4 w-full btn btn-secondary"
             >
-              Cancel
+              Отмена
             </button>
           </div>
         </div>
@@ -368,40 +374,40 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
           <p>{tournament.description}</p>
         </div>
       ) : (
-        <p className="text-gray-500">No description provided.</p>
+        <p className="text-gray-500">Описание не указано.</p>
       )}
 
       <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div>
-          <p className="text-sm text-gray-500">Max Team Size</p>
+          <p className="text-sm text-gray-500">Макс. размер команды</p>
           <p className="text-lg font-medium">{tournament.max_team_size}</p>
         </div>
         {tournament.max_participants && (
           <div>
-            <p className="text-sm text-gray-500">Max Participants</p>
+            <p className="text-sm text-gray-500">Макс. участников</p>
             <p className="text-lg font-medium">{tournament.max_participants}</p>
           </div>
         )}
         {tournament.start_time && (
           <div>
-            <p className="text-sm text-gray-500">Started</p>
+            <p className="text-sm text-gray-500">Начало</p>
             <p className="text-lg font-medium">
-              {new Date(tournament.start_time).toLocaleDateString()}
+              {new Date(tournament.start_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
         )}
         {tournament.end_time && (
           <div>
-            <p className="text-sm text-gray-500">Ended</p>
+            <p className="text-sm text-gray-500">Окончание</p>
             <p className="text-lg font-medium">
-              {new Date(tournament.end_time).toLocaleDateString()}
+              {new Date(tournament.end_time).toLocaleDateString('ru-RU')}
             </p>
           </div>
         )}
         <div>
-          <p className="text-sm text-gray-500">Created</p>
+          <p className="text-sm text-gray-500">Создан</p>
           <p className="text-lg font-medium">
-            {new Date(tournament.created_at).toLocaleDateString()}
+            {new Date(tournament.created_at).toLocaleDateString('ru-RU')}
           </p>
         </div>
       </div>
@@ -423,16 +429,16 @@ function LeaderboardTab({
     <div>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Standings</h2>
+          <h2 className="text-lg font-semibold">Рейтинг</h2>
           {isConnected && (
             <span className="flex items-center gap-1 text-sm text-green-600">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Live
+              Онлайн
             </span>
           )}
         </div>
         <button onClick={onToggleFullscreen} className="btn btn-secondary">
-          Fullscreen
+          На весь экран
         </button>
       </div>
       <LeaderboardTable entries={entries} />
@@ -451,7 +457,7 @@ function LeaderboardTable({
   if (entries.length === 0) {
     return (
       <div className={`text-center py-8 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-        No standings yet. Matches will update the leaderboard.
+        Пока нет результатов. Таблица обновится после матчей.
       </div>
     );
   }
@@ -461,13 +467,13 @@ function LeaderboardTable({
       <table className={`w-full ${isDark ? 'text-white' : ''}`}>
         <thead className={isDark ? 'bg-gray-800' : 'bg-gray-50'}>
           <tr>
-            <th className="px-4 py-3 text-left font-medium">Rank</th>
-            <th className="px-4 py-3 text-left font-medium">Team / User</th>
-            <th className="px-4 py-3 text-right font-medium">Rating</th>
-            <th className="px-4 py-3 text-right font-medium">W</th>
-            <th className="px-4 py-3 text-right font-medium">L</th>
-            <th className="px-4 py-3 text-right font-medium">D</th>
-            <th className="px-4 py-3 text-right font-medium">Total</th>
+            <th className="px-4 py-3 text-left font-medium">Место</th>
+            <th className="px-4 py-3 text-left font-medium">Команда / Участник</th>
+            <th className="px-4 py-3 text-right font-medium">Рейтинг</th>
+            <th className="px-4 py-3 text-right font-medium">П</th>
+            <th className="px-4 py-3 text-right font-medium">Пр</th>
+            <th className="px-4 py-3 text-right font-medium">Н</th>
+            <th className="px-4 py-3 text-right font-medium">Всего</th>
           </tr>
         </thead>
         <tbody>
@@ -540,7 +546,7 @@ function GamesTab({
   if (games.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-        No games added to this tournament yet.
+        В этот турнир ещё не добавлены игры.
       </div>
     );
   }
@@ -564,7 +570,7 @@ function GamesTab({
           )}
           {myTeam && (
             <div className="mt-3 text-sm text-primary-600">
-              Click to manage your program
+              Нажмите для управления вашей программой
             </div>
           )}
         </Link>
@@ -578,7 +584,7 @@ function TeamsTab({ teams }: { teams: Team[] }) {
   if (teams.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-        No teams have joined this tournament yet.
+        Ни одна команда ещё не присоединилась к турниру.
       </div>
     );
   }
@@ -589,7 +595,7 @@ function TeamsTab({ teams }: { teams: Team[] }) {
         <div key={team.id} className="card">
           <h3 className="text-lg font-semibold mb-2">{team.name}</h3>
           <p className="text-sm text-gray-500">
-            Joined: {new Date(team.created_at).toLocaleDateString()}
+            Присоединились: {new Date(team.created_at).toLocaleDateString('ru-RU')}
           </p>
         </div>
       ))}

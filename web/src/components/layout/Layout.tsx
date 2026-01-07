@@ -27,14 +27,14 @@ export function Layout() {
                 to="/tournaments"
                 className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
               >
-                Tournaments
+                Турниры
               </Link>
               {isAuthenticated && (
                 <Link
                   to="/games"
                   className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
                 >
-                  Games
+                  Игры
                 </Link>
               )}
               {user?.role === 'admin' && (
@@ -42,7 +42,7 @@ export function Layout() {
                   to="/admin"
                   className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
                 >
-                  Admin
+                  Админ
                 </Link>
               )}
             </nav>
@@ -56,16 +56,16 @@ export function Layout() {
                     onClick={handleLogout}
                     className="btn btn-secondary text-sm"
                   >
-                    Logout
+                    Выйти
                   </button>
                 </>
               ) : (
                 <>
                   <Link to="/login" className="btn btn-secondary text-sm">
-                    Login
+                    Войти
                   </Link>
                   <Link to="/register" className="btn btn-primary text-sm">
-                    Register
+                    Регистрация
                   </Link>
                 </>
               )}
@@ -83,7 +83,7 @@ export function Layout() {
       <footer className="bg-white border-t mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <p className="text-center text-gray-500 text-sm">
-            TJudge - Tournament Management System
+            TJudge — Турнирная система по теории игр
           </p>
         </div>
       </footer>

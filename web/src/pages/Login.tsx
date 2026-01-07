@@ -17,14 +17,14 @@ export function Login() {
       await login(email, password);
       navigate('/tournaments');
     } catch (err) {
-      setError('Invalid email or password');
+      setError('Неверный email или пароль');
     }
   };
 
   return (
     <div className="max-w-md mx-auto">
       <div className="card">
-        <h1 className="text-2xl font-bold text-center mb-6">Login</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Вход</h1>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4">
@@ -49,7 +49,7 @@ export function Login() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
+              Пароль
             </label>
             <input
               type="password"
@@ -66,14 +66,14 @@ export function Login() {
             disabled={isLoading}
             className="w-full btn btn-primary"
           >
-            {isLoading ? 'Logging in...' : 'Login'}
+            {isLoading ? 'Вход...' : 'Войти'}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-gray-600">
-          Don't have an account?{' '}
+          Нет аккаунта?{' '}
           <Link to="/register" className="text-primary-600 hover:text-primary-700">
-            Register
+            Зарегистрироваться
           </Link>
         </p>
       </div>

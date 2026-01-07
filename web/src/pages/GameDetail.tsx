@@ -60,7 +60,7 @@ export function GameDetail() {
         }
       }
     } catch (err) {
-      setError('Failed to load game data');
+      setError('Не удалось загрузить данные игры');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -101,7 +101,7 @@ export function GameDetail() {
       setTimeout(() => setUploadSuccess(false), 3000);
     } catch (err) {
       console.error('Upload failed:', err);
-      setUploadError('Failed to upload program. Please try again.');
+      setUploadError('Не удалось загрузить программу. Попробуйте снова.');
     } finally {
       setIsUploading(false);
     }
@@ -110,7 +110,7 @@ export function GameDetail() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Loading game...</p>
+        <p className="text-gray-500">Загрузка игры...</p>
       </div>
     );
   }
@@ -118,9 +118,9 @@ export function GameDetail() {
   if (error || !game) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Game not found'}</p>
+        <p className="text-red-500">{error || 'Игра не найдена'}</p>
         <Link to={`/tournaments/${tournamentId}`} className="btn btn-secondary mt-4">
-          Back to Tournament
+          Назад к турниру
         </Link>
       </div>
     );
@@ -131,11 +131,11 @@ export function GameDetail() {
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
         <Link to="/tournaments" className="text-gray-500 hover:text-gray-700">
-          Tournaments
+          Турниры
         </Link>
         <span className="mx-2 text-gray-400">/</span>
         <Link to={`/tournaments/${tournamentId}`} className="text-gray-500 hover:text-gray-700">
-          Tournament
+          Турнир
         </Link>
         <span className="mx-2 text-gray-400">/</span>
         <span className="text-gray-900">{game.display_name}</span>
@@ -145,7 +145,7 @@ export function GameDetail() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-2">{game.display_name}</h1>
         <p className="text-gray-500">
-          Game ID: <code className="bg-gray-100 px-2 py-0.5 rounded">{game.name}</code>
+          ID игры: <code className="bg-gray-100 px-2 py-0.5 rounded">{game.name}</code>
         </p>
       </div>
 
@@ -153,13 +153,13 @@ export function GameDetail() {
         {/* Rules Section */}
         <div className="lg:col-span-2">
           <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Game Rules</h2>
+            <h2 className="text-lg font-semibold mb-4">Правила игры</h2>
             {game.rules ? (
               <div className="prose max-w-none">
                 <MarkdownRenderer content={game.rules} />
               </div>
             ) : (
-              <p className="text-gray-500">No rules provided for this game.</p>
+              <p className="text-gray-500">Правила для этой игры не указаны.</p>
             )}
           </div>
         </div>
@@ -168,7 +168,7 @@ export function GameDetail() {
         <div className="lg:col-span-1">
           {isAuthenticated && myTeam ? (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Your Program</h2>
+              <h2 className="text-lg font-semibold mb-4">Ваша программа</h2>
 
               {/* Current Program */}
               {currentProgram && (
@@ -180,11 +180,11 @@ export function GameDetail() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-500">
-                    Uploaded: {new Date(currentProgram.created_at).toLocaleString()}
+                    Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
                   </p>
                   {currentProgram.error_message && (
                     <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                      <strong>Error:</strong> {currentProgram.error_message}
+                      <strong>Ошибка:</strong> {currentProgram.error_message}
                     </div>
                   )}
                 </div>
@@ -204,12 +204,12 @@ export function GameDetail() {
                   disabled={isUploading}
                   className="btn btn-primary w-full"
                 >
-                  {isUploading ? 'Uploading...' : currentProgram ? 'Upload New Version' : 'Upload Program'}
+                  {isUploading ? 'Загрузка...' : currentProgram ? 'Загрузить новую версию' : 'Загрузить программу'}
                 </button>
 
                 {uploadSuccess && (
                   <div className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
-                    Program uploaded successfully!
+                    Программа успешно загружена!
                   </div>
                 )}
 
@@ -220,14 +220,14 @@ export function GameDetail() {
                 )}
 
                 <p className="text-xs text-gray-500">
-                  Supported: .py, .cpp, .c, .go, .rs, .java
+                  Поддерживаемые форматы: .py, .cpp, .c, .go, .rs, .java
                 </p>
               </div>
 
               {/* Previous Versions */}
               {programs.length > 1 && (
                 <div className="mt-6">
-                  <h3 className="font-medium mb-2">Previous Versions</h3>
+                  <h3 className="font-medium mb-2">Предыдущие версии</h3>
                   <div className="space-y-2">
                     {programs
                       .filter((p) => p.id !== currentProgram?.id)
@@ -239,7 +239,7 @@ export function GameDetail() {
                         >
                           <span>v{program.version}</span>
                           <span className="text-gray-500">
-                            {new Date(program.created_at).toLocaleDateString()}
+                            {new Date(program.created_at).toLocaleDateString('ru-RU')}
                           </span>
                         </div>
                       ))}
@@ -249,20 +249,20 @@ export function GameDetail() {
             </div>
           ) : (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Submit Program</h2>
+              <h2 className="text-lg font-semibold mb-4">Отправить программу</h2>
               {!isAuthenticated ? (
                 <p className="text-gray-500">
                   <Link to="/login" className="text-primary-600 hover:underline">
-                    Login
+                    Войдите
                   </Link>{' '}
-                  to submit a program.
+                  чтобы отправить программу.
                 </p>
               ) : (
                 <p className="text-gray-500">
                   <Link to={`/tournaments/${tournamentId}`} className="text-primary-600 hover:underline">
-                    Join a team
+                    Присоединитесь к команде
                   </Link>{' '}
-                  to submit a program.
+                  чтобы отправить программу.
                 </p>
               )}
             </div>

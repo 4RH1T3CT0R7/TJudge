@@ -9,6 +9,12 @@ const statusColors: Record<TournamentStatus, string> = {
   completed: 'bg-gray-100 text-gray-800',
 };
 
+const statusLabels: Record<TournamentStatus, string> = {
+  pending: 'Ожидание',
+  active: 'Активный',
+  completed: 'Завершён',
+};
+
 export function Tournaments() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +39,7 @@ export function Tournaments() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Tournaments</h1>
+        <h1 className="text-2xl font-bold">Турниры</h1>
 
         {/* Filter */}
         <select
@@ -41,20 +47,20 @@ export function Tournaments() {
           onChange={(e) => setFilter(e.target.value as TournamentStatus | '')}
           className="input w-auto"
         >
-          <option value="">All</option>
-          <option value="pending">Pending</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
+          <option value="">Все</option>
+          <option value="pending">Ожидание</option>
+          <option value="active">Активные</option>
+          <option value="completed">Завершённые</option>
         </select>
       </div>
 
       {isLoading ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">Loading tournaments...</p>
+          <p className="text-gray-500">Загрузка турниров...</p>
         </div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-500">No tournaments found</p>
+          <p className="text-gray-500">Турниры не найдены</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -67,7 +73,7 @@ export function Tournaments() {
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold">{tournament.name}</h3>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[tournament.status]}`}>
-                  {tournament.status}
+                  {statusLabels[tournament.status]}
                 </span>
               </div>
 
@@ -78,11 +84,11 @@ export function Tournaments() {
               )}
 
               <div className="text-sm text-gray-500 space-y-1">
-                <p>Code: <code className="bg-gray-100 px-1 rounded">{tournament.code}</code></p>
-                <p>Max team size: {tournament.max_team_size}</p>
+                <p>Код: <code className="bg-gray-100 px-1 rounded">{tournament.code}</code></p>
+                <p>Макс. размер команды: {tournament.max_team_size}</p>
                 {tournament.is_permanent && (
                   <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
-                    Permanent
+                    Постоянный
                   </span>
                 )}
               </div>

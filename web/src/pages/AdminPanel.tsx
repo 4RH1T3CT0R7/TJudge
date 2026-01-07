@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Tournament } from '../types';
+import type { Game, Tournament, TournamentStatus } from '../types';
 
 type AdminTab = 'games' | 'tournaments';
+
+const statusLabels: Record<TournamentStatus, string> = {
+  pending: 'Ожидание',
+  active: 'Активный',
+  completed: 'Завершён',
+};
 
 export function AdminPanel() {
   const navigate = useNavigate();
@@ -65,13 +71,13 @@ export function AdminPanel() {
 
   const handleCreateGame = async () => {
     if (!gameForm.name.trim() || !gameForm.display_name.trim()) {
-      setGameError('Name and display name are required');
+      setGameError('Название и отображаемое имя обязательны');
       return;
     }
 
     // Validate name format
     if (!/^[a-z0-9_]+$/.test(gameForm.name)) {
-      setGameError('Name must contain only lowercase letters, numbers, and underscores');
+      setGameError('Название должно содержать только строчные буквы, цифры и подчёркивания');
       return;
     }
 
@@ -92,7 +98,7 @@ export function AdminPanel() {
       resetGameForm();
     } catch (err) {
       console.error('Failed to save game:', err);
-      setGameError('Failed to save game');
+      setGameError('Не удалось сохранить игру');
     } finally {
       setIsSavingGame(false);
     }
@@ -153,7 +159,7 @@ export function AdminPanel() {
   if (user?.role !== 'admin') {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">Access denied. Admin privileges required.</p>
+        <p className="text-red-500">Доступ запрещён. Требуются права администратора.</p>
       </div>
     );
   }
@@ -161,19 +167,19 @@ export function AdminPanel() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-gray-500">Загрузка...</p>
       </div>
     );
   }
 
   const tabs: { id: AdminTab; label: string }[] = [
-    { id: 'games', label: `Games (${games.length})` },
-    { id: 'tournaments', label: `Tournaments (${tournaments.length})` },
+    { id: 'games', label: `Игры (${games.length})` },
+    { id: 'tournaments', label: `Турниры (${tournaments.length})` },
   ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Admin Panel</h1>
+      <h1 className="text-2xl font-bold mb-6">Панель администратора</h1>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
@@ -198,9 +204,9 @@ export function AdminPanel() {
       {activeTab === 'games' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Manage Games</h2>
+            <h2 className="text-lg font-semibold">Управление играми</h2>
             <button onClick={() => setShowGameForm(true)} className="btn btn-primary">
-              Add Game
+              Добавить игру
             </button>
           </div>
 
@@ -209,13 +215,13 @@ export function AdminPanel() {
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">
-                  {editingGame ? 'Edit Game' : 'Create New Game'}
+                  {editingGame ? 'Редактировать игру' : 'Создать новую игру'}
                 </h2>
 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Name (unique identifier)
+                      Название (уникальный идентификатор)
                     </label>
                     <input
                       type="text"
@@ -228,12 +234,12 @@ export function AdminPanel() {
                       placeholder="game_name"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Only lowercase letters, numbers, and underscores
+                      Только строчные буквы, цифры и подчёркивания
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Display Name</label>
+                    <label className="block text-sm font-medium mb-1">Отображаемое название</label>
                     <input
                       type="text"
                       value={gameForm.display_name}
@@ -241,17 +247,17 @@ export function AdminPanel() {
                         setGameForm({ ...gameForm, display_name: e.target.value })
                       }
                       className="input"
-                      placeholder="Game Name"
+                      placeholder="Название игры"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Rules (Markdown)</label>
+                    <label className="block text-sm font-medium mb-1">Правила (Markdown)</label>
                     <textarea
                       value={gameForm.rules}
                       onChange={(e) => setGameForm({ ...gameForm, rules: e.target.value })}
                       className="input min-h-[200px] font-mono text-sm"
-                      placeholder="# Game Rules&#10;&#10;Write rules in Markdown format..."
+                      placeholder="# Правила игры&#10;&#10;Напишите правила в формате Markdown..."
                     />
                   </div>
 
@@ -264,14 +270,14 @@ export function AdminPanel() {
 
                 <div className="flex justify-end gap-2 mt-6">
                   <button onClick={resetGameForm} className="btn btn-secondary">
-                    Cancel
+                    Отмена
                   </button>
                   <button
                     onClick={handleCreateGame}
                     disabled={isSavingGame}
                     className="btn btn-primary"
                   >
-                    {isSavingGame ? 'Saving...' : editingGame ? 'Update' : 'Create'}
+                    {isSavingGame ? 'Сохранение...' : editingGame ? 'Обновить' : 'Создать'}
                   </button>
                 </div>
               </div>
@@ -281,7 +287,7 @@ export function AdminPanel() {
           {/* Games List */}
           {games.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No games created yet.
+              Игры ещё не созданы.
             </div>
           ) : (
             <div className="space-y-4">
@@ -303,7 +309,7 @@ export function AdminPanel() {
                       onClick={() => startEditGame(game)}
                       className="btn btn-secondary text-sm"
                     >
-                      Edit
+                      Редактировать
                     </button>
                     {deleteGameId === game.id ? (
                       <div className="flex gap-1">
@@ -311,13 +317,13 @@ export function AdminPanel() {
                           onClick={() => handleDeleteGame(game.id)}
                           className="btn btn-danger text-sm"
                         >
-                          Confirm
+                          Подтвердить
                         </button>
                         <button
                           onClick={() => setDeleteGameId(null)}
                           className="btn btn-secondary text-sm"
                         >
-                          Cancel
+                          Отмена
                         </button>
                       </div>
                     ) : (
@@ -325,7 +331,7 @@ export function AdminPanel() {
                         onClick={() => setDeleteGameId(game.id)}
                         className="btn btn-danger text-sm"
                       >
-                        Delete
+                        Удалить
                       </button>
                     )}
                   </div>
@@ -340,9 +346,9 @@ export function AdminPanel() {
       {activeTab === 'tournaments' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Manage Tournaments</h2>
+            <h2 className="text-lg font-semibold">Управление турнирами</h2>
             <button onClick={() => setShowTournamentForm(true)} className="btn btn-primary">
-              Create Tournament
+              Создать турнир
             </button>
           </div>
 
@@ -350,11 +356,11 @@ export function AdminPanel() {
           {showTournamentForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4">Create Tournament</h2>
+                <h2 className="text-xl font-bold mb-4">Создать турнир</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Name</label>
+                    <label className="block text-sm font-medium mb-1">Название</label>
                     <input
                       type="text"
                       value={tournamentForm.name}
@@ -362,24 +368,24 @@ export function AdminPanel() {
                         setTournamentForm({ ...tournamentForm, name: e.target.value })
                       }
                       className="input"
-                      placeholder="Tournament Name"
+                      placeholder="Название турнира"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Description</label>
+                    <label className="block text-sm font-medium mb-1">Описание</label>
                     <textarea
                       value={tournamentForm.description}
                       onChange={(e) =>
                         setTournamentForm({ ...tournamentForm, description: e.target.value })
                       }
                       className="input min-h-[100px]"
-                      placeholder="Tournament description..."
+                      placeholder="Описание турнира..."
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Max Team Size</label>
+                    <label className="block text-sm font-medium mb-1">Макс. размер команды</label>
                     <input
                       type="number"
                       value={tournamentForm.max_team_size}
@@ -409,21 +415,21 @@ export function AdminPanel() {
                       className="w-4 h-4"
                     />
                     <label htmlFor="is_permanent" className="text-sm">
-                      Permanent tournament (always accepting new participants)
+                      Постоянный турнир (всегда принимает новых участников)
                     </label>
                   </div>
                 </div>
 
                 <div className="flex justify-end gap-2 mt-6">
                   <button onClick={resetTournamentForm} className="btn btn-secondary">
-                    Cancel
+                    Отмена
                   </button>
                   <button
                     onClick={handleCreateTournament}
                     disabled={isSavingTournament || !tournamentForm.name.trim()}
                     className="btn btn-primary"
                   >
-                    {isSavingTournament ? 'Creating...' : 'Create'}
+                    {isSavingTournament ? 'Создание...' : 'Создать'}
                   </button>
                 </div>
               </div>
@@ -433,7 +439,7 @@ export function AdminPanel() {
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No tournaments created yet.
+              Турниры ещё не созданы.
             </div>
           ) : (
             <div className="space-y-4">
@@ -443,7 +449,7 @@ export function AdminPanel() {
                     <div>
                       <h3 className="font-semibold">{tournament.name}</h3>
                       <p className="text-sm text-gray-500">
-                        Code: <code>{tournament.code}</code>
+                        Код: <code>{tournament.code}</code>
                       </p>
                       {tournament.description && (
                         <p className="text-sm text-gray-600 mt-1 line-clamp-2">
@@ -461,11 +467,11 @@ export function AdminPanel() {
                             : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        {tournament.status}
+                        {statusLabels[tournament.status]}
                       </span>
                       {tournament.is_permanent && (
                         <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                          Permanent
+                          Постоянный
                         </span>
                       )}
                     </div>
@@ -475,7 +481,7 @@ export function AdminPanel() {
                       href={`/tournaments/${tournament.id}`}
                       className="btn btn-secondary text-sm"
                     >
-                      View
+                      Просмотр
                     </a>
                     {tournament.status === 'pending' && (
                       <button
@@ -485,7 +491,7 @@ export function AdminPanel() {
                         }}
                         className="btn btn-primary text-sm"
                       >
-                        Start
+                        Запустить
                       </button>
                     )}
                     {tournament.status === 'active' && (
@@ -496,7 +502,7 @@ export function AdminPanel() {
                         }}
                         className="btn btn-secondary text-sm"
                       >
-                        Complete
+                        Завершить
                       </button>
                     )}
                   </div>
