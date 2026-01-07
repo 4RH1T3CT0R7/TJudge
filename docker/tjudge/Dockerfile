@@ -5,15 +5,12 @@ FROM rust:1.85-alpine AS builder
 # Устанавливаем необходимые зависимости для сборки
 RUN apk add --no-cache musl-dev git
 
-# Добавляем target для статической сборки
-RUN rustup target add x86_64-unknown-linux-musl
-
 # Клонируем tjudge-cli
 WORKDIR /build
 RUN git clone --depth 1 https://github.com/bmstu-itstech/tjudge-cli.git .
 
-# Собираем в release режиме со статической линковкой
-RUN cargo build --release --target x86_64-unknown-linux-musl
+# Собираем в release режиме (для native архитектуры)
+RUN cargo build --release
 
 # Stage 2: Минимальный runtime образ
 FROM alpine:3.19
@@ -22,7 +19,7 @@ FROM alpine:3.19
 RUN adduser -D -H -s /sbin/nologin tjudge
 
 # Копируем бинарник
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/tjudge-cli /usr/local/bin/tjudge-cli
+COPY --from=builder /build/target/release/tjudge-cli /usr/local/bin/tjudge-cli
 
 # Делаем бинарник исполняемым
 RUN chmod +x /usr/local/bin/tjudge-cli
