@@ -71,6 +71,14 @@
   100% { transform: scale(1.5); opacity: 0; }
 }
 
+/* Spring-like easing for toggle animation */
+@keyframes toggle-spring {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(calc(100% + 4px)); }
+  75% { transform: translateX(calc(100% - 2px)); }
+  100% { transform: translateX(100%); }
+}
+
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 min-h-screen;
@@ -421,6 +429,11 @@
 
   .animate-scale-in {
     animation: scale-in 0.2s ease-out;
+  }
+
+  /* Spring-like easing for smooth bouncy transitions */
+  .ease-spring {
+    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   /* Staggered animation delays for list items */

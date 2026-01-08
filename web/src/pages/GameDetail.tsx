@@ -201,25 +201,25 @@ export function GameDetail() {
         <div className="lg:col-span-2">
           {activeTab === 'rules' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Правила игры</h2>
+              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Правила игры</h2>
               {game.rules ? (
-                <div className="prose max-w-none">
+                <div className="prose max-w-none dark:prose-invert">
                   <MarkdownRenderer content={game.rules} />
                 </div>
               ) : (
-                <p className="text-gray-500">Правила для этой игры не указаны.</p>
+                <p className="text-gray-500 dark:text-gray-400">Правила для этой игры не указаны.</p>
               )}
             </div>
           )}
 
           {activeTab === 'leaderboard' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Таблица рейтинга</h2>
+              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Таблица рейтинга</h2>
               {leaderboard.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="text-left text-sm text-gray-500 border-b">
+                      <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
                         <th className="pb-2 pr-4">#</th>
                         <th className="pb-2 pr-4">Программа</th>
                         <th className="pb-2 pr-4 text-center">Рейтинг</th>
@@ -231,21 +231,21 @@ export function GameDetail() {
                     </thead>
                     <tbody>
                       {leaderboard.map((entry) => (
-                        <tr key={entry.program_id} className="border-b border-gray-100">
-                          <td className="py-2 pr-4 font-medium">{entry.rank}</td>
-                          <td className="py-2 pr-4">{entry.program_name}</td>
-                          <td className="py-2 pr-4 text-center font-medium">{entry.rating}</td>
-                          <td className="py-2 pr-4 text-center text-green-600">{entry.wins}</td>
-                          <td className="py-2 pr-4 text-center text-red-600">{entry.losses}</td>
-                          <td className="py-2 pr-4 text-center text-gray-500">{entry.draws}</td>
-                          <td className="py-2 text-center">{entry.total_games}</td>
+                        <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
+                          <td className="py-2 pr-4 font-medium dark:text-gray-200">{entry.rank}</td>
+                          <td className="py-2 pr-4 dark:text-gray-200">{entry.program_name}</td>
+                          <td className="py-2 pr-4 text-center font-medium dark:text-gray-200">{entry.rating}</td>
+                          <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">{entry.wins}</td>
+                          <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">{entry.losses}</td>
+                          <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">{entry.draws}</td>
+                          <td className="py-2 text-center dark:text-gray-200">{entry.total_games}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className="text-gray-500">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
+                <p className="text-gray-500 dark:text-gray-400">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
               )}
             </div>
           )}
@@ -266,22 +266,22 @@ export function GameDetail() {
         <div className="lg:col-span-1">
           {isAuthenticated && myTeam ? (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Ваша программа</h2>
+              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Ваша программа</h2>
 
               {/* Current Program */}
               {currentProgram && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                   <div className="flex justify-between items-start mb-2">
-                    <p className="font-medium">{currentProgram.name}</p>
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                    <p className="font-medium dark:text-gray-200">{currentProgram.name}</p>
+                    <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded">
                       v{currentProgram.version}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
                   </p>
                   {currentProgram.error_message && (
-                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
                       <strong>Ошибка:</strong> {currentProgram.error_message}
                     </div>
                   )}
@@ -327,18 +327,18 @@ export function GameDetail() {
                 </button>
 
                 {uploadSuccess && (
-                  <div className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                  <div className="p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300">
                     Программа успешно загружена!
                   </div>
                 )}
 
                 {uploadError && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
                     {uploadError}
                   </div>
                 )}
 
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Поддерживаемые форматы: .py, .cpp, .c, .go, .rs, .java
                 </p>
               </div>
@@ -391,17 +391,17 @@ export function GameDetail() {
             </div>
           ) : (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4">Отправить программу</h2>
+              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Отправить программу</h2>
               {!isAuthenticated ? (
-                <p className="text-gray-500">
-                  <Link to="/login" className="text-primary-600 hover:underline">
+                <p className="text-gray-500 dark:text-gray-400">
+                  <Link to="/login" className="text-primary-600 dark:text-primary-400 hover:underline">
                     Войдите
                   </Link>{' '}
                   чтобы отправить программу.
                 </p>
               ) : (
-                <p className="text-gray-500">
-                  <Link to={`/tournaments/${tournamentId}`} className="text-primary-600 hover:underline">
+                <p className="text-gray-500 dark:text-gray-400">
+                  <Link to={`/tournaments/${tournamentId}`} className="text-primary-600 dark:text-primary-400 hover:underline">
                     Присоединитесь к команде
                   </Link>{' '}
                   чтобы отправить программу.
@@ -611,37 +611,37 @@ function MarkdownRenderer({ content }: { content: string }) {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       // Headers
-      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3">$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-6 mb-4">$1</h1>')
+      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-900 dark:text-gray-100">$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-900 dark:text-gray-100">$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-6 mb-4 text-gray-900 dark:text-gray-100">$1</h1>')
       // Bold
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
       // Italic
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       // Code blocks
-      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-100 p-3 rounded-lg overflow-x-auto my-3"><code>$2</code></pre>')
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-3"><code>$2</code></pre>')
       // Inline code
-      .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>')
+      .replace(/`([^`]+)`/g, '<code class="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
       // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-600 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-600 dark:text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
       // Unordered lists
-      .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4">$1</li>')
+      .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-700 dark:text-gray-300">$1</li>')
       // Ordered lists
-      .replace(/^\s*\d+\. (.*$)/gim, '<li class="ml-4 list-decimal">$1</li>')
+      .replace(/^\s*\d+\. (.*$)/gim, '<li class="ml-4 list-decimal text-gray-700 dark:text-gray-300">$1</li>')
       // Paragraphs (double newline)
-      .replace(/\n\n/g, '</p><p class="my-3">')
+      .replace(/\n\n/g, '</p><p class="my-3 text-gray-700 dark:text-gray-300">')
       // Single newlines to <br>
       .replace(/\n/g, '<br />');
 
     // Wrap in paragraph tags
-    html = '<p class="my-3">' + html + '</p>';
+    html = '<p class="my-3 text-gray-700 dark:text-gray-300">' + html + '</p>';
 
     return html;
   };
 
   return (
     <div
-      className="markdown-content"
+      className="markdown-content text-gray-700 dark:text-gray-300"
       dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
     />
   );
