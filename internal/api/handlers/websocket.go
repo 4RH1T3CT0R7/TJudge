@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -63,15 +64,9 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Извлекаем user ID из контекста (должен быть установлен auth middleware)
-	userIDValue := r.Context().Value("user_id")
-	if userIDValue == nil {
-		writeError(w, errors.ErrUnauthorized.WithMessage("authentication required"))
-		return
-	}
-
-	userID, ok := userIDValue.(uuid.UUID)
+	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		writeError(w, errors.ErrUnauthorized.WithMessage("invalid user ID"))
+		writeError(w, errors.ErrUnauthorized.WithMessage("authentication required"))
 		return
 	}
 
