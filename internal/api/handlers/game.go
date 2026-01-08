@@ -251,11 +251,41 @@ type AddGameToTournamentRequest struct {
 
 // AddGameToTournament добавляет игру в турнир
 // POST /api/v1/tournaments/{id}/games
+// Доступно админам или создателю турнира
 func (h *GameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	tournamentID, err := uuid.Parse(idStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Получаем информацию о пользователе из контекста
+	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	if !ok {
+		writeError(w, errors.ErrUnauthorized)
+		return
+	}
+	userRole, _ := r.Context().Value("user_role").(string)
+
+	// Проверяем права: админ или создатель турнира
+	isAdmin := userRole == "admin"
+	isCreator := false
+
+	if !isAdmin && h.tournamentRepo != nil {
+		tournament, err := h.tournamentRepo.GetByID(r.Context(), tournamentID)
+		if err != nil {
+			h.log.LogError("Failed to get tournament", err)
+			writeError(w, err)
+			return
+		}
+		if tournament.CreatorID != nil && *tournament.CreatorID == userID {
+			isCreator = true
+		}
+	}
+
+	if !isAdmin && !isCreator {
+		writeError(w, errors.ErrForbidden.WithMessage("only admins or tournament creator can add games"))
 		return
 	}
 
@@ -275,6 +305,7 @@ func (h *GameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request
 	h.log.Info("Game added to tournament",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.String("game_id", req.GameID.String()),
+		zap.String("added_by", userID.String()),
 	)
 
 	w.WriteHeader(http.StatusNoContent)

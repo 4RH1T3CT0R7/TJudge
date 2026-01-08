@@ -1,6 +1,14 @@
 //go:build performance
 // +build performance
 
+// Performance test for tournament with 30 teams.
+//
+// Run without cache (recommended):
+//   go test -v -tags=performance ./tests/performance/... -run TestPerformance_30Teams_Tournament -timeout 5m -count=1
+//
+// Environment variables:
+//   PERF_API_URL - API base URL (default: http://localhost:8080)
+
 package performance
 
 import (

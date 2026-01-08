@@ -160,7 +160,7 @@ func main() {
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
 	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, matchScheduler, log)
 	matchHandler := handlers.NewMatchHandlerWithProgramLookup(matchRepo, matchCache, programRepo, log)
-	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, log)
+	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, tournamentRepo, log)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 

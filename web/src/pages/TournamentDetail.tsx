@@ -146,6 +146,7 @@ export function TournamentDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
   const [isRunningMatches, setIsRunningMatches] = useState(false);
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
   const [isRefreshingMatches, setIsRefreshingMatches] = useState(false);
@@ -396,9 +397,25 @@ export function TournamentDetail() {
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold mb-2">{tournament.name}</h1>
-              <p className="text-gray-400">Таблица лидеров</p>
+              <p className="text-gray-400">
+                {showCrossGameLeaderboard ? 'Рейтинг по играм' : 'Общий рейтинг'}
+              </p>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowCrossGameLeaderboard(true)}
+                  className={`btn text-sm ${showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
+                >
+                  По играм
+                </button>
+                <button
+                  onClick={() => setShowCrossGameLeaderboard(false)}
+                  className={`btn text-sm ${!showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
+                >
+                  Общий
+                </button>
+              </div>
               {isConnected && (
                 <span className="online-indicator text-emerald-400">
                   Обновления в реальном времени
@@ -410,7 +427,11 @@ export function TournamentDetail() {
               </button>
             </div>
           </div>
-          <LeaderboardTable entries={leaderboard} isDark />
+          {showCrossGameLeaderboard ? (
+            <CrossGameLeaderboardTableDark entries={crossGameLeaderboard} games={games} />
+          ) : (
+            <LeaderboardTable entries={leaderboard} isDark />
+          )}
         </div>
       </div>
     );
@@ -562,6 +583,8 @@ export function TournamentDetail() {
             crossGameEntries={crossGameLeaderboard}
             games={games}
             isConnected={isConnected}
+            showCrossGame={showCrossGameLeaderboard}
+            onShowCrossGameChange={setShowCrossGameLeaderboard}
             onToggleFullscreen={toggleFullscreen}
           />
         )}
@@ -738,16 +761,18 @@ function LeaderboardTab({
   crossGameEntries,
   games,
   isConnected,
+  showCrossGame,
+  onShowCrossGameChange,
   onToggleFullscreen,
 }: {
   entries: LeaderboardEntry[];
   crossGameEntries: CrossGameLeaderboardEntry[];
   games: Game[];
   isConnected: boolean;
+  showCrossGame: boolean;
+  onShowCrossGameChange: (value: boolean) => void;
   onToggleFullscreen: () => void;
 }) {
-  const [showCrossGame, setShowCrossGame] = useState(true);
-
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -761,13 +786,13 @@ function LeaderboardTab({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowCrossGame(true)}
+            onClick={() => onShowCrossGameChange(true)}
             className={`btn ${showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
           >
             По играм
           </button>
           <button
-            onClick={() => setShowCrossGame(false)}
+            onClick={() => onShowCrossGameChange(false)}
             className={`btn ${!showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
           >
             Общий
@@ -891,13 +916,15 @@ function LeaderboardTable({
 function CrossGameLeaderboardTable({
   entries,
   games,
+  isDark = false,
 }: {
   entries: CrossGameLeaderboardEntry[];
   games: Game[];
+  isDark?: boolean;
 }) {
   if (entries.length === 0) {
     return (
-      <div className="empty-state">
+      <div className={`empty-state ${isDark ? 'text-gray-400' : ''}`}>
         <div className="empty-state-icon">
           <ChartBarIcon />
         </div>
@@ -913,20 +940,20 @@ function CrossGameLeaderboardTable({
     if (index === 0) return 'rank-badge rank-gold';
     if (index === 1) return 'rank-badge rank-silver';
     if (index === 2) return 'rank-badge rank-bronze';
-    return 'rank-badge rank-default';
+    return isDark ? 'rank-badge bg-gray-700 text-gray-300' : 'rank-badge rank-default';
   };
 
   const getRowClass = (index: number) => {
-    if (index === 0) return 'leaderboard-row-gold';
-    if (index === 1) return 'leaderboard-row-silver';
-    if (index === 2) return 'leaderboard-row-bronze';
+    if (index === 0) return isDark ? 'bg-amber-900/20' : 'leaderboard-row-gold';
+    if (index === 1) return isDark ? 'bg-gray-700/30' : 'leaderboard-row-silver';
+    if (index === 2) return isDark ? 'bg-orange-900/20' : 'leaderboard-row-bronze';
     return '';
   };
 
   return (
-    <div className="overflow-x-auto card p-0">
-      <table className="w-full dark:text-gray-100">
-        <thead className="bg-gray-50 dark:bg-gray-800/50">
+    <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
+      <table className={`w-full ${isDark ? 'text-white' : 'dark:text-gray-100'}`}>
+        <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800/50'}>
           <tr>
             <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
             <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Команда</th>
@@ -942,7 +969,7 @@ function CrossGameLeaderboardTable({
           {entries.map((entry, index) => (
             <tr
               key={entry.program_id}
-              className={`border-b border-gray-100 dark:border-gray-700 ${getRowClass(index)} transition-colors`}
+              className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-100 dark:border-gray-700'} ${getRowClass(index)} transition-colors`}
             >
               <td className="px-4 py-3">
                 <span className={getRankClass(index)}>
@@ -961,10 +988,10 @@ function CrossGameLeaderboardTable({
                     {gameRating ? (
                       <div>
                         <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
-                        <div className="text-xs text-gray-500 dark:text-gray-200">
-                          <span className="text-emerald-600 dark:text-emerald-400">{gameRating.wins}П</span>
+                        <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}`}>
+                          <span className="text-emerald-400">{gameRating.wins}П</span>
                           {' / '}
-                          <span className="text-red-600 dark:text-red-400">{gameRating.losses}Пр</span>
+                          <span className="text-red-400">{gameRating.losses}Пр</span>
                         </div>
                       </div>
                     ) : (
@@ -974,7 +1001,7 @@ function CrossGameLeaderboardTable({
                 );
               })}
               <td className="px-4 py-3 text-right">
-                <span className="font-mono font-bold text-lg text-primary-600 dark:text-primary-400">
+                <span className={`font-mono font-bold text-lg ${isDark ? 'text-primary-400' : 'text-primary-600 dark:text-primary-400'}`}>
                   {entry.total_rating}
                 </span>
               </td>
@@ -984,6 +1011,17 @@ function CrossGameLeaderboardTable({
       </table>
     </div>
   );
+}
+
+// Dark mode alias for fullscreen
+function CrossGameLeaderboardTableDark({
+  entries,
+  games,
+}: {
+  entries: CrossGameLeaderboardEntry[];
+  games: Game[];
+}) {
+  return <CrossGameLeaderboardTable entries={entries} games={games} isDark />;
 }
 
 // Games Tab Component

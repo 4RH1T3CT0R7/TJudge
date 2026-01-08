@@ -394,33 +394,9 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 
 // GetLeaderboard получает таблицу лидеров турнира
 func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
-	// Используем materialized view для быстрого доступа к leaderboard
-	// Materialized view периодически обновляется, что даёт O(1) доступ к leaderboard
-	query := `
-		SELECT
-			ROW_NUMBER() OVER (ORDER BY rating DESC, total_matches DESC) as rank,
-			program_id,
-			program_name,
-			rating,
-			wins,
-			losses,
-			draws,
-			total_matches as total_games
-		FROM leaderboard_tournament
-		WHERE tournament_id = $1
-		ORDER BY rating DESC, total_matches DESC
-		LIMIT $2
-	`
-
-	var leaderboard []*domain.LeaderboardEntry
-
-	err := r.db.QueryWithMetrics(ctx, "tournament_leaderboard", &leaderboard, query, tournamentID, limit)
-	if err != nil {
-		// Fallback к прямому запросу если materialized view ещё не создан
-		return r.getLeaderboardFallback(ctx, tournamentID, limit)
-	}
-
-	return leaderboard, nil
+	// Используем прямой запрос для получения актуальных данных в реальном времени
+	// Materialized view может содержать устаревшие данные до следующего обновления (каждые 30 сек)
+	return r.getLeaderboardFallback(ctx, tournamentID, limit)
 }
 
 // getLeaderboardFallback - fallback метод для получения leaderboard без materialized view
