@@ -347,6 +347,26 @@ export function TournamentDetail() {
     }
   }, [id, isRefreshingMatches]);
 
+  // Функция для обновления таблиц рейтинга (для авто-обновления)
+  const [isRefreshingLeaderboard, setIsRefreshingLeaderboard] = useState(false);
+  const refreshLeaderboard = useCallback(async () => {
+    if (!id || isRefreshingLeaderboard) return;
+
+    setIsRefreshingLeaderboard(true);
+    try {
+      const [leaderboardData, crossGameData] = await Promise.all([
+        api.getLeaderboard(id),
+        api.getCrossGameLeaderboard(id),
+      ]);
+      setLeaderboard(leaderboardData || []);
+      setCrossGameLeaderboard(crossGameData || []);
+    } catch (err) {
+      console.error('Failed to refresh leaderboard:', err);
+    } finally {
+      setIsRefreshingLeaderboard(false);
+    }
+  }, [id, isRefreshingLeaderboard]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -586,6 +606,9 @@ export function TournamentDetail() {
             showCrossGame={showCrossGameLeaderboard}
             onShowCrossGameChange={setShowCrossGameLeaderboard}
             onToggleFullscreen={toggleFullscreen}
+            onRefresh={refreshLeaderboard}
+            isRefreshing={isRefreshingLeaderboard}
+            hasActiveMatches={matchRounds.some(r => r.pending_count > 0 || r.running_count > 0)}
           />
         )}
 
@@ -764,6 +787,9 @@ function LeaderboardTab({
   showCrossGame,
   onShowCrossGameChange,
   onToggleFullscreen,
+  onRefresh,
+  isRefreshing,
+  hasActiveMatches,
 }: {
   entries: LeaderboardEntry[];
   crossGameEntries: CrossGameLeaderboardEntry[];
@@ -772,7 +798,23 @@ function LeaderboardTab({
   showCrossGame: boolean;
   onShowCrossGameChange: (value: boolean) => void;
   onToggleFullscreen: () => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
+  hasActiveMatches: boolean;
 }) {
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Автообновление каждые 2 секунды если есть активные матчи
+  useEffect(() => {
+    if (!autoRefresh || !hasActiveMatches) return;
+
+    const interval = setInterval(() => {
+      onRefresh();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, hasActiveMatches, onRefresh]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -783,8 +825,32 @@ function LeaderboardTab({
               Онлайн
             </span>
           )}
+          {hasActiveMatches && autoRefresh && (
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              Обновление...
+            </span>
+          )}
+          {isRefreshing && (
+            <div className="w-4 h-4 border-2 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin" />
+          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {hasActiveMatches && (
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`btn text-sm ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {autoRefresh ? 'Авто-обновление вкл' : 'Авто-обновление выкл'}
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="btn btn-secondary text-sm"
+          >
+            Обновить
+          </button>
           <button
             onClick={() => onShowCrossGameChange(true)}
             className={`btn ${showCrossGame ? 'btn-primary' : 'btn-secondary'}`}

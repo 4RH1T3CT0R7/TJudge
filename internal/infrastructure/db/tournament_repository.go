@@ -407,6 +407,8 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 			SELECT
 				p.id as program_id,
 				p.name as program_name,
+				t.id as team_id,
+				t.name as team_name,
 				COUNT(*) FILTER (WHERE
 					(m.program1_id = p.id AND m.winner = 1) OR
 					(m.program2_id = p.id AND m.winner = 2)
@@ -426,16 +428,19 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 				), 0) as total_score
 			FROM tournament_participants tp
 			JOIN programs p ON tp.program_id = p.id
+			LEFT JOIN teams t ON p.team_id = t.id
 			LEFT JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
 				AND m.tournament_id = $1
 				AND m.status = 'completed'
 			WHERE tp.tournament_id = $1
-			GROUP BY p.id, p.name
+			GROUP BY p.id, p.name, t.id, t.name
 		)
 		SELECT
 			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
 			program_id,
 			program_name,
+			team_id,
+			team_name,
 			total_score as rating,
 			wins,
 			losses,
@@ -446,11 +451,35 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 		LIMIT $2
 	`
 
-	var leaderboard []*domain.LeaderboardEntry
-
-	err := r.db.QueryWithMetrics(ctx, "tournament_leaderboard_fallback", &leaderboard, query, tournamentID, limit)
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get tournament leaderboard")
+	}
+	defer rows.Close()
+
+	var leaderboard []*domain.LeaderboardEntry
+	for rows.Next() {
+		var entry domain.LeaderboardEntry
+		err := rows.Scan(
+			&entry.Rank,
+			&entry.ProgramID,
+			&entry.ProgramName,
+			&entry.TeamID,
+			&entry.TeamName,
+			&entry.Rating,
+			&entry.Wins,
+			&entry.Losses,
+			&entry.Draws,
+			&entry.TotalGames,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan leaderboard entry")
+		}
+		leaderboard = append(leaderboard, &entry)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "rows iteration error")
 	}
 
 	return leaderboard, nil

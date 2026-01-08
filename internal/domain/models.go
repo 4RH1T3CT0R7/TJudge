@@ -226,14 +226,16 @@ type MatchResult struct {
 
 // LeaderboardEntry - запись в таблице лидеров
 type LeaderboardEntry struct {
-	Rank        int       `json:"rank" db:"rank"`
-	ProgramID   uuid.UUID `json:"program_id" db:"program_id"`
-	ProgramName string    `json:"program_name" db:"program_name"`
-	Rating      int       `json:"rating" db:"rating"`
-	Wins        int       `json:"wins" db:"wins"`
-	Losses      int       `json:"losses" db:"losses"`
-	Draws       int       `json:"draws" db:"draws"`
-	TotalGames  int       `json:"total_games" db:"total_games"`
+	Rank        int        `json:"rank" db:"rank"`
+	ProgramID   uuid.UUID  `json:"program_id" db:"program_id"`
+	ProgramName string     `json:"program_name" db:"program_name"`
+	TeamID      *uuid.UUID `json:"team_id,omitempty" db:"team_id"`
+	TeamName    *string    `json:"team_name,omitempty" db:"team_name"`
+	Rating      int        `json:"rating" db:"rating"`
+	Wins        int        `json:"wins" db:"wins"`
+	Losses      int        `json:"losses" db:"losses"`
+	Draws       int        `json:"draws" db:"draws"`
+	TotalGames  int        `json:"total_games" db:"total_games"`
 }
 
 // TeamLeaderboardEntry - запись в таблице лидеров для команд
