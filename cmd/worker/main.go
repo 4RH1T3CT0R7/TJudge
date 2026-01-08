@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -93,6 +95,9 @@ func main() {
 
 	// Инициализируем rating service
 	ratingService := rating.NewService(ratingRepo, leaderboardCache, log)
+
+	// Проверяем наличие образа tjudge-cli
+	checkTJudgeCLIImage(log)
 
 	// Инициализируем executor с путём к программам
 	exec, err := executor.NewExecutor(cfg.Executor, cfg.Storage.ProgramsPath, cfg.Storage.HostProgramsPath, log)
@@ -221,4 +226,32 @@ func main() {
 	log.Info("Worker pool stopped gracefully",
 		zap.Int64("total_matches_processed", pool.GetMatchesProcessed()),
 	)
+}
+
+// checkTJudgeCLIImage проверяет наличие Docker образа tjudge-cli
+func checkTJudgeCLIImage(log *logger.Logger) {
+	const imageName = "tjudge-cli:latest"
+
+	// Проверяем наличие образа
+	cmd := exec.Command("docker", "images", "-q", imageName)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Warn("Failed to check tjudge-cli image",
+			zap.Error(err),
+			zap.String("image", imageName),
+		)
+		return
+	}
+
+	if strings.TrimSpace(string(output)) == "" {
+		log.Error("Docker image tjudge-cli:latest not found!",
+			zap.String("image", imageName),
+			zap.String("hint", "Run 'docker compose build tjudge-cli' to build the image"),
+		)
+		log.Warn("Worker will fail to execute matches without tjudge-cli image")
+	} else {
+		log.Info("Docker image tjudge-cli verified",
+			zap.String("image", imageName),
+		)
+	}
 }

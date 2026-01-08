@@ -247,7 +247,7 @@ export function AdminPanel() {
   if (user?.role !== 'admin') {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">Доступ запрещён. Требуются права администратора.</p>
+        <p className="text-red-500 dark:text-red-400">Доступ запрещён. Требуются права администратора.</p>
       </div>
     );
   }
@@ -255,7 +255,7 @@ export function AdminPanel() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Загрузка...</p>
+        <p className="text-gray-500 dark:text-gray-400">Загрузка...</p>
       </div>
     );
   }
@@ -267,10 +267,10 @@ export function AdminPanel() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Панель администратора</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Панель администратора</h1>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="-mb-px flex gap-4">
           {tabs.map((tab) => (
             <button
@@ -278,8 +278,8 @@ export function AdminPanel() {
               onClick={() => setActiveTab(tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               {tab.label}
@@ -292,7 +292,7 @@ export function AdminPanel() {
       {activeTab === 'games' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Управление играми</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Управление играми</h2>
             <button onClick={() => setShowGameForm(true)} className="btn btn-primary">
               Добавить игру
             </button>
@@ -301,14 +301,14 @@ export function AdminPanel() {
           {/* Game Form Modal */}
           {showGameForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
                   {editingGame ? 'Редактировать игру' : 'Создать новую игру'}
                 </h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
                       Название (уникальный идентификатор)
                     </label>
                     <input
@@ -321,13 +321,13 @@ export function AdminPanel() {
                       className="input"
                       placeholder="game_name"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       Только строчные буквы, цифры и подчёркивания
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Отображаемое название</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Отображаемое название</label>
                     <input
                       type="text"
                       value={gameForm.display_name}
@@ -340,7 +340,7 @@ export function AdminPanel() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Правила (Markdown)</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Правила (Markdown)</label>
                     <textarea
                       value={gameForm.rules}
                       onChange={(e) => setGameForm({ ...gameForm, rules: e.target.value })}
@@ -350,7 +350,7 @@ export function AdminPanel() {
                   </div>
 
                   {gameError && (
-                    <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
                       {gameError}
                     </div>
                   )}
@@ -374,7 +374,7 @@ export function AdminPanel() {
 
           {/* Games List */}
           {games.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
               Игры ещё не созданы.
             </div>
           ) : (
@@ -382,12 +382,12 @@ export function AdminPanel() {
               {games.map((game) => (
                 <div key={game.id} className="card flex justify-between items-start">
                   <div>
-                    <h3 className="font-semibold">{game.display_name}</h3>
-                    <p className="text-sm text-gray-500">
-                      <code>{game.name}</code>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{game.display_name}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
                     </p>
                     {game.rules && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
                         {game.rules.substring(0, 150)}...
                       </p>
                     )}
@@ -434,7 +434,7 @@ export function AdminPanel() {
       {activeTab === 'tournaments' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Управление турнирами</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Управление турнирами</h2>
             <button onClick={() => setShowTournamentForm(true)} className="btn btn-primary">
               Создать турнир
             </button>
@@ -443,12 +443,12 @@ export function AdminPanel() {
           {/* Tournament Form Modal */}
           {showTournamentForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">Создать турнир</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Создать турнир</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Название *</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название *</label>
                     <input
                       type="text"
                       value={tournamentForm.name}
@@ -461,17 +461,17 @@ export function AdminPanel() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Игры турнира *</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Игры турнира *</label>
                     {games.length === 0 ? (
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
                         Сначала создайте игры во вкладке "Игры"
                       </p>
                     ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-700">
                         {games.map((game) => (
                           <label
                             key={game.id}
-                            className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-600 rounded cursor-pointer"
                           >
                             <input
                               type="checkbox"
@@ -480,22 +480,22 @@ export function AdminPanel() {
                               className="w-4 h-4 text-primary-600 rounded"
                             />
                             <div>
-                              <span className="font-medium">{game.display_name}</span>
-                              <span className="text-xs text-gray-500 ml-2">({game.name})</span>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">{game.display_name}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({game.name})</span>
                             </div>
                           </label>
                         ))}
                       </div>
                     )}
                     {selectedGameIds.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Выбрано игр: {selectedGameIds.length}
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Описание</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
                     <textarea
                       value={tournamentForm.description}
                       onChange={(e) =>
@@ -508,7 +508,7 @@ export function AdminPanel() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Макс. размер команды</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Макс. размер команды</label>
                       <input
                         type="number"
                         value={tournamentForm.max_team_size}
@@ -525,7 +525,7 @@ export function AdminPanel() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-1">Макс. участников</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Макс. участников</label>
                       <input
                         type="number"
                         value={tournamentForm.max_participants}
@@ -544,7 +544,7 @@ export function AdminPanel() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Дата начала</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дата начала</label>
                       <input
                         type="datetime-local"
                         value={tournamentForm.start_time}
@@ -556,7 +556,7 @@ export function AdminPanel() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-1">Дата окончания</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дата окончания</label>
                       <input
                         type="datetime-local"
                         value={tournamentForm.end_time}
@@ -581,13 +581,13 @@ export function AdminPanel() {
                       }
                       className="w-4 h-4"
                     />
-                    <label htmlFor="is_permanent" className="text-sm">
+                    <label htmlFor="is_permanent" className="text-sm text-gray-700 dark:text-gray-300">
                       Постоянный турнир (всегда принимает новых участников)
                     </label>
                   </div>
 
                   {tournamentError && (
-                    <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
                       {tournamentError}
                     </div>
                   )}
@@ -611,11 +611,11 @@ export function AdminPanel() {
 
           {/* Action Error */}
           {actionError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
               {actionError}
               <button
                 onClick={() => setActionError(null)}
-                className="ml-2 text-red-500 hover:text-red-700"
+                className="ml-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
               >
                 ✕
               </button>
@@ -624,7 +624,7 @@ export function AdminPanel() {
 
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
               Турниры ещё не созданы.
             </div>
           ) : (
@@ -633,12 +633,12 @@ export function AdminPanel() {
                 <div key={tournament.id} className="card">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-semibold">{tournament.name}</h3>
-                      <p className="text-sm text-gray-500">
-                        Код: <code>{tournament.code}</code>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tournament.name}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Код: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{tournament.code}</code>
                       </p>
                       {tournament.description && (
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
                           {tournament.description}
                         </p>
                       )}
@@ -647,16 +647,16 @@ export function AdminPanel() {
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
                           tournament.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300'
                             : tournament.status === 'active'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                         }`}
                       >
                         {statusLabels[tournament.status]}
                       </span>
                       {tournament.is_permanent && (
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                        <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium">
                           Постоянный
                         </span>
                       )}
