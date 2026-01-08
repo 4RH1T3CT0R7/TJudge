@@ -1,13 +1,19 @@
 services:
-  # TJudge CLI - образ для запуска матчей
+  # TJudge CLI - образ для запуска матчей (только сборка)
   tjudge-cli:
     build:
       context: .
       dockerfile: docker/tjudge/Dockerfile
     image: tjudge-cli:latest
-    # Этот сервис не запускается, только собирается образ
-    profiles:
-      - build-only
+    entrypoint: ["echo", "tjudge-cli image built successfully"]
+    restart: "no"
+    networks:
+      - tjudge-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 32M
 
   # PostgreSQL Database
   postgres:
@@ -148,6 +154,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tjudge-cli:
+        condition: service_completed_successfully
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

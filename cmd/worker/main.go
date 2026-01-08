@@ -228,30 +228,139 @@ func main() {
 	)
 }
 
-// checkTJudgeCLIImage проверяет наличие Docker образа tjudge-cli
+// checkTJudgeCLIImage проверяет наличие Docker образа tjudge-cli и пытается его собрать
 func checkTJudgeCLIImage(log *logger.Logger) {
 	const imageName = "tjudge-cli:latest"
 
 	// Проверяем наличие образа
-	cmd := exec.Command("docker", "images", "-q", imageName)
-	output, err := cmd.Output()
-	if err != nil {
-		log.Warn("Failed to check tjudge-cli image",
-			zap.Error(err),
+	if imageExists(imageName, log) {
+		log.Info("Docker image tjudge-cli verified",
 			zap.String("image", imageName),
 		)
 		return
 	}
 
-	if strings.TrimSpace(string(output)) == "" {
-		log.Error("Docker image tjudge-cli:latest not found!",
-			zap.String("image", imageName),
-			zap.String("hint", "Run 'docker compose build tjudge-cli' to build the image"),
-		)
-		log.Warn("Worker will fail to execute matches without tjudge-cli image")
-	} else {
-		log.Info("Docker image tjudge-cli verified",
-			zap.String("image", imageName),
-		)
+	log.Warn("Docker image tjudge-cli:latest not found, attempting to build...",
+		zap.String("image", imageName),
+	)
+
+	// Пытаемся собрать образ через docker compose
+	if tryBuildWithCompose(log) {
+		if imageExists(imageName, log) {
+			log.Info("Docker image tjudge-cli built successfully",
+				zap.String("image", imageName),
+			)
+			return
+		}
 	}
+
+	// Пытаемся собрать напрямую через docker build
+	if tryBuildDirectly(log) {
+		if imageExists(imageName, log) {
+			log.Info("Docker image tjudge-cli built successfully",
+				zap.String("image", imageName),
+			)
+			return
+		}
+	}
+
+	log.Error("Failed to build tjudge-cli image!",
+		zap.String("image", imageName),
+		zap.String("hint", "Run 'docker compose build tjudge-cli' manually or check docker/tjudge/Dockerfile"),
+	)
+	log.Warn("Worker will fail to execute matches without tjudge-cli image")
+}
+
+// imageExists проверяет существование Docker образа
+func imageExists(imageName string, log *logger.Logger) bool {
+	cmd := exec.Command("docker", "images", "-q", imageName)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Debug("Failed to check image existence",
+			zap.Error(err),
+			zap.String("image", imageName),
+		)
+		return false
+	}
+	return strings.TrimSpace(string(output)) != ""
+}
+
+// tryBuildWithCompose пытается собрать образ через docker compose
+func tryBuildWithCompose(log *logger.Logger) bool {
+	log.Info("Trying to build tjudge-cli with docker compose...")
+
+	// Проверяем возможные пути к docker-compose.yml
+	composePaths := []string{
+		"docker-compose.yml",
+		"../docker-compose.yml",
+		"../../docker-compose.yml",
+		"/app/docker-compose.yml",
+	}
+
+	for _, path := range composePaths {
+		if _, err := os.Stat(path); err == nil {
+			cmd := exec.Command("docker", "compose", "-f", path, "build", "tjudge-cli")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+
+			log.Info("Running docker compose build",
+				zap.String("compose_file", path),
+			)
+
+			if err := cmd.Run(); err != nil {
+				log.Debug("Docker compose build failed",
+					zap.Error(err),
+					zap.String("path", path),
+				)
+				continue
+			}
+			return true
+		}
+	}
+
+	return false
+}
+
+// tryBuildDirectly пытается собрать образ напрямую через docker build
+func tryBuildDirectly(log *logger.Logger) bool {
+	log.Info("Trying to build tjudge-cli with docker build...")
+
+	// Проверяем возможные пути к Dockerfile
+	dockerfilePaths := []struct {
+		dockerfile string
+		context    string
+	}{
+		{"docker/tjudge/Dockerfile", "."},
+		{"../docker/tjudge/Dockerfile", ".."},
+		{"../../docker/tjudge/Dockerfile", "../.."},
+		{"/app/docker/tjudge/Dockerfile", "/app"},
+	}
+
+	for _, paths := range dockerfilePaths {
+		if _, err := os.Stat(paths.dockerfile); err == nil {
+			cmd := exec.Command("docker", "build",
+				"-t", "tjudge-cli:latest",
+				"-f", paths.dockerfile,
+				paths.context,
+			)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+
+			log.Info("Running docker build",
+				zap.String("dockerfile", paths.dockerfile),
+				zap.String("context", paths.context),
+			)
+
+			if err := cmd.Run(); err != nil {
+				log.Debug("Docker build failed",
+					zap.Error(err),
+					zap.String("dockerfile", paths.dockerfile),
+				)
+				continue
+			}
+			return true
+		}
+	}
+
+	return false
 }
