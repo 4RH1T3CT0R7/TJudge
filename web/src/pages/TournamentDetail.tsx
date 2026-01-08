@@ -8,11 +8,9 @@ import type {
   TournamentStatus,
   Team,
   Game,
-  LeaderboardEntry,
   CrossGameLeaderboardEntry,
   MatchRound,
   WSMessage,
-  LeaderboardUpdate,
 } from '../types';
 
 type TabType = 'info' | 'leaderboard' | 'matches' | 'games' | 'teams';
@@ -356,11 +354,7 @@ export function TournamentDetail() {
 
     setIsRefreshingLeaderboard(true);
     try {
-      const [leaderboardData, crossGameData] = await Promise.all([
-        api.getLeaderboard(id),
-        api.getCrossGameLeaderboard(id),
-      ]);
-      setLeaderboard(leaderboardData || []);
+      const crossGameData = await api.getCrossGameLeaderboard(id);
       setCrossGameLeaderboard(crossGameData || []);
     } catch (err) {
       console.error('Failed to refresh leaderboard:', err);
