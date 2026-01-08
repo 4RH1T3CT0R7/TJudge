@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 export function Login() {
@@ -69,13 +69,6 @@ export function Login() {
             {isLoading ? 'Вход...' : 'Войти'}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-300">
-          Нет аккаунта?{' '}
-          <Link to="/register" className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300">
-            Зарегистрироваться
-          </Link>
-        </p>
       </div>
     </div>
   );

@@ -65,7 +65,7 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-black/30 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -117,14 +117,9 @@ export function Layout() {
                   </button>
                 </>
               ) : (
-                <>
-                  <Link to="/login" className="btn btn-secondary text-sm">
-                    Войти
-                  </Link>
-                  <Link to="/register" className="btn btn-primary text-sm">
-                    Регистрация
-                  </Link>
-                </>
+                <Link to="/login" className="btn btn-primary text-sm">
+                  Войти
+                </Link>
               )}
             </div>
           </div>
@@ -132,7 +127,7 @@ export function Layout() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <Outlet />
       </main>
 

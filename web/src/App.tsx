@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/layout/Layout';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
-import { Register } from './pages/Register';
 import { Tournaments } from './pages/Tournaments';
 import { TournamentDetail } from './pages/TournamentDetail';
 import { GameDetail } from './pages/GameDetail';
@@ -61,9 +60,8 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/" element={<Layout />}>
-        <Route index element={<Home />} />
+        <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="login" element={<Login />} />
-        <Route path="register" element={<Register />} />
         <Route path="tournaments" element={<Tournaments />} />
         <Route path="tournaments/:id" element={<TournamentDetail />} />
         <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />

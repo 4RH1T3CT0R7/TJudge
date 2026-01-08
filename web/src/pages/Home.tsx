@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -26,8 +25,6 @@ const PuzzlePieceIcon = () => (
 );
 
 export function Home() {
-  const { isAuthenticated } = useAuthStore();
-
   return (
     <div>
       {/* Hero Section */}
@@ -40,17 +37,10 @@ export function Home() {
           Создавайте команды, разрабатывайте стратегии и соревнуйтесь в турнирах.
         </p>
 
-        <div className="flex flex-col sm:flex-row justify-center gap-3">
-          <Link to="/tournaments" className="btn btn-primary">
-            <TrophyIcon />
-            Смотреть турниры
-          </Link>
-          {!isAuthenticated && (
-            <Link to="/register" className="btn btn-secondary">
-              Регистрация
-            </Link>
-          )}
-        </div>
+        <Link to="/tournaments" className="btn btn-primary">
+          <TrophyIcon />
+          Смотреть турниры
+        </Link>
       </div>
 
       {/* Features section */}
@@ -94,28 +84,6 @@ export function Home() {
           </div>
         </div>
       </div>
-
-      {/* CTA Section */}
-      {!isAuthenticated && (
-        <div className="py-12 border-t border-gray-200 dark:border-gray-700">
-          <div className="bg-primary-600 rounded-lg p-8 text-center">
-            <h2 className="text-2xl font-bold text-white mb-3">
-              Готовы к соревнованию?
-            </h2>
-            <p className="text-primary-100 mb-6 max-w-xl mx-auto">
-              Присоединяйтесь к сообществу и начните свой путь в мире соревновательной теории игр
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3">
-              <Link to="/tournaments" className="btn bg-white text-primary-700 hover:bg-gray-100">
-                Найти турнир
-              </Link>
-              <Link to="/register" className="btn bg-primary-500 text-white border border-primary-400 hover:bg-primary-400">
-                Создать аккаунт
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
