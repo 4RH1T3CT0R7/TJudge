@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -261,12 +262,12 @@ func (h *GameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request
 	}
 
 	// Получаем информацию о пользователе из контекста
-	userID, ok := r.Context().Value("user_id").(uuid.UUID)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if !ok {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
-	userRole, _ := r.Context().Value("user_role").(string)
+	userRole, _ := r.Context().Value(middleware.RoleKey).(string)
 
 	// Проверяем права: админ или создатель турнира
 	isAdmin := userRole == "admin"

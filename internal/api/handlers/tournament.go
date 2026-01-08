@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -55,6 +56,11 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		h.log.Info("Invalid request body", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithError(err))
 		return
+	}
+
+	// Получаем ID создателя из контекста
+	if userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID); ok {
+		req.CreatorID = &userID
 	}
 
 	// Создаём турнир

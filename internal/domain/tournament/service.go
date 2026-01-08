@@ -100,6 +100,7 @@ type CreateRequest struct {
 	IsPermanent     bool                   `json:"is_permanent,omitempty"`
 	StartTime       *time.Time             `json:"start_time,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	CreatorID       *uuid.UUID             `json:"-"` // Устанавливается из контекста, не из JSON
 }
 
 // generateCode генерирует уникальный код турнира (6-8 символов)
@@ -132,6 +133,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 		IsPermanent:     req.IsPermanent,
 		StartTime:       req.StartTime,
 		Metadata:        req.Metadata,
+		CreatorID:       req.CreatorID,
 	}
 
 	// Валидация
