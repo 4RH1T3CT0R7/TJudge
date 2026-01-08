@@ -19,26 +19,37 @@ export function useWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
+  const mountedRef = useRef(true);
   const maxReconnectAttempts = 5;
 
-  // Store callbacks in refs to avoid recreating connect function
+  // Store values in refs to avoid recreating functions
+  const tournamentIdRef = useRef(tournamentId);
   const onMessageRef = useRef(onMessage);
   const onOpenRef = useRef(onOpen);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
 
-  // Update refs when callbacks change
+  // Update refs when values change
   useEffect(() => {
+    tournamentIdRef.current = tournamentId;
     onMessageRef.current = onMessage;
     onOpenRef.current = onOpen;
     onCloseRef.current = onClose;
     onErrorRef.current = onError;
-  }, [onMessage, onOpen, onClose, onError]);
+  }, [tournamentId, onMessage, onOpen, onClose, onError]);
 
   const connect = useCallback(() => {
+    // Don't connect if unmounted
+    if (!mountedRef.current) {
+      return;
+    }
+
+    const currentTournamentId = tournamentIdRef.current;
+
     // Don't connect if no tournamentId
-    if (!tournamentId) {
+    if (!currentTournamentId) {
       return;
     }
 
@@ -57,17 +68,23 @@ export function useWebSocket({
     // Build WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${tournamentId}?token=${token}`;
+    const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${currentTournamentId}?token=${token}`;
 
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      if (!mountedRef.current) {
+        ws.close();
+        return;
+      }
       setIsConnected(true);
       reconnectAttempts.current = 0;
       onOpenRef.current?.();
     };
 
     ws.onclose = (event) => {
+      if (!mountedRef.current) return;
+
       setIsConnected(false);
       wsRef.current = null;
       onCloseRef.current?.();
@@ -82,10 +99,12 @@ export function useWebSocket({
     };
 
     ws.onerror = (error) => {
+      if (!mountedRef.current) return;
       onErrorRef.current?.(error);
     };
 
     ws.onmessage = (event) => {
+      if (!mountedRef.current) return;
       try {
         const message = JSON.parse(event.data) as WSMessage;
         onMessageRef.current?.(message);
@@ -95,12 +114,16 @@ export function useWebSocket({
     };
 
     wsRef.current = ws;
-  }, [tournamentId]);
+  }, []); // Empty deps - uses refs
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
     }
     if (wsRef.current) {
       wsRef.current.close(1000); // Clean close
@@ -115,10 +138,37 @@ export function useWebSocket({
     connect();
   }, [connect, disconnect]);
 
+  // Connect when tournamentId changes (with debounce)
   useEffect(() => {
-    connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
+    mountedRef.current = true;
+
+    // Clear any pending connection
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+    }
+
+    // Disconnect existing connection
+    if (wsRef.current) {
+      wsRef.current.close(1000);
+      wsRef.current = null;
+      setIsConnected(false);
+    }
+
+    // Only connect if we have a valid tournamentId
+    if (tournamentId) {
+      // Small delay to let React settle and avoid rapid reconnections
+      connectTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          connect();
+        }
+      }, 100);
+    }
+
+    return () => {
+      mountedRef.current = false;
+      disconnect();
+    };
+  }, [tournamentId, connect, disconnect]);
 
   return { isConnected, disconnect, reconnect };
 }

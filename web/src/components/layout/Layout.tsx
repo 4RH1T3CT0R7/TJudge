@@ -71,12 +71,12 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             {/* Logo */}
-            <Link to="/" className="flex items-center">
+            <Link to="/" className="flex items-center min-w-[100px]">
               <span className="text-xl font-bold text-primary-600 dark:text-primary-400">TJudge</span>
             </Link>
 
-            {/* Navigation */}
-            <nav className="flex items-center space-x-4">
+            {/* Navigation - centered */}
+            <nav className="flex items-center justify-center space-x-4 flex-1">
               <Link
                 to="/tournaments"
                 className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
@@ -102,7 +102,7 @@ export function Layout() {
             </nav>
 
             {/* Auth section */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4 min-w-[100px] justify-end">
               {/* Dark mode toggle */}
               <ThemeToggle isDark={isDark} onToggle={toggle} />
 
@@ -134,9 +134,33 @@ export function Layout() {
       {/* Footer */}
       <footer className="bg-white dark:bg-gray-900 border-t dark:border-gray-800 mt-auto transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-gray-500 dark:text-gray-200 text-sm">
-            TJudge — Турнирная система по теории игр
-          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              TJudge — Турнирная система по теории игр
+            </p>
+            <a
+              href="https://itsbmstu.ru"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex gap-3 items-center opacity-70 hover:opacity-100 transition-all duration-300"
+            >
+              <div className="relative">
+                <div className="absolute inset-0 bg-blue-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative w-10 h-10 bg-gray-900 dark:bg-gray-800 rounded-lg p-1 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-shadow duration-300">
+                  <img
+                    alt="ITS Tech"
+                    width="32"
+                    height="32"
+                    src="/itstech_logo.svg"
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+              <span className="text-base font-medium text-gray-600 dark:text-gray-300 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors duration-300">
+                Сделано в ИТС ТЕХ
+              </span>
+            </a>
+          </div>
         </div>
       </footer>
     </div>
