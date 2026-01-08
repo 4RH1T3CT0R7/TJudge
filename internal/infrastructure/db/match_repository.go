@@ -10,6 +10,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // MatchRepository - репозиторий для работы с матчами
@@ -580,7 +581,7 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 		`
 	}
 
-	_, err = tx.ExecContext(ctx, query, status, matchIDs)
+	_, err = tx.ExecContext(ctx, query, status, pq.Array(matchIDs))
 	if err != nil {
 		return errors.Wrap(err, "failed to batch update match status")
 	}

@@ -272,6 +272,7 @@ export function AdminPanel() {
       // Load leaderboard for each game (contains program info)
       const programsByGame: Record<string, LeaderboardEntry[]> = {};
 
+      // First, try to get game-specific leaderboards
       for (const game of gamesData) {
         try {
           const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
@@ -280,6 +281,20 @@ export function AdminPanel() {
           }
         } catch {
           console.error(`Failed to load leaderboard for game ${game.id}`);
+        }
+      }
+
+      // If no game-specific data, fall back to tournament-level leaderboard
+      if (Object.keys(programsByGame).length === 0) {
+        try {
+          const tournamentLeaderboard = await api.getLeaderboard(tournamentId);
+          if (tournamentLeaderboard && tournamentLeaderboard.length > 0) {
+            // Put all programs under "all" key or first game
+            const key = gamesData.length > 0 ? gamesData[0].id : 'all';
+            programsByGame[key] = tournamentLeaderboard;
+          }
+        } catch {
+          console.error('Failed to load tournament leaderboard');
         }
       }
 
