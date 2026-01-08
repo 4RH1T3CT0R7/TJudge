@@ -9,11 +9,6 @@ services:
     restart: "no"
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.1'
-          memory: 32M
 
   # PostgreSQL Database
   postgres:
@@ -35,14 +30,6 @@ services:
       retries: 5
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
 
   # Redis Cache
   redis:
@@ -60,14 +47,6 @@ services:
       retries: 5
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
 
   # API Server
   api:
@@ -115,14 +94,6 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
 
   # Worker Pool
   worker:
@@ -162,14 +133,6 @@ services:
       - ./data/programs:/data/programs
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 2G
-        reservations:
-          cpus: '1.0'
-          memory: 512M
 
   # Alertmanager для оповещений
   alertmanager:
@@ -192,14 +155,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
 
   # Prometheus для метрик
   prometheus:
@@ -224,14 +179,6 @@ services:
     networks:
       - tjudge-network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
 
   # Grafana для визуализации
   grafana:
@@ -259,14 +206,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
 
   # Loki для логов
   loki:
@@ -283,14 +222,6 @@ services:
     restart: unless-stopped
     # Note: Loki image has no shell/wget/curl, so we disable health check
     # Loki availability is checked by Promtail connection
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
 
   # Promtail для сбора логов
   promtail:
@@ -306,14 +237,6 @@ services:
     networks:
       - tjudge-network
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
 
 volumes:
   postgres_data:
