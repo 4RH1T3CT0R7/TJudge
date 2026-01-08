@@ -7,6 +7,7 @@ interface UseWebSocketOptions {
   onOpen?: () => void;
   onClose?: () => void;
   onError?: (error: Event) => void;
+  enabled?: boolean;
 }
 
 export function useWebSocket({
@@ -15,6 +16,7 @@ export function useWebSocket({
   onOpen,
   onClose,
   onError,
+  enabled = false, // Disabled by default until server is properly configured
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -140,6 +142,11 @@ export function useWebSocket({
 
   // Connect when tournamentId changes (with debounce)
   useEffect(() => {
+    // Don't connect if disabled
+    if (!enabled) {
+      return;
+    }
+
     mountedRef.current = true;
 
     // Clear any pending connection
@@ -168,7 +175,7 @@ export function useWebSocket({
       mountedRef.current = false;
       disconnect();
     };
-  }, [tournamentId, connect, disconnect]);
+  }, [tournamentId, enabled, connect, disconnect]);
 
   return { isConnected, disconnect, reconnect };
 }

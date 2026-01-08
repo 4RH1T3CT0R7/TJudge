@@ -69,24 +69,24 @@ export function Layout() {
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-black/30 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
+          <div className="relative flex h-16 items-center justify-between">
             {/* Logo */}
-            <Link to="/" className="flex items-center min-w-[100px]">
+            <Link to="/" className="flex items-center shrink-0 z-10">
               <span className="text-xl font-bold text-primary-600 dark:text-primary-400">TJudge</span>
             </Link>
 
-            {/* Navigation - centered */}
-            <nav className="flex items-center justify-center space-x-4 flex-1">
+            {/* Navigation - absolutely centered */}
+            <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
               <Link
                 to="/tournaments"
-                className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
               >
                 Турниры
               </Link>
               {isAuthenticated && (
                 <Link
                   to="/games"
-                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
                 >
                   Игры
                 </Link>
@@ -94,7 +94,7 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                  className="text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
                 >
                   Админ
                 </Link>
@@ -102,7 +102,7 @@ export function Layout() {
             </nav>
 
             {/* Auth section */}
-            <div className="flex items-center space-x-4 min-w-[100px] justify-end">
+            <div className="flex items-center gap-3 shrink-0 z-10">
               {/* Dark mode toggle */}
               <ThemeToggle isDark={isDark} onToggle={toggle} />
 
