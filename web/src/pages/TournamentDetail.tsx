@@ -138,7 +138,6 @@ export function TournamentDetail() {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [games, setGames] = useState<Game[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [crossGameLeaderboard, setCrossGameLeaderboard] = useState<CrossGameLeaderboardEntry[]>([]);
   const [matchRounds, setMatchRounds] = useState<MatchRound[]>([]);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
@@ -163,11 +162,16 @@ export function TournamentDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const handleWebSocketMessage = useCallback((message: WSMessage) => {
+    // WebSocket updates can trigger refresh of data
     if (message.type === 'leaderboard_update') {
-      const update = message.payload as LeaderboardUpdate;
-      setLeaderboard(update.entries);
+      // Refresh cross-game leaderboard on updates
+      if (id) {
+        api.getCrossGameLeaderboard(id).then(data => {
+          setCrossGameLeaderboard(data || []);
+        }).catch(console.error);
+      }
     }
-  }, []);
+  }, [id]);
 
   const { isConnected } = useWebSocket({
     tournamentId: id || '',
@@ -190,17 +194,15 @@ export function TournamentDetail() {
       const tournamentData = await api.getTournament(id);
       setTournament(tournamentData);
 
-      const [teamsData, gamesData, leaderboardData, crossGameData, matchRoundsData] = await Promise.all([
+      const [teamsData, gamesData, crossGameData, matchRoundsData] = await Promise.all([
         api.getTournamentTeams(id).catch(() => []),
         api.getTournamentGames(id).catch(() => []),
-        api.getLeaderboard(id).catch(() => []),
         api.getCrossGameLeaderboard(id).catch(() => []),
         api.getMatchesByRounds(id).catch(() => []),
       ]);
 
       setTeams(teamsData || []);
       setGames(gamesData || []);
-      setLeaderboard(leaderboardData || []);
       setCrossGameLeaderboard(crossGameData || []);
       setMatchRounds(matchRoundsData || []);
 
@@ -450,7 +452,7 @@ export function TournamentDetail() {
           {showCrossGameLeaderboard ? (
             <CrossGameLeaderboardTableDark entries={crossGameLeaderboard} games={games} />
           ) : (
-            <LeaderboardTable entries={leaderboard} isDark />
+            <GeneralLeaderboardTable entries={crossGameLeaderboard} isDark />
           )}
         </div>
       </div>
@@ -599,7 +601,6 @@ export function TournamentDetail() {
 
         {activeTab === 'leaderboard' && (
           <LeaderboardTab
-            entries={leaderboard}
             crossGameEntries={crossGameLeaderboard}
             games={games}
             isConnected={isConnected}
@@ -780,7 +781,6 @@ function InfoTab({ tournament }: { tournament: Tournament }) {
 
 // Leaderboard Tab Component
 function LeaderboardTab({
-  entries,
   crossGameEntries,
   games,
   isConnected,
@@ -791,7 +791,6 @@ function LeaderboardTab({
   isRefreshing,
   hasActiveMatches,
 }: {
-  entries: LeaderboardEntry[];
   crossGameEntries: CrossGameLeaderboardEntry[];
   games: Game[];
   isConnected: boolean;
@@ -873,18 +872,19 @@ function LeaderboardTab({
       {showCrossGame ? (
         <CrossGameLeaderboardTable entries={crossGameEntries} games={games} />
       ) : (
-        <LeaderboardTable entries={entries} />
+        <GeneralLeaderboardTable entries={crossGameEntries} />
       )}
     </div>
   );
 }
 
-// Leaderboard Table Component
-function LeaderboardTable({
+// General Leaderboard Table Component - uses CrossGameLeaderboardEntry data
+// Shows: rank, team name, total score, wins, losses, draws, total games
+function GeneralLeaderboardTable({
   entries,
   isDark = false,
 }: {
-  entries: LeaderboardEntry[];
+  entries: CrossGameLeaderboardEntry[];
   isDark?: boolean;
 }) {
   if (entries.length === 0) {
@@ -915,24 +915,35 @@ function LeaderboardTable({
     return '';
   };
 
+  // Calculate total draws from game_ratings
+  const getTotalDraws = (entry: CrossGameLeaderboardEntry) => {
+    let draws = 0;
+    for (const gameId in entry.game_ratings) {
+      draws += entry.game_ratings[gameId].draws || 0;
+    }
+    return draws;
+  };
+
   return (
     <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
       <table className={`w-full ${isDark ? 'text-white' : 'dark:text-gray-100'}`}>
         <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800/50'}>
           <tr>
-            <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
-            <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Команда / Участник</th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Очки</th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className="text-emerald-600 dark:text-emerald-400">Побед</span>
+            <th className="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
+            <th className="px-4 py-4 text-left font-semibold text-sm uppercase tracking-wide">Команда</th>
+            <th className="px-4 py-4 text-right font-semibold text-sm uppercase tracking-wide">
+              <span title="Сумма очков за все матчи">Очки</span>
             </th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className="text-red-600 dark:text-red-400">Поражений</span>
+            <th className="px-4 py-4 text-right font-semibold text-sm uppercase tracking-wide">
+              <span className="text-emerald-600 dark:text-emerald-400" title="Матчи, в которых набрано больше очков, чем у соперника">Побед</span>
             </th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}>Ничьих</span>
+            <th className="px-4 py-4 text-right font-semibold text-sm uppercase tracking-wide">
+              <span className="text-red-600 dark:text-red-400" title="Матчи, в которых набрано меньше очков, чем у соперника">Поражений</span>
             </th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Матчей</th>
+            <th className="px-4 py-4 text-right font-semibold text-sm uppercase tracking-wide">
+              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'} title="Матчи с равным счётом">Ничьих</span>
+            </th>
+            <th className="px-4 py-4 text-right font-semibold text-sm uppercase tracking-wide">Матчей</th>
           </tr>
         </thead>
         <tbody>
@@ -941,33 +952,33 @@ function LeaderboardTable({
               key={entry.program_id}
               className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-100 dark:border-gray-700'} ${getRowClass(index)} transition-colors`}
             >
-              <td className="px-6 py-4">
+              <td className="px-4 py-4">
                 <span className={getRankClass(index)}>
                   {entry.rank}
                 </span>
               </td>
-              <td className="px-6 py-4">
+              <td className="px-4 py-4">
                 <span className="font-semibold">
-                  {entry.team_name || entry.username || entry.program_name}
+                  {entry.team_name || entry.program_name}
                 </span>
               </td>
-              <td className="px-6 py-4 text-right">
-                <span className="font-mono font-bold text-lg">
-                  {Math.round(entry.rating)}
+              <td className="px-4 py-4 text-right">
+                <span className="font-mono font-bold text-lg text-primary-600 dark:text-primary-400">
+                  {entry.total_rating}
                 </span>
               </td>
-              <td className="px-6 py-4 text-right">
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{entry.wins}</span>
+              <td className="px-4 py-4 text-right">
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{entry.total_wins}</span>
               </td>
-              <td className="px-6 py-4 text-right">
-                <span className="font-semibold text-red-600 dark:text-red-400">{entry.losses}</span>
+              <td className="px-4 py-4 text-right">
+                <span className="font-semibold text-red-600 dark:text-red-400">{entry.total_losses}</span>
               </td>
-              <td className="px-6 py-4 text-right">
+              <td className="px-4 py-4 text-right">
                 <span className={`font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}`}>
-                  {entry.draws}
+                  {getTotalDraws(entry)}
                 </span>
               </td>
-              <td className="px-6 py-4 text-right">
+              <td className="px-4 py-4 text-right">
                 <span className="font-mono">{entry.total_games}</span>
               </td>
             </tr>
@@ -1055,9 +1066,11 @@ function CrossGameLeaderboardTable({
                       <div>
                         <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
                         <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}`}>
-                          <span className="text-emerald-400" title="Побед">{gameRating.wins}в</span>
-                          {' / '}
-                          <span className="text-red-400" title="Поражений">{gameRating.losses}п</span>
+                          <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
+                          <span className="mx-0.5">/</span>
+                          <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
+                          <span className="mx-0.5">/</span>
+                          <span title="Ничьих">{gameRating.draws || 0}</span>
                         </div>
                       </div>
                     ) : (
