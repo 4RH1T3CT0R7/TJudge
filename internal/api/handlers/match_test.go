@@ -47,6 +47,14 @@ func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *u
 	return args.Get(0).(*db.MatchStatistics), args.Error(1)
 }
 
+func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error) {
+	args := m.Called(ctx, ids)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
 // MockMatchCache mocks the match cache
 type MockMatchCache struct {
 	mock.Mock

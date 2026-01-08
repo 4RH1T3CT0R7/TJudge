@@ -65,6 +65,14 @@ func (m *MockProgramRepository) GetLatestVersion(ctx context.Context, teamID, ga
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error) {
+	args := m.Called(ctx, teamID, gameID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Program), args.Error(1)
+}
+
 func TestProgramHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
