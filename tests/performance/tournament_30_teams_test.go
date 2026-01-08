@@ -215,42 +215,58 @@ type PerformanceMetrics struct {
 	MatchesCompleted     int64
 	MatchesFailed        int64
 	AvgMatchDuration     time.Duration
+	RetryCount           int
 }
 
 func (m *PerformanceMetrics) Print() {
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Println("   PERFORMANCE TEST RESULTS - 30 TEAMS TOURNAMENT")
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Printf("\n📊 Setup Phase:\n")
-	fmt.Printf("   User Registration:     %v\n", m.UserRegistrationTime)
-	fmt.Printf("   Team Creation:         %v\n", m.TeamCreationTime)
-	fmt.Printf("   Program Upload:        %v\n", m.ProgramUploadTime)
-	fmt.Printf("   Tournament Join:       %v\n", m.TournamentJoinTime)
+	fmt.Println("\n" + strings.Repeat("=", 70))
+	fmt.Println("       PERFORMANCE TEST RESULTS - 30 TEAMS TOURNAMENT")
+	fmt.Println(strings.Repeat("=", 70))
 
-	fmt.Printf("\n🏁 Tournament Phase:\n")
-	fmt.Printf("   Round Start Time:      %v\n", m.RoundStartTime)
-	fmt.Printf("   Matches Generated:     %d\n", m.MatchesGenerated)
-
-	fmt.Printf("\n⏱️ Match Execution:\n")
-	fmt.Printf("   Total Match Time:      %v\n", m.TotalMatchTime)
-	fmt.Printf("   Matches Completed:     %d\n", m.MatchesCompleted)
-	fmt.Printf("   Matches Failed:        %d\n", m.MatchesFailed)
-	if m.MatchesCompleted > 0 {
-		fmt.Printf("   Avg Match Duration:    %v\n", m.AvgMatchDuration)
-	}
-
+	// Setup Phase Table
+	fmt.Println("\n┌─────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("│                          SETUP PHASE                                │")
+	fmt.Println("├────────────────────────────────┬────────────────────────────────────┤")
+	fmt.Printf("│ User Registration              │ %34v │\n", m.UserRegistrationTime.Round(time.Millisecond))
+	fmt.Printf("│ Team Creation                  │ %34v │\n", m.TeamCreationTime.Round(time.Millisecond))
+	fmt.Printf("│ Program Upload                 │ %34v │\n", m.ProgramUploadTime.Round(time.Millisecond))
+	fmt.Printf("│ Tournament Join                │ %34v │\n", m.TournamentJoinTime.Round(time.Millisecond))
 	totalSetupTime := m.UserRegistrationTime + m.TeamCreationTime + m.ProgramUploadTime + m.TournamentJoinTime
-	fmt.Printf("\n📈 Summary:\n")
-	fmt.Printf("   Total Setup Time:      %v\n", totalSetupTime)
-	fmt.Printf("   Total Execution Time:  %v\n", totalSetupTime+m.RoundStartTime+m.TotalMatchTime)
+	fmt.Println("├────────────────────────────────┼────────────────────────────────────┤")
+	fmt.Printf("│ Total Setup Time               │ %34v │\n", totalSetupTime.Round(time.Millisecond))
+	fmt.Println("└────────────────────────────────┴────────────────────────────────────┘")
 
-	// Expected matches for 30 teams: C(30,2) = 435 matches per game
+	// Match Execution Table
+	fmt.Println("\n┌─────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("│                       MATCH EXECUTION                               │")
+	fmt.Println("├────────────────────────────────┬────────────────────────────────────┤")
+	fmt.Printf("│ Round Start Time               │ %34v │\n", m.RoundStartTime.Round(time.Millisecond))
+	fmt.Printf("│ Matches Generated              │ %34d │\n", m.MatchesGenerated)
+	fmt.Printf("│ Matches Completed              │ %34d │\n", m.MatchesCompleted)
+	fmt.Printf("│ Matches Failed                 │ %34d │\n", m.MatchesFailed)
+	fmt.Printf("│ Retry Attempts                 │ %34d │\n", m.RetryCount)
+	fmt.Printf("│ Total Match Time               │ %34v │\n", m.TotalMatchTime.Round(time.Millisecond))
+	if m.MatchesCompleted > 0 {
+		fmt.Printf("│ Avg Match Duration             │ %34v │\n", m.AvgMatchDuration.Round(time.Millisecond))
+	}
+	fmt.Println("└────────────────────────────────┴────────────────────────────────────┘")
+
+	// Summary Table
+	fmt.Println("\n┌─────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("│                           SUMMARY                                   │")
+	fmt.Println("├────────────────────────────────┬────────────────────────────────────┤")
+	totalTime := totalSetupTime + m.RoundStartTime + m.TotalMatchTime
+	fmt.Printf("│ Total Execution Time           │ %34v │\n", totalTime.Round(time.Millisecond))
 	if m.MatchesGenerated > 0 && m.TotalMatchTime > 0 {
 		matchesPerSecond := float64(m.MatchesCompleted) / m.TotalMatchTime.Seconds()
-		fmt.Printf("   Matches/Second:        %.2f\n", matchesPerSecond)
+		fmt.Printf("│ Throughput                     │ %30.2f m/s │\n", matchesPerSecond)
 	}
-
-	fmt.Println(strings.Repeat("=", 60))
+	if m.MatchesGenerated > 0 {
+		successRate := float64(m.MatchesCompleted) / float64(m.MatchesGenerated) * 100
+		fmt.Printf("│ Success Rate                   │ %32.2f %% │\n", successRate)
+	}
+	fmt.Println("└────────────────────────────────┴────────────────────────────────────┘")
+	fmt.Println(strings.Repeat("=", 70))
 }
 
 // TestPerformance_30Teams_Tournament tests tournament with 30 teams
@@ -394,6 +410,25 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 					if err := createClient.parseResponse(resp, &tournamentResp); err == nil {
 						tournamentID = tournamentResp.ID
 						fmt.Printf("   Tournament created: %s\n", tournamentID)
+
+						// Add game to tournament
+						addGameResp, err := createClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/games", tournamentID), map[string]string{
+							"game_id": gameID,
+						})
+						if err != nil {
+							fmt.Printf("   ⚠️ Failed to add game to tournament: %v\n", err)
+						} else if addGameResp.StatusCode == http.StatusOK || addGameResp.StatusCode == http.StatusCreated {
+							fmt.Printf("   ✅ Game added to tournament\n")
+						} else if addGameResp.StatusCode == http.StatusForbidden {
+							body, _ := io.ReadAll(addGameResp.Body)
+							addGameResp.Body.Close()
+							fmt.Printf("   ⚠️ Adding game requires admin permissions: %s\n", string(body))
+							fmt.Printf("   ℹ️  To add game, make user admin: make admin EMAIL=%s@test.com\n", fmt.Sprintf("perf_%d_0", timestamp))
+						} else {
+							body, _ := io.ReadAll(addGameResp.Body)
+							addGameResp.Body.Close()
+							fmt.Printf("   ⚠️ Failed to add game (%d): %s\n", addGameResp.StatusCode, string(body))
+						}
 					}
 				} else {
 					body, _ := io.ReadAll(resp.Body)
@@ -575,13 +610,15 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	fmt.Printf("   Round started in %v\n", metrics.RoundStartTime)
 
 	// ==========================================================================
-	// Phase 8: Monitor match execution
+	// Phase 8: Monitor match execution with retry for failed matches
 	// ==========================================================================
 	fmt.Println("\n⏳ Phase 8: Monitoring match execution...")
 
 	start = time.Now()
-	maxWaitTime := 5 * time.Minute
+	maxWaitTime := 10 * time.Minute
 	pollInterval := 2 * time.Second
+	maxRetries := 3
+	retryCount := 0
 
 	var lastPending, lastCompleted, lastFailed int
 
@@ -591,8 +628,8 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 			break
 		}
 
-		// Get match statistics
-		resp, err := adminClient.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s/matches", tournamentID), nil)
+		// Get match statistics (use limit=1000 to get all matches)
+		resp, err := adminClient.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s/matches?limit=1000", tournamentID), nil)
 		if err != nil {
 			time.Sleep(pollInterval)
 			continue
@@ -630,9 +667,50 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 			lastPending, lastCompleted, lastFailed = pending, completed, failed
 		}
 
-		// All done?
+		// All pending done - check if we need to retry failed matches
 		if pending == 0 && len(matches) > 0 {
-			fmt.Printf("   ✅ All matches completed!\n")
+			if failed > 0 && retryCount < maxRetries {
+				retryCount++
+				metrics.RetryCount = retryCount
+				fmt.Printf("   🔄 Retrying %d failed matches (attempt %d/%d)...\n", failed, retryCount, maxRetries)
+
+				// Call retry endpoint (requires admin permissions)
+				retryResp, retryErr := adminClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/retry-matches", tournamentID), nil)
+				if retryErr != nil {
+					fmt.Printf("   ⚠️ Retry request failed: %v\n", retryErr)
+					// Don't retry anymore if request fails
+					retryCount = maxRetries
+				} else if retryResp.StatusCode == http.StatusForbidden {
+					body, _ := io.ReadAll(retryResp.Body)
+					retryResp.Body.Close()
+					fmt.Printf("   ⚠️ Retry requires admin permissions: %s\n", string(body))
+					fmt.Printf("   ℹ️  To enable retry, run test with admin user or use: make admin EMAIL=user@test.com\n")
+					// Don't retry anymore without admin permissions
+					retryCount = maxRetries
+				} else if retryResp.StatusCode != http.StatusOK {
+					body, _ := io.ReadAll(retryResp.Body)
+					retryResp.Body.Close()
+					fmt.Printf("   ⚠️ Retry returned %d: %s\n", retryResp.StatusCode, string(body))
+				} else {
+					var retryResult struct {
+						Enqueued int `json:"enqueued"`
+					}
+					if err := adminClient.parseResponse(retryResp, &retryResult); err == nil {
+						fmt.Printf("   ✓ Enqueued %d matches for retry\n", retryResult.Enqueued)
+					}
+					// Reset counters and continue monitoring only if retry succeeded
+					lastPending, lastCompleted, lastFailed = 0, 0, 0
+					time.Sleep(pollInterval)
+					continue
+				}
+			}
+
+			// All done (no more retries or no failed matches)
+			if failed == 0 {
+				fmt.Printf("   ✅ All %d matches completed successfully!\n", completed)
+			} else {
+				fmt.Printf("   ⚠️ Completed with %d failed matches after %d retries\n", failed, retryCount)
+			}
 			break
 		}
 
@@ -650,27 +728,34 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	}
 
 	// ==========================================================================
-	// Print results
+	// Print results table
 	// ==========================================================================
 	metrics.Print()
 
 	// ==========================================================================
-	// Summary
+	// Test assertions and detailed log output
 	// ==========================================================================
-	t.Logf("Registered users: %d/%d", successfulRegistrations, numTeams)
-	t.Logf("Created teams: %d", successfulTeams)
-	t.Logf("Joined tournament: %d", successfulJoins)
-	t.Logf("Uploaded programs: %d", successfulUploads)
-	t.Logf("Matches generated: %d", metrics.MatchesGenerated)
-	t.Logf("Matches completed: %d", metrics.MatchesCompleted)
-	t.Logf("Matches failed: %d", metrics.MatchesFailed)
+	expectedMatches := successfulUploads * (successfulUploads - 1) // N*(N-1) for double round-robin
 
-	// Expected matches for N programs: C(N,2) = N*(N-1)/2
-	expectedMatches := (successfulUploads * (successfulUploads - 1)) / 2
-	t.Logf("Expected matches for %d programs: %d", successfulUploads, expectedMatches)
+	t.Logf("\n📋 Test Details:")
+	t.Logf("   Users: %d/%d registered", successfulRegistrations, numTeams)
+	t.Logf("   Teams: %d created", successfulTeams)
+	t.Logf("   Programs: %d uploaded", successfulUploads)
+	t.Logf("   Expected matches: %d (double round-robin for %d programs)", expectedMatches, successfulUploads)
+	t.Logf("   Actual matches: %d generated, %d completed, %d failed", metrics.MatchesGenerated, metrics.MatchesCompleted, metrics.MatchesFailed)
 
+	// Check if we got the expected number of matches
+	if metrics.MatchesGenerated != expectedMatches {
+		t.Logf("⚠️  Match count mismatch: expected %d, got %d", expectedMatches, metrics.MatchesGenerated)
+	}
+
+	// Report final success rate
 	if metrics.MatchesGenerated > 0 {
 		successRate := float64(metrics.MatchesCompleted) / float64(metrics.MatchesGenerated) * 100
-		t.Logf("Success rate: %.2f%%", successRate)
+		if successRate == 100 {
+			t.Logf("✅ Success rate: %.2f%%", successRate)
+		} else {
+			t.Logf("⚠️  Success rate: %.2f%% (%d failed matches)", successRate, metrics.MatchesFailed)
+		}
 	}
 }
