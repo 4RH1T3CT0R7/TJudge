@@ -176,7 +176,7 @@ make admin EMAIL=x@y.z  # Make user admin
 - `GET /api/v1/programs/:id` - Get program details
 
 ### WebSocket
-- `GET /api/v1/ws` - Real-time updates (leaderboard, match results)
+- `WS /api/v1/ws/tournaments/:id` - Real-time updates (leaderboard, match results)
 
 ## Testing
 
@@ -310,9 +310,19 @@ WHERE p.user_id = 'uuid';
 - Grafana: `http://localhost:3000` (admin/admin)
 - API Metrics: `http://localhost:8080/metrics`
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| `docs/SETUP.md` | Development setup, deployment, configuration |
+| `docs/USER_GUIDE.md` | User guide, game rules, strategy examples |
+| `docs/ARCHITECTURE.md` | Detailed architecture |
+| `docs/API_GUIDE.md` | Full API reference |
+| `docs/DATABASE_SCHEMA.md` | Database schema |
+
 ## Links
 
 - API Server: `http://localhost:8080`
-- WebSocket: `ws://localhost:8080/api/v1/ws`
+- WebSocket: `ws://localhost:8080/api/v1/ws/tournaments/:id`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
