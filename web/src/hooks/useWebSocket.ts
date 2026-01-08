@@ -37,10 +37,14 @@ export function useWebSocket({
   }, [onMessage, onOpen, onClose, onError]);
 
   const connect = useCallback(() => {
+    // Don't connect if no tournamentId
+    if (!tournamentId) {
+      return;
+    }
+
     // Always get fresh token from localStorage
     const token = localStorage.getItem('access_token');
     if (!token) {
-      console.warn('WebSocket: No access token available');
       return;
     }
 

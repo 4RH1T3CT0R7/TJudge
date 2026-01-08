@@ -171,8 +171,9 @@ export function TournamentDetail() {
     }
   }, [id]);
 
+  // Only connect WebSocket when authenticated
   const { isConnected } = useWebSocket({
-    tournamentId: id || '',
+    tournamentId: isAuthenticated ? (id || '') : '',
     onMessage: handleWebSocketMessage,
   });
 
