@@ -48,6 +48,25 @@ services:
     networks:
       - tjudge-network
 
+  # Database migrations
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/migrate/Dockerfile
+    container_name: tjudge-migrate
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=tjudge
+      - DB_PASSWORD=secret
+      - DB_NAME=tjudge
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tjudge-network
+    restart: "no"
+
   # API Server
   api:
     build:
@@ -73,8 +92,8 @@ services:
       - PROGRAMS_PATH=/data/programs
       - BASE_URL=http://localhost:8080
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -121,8 +140,8 @@ services:
       - PROGRAMS_PATH=/data/programs
       - HOST_PROGRAMS_PATH=/Users/artem/GolandProjects/TJudge/data/programs
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       tjudge-cli:
