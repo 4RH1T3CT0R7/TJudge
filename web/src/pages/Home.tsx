@@ -199,85 +199,83 @@ function PrisonersDilemmaMatrix() {
   };
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Matrix table */}
-      <table className="border-collapse">
-        <thead>
-          <tr>
-            <th className="w-20"></th>
-            <th colSpan={2} className="text-center pb-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="flex items-center gap-4">
+        {/* Player A label - vertical on the left */}
+        <div className="flex items-center justify-center h-full">
+          <div className="text-base font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+            Игрок A
+          </div>
+        </div>
+
+        {/* Matrix content */}
+        <div className="flex flex-col items-center">
+          {/* Player B header */}
+          <div className="mb-3">
+            <div className="text-base font-bold text-gray-600 dark:text-gray-300 text-center">
               Игрок B
-            </th>
-          </tr>
-          <tr>
-            <th className="w-20"></th>
-            <th className="px-2 pb-2 text-xs font-semibold text-blue-600 dark:text-blue-400">Сотрудничать</th>
-            <th className="px-2 pb-2 text-xs font-semibold text-red-600 dark:text-red-400">Предать</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td rowSpan={2} className="pr-3 text-sm font-bold text-gray-600 dark:text-gray-300 align-middle">
-              <div className="-rotate-90 whitespace-nowrap">Игрок A</div>
-            </td>
-            <td className="p-0">
-              <div className="flex items-center">
-                <span className="pr-2 text-xs font-semibold text-blue-600 dark:text-blue-400">Сотр.</span>
-                <div
-                  className={`w-16 h-16 flex items-center justify-center bg-green-100 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-tl-xl cursor-pointer transition-all ${hoveredCell === 'cc' ? 'scale-110 shadow-xl z-10 ring-2 ring-green-400' : 'hover:scale-105'}`}
-                  onMouseEnter={() => setHoveredCell('cc')}
-                  onMouseLeave={() => setHoveredCell(null)}
-                >
-                  <span className="font-mono font-bold text-green-700 dark:text-green-400">3, 3</span>
-                </div>
-              </div>
-            </td>
-            <td className="p-0">
+            </div>
+          </div>
+
+          {/* Column headers */}
+          <div className="flex mb-2 ml-16">
+            <div className="w-24 text-center text-sm font-semibold text-blue-600 dark:text-blue-400">Сотр.</div>
+            <div className="w-24 text-center text-sm font-semibold text-red-600 dark:text-red-400">Пред.</div>
+          </div>
+
+          {/* Matrix rows */}
+          <div className="flex flex-col gap-1">
+            {/* Row 1: Cooperate */}
+            <div className="flex items-center">
+              <div className="w-16 text-right pr-3 text-sm font-semibold text-blue-600 dark:text-blue-400">Сотр.</div>
               <div
-                className={`w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-tr-xl cursor-pointer transition-all ${hoveredCell === 'cd' ? 'scale-110 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-105'}`}
+                className={`w-24 h-20 flex items-center justify-center bg-green-100 dark:bg-green-900/40 border-2 border-green-300 dark:border-green-700 rounded-tl-2xl cursor-pointer transition-all ${hoveredCell === 'cc' ? 'scale-105 shadow-xl z-10 ring-2 ring-green-400' : 'hover:scale-[1.02]'}`}
+                onMouseEnter={() => setHoveredCell('cc')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-lg text-green-700 dark:text-green-400">3, 3</span>
+              </div>
+              <div
+                className={`w-24 h-20 flex items-center justify-center bg-red-100 dark:bg-red-900/40 border-2 border-red-300 dark:border-red-700 rounded-tr-2xl cursor-pointer transition-all ${hoveredCell === 'cd' ? 'scale-105 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-[1.02]'}`}
                 onMouseEnter={() => setHoveredCell('cd')}
                 onMouseLeave={() => setHoveredCell(null)}
               >
-                <span className="font-mono font-bold text-red-700 dark:text-red-400">0, 5</span>
+                <span className="font-mono font-bold text-lg text-red-700 dark:text-red-400">0, 5</span>
               </div>
-            </td>
-          </tr>
-          <tr>
-            <td className="p-0">
-              <div className="flex items-center">
-                <span className="pr-2 text-xs font-semibold text-red-600 dark:text-red-400">Пред.</span>
-                <div
-                  className={`w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-bl-xl cursor-pointer transition-all ${hoveredCell === 'dc' ? 'scale-110 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-105'}`}
-                  onMouseEnter={() => setHoveredCell('dc')}
-                  onMouseLeave={() => setHoveredCell(null)}
-                >
-                  <span className="font-mono font-bold text-red-700 dark:text-red-400">5, 0</span>
-                </div>
-              </div>
-            </td>
-            <td className="p-0">
+            </div>
+
+            {/* Row 2: Defect */}
+            <div className="flex items-center">
+              <div className="w-16 text-right pr-3 text-sm font-semibold text-red-600 dark:text-red-400">Пред.</div>
               <div
-                className={`w-16 h-16 flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-200 dark:border-yellow-800 rounded-br-xl cursor-pointer transition-all relative ${hoveredCell === 'dd' ? 'scale-110 shadow-xl z-10 ring-2 ring-yellow-400' : 'hover:scale-105'}`}
+                className={`w-24 h-20 flex items-center justify-center bg-red-100 dark:bg-red-900/40 border-2 border-red-300 dark:border-red-700 rounded-bl-2xl cursor-pointer transition-all ${hoveredCell === 'dc' ? 'scale-105 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-[1.02]'}`}
+                onMouseEnter={() => setHoveredCell('dc')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-lg text-red-700 dark:text-red-400">5, 0</span>
+              </div>
+              <div
+                className={`w-24 h-20 flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/40 border-2 border-yellow-300 dark:border-yellow-700 rounded-br-2xl cursor-pointer transition-all relative ${hoveredCell === 'dd' ? 'scale-105 shadow-xl z-10 ring-2 ring-yellow-400' : 'hover:scale-[1.02]'}`}
                 onMouseEnter={() => setHoveredCell('dd')}
                 onMouseLeave={() => setHoveredCell(null)}
               >
-                <span className="font-mono font-bold text-yellow-700 dark:text-yellow-400">1, 1</span>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary-500 rounded-full animate-pulse" title="Равновесие Нэша" />
+                <span className="font-mono font-bold text-lg text-yellow-700 dark:text-yellow-400">1, 1</span>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary-500 rounded-full animate-pulse" title="Равновесие Нэша" />
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Tooltip */}
-      <div className={`mt-4 text-center transition-all duration-200 h-10 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
+      <div className={`mt-5 text-center transition-all duration-200 h-12 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
         {hoveredCell ? (
           <>
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
+            <div className="text-base font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
           </>
         ) : (
-          <div className="text-xs text-gray-400 dark:text-gray-500">Наведите на ячейку</div>
+          <div className="text-sm text-gray-400 dark:text-gray-500">Наведите на ячейку для подробностей</div>
         )}
       </div>
     </div>
@@ -459,7 +457,7 @@ function TugOfWarVisualization() {
   );
 }
 
-// Good Deal Visualization - Compact design with visual price bar
+// Good Deal Visualization - Compact design with +/- buttons instead of sliders
 function GoodDealVisualization() {
   const [sellerMin, setSellerMin] = useState(30);
   const [buyerMax, setBuyerMax] = useState(70);
@@ -467,36 +465,53 @@ function GoodDealVisualization() {
   const dealPossible = buyerMax >= sellerMin;
   const dealPrice = dealPossible ? Math.round((sellerMin + buyerMax) / 2) : null;
 
+  const adjustSeller = (delta: number) => {
+    const newValue = Math.max(0, Math.min(100, sellerMin + delta));
+    setSellerMin(newValue);
+  };
+
+  const adjustBuyer = (delta: number) => {
+    const newValue = Math.max(0, Math.min(100, buyerMax + delta));
+    setBuyerMax(newValue);
+  };
+
   return (
     <div className="flex flex-col justify-center space-y-4">
       {/* Visual price scale */}
-      <div className="relative">
+      <div className="relative pt-7 pb-2">
         {/* Scale bar */}
-        <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded-xl relative overflow-hidden">
+        <div className="h-14 bg-gray-200 dark:bg-gray-700 rounded-xl relative overflow-hidden">
           {/* Deal zone highlight */}
           {dealPossible && (
             <div
-              className="absolute top-0 bottom-0 bg-green-400/50 dark:bg-green-500/30 transition-all"
+              className="absolute top-0 bottom-0 bg-gradient-to-r from-green-400/60 to-green-500/60 dark:from-green-500/40 dark:to-green-600/40"
               style={{ left: `${sellerMin}%`, right: `${100 - buyerMax}%` }}
             />
           )}
 
+          {/* Scale markers */}
+          <div className="absolute bottom-1 left-3 text-xs text-gray-400 font-mono">0</div>
+          <div className="absolute bottom-1 left-1/4 text-xs text-gray-400 font-mono">25</div>
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-gray-400 font-mono">50</div>
+          <div className="absolute bottom-1 left-3/4 text-xs text-gray-400 font-mono">75</div>
+          <div className="absolute bottom-1 right-3 text-xs text-gray-400 font-mono">100</div>
+
           {/* Seller marker */}
           <div
-            className="absolute top-0 bottom-0 w-1 bg-blue-500 transition-all"
+            className="absolute top-0 bottom-0 w-1.5 bg-blue-500 shadow-lg shadow-blue-500/50"
             style={{ left: `${sellerMin}%` }}
           >
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-blue-500 rounded text-xs font-bold text-white whitespace-nowrap">
               A: {sellerMin}
             </div>
           </div>
 
           {/* Buyer marker */}
           <div
-            className="absolute top-0 bottom-0 w-1 bg-red-500 transition-all"
+            className="absolute top-0 bottom-0 w-1.5 bg-red-500 shadow-lg shadow-red-500/50"
             style={{ left: `${buyerMax}%` }}
           >
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-red-600 dark:text-red-400 whitespace-nowrap">
+            <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-red-500 rounded text-xs font-bold text-white whitespace-nowrap">
               B: {buyerMax}
             </div>
           </div>
@@ -504,80 +519,114 @@ function GoodDealVisualization() {
           {/* Deal price marker */}
           {dealPrice && (
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg transition-all"
-              style={{ left: `calc(${dealPrice}% - 16px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-xl shadow-green-500/40 border-2 border-white"
+              style={{ left: `calc(${dealPrice}% - 20px)` }}
             >
-              <span className="text-white text-xs font-bold">{dealPrice}</span>
+              <span className="text-white text-sm font-bold">{dealPrice}</span>
             </div>
           )}
-
-          {/* Scale numbers */}
-          <div className="absolute bottom-1 left-2 text-xs text-gray-400">0</div>
-          <div className="absolute bottom-1 right-2 text-xs text-gray-400">100</div>
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Controls - using +/- buttons instead of sliders */}
       <div className="grid grid-cols-2 gap-4">
         {/* Seller control */}
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-sm">A</div>
-            <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-sm">A</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Продавец</div>
-              <div className="text-sm font-bold text-blue-600 dark:text-blue-400">мин. {sellerMin}</div>
             </div>
+            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{sellerMin}</div>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={sellerMin}
-            onChange={(e) => setSellerMin(parseInt(e.target.value))}
-            className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-blue-200 dark:bg-blue-800 accent-blue-500"
-          />
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => adjustSeller(-10)}
+              className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors"
+            >
+              -10
+            </button>
+            <button
+              onClick={() => adjustSeller(-1)}
+              className="w-10 h-10 rounded-lg bg-blue-200 dark:bg-blue-700 text-blue-700 dark:text-blue-300 font-bold hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+            >
+              -1
+            </button>
+            <button
+              onClick={() => adjustSeller(1)}
+              className="w-10 h-10 rounded-lg bg-blue-200 dark:bg-blue-700 text-blue-700 dark:text-blue-300 font-bold hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+            >
+              +1
+            </button>
+            <button
+              onClick={() => adjustSeller(10)}
+              className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-200 dark:hover:bg-blue-700 transition-colors"
+            >
+              +10
+            </button>
+          </div>
         </div>
 
         {/* Buyer control */}
         <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center font-bold text-sm">B</div>
-            <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center font-bold text-sm">B</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">Покупатель</div>
-              <div className="text-sm font-bold text-red-600 dark:text-red-400">макс. {buyerMax}</div>
             </div>
+            <div className="text-lg font-bold text-red-600 dark:text-red-400">{buyerMax}</div>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={buyerMax}
-            onChange={(e) => setBuyerMax(parseInt(e.target.value))}
-            className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-red-200 dark:bg-red-800 accent-red-500"
-          />
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => adjustBuyer(-10)}
+              className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-400 font-bold hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+            >
+              -10
+            </button>
+            <button
+              onClick={() => adjustBuyer(-1)}
+              className="w-10 h-10 rounded-lg bg-red-200 dark:bg-red-700 text-red-700 dark:text-red-300 font-bold hover:bg-red-300 dark:hover:bg-red-600 transition-colors"
+            >
+              -1
+            </button>
+            <button
+              onClick={() => adjustBuyer(1)}
+              className="w-10 h-10 rounded-lg bg-red-200 dark:bg-red-700 text-red-700 dark:text-red-300 font-bold hover:bg-red-300 dark:hover:bg-red-600 transition-colors"
+            >
+              +1
+            </button>
+            <button
+              onClick={() => adjustBuyer(10)}
+              className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-400 font-bold hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+            >
+              +10
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Result */}
-      <div className={`text-center py-2 px-4 rounded-xl transition-all ${
+      <div className={`text-center py-3 px-4 rounded-xl ${
         dealPossible
           ? 'bg-green-100 dark:bg-green-900/30'
           : 'bg-gray-100 dark:bg-gray-800'
       }`}>
         {dealPossible ? (
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-lg">🤝</span>
-            <span className="text-sm font-bold text-green-700 dark:text-green-300">
-              Сделка по цене {dealPrice}
-            </span>
-            <span className="text-xs text-green-600 dark:text-green-400">
-              (A: +{dealPrice! - sellerMin}, B: +{buyerMax - dealPrice!})
-            </span>
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-2xl">🤝</span>
+            <div>
+              <span className="text-base font-bold text-green-700 dark:text-green-300">
+                Сделка по цене {dealPrice}!
+              </span>
+              <div className="text-xs text-green-600 dark:text-green-400">
+                Выигрыш: A +{dealPrice! - sellerMin}, B +{buyerMax - dealPrice!}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
-            <span className="text-lg">❌</span>
-            <span className="text-sm">Нет сделки — сведите цены</span>
+            <span className="text-xl">❌</span>
+            <span className="text-sm">Нет сделки — цены не пересекаются</span>
           </div>
         )}
       </div>

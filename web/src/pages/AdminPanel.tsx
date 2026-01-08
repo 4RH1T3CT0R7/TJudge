@@ -2,9 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Tournament, TournamentStatus } from '../types';
+import type { Game, Tournament, TournamentStatus, LeaderboardEntry } from '../types';
 
-type AdminTab = 'games' | 'tournaments';
+type AdminTab = 'games' | 'tournaments' | 'programs';
+
+// Game-specific icons configuration for programs view
+const gameIcons: Record<string, string> = {
+  prisoners_dilemma: '🤝',
+  tug_of_war: '🪢',
+  good_deal: '💰',
+  balance_of_universe: '⚖️',
+};
+const getGameIcon = (gameName: string) => gameIcons[gameName] || '🎮';
 
 const statusLabels: Record<TournamentStatus, string> = {
   pending: 'Ожидание',
@@ -53,6 +62,12 @@ export function AdminPanel() {
 
   // Action errors
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Programs tab state
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [tournamentGames, setTournamentGames] = useState<Game[]>([]);
+  const [programsData, setProgramsData] = useState<Record<string, LeaderboardEntry[]>>({});
+  const [isLoadingPrograms, setIsLoadingPrograms] = useState(false);
 
   useEffect(() => {
     // Redirect non-admin users
@@ -244,6 +259,43 @@ export function AdminPanel() {
     setShowGameForm(true);
   };
 
+  // Load programs for selected tournament
+  const loadTournamentPrograms = async (tournamentId: string) => {
+    setIsLoadingPrograms(true);
+    setProgramsData({});
+
+    try {
+      // Get games for this tournament
+      const gamesData = await api.getTournamentGames(tournamentId);
+      setTournamentGames(gamesData);
+
+      // Load leaderboard for each game (contains program info)
+      const programsByGame: Record<string, LeaderboardEntry[]> = {};
+
+      for (const game of gamesData) {
+        try {
+          const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
+          if (leaderboard && leaderboard.length > 0) {
+            programsByGame[game.id] = leaderboard;
+          }
+        } catch {
+          console.error(`Failed to load leaderboard for game ${game.id}`);
+        }
+      }
+
+      setProgramsData(programsByGame);
+    } catch (err) {
+      console.error('Failed to load tournament programs:', err);
+    } finally {
+      setIsLoadingPrograms(false);
+    }
+  };
+
+  const handleTournamentSelect = (tournamentId: string) => {
+    setSelectedTournamentId(tournamentId);
+    loadTournamentPrograms(tournamentId);
+  };
+
   if (user?.role !== 'admin') {
     return (
       <div className="text-center py-12">
@@ -263,6 +315,7 @@ export function AdminPanel() {
   const tabs: { id: AdminTab; label: string }[] = [
     { id: 'games', label: `Игры (${games.length})` },
     { id: 'tournaments', label: `Турниры (${tournaments.length})` },
+    { id: 'programs', label: 'Программы' },
   ];
 
   return (
@@ -718,6 +771,134 @@ export function AdminPanel() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Programs Tab */}
+      {activeTab === 'programs' && (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Просмотр загруженных программ</h2>
+
+          {/* Tournament selector */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+              Выберите турнир
+            </label>
+            <select
+              value={selectedTournamentId || ''}
+              onChange={(e) => e.target.value && handleTournamentSelect(e.target.value)}
+              className="input max-w-md"
+            >
+              <option value="">-- Выберите турнир --</option>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({statusLabels[t.status]})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Loading state */}
+          {isLoadingPrograms && (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              Загрузка программ...
+            </div>
+          )}
+
+          {/* No tournament selected */}
+          {!selectedTournamentId && !isLoadingPrograms && (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              Выберите турнир для просмотра загруженных программ
+            </div>
+          )}
+
+          {/* Programs data */}
+          {selectedTournamentId && !isLoadingPrograms && (
+            <div className="space-y-6">
+              {tournamentGames.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  В этом турнире нет игр
+                </div>
+              ) : (
+                tournamentGames.map((game) => {
+                  const programs = programsData[game.id] || [];
+                  const totalPrograms = programs.length;
+
+                  return (
+                    <div key={game.id} className="card">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">{getGameIcon(game.name)}</span>
+                        <div>
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                            {game.display_name}
+                          </h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {totalPrograms} {totalPrograms === 1 ? 'программа' : totalPrograms < 5 ? 'программы' : 'программ'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {programs.length === 0 ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Программы ещё не загружены
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                <th className="pb-2 pr-4">#</th>
+                                <th className="pb-2 pr-4">Программа</th>
+                                <th className="pb-2 pr-4">Команда</th>
+                                <th className="pb-2 pr-4 text-center">Рейтинг</th>
+                                <th className="pb-2 pr-4 text-center">W</th>
+                                <th className="pb-2 pr-4 text-center">L</th>
+                                <th className="pb-2 pr-4 text-center">D</th>
+                                <th className="pb-2 text-center">Игр</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {programs.map((entry) => (
+                                <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
+                                  <td className="py-2 pr-4 font-medium text-gray-600 dark:text-gray-400">{entry.rank}</td>
+                                  <td className="py-2 pr-4">
+                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                      {entry.program_name}
+                                    </div>
+                                    <code className="text-xs text-gray-500 dark:text-gray-500 font-mono">
+                                      {entry.program_id.substring(0, 8)}...
+                                    </code>
+                                  </td>
+                                  <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                    {entry.team_name || '-'}
+                                  </td>
+                                  <td className="py-2 pr-4 text-center font-bold text-gray-900 dark:text-gray-100">
+                                    {entry.rating}
+                                  </td>
+                                  <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">
+                                    {entry.wins}
+                                  </td>
+                                  <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">
+                                    {entry.losses}
+                                  </td>
+                                  <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">
+                                    {entry.draws}
+                                  </td>
+                                  <td className="py-2 text-center text-gray-600 dark:text-gray-300">
+                                    {entry.total_games}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>

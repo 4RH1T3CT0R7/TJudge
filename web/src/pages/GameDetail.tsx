@@ -4,6 +4,48 @@ import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { Game, Program, Team, LeaderboardEntry, Match, Tournament } from '../types';
 
+// Game-specific icons and colors configuration
+const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
+  prisoners_dilemma: {
+    icon: '🤝',
+    bgClass: 'bg-blue-500',
+    textClass: 'text-blue-600 dark:text-blue-400',
+    borderClass: 'border-blue-500',
+    gradientClass: 'from-blue-500 to-blue-600',
+  },
+  tug_of_war: {
+    icon: '🪢',
+    bgClass: 'bg-emerald-500',
+    textClass: 'text-emerald-600 dark:text-emerald-400',
+    borderClass: 'border-emerald-500',
+    gradientClass: 'from-emerald-500 to-emerald-600',
+  },
+  good_deal: {
+    icon: '💰',
+    bgClass: 'bg-purple-500',
+    textClass: 'text-purple-600 dark:text-purple-400',
+    borderClass: 'border-purple-500',
+    gradientClass: 'from-purple-500 to-purple-600',
+  },
+  balance_of_universe: {
+    icon: '⚖️',
+    bgClass: 'bg-orange-500',
+    textClass: 'text-orange-600 dark:text-orange-400',
+    borderClass: 'border-orange-500',
+    gradientClass: 'from-orange-500 to-orange-600',
+  },
+};
+
+const defaultGameConfig = {
+  icon: '🎮',
+  bgClass: 'bg-primary-600',
+  textClass: 'text-primary-600 dark:text-primary-400',
+  borderClass: 'border-primary-500',
+  gradientClass: 'from-primary-500 to-primary-600',
+};
+
+const getGameConfig = (gameName: string) => gameConfig[gameName] || defaultGameConfig;
+
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
   const { isAuthenticated } = useAuthStore();
@@ -180,10 +222,17 @@ export function GameDetail() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2 dark:text-gray-100">{game.display_name}</h1>
-        <p className="text-gray-500 dark:text-gray-400">
-          ID игры: <code className="bg-gray-800 dark:bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
-        </p>
+        <div className="flex items-center gap-4">
+          <div className={`w-14 h-14 ${getGameConfig(game.name).bgClass} rounded-xl flex items-center justify-center text-3xl shadow-lg`}>
+            {getGameConfig(game.name).icon}
+          </div>
+          <div>
+            <h1 className={`text-2xl font-bold mb-1 dark:text-gray-100`}>{game.display_name}</h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              ID игры: <code className="bg-gray-800 dark:bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
