@@ -38,11 +38,17 @@ type GameMatchRepository interface {
 	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
 }
 
+// GameTournamentRepository интерфейс для проверки владельца турнира
+type GameTournamentRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+}
+
 // GameHandler обрабатывает запросы игр
 type GameHandler struct {
 	gameService     GameService
 	leaderboardRepo GameLeaderboardRepository
 	matchRepo       GameMatchRepository
+	tournamentRepo  GameTournamentRepository
 	log             *logger.Logger
 }
 
@@ -55,11 +61,18 @@ func NewGameHandler(gameService GameService, log *logger.Logger) *GameHandler {
 }
 
 // NewGameHandlerWithRepos создаёт game handler с репозиториями для расширенной функциональности
-func NewGameHandlerWithRepos(gameService GameService, leaderboardRepo GameLeaderboardRepository, matchRepo GameMatchRepository, log *logger.Logger) *GameHandler {
+func NewGameHandlerWithRepos(
+	gameService GameService,
+	leaderboardRepo GameLeaderboardRepository,
+	matchRepo GameMatchRepository,
+	tournamentRepo GameTournamentRepository,
+	log *logger.Logger,
+) *GameHandler {
 	return &GameHandler{
 		gameService:     gameService,
 		leaderboardRepo: leaderboardRepo,
 		matchRepo:       matchRepo,
+		tournamentRepo:  tournamentRepo,
 		log:             log,
 	}
 }

@@ -148,6 +148,7 @@ export function TournamentDetail() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRunningMatches, setIsRunningMatches] = useState(false);
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
+  const [isRefreshingMatches, setIsRefreshingMatches] = useState(false);
 
   // Join modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -329,6 +330,21 @@ export function TournamentDetail() {
       setIsRetryingMatches(false);
     }
   };
+
+  // Функция для обновления только матчей (для авто-обновления)
+  const refreshMatches = useCallback(async () => {
+    if (!id || isRefreshingMatches) return;
+
+    setIsRefreshingMatches(true);
+    try {
+      const matchRoundsData = await api.getMatchesByRounds(id);
+      setMatchRounds(matchRoundsData || []);
+    } catch (err) {
+      console.error('Failed to refresh matches:', err);
+    } finally {
+      setIsRefreshingMatches(false);
+    }
+  }, [id, isRefreshingMatches]);
 
   if (isLoading) {
     return (
@@ -551,7 +567,11 @@ export function TournamentDetail() {
         )}
 
         {activeTab === 'matches' && (
-          <MatchesTab rounds={matchRounds} />
+          <MatchesTab
+            rounds={matchRounds}
+            onRefresh={refreshMatches}
+            isRefreshing={isRefreshingMatches}
+          />
         )}
 
         {activeTab === 'games' && (
@@ -1142,8 +1162,33 @@ function TeamsTab({
 }
 
 // Matches Tab Component - отображает матчи, сгруппированные по раундам
-function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
+function MatchesTab({
+  rounds,
+  onRefresh,
+  isRefreshing
+}: {
+  rounds: MatchRound[];
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}) {
   const [expandedRounds, setExpandedRounds] = useState<Set<number>>(new Set());
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Проверяем, есть ли активные матчи (pending или running)
+  const hasActiveMatches = rounds.some(
+    r => r.pending_count > 0 || r.running_count > 0
+  );
+
+  // Автообновление каждые 2 секунды если есть активные матчи
+  useEffect(() => {
+    if (!autoRefresh || !hasActiveMatches) return;
+
+    const interval = setInterval(() => {
+      onRefresh();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, hasActiveMatches, onRefresh]);
 
   const toggleRound = (roundNumber: number) => {
     setExpandedRounds(prev => {
@@ -1196,9 +1241,20 @@ function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
       {/* Header with summary stats */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Матчи по раундам
-          </h2>
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              Матчи по раундам
+            </h2>
+            {hasActiveMatches && autoRefresh && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs">
+                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                Обновление...
+              </span>
+            )}
+            {isRefreshing && (
+              <div className="w-4 h-4 border-2 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin" />
+            )}
+          </div>
           <div className="flex flex-wrap gap-3 text-sm">
             <span className="text-gray-600 dark:text-gray-200">
               Всего: <strong className="text-gray-900 dark:text-gray-100">{totalStats.total}</strong>
@@ -1223,7 +1279,22 @@ function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {hasActiveMatches && (
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`btn text-sm ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              {autoRefresh ? 'Авто-обновление вкл' : 'Авто-обновление выкл'}
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="btn btn-secondary text-sm"
+          >
+            Обновить
+          </button>
           <button onClick={expandAll} className="btn btn-secondary text-sm">
             Развернуть все
           </button>
@@ -1232,6 +1303,63 @@ function MatchesTab({ rounds }: { rounds: MatchRound[] }) {
           </button>
         </div>
       </div>
+
+      {/* Overall progress bar */}
+      {totalStats.total > 0 && (
+        <div className="mb-6 card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Общий прогресс
+            </span>
+            <span className="text-sm font-mono text-gray-600 dark:text-gray-200">
+              {totalStats.completed} / {totalStats.total} ({Math.round((totalStats.completed / totalStats.total) * 100)}%)
+            </span>
+          </div>
+          <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-full flex">
+              {/* Completed - green */}
+              <div
+                className="bg-emerald-500 transition-all duration-500"
+                style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
+              />
+              {/* Running - blue, animated */}
+              <div
+                className="bg-blue-500 animate-pulse transition-all duration-500"
+                style={{ width: `${(totalStats.running / totalStats.total) * 100}%` }}
+              />
+              {/* Failed - red */}
+              <div
+                className="bg-red-500 transition-all duration-500"
+                style={{ width: `${(totalStats.failed / totalStats.total) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-4 mt-2 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded-full bg-emerald-500" />
+              Завершено
+            </span>
+            {totalStats.running > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+                Выполняется
+              </span>
+            )}
+            {totalStats.pending > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600" />
+                В очереди
+              </span>
+            )}
+            {totalStats.failed > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-red-500" />
+                Ошибки
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Rounds list */}
       <div className="space-y-3">
