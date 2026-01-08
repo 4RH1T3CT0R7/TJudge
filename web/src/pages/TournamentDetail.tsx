@@ -922,17 +922,17 @@ function LeaderboardTable({
           <tr>
             <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
             <th className="px-6 py-4 text-left font-semibold text-sm uppercase tracking-wide">Команда / Участник</th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Рейтинг</th>
+            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Очки</th>
             <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className="text-emerald-600 dark:text-emerald-400">П</span>
+              <span className="text-emerald-600 dark:text-emerald-400">Побед</span>
             </th>
             <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className="text-red-600 dark:text-red-400">Пр</span>
+              <span className="text-red-600 dark:text-red-400">Поражений</span>
             </th>
             <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">
-              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}>Н</span>
+              <span className={isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}>Ничьих</span>
             </th>
-            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Всего</th>
+            <th className="px-6 py-4 text-right font-semibold text-sm uppercase tracking-wide">Матчей</th>
           </tr>
         </thead>
         <tbody>
@@ -1055,9 +1055,9 @@ function CrossGameLeaderboardTable({
                       <div>
                         <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
                         <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-200'}`}>
-                          <span className="text-emerald-400">{gameRating.wins}П</span>
+                          <span className="text-emerald-400" title="Побед">{gameRating.wins}в</span>
                           {' / '}
-                          <span className="text-red-400">{gameRating.losses}Пр</span>
+                          <span className="text-red-400" title="Поражений">{gameRating.losses}п</span>
                         </div>
                       </div>
                     ) : (

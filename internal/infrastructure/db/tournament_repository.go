@@ -451,35 +451,11 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 		LIMIT $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, tournamentID, limit)
+	var leaderboard []*domain.LeaderboardEntry
+
+	err := r.db.QueryWithMetrics(ctx, "tournament_leaderboard_fallback", &leaderboard, query, tournamentID, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get tournament leaderboard")
-	}
-	defer rows.Close()
-
-	var leaderboard []*domain.LeaderboardEntry
-	for rows.Next() {
-		var entry domain.LeaderboardEntry
-		err := rows.Scan(
-			&entry.Rank,
-			&entry.ProgramID,
-			&entry.ProgramName,
-			&entry.TeamID,
-			&entry.TeamName,
-			&entry.Rating,
-			&entry.Wins,
-			&entry.Losses,
-			&entry.Draws,
-			&entry.TotalGames,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan leaderboard entry")
-		}
-		leaderboard = append(leaderboard, &entry)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "rows iteration error")
 	}
 
 	return leaderboard, nil
