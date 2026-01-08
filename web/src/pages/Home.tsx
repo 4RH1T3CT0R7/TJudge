@@ -13,229 +13,724 @@ const ArrowRightIcon = () => (
   </svg>
 );
 
-// Prisoner's Dilemma Matrix Component
-function PrisonersDilemmaMatrix() {
+// Game history and detailed info
+const gameDetails: Record<string, { history: string; facts: string[]; applications: string[] }> = {
+  prisoners_dilemma: {
+    history: `Дилемма заключённого — одна из самых знаменитых задач теории игр, придуманная в 1950 году математиками Мерриллом Фладом и Мелвином Дрешером в корпорации RAND. Название придумал Альберт Такер, который представил задачу в виде истории о двух преступниках.
+
+Представьте: полиция арестовала двух подозреваемых, но у следствия недостаточно улик. Их разводят по разным камерам и предлагают сделку: предать подельника в обмен на свободу. Если оба молчат — получат минимальный срок. Если оба предают — средний срок. Но если один предаёт, а другой молчит — предатель выходит на свободу, а молчун получает максимальный срок.
+
+Парадокс в том, что рационально каждому выгодно предать, но если оба так поступят — оба проиграют. Эта простая модель объясняет, почему сотрудничество так сложно достичь, даже когда оно выгодно всем.`,
+    facts: [
+      'В 1980-х годах политолог Роберт Аксельрод провёл компьютерный турнир стратегий — победила простейшая «Око за око» (Tit for Tat)',
+      'Дилемма заключённого используется для объяснения гонки вооружений между СССР и США',
+      'Биологи применяют эту модель для изучения альтруизма у животных и эволюции кооперации',
+      'В 2012 году два игрока на британском шоу «Golden Balls» обманули систему, договорившись заранее разделить выигрыш'
+    ],
+    applications: [
+      'Международные отношения и договоры о разоружении',
+      'Экология: почему страны не могут договориться о сокращении выбросов',
+      'Бизнес: ценовые войны между конкурентами',
+      'Эволюционная биология: как возникает сотрудничество в природе'
+    ]
+  },
+  tug_of_war: {
+    history: `Игра «Перетягивание каната» в теории игр — это модель конфликта за ограниченные ресурсы, известная как «полковничий блото» (Colonel Blotto). Её придумал французский математик Эмиль Борель в 1921 году.
+
+Оригинальная задача звучала так: два полковника должны распределить своих солдат по нескольким полям сражения. На каждом поле побеждает тот, у кого больше войск. Побеждает тот, кто выиграет больше полей.
+
+Красота этой игры в том, что здесь нет единственной «лучшей» стратегии. Любое распределение можно победить другим распределением. Это делает игру похожей на «камень-ножницы-бумага», только гораздо сложнее.
+
+В нашей версии вместо солдат — единицы силы, а вместо полей сражения — раунды перетягивания каната.`,
+    facts: [
+      'Задача Colonel Blotto до сих пор не имеет полного математического решения для произвольного числа полей',
+      'Эта модель активно используется в политологии для анализа избирательных кампаний',
+      'В 2006 году математики доказали, что в эту игру оптимально играть случайно — используя рандомизированные стратегии',
+      'Перетягивание каната было олимпийским видом спорта с 1900 по 1920 год'
+    ],
+    applications: [
+      'Распределение рекламного бюджета по регионам',
+      'Военная стратегия и распределение войск',
+      'Спортивные турниры с несколькими раундами',
+      'Конкурентная борьба компаний на разных рынках'
+    ]
+  },
+  good_deal: {
+    history: `«Выгодная сделка» основана на модели двусторонних переговоров, которую формализовал Джон Нэш в своей работе «Проблема торга» (The Bargaining Problem) в 1950 году. За эту и другие работы он получил Нобелевскую премию по экономике в 1994 году.
+
+Суть проста: у продавца есть товар, который он оценивает в X рублей (ниже не продаст). У покупателя есть максимум Y рублей, который он готов заплатить. Если Y ≥ X — сделка возможна, и оба выиграют. Вопрос только в том, как разделить «выигрыш» (разницу Y − X).
+
+Нэш доказал, что существует единственное «справедливое» решение — делить пополам. Но в реальности всё зависит от переговорной силы сторон: кто может дольше ждать, у кого есть альтернативы, кто лучше блефует.
+
+Эта простая модель объясняет всё: от торговли на базаре до международных торговых соглашений.`,
+    facts: [
+      'Джон Нэш страдал шизофренией, но продолжал делать выдающиеся открытия — его история показана в фильме «Игры разума»',
+      'Теорема Нэша о торге требует всего 4 аксиомы: эффективность, симметрия, независимость от масштаба и независимость от нерелевантных альтернатив',
+      'На аукционах eBay средняя цена обычно оказывается ровно посередине между ценой продавца и максимальной ставкой покупателя',
+      'Исследования показывают, что первый названный в переговорах price служит «якорем» и сильно влияет на итоговую цену'
+    ],
+    applications: [
+      'Переговоры о зарплате при найме на работу',
+      'Сделки купли-продажи недвижимости',
+      'Международная торговля и таможенные тарифы',
+      'Слияния и поглощения компаний'
+    ]
+  },
+  balance_of_universe: {
+    history: `«Баланс вселенной» — это наша интерпретация игр координации и общественных благ, которые изучаются в теории игр с 1960-х годов.
+
+Классический пример — «Трагедия общин», описанная экологом Гарретом Хардином в 1968 году. Представьте общее пастбище: каждому фермеру выгодно добавить ещё одну корову, но если все так поступят — пастбище погибнет.
+
+Похожая логика работает в играх координации: игрокам нужно договориться о каком-то балансе, даже если каждому по отдельности выгодно «перетянуть одеяло» на себя.
+
+В нашей игре «порядок» и «хаос» — это метафора любых противоположных интересов. Максимальный выигрыш достигается в равновесии, но соблазн «доминировать» очень велик. Это модель экологии, международных отношений и даже семейной жизни.`,
+    facts: [
+      'Элинор Остром получила Нобелевскую премию 2009 года за исследование того, как сообщества решают проблему общих ресурсов без государства',
+      'Концепция «баланса сил» в международных отношениях восходит к древнегреческому историку Фукидиду',
+      'В теории хаоса (математике) даже детерминированные системы могут вести себя непредсказуемо — эффект бабочки',
+      'Игры координации объясняют, почему все ездят по одной стороне дороги — важен не выбор стороны, а согласованность'
+    ],
+    applications: [
+      'Экология: управление общими ресурсами (леса, рыба, вода)',
+      'Климатические соглашения между странами',
+      'Стандартизация в технологиях (USB, Wi-Fi, форматы файлов)',
+      'Социальные нормы и общественный договор'
+    ]
+  }
+};
+
+// Modal component
+function GameInfoModal({
+  isOpen,
+  onClose,
+  gameId,
+  gameName,
+  gameIcon
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  gameId: string;
+  gameName: string;
+  gameIcon: string;
+}) {
+  if (!isOpen) return null;
+
+  const details = gameDetails[gameId];
+  if (!details) return null;
+
   return (
-    <div className="relative pt-10 pl-16">
-      {/* Player B label - centered above matrix */}
-      <div className="absolute top-0 left-16 right-0 text-center text-sm font-semibold text-gray-600 dark:text-gray-300">
-        Игрок B
-      </div>
-      {/* Player A label - rotated on the left */}
-      <div className="absolute left-0 top-10 bottom-0 flex items-center">
-        <span className="-rotate-90 text-sm font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-          Игрок A
-        </span>
-      </div>
-
-      {/* Matrix */}
-      <div className="grid grid-cols-3 gap-0 text-center">
-        {/* Header row */}
-        <div className="p-3"></div>
-        <div className="p-3 font-semibold text-blue-600 dark:text-blue-400 text-sm">Сотрудничать</div>
-        <div className="p-3 font-semibold text-red-600 dark:text-red-400 text-sm">Предать</div>
-
-        {/* Row 1: Cooperate */}
-        <div className="p-3 font-semibold text-blue-600 dark:text-blue-400 text-sm flex items-center justify-end">Сотрудничать</div>
-        <div className="p-4 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-tl-lg">
-          <span className="font-mono font-bold text-green-700 dark:text-green-400">3, 3</span>
-        </div>
-        <div className="p-4 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-tr-lg">
-          <span className="font-mono font-bold text-red-700 dark:text-red-400">0, 5</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{gameIcon}</span>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{gameName}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* Row 2: Defect */}
-        <div className="p-3 font-semibold text-red-600 dark:text-red-400 text-sm flex items-center justify-end">Предать</div>
-        <div className="p-4 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-bl-lg">
-          <span className="font-mono font-bold text-red-700 dark:text-red-400">5, 0</span>
-        </div>
-        <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-br-lg group relative">
-          <span className="font-mono font-bold text-yellow-700 dark:text-yellow-400">1, 1</span>
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary-500 rounded-full animate-pulse" title="Равновесие Нэша" />
+        {/* Content */}
+        <div className="px-6 py-5 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6">
+          {/* History */}
+          <div>
+            <h3 className="text-sm font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wide mb-3">
+              История
+            </h3>
+            <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+              {details.history}
+            </div>
+          </div>
+
+          {/* Interesting facts */}
+          <div>
+            <h3 className="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-3">
+              Интересные факты
+            </h3>
+            <ul className="space-y-2">
+              {details.facts.map((fact, i) => (
+                <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-amber-500 mt-1">•</span>
+                  <span>{fact}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Applications */}
+          <div>
+            <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3">
+              Где применяется
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {details.applications.map((app, i) => (
+                <span key={i} className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                  {app}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// Tug of War Visualization
-function TugOfWarVisualization() {
-  return (
-    <div className="relative h-48 flex flex-col justify-center">
-      {/* Rope */}
-      <div className="relative">
-        {/* Center marker */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-6 text-xs font-semibold text-gray-500 dark:text-gray-400">
-          Центр
-        </div>
-        <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-4 -top-2 bg-gray-400 dark:bg-gray-500" />
+// Prisoner's Dilemma Matrix Component - Interactive
+function PrisonersDilemmaMatrix() {
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
 
-        {/* Rope line */}
-        <div className="h-3 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 rounded-full shadow-inner relative overflow-hidden">
-          {/* Rope texture */}
-          <div className="absolute inset-0 opacity-30" style={{
-            backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.2) 4px, rgba(0,0,0,0.2) 8px)'
-          }} />
-          {/* Animated marker */}
-          <div className="absolute top-0 bottom-0 w-2 bg-red-500 rounded-full left-1/2 -translate-x-1/2 animate-pulse shadow-lg" />
+  const cellInfo: Record<string, { title: string; desc: string }> = {
+    'cc': { title: 'Взаимное сотрудничество', desc: 'Оба выигрывают!' },
+    'cd': { title: 'A сотрудничает, B предаёт', desc: 'B получает максимум' },
+    'dc': { title: 'A предаёт, B сотрудничает', desc: 'A получает максимум' },
+    'dd': { title: 'Равновесие Нэша', desc: 'Оба проигрывают' },
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* Matrix table */}
+      <table className="border-collapse">
+        <thead>
+          <tr>
+            <th className="w-20"></th>
+            <th colSpan={2} className="text-center pb-3 text-sm font-bold text-gray-600 dark:text-gray-300">
+              Игрок B
+            </th>
+          </tr>
+          <tr>
+            <th className="w-20"></th>
+            <th className="px-2 pb-2 text-xs font-semibold text-blue-600 dark:text-blue-400">Сотрудничать</th>
+            <th className="px-2 pb-2 text-xs font-semibold text-red-600 dark:text-red-400">Предать</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowSpan={2} className="pr-3 text-sm font-bold text-gray-600 dark:text-gray-300 align-middle">
+              <div className="-rotate-90 whitespace-nowrap">Игрок A</div>
+            </td>
+            <td className="p-0">
+              <div className="flex items-center">
+                <span className="pr-2 text-xs font-semibold text-blue-600 dark:text-blue-400">Сотр.</span>
+                <div
+                  className={`w-16 h-16 flex items-center justify-center bg-green-100 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-tl-xl cursor-pointer transition-all ${hoveredCell === 'cc' ? 'scale-110 shadow-xl z-10 ring-2 ring-green-400' : 'hover:scale-105'}`}
+                  onMouseEnter={() => setHoveredCell('cc')}
+                  onMouseLeave={() => setHoveredCell(null)}
+                >
+                  <span className="font-mono font-bold text-green-700 dark:text-green-400">3, 3</span>
+                </div>
+              </div>
+            </td>
+            <td className="p-0">
+              <div
+                className={`w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-tr-xl cursor-pointer transition-all ${hoveredCell === 'cd' ? 'scale-110 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-105'}`}
+                onMouseEnter={() => setHoveredCell('cd')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-red-700 dark:text-red-400">0, 5</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td className="p-0">
+              <div className="flex items-center">
+                <span className="pr-2 text-xs font-semibold text-red-600 dark:text-red-400">Пред.</span>
+                <div
+                  className={`w-16 h-16 flex items-center justify-center bg-red-100 dark:bg-red-900/30 border-2 border-red-200 dark:border-red-800 rounded-bl-xl cursor-pointer transition-all ${hoveredCell === 'dc' ? 'scale-110 shadow-xl z-10 ring-2 ring-red-400' : 'hover:scale-105'}`}
+                  onMouseEnter={() => setHoveredCell('dc')}
+                  onMouseLeave={() => setHoveredCell(null)}
+                >
+                  <span className="font-mono font-bold text-red-700 dark:text-red-400">5, 0</span>
+                </div>
+              </div>
+            </td>
+            <td className="p-0">
+              <div
+                className={`w-16 h-16 flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-200 dark:border-yellow-800 rounded-br-xl cursor-pointer transition-all relative ${hoveredCell === 'dd' ? 'scale-110 shadow-xl z-10 ring-2 ring-yellow-400' : 'hover:scale-105'}`}
+                onMouseEnter={() => setHoveredCell('dd')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-yellow-700 dark:text-yellow-400">1, 1</span>
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary-500 rounded-full animate-pulse" title="Равновесие Нэша" />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* Tooltip */}
+      <div className={`mt-4 text-center transition-all duration-200 h-10 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
+        {hoveredCell ? (
+          <>
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
+          </>
+        ) : (
+          <div className="text-xs text-gray-400 dark:text-gray-500">Наведите на ячейку</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Tug of War Visualization - With visual rope
+function TugOfWarVisualization() {
+  const [rounds, setRounds] = useState([35, 35, 30]);
+  const [opponentRounds] = useState([40, 30, 30]);
+  const [showResults, setShowResults] = useState(false);
+  const [currentRound, setCurrentRound] = useState(0);
+
+  const totalForce = 100;
+  const usedForce = rounds.reduce((a, b) => a + b, 0);
+  const remaining = totalForce - usedForce;
+
+  const adjustRound = (index: number, delta: number) => {
+    const newRounds = [...rounds];
+    const newValue = newRounds[index] + delta;
+    if (newValue >= 0 && newValue <= 100 && usedForce + delta <= totalForce) {
+      newRounds[index] = newValue;
+      setRounds(newRounds);
+      setShowResults(false);
+    }
+  };
+
+  const getResults = () => {
+    let playerWins = 0;
+    let opponentWins = 0;
+    rounds.forEach((force, i) => {
+      if (force > opponentRounds[i]) playerWins++;
+      else if (force < opponentRounds[i]) opponentWins++;
+    });
+    return { playerWins, opponentWins, winner: playerWins > opponentWins ? 'A' : opponentWins > playerWins ? 'B' : 'draw' };
+  };
+
+  const results = getResults();
+
+  // Calculate rope position based on current round result
+  const getRopePosition = () => {
+    if (!showResults) return 50;
+    const force = rounds[currentRound];
+    const oppForce = opponentRounds[currentRound];
+    const diff = force - oppForce;
+    return Math.max(20, Math.min(80, 50 - diff * 0.5));
+  };
+
+  const ropePosition = getRopePosition();
+
+  return (
+    <div className="flex flex-col justify-center space-y-3">
+      {/* Rope visualization */}
+      <div className="relative h-16 mx-2">
+        {/* Background field */}
+        <div className="absolute inset-0 flex">
+          <div className={`flex-1 rounded-l-xl transition-colors ${ropePosition < 45 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-800'}`} />
+          <div className={`flex-1 rounded-r-xl transition-colors ${ropePosition > 55 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-800'}`} />
         </div>
+
+        {/* Center line */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-600 -translate-x-1/2" />
+
+        {/* Rope */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 60" preserveAspectRatio="none">
+          {/* Rope path */}
+          <path
+            d={`M 10,30 Q 75,${25 + Math.sin(Date.now() / 500) * 3} 150,30 Q 225,${35 + Math.sin(Date.now() / 500) * 3} 290,30`}
+            fill="none"
+            stroke="#b45309"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
+          <path
+            d={`M 10,30 Q 75,${25 + Math.sin(Date.now() / 500) * 3} 150,30 Q 225,${35 + Math.sin(Date.now() / 500) * 3} 290,30`}
+            fill="none"
+            stroke="#d97706"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+          {/* Knot */}
+          <circle
+            cx={ropePosition * 3}
+            cy="30"
+            r="10"
+            fill="#dc2626"
+            className="transition-all duration-500"
+          />
+          <circle
+            cx={ropePosition * 3}
+            cy="30"
+            r="6"
+            fill="#fca5a5"
+          />
+        </svg>
 
         {/* Players */}
-        <div className="flex justify-between mt-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
-              A
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-              <div className="font-semibold">Игрок A</div>
-              <div className="text-xs text-gray-500">Сила: 100</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-gray-600 dark:text-gray-300 text-right">
-              <div className="font-semibold">Игрок B</div>
-              <div className="text-xs text-gray-500">Сила: 100</div>
-            </div>
-            <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
-              B
-            </div>
-          </div>
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+          A
+        </div>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+          B
         </div>
       </div>
 
-      {/* Rounds indicator */}
-      <div className="flex justify-center gap-2 mt-6">
-        {[1, 2, 3, 4, 5].map((round) => (
-          <div
-            key={round}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
-              round <= 3
-                ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
-            }`}
-          >
-            {round}
+      {/* Round selector when showing results */}
+      {showResults && (
+        <div className="flex justify-center gap-2">
+          {rounds.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentRound(i)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                currentRound === i
+                  ? 'bg-primary-500 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+              }`}
+            >
+              Раунд {i + 1}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Force allocation */}
+      <div className="space-y-2">
+        {rounds.map((force, index) => (
+          <div key={index} className="flex items-center gap-2 text-xs">
+            <span className="w-14 text-gray-500 dark:text-gray-400">Раунд {index + 1}</span>
+            <button onClick={() => adjustRound(index, -5)} disabled={force <= 0 || showResults} className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-600 disabled:opacity-30">−</button>
+            <div className="w-8 text-center font-bold text-blue-600 dark:text-blue-400">{force}</div>
+            <button onClick={() => adjustRound(index, 5)} disabled={remaining <= 0 || showResults} className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-600 disabled:opacity-30">+</button>
+            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 transition-all" style={{ width: `${force}%` }} />
+            </div>
+            {showResults && (
+              <span className={`w-8 text-center font-bold ${
+                force > opponentRounds[index] ? 'text-green-600' : force < opponentRounds[index] ? 'text-red-600' : 'text-gray-500'
+              }`}>
+                {force > opponentRounds[index] ? '✓' : force < opponentRounds[index] ? '✗' : '–'}
+              </span>
+            )}
           </div>
         ))}
       </div>
-      <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
-        Раунды
+
+      {/* Remaining indicator */}
+      {!showResults && remaining > 0 && (
+        <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+          Осталось распределить: <span className="font-bold text-blue-600">{remaining}</span>
+        </div>
+      )}
+
+      {/* Battle button / Results */}
+      <div className="text-center">
+        {!showResults ? (
+          <button
+            onClick={() => { setShowResults(true); setCurrentRound(0); }}
+            disabled={remaining > 0}
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold shadow-lg hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100"
+          >
+            {remaining > 0 ? `Ещё ${remaining}` : '⚔️ Тянуть!'}
+          </button>
+        ) : (
+          <div className="space-y-1">
+            <div className={`text-sm font-bold ${
+              results.winner === 'A' ? 'text-blue-600' : results.winner === 'B' ? 'text-red-600' : 'text-gray-600'
+            }`}>
+              {results.winner === 'A' ? '🎉 Победа!' : results.winner === 'B' ? '😔 Поражение' : '🤝 Ничья'}
+              <span className="text-gray-400 font-normal ml-2">({results.playerWins}:{results.opponentWins})</span>
+            </div>
+            <button onClick={() => { setShowResults(false); setRounds([35, 35, 30]); }} className="text-xs text-gray-400 hover:text-gray-600 underline">
+              Заново
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Good Deal Visualization
+// Good Deal Visualization - Compact design with visual price bar
 function GoodDealVisualization() {
+  const [sellerMin, setSellerMin] = useState(30);
+  const [buyerMax, setBuyerMax] = useState(70);
+
+  const dealPossible = buyerMax >= sellerMin;
+  const dealPrice = dealPossible ? Math.round((sellerMin + buyerMax) / 2) : null;
+
   return (
-    <div className="relative h-48 flex flex-col justify-center items-center">
-      {/* Trading visualization */}
-      <div className="flex items-center gap-8">
-        {/* Player A */}
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg mb-2">
-            A
-          </div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">Продавец</div>
-        </div>
+    <div className="flex flex-col justify-center space-y-4">
+      {/* Visual price scale */}
+      <div className="relative">
+        {/* Scale bar */}
+        <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded-xl relative overflow-hidden">
+          {/* Deal zone highlight */}
+          {dealPossible && (
+            <div
+              className="absolute top-0 bottom-0 bg-green-400/50 dark:bg-green-500/30 transition-all"
+              style={{ left: `${sellerMin}%`, right: `${100 - buyerMax}%` }}
+            />
+          )}
 
-        {/* Deal animation */}
-        <div className="relative w-32">
-          {/* Arrows */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-center">
-              <div className="text-2xl animate-bounce">💰</div>
-              <svg className="w-8 h-4 text-green-500" fill="none" viewBox="0 0 24 12">
-                <path d="M0 6h20m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <div className="flex items-center justify-center">
-              <svg className="w-8 h-4 text-purple-500 rotate-180" fill="none" viewBox="0 0 24 12">
-                <path d="M0 6h20m0 0l-4-4m4 4l-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <div className="text-2xl animate-bounce" style={{ animationDelay: '0.2s' }}>📦</div>
+          {/* Seller marker */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-blue-500 transition-all"
+            style={{ left: `${sellerMin}%` }}
+          >
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+              A: {sellerMin}
             </div>
           </div>
 
-          {/* Price display */}
-          <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-green-100 dark:bg-green-900/50 px-3 py-1 rounded-full">
-            <span className="text-sm font-bold text-green-700 dark:text-green-300">Цена: ?</span>
+          {/* Buyer marker */}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-red-500 transition-all"
+            style={{ left: `${buyerMax}%` }}
+          >
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-red-600 dark:text-red-400 whitespace-nowrap">
+              B: {buyerMax}
+            </div>
           </div>
-        </div>
 
-        {/* Player B */}
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg mb-2">
-            B
-          </div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">Покупатель</div>
+          {/* Deal price marker */}
+          {dealPrice && (
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg transition-all"
+              style={{ left: `calc(${dealPrice}% - 16px)` }}
+            >
+              <span className="text-white text-xs font-bold">{dealPrice}</span>
+            </div>
+          )}
+
+          {/* Scale numbers */}
+          <div className="absolute bottom-1 left-2 text-xs text-gray-400">0</div>
+          <div className="absolute bottom-1 right-2 text-xs text-gray-400">100</div>
         </div>
       </div>
 
-      {/* Negotiation bar */}
-      <div className="w-full max-w-xs mt-12">
-        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-          <span>0</span>
-          <span>Цена сделки</span>
-          <span>100</span>
-        </div>
-        <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full w-1/2 bg-gradient-to-r from-blue-500 to-red-500 rounded-full relative">
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white dark:bg-gray-900 rounded-full border-2 border-primary-500 shadow-lg" />
+      {/* Controls */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Seller control */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-sm">A</div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Продавец</div>
+              <div className="text-sm font-bold text-blue-600 dark:text-blue-400">мин. {sellerMin}</div>
+            </div>
           </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={sellerMin}
+            onChange={(e) => setSellerMin(parseInt(e.target.value))}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-blue-200 dark:bg-blue-800 accent-blue-500"
+          />
         </div>
+
+        {/* Buyer control */}
+        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center font-bold text-sm">B</div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Покупатель</div>
+              <div className="text-sm font-bold text-red-600 dark:text-red-400">макс. {buyerMax}</div>
+            </div>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={buyerMax}
+            onChange={(e) => setBuyerMax(parseInt(e.target.value))}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-red-200 dark:bg-red-800 accent-red-500"
+          />
+        </div>
+      </div>
+
+      {/* Result */}
+      <div className={`text-center py-2 px-4 rounded-xl transition-all ${
+        dealPossible
+          ? 'bg-green-100 dark:bg-green-900/30'
+          : 'bg-gray-100 dark:bg-gray-800'
+      }`}>
+        {dealPossible ? (
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-lg">🤝</span>
+            <span className="text-sm font-bold text-green-700 dark:text-green-300">
+              Сделка по цене {dealPrice}
+            </span>
+            <span className="text-xs text-green-600 dark:text-green-400">
+              (A: +{dealPrice! - sellerMin}, B: +{buyerMax - dealPrice!})
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
+            <span className="text-lg">❌</span>
+            <span className="text-sm">Нет сделки — сведите цены</span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Balance of Universe Visualization
+// Balance of Universe Visualization - Interactive with clickable weights
 function BalanceVisualization() {
+  const [leftWeight, setLeftWeight] = useState(3);
+  const [rightWeight, setRightWeight] = useState(3);
+
+  const diff = leftWeight - rightWeight;
+  const tilt = diff * 5; // -10 to +10 degrees
+  const isBalanced = diff === 0;
+  const leftWins = diff > 0;
+  const rightWins = diff < 0;
+
+  const addWeight = (side: 'left' | 'right') => {
+    if (side === 'left' && leftWeight < 5) setLeftWeight(leftWeight + 1);
+    if (side === 'right' && rightWeight < 5) setRightWeight(rightWeight + 1);
+  };
+
+  const removeWeight = (side: 'left' | 'right') => {
+    if (side === 'left' && leftWeight > 1) setLeftWeight(leftWeight - 1);
+    if (side === 'right' && rightWeight > 1) setRightWeight(rightWeight - 1);
+  };
+
   return (
-    <div className="relative h-48 flex flex-col justify-center items-center">
+    <div className="flex flex-col justify-center space-y-4">
       {/* Balance scale */}
-      <div className="relative w-64">
-        {/* Center pivot */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-2 w-4 h-4 bg-gray-400 dark:bg-gray-500 rounded-full z-10" />
+      <div className="relative flex justify-center py-2">
+        <svg width="260" height="130" viewBox="0 0 260 130" className="overflow-visible">
+          {/* Stand */}
+          <rect x="125" y="60" width="10" height="55" fill="#9ca3af" rx="2" />
+          <rect x="100" y="112" width="60" height="10" fill="#6b7280" rx="5" />
 
-        {/* Balance beam - animated tilt */}
-        <div className="relative h-2 bg-gradient-to-r from-gray-400 via-gray-300 to-gray-400 rounded-full transform origin-center animate-pulse"
-          style={{ animation: 'tilt 3s ease-in-out infinite' }}>
-        </div>
+          {/* Balance beam with tilt */}
+          <g style={{ transform: `rotate(${tilt}deg)`, transformOrigin: '130px 55px', transition: 'transform 0.3s ease-out' }}>
+            {/* Beam */}
+            <rect x="20" y="51" width="220" height="8" fill="#d1d5db" rx="4" />
 
-        {/* Left pan */}
-        <div className="absolute -left-4 top-4">
-          <div className="w-1 h-8 bg-gray-400 mx-auto" />
-          <div className="w-20 h-3 bg-gradient-to-b from-amber-400 to-amber-600 rounded-b-lg shadow-lg flex items-end justify-center">
-            <div className="flex gap-1 -mb-6">
-              <div className="w-4 h-4 bg-blue-500 rounded-full shadow animate-bounce" style={{ animationDelay: '0s' }} />
-              <div className="w-4 h-4 bg-blue-400 rounded-full shadow animate-bounce" style={{ animationDelay: '0.1s' }} />
-            </div>
-          </div>
-          <div className="text-center mt-8 text-xs font-semibold text-blue-600 dark:text-blue-400">Порядок</div>
-        </div>
+            {/* Pivot point */}
+            <circle cx="130" cy="55" r="10" fill="#6b7280" />
+            <circle cx="130" cy="55" r="5" fill="#9ca3af" />
 
-        {/* Right pan */}
-        <div className="absolute -right-4 top-4">
-          <div className="w-1 h-8 bg-gray-400 mx-auto" />
-          <div className="w-20 h-3 bg-gradient-to-b from-amber-400 to-amber-600 rounded-b-lg shadow-lg flex items-end justify-center">
-            <div className="flex gap-1 -mb-6">
-              <div className="w-4 h-4 bg-red-500 rounded-full shadow animate-bounce" style={{ animationDelay: '0.2s' }} />
-              <div className="w-4 h-4 bg-red-400 rounded-full shadow animate-bounce" style={{ animationDelay: '0.3s' }} />
-            </div>
-          </div>
-          <div className="text-center mt-8 text-xs font-semibold text-red-600 dark:text-red-400">Хаос</div>
-        </div>
+            {/* Left pan (Order - Blue) */}
+            <g>
+              <line x1="45" y1="59" x2="45" y2="85" stroke="#9ca3af" strokeWidth="2" />
+              <ellipse cx="45" cy="90" rx="35" ry="8" fill="#fbbf24" />
+              <ellipse cx="45" cy="88" rx="32" ry="6" fill="#f59e0b" />
+              {/* Weights */}
+              {Array.from({ length: leftWeight }).map((_, i) => (
+                <circle
+                  key={i}
+                  cx={30 + (i % 3) * 15}
+                  cy={75 - Math.floor(i / 3) * 12}
+                  r={7}
+                  fill={`hsl(220, ${70 + i * 5}%, ${50 + i * 5}%)`}
+                  className="drop-shadow-md"
+                />
+              ))}
+            </g>
 
-        {/* Stand */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-0 w-2 h-20 bg-gradient-to-b from-gray-400 to-gray-500 rounded-b-lg" />
-        <div className="absolute left-1/2 -translate-x-1/2 top-20 w-12 h-2 bg-gray-500 rounded-lg" />
+            {/* Right pan (Chaos - Red) */}
+            <g>
+              <line x1="215" y1="59" x2="215" y2="85" stroke="#9ca3af" strokeWidth="2" />
+              <ellipse cx="215" cy="90" rx="35" ry="8" fill="#fbbf24" />
+              <ellipse cx="215" cy="88" rx="32" ry="6" fill="#f59e0b" />
+              {/* Weights */}
+              {Array.from({ length: rightWeight }).map((_, i) => (
+                <circle
+                  key={i}
+                  cx={200 + (i % 3) * 15}
+                  cy={75 - Math.floor(i / 3) * 12}
+                  r={7}
+                  fill={`hsl(0, ${70 + i * 5}%, ${50 + i * 5}%)`}
+                  className="drop-shadow-md"
+                />
+              ))}
+            </g>
+          </g>
+        </svg>
       </div>
 
-      {/* Equilibrium indicator */}
-      <div className="mt-16 flex items-center gap-2">
-        <div className="w-3 h-3 bg-primary-500 rounded-full animate-pulse" />
-        <span className="text-sm text-gray-600 dark:text-gray-300">Ищите баланс между крайностями</span>
+      {/* Controls */}
+      <div className="flex justify-between px-2">
+        {/* Left side controls */}
+        <div className="flex flex-col items-center gap-2">
+          <span className={`text-xs font-semibold ${leftWins ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+            Порядок ({leftWeight})
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => removeWeight('left')}
+              className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors disabled:opacity-30"
+              disabled={leftWeight <= 1}
+            >
+              −
+            </button>
+            <button
+              onClick={() => addWeight('left')}
+              className="w-8 h-8 rounded-full bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors disabled:opacity-30"
+              disabled={leftWeight >= 5}
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        {/* Center status */}
+        <div className="flex flex-col items-center">
+          <div className={`text-2xl transition-transform ${isBalanced ? 'scale-125' : ''}`}>
+            {isBalanced ? '✨' : leftWins ? '📐' : '🌀'}
+          </div>
+          <span className={`text-xs font-bold ${
+            isBalanced ? 'text-green-600 dark:text-green-400' :
+            leftWins ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'
+          }`}>
+            {isBalanced ? 'Баланс!' : leftWins ? 'Порядок' : 'Хаос'}
+          </span>
+        </div>
+
+        {/* Right side controls */}
+        <div className="flex flex-col items-center gap-2">
+          <span className={`text-xs font-semibold ${rightWins ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+            Хаос ({rightWeight})
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => removeWeight('right')}
+              className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 font-bold hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors disabled:opacity-30"
+              disabled={rightWeight <= 1}
+            >
+              −
+            </button>
+            <button
+              onClick={() => addWeight('right')}
+              className="w-8 h-8 rounded-full bg-red-500 text-white font-bold hover:bg-red-600 transition-colors disabled:opacity-30"
+              disabled={rightWeight >= 5}
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Instruction */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+          <span className="text-lg">⚖️</span>
+          Добавляй и убирай грузы для баланса
+        </div>
       </div>
     </div>
   );
@@ -244,6 +739,7 @@ function BalanceVisualization() {
 // Game Showcase Component with tabs
 function GameShowcase() {
   const [activeGame, setActiveGame] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const games = [
     {
@@ -341,7 +837,7 @@ function GameShowcase() {
   return (
     <div className="space-y-6">
       {/* Game tabs */}
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap justify-center gap-3 md:gap-4">
         {games.map((game, index) => (
           <button
             key={game.id}
@@ -391,6 +887,20 @@ function GameShowcase() {
               <strong>Инсайт:</strong> {currentGame.insight}
             </p>
           </div>
+
+          {/* Learn more button */}
+          <button
+            onClick={() => setModalOpen(true)}
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors group"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Подробнее об игре
+            <svg className="w-3 h-3 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         {/* Visualization */}
@@ -400,6 +910,15 @@ function GameShowcase() {
           </div>
         </div>
       </div>
+
+      {/* Game info modal */}
+      <GameInfoModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        gameId={currentGame.id}
+        gameName={currentGame.name}
+        gameIcon={currentGame.icon}
+      />
     </div>
   );
 }

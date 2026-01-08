@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Program, Team, LeaderboardEntry, Match } from '../types';
+import type { Game, Program, Team, LeaderboardEntry, Match, Tournament } from '../types';
 
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
   const { isAuthenticated } = useAuthStore();
+  const [tournament, setTournament] = useState<Tournament | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -16,6 +17,11 @@ export function GameDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'rules' | 'leaderboard' | 'matches'>('rules');
+
+  // Pagination state for matches
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalMatches, setTotalMatches] = useState(0);
+  const matchesPerPage = 20;
 
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -36,16 +42,22 @@ export function GameDetail() {
     setError(null);
 
     try {
-      const gameData = await api.getGame(gameId);
+      // Load tournament and game data in parallel
+      const [tournamentData, gameData] = await Promise.all([
+        api.getTournament(tournamentId),
+        api.getGame(gameId),
+      ]);
+      setTournament(tournamentData);
       setGame(gameData);
 
       // Load leaderboard and matches in parallel
       const [leaderboardData, matchesData] = await Promise.all([
         api.getGameLeaderboard(tournamentId, gameId).catch(() => []),
-        api.getGameMatches(tournamentId, gameId).catch(() => []),
+        api.getGameMatches(tournamentId, gameId, undefined, matchesPerPage, 0).catch(() => []),
       ]);
       setLeaderboard(leaderboardData || []);
       setMatches(matchesData || []);
+      setTotalMatches(matchesData?.length || 0); // Will be updated with proper count
 
       if (isAuthenticated) {
         try {
@@ -77,6 +89,20 @@ export function GameDetail() {
       setIsLoading(false);
     }
   };
+
+  // Load more matches when page changes
+  const loadMatchesPage = useCallback(async (page: number) => {
+    if (!gameId || !tournamentId) return;
+
+    try {
+      const offset = (page - 1) * matchesPerPage;
+      const matchesData = await api.getGameMatches(tournamentId, gameId, undefined, matchesPerPage, offset);
+      setMatches(matchesData || []);
+      setCurrentPage(page);
+    } catch (err) {
+      console.error('Failed to load matches:', err);
+    }
+  }, [gameId, tournamentId]);
 
   const handleFileSelect = () => {
     fileInputRef.current?.click();
@@ -252,9 +278,40 @@ export function GameDetail() {
 
           {activeTab === 'matches' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Результаты матчей</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold dark:text-gray-100">Результаты матчей</h2>
+                {matches.length > 0 && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Всего: {totalMatches}
+                  </span>
+                )}
+              </div>
               {matches.length > 0 ? (
-                <MatchGroups matches={matches} />
+                <>
+                  <MatchGroups matches={matches} />
+                  {/* Pagination */}
+                  {totalMatches > matchesPerPage && (
+                    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={() => loadMatchesPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="btn btn-secondary text-sm disabled:opacity-50"
+                      >
+                        Назад
+                      </button>
+                      <span className="text-sm text-gray-600 dark:text-gray-400 px-4">
+                        Страница {currentPage} из {Math.ceil(totalMatches / matchesPerPage)}
+                      </span>
+                      <button
+                        onClick={() => loadMatchesPage(currentPage + 1)}
+                        disabled={currentPage >= Math.ceil(totalMatches / matchesPerPage)}
+                        className="btn btn-secondary text-sm disabled:opacity-50"
+                      >
+                        Вперёд
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-gray-500 dark:text-gray-400">Матчи ещё не проводились.</p>
               )}
@@ -267,6 +324,35 @@ export function GameDetail() {
           {isAuthenticated && myTeam ? (
             <div className="card">
               <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Ваша программа</h2>
+
+              {/* Show warning if tournament is completed or not accepting submissions */}
+              {tournament?.status === 'completed' && (
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                    </svg>
+                    <span className="text-sm font-medium">Турнир завершён</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Загрузка программ больше не доступна
+                  </p>
+                </div>
+              )}
+
+              {tournament?.status === 'pending' && (
+                <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                  <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    <span className="text-sm font-medium">Турнир ещё не начался</span>
+                  </div>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                    Вы можете загружать программы до начала турнира
+                  </p>
+                </div>
+              )}
 
               {/* Current Program */}
               {currentProgram && (
@@ -320,10 +406,10 @@ export function GameDetail() {
                 />
                 <button
                   onClick={handleFileSelect}
-                  disabled={isUploading}
-                  className="btn btn-primary w-full"
+                  disabled={isUploading || tournament?.status === 'completed'}
+                  className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isUploading ? 'Загрузка...' : currentProgram ? 'Загрузить новую версию' : 'Загрузить программу'}
+                  {isUploading ? 'Загрузка...' : tournament?.status === 'completed' ? 'Загрузка закрыта' : currentProgram ? 'Загрузить новую версию' : 'Загрузить программу'}
                 </button>
 
                 {uploadSuccess && (
