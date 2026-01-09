@@ -202,43 +202,61 @@ for i in range(n):
 }
 
 // Bot strategies for Tug of War
-// Protocol: Total energy = 100, distribute across 5 rounds
+// Protocol: Total energy = 100, distribute across rounds
 // Each round: output integer (how much energy to spend), read opponent's spent
+// IMPORTANT: Track remaining energy and never overspend
 var tugOfWarStrategies = []string{
-	// Even distribution - 20 per round
+	// Even distribution with tracking
 	`#!/usr/bin/python3
 n = int(input())
+remaining = 100
 for i in range(n):
-    print(20, flush=True)
+    rounds_left = n - i
+    spend = min(remaining, remaining // rounds_left) if rounds_left > 0 else remaining
+    remaining -= spend
+    print(max(0, spend), flush=True)
     input()
 `,
-	// Front-loaded - more in early rounds
+	// Front-loaded with tracking
 	`#!/usr/bin/python3
 n = int(input())
-distribution = [30, 25, 20, 15, 10]
+remaining = 100
+weights = [3, 2.5, 2, 1.5, 1, 0.5, 0.3, 0.2]
 for i in range(n):
-    print(distribution[i] if i < len(distribution) else 10, flush=True)
+    w = weights[i] if i < len(weights) else 0.1
+    spend = min(remaining, int(remaining * w / sum(weights[i:] if i < len(weights) else [0.1])))
+    spend = max(0, min(remaining, spend))
+    remaining -= spend
+    print(spend, flush=True)
     input()
 `,
-	// Back-loaded - more in later rounds
+	// Back-loaded with tracking
 	`#!/usr/bin/python3
 n = int(input())
-distribution = [10, 15, 20, 25, 30]
+remaining = 100
+weights = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
 for i in range(n):
-    print(distribution[i] if i < len(distribution) else 20, flush=True)
+    w = weights[i] if i < len(weights) else 5
+    spend = min(remaining, int(remaining * w / sum(weights[i:] if i < len(weights) else [5])))
+    spend = max(0, min(remaining, spend))
+    remaining -= spend
+    print(spend, flush=True)
     input()
 `,
-	// Random within budget
+	// Random within budget with safety
 	`#!/usr/bin/python3
 import random
 n = int(input())
 remaining = 100
 for i in range(n):
     rounds_left = n - i
-    avg = remaining // rounds_left if rounds_left > 0 else remaining
-    spend = min(remaining, max(1, random.randint(avg - 5, avg + 5)))
-    remaining -= spend
-    print(spend, flush=True)
+    if rounds_left <= 0 or remaining <= 0:
+        print(0, flush=True)
+    else:
+        avg = remaining // rounds_left
+        spend = min(remaining, max(0, random.randint(max(0, avg - 5), avg + 5)))
+        remaining -= spend
+        print(spend, flush=True)
     input()
 `,
 }
