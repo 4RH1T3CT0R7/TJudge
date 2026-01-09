@@ -126,6 +126,7 @@ func (s *Server) setupRoutes() {
 			r.Post("/refresh", s.authHandler.Refresh)
 			r.Post("/logout", s.authHandler.Logout)
 			r.Get("/me", s.authHandler.Me)
+			r.Put("/profile", s.authHandler.UpdateProfile)
 		})
 
 		// Tournament routes

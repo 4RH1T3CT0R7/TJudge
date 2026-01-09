@@ -17,9 +17,10 @@ type AuthService interface {
 	Register(ctx context.Context, req *auth.RegisterRequest) (*auth.AuthResponse, error)
 	Login(ctx context.Context, req *auth.LoginRequest) (*auth.AuthResponse, error)
 	RefreshTokens(ctx context.Context, refreshToken string) (*auth.AuthResponse, error)
-	Logout(ctx context.Context, token string) error
+	Logout(ctx context.Context, accessToken, refreshToken string) error
 	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)
 	ValidateToken(token string) (*auth.Claims, error)
+	UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*domain.User, error)
 }
 
 // AuthHandler обрабатывает запросы аутентификации
@@ -121,17 +122,24 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // Logout обрабатывает выход пользователя
 // POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка
+	// Извлекаем access token из заголовка
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
 
-	token := authHeader[7:] // Remove "Bearer "
+	accessToken := authHeader[7:] // Remove "Bearer "
 
-	// Выполняем выход
-	if err := h.authService.Logout(r.Context(), token); err != nil {
+	// Извлекаем refresh token из body (опционально)
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	// Ignore decode errors - refresh token is optional
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	// Выполняем выход (blacklist обоих токенов)
+	if err := h.authService.Logout(r.Context(), accessToken, req.RefreshToken); err != nil {
 		// Для idempotency возвращаем success даже если токен уже в blacklist
 		appErr := errors.GetAppError(err)
 		if appErr != nil && appErr.Code == http.StatusUnauthorized {
@@ -168,6 +176,48 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
+	writeJSON(w, http.StatusOK, user)
+}
+
+// UpdateProfile обновляет профиль пользователя
+// PUT /api/v1/auth/profile
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	// Извлекаем токен из заголовка
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		writeError(w, errors.ErrUnauthorized)
+		return
+	}
+
+	token := authHeader[7:] // Remove "Bearer "
+
+	// Валидируем токен и получаем user ID
+	claims, err := h.authService.ValidateToken(token)
+	if err != nil {
+		h.log.LogError("Invalid token", err)
+		writeError(w, errors.ErrUnauthorized)
+		return
+	}
+
+	var req auth.UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Info("Invalid request body", zap.Error(err))
+		writeError(w, errors.ErrInvalidInput.WithError(err))
+		return
+	}
+
+	// Обновляем профиль
+	user, err := h.authService.UpdateProfile(r.Context(), claims.UserID.String(), &req)
+	if err != nil {
+		h.log.LogError("Failed to update profile", err)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Profile updated",
+		zap.String("user_id", user.ID.String()),
+	)
 
 	writeJSON(w, http.StatusOK, user)
 }

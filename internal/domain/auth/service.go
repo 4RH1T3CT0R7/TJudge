@@ -20,6 +20,7 @@ type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	Exists(ctx context.Context, username, email string) (bool, error)
+	Update(ctx context.Context, user *domain.User) error
 }
 
 // TokenBlacklist интерфейс для работы с чёрным списком токенов
@@ -59,6 +60,12 @@ type LoginRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+// UpdateProfileRequest - запрос на обновление профиля
+type UpdateProfileRequest struct {
+	Email    string `json:"email,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 // AuthResponse - ответ с токенами
@@ -248,31 +255,83 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	}, nil
 }
 
-// Logout выполняет выход пользователя, добавляя токен в чёрный список
-func (s *Service) Logout(ctx context.Context, tokenString string) error {
-	// Валидируем токен
-	claims, err := s.jwtManager.ValidateToken(tokenString)
+// Logout выполняет выход пользователя, добавляя токены в чёрный список
+func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) error {
+	// Добавляем access token в blacklist
+	claims, err := s.jwtManager.ValidateToken(accessToken)
 	if err != nil {
-		return errors.ErrInvalidToken.WithError(err)
+		// Access token может быть уже истёкшим, это OK
+		s.log.Info("Access token validation failed during logout", zap.Error(err))
+	} else {
+		ttl := time.Until(claims.ExpiresAt.Time)
+		if ttl > 0 {
+			if err := s.tokenBlacklist.Add(ctx, accessToken, ttl); err != nil {
+				s.log.LogError("Failed to blacklist access token", err)
+			}
+		}
 	}
 
-	// Вычисляем оставшееся время жизни токена
-	ttl := time.Until(claims.ExpiresAt.Time)
-	if ttl <= 0 {
-		// Токен уже истёк, нет смысла добавлять в чёрный список
-		return nil
+	// Добавляем refresh token в blacklist (если предоставлен)
+	if refreshToken != "" {
+		// Refresh token добавляем с полным TTL, т.к. его expiry может быть позже
+		if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
+			s.log.LogError("Failed to blacklist refresh token", err)
+		}
 	}
 
-	// Добавляем токен в чёрный список
-	if err := s.tokenBlacklist.Add(ctx, tokenString, ttl); err != nil {
-		return fmt.Errorf("failed to add token to blacklist: %w", err)
+	if claims != nil {
+		s.log.Info("User logged out",
+			zap.String("user_id", claims.UserID.String()),
+		)
 	}
-
-	s.log.Info("User logged out",
-		zap.String("user_id", claims.UserID.String()),
-	)
 
 	return nil
+}
+
+// UpdateProfile обновляет профиль пользователя
+func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*domain.User, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, errors.ErrInvalidInput.WithMessage("invalid user ID")
+	}
+
+	// Получаем текущего пользователя
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Обновляем email если указан
+	if req.Email != "" {
+		user.Email = req.Email
+	}
+
+	// Обновляем пароль если указан
+	if req.Password != "" {
+		if err := domain.ValidatePassword(req.Password); err != nil {
+			return nil, errors.ErrValidation.WithError(err)
+		}
+
+		passwordHash, err := s.hashPassword(req.Password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash password: %w", err)
+		}
+		user.PasswordHash = passwordHash
+	}
+
+	// Сохраняем изменения
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	s.log.Info("Profile updated",
+		zap.String("user_id", user.ID.String()),
+	)
+
+	// Скрываем пароль
+	user.PasswordHash = ""
+
+	return user, nil
 }
 
 // IsTokenBlacklisted проверяет, находится ли токен в чёрном списке

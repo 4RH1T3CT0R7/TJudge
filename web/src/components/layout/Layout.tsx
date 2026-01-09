@@ -108,7 +108,12 @@ export function Layout() {
 
               {isAuthenticated ? (
                 <>
-                  <span className="text-sm text-gray-700 dark:text-gray-100">{user?.username}</span>
+                  <Link
+                    to="/profile"
+                    className="text-sm text-gray-700 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                  >
+                    {user?.username}
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="btn btn-secondary text-sm"
