@@ -200,69 +200,79 @@ function PrisonersDilemmaMatrix() {
 
   return (
     <div className="flex flex-col items-center justify-center w-full py-4">
-      {/* Player B header */}
-      <div className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-3">
-        Игрок B
-      </div>
-
-      {/* Column headers (Сотр. / Пред.) */}
-      <div className="flex mb-2" style={{ marginLeft: '5rem' }}>
-        <div className="w-40 text-center text-base font-semibold text-green-500 dark:text-green-400">Сотр.</div>
-        <div className="w-40 text-center text-base font-semibold text-red-400 dark:text-red-400">Пред.</div>
-      </div>
-
-      {/* Main container: Player A label + Matrix */}
-      <div className="flex items-center">
-        {/* Player A label - vertically centered with the 2x2 matrix cells */}
-        <div
-          className="text-lg font-bold text-blue-600 dark:text-blue-400 mr-3"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', height: '13rem' }}
-        >
-          Игрок A
+      {/* Matrix container - centered */}
+      <div className="inline-flex flex-col items-center">
+        {/* Player B header - positioned above the matrix cells */}
+        <div className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-2">
+          Игрок B
         </div>
 
-        {/* Row labels + Cells */}
-        <div className="flex flex-col">
-          {/* Row 1: Cooperate */}
-          <div className="flex items-center">
-            <div className="w-14 text-right pr-3 text-base font-semibold text-blue-500 dark:text-blue-400">Сотр.</div>
+        {/* Column headers row - aligned with matrix cells */}
+        <div className="flex">
+          {/* Empty space for Player A label + row labels */}
+          <div className="w-20 flex-shrink-0" />
+          {/* Column headers */}
+          <div className="flex">
+            <div className="w-32 md:w-36 text-center text-base font-semibold text-green-500 dark:text-green-400">Сотр.</div>
+            <div className="w-32 md:w-36 text-center text-base font-semibold text-red-400 dark:text-red-400">Пред.</div>
+          </div>
+        </div>
+
+        {/* Main container: Player A label + Row labels + Matrix cells */}
+        <div className="flex items-stretch mt-2">
+          {/* Player A label - vertically centered with the matrix */}
+          <div className="flex items-center justify-center w-6 mr-2">
             <div
-              className={`w-40 h-26 flex items-center justify-center cursor-pointer transition-all bg-green-700 dark:bg-green-700 border-2 border-green-500 rounded-tl-lg ${hoveredCell === 'cc' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
-              style={{ height: '6.5rem' }}
-              onMouseEnter={() => setHoveredCell('cc')}
-              onMouseLeave={() => setHoveredCell(null)}
+              className="text-lg font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap"
+              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
             >
-              <span className="font-mono font-bold text-3xl text-cyan-300">3, 3</span>
-            </div>
-            <div
-              className={`w-40 h-26 flex items-center justify-center cursor-pointer transition-all bg-red-800 dark:bg-red-800 border-2 border-red-600 rounded-tr-lg ${hoveredCell === 'cd' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
-              style={{ height: '6.5rem' }}
-              onMouseEnter={() => setHoveredCell('cd')}
-              onMouseLeave={() => setHoveredCell(null)}
-            >
-              <span className="font-mono font-bold text-3xl text-red-300">0, 5</span>
+              Игрок A
             </div>
           </div>
 
-          {/* Row 2: Defect */}
-          <div className="flex items-center">
-            <div className="w-14 text-right pr-3 text-base font-semibold text-red-400 dark:text-red-400">Пред.</div>
-            <div
-              className={`w-40 h-26 flex items-center justify-center cursor-pointer transition-all bg-red-800 dark:bg-red-800 border-2 border-red-600 rounded-bl-lg ${hoveredCell === 'dc' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
-              style={{ height: '6.5rem' }}
-              onMouseEnter={() => setHoveredCell('dc')}
-              onMouseLeave={() => setHoveredCell(null)}
-            >
-              <span className="font-mono font-bold text-3xl text-red-300">5, 0</span>
+          {/* Row labels + Cells */}
+          <div className="flex flex-col">
+            {/* Row 1: Cooperate */}
+            <div className="flex items-center">
+              <div className="w-12 text-right pr-2 text-base font-semibold text-blue-500 dark:text-blue-400 flex-shrink-0">Сотр.</div>
+              <div
+                className={`w-32 md:w-36 flex items-center justify-center cursor-pointer transition-all bg-green-700 dark:bg-green-700 border-2 border-green-500 rounded-tl-lg ${hoveredCell === 'cc' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
+                style={{ height: '5rem' }}
+                onMouseEnter={() => setHoveredCell('cc')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-2xl md:text-3xl text-cyan-300">3, 3</span>
+              </div>
+              <div
+                className={`w-32 md:w-36 flex items-center justify-center cursor-pointer transition-all bg-red-800 dark:bg-red-800 border-2 border-red-600 rounded-tr-lg ${hoveredCell === 'cd' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
+                style={{ height: '5rem' }}
+                onMouseEnter={() => setHoveredCell('cd')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-2xl md:text-3xl text-red-300">0, 5</span>
+              </div>
             </div>
-            <div
-              className={`w-40 h-26 flex items-center justify-center cursor-pointer transition-all bg-yellow-700 dark:bg-yellow-700 border-2 border-yellow-500 rounded-br-lg relative ${hoveredCell === 'dd' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
-              style={{ height: '6.5rem' }}
-              onMouseEnter={() => setHoveredCell('dd')}
-              onMouseLeave={() => setHoveredCell(null)}
-            >
-              <span className="font-mono font-bold text-3xl text-yellow-300">1, 1</span>
-              <div className="absolute top-3 right-3 w-3 h-3 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
+
+            {/* Row 2: Defect */}
+            <div className="flex items-center">
+              <div className="w-12 text-right pr-2 text-base font-semibold text-red-400 dark:text-red-400 flex-shrink-0">Пред.</div>
+              <div
+                className={`w-32 md:w-36 flex items-center justify-center cursor-pointer transition-all bg-red-800 dark:bg-red-800 border-2 border-red-600 rounded-bl-lg ${hoveredCell === 'dc' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
+                style={{ height: '5rem' }}
+                onMouseEnter={() => setHoveredCell('dc')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-2xl md:text-3xl text-red-300">5, 0</span>
+              </div>
+              <div
+                className={`w-32 md:w-36 flex items-center justify-center cursor-pointer transition-all bg-yellow-700 dark:bg-yellow-700 border-2 border-yellow-500 rounded-br-lg relative ${hoveredCell === 'dd' ? 'scale-105 shadow-2xl z-10 brightness-110' : 'hover:brightness-110'}`}
+                style={{ height: '5rem' }}
+                onMouseEnter={() => setHoveredCell('dd')}
+                onMouseLeave={() => setHoveredCell(null)}
+              >
+                <span className="font-mono font-bold text-2xl md:text-3xl text-yellow-300">1, 1</span>
+                <div className="absolute top-2 right-2 w-3 h-3 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
+              </div>
             </div>
           </div>
         </div>

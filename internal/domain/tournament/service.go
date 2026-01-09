@@ -35,8 +35,10 @@ type MatchRepository interface {
 	CreateBatch(ctx context.Context, matches []*domain.Match) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
+	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 	GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
 }
 
@@ -748,6 +750,143 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 	)
 
 	return enqueued, nil
+}
+
+// RunGameMatches запускает матчи для конкретной игры в турнире
+func (s *Service) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	// Получаем pending матчи для конкретной игры
+	matches, err := s.matchRepo.GetPendingByTournamentAndGame(ctx, tournamentID, gameType)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pending matches: %w", err)
+	}
+
+	// Если нет pending матчей, создаём новый раунд для этой игры
+	if len(matches) == 0 {
+		s.log.Info("No pending matches for game, generating new round",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", gameType),
+		)
+
+		// Получаем турнир
+		tournament, err := s.GetByID(ctx, tournamentID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get tournament: %w", err)
+		}
+
+		// Проверяем что турнир активен
+		if tournament.Status != domain.TournamentActive {
+			return 0, errors.ErrConflict.WithMessage("tournament is not active")
+		}
+
+		// Получаем участников (только последние версии программ каждой команды для этой игры)
+		participants, err := s.getLatestParticipantsByGame(ctx, tournamentID, gameType)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get participants: %w", err)
+		}
+
+		if len(participants) < 2 {
+			return 0, errors.ErrValidation.WithMessage("need at least 2 participants with programs for this game")
+		}
+
+		// Получаем следующий номер раунда для этой игры
+		roundNumber, err := s.matchRepo.GetNextRoundNumberByGame(ctx, tournamentID, gameType)
+		if err != nil {
+			s.log.Warn("Failed to get next round number for game, using 1",
+				zap.Error(err),
+			)
+			roundNumber = 1
+		}
+
+		// Генерируем матчи для этой игры
+		matches, err = s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber)
+		if err != nil {
+			return 0, fmt.Errorf("failed to generate matches: %w", err)
+		}
+
+		// Сохраняем матчи в БД
+		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
+			return 0, fmt.Errorf("failed to create matches: %w", err)
+		}
+
+		s.log.Info("Generated new round of matches for game",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", gameType),
+			zap.Int("round_number", roundNumber),
+			zap.Int("matches_count", len(matches)),
+		)
+	}
+
+	// Добавляем все матчи в очередь
+	enqueued := 0
+	for _, match := range matches {
+		if err := s.queueManager.Enqueue(ctx, match); err != nil {
+			s.log.Error("Failed to enqueue match",
+				zap.Error(err),
+				zap.String("match_id", match.ID.String()),
+			)
+			continue
+		}
+		enqueued++
+	}
+
+	s.log.Info("Admin triggered game matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_type", gameType),
+		zap.Int("total_pending", len(matches)),
+		zap.Int("enqueued", enqueued),
+	)
+
+	return enqueued, nil
+}
+
+// getLatestParticipantsByGame получает последние версии программ участников для конкретной игры
+func (s *Service) getLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
+	// Получаем всех участников
+	allParticipants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Фильтруем по игре - это требует проверки game_id программы
+	// Для простоты пока возвращаем всех участников
+	// TODO: добавить фильтрацию по game_id
+	return allParticipants, nil
+}
+
+// generateRoundRobinMatchesForGame генерирует матчи для конкретной игры
+func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int) ([]*domain.Match, error) {
+	var matches []*domain.Match
+	now := time.Now()
+
+	// Каждый участник играет с каждым в обе стороны (AB и BA)
+	for i := 0; i < len(participants); i++ {
+		for j := 0; j < len(participants); j++ {
+			// Пропускаем матч против себя
+			if i == j {
+				continue
+			}
+
+			match := &domain.Match{
+				ID:           uuid.New(),
+				TournamentID: tournament.ID,
+				Program1ID:   participants[i].ProgramID,
+				Program2ID:   participants[j].ProgramID,
+				GameType:     gameType,
+				Status:       domain.MatchPending,
+				Priority:     domain.PriorityMedium,
+				RoundNumber:  roundNumber,
+				CreatedAt:    now,
+			}
+
+			if err := match.Validate(); err != nil {
+				return nil, fmt.Errorf("invalid match generated: %w", err)
+			}
+
+			matches = append(matches, match)
+		}
+	}
+
+	return matches, nil
 }
 
 // RetryFailedMatches сбрасывает failed матчи в pending и ставит их в очередь

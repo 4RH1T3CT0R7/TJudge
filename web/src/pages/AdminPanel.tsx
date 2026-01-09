@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Tournament, TournamentStatus, LeaderboardEntry } from '../types';
+import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics } from '../types';
 
-type AdminTab = 'games' | 'tournaments' | 'programs';
+type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
 
 // Game-specific icons configuration for programs view
 const gameIcons: Record<string, string> = {
@@ -19,6 +19,29 @@ const statusLabels: Record<TournamentStatus, string> = {
   pending: 'Ожидание',
   active: 'Активный',
   completed: 'Завершён',
+};
+
+// Helper function to format bytes to human readable format
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+// Helper function to format uptime to human readable format
+const formatUptime = (seconds: number): string => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}д`);
+  if (hours > 0) parts.push(`${hours}ч`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}м`);
+
+  return parts.join(' ');
 };
 
 export function AdminPanel() {
@@ -63,11 +86,27 @@ export function AdminPanel() {
   // Action errors
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Tournament games management state
+  const [managingTournamentId, setManagingTournamentId] = useState<string | null>(null);
+  const [managingTournamentGames, setManagingTournamentGames] = useState<Game[]>([]);
+  const [isLoadingTournamentGames, setIsLoadingTournamentGames] = useState(false);
+  const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
+
   // Programs tab state
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   const [tournamentGames, setTournamentGames] = useState<Game[]>([]);
   const [programsData, setProgramsData] = useState<Record<string, LeaderboardEntry[]>>({});
+  const [programDetails, setProgramDetails] = useState<Record<string, Program[]>>({});
   const [isLoadingPrograms, setIsLoadingPrograms] = useState(false);
+
+  // System tab state
+  const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
+  const [matchStats, setMatchStats] = useState<MatchStatistics | null>(null);
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
+  const [isLoadingSystem, setIsLoadingSystem] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
 
   useEffect(() => {
     // Redirect non-admin users
@@ -91,6 +130,68 @@ export function AdminPanel() {
       console.error('Failed to load data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // System data loading
+  const loadSystemData = useCallback(async () => {
+    setIsLoadingSystem(true);
+    setSystemError(null);
+    try {
+      const [queueData, matchData, metricsData] = await Promise.all([
+        api.getQueueStats(),
+        api.getMatchStatistics(),
+        api.getSystemMetrics(),
+      ]);
+      setQueueStats(queueData);
+      setMatchStats(matchData);
+      setSystemMetrics(metricsData);
+    } catch (err) {
+      console.error('Failed to load system data:', err);
+      setSystemError('Не удалось загрузить данные системы');
+    } finally {
+      setIsLoadingSystem(false);
+    }
+  }, []);
+
+  // Auto-refresh system data when on system tab
+  useEffect(() => {
+    if (activeTab === 'system') {
+      loadSystemData();
+      const interval = setInterval(loadSystemData, 5000); // Refresh every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, loadSystemData]);
+
+  const handleClearQueue = async () => {
+    if (!confirm('Вы уверены, что хотите очистить очередь? Все ожидающие матчи будут удалены.')) {
+      return;
+    }
+    setIsClearing(true);
+    setSystemError(null);
+    try {
+      await api.clearQueue();
+      loadSystemData();
+    } catch (err) {
+      console.error('Failed to clear queue:', err);
+      setSystemError('Не удалось очистить очередь');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const handlePurgeInvalidMatches = async () => {
+    setIsPurging(true);
+    setSystemError(null);
+    try {
+      const result = await api.purgeInvalidMatches();
+      alert(`Удалено ${result.purged_count} невалидных матчей из очереди`);
+      loadSystemData();
+    } catch (err) {
+      console.error('Failed to purge invalid matches:', err);
+      setSystemError('Не удалось очистить невалидные матчи');
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -249,6 +350,26 @@ export function AdminPanel() {
     );
   };
 
+  // Move game up in the order
+  const moveGameUp = (index: number) => {
+    if (index <= 0) return;
+    setSelectedGameIds(prev => {
+      const newIds = [...prev];
+      [newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]];
+      return newIds;
+    });
+  };
+
+  // Move game down in the order
+  const moveGameDown = (index: number) => {
+    if (index >= selectedGameIds.length - 1) return;
+    setSelectedGameIds(prev => {
+      const newIds = [...prev];
+      [newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]];
+      return newIds;
+    });
+  };
+
   const startEditGame = (game: Game) => {
     setEditingGame(game);
     setGameForm({
@@ -263,16 +384,18 @@ export function AdminPanel() {
   const loadTournamentPrograms = async (tournamentId: string) => {
     setIsLoadingPrograms(true);
     setProgramsData({});
+    setProgramDetails({});
 
     try {
       // Get games for this tournament
       const gamesData = await api.getTournamentGames(tournamentId);
       setTournamentGames(gamesData);
 
-      // Load leaderboard for each game (contains program info)
+      // Load leaderboard and program details for each game
       const programsByGame: Record<string, LeaderboardEntry[]> = {};
+      const detailsByGame: Record<string, Program[]> = {};
 
-      // First, try to get game-specific leaderboards
+      // First, try to get game-specific leaderboards and program details
       for (const game of gamesData) {
         try {
           const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
@@ -281,6 +404,16 @@ export function AdminPanel() {
           }
         } catch {
           console.error(`Failed to load leaderboard for game ${game.id}`);
+        }
+
+        // Load full program details (includes error_message)
+        try {
+          const programs = await api.getGamePrograms(tournamentId, game.id);
+          if (programs && programs.length > 0) {
+            detailsByGame[game.id] = programs;
+          }
+        } catch {
+          console.error(`Failed to load programs for game ${game.id}`);
         }
       }
 
@@ -299,6 +432,7 @@ export function AdminPanel() {
       }
 
       setProgramsData(programsByGame);
+      setProgramDetails(detailsByGame);
     } catch (err) {
       console.error('Failed to load tournament programs:', err);
     } finally {
@@ -309,6 +443,67 @@ export function AdminPanel() {
   const handleTournamentSelect = (tournamentId: string) => {
     setSelectedTournamentId(tournamentId);
     loadTournamentPrograms(tournamentId);
+  };
+
+  // Download program file
+  const handleDownloadProgram = async (programId: string, programName: string) => {
+    try {
+      const blob = await api.downloadProgram(programId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${programName}.py`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download program:', err);
+      setActionError('Не удалось скачать программу');
+    }
+  };
+
+  // Open tournament games management modal
+  const openTournamentGamesManagement = async (tournamentId: string) => {
+    setManagingTournamentId(tournamentId);
+    setIsLoadingTournamentGames(true);
+    try {
+      const gamesData = await api.getTournamentGames(tournamentId);
+      setManagingTournamentGames(gamesData || []);
+    } catch (err) {
+      console.error('Failed to load tournament games:', err);
+      setActionError('Не удалось загрузить игры турнира');
+    } finally {
+      setIsLoadingTournamentGames(false);
+    }
+  };
+
+  // Close tournament games management modal
+  const closeTournamentGamesManagement = () => {
+    setManagingTournamentId(null);
+    setManagingTournamentGames([]);
+    setRunningGameMatches(null);
+  };
+
+  // Run matches for a specific game
+  const handleRunGameMatches = async (gameType: string, gameName: string) => {
+    if (!managingTournamentId) return;
+
+    setRunningGameMatches(gameType);
+    setActionError(null);
+
+    try {
+      const result = await api.runGameMatches(managingTournamentId, gameType);
+      setActionError(null);
+      // Show success message
+      alert(`Запущено ${result.enqueued} матчей для "${gameName}"`);
+    } catch (err: unknown) {
+      console.error('Failed to run game matches:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось запустить матчи');
+    } finally {
+      setRunningGameMatches(null);
+    }
   };
 
   if (user?.role !== 'admin') {
@@ -331,6 +526,7 @@ export function AdminPanel() {
     { id: 'games', label: `Игры (${games.length})` },
     { id: 'tournaments', label: `Турниры (${tournaments.length})` },
     { id: 'programs', label: 'Программы' },
+    { id: 'system', label: 'Система' },
   ];
 
   return (
@@ -535,24 +731,82 @@ export function AdminPanel() {
                         Сначала создайте игры во вкладке "Игры"
                       </p>
                     ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-700">
-                        {games.map((game) => (
-                          <label
-                            key={game.id}
-                            className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-600 rounded cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedGameIds.includes(game.id)}
-                              onChange={() => toggleGameSelection(game.id)}
-                              className="w-4 h-4 text-primary-600 rounded"
-                            />
-                            <div>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">{game.display_name}</span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({game.name})</span>
+                      <div className="space-y-3">
+                        {/* Available games */}
+                        <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-700">
+                          {games.map((game) => (
+                            <label
+                              key={game.id}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-600 rounded cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedGameIds.includes(game.id)}
+                                onChange={() => toggleGameSelection(game.id)}
+                                className="w-4 h-4 text-primary-600 rounded"
+                              />
+                              <div>
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{game.display_name}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({game.name})</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+
+                        {/* Selected games with order controls */}
+                        {selectedGameIds.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Порядок игр (раунды будут запускаться в этом порядке):
+                            </p>
+                            <div className="space-y-2 border border-primary-200 dark:border-primary-800 rounded-lg p-3 bg-primary-50 dark:bg-primary-900/20">
+                              {selectedGameIds.map((gameId, index) => {
+                                const game = games.find(g => g.id === gameId);
+                                if (!game) return null;
+                                return (
+                                  <div
+                                    key={gameId}
+                                    className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-bold text-primary-600 dark:text-primary-400 w-6">
+                                        {index + 1}.
+                                      </span>
+                                      <span className="text-lg">{getGameIcon(game.name)}</span>
+                                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                                        {game.display_name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => moveGameUp(index)}
+                                        disabled={index === 0}
+                                        className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30"
+                                        title="Вверх"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => moveGameDown(index)}
+                                        disabled={index === selectedGameIds.length - 1}
+                                        className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30"
+                                        title="Вниз"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          </label>
-                        ))}
+                          </div>
+                        )}
                       </div>
                     )}
                     {selectedGameIds.length > 0 && (
@@ -690,6 +944,73 @@ export function AdminPanel() {
             </div>
           )}
 
+          {/* Tournament Games Management Modal */}
+          {managingTournamentId && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    Запустить раунд по игре
+                  </h2>
+                  <button
+                    onClick={closeTournamentGamesManagement}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Выберите игру для запуска раунда матчей. Раунд создаст матчи для всех участников и добавит их в очередь.
+                </p>
+
+                {isLoadingTournamentGames ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Загрузка игр...
+                  </div>
+                ) : managingTournamentGames.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    В этом турнире нет игр
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {managingTournamentGames.map((game) => (
+                      <div
+                        key={game.id}
+                        className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{getGameIcon(game.name)}</span>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">
+                              {game.display_name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {game.name}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRunGameMatches(game.name, game.display_name)}
+                          disabled={runningGameMatches === game.name}
+                          className="btn btn-primary text-sm disabled:opacity-50"
+                        >
+                          {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex justify-end mt-6">
+                  <button onClick={closeTournamentGamesManagement} className="btn btn-secondary">
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -746,15 +1067,23 @@ export function AdminPanel() {
                       </button>
                     )}
                     {tournament.status === 'active' && (
-                      <button
-                        onClick={async () => {
-                          await api.completeTournament(tournament.id);
-                          loadData();
-                        }}
-                        className="btn btn-secondary text-sm"
-                      >
-                        Завершить
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openTournamentGamesManagement(tournament.id)}
+                          className="btn btn-primary text-sm"
+                        >
+                          Запустить раунд
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await api.completeTournament(tournament.id);
+                            loadData();
+                          }}
+                          className="btn btn-secondary text-sm"
+                        >
+                          Завершить
+                        </button>
+                      </>
                     )}
                     {tournament.status !== 'active' && (
                       <>
@@ -839,27 +1168,48 @@ export function AdminPanel() {
               ) : (
                 tournamentGames.map((game) => {
                   const programs = programsData[game.id] || [];
-                  const totalPrograms = programs.length;
+                  const details = programDetails[game.id] || [];
+                  const totalPrograms = programs.length || details.length;
+
+                  // Create a lookup map for program errors
+                  const errorLookup = new Map<string, string>();
+                  details.forEach(p => {
+                    if (p.error_message) {
+                      errorLookup.set(p.id, p.error_message);
+                    }
+                  });
+
+                  // Count programs with errors
+                  const programsWithErrors = details.filter(p => p.error_message).length;
 
                   return (
                     <div key={game.id} className="card">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-2xl">{getGameIcon(game.name)}</span>
-                        <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                            {game.display_name}
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {totalPrograms} {totalPrograms === 1 ? 'программа' : totalPrograms < 5 ? 'программы' : 'программ'}
-                          </p>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{getGameIcon(game.name)}</span>
+                          <div>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                              {game.display_name}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {totalPrograms} {totalPrograms === 1 ? 'программа' : totalPrograms < 5 ? 'программы' : 'программ'}
+                              </p>
+                              {programsWithErrors > 0 && (
+                                <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded-full">
+                                  {programsWithErrors} с ошибкой
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {programs.length === 0 ? (
+                      {programs.length === 0 && details.length === 0 ? (
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           Программы ещё не загружены
                         </p>
-                      ) : (
+                      ) : programs.length > 0 ? (
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
@@ -871,38 +1221,128 @@ export function AdminPanel() {
                                 <th className="pb-2 pr-4 text-center">W</th>
                                 <th className="pb-2 pr-4 text-center">L</th>
                                 <th className="pb-2 pr-4 text-center">D</th>
-                                <th className="pb-2 text-center">Игр</th>
+                                <th className="pb-2 pr-4 text-center">Игр</th>
+                                <th className="pb-2 pr-4">Статус</th>
+                                <th className="pb-2">Действия</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {programs.map((entry) => (
-                                <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
-                                  <td className="py-2 pr-4 font-medium text-gray-600 dark:text-gray-400">{entry.rank}</td>
+                              {programs.map((entry) => {
+                                const error = errorLookup.get(entry.program_id);
+                                return (
+                                  <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
+                                    <td className="py-2 pr-4 font-medium text-gray-600 dark:text-gray-400">{entry.rank}</td>
+                                    <td className="py-2 pr-4">
+                                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                                        {entry.program_name}
+                                      </div>
+                                      <code className="text-xs text-gray-500 dark:text-gray-500 font-mono">
+                                        {entry.program_id.substring(0, 8)}...
+                                      </code>
+                                    </td>
+                                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                      {entry.team_name || '-'}
+                                    </td>
+                                    <td className="py-2 pr-4 text-center font-bold text-gray-900 dark:text-gray-100">
+                                      {entry.rating}
+                                    </td>
+                                    <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">
+                                      {entry.wins}
+                                    </td>
+                                    <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">
+                                      {entry.losses}
+                                    </td>
+                                    <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">
+                                      {entry.draws}
+                                    </td>
+                                    <td className="py-2 pr-4 text-center text-gray-600 dark:text-gray-300">
+                                      {entry.total_games}
+                                    </td>
+                                    <td className="py-2 pr-4">
+                                      {error ? (
+                                        <div className="group relative">
+                                          <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded cursor-help">
+                                            Ошибка
+                                          </span>
+                                          <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
+                                            <pre className="whitespace-pre-wrap break-words font-mono">{error}</pre>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                          OK
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2">
+                                      <button
+                                        onClick={() => handleDownloadProgram(entry.program_id, entry.program_name)}
+                                        className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 text-sm"
+                                        title="Скачать программу"
+                                      >
+                                        ⬇️ Скачать
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        // Show details only if no leaderboard but have program details
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                                <th className="pb-2 pr-4">Программа</th>
+                                <th className="pb-2 pr-4">Версия</th>
+                                <th className="pb-2 pr-4">Язык</th>
+                                <th className="pb-2 pr-4">Статус</th>
+                                <th className="pb-2">Действия</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {details.map((prog) => (
+                                <tr key={prog.id} className="border-b border-gray-100 dark:border-gray-800">
                                   <td className="py-2 pr-4">
                                     <div className="font-medium text-gray-900 dark:text-gray-100">
-                                      {entry.program_name}
+                                      {prog.name}
                                     </div>
                                     <code className="text-xs text-gray-500 dark:text-gray-500 font-mono">
-                                      {entry.program_id.substring(0, 8)}...
+                                      {prog.id.substring(0, 8)}...
                                     </code>
                                   </td>
                                   <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
-                                    {entry.team_name || '-'}
+                                    v{prog.version}
                                   </td>
-                                  <td className="py-2 pr-4 text-center font-bold text-gray-900 dark:text-gray-100">
-                                    {entry.rating}
+                                  <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                    {prog.language}
                                   </td>
-                                  <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">
-                                    {entry.wins}
+                                  <td className="py-2 pr-4">
+                                    {prog.error_message ? (
+                                      <div className="group relative">
+                                        <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded cursor-help">
+                                          Ошибка
+                                        </span>
+                                        <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
+                                          <pre className="whitespace-pre-wrap break-words font-mono">{prog.error_message}</pre>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                        OK
+                                      </span>
+                                    )}
                                   </td>
-                                  <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">
-                                    {entry.losses}
-                                  </td>
-                                  <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">
-                                    {entry.draws}
-                                  </td>
-                                  <td className="py-2 text-center text-gray-600 dark:text-gray-300">
-                                    {entry.total_games}
+                                  <td className="py-2">
+                                    <button
+                                      onClick={() => handleDownloadProgram(prog.id, prog.name)}
+                                      className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 text-sm"
+                                      title="Скачать программу"
+                                    >
+                                      ⬇️ Скачать
+                                    </button>
                                   </td>
                                 </tr>
                               ))}
@@ -914,6 +1354,323 @@ export function AdminPanel() {
                   );
                 })
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* System Tab */}
+      {activeTab === 'system' && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Состояние системы</h2>
+            <button
+              onClick={loadSystemData}
+              disabled={isLoadingSystem}
+              className="btn btn-secondary text-sm"
+            >
+              {isLoadingSystem ? 'Обновление...' : 'Обновить'}
+            </button>
+          </div>
+
+          {systemError && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
+              {systemError}
+            </div>
+          )}
+
+          {isLoadingSystem && !queueStats && !matchStats ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              Загрузка данных системы...
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Queue Stats Card */}
+              <div className="card">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  Очередь матчей
+                </h3>
+                {queueStats ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Всего в очереди</span>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{queueStats.total}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Высокий</div>
+                        <div className="text-lg font-semibold text-red-600 dark:text-red-400">{queueStats.high}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Средний</div>
+                        <div className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">{queueStats.medium}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Низкий</div>
+                        <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">{queueStats.low}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                )}
+              </div>
+
+              {/* Match Stats Card */}
+              <div className="card">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">🎮</span>
+                  Статистика матчей
+                </h3>
+                {matchStats ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Всего матчей</span>
+                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{matchStats.total}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Ожидают</span>
+                        <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded font-medium">{matchStats.pending}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Выполняются</span>
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded font-medium">{matchStats.running}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Завершены</span>
+                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-medium">{matchStats.completed}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">С ошибкой</span>
+                        <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded font-medium">{matchStats.failed}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                )}
+              </div>
+
+              {/* System Metrics Card */}
+              <div className="card md:col-span-2">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">💻</span>
+                  Нагрузка сервера
+                </h3>
+                {systemMetrics ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* CPU */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <span>🔧</span> CPU
+                      </div>
+                      <div className="relative pt-1">
+                        <div className="flex mb-2 items-center justify-between">
+                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                            {systemMetrics.cpu.usage_percent.toFixed(1)}%
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {systemMetrics.cpu.cores} ядер
+                          </span>
+                        </div>
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                          <div
+                            style={{ width: `${Math.min(systemMetrics.cpu.usage_percent, 100)}%` }}
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                              systemMetrics.cpu.usage_percent > 80
+                                ? 'bg-red-500'
+                                : systemMetrics.cpu.usage_percent > 50
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                      {systemMetrics.cpu.model_name && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={systemMetrics.cpu.model_name}>
+                          {systemMetrics.cpu.model_name}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Memory */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <span>🧠</span> Память
+                      </div>
+                      <div className="relative pt-1">
+                        <div className="flex mb-2 items-center justify-between">
+                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                            {systemMetrics.memory.used_percent.toFixed(1)}%
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatBytes(systemMetrics.memory.used)} / {formatBytes(systemMetrics.memory.total)}
+                          </span>
+                        </div>
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                          <div
+                            style={{ width: `${Math.min(systemMetrics.memory.used_percent, 100)}%` }}
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                              systemMetrics.memory.used_percent > 80
+                                ? 'bg-red-500'
+                                : systemMetrics.memory.used_percent > 50
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Свободно: {formatBytes(systemMetrics.memory.free)}
+                      </p>
+                    </div>
+
+                    {/* Disk */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <span>💾</span> Диск ({systemMetrics.disk.path})
+                      </div>
+                      <div className="relative pt-1">
+                        <div className="flex mb-2 items-center justify-between">
+                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                            {systemMetrics.disk.used_percent.toFixed(1)}%
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatBytes(systemMetrics.disk.used)} / {formatBytes(systemMetrics.disk.total)}
+                          </span>
+                        </div>
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                          <div
+                            style={{ width: `${Math.min(systemMetrics.disk.used_percent, 100)}%` }}
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                              systemMetrics.disk.used_percent > 90
+                                ? 'bg-red-500'
+                                : systemMetrics.disk.used_percent > 70
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Свободно: {formatBytes(systemMetrics.disk.free)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                )}
+
+                {/* Temperature sensors */}
+                {systemMetrics?.temperature && systemMetrics.temperature.length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <span>🌡️</span> Температура
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {systemMetrics.temperature.map((temp, idx) => (
+                        <div
+                          key={idx}
+                          className={`px-3 py-2 rounded-lg text-sm ${
+                            temp.temperature > 80
+                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                              : temp.temperature > 60
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                          }`}
+                        >
+                          <span className="font-medium">{temp.temperature.toFixed(1)}°C</span>
+                          <span className="text-xs opacity-75 ml-1">{temp.sensor_key}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Go runtime info */}
+                {systemMetrics && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <span>🐹</span> Go Runtime
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Версия:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.version}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Горутины:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.goroutines}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Heap:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{formatBytes(systemMetrics.go.heap_alloc)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">GC:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.num_gc} циклов</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Host info */}
+                {systemMetrics && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      <span>🖥️</span> Система
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Хост:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.hostname}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">ОС:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.platform} {systemMetrics.host.platform_version}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Архитектура:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.arch}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">Uptime:</span>
+                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{formatUptime(systemMetrics.host.uptime)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Queue Actions Card */}
+              <div className="card md:col-span-2">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">🛠</span>
+                  Управление очередью
+                </h3>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={handlePurgeInvalidMatches}
+                    disabled={isPurging}
+                    className="btn btn-secondary"
+                  >
+                    {isPurging ? 'Очистка...' : 'Удалить невалидные матчи'}
+                  </button>
+                  <button
+                    onClick={handleClearQueue}
+                    disabled={isClearing}
+                    className="btn btn-danger"
+                  >
+                    {isClearing ? 'Очистка...' : 'Очистить всю очередь'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                  «Удалить невалидные матчи» — удаляет из очереди матчи, которые не существуют в базе данных.
+                  «Очистить всю очередь» — удаляет все матчи из очереди (требует подтверждения).
+                </p>
+              </div>
             </div>
           )}
         </div>

@@ -28,10 +28,10 @@ const gameConfig: Record<string, { icon: string; color: string; bgClass: string;
   },
   balance_of_universe: {
     icon: '⚖️',
-    color: 'indigo',
-    bgClass: 'bg-indigo-500',
-    textClass: 'text-indigo-600 dark:text-indigo-400',
-    borderClass: 'border-indigo-200 dark:border-indigo-800 hover:border-indigo-300 dark:hover:border-indigo-700',
+    color: 'amber',
+    bgClass: 'bg-amber-500',
+    textClass: 'text-amber-600 dark:text-amber-400',
+    borderClass: 'border-amber-200 dark:border-amber-800 hover:border-amber-300 dark:hover:border-amber-700',
   },
 };
 

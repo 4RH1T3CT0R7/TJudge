@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Program, Team, LeaderboardEntry, Match, Tournament } from '../types';
+import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, TournamentGameWithDetails } from '../types';
 
 // Game-specific icons and colors configuration
 const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
@@ -51,6 +51,7 @@ export function GameDetail() {
   const { isAuthenticated } = useAuthStore();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [game, setGame] = useState<Game | null>(null);
+  const [gameStatus, setGameStatus] = useState<TournamentGameWithDetails | null>(null);
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [currentProgram, setCurrentProgram] = useState<Program | null>(null);
@@ -69,7 +70,9 @@ export function GameDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (gameId && tournamentId) {
@@ -84,13 +87,18 @@ export function GameDetail() {
     setError(null);
 
     try {
-      // Load tournament and game data in parallel
-      const [tournamentData, gameData] = await Promise.all([
+      // Load tournament, game data, and game status in parallel
+      const [tournamentData, gameData, gamesStatusData] = await Promise.all([
         api.getTournament(tournamentId),
         api.getGame(gameId),
+        api.getTournamentGamesStatus(tournamentId).catch(() => []),
       ]);
       setTournament(tournamentData);
       setGame(gameData);
+
+      // Find and set the status for the current game
+      const currentGameStatus = gamesStatusData.find(gs => gs.game_id === gameId);
+      setGameStatus(currentGameStatus || null);
 
       // Load leaderboard and matches in parallel
       const [leaderboardData, matchesData] = await Promise.all([
@@ -150,9 +158,25 @@ export function GameDetail() {
     fileInputRef.current?.click();
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !tournamentId || !gameId || !myTeam) return;
+  // Supported file extensions
+  const supportedExtensions = ['.py', '.cpp', '.c', '.go', '.rs', '.java'];
+
+  const isValidFile = (file: File) => {
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    return supportedExtensions.includes(ext);
+  };
+
+  // Process uploaded file (used by both input and drag-drop)
+  const processFile = async (file: File) => {
+    if (!tournamentId || !gameId || !myTeam) {
+      setUploadError('Не удалось загрузить: отсутствуют данные команды');
+      return;
+    }
+
+    if (!isValidFile(file)) {
+      setUploadError(`Неподдерживаемый формат файла. Используйте: ${supportedExtensions.join(', ')}`);
+      return;
+    }
 
     setIsUploading(true);
     setUploadError(null);
@@ -178,12 +202,65 @@ export function GameDetail() {
 
       // Hide success message after 3 seconds
       setTimeout(() => setUploadSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Upload failed:', err);
-      setUploadError('Не удалось загрузить программу. Попробуйте снова.');
+      // Try to extract error message from API response
+      if (err && typeof err === 'object' && 'message' in err) {
+        setUploadError((err as { message: string }).message);
+      } else {
+        setUploadError('Не удалось загрузить программу');
+      }
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the drop zone entirely
+    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (tournament?.status === 'completed') {
+      setUploadError('Турнир завершён, загрузка программ закрыта');
+      return;
+    }
+
+    if (gameStatus?.round_completed) {
+      setUploadError('Раунд для этой игры завершён, загрузка новых версий закрыта');
+      return;
+    }
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processFile(files[0]);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    processFile(file);
   };
 
   if (isLoading) {
@@ -403,6 +480,25 @@ export function GameDetail() {
                 </div>
               )}
 
+              {gameStatus?.round_completed && (
+                <div className="mb-4 p-3 bg-orange-50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-700">
+                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                    </svg>
+                    <span className="text-sm font-medium">Раунд завершён</span>
+                  </div>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                    Раунд для этой игры завершён, загрузка новых версий закрыта
+                  </p>
+                  {gameStatus.round_completed_at && (
+                    <p className="text-xs text-orange-500 dark:text-orange-500 mt-1">
+                      Завершён: {new Date(gameStatus.round_completed_at).toLocaleString('ru-RU')}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Current Program */}
               {currentProgram && (
                 <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -444,7 +540,7 @@ export function GameDetail() {
                 </div>
               )}
 
-              {/* Upload Form */}
+              {/* Upload Form with Drag & Drop */}
               <div className="space-y-3">
                 <input
                   type="file"
@@ -453,27 +549,77 @@ export function GameDetail() {
                   className="hidden"
                   accept=".py,.cpp,.c,.go,.rs,.java"
                 />
-                <button
-                  onClick={handleFileSelect}
-                  disabled={isUploading || tournament?.status === 'completed'}
-                  className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+
+                {/* Drop Zone */}
+                <div
+                  ref={dropZoneRef}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onClick={tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading ? handleFileSelect : undefined}
+                  className={`
+                    relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
+                    ${tournament?.status === 'completed' || gameStatus?.round_completed || isUploading ? 'cursor-not-allowed opacity-50' : ''}
+                    ${isDragging
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    }
+                  `}
                 >
-                  {isUploading ? 'Загрузка...' : tournament?.status === 'completed' ? 'Загрузка закрыта' : currentProgram ? 'Загрузить новую версию' : 'Загрузить программу'}
-                </button>
+                  {isDragging ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-primary-500">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
+                      <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                        Отпустите файл для загрузки
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-400 dark:text-gray-500">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {isUploading ? 'Загрузка...' : tournament?.status === 'completed' ? 'Загрузка закрыта' : gameStatus?.round_completed ? 'Раунд завершён' : 'Перетащите файл сюда'}
+                        </p>
+                        {tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            или <span className="text-primary-600 dark:text-primary-400 underline">выберите файл</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 rounded-lg flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                    </div>
+                  )}
+                </div>
 
                 {uploadSuccess && (
-                  <div className="p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300">
+                  <div className="p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
                     Программа успешно загружена!
                   </div>
                 )}
 
                 {uploadError && (
-                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
+                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
                     {uploadError}
                   </div>
                 )}
 
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
                   Поддерживаемые форматы: .py, .cpp, .c, .go, .rs, .java
                 </p>
               </div>

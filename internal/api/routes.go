@@ -24,6 +24,7 @@ type Server struct {
 	gameHandler       *handlers.GameHandler
 	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
+	systemHandler     *handlers.SystemHandler
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
 	corsConfig        config.CORSConfig
@@ -40,6 +41,7 @@ func NewServer(
 	gameHandler *handlers.GameHandler,
 	teamHandler *handlers.TeamHandler,
 	wsHandler *handlers.WebSocketHandler,
+	systemHandler *handlers.SystemHandler,
 	authService middleware.AuthService,
 	rateLimiter middleware.RateLimiter,
 	corsConfig config.CORSConfig,
@@ -55,6 +57,7 @@ func NewServer(
 		gameHandler:       gameHandler,
 		teamHandler:       teamHandler,
 		wsHandler:         wsHandler,
+		systemHandler:     systemHandler,
 		authService:       authService,
 		rateLimiter:       rateLimiter,
 		corsConfig:        corsConfig,
@@ -140,6 +143,7 @@ func (s *Server) setupRoutes() {
 			// Эндпоинты для конкретной игры в турнире
 			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
 			r.Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
+			r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
 
 			// Защищённые маршруты
 			r.Group(func(r chi.Router) {
@@ -160,7 +164,10 @@ func (s *Server) setupRoutes() {
 					r.Use(middleware.RequireAdmin())
 					r.Delete("/{id}", s.tournamentHandler.Delete)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
+					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
+					r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
 					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
+					r.Post("/{id}/run-game-matches", s.tournamentHandler.RunGameMatches)
 					r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)
 				})
 			})
@@ -240,6 +247,15 @@ func (s *Server) setupRoutes() {
 
 			r.Get("/tournaments/{id}", s.wsHandler.HandleTournament)
 			r.Get("/stats", s.wsHandler.GetStats)
+		})
+
+		// System routes (только для админов)
+		r.Route("/system", func(r chi.Router) {
+			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(middleware.RequireAdmin())
+
+			r.Get("/metrics", s.systemHandler.GetMetrics)
+			r.Get("/health", s.systemHandler.GetHealth)
 		})
 	})
 

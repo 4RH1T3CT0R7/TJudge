@@ -6,12 +6,16 @@ import type {
   Team,
   TeamWithMembers,
   Game,
+  TournamentGameWithDetails,
   Program,
   Match,
   MatchRound,
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
   ApiError,
+  QueueStats,
+  MatchStatistics,
+  SystemMetrics,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -177,6 +181,14 @@ class ApiClient {
     return data;
   }
 
+  async runGameMatches(tournamentId: string, gameType: string): Promise<{ status: string; game_type: string; enqueued: number }> {
+    const { data } = await this.client.post<{ status: string; game_type: string; enqueued: number }>(
+      `/tournaments/${tournamentId}/run-game-matches`,
+      { game_type: gameType }
+    );
+    return data;
+  }
+
   async getTournamentMatches(tournamentId: string, limit = 50, offset = 0): Promise<Match[]> {
     const { data } = await this.client.get<Match[]>(`/tournaments/${tournamentId}/matches`, {
       params: { limit, offset },
@@ -204,6 +216,17 @@ class ApiClient {
   async getTournamentGames(tournamentId: string): Promise<Game[]> {
     const { data } = await this.client.get<Game[]>(`/tournaments/${tournamentId}/games`);
     return data;
+  }
+
+  async getTournamentGamesStatus(tournamentId: string): Promise<TournamentGameWithDetails[]> {
+    const { data } = await this.client.get<TournamentGameWithDetails[]>(
+      `/tournaments/${tournamentId}/games/status`
+    );
+    return data;
+  }
+
+  async markGameRoundCompleted(tournamentId: string, gameId: string): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/games/${gameId}/complete-round`);
   }
 
   // Team endpoints
@@ -307,6 +330,13 @@ class ApiClient {
     return data;
   }
 
+  async getGamePrograms(tournamentId: string, gameId: string): Promise<Program[]> {
+    const { data } = await this.client.get<Program[]>(
+      `/tournaments/${tournamentId}/games/${gameId}/programs`
+    );
+    return data;
+  }
+
   // Program endpoints
   async getPrograms(): Promise<Program[]> {
     const { data } = await this.client.get<Program[]>('/programs');
@@ -359,6 +389,39 @@ class ApiClient {
 
   async getMatch(id: string): Promise<Match> {
     const { data } = await this.client.get<Match>(`/matches/${id}`);
+    return data;
+  }
+
+  // System endpoints (admin only)
+  async getQueueStats(): Promise<QueueStats> {
+    const { data } = await this.client.get<QueueStats>('/matches/queue/stats');
+    return data;
+  }
+
+  async getMatchStatistics(tournamentId?: string): Promise<MatchStatistics> {
+    const params = tournamentId ? { tournament_id: tournamentId } : {};
+    const { data } = await this.client.get<MatchStatistics>('/matches/statistics', { params });
+    return data;
+  }
+
+  async clearQueue(): Promise<{ message: string }> {
+    const { data } = await this.client.post<{ message: string }>('/matches/queue/clear');
+    return data;
+  }
+
+  async purgeInvalidMatches(): Promise<{ message: string; purged_count: number }> {
+    const { data } = await this.client.post<{ message: string; purged_count: number }>('/matches/queue/purge');
+    return data;
+  }
+
+  // System endpoints (admin only)
+  async getSystemMetrics(): Promise<SystemMetrics> {
+    const { data } = await this.client.get<SystemMetrics>('/system/metrics');
+    return data;
+  }
+
+  async getSystemHealth(): Promise<{ status: string; timestamp: string; hostname: string; pid: number }> {
+    const { data } = await this.client.get<{ status: string; timestamp: string; hostname: string; pid: number }>('/system/health');
     return data;
   }
 }

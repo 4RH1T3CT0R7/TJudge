@@ -31,6 +31,7 @@ type TournamentService interface {
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
 
@@ -476,6 +477,55 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "started",
 		"enqueued": enqueued,
+	})
+}
+
+// RunGameMatches запускает матчи для конкретной игры в турнире
+// POST /api/v1/tournaments/:id/games/:gameId/run-matches
+func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Декодируем тело запроса для получения game_type
+	var req struct {
+		GameType string `json:"game_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Info("Invalid request body", zap.Error(err))
+		writeError(w, errors.ErrInvalidInput.WithMessage("game_type is required"))
+		return
+	}
+
+	if req.GameType == "" {
+		writeError(w, errors.ErrInvalidInput.WithMessage("game_type is required"))
+		return
+	}
+
+	// Запускаем матчи для игры
+	enqueued, err := h.tournamentService.RunGameMatches(r.Context(), tournamentID, req.GameType)
+	if err != nil {
+		h.log.LogError("Failed to run game matches", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", req.GameType),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Started game matches",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_type", req.GameType),
+		zap.Int("enqueued", enqueued),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":    "started",
+		"game_type": req.GameType,
+		"enqueued":  enqueued,
 	})
 }
 

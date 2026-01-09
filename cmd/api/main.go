@@ -159,10 +159,16 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
 	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, matchScheduler, log)
-	matchHandler := handlers.NewMatchHandlerWithProgramLookup(matchRepo, matchCache, programRepo, log)
+	programHandler.SetGameLookup(gameService)
+	programHandler.SetMatchChecker(matchRepo)
+	programHandler.SetRoundChecker(gameRepo)
+	matchHandler := handlers.NewMatchHandlerFull(matchRepo, matchCache, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, tournamentRepo, log)
+	gameHandler.SetProgramRepo(programRepo)
+	gameHandler.SetTournamentGameStatusRepo(gameRepo)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
+	systemHandler := handlers.NewSystemHandler(log)
 
 	// Создаём API сервер
 	apiServer := api.NewServer(
@@ -173,6 +179,7 @@ func main() {
 		gameHandler,
 		teamHandler,
 		wsHandler,
+		systemHandler,
 		authService,
 		rateLimiter,
 		cfg.CORS,

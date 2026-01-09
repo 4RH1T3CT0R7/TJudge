@@ -80,9 +80,12 @@ type TeamWithMembers struct {
 
 // TournamentGame - связь турнира с игрой
 type TournamentGame struct {
-	TournamentID uuid.UUID `json:"tournament_id" db:"tournament_id"`
-	GameID       uuid.UUID `json:"game_id" db:"game_id"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	TournamentID     uuid.UUID  `json:"tournament_id" db:"tournament_id"`
+	GameID           uuid.UUID  `json:"game_id" db:"game_id"`
+	RoundCompleted   bool       `json:"round_completed" db:"round_completed"`
+	RoundCompletedAt *time.Time `json:"round_completed_at,omitempty" db:"round_completed_at"`
+	CurrentRound     int        `json:"current_round" db:"current_round"`
+	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
 // TournamentStatus - статус турнира

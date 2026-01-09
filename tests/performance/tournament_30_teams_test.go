@@ -201,13 +201,126 @@ for i in range(n):
 `,
 }
 
+// Bot strategies for Tug of War
+// Protocol: 1. Read iterations, 2. Loop: output integer (1-100 strength), read opponent's choice
+var tugOfWarStrategies = []string{
+	// Constant medium
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(50, flush=True)
+    input()
+`,
+	// Constant high
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(80, flush=True)
+    input()
+`,
+	// Random
+	`#!/usr/bin/python3
+import random
+n = int(input())
+for i in range(n):
+    print(random.randint(1, 100), flush=True)
+    input()
+`,
+	// Adaptive - slightly more than opponent's last
+	`#!/usr/bin/python3
+n = int(input())
+my_choice = 50
+for i in range(n):
+    print(my_choice, flush=True)
+    opp = int(input().strip())
+    my_choice = min(100, opp + 5)
+`,
+}
+
+// Bot strategies for Good Deal
+// Protocol: 1. Read iterations, 2. Loop: output integer (offer amount), read opponent's response
+var goodDealStrategies = []string{
+	// Fair split
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(50, flush=True)
+    input()
+`,
+	// Greedy
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(70, flush=True)
+    input()
+`,
+	// Generous
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(40, flush=True)
+    input()
+`,
+	// Random
+	`#!/usr/bin/python3
+import random
+n = int(input())
+for i in range(n):
+    print(random.randint(30, 70), flush=True)
+    input()
+`,
+}
+
+// Bot strategies for Balance of Universe
+// Protocol: Similar to other games
+var balanceOfUniverseStrategies = []string{
+	// Balanced
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(0, flush=True)
+    input()
+`,
+	// Positive
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(1, flush=True)
+    input()
+`,
+	// Negative
+	`#!/usr/bin/python3
+n = int(input())
+for i in range(n):
+    print(-1, flush=True)
+    input()
+`,
+	// Random
+	`#!/usr/bin/python3
+import random
+n = int(input())
+for i in range(n):
+    print(random.choice([-1, 0, 1]), flush=True)
+    input()
+`,
+}
+
+// Map game names to their strategies
+var gameStrategies = map[string][]string{
+	"prisoners_dilemma":   dilemmaStrategies,
+	"tug_of_war":          tugOfWarStrategies,
+	"good_deal":           goodDealStrategies,
+	"balance_of_universe": balanceOfUniverseStrategies,
+}
+
 // Team represents a test team
 type Team struct {
-	UserToken string
-	UserID    string
-	TeamID    string
-	TeamName  string
-	ProgramID string
+	UserToken  string
+	UserID     string
+	TeamID     string
+	TeamName   string
+	ProgramID  string            // Legacy single program ID (for backwards compat)
+	ProgramIDs map[string]string // Game ID -> Program ID
 }
 
 // PerformanceMetrics collects performance data
@@ -290,12 +403,11 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	timestamp := time.Now().UnixNano()
 
 	// ==========================================================================
-	// Phase 1: Get game info
+	// Phase 1: Get all game info
 	// ==========================================================================
-	fmt.Println("\n🔧 Phase 1: Getting game info...")
+	fmt.Println("\n🔧 Phase 1: Getting all game info...")
 
 	client := NewTestClient()
-	var gameID string
 
 	resp, err := client.doRequest("GET", "/api/v1/games", nil)
 	require.NoError(t, err)
@@ -307,17 +419,32 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	require.NoError(t, client.parseResponse(resp, &games))
 	require.NotEmpty(t, games, "No games available")
 
-	// Use dilemma game
+	// Build map of game name -> ID for all available games
+	gameIDs := make(map[string]string)
 	for _, g := range games {
-		if g.Name == "dilemma" {
-			gameID = g.ID
+		gameIDs[g.Name] = g.ID
+		fmt.Printf("   Found game: %s (%s)\n", g.Name, g.ID)
+	}
+
+	// Define the 4 games we want to use
+	targetGames := []string{"prisoners_dilemma", "tug_of_war", "good_deal", "balance_of_universe"}
+	var availableGames []string
+	for _, gameName := range targetGames {
+		if _, ok := gameIDs[gameName]; ok {
+			availableGames = append(availableGames, gameName)
+		}
+	}
+
+	if len(availableGames) == 0 {
+		// Fallback to first available game
+		for _, g := range games {
+			availableGames = append(availableGames, g.Name)
+			gameIDs[g.Name] = g.ID
 			break
 		}
 	}
-	if gameID == "" {
-		gameID = games[0].ID
-	}
-	fmt.Printf("   Using game: %s\n", gameID)
+
+	fmt.Printf("   Will use %d games: %v\n", len(availableGames), availableGames)
 
 	// ==========================================================================
 	// Phase 2: Tournament ID placeholder (will create after registering users)
@@ -419,24 +546,32 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 						tournamentID = tournamentResp.ID
 						fmt.Printf("   Tournament created: %s\n", tournamentID)
 
-						// Add game to tournament
-						addGameResp, err := createClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/games", tournamentID), map[string]string{
-							"game_id": gameID,
-						})
-						if err != nil {
-							fmt.Printf("   ⚠️ Failed to add game to tournament: %v\n", err)
-						} else if addGameResp.StatusCode == http.StatusOK || addGameResp.StatusCode == http.StatusCreated {
-							fmt.Printf("   ✅ Game added to tournament\n")
-						} else if addGameResp.StatusCode == http.StatusForbidden {
-							body, _ := io.ReadAll(addGameResp.Body)
-							addGameResp.Body.Close()
-							fmt.Printf("   ⚠️ Adding game requires admin permissions: %s\n", string(body))
-							fmt.Printf("   ℹ️  To add game, make user admin: make admin EMAIL=%s@test.com\n", fmt.Sprintf("perf_%d_0", timestamp))
-						} else {
-							body, _ := io.ReadAll(addGameResp.Body)
-							addGameResp.Body.Close()
-							fmt.Printf("   ⚠️ Failed to add game (%d): %s\n", addGameResp.StatusCode, string(body))
+						// Add ALL games to tournament
+						gamesAdded := 0
+						for _, gameName := range availableGames {
+							gameID := gameIDs[gameName]
+							addGameResp, err := createClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/games", tournamentID), map[string]string{
+								"game_id": gameID,
+							})
+							if err != nil {
+								fmt.Printf("   ⚠️ Failed to add game %s: %v\n", gameName, err)
+							} else if addGameResp.StatusCode == http.StatusOK || addGameResp.StatusCode == http.StatusCreated {
+								fmt.Printf("   ✅ Game %s added to tournament\n", gameName)
+								gamesAdded++
+								addGameResp.Body.Close()
+							} else if addGameResp.StatusCode == http.StatusForbidden {
+								body, _ := io.ReadAll(addGameResp.Body)
+								addGameResp.Body.Close()
+								fmt.Printf("   ⚠️ Adding game %s requires admin permissions: %s\n", gameName, string(body))
+								fmt.Printf("   ℹ️  To add games, make user admin: make admin EMAIL=%s@test.com\n", fmt.Sprintf("perf_%d_0", timestamp))
+								break // No point trying other games without admin
+							} else {
+								body, _ := io.ReadAll(addGameResp.Body)
+								addGameResp.Body.Close()
+								fmt.Printf("   ⚠️ Failed to add game %s (%d): %s\n", gameName, addGameResp.StatusCode, string(body))
+							}
 						}
+						fmt.Printf("   Added %d/%d games to tournament\n", gamesAdded, len(availableGames))
 					}
 				} else {
 					body, _ := io.ReadAll(resp.Body)
@@ -510,59 +645,83 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	fmt.Printf("   %d teams in tournament (joined at team creation)\n", successfulJoins)
 
 	// ==========================================================================
-	// Phase 6: Upload programs
+	// Phase 6: Upload programs for ALL games
 	// ==========================================================================
-	fmt.Println("\n📦 Phase 6: Uploading programs...")
+	fmt.Println("\n📦 Phase 6: Uploading programs for all games...")
 
 	start = time.Now()
 	successfulUploads := 0
+	totalProgramsToUpload := 0
 
 	for i := 0; i < numTeams; i++ {
 		if teams[i] == nil || teams[i].TeamID == "" {
 			continue
 		}
 
+		teams[i].ProgramIDs = make(map[string]string)
 		uploadClient := NewTestClient()
 		uploadClient.SetToken(teams[i].UserToken)
 
-		// Select a strategy (cycle through available strategies)
-		strategy := dilemmaStrategies[i%len(dilemmaStrategies)]
+		// Upload a program for each available game
+		for _, gameName := range availableGames {
+			gameID := gameIDs[gameName]
+			totalProgramsToUpload++
 
-		resp, err := uploadClient.uploadProgram(
-			teams[i].TeamID,
-			tournamentID,
-			gameID,
-			fmt.Sprintf("Bot_%d", i),
-			strategy,
-		)
-
-		if err != nil {
-			fmt.Printf("   Program %d: upload error: %v\n", i, err)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if i < 3 { // Only log first few errors
-				fmt.Printf("   Program %d: failed (%d): %s\n", i, resp.StatusCode, string(body))
+			// Get strategies for this game
+			strategies, ok := gameStrategies[gameName]
+			if !ok || len(strategies) == 0 {
+				// Fallback to dilemma strategies
+				strategies = dilemmaStrategies
 			}
-			continue
-		}
 
-		var programResp struct {
-			ID string `json:"id"`
-		}
-		if err := uploadClient.parseResponse(resp, &programResp); err != nil {
-			fmt.Printf("   Program %d: parse error: %v\n", i, err)
-			continue
-		}
+			// Select a strategy (cycle through available strategies)
+			strategy := strategies[i%len(strategies)]
 
-		teams[i].ProgramID = programResp.ID
-		successfulUploads++
+			resp, err := uploadClient.uploadProgram(
+				teams[i].TeamID,
+				tournamentID,
+				gameID,
+				fmt.Sprintf("Bot_%d_%s", i, gameName),
+				strategy,
+			)
+
+			if err != nil {
+				if i < 2 { // Only log first few errors
+					fmt.Printf("   Team %d, game %s: upload error: %v\n", i, gameName, err)
+				}
+				continue
+			}
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if i < 2 { // Only log first few errors
+					fmt.Printf("   Team %d, game %s: failed (%d): %s\n", i, gameName, resp.StatusCode, string(body))
+				}
+				continue
+			}
+
+			var programResp struct {
+				ID string `json:"id"`
+			}
+			if err := uploadClient.parseResponse(resp, &programResp); err != nil {
+				if i < 2 {
+					fmt.Printf("   Team %d, game %s: parse error: %v\n", i, gameName, err)
+				}
+				continue
+			}
+
+			teams[i].ProgramIDs[gameID] = programResp.ID
+			// Set legacy ProgramID to first uploaded program
+			if teams[i].ProgramID == "" {
+				teams[i].ProgramID = programResp.ID
+			}
+			successfulUploads++
+		}
 	}
 	metrics.ProgramUploadTime = time.Since(start)
-	fmt.Printf("   Uploaded %d programs in %v\n", successfulUploads, metrics.ProgramUploadTime)
+	fmt.Printf("   Uploaded %d/%d programs (%d games x %d teams) in %v\n",
+		successfulUploads, totalProgramsToUpload, len(availableGames), successfulTeams, metrics.ProgramUploadTime)
 
 	// ==========================================================================
 	// Phase 7: Start tournament and run matches
@@ -587,31 +746,61 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 
 	start = time.Now()
 
-	// Start tournament
+	// Start tournament - this creates matches and changes status to active
 	resp, err = adminClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/start", tournamentID), nil)
 	if err != nil {
-		t.Logf("Warning: Could not start tournament: %v", err)
-	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to start tournament: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		t.Logf("Warning: Start tournament returned %d: %s", resp.StatusCode, string(body))
+		// If tournament already started, that's OK
+		if resp.StatusCode == http.StatusConflict {
+			t.Logf("Tournament already started (conflict is OK)")
+		} else {
+			t.Fatalf("Start tournament failed (%d): %s", resp.StatusCode, string(body))
+		}
+	} else {
+		resp.Body.Close()
+		fmt.Printf("   Tournament started successfully\n")
 	}
 
-	// Run all matches (requires admin - may fail without proper permissions)
+	// Verify tournament is now active
+	resp, err = adminClient.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s", tournamentID), nil)
+	if err == nil && resp.StatusCode == http.StatusOK {
+		var tournamentCheck struct {
+			Status string `json:"status"`
+		}
+		if err := adminClient.parseResponse(resp, &tournamentCheck); err == nil {
+			fmt.Printf("   Tournament status: %s\n", tournamentCheck.Status)
+			if tournamentCheck.Status != "active" {
+				t.Fatalf("Tournament should be active after start, but status is: %s", tournamentCheck.Status)
+			}
+		}
+	}
+
+	// Note: Matches are already created and enqueued by /start
+	// The /run-matches endpoint is for running additional rounds or regenerating matches
+	// Try to run additional matches if admin permissions are available
 	resp, err = adminClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/run-matches", tournamentID), nil)
 	if err != nil {
-		t.Logf("Note: Could not run matches (may need admin): %v", err)
-	} else if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		t.Logf("Note: Run matches returned %d: %s (may need admin)", resp.StatusCode, string(body))
-	} else {
+		t.Logf("Note: Could not run additional matches (may need admin): %v", err)
+	} else if resp.StatusCode == http.StatusOK {
 		var runResp struct {
 			MatchesCreated int `json:"matches_created"`
 		}
-		if err := adminClient.parseResponse(resp, &runResp); err == nil {
-			fmt.Printf("   Matches created: %d\n", runResp.MatchesCreated)
+		if err := adminClient.parseResponse(resp, &runResp); err == nil && runResp.MatchesCreated > 0 {
+			fmt.Printf("   Additional matches created: %d\n", runResp.MatchesCreated)
 		}
+		resp.Body.Close()
+	} else if resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Logf("Note: /run-matches requires admin permissions: %s", string(body))
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Logf("Note: Run matches returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	metrics.RoundStartTime = time.Since(start)
@@ -743,13 +932,25 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	// ==========================================================================
 	// Test assertions and detailed log output
 	// ==========================================================================
-	expectedMatches := successfulUploads * (successfulUploads - 1) // N*(N-1) for double round-robin
+	// For multi-game tournaments: N*(N-1) matches per game for double round-robin
+	// With multiple games, each team uploads a program for each game
+	// Matches are generated per game based on programs uploaded for that game
+	teamsWithPrograms := 0
+	for i := 0; i < numTeams; i++ {
+		if teams[i] != nil && teams[i].ProgramID != "" {
+			teamsWithPrograms++
+		}
+	}
+	matchesPerGame := teamsWithPrograms * (teamsWithPrograms - 1) // N*(N-1) for double round-robin
+	expectedMatches := matchesPerGame * len(availableGames)
 
 	t.Logf("\n📋 Test Details:")
 	t.Logf("   Users: %d/%d registered", successfulRegistrations, numTeams)
 	t.Logf("   Teams: %d created", successfulTeams)
-	t.Logf("   Programs: %d uploaded", successfulUploads)
-	t.Logf("   Expected matches: %d (double round-robin for %d programs)", expectedMatches, successfulUploads)
+	t.Logf("   Games: %d available (%v)", len(availableGames), availableGames)
+	t.Logf("   Programs: %d uploaded (%d per team across %d games)", successfulUploads, len(availableGames), len(availableGames))
+	t.Logf("   Teams with programs: %d", teamsWithPrograms)
+	t.Logf("   Expected matches: %d (%d per game x %d games)", expectedMatches, matchesPerGame, len(availableGames))
 	t.Logf("   Actual matches: %d generated, %d completed, %d failed", metrics.MatchesGenerated, metrics.MatchesCompleted, metrics.MatchesFailed)
 
 	// Check if we got the expected number of matches

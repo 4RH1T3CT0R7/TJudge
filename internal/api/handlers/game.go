@@ -44,13 +44,26 @@ type GameTournamentRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
 }
 
+// GameProgramRepository интерфейс для получения программ по турниру и игре
+type GameProgramRepository interface {
+	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error)
+}
+
+// TournamentGameStatusRepository интерфейс для получения статуса игр в турнире
+type TournamentGameStatusRepository interface {
+	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
+	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
+}
+
 // GameHandler обрабатывает запросы игр
 type GameHandler struct {
-	gameService     GameService
-	leaderboardRepo GameLeaderboardRepository
-	matchRepo       GameMatchRepository
-	tournamentRepo  GameTournamentRepository
-	log             *logger.Logger
+	gameService              GameService
+	leaderboardRepo          GameLeaderboardRepository
+	matchRepo                GameMatchRepository
+	tournamentRepo           GameTournamentRepository
+	programRepo              GameProgramRepository
+	tournamentGameStatusRepo TournamentGameStatusRepository
+	log                      *logger.Logger
 }
 
 // NewGameHandler создаёт новый game handler
@@ -76,6 +89,16 @@ func NewGameHandlerWithRepos(
 		tournamentRepo:  tournamentRepo,
 		log:             log,
 	}
+}
+
+// SetProgramRepo устанавливает репозиторий программ
+func (h *GameHandler) SetProgramRepo(programRepo GameProgramRepository) {
+	h.programRepo = programRepo
+}
+
+// SetTournamentGameStatusRepo устанавливает репозиторий для работы со статусом игр турнира
+func (h *GameHandler) SetTournamentGameStatusRepo(repo TournamentGameStatusRepository) {
+	h.tournamentGameStatusRepo = repo
 }
 
 // Create создаёт новую игру
@@ -469,4 +492,148 @@ func (h *GameHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, matches)
+}
+
+// GetGamePrograms получает программы для конкретной игры в турнире (только для админов)
+// GET /api/v1/tournaments/:id/games/:gameId/programs
+func (h *GameHandler) GetGamePrograms(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.programRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("program repository not configured"))
+		return
+	}
+
+	// Получаем программы
+	programs, err := h.programRepo.GetByTournamentAndGame(r.Context(), tournamentID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game programs", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, programs)
+}
+
+// TournamentGameWithDetails содержит информацию о связи турнира с игрой и данные об игре
+type TournamentGameWithDetails struct {
+	TournamentID     uuid.UUID `json:"tournament_id"`
+	GameID           uuid.UUID `json:"game_id"`
+	GameName         string    `json:"game_name"`
+	GameDisplayName  string    `json:"game_display_name"`
+	RoundCompleted   bool      `json:"round_completed"`
+	RoundCompletedAt *string   `json:"round_completed_at,omitempty"`
+	CurrentRound     int       `json:"current_round"`
+}
+
+// GetTournamentGamesWithStatus получает игры турнира с их статусом раундов
+// GET /api/v1/tournaments/{id}/games/status
+func (h *GameHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+
+	// Получаем связи турнира с играми
+	tournamentGames, err := h.tournamentGameStatusRepo.GetTournamentGames(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to get tournament games status", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// Обогащаем данными об играх
+	result := make([]TournamentGameWithDetails, 0, len(tournamentGames))
+	for _, tg := range tournamentGames {
+		g, err := h.gameService.GetByID(r.Context(), tg.GameID)
+		if err != nil {
+			h.log.LogError("Failed to get game details", err,
+				zap.String("game_id", tg.GameID.String()),
+			)
+			continue
+		}
+
+		item := TournamentGameWithDetails{
+			TournamentID:    tg.TournamentID,
+			GameID:          tg.GameID,
+			GameName:        g.Name,
+			GameDisplayName: g.DisplayName,
+			RoundCompleted:  tg.RoundCompleted,
+			CurrentRound:    tg.CurrentRound,
+		}
+		if tg.RoundCompletedAt != nil {
+			formatted := tg.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
+			item.RoundCompletedAt = &formatted
+		}
+		result = append(result, item)
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// MarkGameRoundCompleted отмечает раунд игры как завершённый
+// POST /api/v1/tournaments/{id}/games/{gameId}/complete-round
+func (h *GameHandler) MarkGameRoundCompleted(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+
+	// Отмечаем раунд как завершённый
+	if err := h.tournamentGameStatusRepo.MarkRoundCompleted(r.Context(), tournamentID, gameID); err != nil {
+		h.log.LogError("Failed to mark round completed", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Game round marked as completed",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_id", gameID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -67,6 +67,17 @@ export interface Game {
   updated_at: string;
 }
 
+// TournamentGame - связь турнира с игрой со статусом раунда
+export interface TournamentGameWithDetails {
+  tournament_id: string;
+  game_id: string;
+  game_name: string;
+  game_display_name: string;
+  round_completed: boolean;
+  round_completed_at?: string;
+  current_round: number;
+}
+
 // Program types
 export type ProgramStatus = 'pending' | 'compiling' | 'ready' | 'error';
 
@@ -170,6 +181,78 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   limit: number;
+}
+
+// Queue stats types
+export interface QueueStats {
+  high: number;
+  medium: number;
+  low: number;
+  total: number;
+}
+
+// Match statistics types
+export interface MatchStatistics {
+  total: number;
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+}
+
+// System metrics types
+export interface CPUMetrics {
+  usage_percent: number;
+  cores: number;
+  model_name?: string;
+  per_core?: number[];
+}
+
+export interface MemoryMetrics {
+  total: number;
+  used: number;
+  free: number;
+  used_percent: number;
+}
+
+export interface DiskMetrics {
+  total: number;
+  used: number;
+  free: number;
+  used_percent: number;
+  path: string;
+}
+
+export interface HostMetrics {
+  hostname: string;
+  platform: string;
+  platform_version: string;
+  os: string;
+  arch: string;
+  uptime: number;
+}
+
+export interface GoMetrics {
+  version: string;
+  goroutines: number;
+  heap_alloc: number;
+  heap_sys: number;
+  num_gc: number;
+  gomaxprocs: number;
+}
+
+export interface TemperatureInfo {
+  sensor_key: string;
+  temperature: number;
+}
+
+export interface SystemMetrics {
+  cpu: CPUMetrics;
+  memory: MemoryMetrics;
+  disk: DiskMetrics;
+  host: HostMetrics;
+  go: GoMetrics;
+  temperature?: TemperatureInfo[];
 }
 
 // WebSocket message types

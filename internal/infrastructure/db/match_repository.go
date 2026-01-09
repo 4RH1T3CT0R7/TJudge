@@ -187,6 +187,75 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 	return matches, nil
 }
 
+// GetPendingByTournamentAndGame получает ожидающие матчи турнира для конкретной игры
+func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error) {
+	var matches []*domain.Match
+
+	query := `
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
+		       score1, score2, winner, error_message, started_at, completed_at, created_at
+		FROM matches
+		WHERE tournament_id = $1 AND game_type = $2 AND status = $3
+		ORDER BY
+			CASE priority
+				WHEN 'high' THEN 1
+				WHEN 'medium' THEN 2
+				WHEN 'low' THEN 3
+			END,
+			created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType, domain.MatchPending)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get pending matches by tournament and game")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var match domain.Match
+		err := rows.Scan(
+			&match.ID,
+			&match.TournamentID,
+			&match.Program1ID,
+			&match.Program2ID,
+			&match.GameType,
+			&match.Status,
+			&match.Priority,
+			&match.RoundNumber,
+			&match.Score1,
+			&match.Score2,
+			&match.Winner,
+			&match.ErrorMessage,
+			&match.StartedAt,
+			&match.CompletedAt,
+			&match.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan match")
+		}
+		matches = append(matches, &match)
+	}
+
+	return matches, nil
+}
+
+// GetNextRoundNumberByGame получает следующий номер раунда для конкретной игры в турнире
+func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	query := `
+		SELECT COALESCE(MAX(round_number), 0) + 1
+		FROM matches
+		WHERE tournament_id = $1 AND game_type = $2
+	`
+
+	var nextRound int
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType).Scan(&nextRound)
+	if err != nil {
+		return 1, errors.Wrap(err, "failed to get next round number by game")
+	}
+
+	return nextRound, nil
+}
+
 // ResetFailedMatches сбрасывает все failed матчи турнира в pending
 func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
 	query := `
@@ -330,6 +399,27 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 	}
 
 	return nil
+}
+
+// HasStartedMatches проверяет, есть ли запущенные или завершённые матчи для турнира и игры
+// Возвращает true, если есть матчи со статусом running или completed
+func (r *MatchRepository) HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM matches
+			WHERE tournament_id = $1
+			AND game_type = $2
+			AND status IN ($3, $4)
+		)
+	`
+
+	var exists bool
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType, domain.MatchRunning, domain.MatchCompleted).Scan(&exists)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check started matches")
+	}
+
+	return exists, nil
 }
 
 // GetStatistics получает статистику матчей

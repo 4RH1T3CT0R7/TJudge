@@ -292,3 +292,133 @@ func (r *GameRepository) Exists(ctx context.Context, name string) (bool, error) 
 
 	return exists, nil
 }
+
+// GetTournamentGame получает связь турнира с игрой
+func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
+	var tg domain.TournamentGame
+
+	query := `
+		SELECT tournament_id, game_id, COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
+		FROM tournament_games
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(
+		&tg.TournamentID,
+		&tg.GameID,
+		&tg.RoundCompleted,
+		&tg.RoundCompletedAt,
+		&tg.CurrentRound,
+		&tg.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, errors.ErrNotFound.WithMessage("tournament game not found")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get tournament game")
+	}
+
+	return &tg, nil
+}
+
+// GetTournamentGames получает все связи турнира с играми
+func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+	query := `
+		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0), tg.created_at
+		FROM tournament_games tg
+		WHERE tg.tournament_id = $1
+		ORDER BY tg.created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get tournament games")
+	}
+	defer rows.Close()
+
+	var tgs []*domain.TournamentGame
+	for rows.Next() {
+		var tg domain.TournamentGame
+
+		err := rows.Scan(
+			&tg.TournamentID,
+			&tg.GameID,
+			&tg.RoundCompleted,
+			&tg.RoundCompletedAt,
+			&tg.CurrentRound,
+			&tg.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan tournament game")
+		}
+
+		tgs = append(tgs, &tg)
+	}
+
+	return tgs, nil
+}
+
+// MarkRoundCompleted отмечает раунд игры как завершённый
+func (r *GameRepository) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	query := `
+		UPDATE tournament_games
+		SET round_completed = true, round_completed_at = NOW()
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameID)
+	if err != nil {
+		return errors.Wrap(err, "failed to mark round completed")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("tournament game not found")
+	}
+
+	return nil
+}
+
+// IsRoundCompleted проверяет, завершён ли раунд для игры в турнире
+func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
+	var completed bool
+	query := `
+		SELECT COALESCE(round_completed, false)
+		FROM tournament_games
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&completed)
+	if err == sql.ErrNoRows {
+		// Если связи нет, считаем раунд не завершённым
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check round completion")
+	}
+
+	return completed, nil
+}
+
+// IncrementCurrentRound увеличивает номер текущего раунда
+func (r *GameRepository) IncrementCurrentRound(ctx context.Context, tournamentID, gameID uuid.UUID) (int, error) {
+	var newRound int
+	query := `
+		UPDATE tournament_games
+		SET current_round = COALESCE(current_round, 0) + 1
+		WHERE tournament_id = $1 AND game_id = $2
+		RETURNING current_round
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&newRound)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to increment current round")
+	}
+
+	return newRound, nil
+}

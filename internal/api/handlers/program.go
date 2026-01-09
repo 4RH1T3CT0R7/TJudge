@@ -41,11 +41,29 @@ type MatchScheduler interface {
 	ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error
 }
 
+// GameLookup интерфейс для получения информации об игре
+type GameLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
+}
+
+// MatchExistenceChecker интерфейс для проверки существования матчей
+type MatchExistenceChecker interface {
+	HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error)
+}
+
+// RoundCompletionChecker интерфейс для проверки завершения раунда игры
+type RoundCompletionChecker interface {
+	IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
 	programRepo    ProgramRepository
 	tournamentRepo TournamentParticipantAdder
 	matchScheduler MatchScheduler
+	gameLookup     GameLookup
+	matchChecker   MatchExistenceChecker
+	roundChecker   RoundCompletionChecker
 	uploadDir      string
 	maxFileSize    int64
 	log            *logger.Logger
@@ -71,6 +89,21 @@ func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentP
 		maxFileSize:    10 * 1024 * 1024, // 10MB
 		log:            log,
 	}
+}
+
+// SetGameLookup устанавливает GameLookup для проверки игр
+func (h *ProgramHandler) SetGameLookup(gameLookup GameLookup) {
+	h.gameLookup = gameLookup
+}
+
+// SetMatchChecker устанавливает MatchExistenceChecker для проверки наличия матчей
+func (h *ProgramHandler) SetMatchChecker(matchChecker MatchExistenceChecker) {
+	h.matchChecker = matchChecker
+}
+
+// SetRoundChecker устанавливает RoundCompletionChecker для проверки завершения раунда
+func (h *ProgramHandler) SetRoundChecker(roundChecker RoundCompletionChecker) {
+	h.roundChecker = roundChecker
 }
 
 // detectLanguage определяет язык программирования по расширению файла
@@ -192,6 +225,52 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game_id"))
 		return
+	}
+
+	// Проверяем, завершён ли раунд для этой игры (блокировка загрузки после завершения раунда)
+	if h.roundChecker != nil {
+		roundCompleted, err := h.roundChecker.IsRoundCompleted(r.Context(), tournamentID, gameID)
+		if err != nil {
+			h.log.LogError("Failed to check round completion", err,
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+			)
+			// Продолжаем, если не можем проверить статус раунда
+		} else if roundCompleted {
+			h.log.Info("Upload blocked: round already completed",
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+			)
+			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже завершён для этой игры"))
+			return
+		}
+	}
+
+	// Проверяем, не начались ли уже матчи для этой игры (блокировка загрузки после старта раунда)
+	if h.gameLookup != nil && h.matchChecker != nil {
+		game, err := h.gameLookup.GetByID(r.Context(), gameID)
+		if err != nil {
+			h.log.LogError("Failed to get game", err, zap.String("game_id", gameID.String()))
+			writeError(w, errors.ErrInternal.WithMessage("failed to verify game"))
+			return
+		}
+
+		hasStarted, err := h.matchChecker.HasStartedMatches(r.Context(), tournamentID, game.Name)
+		if err != nil {
+			h.log.LogError("Failed to check match status", err)
+			writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
+			return
+		}
+
+		if hasStarted {
+			h.log.Info("Upload blocked: matches already started",
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+				zap.String("game_type", game.Name),
+			)
+			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже запущен"))
+			return
+		}
 	}
 
 	// Если имя не указано, используем имя файла
