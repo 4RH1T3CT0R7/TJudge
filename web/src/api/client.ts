@@ -71,7 +71,11 @@ class ApiClient {
             // Retry original request with new token
             return this.client.request(originalRequest);
           } catch {
-            this.logout();
+            // Refresh failed - just clear tokens locally, don't call logout API
+            // (calling logout API would cause another 401 and infinite loop)
+            this.clearTokens();
+            // Redirect to login page
+            window.location.href = '/login';
           }
         }
         return Promise.reject(error);
