@@ -264,16 +264,36 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 
 	// Если есть ошибка
 	if exitCode != 0 {
-		// Sanitize error message - remove null bytes that break PostgreSQL
-		result.ErrorMessage = sanitizeForDB(strings.TrimSpace(stderr))
+		// Build comprehensive error message including both stdout and stderr
+		var errorParts []string
 
-		// Определяем winner по коду ошибки
-		// 1 - ошибка программы 1, 2 - ошибка программы 2
-		if exitCode == 1 {
+		// Add which program failed based on exit code
+		switch exitCode {
+		case 1:
+			errorParts = append(errorParts, "❌ Программа 1 завершилась с ошибкой:")
 			result.Winner = 2 // Побеждает программа 2
-		} else if exitCode == 2 {
+		case 2:
+			errorParts = append(errorParts, "❌ Программа 2 завершилась с ошибкой:")
 			result.Winner = 1 // Побеждает программа 1
+		default:
+			errorParts = append(errorParts, fmt.Sprintf("❌ Ошибка выполнения (код %d):", exitCode))
 		}
+
+		// Add stderr (primary error output)
+		if stderrClean := strings.TrimSpace(stderr); stderrClean != "" {
+			errorParts = append(errorParts, "\n--- stderr ---\n"+stderrClean)
+		}
+
+		// Add stdout if it contains useful info (sometimes errors go to stdout)
+		if stdoutClean := strings.TrimSpace(stdout); stdoutClean != "" {
+			// Only include stdout if it's not just scores
+			if !strings.Contains(stdoutClean, " ") || len(stdoutClean) > 20 {
+				errorParts = append(errorParts, "\n--- stdout ---\n"+stdoutClean)
+			}
+		}
+
+		// Sanitize and store the combined error message
+		result.ErrorMessage = sanitizeForDB(strings.Join(errorParts, ""))
 
 		return result, nil
 	}

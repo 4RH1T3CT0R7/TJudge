@@ -314,72 +314,103 @@ func TestPerformance_30Teams_Upload(t *testing.T) {
 	require.Greater(t, successfulTeams, 0, "Need at least one team created")
 
 	// ==========================================================================
-	// Phase 5: Upload programs for ACTIVE game only (dilemma)
+	// Phase 5: Upload programs for ALL games (dilemma and tug_of_war)
 	// Tournament is pending, matches NOT started
 	// ==========================================================================
-	fmt.Println("\n📦 Phase 5: Uploading programs for active game (dilemma)...")
+	fmt.Println("\n📦 Phase 5: Uploading programs for ALL games...")
 	fmt.Println("   Note: Tournament is PENDING, matches will NOT be executed")
 
 	start = time.Now()
 	successfulUploads := 0
 	failedUploads := 0
 
-	for i := 0; i < numTeams; i++ {
-		if teams[i] == nil || teams[i].TeamID == "" {
+	// Upload programs for each game
+	for _, gameName := range availableGames {
+		gameID := gameIDs[gameName]
+		fmt.Printf("\n   📌 Uploading %s programs...\n", gameName)
+
+		var strategies []string
+		var botPrefix string
+		switch gameName {
+		case "dilemma":
+			strategies = dilemmaStrategies
+			botPrefix = "DilemmaBot"
+		case "tug_of_war":
+			strategies = tugOfWarStrategies
+			botPrefix = "TugBot"
+		default:
+			fmt.Printf("   ⚠️ Unknown game %s, skipping\n", gameName)
 			continue
 		}
 
-		uploadClient := NewTestClient()
-		uploadClient.SetToken(teams[i].UserToken)
+		gameUploads := 0
+		gameFailed := 0
 
-		// Get strategy for dilemma
-		strategies := dilemmaStrategies
-		strategy := strategies[i%len(strategies)]
-
-		resp, err := uploadClient.uploadProgram(
-			teams[i].TeamID,
-			tournamentID,
-			activeGameID,
-			fmt.Sprintf("DilemmaBot_%d", i),
-			strategy,
-		)
-
-		if err != nil {
-			if i < 3 {
-				fmt.Printf("   Team %d: upload error: %v\n", i, err)
+		for i := 0; i < numTeams; i++ {
+			if teams[i] == nil || teams[i].TeamID == "" {
+				continue
 			}
-			failedUploads++
-			continue
-		}
 
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if i < 3 {
-				fmt.Printf("   Team %d: failed (%d): %s\n", i, resp.StatusCode, string(body))
+			uploadClient := NewTestClient()
+			uploadClient.SetToken(teams[i].UserToken)
+
+			strategy := strategies[i%len(strategies)]
+
+			resp, err := uploadClient.uploadProgram(
+				teams[i].TeamID,
+				tournamentID,
+				gameID,
+				fmt.Sprintf("%s_%d", botPrefix, i),
+				strategy,
+			)
+
+			if err != nil {
+				if gameFailed < 3 {
+					fmt.Printf("      Team %d: upload error: %v\n", i, err)
+				}
+				gameFailed++
+				failedUploads++
+				continue
 			}
-			failedUploads++
-			continue
-		}
 
-		var programResp struct {
-			ID string `json:"id"`
-		}
-		if err := uploadClient.parseResponse(resp, &programResp); err != nil {
-			if i < 3 {
-				fmt.Printf("   Team %d: parse error: %v\n", i, err)
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if gameFailed < 3 {
+					fmt.Printf("      Team %d: failed (%d): %s\n", i, resp.StatusCode, string(body))
+				}
+				gameFailed++
+				failedUploads++
+				continue
 			}
-			failedUploads++
-			continue
+
+			var programResp struct {
+				ID string `json:"id"`
+			}
+			if err := uploadClient.parseResponse(resp, &programResp); err != nil {
+				if gameFailed < 3 {
+					fmt.Printf("      Team %d: parse error: %v\n", i, err)
+				}
+				gameFailed++
+				failedUploads++
+				continue
+			}
+
+			// Store program ID (use first one for legacy compatibility)
+			if teams[i].ProgramID == "" {
+				teams[i].ProgramID = programResp.ID
+			}
+			gameUploads++
+			successfulUploads++
 		}
 
-		teams[i].ProgramID = programResp.ID
-		successfulUploads++
+		fmt.Printf("   ✅ %s: uploaded %d, failed %d\n", gameName, gameUploads, gameFailed)
 	}
+
 	metrics.ProgramUploadTime = time.Since(start)
 	metrics.ProgramsUploaded = successfulUploads
 	metrics.ProgramsFailed = failedUploads
-	fmt.Printf("   Uploaded %d programs, failed %d in %v\n",
+	fmt.Printf("\n   Total: Uploaded %d programs, failed %d in %v\n",
 		successfulUploads, failedUploads, metrics.ProgramUploadTime)
 
 	// ==========================================================================

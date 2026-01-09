@@ -205,9 +205,11 @@ for i in range(n):
 // Protocol: Total energy = 100, distribute across rounds
 // Each round: output integer (how much energy to spend), read opponent's spent
 // IMPORTANT: Track remaining energy and never overspend
+// Game sends -1 when match ends early
 var tugOfWarStrategies = []string{
 	// Even distribution with tracking
 	`#!/usr/bin/python3
+import sys
 n = int(input())
 remaining = 100
 for i in range(n):
@@ -215,37 +217,57 @@ for i in range(n):
     spend = min(remaining, remaining // rounds_left) if rounds_left > 0 else remaining
     remaining -= spend
     print(max(0, spend), flush=True)
-    input()
+    try:
+        line = input()
+        if line.strip() == '' or int(line) < 0:
+            break
+    except (ValueError, EOFError):
+        break
 `,
 	// Front-loaded with tracking
 	`#!/usr/bin/python3
+import sys
 n = int(input())
 remaining = 100
 weights = [3, 2.5, 2, 1.5, 1, 0.5, 0.3, 0.2]
 for i in range(n):
     w = weights[i] if i < len(weights) else 0.1
-    spend = min(remaining, int(remaining * w / sum(weights[i:] if i < len(weights) else [0.1])))
+    total_w = sum(weights[j] if j < len(weights) else 0.1 for j in range(i, n))
+    spend = min(remaining, int(remaining * w / max(0.01, total_w)))
     spend = max(0, min(remaining, spend))
     remaining -= spend
     print(spend, flush=True)
-    input()
+    try:
+        line = input()
+        if line.strip() == '' or int(line) < 0:
+            break
+    except (ValueError, EOFError):
+        break
 `,
 	// Back-loaded with tracking
 	`#!/usr/bin/python3
+import sys
 n = int(input())
 remaining = 100
 weights = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5]
 for i in range(n):
     w = weights[i] if i < len(weights) else 5
-    spend = min(remaining, int(remaining * w / sum(weights[i:] if i < len(weights) else [5])))
+    total_w = sum(weights[j] if j < len(weights) else 5 for j in range(i, n))
+    spend = min(remaining, int(remaining * w / max(0.01, total_w)))
     spend = max(0, min(remaining, spend))
     remaining -= spend
     print(spend, flush=True)
-    input()
+    try:
+        line = input()
+        if line.strip() == '' or int(line) < 0:
+            break
+    except (ValueError, EOFError):
+        break
 `,
 	// Random within budget with safety
 	`#!/usr/bin/python3
 import random
+import sys
 n = int(input())
 remaining = 100
 for i in range(n):
@@ -257,7 +279,12 @@ for i in range(n):
         spend = min(remaining, max(0, random.randint(max(0, avg - 5), avg + 5)))
         remaining -= spend
         print(spend, flush=True)
-    input()
+    try:
+        line = input()
+        if line.strip() == '' or int(line) < 0:
+            break
+    except (ValueError, EOFError):
+        break
 `,
 }
 

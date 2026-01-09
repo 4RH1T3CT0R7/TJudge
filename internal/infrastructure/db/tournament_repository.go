@@ -763,6 +763,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 		),
 		match_stats AS (
 			-- Получаем статистику матчей для каждой программы (любой версии)
+			-- Очки умножаются на score_multiplier игры для балансировки между играми
 			SELECT
 				p.team_id,
 				g.id as game_id,
@@ -779,11 +780,11 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games,
 				COALESCE(SUM(
 					CASE
-						WHEN m.program1_id = p.id THEN COALESCE(m.score1, 0)
-						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0)
+						WHEN m.program1_id = p.id THEN COALESCE(m.score1, 0) * COALESCE(g.score_multiplier, 1.0)
+						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0) * COALESCE(g.score_multiplier, 1.0)
 						ELSE 0
 					END
-				), 0) as total_score
+				), 0)::bigint as total_score
 			FROM programs p
 			JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
 			JOIN games g ON m.game_type = g.name
