@@ -337,16 +337,15 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
 
-	// Проверяем синтаксис для Python-файлов
+	// Проверяем синтаксис для всех поддерживаемых языков
 	var syntaxError *string
-	if language == "python" {
-		if errMsg := validatePythonSyntax(filePath); errMsg != "" {
-			syntaxError = &errMsg
-			h.log.Info("Python syntax error detected",
-				zap.String("file", filePath),
-				zap.String("error", errMsg),
-			)
-		}
+	if errMsg := validateSyntax(language, filePath); errMsg != "" {
+		syntaxError = &errMsg
+		h.log.Info("Syntax error detected",
+			zap.String("file", filePath),
+			zap.String("language", language),
+			zap.String("error", errMsg),
+		)
 	}
 
 	// Создаём запись в БД
@@ -788,4 +787,100 @@ func validatePythonSyntax(filePath string) string {
 		return errorMsg
 	}
 	return ""
+}
+
+// validateJavaScriptSyntax проверяет синтаксис JavaScript файла с помощью Node.js
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validateJavaScriptSyntax(filePath string) string {
+	// Используем Node.js для проверки синтаксиса (--check парсит, но не выполняет)
+	cmd := exec.Command("node", "--check", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := strings.TrimSpace(string(output))
+		if errorMsg == "" {
+			errorMsg = "Синтаксическая ошибка в JavaScript коде"
+		}
+		if len(errorMsg) > 500 {
+			errorMsg = errorMsg[:500] + "..."
+		}
+		return errorMsg
+	}
+	return ""
+}
+
+// validateRubySyntax проверяет синтаксис Ruby файла
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validateRubySyntax(filePath string) string {
+	// Используем ruby -c для проверки синтаксиса
+	cmd := exec.Command("ruby", "-c", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := strings.TrimSpace(string(output))
+		if errorMsg == "" {
+			errorMsg = "Синтаксическая ошибка в Ruby коде"
+		}
+		if len(errorMsg) > 500 {
+			errorMsg = errorMsg[:500] + "..."
+		}
+		return errorMsg
+	}
+	return ""
+}
+
+// validatePHPSyntax проверяет синтаксис PHP файла
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validatePHPSyntax(filePath string) string {
+	// Используем php -l для проверки синтаксиса
+	cmd := exec.Command("php", "-l", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := strings.TrimSpace(string(output))
+		if errorMsg == "" {
+			errorMsg = "Синтаксическая ошибка в PHP коде"
+		}
+		if len(errorMsg) > 500 {
+			errorMsg = errorMsg[:500] + "..."
+		}
+		return errorMsg
+	}
+	return ""
+}
+
+// validateLuaSyntax проверяет синтаксис Lua файла
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validateLuaSyntax(filePath string) string {
+	// Используем luac для проверки синтаксиса (-p = parse only, don't generate output)
+	cmd := exec.Command("luac", "-p", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := strings.TrimSpace(string(output))
+		if errorMsg == "" {
+			errorMsg = "Синтаксическая ошибка в Lua коде"
+		}
+		if len(errorMsg) > 500 {
+			errorMsg = errorMsg[:500] + "..."
+		}
+		return errorMsg
+	}
+	return ""
+}
+
+// validateSyntax проверяет синтаксис файла в зависимости от языка
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validateSyntax(language, filePath string) string {
+	switch language {
+	case "python":
+		return validatePythonSyntax(filePath)
+	case "javascript":
+		return validateJavaScriptSyntax(filePath)
+	case "ruby":
+		return validateRubySyntax(filePath)
+	case "php":
+		return validatePHPSyntax(filePath)
+	case "lua":
+		return validateLuaSyntax(filePath)
+	default:
+		// Для неподдерживаемых языков пропускаем проверку
+		return ""
+	}
 }

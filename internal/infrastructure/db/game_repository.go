@@ -298,7 +298,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	var tg domain.TournamentGame
 
 	query := `
-		SELECT tournament_id, game_id, COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
 		FROM tournament_games
 		WHERE tournament_id = $1 AND game_id = $2
 	`
@@ -306,6 +306,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(
 		&tg.TournamentID,
 		&tg.GameID,
+		&tg.IsActive,
 		&tg.RoundCompleted,
 		&tg.RoundCompletedAt,
 		&tg.CurrentRound,
@@ -325,7 +326,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 // GetTournamentGames получает все связи турнира с играми
 func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
 	query := `
-		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0), tg.created_at
+		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0), tg.created_at
 		FROM tournament_games tg
 		WHERE tg.tournament_id = $1
 		ORDER BY tg.created_at ASC
@@ -344,6 +345,7 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 		err := rows.Scan(
 			&tg.TournamentID,
 			&tg.GameID,
+			&tg.IsActive,
 			&tg.RoundCompleted,
 			&tg.RoundCompletedAt,
 			&tg.CurrentRound,
@@ -421,4 +423,125 @@ func (r *GameRepository) IncrementCurrentRound(ctx context.Context, tournamentID
 	}
 
 	return newRound, nil
+}
+
+// SetActiveGame устанавливает активную игру для турнира
+// Деактивирует все остальные игры и активирует указанную
+func (r *GameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	// Используем транзакцию для атомарности
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to begin transaction")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Деактивируем все игры турнира
+	deactivateQuery := `
+		UPDATE tournament_games
+		SET is_active = false
+		WHERE tournament_id = $1
+	`
+	if _, err := tx.ExecContext(ctx, deactivateQuery, tournamentID); err != nil {
+		return errors.Wrap(err, "failed to deactivate games")
+	}
+
+	// Активируем указанную игру
+	activateQuery := `
+		UPDATE tournament_games
+		SET is_active = true
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+	result, err := tx.ExecContext(ctx, activateQuery, tournamentID, gameID)
+	if err != nil {
+		return errors.Wrap(err, "failed to activate game")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("game not found in tournament")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit transaction")
+	}
+
+	return nil
+}
+
+// GetActiveGame получает активную игру для турнира
+func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
+	var tg domain.TournamentGame
+
+	query := `
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
+		FROM tournament_games
+		WHERE tournament_id = $1 AND is_active = true
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID).Scan(
+		&tg.TournamentID,
+		&tg.GameID,
+		&tg.IsActive,
+		&tg.RoundCompleted,
+		&tg.RoundCompletedAt,
+		&tg.CurrentRound,
+		&tg.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, errors.ErrNotFound.WithMessage("no active game found")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get active game")
+	}
+
+	return &tg, nil
+}
+
+// IsGameActive проверяет, является ли игра активной
+func (r *GameRepository) IsGameActive(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
+	var isActive bool
+	query := `
+		SELECT COALESCE(is_active, false)
+		FROM tournament_games
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&isActive)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check game active status")
+	}
+
+	return isActive, nil
+}
+
+// ResetGameRound сбрасывает номер раунда и статус завершения для игры в турнире
+func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	query := `
+		UPDATE tournament_games
+		SET current_round = 0, round_completed = false, round_completed_at = NULL
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameID)
+	if err != nil {
+		return errors.Wrap(err, "failed to reset game round")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("tournament game not found")
+	}
+
+	return nil
 }

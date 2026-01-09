@@ -1095,3 +1095,20 @@ type MatchStatistics struct {
 	Completed int `json:"completed"`
 	Failed    int `json:"failed"`
 }
+
+// DeleteMatchesForGame удаляет все матчи турнира для определённой игры
+func (r *MatchRepository) DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
+	query := `DELETE FROM matches WHERE tournament_id = $1 AND game_type = $2`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameType)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to delete matches for game")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get rows affected")
+	}
+
+	return rows, nil
+}

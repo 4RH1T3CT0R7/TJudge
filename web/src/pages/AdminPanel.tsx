@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match } from '../types';
+import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match, TournamentGameWithDetails } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
 
@@ -88,8 +88,11 @@ export function AdminPanel() {
   // Tournament games management state
   const [managingTournamentId, setManagingTournamentId] = useState<string | null>(null);
   const [managingTournamentGames, setManagingTournamentGames] = useState<Game[]>([]);
+  const [managingTournamentGamesStatus, setManagingTournamentGamesStatus] = useState<TournamentGameWithDetails[]>([]);
   const [isLoadingTournamentGames, setIsLoadingTournamentGames] = useState(false);
   const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
+  const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
+  const [resettingGame, setResettingGame] = useState<string | null>(null);
 
   // Programs tab state
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
@@ -497,8 +500,12 @@ export function AdminPanel() {
     setManagingTournamentId(tournamentId);
     setIsLoadingTournamentGames(true);
     try {
-      const gamesData = await api.getTournamentGames(tournamentId);
+      const [gamesData, gamesStatus] = await Promise.all([
+        api.getTournamentGames(tournamentId),
+        api.getTournamentGamesStatus(tournamentId),
+      ]);
       setManagingTournamentGames(gamesData || []);
+      setManagingTournamentGamesStatus(gamesStatus || []);
     } catch (err) {
       console.error('Failed to load tournament games:', err);
       setActionError('Не удалось загрузить игры турнира');
@@ -511,7 +518,86 @@ export function AdminPanel() {
   const closeTournamentGamesManagement = () => {
     setManagingTournamentId(null);
     setManagingTournamentGames([]);
+    setManagingTournamentGamesStatus([]);
     setRunningGameMatches(null);
+    setSettingActiveGame(null);
+  };
+
+  // Set active game for tournament
+  const handleSetActiveGame = async (gameId: string) => {
+    if (!managingTournamentId) return;
+
+    setSettingActiveGame(gameId);
+    setActionError(null);
+
+    try {
+      await api.setActiveGame(managingTournamentId, gameId);
+      // Reload games status to update UI
+      const gamesStatus = await api.getTournamentGamesStatus(managingTournamentId);
+      setManagingTournamentGamesStatus(gamesStatus || []);
+    } catch (err: unknown) {
+      console.error('Failed to set active game:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось установить активную игру');
+    } finally {
+      setSettingActiveGame(null);
+    }
+  };
+
+  // Run round for active game only
+  const handleRunActiveGameRound = async () => {
+    if (!managingTournamentId) return;
+
+    const activeGame = managingTournamentGamesStatus.find(g => g.is_active);
+    if (!activeGame) {
+      setActionError('Нет активной игры. Выберите активную игру для запуска раунда.');
+      return;
+    }
+
+    const game = managingTournamentGames.find(g => g.id === activeGame.game_id);
+    if (!game) return;
+
+    await handleRunGameMatches(game.name, game.display_name);
+  };
+
+  // Reset game round (delete all matches and reset ratings)
+  const handleResetGameRound = async (gameId: string, gameName: string) => {
+    if (!managingTournamentId) return;
+
+    const confirmed = window.confirm(
+      `Вы уверены, что хотите сбросить раунд для игры "${gameName}"?\n\n` +
+      'Это действие:\n' +
+      '- Удалит все матчи этой игры\n' +
+      '- Сбросит рейтинги всех участников до 1000\n' +
+      '- Сбросит номер раунда\n\n' +
+      'Это действие необратимо!'
+    );
+
+    if (!confirmed) return;
+
+    setResettingGame(gameId);
+    setActionError(null);
+
+    try {
+      const result = await api.resetGameRound(managingTournamentId, gameId);
+
+      // Reload games status to update UI
+      const gamesStatus = await api.getTournamentGamesStatus(managingTournamentId);
+      setManagingTournamentGamesStatus(gamesStatus || []);
+
+      alert(
+        `Раунд сброшен успешно!\n\n` +
+        `Удалено матчей: ${result.matches_deleted}\n` +
+        `Сброшено рейтингов: ${result.participants_reset}\n` +
+        `Удалено записей истории: ${result.rating_history_reset}`
+      );
+    } catch (err: unknown) {
+      console.error('Failed to reset game round:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось сбросить раунд');
+    } finally {
+      setResettingGame(null);
+    }
   };
 
   // Run matches for a specific game
@@ -979,7 +1065,7 @@ export function AdminPanel() {
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                    Запустить раунд по игре
+                    Управление играми турнира
                   </h2>
                   <button
                     onClick={closeTournamentGamesManagement}
@@ -990,7 +1076,8 @@ export function AdminPanel() {
                 </div>
 
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Выберите игру для запуска раунда матчей. Раунд создаст матчи для всех участников и добавит их в очередь.
+                  Выберите активную игру. Только активная игра может принимать загрузку программ.
+                  Кнопка «Запустить раунд» запустит матчи только для активной игры.
                 </p>
 
                 {isLoadingTournamentGames ? (
@@ -1003,38 +1090,88 @@ export function AdminPanel() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {managingTournamentGames.map((game) => (
-                      <div
-                        key={game.id}
-                        className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{getGameIcon(game.name)}</span>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-gray-100">
-                              {game.display_name}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {game.name}
-                            </p>
+                    {managingTournamentGames.map((game) => {
+                      const gameStatus = managingTournamentGamesStatus.find(g => g.game_id === game.id);
+                      const isActive = gameStatus?.is_active || false;
+                      return (
+                        <div
+                          key={game.id}
+                          className={`p-3 border rounded-lg transition-colors ${
+                            isActive
+                              ? 'border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
+                              : 'border-gray-200 dark:border-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{getGameIcon(game.name)}</span>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                                    {game.display_name}
+                                  </p>
+                                  {isActive && (
+                                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 text-xs rounded-full font-medium">
+                                      Активна
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {game.name}
+                                  {gameStatus && ` • Раунд ${gameStatus.current_round}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!isActive && (
+                                <button
+                                  onClick={() => handleSetActiveGame(game.id)}
+                                  disabled={settingActiveGame === game.id}
+                                  className="btn btn-secondary text-sm disabled:opacity-50"
+                                >
+                                  {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
+                                </button>
+                              )}
+                              {isActive && (
+                                <>
+                                  <button
+                                    onClick={() => handleRunGameMatches(game.name, game.display_name)}
+                                    disabled={runningGameMatches === game.name}
+                                    className="btn btn-primary text-sm disabled:opacity-50"
+                                  >
+                                    {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleResetGameRound(game.id, game.display_name)}
+                                    disabled={resettingGame === game.id}
+                                    className="btn text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                                    title="Сбросить раунд (удалить все матчи и рейтинги)"
+                                  >
+                                    {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleRunGameMatches(game.name, game.display_name)}
-                          disabled={runningGameMatches === game.name}
-                          className="btn btn-primary text-sm disabled:opacity-50"
-                        >
-                          {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
-                <div className="flex justify-end mt-6">
+                <div className="flex justify-between mt-6">
                   <button onClick={closeTournamentGamesManagement} className="btn btn-secondary">
                     Закрыть
                   </button>
+                  {managingTournamentGamesStatus.some(g => g.is_active) && (
+                    <button
+                      onClick={handleRunActiveGameRound}
+                      disabled={runningGameMatches !== null}
+                      className="btn btn-primary"
+                    >
+                      {runningGameMatches ? 'Запуск...' : 'Запустить раунд активной игры'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

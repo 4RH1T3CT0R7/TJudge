@@ -53,6 +53,20 @@ type GameProgramRepository interface {
 type TournamentGameStatusRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
 	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
+	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
+	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error)
+	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
+}
+
+// GameRatingRepository интерфейс для сброса рейтингов
+type GameRatingRepository interface {
+	ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error)
+	DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error)
+}
+
+// GameMatchResetRepository интерфейс для удаления матчей
+type GameMatchResetRepository interface {
+	DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error)
 }
 
 // GameHandler обрабатывает запросы игр
@@ -63,6 +77,8 @@ type GameHandler struct {
 	tournamentRepo           GameTournamentRepository
 	programRepo              GameProgramRepository
 	tournamentGameStatusRepo TournamentGameStatusRepository
+	ratingRepo               GameRatingRepository
+	matchResetRepo           GameMatchResetRepository
 	log                      *logger.Logger
 }
 
@@ -99,6 +115,16 @@ func (h *GameHandler) SetProgramRepo(programRepo GameProgramRepository) {
 // SetTournamentGameStatusRepo устанавливает репозиторий для работы со статусом игр турнира
 func (h *GameHandler) SetTournamentGameStatusRepo(repo TournamentGameStatusRepository) {
 	h.tournamentGameStatusRepo = repo
+}
+
+// SetRatingRepo устанавливает репозиторий рейтингов
+func (h *GameHandler) SetRatingRepo(repo GameRatingRepository) {
+	h.ratingRepo = repo
+}
+
+// SetMatchResetRepo устанавливает репозиторий для удаления матчей
+func (h *GameHandler) SetMatchResetRepo(repo GameMatchResetRepository) {
+	h.matchResetRepo = repo
 }
 
 // Create создаёт новую игру
@@ -537,6 +563,7 @@ type TournamentGameWithDetails struct {
 	GameID           uuid.UUID `json:"game_id"`
 	GameName         string    `json:"game_name"`
 	GameDisplayName  string    `json:"game_display_name"`
+	IsActive         bool      `json:"is_active"`
 	RoundCompleted   bool      `json:"round_completed"`
 	RoundCompletedAt *string   `json:"round_completed_at,omitempty"`
 	CurrentRound     int       `json:"current_round"`
@@ -584,6 +611,7 @@ func (h *GameHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *htt
 			GameID:          tg.GameID,
 			GameName:        g.Name,
 			GameDisplayName: g.DisplayName,
+			IsActive:        tg.IsActive,
 			RoundCompleted:  tg.RoundCompleted,
 			CurrentRound:    tg.CurrentRound,
 		}
@@ -636,4 +664,217 @@ func (h *GameHandler) MarkGameRoundCompleted(w http.ResponseWriter, r *http.Requ
 	)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// SetActiveGameRequest запрос на установку активной игры
+type SetActiveGameRequest struct {
+	GameID uuid.UUID `json:"game_id"`
+}
+
+// SetActiveGame устанавливает активную игру для турнира
+// POST /api/v1/tournaments/{id}/active-game
+func (h *GameHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+
+	var req SetActiveGameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Info("Invalid request body", zap.Error(err))
+		writeError(w, errors.ErrInvalidInput.WithMessage("game_id is required"))
+		return
+	}
+
+	// Устанавливаем активную игру
+	if err := h.tournamentGameStatusRepo.SetActiveGame(r.Context(), tournamentID, req.GameID); err != nil {
+		h.log.LogError("Failed to set active game", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", req.GameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Active game set",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_id", req.GameID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetActiveGame получает текущую активную игру турнира
+// GET /api/v1/tournaments/{id}/active-game
+func (h *GameHandler) GetActiveGame(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+
+	// Получаем активную игру
+	activeGame, err := h.tournamentGameStatusRepo.GetActiveGame(r.Context(), tournamentID)
+	if err != nil {
+		// Если активной игры нет - возвращаем null
+		if errors.IsNotFound(err) {
+			writeJSON(w, http.StatusOK, nil)
+			return
+		}
+		h.log.LogError("Failed to get active game", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// Получаем информацию об игре
+	g, err := h.gameService.GetByID(r.Context(), activeGame.GameID)
+	if err != nil {
+		h.log.LogError("Failed to get game details", err,
+			zap.String("game_id", activeGame.GameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	result := TournamentGameWithDetails{
+		TournamentID:    activeGame.TournamentID,
+		GameID:          activeGame.GameID,
+		GameName:        g.Name,
+		GameDisplayName: g.DisplayName,
+		IsActive:        activeGame.IsActive,
+		RoundCompleted:  activeGame.RoundCompleted,
+		CurrentRound:    activeGame.CurrentRound,
+	}
+	if activeGame.RoundCompletedAt != nil {
+		formatted := activeGame.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
+		result.RoundCompletedAt = &formatted
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// ResetGameRoundResponse ответ на сброс раунда
+type ResetGameRoundResponse struct {
+	MatchesDeleted     int64 `json:"matches_deleted"`
+	ParticipantsReset  int64 `json:"participants_reset"`
+	RatingHistoryReset int64 `json:"rating_history_reset"`
+}
+
+// ResetGameRound полностью сбрасывает раунд игры: удаляет все матчи, сбрасывает рейтинги и статистику
+// POST /api/v1/tournaments/{id}/games/{gameId}/reset-round
+// Требует прав администратора (проверяется middleware RequireAdmin)
+func (h *GameHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, err := uuid.Parse(gameIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+		return
+	}
+
+	// Проверяем наличие репозиториев
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+	if h.ratingRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("rating repository not configured"))
+		return
+	}
+	if h.matchResetRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("match reset repository not configured"))
+		return
+	}
+
+	// Получаем информацию об игре
+	g, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game details", err,
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	ctx := r.Context()
+
+	// 1. Удаляем историю рейтингов для этой игры
+	ratingHistoryDeleted, err := h.ratingRepo.DeleteRatingHistoryForGame(ctx, tournamentID, gameID, g.Name)
+	if err != nil {
+		h.log.LogError("Failed to delete rating history", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// 2. Удаляем матчи
+	matchesDeleted, err := h.matchResetRepo.DeleteMatchesForGame(ctx, tournamentID, g.Name)
+	if err != nil {
+		h.log.LogError("Failed to delete matches", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", g.Name),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// 3. Сбрасываем рейтинги участников
+	participantsReset, err := h.ratingRepo.ResetParticipantsForGame(ctx, tournamentID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to reset participants", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// 4. Сбрасываем номер раунда
+	if err := h.tournamentGameStatusRepo.ResetGameRound(ctx, tournamentID, gameID); err != nil {
+		h.log.LogError("Failed to reset game round number", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Game round reset completed",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_id", gameID.String()),
+		zap.Int64("matches_deleted", matchesDeleted),
+		zap.Int64("participants_reset", participantsReset),
+		zap.Int64("rating_history_reset", ratingHistoryDeleted),
+	)
+
+	writeJSON(w, http.StatusOK, ResetGameRoundResponse{
+		MatchesDeleted:     matchesDeleted,
+		ParticipantsReset:  participantsReset,
+		RatingHistoryReset: ratingHistoryDeleted,
+	})
 }

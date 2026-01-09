@@ -280,6 +280,28 @@ class ApiClient {
     await this.client.post(`/tournaments/${tournamentId}/games/${gameId}/complete-round`);
   }
 
+  async setActiveGame(tournamentId: string, gameId: string): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/active-game`, { game_id: gameId });
+  }
+
+  async getActiveGame(tournamentId: string): Promise<TournamentGameWithDetails | null> {
+    const { data } = await this.client.get<TournamentGameWithDetails | null>(
+      `/tournaments/${tournamentId}/active-game`
+    );
+    return data;
+  }
+
+  async resetGameRound(tournamentId: string, gameId: string): Promise<{
+    matches_deleted: number;
+    participants_reset: number;
+    rating_history_reset: number;
+  }> {
+    const { data } = await this.client.post(
+      `/tournaments/${tournamentId}/games/${gameId}/reset-round`
+    );
+    return data;
+  }
+
   // Team endpoints
   async createTeam(tournamentId: string, name: string): Promise<Team> {
     const { data } = await this.client.post<Team>('/teams', { tournament_id: tournamentId, name });

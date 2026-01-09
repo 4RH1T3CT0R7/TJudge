@@ -73,6 +73,7 @@ export interface TournamentGameWithDetails {
   game_id: string;
   game_name: string;
   game_display_name: string;
+  is_active: boolean;
   round_completed: boolean;
   round_completed_at?: string;
   current_round: number;

@@ -107,6 +107,7 @@ func main() {
 	matchRepo := db.NewMatchRepository(database)
 	gameRepo := db.NewGameRepository(database)
 	teamRepo := db.NewTeamRepository(database)
+	ratingRepo := db.NewRatingRepository(database)
 
 	// Инициализируем кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
@@ -166,6 +167,8 @@ func main() {
 	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, tournamentRepo, log)
 	gameHandler.SetProgramRepo(programRepo)
 	gameHandler.SetTournamentGameStatusRepo(gameRepo)
+	gameHandler.SetRatingRepo(ratingRepo)
+	gameHandler.SetMatchResetRepo(matchRepo)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 	systemHandler := handlers.NewSystemHandler(log)

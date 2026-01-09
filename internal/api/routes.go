@@ -145,6 +145,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
 			r.Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
 			r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
+			r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
 
 			// Защищённые маршруты
 			r.Group(func(r chi.Router) {
@@ -167,6 +168,8 @@ func (s *Server) setupRoutes() {
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
 					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
 					r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
+					r.Post("/{id}/games/{gameId}/reset-round", s.gameHandler.ResetGameRound)
+					r.Post("/{id}/active-game", s.gameHandler.SetActiveGame)
 					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
 					r.Post("/{id}/run-game-matches", s.tournamentHandler.RunGameMatches)
 					r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)

@@ -199,3 +199,51 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 
 	return rating1, rating2, nil
 }
+
+// ResetParticipantsForGame сбрасывает рейтинги и статистику всех участников для определённой игры
+func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
+	// Сначала получаем программы для этой игры
+	query := `
+		UPDATE tournament_participants tp
+		SET rating = 1000, wins = 0, losses = 0, draws = 0
+		FROM programs p
+		WHERE tp.program_id = p.id
+		AND tp.tournament_id = $1
+		AND p.game_id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameID)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to reset participants for game")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get rows affected")
+	}
+
+	return rows, nil
+}
+
+// DeleteRatingHistoryForGame удаляет историю рейтингов для определённой игры
+func (r *RatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error) {
+	query := `
+		DELETE FROM rating_history rh
+		WHERE rh.tournament_id = $1
+		AND rh.match_id IN (
+			SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
+		)
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameType)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to delete rating history for game")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get rows affected")
+	}
+
+	return rows, nil
+}

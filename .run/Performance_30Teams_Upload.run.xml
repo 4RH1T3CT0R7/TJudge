@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Performance: 30 Teams Upload" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="TJudge" />
+    <working_directory value="$PROJECT_DIR$" />
+    <go_parameters value="-tags=performance -timeout 5m -count=1" />
+    <framework value="gotest" />
+    <kind value="PACKAGE" />
+    <package value="github.com/bmstu-itstech/tjudge/tests/performance" />
+    <pattern value="^TestPerformance_30Teams_Upload$" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -82,6 +82,7 @@ type TeamWithMembers struct {
 type TournamentGame struct {
 	TournamentID     uuid.UUID  `json:"tournament_id" db:"tournament_id"`
 	GameID           uuid.UUID  `json:"game_id" db:"game_id"`
+	IsActive         bool       `json:"is_active" db:"is_active"`
 	RoundCompleted   bool       `json:"round_completed" db:"round_completed"`
 	RoundCompletedAt *time.Time `json:"round_completed_at,omitempty" db:"round_completed_at"`
 	CurrentRound     int        `json:"current_round" db:"current_round"`
