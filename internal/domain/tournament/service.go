@@ -24,6 +24,7 @@ type TournamentRepository interface {
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
+	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
@@ -273,7 +274,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	// Используем distributed lock для предотвращения одновременного старта
 	lockKey := fmt.Sprintf("tournament:start:%s", tournamentID.String())
 
-	return s.distributedLock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
 		// Получаем турнир
 		tournament, err := s.GetByID(ctx, tournamentID)
 		if err != nil {
@@ -285,44 +286,82 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrConflict.WithMessage("tournament already started or completed")
 		}
 
-		// Получаем список участников (только последние версии программ каждой команды)
-		participants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
+		// Получаем участников сгруппированных по играм
+		participantsByGame, err := s.tournamentRepo.GetLatestParticipantsGroupedByGame(ctx, tournamentID)
 		if err != nil {
-			return fmt.Errorf("failed to get participants: %w", err)
+			s.log.Error("Failed to get participants grouped by game", zap.Error(err))
+			return errors.ErrInternal.WithMessage("failed to get participants")
+		}
+
+		// Считаем общее количество участников
+		totalParticipants := 0
+		for _, participants := range participantsByGame {
+			totalParticipants += len(participants)
 		}
 
 		// Проверяем минимальное количество участников
-		if len(participants) < 2 {
-			return errors.ErrValidation.WithMessage("tournament needs at least 2 participants to start")
+		if totalParticipants < 2 {
+			return errors.ErrValidation.WithMessage(fmt.Sprintf("tournament needs at least 2 participants to start, got %d", totalParticipants))
 		}
 
 		s.log.Info("Starting tournament with participants",
 			zap.String("tournament_id", tournamentID.String()),
-			zap.Int("participants_count", len(participants)),
+			zap.Int("total_participants", totalParticipants),
+			zap.Int("games_count", len(participantsByGame)),
 		)
 
-		// Получаем следующий номер раунда
-		roundNumber, err := s.matchRepo.GetNextRoundNumber(ctx, tournamentID)
-		if err != nil {
-			s.log.Warn("Failed to get next round number, using 1",
-				zap.Error(err),
+		// Генерируем матчи для каждой игры отдельно
+		var allMatches []*domain.Match
+		for gameType, participants := range participantsByGame {
+			if len(participants) < 2 {
+				s.log.Info("Skipping game with less than 2 participants",
+					zap.String("game_type", gameType),
+					zap.Int("participants", len(participants)),
+				)
+				continue
+			}
+
+			// Получаем следующий номер раунда для этой игры
+			roundNumber, err := s.matchRepo.GetNextRoundNumberByGame(ctx, tournamentID, gameType)
+			if err != nil {
+				s.log.Warn("Failed to get next round number for game, using 1",
+					zap.Error(err),
+					zap.String("game_type", gameType),
+				)
+				roundNumber = 1
+			}
+
+			// Генерируем round-robin матчи для этой игры
+			matches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber)
+			if err != nil {
+				s.log.Error("Failed to generate matches for game",
+					zap.Error(err),
+					zap.String("game_type", gameType),
+				)
+				return errors.ErrInternal.WithMessage(fmt.Sprintf("failed to generate matches for game %s", gameType))
+			}
+
+			s.log.Info("Generated matches for game",
+				zap.String("game_type", gameType),
+				zap.Int("participants", len(participants)),
+				zap.Int("matches", len(matches)),
 			)
-			roundNumber = 1
+
+			allMatches = append(allMatches, matches...)
 		}
 
-		// Генерируем расписание матчей (round-robin)
-		matches, err := s.generateRoundRobinMatches(tournament, participants, roundNumber)
-		if err != nil {
-			return fmt.Errorf("failed to generate matches: %w", err)
+		if len(allMatches) == 0 {
+			return errors.ErrValidation.WithMessage("no matches could be generated - need at least 2 participants per game")
 		}
 
 		// Создаём матчи в БД
-		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
-			return fmt.Errorf("failed to create matches: %w", err)
+		if err := s.matchRepo.CreateBatch(ctx, allMatches); err != nil {
+			s.log.Error("Failed to create matches", zap.Error(err))
+			return errors.ErrInternal.WithMessage("failed to create matches")
 		}
 
 		// Добавляем матчи в очередь
-		for _, match := range matches {
+		for _, match := range allMatches {
 			if err := s.queueManager.Enqueue(ctx, match); err != nil {
 				s.log.Error("Failed to enqueue match",
 					zap.Error(err),
@@ -338,12 +377,14 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		tournament.StartTime = &now
 
 		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
-			return fmt.Errorf("failed to update tournament: %w", err)
+			s.log.Error("Failed to update tournament", zap.Error(err))
+			return errors.ErrInternal.WithMessage("failed to update tournament status")
 		}
 
 		s.log.Info("Tournament started with matches",
 			zap.String("tournament_id", tournamentID.String()),
-			zap.Int("matches_created", len(matches)),
+			zap.Int("matches_created", len(allMatches)),
+			zap.Int("games", len(participantsByGame)),
 		)
 
 		// Инвалидируем кэш
@@ -352,12 +393,22 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		// Отправляем broadcast обновление
 		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
 			"status":        tournament.Status,
-			"matches_count": len(matches),
+			"matches_count": len(allMatches),
 			"start_time":    tournament.StartTime,
 		})
 
 		return nil
 	})
+
+	// Обрабатываем ошибку блокировки
+	if lockErr != nil {
+		if errors.IsAppError(lockErr) {
+			return lockErr
+		}
+		s.log.Error("Lock error during tournament start", zap.Error(lockErr))
+		return errors.ErrConflict.WithMessage("could not start tournament, try again later")
+	}
+	return nil
 }
 
 // generateRoundRobinMatches генерирует матчи по системе round-robin (каждый с каждым)

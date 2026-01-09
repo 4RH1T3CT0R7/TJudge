@@ -47,12 +47,29 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError<ApiError>) => {
-        if (error.response?.status === 401) {
+        const originalRequest = error.config;
+
+        // Skip refresh logic if:
+        // 1. This IS the refresh request itself (avoid infinite loop)
+        // 2. This is logout request (avoid infinite loop)
+        // 3. Request was already retried
+        // 4. No original request config
+        // Use type assertion through unknown for _retry flag
+        const requestWithRetry = originalRequest as unknown as { _retry?: boolean };
+        if (
+          error.response?.status === 401 &&
+          originalRequest &&
+          !originalRequest.url?.includes('/auth/refresh') &&
+          !originalRequest.url?.includes('/auth/logout') &&
+          !requestWithRetry._retry
+        ) {
+          requestWithRetry._retry = true;
+
           // Try to refresh token
           try {
             await this.refreshToken();
-            // Retry original request
-            return this.client.request(error.config!);
+            // Retry original request with new token
+            return this.client.request(originalRequest);
           } catch {
             this.logout();
           }

@@ -1076,8 +1076,15 @@ export function AdminPanel() {
                         </button>
                         <button
                           onClick={async () => {
-                            await api.completeTournament(tournament.id);
-                            loadData();
+                            setActionError(null);
+                            try {
+                              await api.completeTournament(tournament.id);
+                              loadData();
+                            } catch (err: unknown) {
+                              console.error('Failed to complete tournament:', err);
+                              const axiosErr = err as { response?: { data?: { message?: string } } };
+                              setActionError(axiosErr.response?.data?.message || 'Не удалось завершить турнир');
+                            }
                           }}
                           className="btn btn-secondary text-sm"
                         >

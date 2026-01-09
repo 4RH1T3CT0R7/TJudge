@@ -187,7 +187,7 @@ function GameInfoModal({
   );
 }
 
-// Prisoner's Dilemma Matrix Component - Clean and centered design
+// Prisoner's Dilemma Matrix Component - Full width centered design
 function PrisonersDilemmaMatrix() {
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
 
@@ -199,87 +199,87 @@ function PrisonersDilemmaMatrix() {
   };
 
   return (
-    <div className="flex flex-col items-center py-4 mx-auto" style={{ maxWidth: 'fit-content' }}>
-      {/* Player B label above matrix */}
-      <div className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2 pl-8">
+    <div className="w-full flex flex-col items-center py-4">
+      {/* Player B label */}
+      <div className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-3">
         Игрок B
       </div>
 
       {/* Column headers */}
-      <div className="flex mb-1 pl-8">
-        <div className="w-12" /> {/* Spacer for row labels */}
-        <div className="w-24 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
-        <div className="w-24 text-center text-sm font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
+      <div className="w-full max-w-sm flex justify-center mb-2">
+        <div className="w-16" /> {/* Spacer for row labels */}
+        <div className="flex-1 text-center text-base font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
+        <div className="flex-1 text-center text-base font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
       </div>
 
       {/* Matrix with Player A on the side */}
-      <div className="flex items-center">
+      <div className="w-full max-w-sm flex items-center justify-center">
         {/* Player A label */}
-        <div className="flex items-center justify-center w-8 h-40">
+        <div className="flex items-center justify-center w-12 h-48">
           <div
-            className="text-lg font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap"
+            className="text-xl font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             Игрок A
           </div>
         </div>
 
-        {/* Matrix grid */}
-        <div className="flex flex-col">
+        {/* Row labels + Matrix grid */}
+        <div className="flex-1 flex flex-col">
           {/* Row 1: Cooperate */}
           <div className="flex items-center">
-            <div className="w-12 text-right pr-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
+            <div className="w-16 text-right pr-3 text-base font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
             <div
-              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-tl-xl ${hoveredCell === 'cc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              className={`flex-1 h-24 flex items-center justify-center cursor-pointer transition-all rounded-tl-2xl ${hoveredCell === 'cc' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#059669' }}
               onMouseEnter={() => setHoveredCell('cc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-xl text-white">3, 3</span>
+              <span className="font-mono font-bold text-2xl text-white">3, 3</span>
             </div>
             <div
-              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-tr-xl ${hoveredCell === 'cd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              className={`flex-1 h-24 flex items-center justify-center cursor-pointer transition-all rounded-tr-2xl ${hoveredCell === 'cd' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#dc2626' }}
               onMouseEnter={() => setHoveredCell('cd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-xl text-white">0, 5</span>
+              <span className="font-mono font-bold text-2xl text-white">0, 5</span>
             </div>
           </div>
 
           {/* Row 2: Defect */}
           <div className="flex items-center">
-            <div className="w-12 text-right pr-2 text-sm font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
+            <div className="w-16 text-right pr-3 text-base font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
             <div
-              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-bl-xl ${hoveredCell === 'dc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              className={`flex-1 h-24 flex items-center justify-center cursor-pointer transition-all rounded-bl-2xl ${hoveredCell === 'dc' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#dc2626' }}
               onMouseEnter={() => setHoveredCell('dc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-xl text-white">5, 0</span>
+              <span className="font-mono font-bold text-2xl text-white">5, 0</span>
             </div>
             <div
-              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-br-xl relative ${hoveredCell === 'dd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              className={`flex-1 h-24 flex items-center justify-center cursor-pointer transition-all rounded-br-2xl relative ${hoveredCell === 'dd' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#ca8a04' }}
               onMouseEnter={() => setHoveredCell('dd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-xl text-white">1, 1</span>
-              <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
+              <span className="font-mono font-bold text-2xl text-white">1, 1</span>
+              <div className="absolute top-2 right-2 w-3 h-3 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Tooltip */}
-      <div className={`mt-4 text-center transition-all duration-200 h-10 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
+      <div className={`mt-5 text-center transition-all duration-200 h-12 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
         {hoveredCell ? (
           <>
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
+            <div className="text-base font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
           </>
         ) : (
-          <div className="text-xs text-gray-400 dark:text-gray-500">Наведите на ячейку для подробностей</div>
+          <div className="text-sm text-gray-400 dark:text-gray-500">Наведите на ячейку для подробностей</div>
         )}
       </div>
     </div>

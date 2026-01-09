@@ -392,6 +392,62 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 	return participants, nil
 }
 
+// ParticipantWithGameType - участник с типом игры для группировки
+type ParticipantWithGameType struct {
+	domain.TournamentParticipant
+	GameType string `json:"game_type" db:"game_type"`
+}
+
+// GetLatestParticipantsGroupedByGame получает участников турнира сгруппированных по играм
+// Возвращает map[game_type] -> participants
+func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
+	// Выбираем участников с последней версией программы и их game_type
+	query := `
+		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at, g.name as game_type
+		FROM tournament_participants tp
+		INNER JOIN programs p ON p.id = tp.program_id
+		INNER JOIN games g ON g.id = p.game_id
+		WHERE tp.tournament_id = $1
+		  AND p.version = (
+		      SELECT MAX(p2.version)
+		      FROM programs p2
+		      WHERE p2.team_id = p.team_id
+		        AND p2.game_id = p.game_id
+		        AND p2.tournament_id = p.tournament_id
+		  )
+		ORDER BY g.name, tp.created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get participants grouped by game")
+	}
+	defer rows.Close()
+
+	result := make(map[string][]*domain.TournamentParticipant)
+	for rows.Next() {
+		var p domain.TournamentParticipant
+		var gameType string
+		err := rows.Scan(
+			&p.ID,
+			&p.TournamentID,
+			&p.ProgramID,
+			&p.Rating,
+			&p.Wins,
+			&p.Losses,
+			&p.Draws,
+			&p.CreatedAt,
+			&gameType,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan participant with game type")
+		}
+		result[gameType] = append(result[gameType], &p)
+	}
+
+	return result, nil
+}
+
 // GetLeaderboard получает таблицу лидеров турнира
 func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	// Используем прямой запрос для получения актуальных данных в реальном времени
