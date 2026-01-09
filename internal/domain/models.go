@@ -186,6 +186,7 @@ type Match struct {
 	Score1       *int          `json:"score1,omitempty" db:"score1"`
 	Score2       *int          `json:"score2,omitempty" db:"score2"`
 	Winner       *int          `json:"winner,omitempty" db:"winner"`
+	ErrorCode    *int          `json:"error_code,omitempty" db:"error_code"`
 	ErrorMessage *string       `json:"error_message,omitempty" db:"error_message"`
 	StartedAt    *time.Time    `json:"started_at,omitempty" db:"started_at"`
 	CompletedAt  *time.Time    `json:"completed_at,omitempty" db:"completed_at"`

@@ -50,6 +50,8 @@ type GameLookup interface {
 // MatchExistenceChecker интерфейс для проверки существования матчей
 type MatchExistenceChecker interface {
 	HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error)
+	HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error)
+	GetActiveGameType(ctx context.Context, tournamentID uuid.UUID) (string, error)
 }
 
 // RoundCompletionChecker интерфейс для проверки завершения раунда игры
@@ -247,29 +249,29 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Проверяем, не начались ли уже матчи для этой игры (блокировка загрузки после старта раунда)
-	if h.gameLookup != nil && h.matchChecker != nil {
-		game, err := h.gameLookup.GetByID(r.Context(), gameID)
+	// Проверяем, не выполняются ли матчи для ЛЮБОЙ игры в турнире
+	// Пока идёт раунд одной игры, загрузка программ для всех игр заблокирована
+	if h.matchChecker != nil {
+		hasRunning, err := h.matchChecker.HasAnyRunningMatches(r.Context(), tournamentID)
 		if err != nil {
-			h.log.LogError("Failed to get game", err, zap.String("game_id", gameID.String()))
-			writeError(w, errors.ErrInternal.WithMessage("failed to verify game"))
-			return
-		}
-
-		hasStarted, err := h.matchChecker.HasStartedMatches(r.Context(), tournamentID, game.Name)
-		if err != nil {
-			h.log.LogError("Failed to check match status", err)
+			h.log.LogError("Failed to check running matches", err)
 			writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
 			return
 		}
 
-		if hasStarted {
-			h.log.Info("Upload blocked: matches already started",
+		if hasRunning {
+			// Получаем название активной игры для информативного сообщения
+			activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
+			h.log.Info("Upload blocked: matches running for another game",
 				zap.String("tournament_id", tournamentID.String()),
 				zap.String("game_id", gameID.String()),
-				zap.String("game_type", game.Name),
+				zap.String("active_game", activeGame),
 			)
-			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже запущен"))
+			if activeGame != "" {
+				writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("загрузка программ запрещена: выполняется раунд игры '%s'", activeGame)))
+			} else {
+				writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: выполняется раунд"))
+			}
 			return
 		}
 	}
