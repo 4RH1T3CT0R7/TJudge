@@ -47,9 +47,17 @@ func (m *MockAuthService) RefreshTokens(ctx context.Context, refreshToken string
 	return args.Get(0).(*auth.AuthResponse), args.Error(1)
 }
 
-func (m *MockAuthService) Logout(ctx context.Context, token string) error {
-	args := m.Called(ctx, token)
+func (m *MockAuthService) Logout(ctx context.Context, accessToken, refreshToken string) error {
+	args := m.Called(ctx, accessToken, refreshToken)
 	return args.Error(0)
+}
+
+func (m *MockAuthService) UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*domain.User, error) {
+	args := m.Called(ctx, userID, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
 }
 
 func (m *MockAuthService) GetUserFromToken(ctx context.Context, token string) (*domain.User, error) {
@@ -363,7 +371,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 		handler := NewAuthHandler(mockService, log)
 
 		token := "valid_access_token"
-		mockService.On("Logout", mock.Anything, token).Return(nil)
+		mockService.On("Logout", mock.Anything, token, "").Return(nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -406,7 +414,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 		handler := NewAuthHandler(mockService, log)
 
 		token := "already_blacklisted_token"
-		mockService.On("Logout", mock.Anything, token).Return(errors.ErrInvalidToken.WithMessage("token already invalidated"))
+		mockService.On("Logout", mock.Anything, token, "").Return(errors.ErrUnauthorized.WithMessage("token already invalidated"))
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

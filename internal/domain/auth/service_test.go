@@ -54,6 +54,11 @@ func (m *MockUserRepository) Exists(ctx context.Context, username, email string)
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
 // Mock TokenBlacklist
 type MockTokenBlacklist struct {
 	mock.Mock
@@ -295,7 +300,7 @@ func TestService_Logout_Success(t *testing.T) {
 
 	blacklist.On("Add", ctx, token, mock.AnythingOfType("time.Duration")).Return(nil)
 
-	err = service.Logout(ctx, token)
+	err = service.Logout(ctx, token, "")
 
 	require.NoError(t, err)
 	blacklist.AssertExpectations(t)
@@ -305,9 +310,10 @@ func TestService_Logout_InvalidToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 	ctx := context.Background()
 
-	err := service.Logout(ctx, "invalid-token")
+	// Invalid token doesn't cause error now - it just logs and continues
+	err := service.Logout(ctx, "invalid-token", "")
 
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestService_Logout_ExpiredToken(t *testing.T) {
@@ -325,8 +331,9 @@ func TestService_Logout_ExpiredToken(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	err = service.Logout(ctx, token)
-	assert.Error(t, err) // Token is invalid/expired
+	// Expired token doesn't cause error - Logout is now more lenient
+	err = service.Logout(ctx, token, "")
+	assert.NoError(t, err)
 }
 
 func TestService_IsTokenBlacklisted(t *testing.T) {
