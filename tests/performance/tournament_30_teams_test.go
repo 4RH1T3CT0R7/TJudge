@@ -202,38 +202,44 @@ for i in range(n):
 }
 
 // Bot strategies for Tug of War
-// Protocol: 1. Read iterations, 2. Loop: output integer (1-100 strength), read opponent's choice
+// Protocol: Total energy = 100, distribute across 5 rounds
+// Each round: output integer (how much energy to spend), read opponent's spent
 var tugOfWarStrategies = []string{
-	// Constant medium
+	// Even distribution - 20 per round
 	`#!/usr/bin/python3
 n = int(input())
 for i in range(n):
-    print(50, flush=True)
+    print(20, flush=True)
     input()
 `,
-	// Constant high
+	// Front-loaded - more in early rounds
 	`#!/usr/bin/python3
 n = int(input())
+distribution = [30, 25, 20, 15, 10]
 for i in range(n):
-    print(80, flush=True)
+    print(distribution[i] if i < len(distribution) else 10, flush=True)
     input()
 `,
-	// Random
+	// Back-loaded - more in later rounds
+	`#!/usr/bin/python3
+n = int(input())
+distribution = [10, 15, 20, 25, 30]
+for i in range(n):
+    print(distribution[i] if i < len(distribution) else 20, flush=True)
+    input()
+`,
+	// Random within budget
 	`#!/usr/bin/python3
 import random
 n = int(input())
+remaining = 100
 for i in range(n):
-    print(random.randint(1, 100), flush=True)
+    rounds_left = n - i
+    avg = remaining // rounds_left if rounds_left > 0 else remaining
+    spend = min(remaining, max(1, random.randint(avg - 5, avg + 5)))
+    remaining -= spend
+    print(spend, flush=True)
     input()
-`,
-	// Adaptive - slightly more than opponent's last
-	`#!/usr/bin/python3
-n = int(input())
-my_choice = 50
-for i in range(n):
-    print(my_choice, flush=True)
-    opp = int(input().strip())
-    my_choice = min(100, opp + 5)
 `,
 }
 
@@ -306,11 +312,10 @@ for i in range(n):
 }
 
 // Map game names to their strategies
+// Supported games: dilemma, tug_of_war (see https://github.com/bmstu-itstech/tjudge-cli)
 var gameStrategies = map[string][]string{
-	"prisoners_dilemma":   dilemmaStrategies,
-	"tug_of_war":          tugOfWarStrategies,
-	"good_deal":           goodDealStrategies,
-	"balance_of_universe": balanceOfUniverseStrategies,
+	"dilemma":    dilemmaStrategies,
+	"tug_of_war": tugOfWarStrategies,
 }
 
 // Team represents a test team

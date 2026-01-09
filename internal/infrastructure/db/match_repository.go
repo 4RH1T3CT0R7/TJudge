@@ -1022,9 +1022,9 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 
 // MatchStatistics - статистика матчей
 type MatchStatistics struct {
-	Total     int
-	Pending   int
-	Running   int
-	Completed int
-	Failed    int
+	Total     int `json:"total"`
+	Pending   int `json:"pending"`
+	Running   int `json:"running"`
+	Completed int `json:"completed"`
+	Failed    int `json:"failed"`
 }

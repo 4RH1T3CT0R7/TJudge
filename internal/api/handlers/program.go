@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -334,6 +335,18 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
 
+	// Проверяем синтаксис для Python-файлов
+	var syntaxError *string
+	if language == "python" {
+		if errMsg := validatePythonSyntax(filePath); errMsg != "" {
+			syntaxError = &errMsg
+			h.log.Info("Python syntax error detected",
+				zap.String("file", filePath),
+				zap.String("error", errMsg),
+			)
+		}
+	}
+
 	// Создаём запись в БД
 	program := &domain.Program{
 		ID:           programID,
@@ -346,6 +359,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		CodePath:     filePath,
 		FilePath:     &filePath,
 		Language:     language,
+		ErrorMessage: syntaxError,
 		Version:      version,
 	}
 
@@ -751,4 +765,25 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, programs)
+}
+
+// validatePythonSyntax проверяет синтаксис Python файла с помощью py_compile
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
+func validatePythonSyntax(filePath string) string {
+	// Используем py_compile для проверки синтаксиса
+	cmd := exec.Command("python3", "-m", "py_compile", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Парсим вывод ошибки
+		errorMsg := strings.TrimSpace(string(output))
+		if errorMsg == "" {
+			errorMsg = "Синтаксическая ошибка в Python коде"
+		}
+		// Ограничиваем длину сообщения
+		if len(errorMsg) > 500 {
+			errorMsg = errorMsg[:500] + "..."
+		}
+		return errorMsg
+	}
+	return ""
 }

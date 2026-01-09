@@ -5,8 +5,9 @@ import { useAuthStore } from '../store/authStore';
 import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, TournamentGameWithDetails } from '../types';
 
 // Game-specific icons and colors configuration
+// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
-  prisoners_dilemma: {
+  dilemma: {
     icon: '🤝',
     bgClass: 'bg-blue-500',
     textClass: 'text-blue-600 dark:text-blue-400',
@@ -19,20 +20,6 @@ const gameConfig: Record<string, { icon: string; bgClass: string; textClass: str
     textClass: 'text-emerald-600 dark:text-emerald-400',
     borderClass: 'border-emerald-500',
     gradientClass: 'from-emerald-500 to-emerald-600',
-  },
-  good_deal: {
-    icon: '💰',
-    bgClass: 'bg-purple-500',
-    textClass: 'text-purple-600 dark:text-purple-400',
-    borderClass: 'border-purple-500',
-    gradientClass: 'from-purple-500 to-purple-600',
-  },
-  balance_of_universe: {
-    icon: '⚖️',
-    bgClass: 'bg-indigo-500',
-    textClass: 'text-indigo-600 dark:text-indigo-400',
-    borderClass: 'border-indigo-500',
-    gradientClass: 'from-indigo-500 to-indigo-600',
   },
 };
 
@@ -193,15 +180,21 @@ export function GameDetail() {
       const program = await api.uploadProgram(formData);
       setCurrentProgram(program);
       setPrograms([...programs, program]);
-      setUploadSuccess(true);
+
+      // Check for syntax errors in uploaded program
+      if (program.error_message) {
+        // Program uploaded but has syntax error - show warning
+        setUploadError(`⚠️ Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
+      } else {
+        setUploadSuccess(true);
+        // Hide success message after 3 seconds
+        setTimeout(() => setUploadSuccess(false), 3000);
+      }
 
       // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-
-      // Hide success message after 3 seconds
-      setTimeout(() => setUploadSuccess(false), 3000);
     } catch (err: unknown) {
       console.error('Upload failed:', err);
       // Try to extract error message from API response

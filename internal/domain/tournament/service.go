@@ -3,6 +3,7 @@ package tournament
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -275,8 +276,9 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	lockKey := fmt.Sprintf("tournament:start:%s", tournamentID.String())
 
 	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
-		// Получаем турнир
-		tournament, err := s.GetByID(ctx, tournamentID)
+		// Получаем турнир напрямую из БД (минуя кэш) для избежания проблем с версией
+		// при оптимистичной блокировке
+		tournament, err := s.tournamentRepo.GetByID(ctx, tournamentID)
 		if err != nil {
 			return err
 		}
@@ -310,15 +312,36 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			zap.Int("games_count", len(participantsByGame)),
 		)
 
+		// Сортируем игры для детерминированного порядка выполнения
+		// Первая игра (по алфавиту) получает HIGH приоритет, вторая - MEDIUM, остальные - LOW
+		gameTypes := make([]string, 0, len(participantsByGame))
+		for gameType := range participantsByGame {
+			gameTypes = append(gameTypes, gameType)
+		}
+		sort.Strings(gameTypes)
+
 		// Генерируем матчи для каждой игры отдельно
 		var allMatches []*domain.Match
-		for gameType, participants := range participantsByGame {
+		for gameIndex, gameType := range gameTypes {
+			participants := participantsByGame[gameType]
 			if len(participants) < 2 {
 				s.log.Info("Skipping game with less than 2 participants",
 					zap.String("game_type", gameType),
 					zap.Int("participants", len(participants)),
 				)
 				continue
+			}
+
+			// Определяем приоритет на основе порядка игры
+			// Первая игра = HIGH (выполняется первой), вторая = MEDIUM, остальные = LOW
+			var priority domain.MatchPriority
+			switch gameIndex {
+			case 0:
+				priority = domain.PriorityHigh
+			case 1:
+				priority = domain.PriorityMedium
+			default:
+				priority = domain.PriorityLow
 			}
 
 			// Получаем следующий номер раунда для этой игры
@@ -332,7 +355,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			}
 
 			// Генерируем round-robin матчи для этой игры
-			matches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber)
+			matches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, priority)
 			if err != nil {
 				s.log.Error("Failed to generate matches for game",
 					zap.Error(err),
@@ -345,6 +368,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 				zap.String("game_type", gameType),
 				zap.Int("participants", len(participants)),
 				zap.Int("matches", len(matches)),
+				zap.String("priority", string(priority)),
 			)
 
 			allMatches = append(allMatches, matches...)
@@ -848,8 +872,8 @@ func (s *Service) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, ga
 			roundNumber = 1
 		}
 
-		// Генерируем матчи для этой игры
-		matches, err = s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber)
+		// Генерируем матчи для этой игры с высоким приоритетом (ручной запуск)
+		matches, err = s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityHigh)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate matches: %w", err)
 		}
@@ -905,7 +929,7 @@ func (s *Service) getLatestParticipantsByGame(ctx context.Context, tournamentID 
 }
 
 // generateRoundRobinMatchesForGame генерирует матчи для конкретной игры
-func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int) ([]*domain.Match, error) {
+func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int, priority domain.MatchPriority) ([]*domain.Match, error) {
 	var matches []*domain.Match
 	now := time.Now()
 
@@ -924,7 +948,7 @@ func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament
 				Program2ID:   participants[j].ProgramID,
 				GameType:     gameType,
 				Status:       domain.MatchPending,
-				Priority:     domain.PriorityMedium,
+				Priority:     priority,
 				RoundNumber:  roundNumber,
 				CreatedAt:    now,
 			}

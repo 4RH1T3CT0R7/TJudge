@@ -4,8 +4,9 @@ import api from '../api/client';
 import type { Game } from '../types';
 
 // Game-specific icons and colors configuration
+// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameConfig: Record<string, { icon: string; color: string; bgClass: string; textClass: string; borderClass: string }> = {
-  prisoners_dilemma: {
+  dilemma: {
     icon: '🤝',
     color: 'blue',
     bgClass: 'bg-blue-500',
@@ -18,20 +19,6 @@ const gameConfig: Record<string, { icon: string; color: string; bgClass: string;
     bgClass: 'bg-emerald-500',
     textClass: 'text-emerald-600 dark:text-emerald-400',
     borderClass: 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-700',
-  },
-  good_deal: {
-    icon: '💰',
-    color: 'purple',
-    bgClass: 'bg-purple-500',
-    textClass: 'text-purple-600 dark:text-purple-400',
-    borderClass: 'border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700',
-  },
-  balance_of_universe: {
-    icon: '⚖️',
-    color: 'amber',
-    bgClass: 'bg-amber-500',
-    textClass: 'text-amber-600 dark:text-amber-400',
-    borderClass: 'border-amber-200 dark:border-amber-800 hover:border-amber-300 dark:hover:border-amber-700',
   },
 };
 

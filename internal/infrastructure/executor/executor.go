@@ -343,6 +343,7 @@ func (e *Executor) hostToContainerPath(hostPath string) string {
 // buildCommand формирует аргументы для запуска tjudge-cli
 // Контейнер уже имеет ENTRYPOINT ["tjudge-cli"], поэтому cmd содержит только аргументы
 // Формат: <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
+// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
 	// Не включаем TJudgePath так как контейнер имеет ENTRYPOINT
 	cmd := []string{gameType}

@@ -2,16 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics } from '../types';
+import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
 
 // Game-specific icons configuration for programs view
+// Supported games: dilemma, tug_of_war (see https://github.com/bmstu-itstech/tjudge-cli)
 const gameIcons: Record<string, string> = {
-  prisoners_dilemma: '🤝',
+  dilemma: '🤝',
   tug_of_war: '🪢',
-  good_deal: '💰',
-  balance_of_universe: '⚖️',
 };
 const getGameIcon = (gameName: string) => gameIcons[gameName] || '🎮';
 
@@ -103,6 +102,7 @@ export function AdminPanel() {
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [matchStats, setMatchStats] = useState<MatchStatistics | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
+  const [failedMatches, setFailedMatches] = useState<Match[]>([]);
   const [isLoadingSystem, setIsLoadingSystem] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -133,25 +133,54 @@ export function AdminPanel() {
     }
   };
 
-  // System data loading
+  // System data loading - each request is independent to avoid cascading failures
   const loadSystemData = useCallback(async () => {
     setIsLoadingSystem(true);
     setSystemError(null);
-    try {
-      const [queueData, matchData, metricsData] = await Promise.all([
-        api.getQueueStats(),
-        api.getMatchStatistics(),
-        api.getSystemMetrics(),
-      ]);
-      setQueueStats(queueData);
-      setMatchStats(matchData);
-      setSystemMetrics(metricsData);
-    } catch (err) {
-      console.error('Failed to load system data:', err);
-      setSystemError('Не удалось загрузить данные системы');
-    } finally {
-      setIsLoadingSystem(false);
+
+    // Load each data source independently
+    const results = await Promise.allSettled([
+      api.getQueueStats(),
+      api.getMatchStatistics(),
+      api.getSystemMetrics(),
+      api.getFailedMatches(50),
+    ]);
+
+    // Process queue stats
+    if (results[0].status === 'fulfilled') {
+      setQueueStats(results[0].value);
+    } else {
+      console.error('Failed to load queue stats:', results[0].reason);
     }
+
+    // Process match stats
+    if (results[1].status === 'fulfilled') {
+      setMatchStats(results[1].value);
+    } else {
+      console.error('Failed to load match stats:', results[1].reason);
+    }
+
+    // Process system metrics
+    if (results[2].status === 'fulfilled') {
+      setSystemMetrics(results[2].value);
+    } else {
+      console.error('Failed to load system metrics:', results[2].reason);
+    }
+
+    // Process failed matches
+    if (results[3].status === 'fulfilled') {
+      setFailedMatches(results[3].value || []);
+    } else {
+      console.error('Failed to load failed matches:', results[3].reason);
+    }
+
+    // Show error only if all requests failed
+    const allFailed = results.every(r => r.status === 'rejected');
+    if (allFailed) {
+      setSystemError('Не удалось загрузить данные системы');
+    }
+
+    setIsLoadingSystem(false);
   }, []);
 
   // Auto-refresh system data when on system tab
@@ -1656,6 +1685,41 @@ export function AdminPanel() {
                   </div>
                 )}
               </div>
+
+              {/* Failed Matches Card */}
+              {failedMatches.length > 0 && (
+                <div className="card md:col-span-2">
+                  <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                    <span className="text-xl">⚠️</span>
+                    Провалившиеся матчи ({failedMatches.length})
+                  </h3>
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {failedMatches.map((match) => (
+                      <div
+                        key={match.id}
+                        className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            Матч {match.id.substring(0, 8)}...
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {match.game_type}
+                          </span>
+                        </div>
+                        {match.error_message && (
+                          <div className="text-sm text-red-700 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs whitespace-pre-wrap break-words">
+                            {match.error_message}
+                          </div>
+                        )}
+                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          Код ошибки: {match.error_code || 'N/A'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Queue Actions Card */}
               <div className="card md:col-span-2">

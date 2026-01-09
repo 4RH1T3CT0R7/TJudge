@@ -475,6 +475,14 @@ class ApiClient {
     const { data } = await this.client.get<{ status: string; timestamp: string; hostname: string; pid: number }>('/system/health');
     return data;
   }
+
+  // Get failed matches (for admin error display)
+  async getFailedMatches(limit: number = 20): Promise<Match[]> {
+    const { data } = await this.client.get<Match[]>('/matches', {
+      params: { status: 'failed', limit: limit.toString() }
+    });
+    return data;
+  }
 }
 
 export const api = new ApiClient();
