@@ -448,6 +448,55 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 	return result, nil
 }
 
+// GetLatestParticipantsByGame получает участников турнира для конкретной игры
+func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
+	var participants []*domain.TournamentParticipant
+
+	// Выбираем только участников с программами для конкретной игры (последняя версия)
+	query := `
+		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
+		FROM tournament_participants tp
+		INNER JOIN programs p ON p.id = tp.program_id
+		INNER JOIN games g ON g.id = p.game_id
+		WHERE tp.tournament_id = $1
+		  AND g.name = $2
+		  AND p.version = (
+		      SELECT MAX(p2.version)
+		      FROM programs p2
+		      WHERE p2.team_id = p.team_id
+		        AND p2.game_id = p.game_id
+		        AND p2.tournament_id = p.tournament_id
+		  )
+		ORDER BY tp.created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get participants by game")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var p domain.TournamentParticipant
+		err := rows.Scan(
+			&p.ID,
+			&p.TournamentID,
+			&p.ProgramID,
+			&p.Rating,
+			&p.Wins,
+			&p.Losses,
+			&p.Draws,
+			&p.CreatedAt,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan participant")
+		}
+		participants = append(participants, &p)
+	}
+
+	return participants, nil
+}
+
 // GetLeaderboard получает таблицу лидеров турнира
 func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	// Используем прямой запрос для получения актуальных данных в реальном времени
