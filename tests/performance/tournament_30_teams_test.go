@@ -555,7 +555,8 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 							})
 							if err != nil {
 								fmt.Printf("   ⚠️ Failed to add game %s: %v\n", gameName, err)
-							} else if addGameResp.StatusCode == http.StatusOK || addGameResp.StatusCode == http.StatusCreated {
+							} else if addGameResp.StatusCode == http.StatusOK || addGameResp.StatusCode == http.StatusCreated || addGameResp.StatusCode == http.StatusNoContent {
+								// 204 No Content is also a success status
 								fmt.Printf("   ✅ Game %s added to tournament\n", gameName)
 								gamesAdded++
 								addGameResp.Body.Close()
@@ -747,22 +748,44 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 	start = time.Now()
 
 	// Start tournament - this creates matches and changes status to active
-	resp, err = adminClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/start", tournamentID), nil)
-	if err != nil {
-		t.Fatalf("Failed to start tournament: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		// If tournament already started, that's OK
-		if resp.StatusCode == http.StatusConflict {
-			t.Logf("Tournament already started (conflict is OK)")
+	// Retry with backoff for rate limiting
+	maxStartRetries := 5
+	startBackoff := 2 * time.Second
+	tournamentStarted := false
+
+	for attempt := 0; attempt < maxStartRetries; attempt++ {
+		resp, err = adminClient.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/start", tournamentID), nil)
+		if err != nil {
+			t.Fatalf("Failed to start tournament: %v", err)
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			fmt.Printf("   Tournament started successfully\n")
+			tournamentStarted = true
+			break
+		} else if resp.StatusCode == http.StatusTooManyRequests {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			fmt.Printf("   Rate limited on start attempt %d, waiting %v... (%s)\n", attempt+1, startBackoff, string(body))
+			time.Sleep(startBackoff)
+			startBackoff *= 2 // Exponential backoff
+			continue
+		} else if resp.StatusCode == http.StatusConflict {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Logf("Tournament already started (conflict is OK): %s", string(body))
+			tournamentStarted = true
+			break
 		} else {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			t.Fatalf("Start tournament failed (%d): %s", resp.StatusCode, string(body))
 		}
-	} else {
-		resp.Body.Close()
-		fmt.Printf("   Tournament started successfully\n")
+	}
+
+	if !tournamentStarted {
+		t.Fatalf("Failed to start tournament after %d attempts due to rate limiting", maxStartRetries)
 	}
 
 	// Verify tournament is now active
