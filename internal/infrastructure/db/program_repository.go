@@ -241,6 +241,20 @@ func (r *ProgramRepository) CheckOwnership(ctx context.Context, programID, userI
 	return exists, nil
 }
 
+// ClearErrorMessages очищает error_message для всех программ в турнире
+func (r *ProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
+	query := `
+		UPDATE programs
+		SET error_message = NULL
+		WHERE tournament_id = $1 AND error_message IS NOT NULL
+	`
+	result, err := r.db.ExecContext(ctx, query, tournamentID)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to clear error messages")
+	}
+	return result.RowsAffected()
+}
+
 // GetLatestVersion получает последнюю версию программы для команды и игры
 func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
 	var version int

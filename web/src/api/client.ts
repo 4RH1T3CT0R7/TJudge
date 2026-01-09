@@ -284,6 +284,17 @@ class ApiClient {
     await this.client.post(`/tournaments/${tournamentId}/active-game`, { game_id: gameId });
   }
 
+  async deactivateAllGames(tournamentId: string): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/games/deactivate-all`);
+  }
+
+  async clearProgramErrors(tournamentId: string): Promise<{ cleared: number; message: string }> {
+    const { data } = await this.client.post<{ cleared: number; message: string }>(
+      `/tournaments/${tournamentId}/programs/clear-errors`
+    );
+    return data;
+  }
+
   async getActiveGame(tournamentId: string): Promise<TournamentGameWithDetails | null> {
     const { data } = await this.client.get<TournamentGameWithDetails | null>(
       `/tournaments/${tournamentId}/active-game`

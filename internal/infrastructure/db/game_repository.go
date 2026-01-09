@@ -471,6 +471,20 @@ func (r *GameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID
 	return nil
 }
 
+// DeactivateAllGames деактивирует все игры в турнире
+func (r *GameRepository) DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error {
+	query := `
+		UPDATE tournament_games
+		SET is_active = false
+		WHERE tournament_id = $1
+	`
+	_, err := r.db.ExecContext(ctx, query, tournamentID)
+	if err != nil {
+		return errors.Wrap(err, "failed to deactivate all games")
+	}
+	return nil
+}
+
 // GetActiveGame получает активную игру для турнира
 func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
 	var tg domain.TournamentGame

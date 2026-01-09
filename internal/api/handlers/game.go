@@ -56,6 +56,7 @@ type TournamentGameStatusRepository interface {
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error)
 	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
+	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
 }
 
 // GameRatingRepository интерфейс для сброса рейтингов
@@ -707,6 +708,38 @@ func (h *GameHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
 	h.log.Info("Active game set",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.String("game_id", req.GameID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeactivateAllGames деактивирует все игры в турнире
+// POST /api/v1/tournaments/{id}/games/deactivate-all
+func (h *GameHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Проверяем наличие репозитория
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+
+	// Деактивируем все игры
+	if err := h.tournamentGameStatusRepo.DeactivateAllGames(r.Context(), tournamentID); err != nil {
+		h.log.LogError("Failed to deactivate all games", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("All games deactivated",
+		zap.String("tournament_id", tournamentID.String()),
 	)
 
 	w.WriteHeader(http.StatusNoContent)

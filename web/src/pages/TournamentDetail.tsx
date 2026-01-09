@@ -361,8 +361,9 @@ export function TournamentDetail() {
         await api.setActiveGame(id, nextGame.id);
         alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}".`);
       } else {
-        // Last game - don't switch to any game, all games become inactive
-        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире.`);
+        // Last game - deactivate all games
+        await api.deactivateAllGames(id);
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы.`);
       }
 
       // Reload games status and matches

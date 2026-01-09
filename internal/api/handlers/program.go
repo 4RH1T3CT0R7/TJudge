@@ -30,6 +30,7 @@ type ProgramRepository interface {
 	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
 	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
 	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error)
+	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
 
 // TournamentParticipantAdder интерфейс для добавления участников в турнир
@@ -768,9 +769,48 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, programs)
 }
 
+// ClearProgramErrors очищает сообщения об ошибках для всех программ турнира (только для админов)
+// POST /api/v1/tournaments/:id/programs/clear-errors
+func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	// Очищаем ошибки
+	cleared, err := h.programRepo.ClearErrorMessages(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to clear program errors", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	h.log.Info("Program errors cleared",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int64("cleared_count", cleared),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"cleared": cleared,
+		"message": fmt.Sprintf("Очищено %d ошибок", cleared),
+	})
+}
+
 // validatePythonSyntax проверяет синтаксис Python файла с помощью py_compile
 // Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
 func validatePythonSyntax(filePath string) string {
+	// Проверяем, доступен ли python3
+	_, lookErr := exec.LookPath("python3")
+	if lookErr != nil {
+		// python3 не найден в PATH - пропускаем проверку синтаксиса
+		// (программа будет проверена при выполнении матча)
+		return ""
+	}
+
 	// Используем py_compile для проверки синтаксиса
 	cmd := exec.Command("python3", "-m", "py_compile", filePath)
 	output, err := cmd.CombinedOutput()

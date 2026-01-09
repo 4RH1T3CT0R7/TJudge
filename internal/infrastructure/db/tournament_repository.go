@@ -695,61 +695,77 @@ func GetTournamentCursor(tournament *domain.Tournament) (*pagination.Cursor, err
 // Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
 	// Получаем все команды и программы в турнире со статистикой по каждой игре
-	// Рейтинг = сумма очков (score1 когда program1, score2 когда program2)
+	// Используем team_id для связи матчей (чтобы учитывать все версии программ команды)
 	query := `
-		WITH team_programs AS (
+		WITH latest_programs AS (
+			-- Получаем последние версии программ для отображения имени
 			SELECT DISTINCT ON (p.team_id, p.game_id)
 				p.id as program_id,
 				p.name as program_name,
 				p.team_id,
 				t.name as team_name,
 				p.game_id,
-				g.name as game_name,
-				g.display_name as game_display_name
+				g.name as game_name
 			FROM programs p
 			LEFT JOIN teams t ON p.team_id = t.id
 			LEFT JOIN games g ON p.game_id = g.id
-			WHERE p.tournament_id = $1
+			WHERE p.tournament_id = $1 AND p.team_id IS NOT NULL
 			ORDER BY p.team_id, p.game_id, p.version DESC
 		),
-		game_stats AS (
+		match_stats AS (
+			-- Получаем статистику матчей для каждой программы (любой версии)
 			SELECT
-				tp.program_id,
-				tp.program_name,
-				tp.team_id,
-				tp.team_name,
-				tp.game_id,
-				tp.game_name,
+				p.team_id,
+				g.id as game_id,
+				g.name as game_name,
 				COUNT(*) FILTER (WHERE
-					(m.program1_id = tp.program_id AND m.winner = 1) OR
-					(m.program2_id = tp.program_id AND m.winner = 2)
+					(m.program1_id = p.id AND m.winner = 1) OR
+					(m.program2_id = p.id AND m.winner = 2)
 				) as wins,
 				COUNT(*) FILTER (WHERE
-					(m.program1_id = tp.program_id AND m.winner = 2) OR
-					(m.program2_id = tp.program_id AND m.winner = 1)
+					(m.program1_id = p.id AND m.winner = 2) OR
+					(m.program2_id = p.id AND m.winner = 1)
 				) as losses,
 				COUNT(*) FILTER (WHERE m.winner = 0 AND m.status = 'completed') as draws,
 				COUNT(*) FILTER (WHERE m.status = 'completed') as total_games,
 				COALESCE(SUM(
 					CASE
-						WHEN m.program1_id = tp.program_id THEN COALESCE(m.score1, 0)
-						WHEN m.program2_id = tp.program_id THEN COALESCE(m.score2, 0)
+						WHEN m.program1_id = p.id THEN COALESCE(m.score1, 0)
+						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0)
 						ELSE 0
 					END
 				), 0) as total_score
-			FROM team_programs tp
-			LEFT JOIN matches m ON (m.program1_id = tp.program_id OR m.program2_id = tp.program_id)
-				AND m.tournament_id = $1
-				AND m.status IN ('completed', 'failed')
-			GROUP BY tp.program_id, tp.program_name, tp.team_id, tp.team_name, tp.game_id, tp.game_name
+			FROM programs p
+			JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
+			JOIN games g ON m.game_type = g.name
+			WHERE m.tournament_id = $1
+			  AND m.status IN ('completed', 'failed')
+			  AND p.team_id IS NOT NULL
+			GROUP BY p.team_id, g.id, g.name
+		),
+		game_stats AS (
+			-- Объединяем статистику матчей с последними программами
+			SELECT
+				COALESCE(ms.team_id, lp.team_id) as team_id,
+				COALESCE(lp.team_name, '') as team_name,
+				COALESCE(lp.program_id, '00000000-0000-0000-0000-000000000000'::uuid) as program_id,
+				COALESCE(lp.program_name, '') as program_name,
+				COALESCE(ms.game_id, lp.game_id) as game_id,
+				COALESCE(ms.game_name, lp.game_name) as game_name,
+				COALESCE(ms.wins, 0) as wins,
+				COALESCE(ms.losses, 0) as losses,
+				COALESCE(ms.draws, 0) as draws,
+				COALESCE(ms.total_games, 0) as total_games,
+				COALESCE(ms.total_score, 0) as total_score
+			FROM latest_programs lp
+			LEFT JOIN match_stats ms ON lp.team_id = ms.team_id AND lp.game_id = ms.game_id
 		),
 		aggregated AS (
 			SELECT
-				COALESCE(team_id::text, MIN(program_id)::text) as group_key,
 				team_id,
 				MAX(team_name) as team_name,
 				MIN(program_id) as program_id,
-				MIN(program_name) as program_name,
+				MAX(program_name) as program_name,
 				json_object_agg(
 					COALESCE(game_id::text, 'unknown'),
 					json_build_object(
@@ -831,14 +847,27 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 // Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
 	// Получаем рейтинг на основе результатов матчей для конкретной игры
-	// Рейтинг = сумма очков (score1 когда program1, score2 когда program2)
+	// Используем team_id для агрегации (чтобы учитывать все версии программ команды)
 	query := `
-		WITH game_stats AS (
-			SELECT
+		WITH latest_programs AS (
+			-- Получаем последние версии программ для отображения имени
+			SELECT DISTINCT ON (p.team_id)
 				p.id as program_id,
 				p.name as program_name,
 				p.team_id,
-				t.name as team_name,
+				t.name as team_name
+			FROM programs p
+			LEFT JOIN teams t ON p.team_id = t.id
+			JOIN games g ON p.game_id = g.id
+			WHERE p.tournament_id = $1
+			  AND g.name = $2
+			  AND p.team_id IS NOT NULL
+			ORDER BY p.team_id, p.version DESC
+		),
+		match_stats AS (
+			-- Получаем статистику матчей по team_id (учитывая все версии программ)
+			SELECT
+				p.team_id,
 				COUNT(*) FILTER (WHERE
 					(m.program1_id = p.id AND m.winner = 1) OR
 					(m.program2_id = p.id AND m.winner = 2)
@@ -857,12 +886,26 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 					END
 				), 0) as total_score
 			FROM programs p
-			LEFT JOIN teams t ON p.team_id = t.id
 			JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
 			WHERE m.tournament_id = $1
 			  AND m.game_type = $2
 			  AND m.status IN ('completed', 'failed')
-			GROUP BY p.id, p.name, p.team_id, t.name
+			  AND p.team_id IS NOT NULL
+			GROUP BY p.team_id
+		),
+		combined AS (
+			SELECT
+				lp.program_id,
+				lp.program_name,
+				lp.team_id,
+				lp.team_name,
+				COALESCE(ms.wins, 0) as wins,
+				COALESCE(ms.losses, 0) as losses,
+				COALESCE(ms.draws, 0) as draws,
+				COALESCE(ms.total_games, 0) as total_games,
+				COALESCE(ms.total_score, 0) as total_score
+			FROM latest_programs lp
+			LEFT JOIN match_stats ms ON lp.team_id = ms.team_id
 		)
 		SELECT
 			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
@@ -875,7 +918,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			losses,
 			draws,
 			total_games
-		FROM game_stats
+		FROM combined
 		ORDER BY total_score DESC, wins DESC
 		LIMIT $3
 	`
