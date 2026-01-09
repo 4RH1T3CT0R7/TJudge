@@ -25,6 +25,7 @@ type TournamentRepository interface {
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error)
+	GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
@@ -833,16 +834,7 @@ func (s *Service) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, ga
 
 // getLatestParticipantsByGame получает последние версии программ участников для конкретной игры
 func (s *Service) getLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
-	// Получаем всех участников
-	allParticipants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Фильтруем по игре - это требует проверки game_id программы
-	// Для простоты пока возвращаем всех участников
-	// TODO: добавить фильтрацию по game_id
-	return allParticipants, nil
+	return s.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)
 }
 
 // generateRoundRobinMatchesForGame генерирует матчи для конкретной игры

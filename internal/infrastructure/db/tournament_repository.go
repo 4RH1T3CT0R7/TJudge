@@ -813,7 +813,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			SELECT
 				team_id,
 				MAX(team_name) as team_name,
-				MIN(program_id) as program_id,
+				(array_agg(program_id ORDER BY program_name))[1] as program_id,
 				MAX(program_name) as program_name,
 				json_object_agg(
 					COALESCE(game_id::text, 'unknown'),

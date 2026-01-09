@@ -342,6 +342,59 @@ export function TournamentDetail() {
     }
   };
 
+  // Helper function to wait for matches to complete and auto-retry if needed
+  const waitForMatchesAndAutoRetry = async (tournamentId: string, initialEnqueued: number) => {
+    const MAX_WAIT_TIME = 10 * 60 * 1000; // 10 minutes max
+    const POLL_INTERVAL = 2000; // 2 seconds
+    const AUTO_RETRY_THRESHOLD = 50;
+
+    const startTime = Date.now();
+    let lastPending = initialEnqueued;
+
+    while (Date.now() - startTime < MAX_WAIT_TIME) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+
+      try {
+        const stats = await api.getMatchStatistics(tournamentId);
+        const inProgress = stats.pending + stats.running;
+
+        // Refresh leaderboard while matches are running
+        if (inProgress !== lastPending) {
+          lastPending = inProgress;
+          // Refresh data
+          const [leaderboardData, matchRoundsData] = await Promise.all([
+            api.getCrossGameLeaderboard(tournamentId).catch(() => []),
+            api.getMatchesByRounds(tournamentId).catch(() => []),
+          ]);
+          setCrossGameLeaderboard(leaderboardData);
+          setMatchRounds(matchRoundsData || []);
+        }
+
+        // All matches completed
+        if (inProgress === 0) {
+          // Check for failed matches
+          if (stats.failed > 0 && stats.failed <= AUTO_RETRY_THRESHOLD) {
+            console.log(`Auto-retrying ${stats.failed} failed matches (threshold: ${AUTO_RETRY_THRESHOLD})`);
+            try {
+              const retryResult = await api.retryFailedMatches(tournamentId);
+              if (retryResult.enqueued > 0) {
+                // Wait for retry to complete recursively
+                await waitForMatchesAndAutoRetry(tournamentId, retryResult.enqueued);
+              }
+            } catch (retryErr) {
+              console.error('Failed to auto-retry matches:', retryErr);
+            }
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('Error polling match status:', err);
+      }
+    }
+
+    console.warn('Timeout waiting for matches to complete');
+  };
+
   // Run matches for a specific game
   const handleRunGameMatches = async (gameId: string, gameName: string, gameDisplayName: string) => {
     if (!tournament || !id) return;
@@ -359,14 +412,28 @@ export function TournamentDetail() {
         // Switch to the next game
         const nextGame = games[currentIndex + 1];
         await api.setActiveGame(id, nextGame.id);
-        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}".`);
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}". Ожидание завершения матчей...`);
       } else {
         // Last game - deactivate all games
         await api.deactivateAllGames(id);
-        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы.`);
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы. Ожидание завершения матчей...`);
       }
 
-      // Reload games status and matches
+      // Wait for matches to complete and auto-retry if needed (runs in background)
+      waitForMatchesAndAutoRetry(id, result.enqueued).then(() => {
+        // Final refresh after all matches complete
+        Promise.all([
+          api.getTournamentGamesStatus(id).catch(() => []),
+          api.getMatchesByRounds(id).catch(() => []),
+          api.getCrossGameLeaderboard(id).catch(() => []),
+        ]).then(([gamesStatusData, matchRoundsData, leaderboardData]) => {
+          setGamesStatus(gamesStatusData || []);
+          setMatchRounds(matchRoundsData || []);
+          setCrossGameLeaderboard(leaderboardData);
+        });
+      });
+
+      // Immediate refresh
       const [gamesStatusData, matchRoundsData] = await Promise.all([
         api.getTournamentGamesStatus(id).catch(() => []),
         api.getMatchesByRounds(id).catch(() => []),
