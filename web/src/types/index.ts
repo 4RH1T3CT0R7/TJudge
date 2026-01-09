@@ -120,9 +120,10 @@ export interface Match {
   created_at: string;
 }
 
-// MatchRound - группа матчей одного раунда
+// MatchRound - группа матчей одного раунда для конкретной игры
 export interface MatchRound {
   round_number: number;
+  game_type: string;
   total_matches: number;
   completed_count: number;
   pending_count: number;

@@ -999,11 +999,12 @@ func (r *MatchRepository) GetNextRoundNumber(ctx context.Context, tournamentID u
 	return int(maxRound.Int64) + 1, nil
 }
 
-// GetMatchesByRounds получает матчи турнира сгруппированные по раундам
+// GetMatchesByRounds получает матчи турнира сгруппированные по раундам и играм
 func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
 	query := `
 		SELECT
 			round_number,
+			game_type,
 			COUNT(*) as total_matches,
 			COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
 			COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
@@ -1012,8 +1013,8 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 			MIN(created_at) as created_at
 		FROM matches
 		WHERE tournament_id = $1
-		GROUP BY round_number
-		ORDER BY round_number DESC
+		GROUP BY round_number, game_type
+		ORDER BY MIN(created_at) DESC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -1027,6 +1028,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		var round domain.MatchRound
 		err := rows.Scan(
 			&round.RoundNumber,
+			&round.GameType,
 			&round.TotalMatches,
 			&round.CompletedCount,
 			&round.PendingCount,
@@ -1040,17 +1042,17 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		rounds = append(rounds, &round)
 	}
 
-	// Теперь получаем матчи для каждого раунда
+	// Теперь получаем матчи для каждого раунда и игры
 	for _, round := range rounds {
 		matchQuery := `
 			SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 			       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 			FROM matches
-			WHERE tournament_id = $1 AND round_number = $2
+			WHERE tournament_id = $1 AND round_number = $2 AND game_type = $3
 			ORDER BY created_at ASC
 		`
 
-		matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, round.RoundNumber)
+		matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, round.RoundNumber, round.GameType)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get matches for round")
 		}

@@ -194,9 +194,10 @@ type Match struct {
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
 }
 
-// MatchRound представляет группу матчей одного раунда
+// MatchRound представляет группу матчей одного раунда для конкретной игры
 type MatchRound struct {
 	RoundNumber    int       `json:"round_number"`
+	GameType       string    `json:"game_type"`
 	TotalMatches   int       `json:"total_matches"`
 	CompletedCount int       `json:"completed_count"`
 	PendingCount   int       `json:"pending_count"`

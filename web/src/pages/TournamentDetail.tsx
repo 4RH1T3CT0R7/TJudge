@@ -11,6 +11,7 @@ import type {
   CrossGameLeaderboardEntry,
   MatchRound,
   WSMessage,
+  TournamentGameWithDetails,
 } from '../types';
 
 type TabType = 'info' | 'leaderboard' | 'matches' | 'games' | 'teams';
@@ -159,6 +160,12 @@ export function TournamentDetail() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Games status state (for active game management)
+  const [gamesStatus, setGamesStatus] = useState<TournamentGameWithDetails[]>([]);
+  const [runningGameId, setRunningGameId] = useState<string | null>(null);
+  const [settingActiveGameId, setSettingActiveGameId] = useState<string | null>(null);
+  const [resettingGameId, setResettingGameId] = useState<string | null>(null);
+
   const handleWebSocketMessage = useCallback((message: WSMessage) => {
     // WebSocket updates can trigger refresh of data
     if (message.type === 'leaderboard_update') {
@@ -193,17 +200,19 @@ export function TournamentDetail() {
       const tournamentData = await api.getTournament(id);
       setTournament(tournamentData);
 
-      const [teamsData, gamesData, crossGameData, matchRoundsData] = await Promise.all([
+      const [teamsData, gamesData, crossGameData, matchRoundsData, gamesStatusData] = await Promise.all([
         api.getTournamentTeams(id).catch(() => []),
         api.getTournamentGames(id).catch(() => []),
         api.getCrossGameLeaderboard(id).catch(() => []),
         api.getMatchesByRounds(id).catch(() => []),
+        api.getTournamentGamesStatus(id).catch(() => []),
       ]);
 
       setTeams(teamsData || []);
       setGames(gamesData || []);
       setCrossGameLeaderboard(crossGameData || []);
       setMatchRounds(matchRoundsData || []);
+      setGamesStatus(gamesStatusData || []);
 
       if (isAuthenticated) {
         try {
@@ -330,6 +339,104 @@ export function TournamentDetail() {
       setActionError(errorMessage);
     } finally {
       setIsRetryingMatches(false);
+    }
+  };
+
+  // Run matches for a specific game
+  const handleRunGameMatches = async (gameId: string, gameName: string, gameDisplayName: string) => {
+    if (!tournament || !id) return;
+
+    setRunningGameId(gameId);
+    setActionError(null);
+    try {
+      const result = await api.runGameMatches(id, gameName);
+
+      // Find current game index and switch to next game
+      const currentIndex = games.findIndex(g => g.id === gameId);
+      const nextGame = games[(currentIndex + 1) % games.length];
+
+      if (nextGame && nextGame.id !== gameId) {
+        // Automatically switch to the next game
+        await api.setActiveGame(id, nextGame.id);
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}".`);
+      } else {
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}"`);
+      }
+
+      // Reload games status and matches
+      const [gamesStatusData, matchRoundsData] = await Promise.all([
+        api.getTournamentGamesStatus(id).catch(() => []),
+        api.getMatchesByRounds(id).catch(() => []),
+      ]);
+      setGamesStatus(gamesStatusData || []);
+      setMatchRounds(matchRoundsData || []);
+    } catch (err: unknown) {
+      console.error('Failed to run game matches:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось запустить матчи');
+    } finally {
+      setRunningGameId(null);
+    }
+  };
+
+  // Set active game for tournament
+  const handleSetActiveGame = async (gameId: string) => {
+    if (!id) return;
+
+    setSettingActiveGameId(gameId);
+    setActionError(null);
+    try {
+      await api.setActiveGame(id, gameId);
+      // Reload games status
+      const gamesStatusData = await api.getTournamentGamesStatus(id);
+      setGamesStatus(gamesStatusData || []);
+    } catch (err: unknown) {
+      console.error('Failed to set active game:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось установить активную игру');
+    } finally {
+      setSettingActiveGameId(null);
+    }
+  };
+
+  // Reset game round (delete all matches and reset ratings)
+  const handleResetGameRound = async (gameId: string, gameDisplayName: string) => {
+    if (!id) return;
+
+    const confirmed = window.confirm(
+      `Вы уверены, что хотите сбросить раунд для игры "${gameDisplayName}"?\n\n` +
+      'Это действие:\n' +
+      '- Удалит все матчи этой игры\n' +
+      '- Сбросит рейтинги всех участников до 1000\n' +
+      '- Сбросит номер раунда\n\n' +
+      'Это действие необратимо!'
+    );
+
+    if (!confirmed) return;
+
+    setResettingGameId(gameId);
+    setActionError(null);
+    try {
+      const result = await api.resetGameRound(id, gameId);
+      alert(
+        `Раунд сброшен успешно!\n\n` +
+        `Удалено матчей: ${result.matches_deleted}\n` +
+        `Сброшено рейтингов: ${result.participants_reset}\n` +
+        `Удалено записей истории: ${result.rating_history_reset}`
+      );
+      // Reload games status and matches
+      const [gamesStatusData, matchRoundsData] = await Promise.all([
+        api.getTournamentGamesStatus(id).catch(() => []),
+        api.getMatchesByRounds(id).catch(() => []),
+      ]);
+      setGamesStatus(gamesStatusData || []);
+      setMatchRounds(matchRoundsData || []);
+    } catch (err: unknown) {
+      console.error('Failed to reset game round:', err);
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setActionError(axiosErr.response?.data?.message || 'Не удалось сбросить раунд');
+    } finally {
+      setResettingGameId(null);
     }
   };
 
@@ -619,14 +726,17 @@ export function TournamentDetail() {
         {activeTab === 'games' && (
           <GamesTab
             games={games}
+            gamesStatus={gamesStatus}
             tournamentId={tournament.id}
             myTeam={myTeam}
             isAdmin={isAdmin}
             tournamentStatus={tournament.status}
-            onRunGameMatches={async (_gameId) => {
-              // For now, run all matches - in the future, could run per-game
-              await handleRunAllMatches();
-            }}
+            onRunGameMatches={handleRunGameMatches}
+            onSetActiveGame={handleSetActiveGame}
+            onResetGameRound={handleResetGameRound}
+            runningGameId={runningGameId}
+            settingActiveGameId={settingActiveGameId}
+            resettingGameId={resettingGameId}
           />
         )}
 
@@ -1133,32 +1243,50 @@ function CrossGameLeaderboardTableDark({
 // Games Tab Component
 function GamesTab({
   games,
+  gamesStatus,
   tournamentId,
   myTeam,
   isAdmin,
   tournamentStatus,
   onRunGameMatches,
+  onSetActiveGame,
+  onResetGameRound,
+  runningGameId,
+  settingActiveGameId,
+  resettingGameId,
 }: {
   games: Game[];
+  gamesStatus: TournamentGameWithDetails[];
   tournamentId: string;
   myTeam: Team | null;
   isAdmin?: boolean;
   tournamentStatus?: TournamentStatus;
-  onRunGameMatches?: (gameId: string) => Promise<void>;
+  onRunGameMatches?: (gameId: string, gameName: string, gameDisplayName: string) => Promise<void>;
+  onSetActiveGame?: (gameId: string) => Promise<void>;
+  onResetGameRound?: (gameId: string, gameDisplayName: string) => Promise<void>;
+  runningGameId?: string | null;
+  settingActiveGameId?: string | null;
+  resettingGameId?: string | null;
 }) {
-  const [runningGame, setRunningGame] = useState<string | null>(null);
-
-  const handleRunMatches = async (e: React.MouseEvent, gameId: string) => {
+  const handleRunMatches = async (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
     e.stopPropagation();
     if (!onRunGameMatches) return;
+    await onRunGameMatches(game.id, game.name, game.display_name);
+  };
 
-    setRunningGame(gameId);
-    try {
-      await onRunGameMatches(gameId);
-    } finally {
-      setRunningGame(null);
-    }
+  const handleSetActive = async (e: React.MouseEvent, gameId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onSetActiveGame) return;
+    await onSetActiveGame(gameId);
+  };
+
+  const handleReset = async (e: React.MouseEvent, game: Game) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onResetGameRound) return;
+    await onResetGameRound(game.id, game.display_name);
   };
 
   if (games.length === 0) {
@@ -1189,7 +1317,7 @@ function GamesTab({
             <div>
               <h4 className="font-medium text-blue-900 dark:text-blue-200">Режим администратора</h4>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                Вы можете запускать раунды матчей для каждой игры отдельно. После запуска матчей команды не смогут изменять свои программы для этой игры.
+                Выберите активную игру и запустите раунд матчей. После запуска матчей команды не смогут изменять свои программы для этой игры.
               </p>
             </div>
           </div>
@@ -1197,65 +1325,116 @@ function GamesTab({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {games.map((game, index) => (
-          <Link
-            key={game.id}
-            to={`/tournaments/${tournamentId}/games/${game.id}`}
-            className="card card-interactive group relative overflow-hidden"
-          >
-            {/* Game number badge */}
-            <div className="absolute top-3 right-3 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
-              {index + 1}
-            </div>
+        {games.map((game, index) => {
+          const gameStatus = gamesStatus.find(g => g.game_id === game.id);
+          const isActive = gameStatus?.is_active || false;
+          const currentRound = gameStatus?.current_round || 0;
 
-            <div className="flex items-start justify-between mb-3 pr-10">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
-                  {game.display_name}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-200">
-                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{game.name}</code>
-                </p>
+          return (
+            <Link
+              key={game.id}
+              to={`/tournaments/${tournamentId}/games/${game.id}`}
+              className={`card card-interactive group relative overflow-hidden ${
+                isActive ? 'ring-2 ring-green-500 dark:ring-green-600' : ''
+              }`}
+            >
+              {/* Game number badge */}
+              <div className="absolute top-3 right-3 w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center text-sm font-bold text-gray-600 dark:text-gray-300">
+                {index + 1}
               </div>
-            </div>
 
-            {game.rules && (
-              <p className="text-gray-600 dark:text-gray-200 text-sm line-clamp-3 mb-4">
-                {game.rules.substring(0, 200)}...
-              </p>
-            )}
-
-            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-              {myTeam && (
-                <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 text-sm font-medium">
-                  <PlayIcon />
-                  <span>Управление программой</span>
+              <div className="flex items-start justify-between mb-3 pr-10">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                      {game.display_name}
+                    </h3>
+                    {isActive && (
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 text-xs rounded-full font-medium">
+                        Активна
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-500 dark:text-gray-200">
+                      {game.name}
+                    </code>
+                    {currentRound > 0 && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        • Раунд {currentRound}
+                      </span>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              {game.rules && (
+                <p className="text-gray-600 dark:text-gray-200 text-sm line-clamp-3 mb-4">
+                  {game.rules.substring(0, 200)}...
+                </p>
               )}
 
-              {/* Admin controls */}
-              {isAdmin && tournamentStatus === 'active' && (
-                <button
-                  onClick={(e) => handleRunMatches(e, game.id)}
-                  disabled={runningGame === game.id}
-                  className="btn btn-primary text-xs py-1.5 px-3"
-                >
-                  {runningGame === game.id ? (
-                    <>
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Запуск...
-                    </>
-                  ) : (
-                    <>
-                      <PlayIcon />
-                      Запустить раунд
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </Link>
-        ))}
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
+                {myTeam && !isAdmin && (
+                  <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400 text-sm font-medium">
+                    <PlayIcon />
+                    <span>Управление программой</span>
+                  </div>
+                )}
+
+                {/* Admin controls */}
+                {isAdmin && tournamentStatus === 'active' && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {!isActive ? (
+                      <button
+                        onClick={(e) => handleSetActive(e, game.id)}
+                        disabled={settingActiveGameId === game.id}
+                        className="btn btn-secondary text-xs py-1.5 px-3"
+                      >
+                        {settingActiveGameId === game.id ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-gray-400/30 border-t-gray-600 rounded-full animate-spin" />
+                            Установка...
+                          </>
+                        ) : (
+                          'Сделать активной'
+                        )}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => handleRunMatches(e, game)}
+                          disabled={runningGameId === game.id}
+                          className="btn btn-primary text-xs py-1.5 px-3"
+                        >
+                          {runningGameId === game.id ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Запуск...
+                            </>
+                          ) : (
+                            <>
+                              <PlayIcon />
+                              Запустить раунд
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => handleReset(e, game)}
+                          disabled={resettingGameId === game.id}
+                          className="btn text-xs py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white"
+                          title="Сбросить раунд (удалить все матчи и рейтинги)"
+                        >
+                          {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
@@ -1576,7 +1755,7 @@ function MatchesTab({
       <div className="space-y-3">
         {rounds.map((round) => (
           <RoundCard
-            key={round.round_number}
+            key={`${round.round_number}-${round.game_type}`}
             round={round}
             isExpanded={expandedRounds.has(round.round_number)}
             onToggle={() => toggleRound(round.round_number)}
@@ -1586,6 +1765,14 @@ function MatchesTab({
     </div>
   );
 }
+
+// Game name display mapping
+const gameDisplayNames: Record<string, string> = {
+  dilemma: 'Дилемма заключённого',
+  tug_of_war: 'Перетягивание каната',
+};
+
+const getGameDisplayName = (gameType: string) => gameDisplayNames[gameType] || gameType;
 
 // Компонент карточки раунда
 function RoundCard({
@@ -1638,6 +1825,9 @@ function RoundCard({
             <FolderIcon />
             <span className="font-semibold text-gray-900 dark:text-gray-100">
               Раунд {round.round_number}
+            </span>
+            <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs rounded-full font-medium">
+              {getGameDisplayName(round.game_type)}
             </span>
           </div>
           <span className="text-sm text-gray-500 dark:text-gray-200">
