@@ -136,6 +136,7 @@ func main() {
 		tournamentRepo,
 		matchRepo,
 		queueManager,
+		gameRepo, // game repository for setting active game
 		tournamentCache,
 		leaderboardCache,
 		wsHub,           // broadcaster

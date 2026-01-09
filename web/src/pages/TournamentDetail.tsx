@@ -351,16 +351,18 @@ export function TournamentDetail() {
     try {
       const result = await api.runGameMatches(id, gameName);
 
-      // Find current game index and switch to next game
+      // Find current game index and check if there's a next game
       const currentIndex = games.findIndex(g => g.id === gameId);
-      const nextGame = games[(currentIndex + 1) % games.length];
+      const isLastGame = currentIndex === games.length - 1;
 
-      if (nextGame && nextGame.id !== gameId) {
-        // Automatically switch to the next game
+      if (!isLastGame) {
+        // Switch to the next game
+        const nextGame = games[currentIndex + 1];
         await api.setActiveGame(id, nextGame.id);
         alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}".`);
       } else {
-        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}"`);
+        // Last game - don't switch to any game, all games become inactive
+        alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире.`);
       }
 
       // Reload games status and matches

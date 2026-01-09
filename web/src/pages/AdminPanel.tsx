@@ -1344,11 +1344,13 @@ export function AdminPanel() {
                   const details = programDetails[game.id] || [];
                   const totalPrograms = programs.length || details.length;
 
-                  // Create a lookup map for program errors
+                  // Create a lookup map for program errors by team_id
+                  // (team_id is used because leaderboard may show older program versions while
+                  // programDetails has the latest version - using team_id ensures correct matching)
                   const errorLookup = new Map<string, string>();
                   details.forEach(p => {
-                    if (p.error_message) {
-                      errorLookup.set(p.id, p.error_message);
+                    if (p.error_message && p.team_id) {
+                      errorLookup.set(p.team_id, p.error_message);
                     }
                   });
 
@@ -1401,7 +1403,7 @@ export function AdminPanel() {
                             </thead>
                             <tbody>
                               {programs.map((entry) => {
-                                const error = errorLookup.get(entry.program_id);
+                                const error = entry.team_id ? errorLookup.get(entry.team_id) : undefined;
                                 return (
                                   <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
                                     <td className="py-2 pr-4 font-medium text-gray-600 dark:text-gray-400">{entry.rank}</td>

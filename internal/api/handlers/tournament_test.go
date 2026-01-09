@@ -118,6 +118,11 @@ func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tourname
 	return args.Get(0).([]*domain.MatchRound), args.Error(1)
 }
 
+func (m *MockTournamentService) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Int(0), args.Error(1)
+}
+
 func TestTournamentHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 

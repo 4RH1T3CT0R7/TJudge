@@ -110,6 +110,7 @@ func setupTestServer(b *testing.B) {
 		tournamentRepo,
 		matchRepo,
 		queueManager,
+		gameRepo,
 		tournamentCache,
 		leaderboardCache,
 		wsHub,

@@ -745,11 +745,11 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 		),
 		aggregated AS (
 			SELECT
-				COALESCE(team_id::text, program_id::text) as group_key,
+				COALESCE(team_id::text, MIN(program_id)::text) as group_key,
 				team_id,
-				team_name,
-				program_id,
-				program_name,
+				MAX(team_name) as team_name,
+				MIN(program_id) as program_id,
+				MIN(program_name) as program_name,
 				json_object_agg(
 					COALESCE(game_id::text, 'unknown'),
 					json_build_object(
@@ -767,7 +767,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				SUM(total_games) as total_games,
 				SUM(total_score) as total_rating
 			FROM game_stats
-			GROUP BY group_key, team_id, team_name, program_id, program_name
+			GROUP BY team_id
 		)
 		SELECT
 			ROW_NUMBER() OVER (ORDER BY total_rating DESC, total_wins DESC) as rank,
@@ -837,6 +837,8 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			SELECT
 				p.id as program_id,
 				p.name as program_name,
+				p.team_id,
+				t.name as team_name,
 				COUNT(*) FILTER (WHERE
 					(m.program1_id = p.id AND m.winner = 1) OR
 					(m.program2_id = p.id AND m.winner = 2)
@@ -855,16 +857,19 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 					END
 				), 0) as total_score
 			FROM programs p
+			LEFT JOIN teams t ON p.team_id = t.id
 			JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
 			WHERE m.tournament_id = $1
 			  AND m.game_type = $2
 			  AND m.status IN ('completed', 'failed')
-			GROUP BY p.id, p.name
+			GROUP BY p.id, p.name, p.team_id, t.name
 		)
 		SELECT
 			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
 			program_id,
 			program_name,
+			team_id,
+			team_name,
 			total_score as rating,
 			wins,
 			losses,
@@ -888,6 +893,8 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			&entry.Rank,
 			&entry.ProgramID,
 			&entry.ProgramName,
+			&entry.TeamID,
+			&entry.TeamName,
 			&entry.Rating,
 			&entry.Wins,
 			&entry.Losses,

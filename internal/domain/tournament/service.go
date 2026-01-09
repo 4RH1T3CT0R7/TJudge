@@ -3,7 +3,6 @@ package tournament
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -59,11 +58,18 @@ type DistributedLock interface {
 	WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error
 }
 
+// GameRepository интерфейс для работы с играми в турнире
+type GameRepository interface {
+	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
+	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
+}
+
 // Service - сервис управления турнирами
 type Service struct {
 	tournamentRepo   TournamentRepository
 	matchRepo        MatchRepository
 	queueManager     QueueManager
+	gameRepo         GameRepository
 	tournamentCache  *cache.TournamentCache
 	leaderboardCache *cache.LeaderboardCache
 	broadcaster      Broadcaster
@@ -76,6 +82,7 @@ func NewService(
 	tournamentRepo TournamentRepository,
 	matchRepo MatchRepository,
 	queueManager QueueManager,
+	gameRepo GameRepository,
 	tournamentCache *cache.TournamentCache,
 	leaderboardCache *cache.LeaderboardCache,
 	broadcaster Broadcaster,
@@ -86,6 +93,7 @@ func NewService(
 		tournamentRepo:   tournamentRepo,
 		matchRepo:        matchRepo,
 		queueManager:     queueManager,
+		gameRepo:         gameRepo,
 		tournamentCache:  tournamentCache,
 		leaderboardCache: leaderboardCache,
 		broadcaster:      broadcaster,
@@ -270,7 +278,8 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 	})
 }
 
-// Start запускает турнир и генерирует матчи
+// Start запускает турнир (меняет статус на active и активирует первую игру)
+// Матчи НЕ генерируются автоматически - запускаются вручную администратором
 func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	// Используем distributed lock для предотвращения одновременного старта
 	lockKey := fmt.Sprintf("tournament:start:%s", tournamentID.String())
@@ -288,113 +297,6 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrConflict.WithMessage("tournament already started or completed")
 		}
 
-		// Получаем участников сгруппированных по играм
-		participantsByGame, err := s.tournamentRepo.GetLatestParticipantsGroupedByGame(ctx, tournamentID)
-		if err != nil {
-			s.log.Error("Failed to get participants grouped by game", zap.Error(err))
-			return errors.ErrInternal.WithMessage("failed to get participants")
-		}
-
-		// Считаем общее количество участников
-		totalParticipants := 0
-		for _, participants := range participantsByGame {
-			totalParticipants += len(participants)
-		}
-
-		// Проверяем минимальное количество участников
-		if totalParticipants < 2 {
-			return errors.ErrValidation.WithMessage(fmt.Sprintf("tournament needs at least 2 participants to start, got %d", totalParticipants))
-		}
-
-		s.log.Info("Starting tournament with participants",
-			zap.String("tournament_id", tournamentID.String()),
-			zap.Int("total_participants", totalParticipants),
-			zap.Int("games_count", len(participantsByGame)),
-		)
-
-		// Сортируем игры для детерминированного порядка выполнения
-		// Первая игра (по алфавиту) получает HIGH приоритет, вторая - MEDIUM, остальные - LOW
-		gameTypes := make([]string, 0, len(participantsByGame))
-		for gameType := range participantsByGame {
-			gameTypes = append(gameTypes, gameType)
-		}
-		sort.Strings(gameTypes)
-
-		// Генерируем матчи для каждой игры отдельно
-		var allMatches []*domain.Match
-		for gameIndex, gameType := range gameTypes {
-			participants := participantsByGame[gameType]
-			if len(participants) < 2 {
-				s.log.Info("Skipping game with less than 2 participants",
-					zap.String("game_type", gameType),
-					zap.Int("participants", len(participants)),
-				)
-				continue
-			}
-
-			// Определяем приоритет на основе порядка игры
-			// Первая игра = HIGH (выполняется первой), вторая = MEDIUM, остальные = LOW
-			var priority domain.MatchPriority
-			switch gameIndex {
-			case 0:
-				priority = domain.PriorityHigh
-			case 1:
-				priority = domain.PriorityMedium
-			default:
-				priority = domain.PriorityLow
-			}
-
-			// Получаем следующий номер раунда для этой игры
-			roundNumber, err := s.matchRepo.GetNextRoundNumberByGame(ctx, tournamentID, gameType)
-			if err != nil {
-				s.log.Warn("Failed to get next round number for game, using 1",
-					zap.Error(err),
-					zap.String("game_type", gameType),
-				)
-				roundNumber = 1
-			}
-
-			// Генерируем round-robin матчи для этой игры
-			matches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, priority)
-			if err != nil {
-				s.log.Error("Failed to generate matches for game",
-					zap.Error(err),
-					zap.String("game_type", gameType),
-				)
-				return errors.ErrInternal.WithMessage(fmt.Sprintf("failed to generate matches for game %s", gameType))
-			}
-
-			s.log.Info("Generated matches for game",
-				zap.String("game_type", gameType),
-				zap.Int("participants", len(participants)),
-				zap.Int("matches", len(matches)),
-				zap.String("priority", string(priority)),
-			)
-
-			allMatches = append(allMatches, matches...)
-		}
-
-		if len(allMatches) == 0 {
-			return errors.ErrValidation.WithMessage("no matches could be generated - need at least 2 participants per game")
-		}
-
-		// Создаём матчи в БД
-		if err := s.matchRepo.CreateBatch(ctx, allMatches); err != nil {
-			s.log.Error("Failed to create matches", zap.Error(err))
-			return errors.ErrInternal.WithMessage("failed to create matches")
-		}
-
-		// Добавляем матчи в очередь
-		for _, match := range allMatches {
-			if err := s.queueManager.Enqueue(ctx, match); err != nil {
-				s.log.Error("Failed to enqueue match",
-					zap.Error(err),
-					zap.String("match_id", match.ID.String()),
-				)
-				// Продолжаем, даже если какой-то матч не удалось добавить в очередь
-			}
-		}
-
 		// Обновляем статус турнира
 		now := time.Now()
 		tournament.Status = domain.TournamentActive
@@ -405,20 +307,35 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrInternal.WithMessage("failed to update tournament status")
 		}
 
-		s.log.Info("Tournament started with matches",
+		s.log.Info("Tournament started",
 			zap.String("tournament_id", tournamentID.String()),
-			zap.Int("matches_created", len(allMatches)),
-			zap.Int("games", len(participantsByGame)),
 		)
+
+		// Активируем первую игру (если есть)
+		if s.gameRepo != nil {
+			games, err := s.gameRepo.GetTournamentGames(ctx, tournamentID)
+			if err != nil {
+				s.log.Warn("Failed to get tournament games", zap.Error(err))
+			} else if len(games) > 0 {
+				// Активируем первую игру
+				if err := s.gameRepo.SetActiveGame(ctx, tournamentID, games[0].GameID); err != nil {
+					s.log.Warn("Failed to set first game as active", zap.Error(err))
+				} else {
+					s.log.Info("First game set as active",
+						zap.String("tournament_id", tournamentID.String()),
+						zap.String("game_id", games[0].GameID.String()),
+					)
+				}
+			}
+		}
 
 		// Инвалидируем кэш
 		_ = s.tournamentCache.Invalidate(ctx, tournamentID)
 
 		// Отправляем broadcast обновление
 		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
-			"status":        tournament.Status,
-			"matches_count": len(allMatches),
-			"start_time":    tournament.StartTime,
+			"status":     tournament.Status,
+			"start_time": tournament.StartTime,
 		})
 
 		return nil

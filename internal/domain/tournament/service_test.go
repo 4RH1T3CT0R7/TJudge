@@ -96,6 +96,14 @@ func (m *MockTournamentRepository) GetLatestParticipants(ctx context.Context, to
 	return args.Get(0).([]*domain.TournamentParticipant), args.Error(1)
 }
 
+func (m *MockTournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string][]*domain.TournamentParticipant), args.Error(1)
+}
+
 type MockMatchRepository struct {
 	mock.Mock
 }
@@ -152,6 +160,19 @@ func (m *MockMatchRepository) GetNextRoundNumber(ctx context.Context, tournament
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockMatchRepository) GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
 type MockQueueManager struct {
 	mock.Mock
 }
@@ -180,6 +201,23 @@ func (m *MockDistributedLock) WithLock(ctx context.Context, key string, ttl time
 	if args.Error(0) == nil {
 		return fn(ctx)
 	}
+	return args.Error(0)
+}
+
+type MockGameRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.TournamentGame), args.Error(1)
+}
+
+func (m *MockGameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	args := m.Called(ctx, tournamentID, gameID)
 	return args.Error(0)
 }
 
@@ -244,6 +282,7 @@ func TestConcurrentJoin(t *testing.T) {
 			tournamentRepo,
 			matchRepo,
 			queueManager,
+			nil, // gameRepo not needed for join test
 			tournamentCache,
 			leaderboardCache,
 			broadcaster,
@@ -357,6 +396,7 @@ func TestConcurrentStart(t *testing.T) {
 			tournamentRepo,
 			matchRepo,
 			queueManager,
+			nil, // gameRepo not needed for concurrent start test
 			tournamentCache,
 			leaderboardCache,
 			broadcaster,
@@ -430,6 +470,7 @@ func TestRaceConditionInJoin(t *testing.T) {
 			tournamentRepo,
 			matchRepo,
 			queueManager,
+			nil, // gameRepo not needed for lock failure test
 			tournamentCache,
 			leaderboardCache,
 			broadcaster,
