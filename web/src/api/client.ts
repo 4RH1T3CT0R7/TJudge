@@ -24,6 +24,9 @@ class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
 
+  // Mutex for token refresh to prevent race conditions
+  private refreshPromise: Promise<void> | null = null;
+
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
@@ -49,25 +52,25 @@ class ApiClient {
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config;
 
-        // Skip refresh logic if:
-        // 1. This IS the refresh request itself (avoid infinite loop)
-        // 2. This is logout request (avoid infinite loop)
-        // 3. Request was already retried
-        // 4. No original request config
-        // Use type assertion through unknown for _retry flag
+        // Skip refresh logic for auth endpoints (they don't need token refresh):
+        // - /auth/refresh: would cause infinite loop
+        // - /auth/logout: user is logging out, no need to refresh
+        // - /auth/login: user is authenticating, no token to refresh
+        // - /auth/register: new user registration, no token exists
+        // Also skip if request was already retried or no config exists
         const requestWithRetry = originalRequest as unknown as { _retry?: boolean };
+        const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
         if (
           error.response?.status === 401 &&
           originalRequest &&
-          !originalRequest.url?.includes('/auth/refresh') &&
-          !originalRequest.url?.includes('/auth/logout') &&
+          !isAuthEndpoint &&
           !requestWithRetry._retry
         ) {
           requestWithRetry._retry = true;
 
-          // Try to refresh token
+          // Use mutex to prevent concurrent refresh attempts
           try {
-            await this.refreshToken();
+            await this.refreshTokenWithMutex();
             // Retry original request with new token
             return this.client.request(originalRequest);
           } catch {
@@ -81,6 +84,26 @@ class ApiClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  /**
+   * Refresh token with mutex to prevent race conditions.
+   * Multiple concurrent 401 errors will all wait for the same refresh promise.
+   */
+  private async refreshTokenWithMutex(): Promise<void> {
+    // If a refresh is already in progress, wait for it
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    // Start a new refresh and store the promise
+    this.refreshPromise = this.refreshToken()
+      .finally(() => {
+        // Clear the promise when done (success or failure)
+        this.refreshPromise = null;
+      });
+
+    return this.refreshPromise;
   }
 
   setAccessToken(token: string) {
@@ -106,9 +129,9 @@ class ApiClient {
     return data;
   }
 
-  async login(email: string, password: string): Promise<AuthResponse> {
+  async login(username: string, password: string): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/login', {
-      email,
+      username,
       password,
     });
     this.setAccessToken(data.access_token);
@@ -129,7 +152,9 @@ class ApiClient {
 
   async logout(): Promise<void> {
     try {
-      await this.client.post('/auth/logout');
+      const refreshToken = localStorage.getItem('refresh_token');
+      // Send both tokens for proper invalidation
+      await this.client.post('/auth/logout', { refresh_token: refreshToken });
     } finally {
       this.clearTokens();
     }
@@ -137,6 +162,11 @@ class ApiClient {
 
   async getMe(): Promise<User> {
     const { data } = await this.client.get<User>('/auth/me');
+    return data;
+  }
+
+  async updateProfile(updates: { email?: string; password?: string }): Promise<User> {
+    const { data } = await this.client.put<User>('/auth/profile', updates);
     return data;
   }
 

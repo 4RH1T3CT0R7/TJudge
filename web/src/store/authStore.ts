@@ -8,10 +8,11 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   isInitialized: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
+  updateProfile: (updates: { email?: string; password?: string }) => Promise<void>;
   initialize: () => Promise<void>;
 }
 
@@ -23,11 +24,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isInitialized: false,
 
-      login: async (email: string, password: string) => {
+      login: async (username: string, password: string) => {
         set({ isLoading: true });
         try {
-          const response = await api.login(email, password);
-          set({ user: response.user, isAuthenticated: true });
+          const response = await api.login(username, password);
+          set({ user: response.user, isAuthenticated: true, isInitialized: true });
         } finally {
           set({ isLoading: false });
         }
@@ -37,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const response = await api.register(username, email, password);
-          set({ user: response.user, isAuthenticated: true });
+          set({ user: response.user, isAuthenticated: true, isInitialized: true });
         } finally {
           set({ isLoading: false });
         }
@@ -48,7 +49,8 @@ export const useAuthStore = create<AuthState>()(
         try {
           await api.logout();
         } finally {
-          set({ user: null, isAuthenticated: false, isLoading: false });
+          // Reset all auth state including isInitialized to ensure clean state for next login
+          set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: false });
         }
       },
 
@@ -59,6 +61,16 @@ export const useAuthStore = create<AuthState>()(
           set({ user, isAuthenticated: true });
         } catch {
           set({ user: null, isAuthenticated: false });
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      updateProfile: async (updates: { email?: string; password?: string }) => {
+        set({ isLoading: true });
+        try {
+          const user = await api.updateProfile(updates);
+          set({ user });
         } finally {
           set({ isLoading: false });
         }

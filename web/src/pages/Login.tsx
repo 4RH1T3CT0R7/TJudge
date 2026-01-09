@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 export function Login() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, isLoading } = useAuthStore();
@@ -14,10 +14,10 @@ export function Login() {
     setError('');
 
     try {
-      await login(email, password);
+      await login(username, password);
       navigate('/tournaments');
-    } catch (err) {
-      setError('Неверный email или пароль');
+    } catch {
+      setError('Неверное имя пользователя или пароль');
     }
   };
 
@@ -34,15 +34,16 @@ export function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-              Email
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+              Имя пользователя
             </label>
             <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="input"
+              autoComplete="username"
               required
             />
           </div>
@@ -57,6 +58,7 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="input"
+              autoComplete="current-password"
               required
             />
           </div>
@@ -69,6 +71,13 @@ export function Login() {
             {isLoading ? 'Вход...' : 'Войти'}
           </button>
         </form>
+
+        <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          Нет аккаунта?{' '}
+          <Link to="/register" className="text-primary-600 dark:text-primary-400 hover:underline">
+            Зарегистрироваться
+          </Link>
+        </div>
       </div>
     </div>
   );
