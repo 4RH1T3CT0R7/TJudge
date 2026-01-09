@@ -232,9 +232,14 @@ func (s *Server) setupRoutes() {
 
 		// Match routes
 		r.Route("/matches", func(r chi.Router) {
-			r.Get("/", s.matchHandler.List)
-			r.Get("/statistics", s.matchHandler.GetStatistics)
-			r.Get("/{id}", s.matchHandler.Get)
+			// Публичные маршруты с опциональной аутентификацией
+			// (если пользователь авторизован, покажет полные ошибки для админов)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.OptionalAuth(s.authService, s.log))
+				r.Get("/", s.matchHandler.List)
+				r.Get("/statistics", s.matchHandler.GetStatistics)
+				r.Get("/{id}", s.matchHandler.Get)
+			})
 
 			// Админские маршруты для управления очередью матчей
 			r.Group(func(r chi.Router) {

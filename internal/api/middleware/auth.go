@@ -100,7 +100,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 }
 
 // OptionalAuth middleware для опциональной аутентификации
-// Если токен есть - валидирует и добавляет в контекст, если нет - пропускает
+// Если токен есть - валидирует и добавляет в контекст (включая роль), если нет - пропускает
 func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +130,19 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
+			// Получаем пользователя для получения роли (важно для проверки админ-прав)
+			user, err := authService.GetUserFromToken(r.Context(), token)
+			if err != nil {
+				// Если не удалось получить пользователя, всё равно пропускаем запрос
+				// но без установки роли в контекст
+				ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// Добавляем user ID и роль в контекст
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+			ctx = context.WithValue(ctx, RoleKey, user.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
