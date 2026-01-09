@@ -296,7 +296,7 @@ func Load() (*Config, error) {
 			MaxAge:         getEnvInt("CORS_MAX_AGE", 3600),
 		},
 		RateLimit: RateLimitConfig{
-			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", true),
+			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // Disabled by default for development
 			RequestsPerMinute: getEnvInt("RATE_LIMIT_RPM", 100),
 			Burst:             getEnvInt("RATE_LIMIT_BURST", 200),
 		},

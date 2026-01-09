@@ -23,6 +23,13 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Получаем IP адрес клиента
 			ip := getClientIP(r)
+
+			// Bypass rate limiting for localhost (for tests)
+			if isLocalhost(ip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			key := fmt.Sprintf("ratelimit:%s", ip)
 
 			// Проверяем лимит
@@ -53,6 +60,26 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isLocalhost checks if the IP is localhost
+func isLocalhost(ip string) bool {
+	// Handle IPv4 localhost
+	if ip == "127.0.0.1" || ip == "localhost" {
+		return true
+	}
+	// Handle IPv6 localhost
+	if ip == "::1" || ip == "[::1]" {
+		return true
+	}
+	// Handle localhost with port (e.g., "127.0.0.1:xxxxx" or "[::1]:xxxxx")
+	if len(ip) > 9 && ip[:9] == "127.0.0.1" {
+		return true
+	}
+	if len(ip) > 4 && (ip[:4] == "::1:" || ip[:5] == "[::1]") {
+		return true
+	}
+	return false
 }
 
 // getClientIP извлекает IP адрес клиента из запроса

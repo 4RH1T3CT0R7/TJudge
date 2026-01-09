@@ -199,72 +199,77 @@ function PrisonersDilemmaMatrix() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full">
-      {/* Main table container */}
-      <table className="border-collapse">
-        {/* Header row with Player B */}
-        <thead>
-          <tr>
-            <th colSpan={2}></th>
-            <th colSpan={2} className="text-center pb-2 text-base font-bold text-gray-800 dark:text-gray-200">
-              Игрок B
-            </th>
-          </tr>
-          <tr>
-            <th colSpan={2}></th>
-            <th className="w-24 text-center pb-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</th>
-            <th className="w-24 text-center pb-1 text-sm font-semibold text-rose-600 dark:text-rose-400">Пред.</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="flex flex-col items-center py-4 mx-auto" style={{ maxWidth: 'fit-content' }}>
+      {/* Player B label above matrix */}
+      <div className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-2 pl-8">
+        Игрок B
+      </div>
+
+      {/* Column headers */}
+      <div className="flex mb-1 pl-8">
+        <div className="w-12" /> {/* Spacer for row labels */}
+        <div className="w-24 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
+        <div className="w-24 text-center text-sm font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
+      </div>
+
+      {/* Matrix with Player A on the side */}
+      <div className="flex items-center">
+        {/* Player A label */}
+        <div className="flex items-center justify-center w-8 h-40">
+          <div
+            className="text-lg font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            Игрок A
+          </div>
+        </div>
+
+        {/* Matrix grid */}
+        <div className="flex flex-col">
           {/* Row 1: Cooperate */}
-          <tr>
-            <td rowSpan={2} className="pr-2 align-middle">
-              <div className="text-base font-bold text-gray-800 dark:text-gray-200 -rotate-90 whitespace-nowrap">
-                Игрок A
-              </div>
-            </td>
-            <td className="text-right pr-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 align-middle">Сотр.</td>
-            <td
-              className={`w-24 h-16 text-center cursor-pointer transition-all rounded-tl-lg ${hoveredCell === 'cc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+          <div className="flex items-center">
+            <div className="w-12 text-right pr-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотр.</div>
+            <div
+              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-tl-xl ${hoveredCell === 'cc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#059669' }}
               onMouseEnter={() => setHoveredCell('cc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-lg text-white">3, 3</span>
-            </td>
-            <td
-              className={`w-24 h-16 text-center cursor-pointer transition-all rounded-tr-lg ${hoveredCell === 'cd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              <span className="font-mono font-bold text-xl text-white">3, 3</span>
+            </div>
+            <div
+              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-tr-xl ${hoveredCell === 'cd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#dc2626' }}
               onMouseEnter={() => setHoveredCell('cd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-lg text-white">0, 5</span>
-            </td>
-          </tr>
+              <span className="font-mono font-bold text-xl text-white">0, 5</span>
+            </div>
+          </div>
+
           {/* Row 2: Defect */}
-          <tr>
-            <td className="text-right pr-2 text-sm font-semibold text-rose-600 dark:text-rose-400 align-middle">Пред.</td>
-            <td
-              className={`w-24 h-16 text-center cursor-pointer transition-all rounded-bl-lg ${hoveredCell === 'dc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+          <div className="flex items-center">
+            <div className="w-12 text-right pr-2 text-sm font-semibold text-rose-600 dark:text-rose-400">Пред.</div>
+            <div
+              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-bl-xl ${hoveredCell === 'dc' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#dc2626' }}
               onMouseEnter={() => setHoveredCell('dc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-lg text-white">5, 0</span>
-            </td>
-            <td
-              className={`w-24 h-16 text-center cursor-pointer transition-all rounded-br-lg relative ${hoveredCell === 'dd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
+              <span className="font-mono font-bold text-xl text-white">5, 0</span>
+            </div>
+            <div
+              className={`w-24 h-16 flex items-center justify-center cursor-pointer transition-all rounded-br-xl relative ${hoveredCell === 'dd' ? 'scale-105 shadow-xl z-10' : 'hover:brightness-110'}`}
               style={{ backgroundColor: '#ca8a04' }}
               onMouseEnter={() => setHoveredCell('dd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
-              <span className="font-mono font-bold text-lg text-white">1, 1</span>
+              <span className="font-mono font-bold text-xl text-white">1, 1</span>
               <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Tooltip */}
       <div className={`mt-4 text-center transition-all duration-200 h-10 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>

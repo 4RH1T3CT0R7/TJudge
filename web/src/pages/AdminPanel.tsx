@@ -1564,28 +1564,34 @@ export function AdminPanel() {
                 )}
 
                 {/* Temperature sensors */}
-                {systemMetrics?.temperature && systemMetrics.temperature.length > 0 && (
+                {systemMetrics && (
                   <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                       <span>🌡️</span> Температура
                     </div>
-                    <div className="flex flex-wrap gap-3">
-                      {systemMetrics.temperature.map((temp, idx) => (
-                        <div
-                          key={idx}
-                          className={`px-3 py-2 rounded-lg text-sm ${
-                            temp.temperature > 80
-                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                              : temp.temperature > 60
-                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                          }`}
-                        >
-                          <span className="font-medium">{temp.temperature.toFixed(1)}°C</span>
-                          <span className="text-xs opacity-75 ml-1">{temp.sensor_key}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {systemMetrics.temperature && systemMetrics.temperature.length > 0 ? (
+                      <div className="flex flex-wrap gap-3">
+                        {systemMetrics.temperature.map((temp, idx) => (
+                          <div
+                            key={idx}
+                            className={`px-3 py-2 rounded-lg text-sm ${
+                              temp.temperature > 80
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                : temp.temperature > 60
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                            }`}
+                          >
+                            <span className="font-medium">{temp.temperature.toFixed(1)}°C</span>
+                            <span className="text-xs opacity-75 ml-1">{temp.sensor_key}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Датчики температуры недоступны на этой системе (macOS не поддерживает)
+                      </p>
+                    )}
                   </div>
                 )}
 

@@ -120,14 +120,22 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		metrics.Memory.UsedPercent = vmStat.UsedPercent
 	}
 
-	// Disk metrics
-	diskStat, err := disk.Usage("/")
-	if err == nil {
-		metrics.Disk.Total = diskStat.Total
-		metrics.Disk.Used = diskStat.Used
-		metrics.Disk.Free = diskStat.Free
-		metrics.Disk.UsedPercent = diskStat.UsedPercent
-		metrics.Disk.Path = "/"
+	// Disk metrics - try multiple paths to find the main system disk
+	diskPaths := []string{"/System/Volumes/Data", "/", os.Getenv("HOME")}
+	if runtime.GOOS != "darwin" {
+		diskPaths = []string{"/"}
+	}
+
+	for _, diskPath := range diskPaths {
+		diskStat, err := disk.Usage(diskPath)
+		if err == nil && diskStat.Total > 50*1024*1024*1024 { // At least 50GB to be considered real disk
+			metrics.Disk.Total = diskStat.Total
+			metrics.Disk.Used = diskStat.Used
+			metrics.Disk.Free = diskStat.Free
+			metrics.Disk.UsedPercent = diskStat.UsedPercent
+			metrics.Disk.Path = diskPath
+			break
+		}
 	}
 
 	// Host information
