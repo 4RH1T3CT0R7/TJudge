@@ -146,104 +146,121 @@ function GameInfoModal({
   );
 }
 
-// Prisoner's Dilemma Matrix Component - Full width centered design
+// Prisoner's Dilemma Matrix Component
 function PrisonersDilemmaMatrix() {
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
 
   const cellInfo: Record<string, { title: string; desc: string }> = {
-    'cc': { title: 'Взаимное сотрудничество', desc: 'Оба выигрывают!' },
-    'cd': { title: 'A сотрудничает, B предаёт', desc: 'B получает максимум' },
-    'dc': { title: 'A предаёт, B сотрудничает', desc: 'A получает максимум' },
-    'dd': { title: 'Равновесие Нэша', desc: 'Оба проигрывают' },
+    'cc': { title: 'Взаимное сотрудничество', desc: 'Оба игрока выигрывают' },
+    'cd': { title: 'A сотрудничает, B предаёт', desc: 'B получает максимум, A — ничего' },
+    'dc': { title: 'A предаёт, B сотрудничает', desc: 'A получает максимум, B — ничего' },
+    'dd': { title: 'Равновесие Нэша', desc: 'Оба проигрывают, но это стабильная стратегия' },
   };
 
+  // Размеры ячеек
+  const cellSize = 'w-40 h-28';
+  const fontSize = 'text-3xl';
+
   return (
-    <div className="w-full flex flex-col items-center justify-center py-6">
-      {/* Matrix container - centered */}
-      <div className="flex flex-col items-center">
-        {/* Player B label - centered over the matrix cells */}
-        <div className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-3">
-          Игрок B
-        </div>
-
-        {/* Main matrix area with Player A on the side */}
-        <div className="flex items-center">
-          {/* Player A label */}
-          <div className="flex items-center justify-center w-10 mr-2">
-            <div
-              className="text-xl font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap"
-              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+    <div className="w-full h-full flex items-center justify-center">
+      <table className="border-separate border-spacing-0">
+        {/* Заголовок: Игрок B */}
+        <thead>
+          <tr>
+            <th></th>
+            <th></th>
+            <th colSpan={2} className="pb-2">
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">Игрок B</span>
+            </th>
+          </tr>
+          <tr>
+            <th></th>
+            <th></th>
+            <th className="w-40 pb-2 text-center text-base font-semibold text-emerald-600 dark:text-emerald-400">
+              Сотрудничать
+            </th>
+            <th className="w-40 pb-2 text-center text-base font-semibold text-red-600 dark:text-red-400">
+              Предать
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* Строка 1: Сотрудничать */}
+          <tr>
+            <td rowSpan={2} className="pr-2 align-middle">
+              <span
+                className="text-lg font-bold text-purple-600 dark:text-purple-400"
+                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+              >
+                Игрок A
+              </span>
+            </td>
+            <td className="pr-3 text-right text-base font-semibold text-emerald-600 dark:text-emerald-400 align-middle">
+              Сотр.
+            </td>
+            <td
+              className={`${cellSize} cursor-pointer transition-all duration-200 bg-emerald-500 rounded-tl-xl ${hoveredCell === 'cc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              onMouseEnter={() => setHoveredCell('cc')}
+              onMouseLeave={() => setHoveredCell(null)}
             >
-              Игрок A
-            </div>
-          </div>
-
-          {/* Row labels + Matrix grid */}
-          <div className="flex flex-col">
-            {/* Column headers */}
-            <div className="flex mb-2">
-              <div className="w-24 shrink-0" /> {/* Spacer for row labels */}
-              <div className="w-36 text-center text-sm font-semibold text-emerald-600 dark:text-emerald-400 px-1">Сотрудничать</div>
-              <div className="w-36 text-center text-sm font-semibold text-rose-600 dark:text-rose-400 px-1">Предать</div>
-            </div>
-
-            {/* Row 1: Cooperate */}
-            <div className="flex items-center">
-              <div className="w-24 shrink-0 text-right pr-3 text-sm font-semibold text-emerald-600 dark:text-emerald-400">Сотрудничать</div>
-              <div
-                className={`w-36 h-24 flex items-center justify-center cursor-pointer transition-all rounded-tl-2xl ${hoveredCell === 'cc' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
-                style={{ backgroundColor: '#059669' }}
-                onMouseEnter={() => setHoveredCell('cc')}
-                onMouseLeave={() => setHoveredCell(null)}
-              >
-                <span className="font-mono font-bold text-xl text-white">3, 3</span>
+              <div className="w-full h-full flex items-center justify-center">
+                <span className={`font-mono font-bold ${fontSize} text-white`}>3, 3</span>
               </div>
-              <div
-                className={`w-36 h-24 flex items-center justify-center cursor-pointer transition-all rounded-tr-2xl ${hoveredCell === 'cd' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
-                style={{ backgroundColor: '#dc2626' }}
-                onMouseEnter={() => setHoveredCell('cd')}
-                onMouseLeave={() => setHoveredCell(null)}
-              >
-                <span className="font-mono font-bold text-xl text-white">0, 5</span>
+            </td>
+            <td
+              className={`${cellSize} cursor-pointer transition-all duration-200 bg-red-500 rounded-tr-xl ${hoveredCell === 'cd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              onMouseEnter={() => setHoveredCell('cd')}
+              onMouseLeave={() => setHoveredCell(null)}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <span className={`font-mono font-bold ${fontSize} text-white`}>0, 5</span>
               </div>
-            </div>
-
-            {/* Row 2: Defect */}
-            <div className="flex items-center">
-              <div className="w-24 shrink-0 text-right pr-3 text-sm font-semibold text-rose-600 dark:text-rose-400">Предать</div>
-              <div
-                className={`w-36 h-24 flex items-center justify-center cursor-pointer transition-all rounded-bl-2xl ${hoveredCell === 'dc' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
-                style={{ backgroundColor: '#dc2626' }}
-                onMouseEnter={() => setHoveredCell('dc')}
-                onMouseLeave={() => setHoveredCell(null)}
-              >
-                <span className="font-mono font-bold text-xl text-white">5, 0</span>
+            </td>
+          </tr>
+          {/* Строка 2: Предать */}
+          <tr>
+            <td className="pr-3 text-right text-base font-semibold text-red-600 dark:text-red-400 align-middle">
+              Пред.
+            </td>
+            <td
+              className={`${cellSize} cursor-pointer transition-all duration-200 bg-red-500 rounded-bl-xl ${hoveredCell === 'dc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              onMouseEnter={() => setHoveredCell('dc')}
+              onMouseLeave={() => setHoveredCell(null)}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <span className={`font-mono font-bold ${fontSize} text-white`}>5, 0</span>
               </div>
-              <div
-                className={`w-36 h-24 flex items-center justify-center cursor-pointer transition-all rounded-br-2xl relative ${hoveredCell === 'dd' ? 'scale-105 shadow-2xl z-10' : 'hover:brightness-110'}`}
-                style={{ backgroundColor: '#ca8a04' }}
-                onMouseEnter={() => setHoveredCell('dd')}
-                onMouseLeave={() => setHoveredCell(null)}
-              >
-                <span className="font-mono font-bold text-xl text-white">1, 1</span>
-                <div className="absolute top-2 right-2 w-3 h-3 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
+            </td>
+            <td
+              className={`${cellSize} cursor-pointer transition-all duration-200 bg-amber-500 rounded-br-xl relative ${hoveredCell === 'dd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              onMouseEnter={() => setHoveredCell('dd')}
+              onMouseLeave={() => setHoveredCell(null)}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <span className={`font-mono font-bold ${fontSize} text-white`}>1, 1</span>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tooltip */}
-        <div className={`mt-5 transition-all duration-200 h-12 text-center ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
-          {hoveredCell ? (
-            <>
-              <div className="text-base font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
-            </>
-          ) : (
-            <div className="text-sm text-gray-400 dark:text-gray-500">Наведите на ячейку для подробностей</div>
-          )}
-        </div>
-      </div>
+              <div className="absolute top-2 right-2 w-4 h-4 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
+            </td>
+          </tr>
+          {/* Подсказка */}
+          <tr>
+            <td></td>
+            <td></td>
+            <td colSpan={2} className="pt-4">
+              <div className={`text-center transition-opacity duration-200 h-12 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
+                {hoveredCell ? (
+                  <>
+                    <div className="text-base font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
+                  </>
+                ) : (
+                  <div className="text-sm text-gray-400 dark:text-gray-500">Наведите на ячейку</div>
+                )}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
