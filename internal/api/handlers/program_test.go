@@ -73,6 +73,11 @@ func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context,
 	return args.Get(0).([]*domain.Program), args.Error(1)
 }
 
+func (m *MockProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestProgramHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 

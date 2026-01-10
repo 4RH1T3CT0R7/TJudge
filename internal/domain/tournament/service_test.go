@@ -104,6 +104,14 @@ func (m *MockTournamentRepository) GetLatestParticipantsGroupedByGame(ctx contex
 	return args.Get(0).(map[string][]*domain.TournamentParticipant), args.Error(1)
 }
 
+func (m *MockTournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.TournamentParticipant), args.Error(1)
+}
+
 type MockMatchRepository struct {
 	mock.Mock
 }
