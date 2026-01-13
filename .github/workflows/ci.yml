@@ -16,21 +16,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -73,21 +73,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Download dependencies
         run: go mod download
@@ -155,21 +155,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Download dependencies
         run: go mod download
@@ -208,21 +208,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Download Go dependencies
         run: go mod download
@@ -253,21 +253,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Run gosec
         uses: securego/gosec@master
@@ -321,7 +321,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Download dependencies
@@ -386,21 +386,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Download dependencies
         run: go mod download
@@ -481,21 +481,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
 
       - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
+        run: npm run build
+        working-directory: web
 
       - name: Download dependencies
         run: go mod download
