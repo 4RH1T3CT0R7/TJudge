@@ -20,7 +20,11 @@ vendor/
 .env
 .env.local
 .env.*.local
+.env.profile
 secrets/
+
+# Backups
+backups/
 
 # Build artifacts
 web/dist/

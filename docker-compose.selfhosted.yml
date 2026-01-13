@@ -1,5 +1,16 @@
+# TJudge Self-Hosted Docker Compose
+# Optimized for self-hosted deployments with configurable resource profiles
+#
+# Usage:
+#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/weak.env up -d
+#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/medium.env up -d
+#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/strong.env up -d
+#
+# Quick deploy:
+#   make deploy-weak | make deploy-medium | make deploy-strong
+
 services:
-  # TJudge CLI - образ для запуска матчей (только сборка)
+  # TJudge CLI - match executor image (build only)
   tjudge-cli:
     build:
       context: .
@@ -15,27 +26,43 @@ services:
     image: postgres:15-alpine
     container_name: tjudge-postgres
     environment:
-      POSTGRES_DB: tjudge
-      POSTGRES_USER: tjudge
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${DB_NAME:-tjudge}
+      POSTGRES_USER: ${DB_USER:-tjudge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
-      - "5433:5432"  # 5433 on host to avoid conflict with local PostgreSQL
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${POSTGRES_MEMORY_RESERVATION:-256M}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tjudge"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tjudge}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - tjudge-network
+    restart: unless-stopped
 
-  # Redis Cache
+  # Redis Cache & Queue
   redis:
     image: redis:7-alpine
     container_name: tjudge-redis
-    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy volatile-lru --save 900 1 --save 300 10 --save 60 10000
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory ${REDIS_MAXMEMORY:-512mb}
+      --maxmemory-policy volatile-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
     ports:
       - "6379:6379"
     volumes:
@@ -47,6 +74,7 @@ services:
       retries: 5
     networks:
       - tjudge-network
+    restart: unless-stopped
 
   # Database migrations
   migrate:
@@ -57,9 +85,9 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,28 +103,39 @@ services:
     container_name: tjudge-api
     ports:
       - "8080:8080"
-      - "9090:9090"  # Metrics port
+      - "9090:9090"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
+      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-50}
+      - DB_MAX_IDLE=${DB_MAX_IDLE:-10}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=dev-secret-key-change-in-production
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - BASE_URL=http://localhost:8080
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-false}
+      - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-100}
+    deploy:
+      resources:
+        limits:
+          cpus: '${API_CPU_LIMIT:-2.0}'
+          memory: ${API_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${API_MEMORY_RESERVATION:-512M}
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    restart: unless-stopped
     volumes:
       - ./data/programs:/data/programs
     networks:
@@ -113,6 +152,7 @@ services:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
+    restart: unless-stopped
 
   # Worker Pool
   worker:
@@ -120,25 +160,40 @@ services:
       context: .
       dockerfile: docker/worker/Dockerfile
     container_name: tjudge-worker
-    user: root  # Required for Docker socket access on macOS
+    user: root
     ports:
-      - "9091:9090"  # Metrics port
+      - "9091:9090"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
+      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-50}
+      - DB_MAX_IDLE=${DB_MAX_IDLE:-10}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - WORKER_MIN=2
-      - WORKER_MAX=10
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
+      - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
+      - WORKER_MIN=${WORKER_MIN:-2}
+      - WORKER_MAX=${WORKER_MAX:-10}
+      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-60s}
+      - EXECUTOR_TIMEOUT=${EXECUTOR_TIMEOUT:-60s}
+      - EXECUTOR_CPU_QUOTA=${EXECUTOR_CPU_QUOTA:-100000}
+      - EXECUTOR_MEMORY_LIMIT=${EXECUTOR_MEMORY_LIMIT:-536870912}
+      - EXECUTOR_PIDS_LIMIT=${EXECUTOR_PIDS_LIMIT:-100}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - HOST_PROGRAMS_PATH=/Users/artem/GolandProjects/TJudge/data/programs
+      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-}
+    deploy:
+      resources:
+        limits:
+          cpus: '${WORKER_CPU_LIMIT:-3.0}'
+          memory: ${WORKER_MEMORY_LIMIT:-2G}
+        reservations:
+          memory: ${WORKER_MEMORY_RESERVATION:-1G}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -146,36 +201,14 @@ services:
         condition: service_healthy
       tjudge-cli:
         condition: service_completed_successfully
-    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/programs:/data/programs
     networks:
       - tjudge-network
-
-  # Alertmanager для оповещений
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: tjudge-alertmanager
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./deployments/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
-    networks:
-      - tjudge-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
-  # Prometheus для метрик
+  # Prometheus (optional - comment out on very weak hardware)
   prometheus:
     image: prom/prometheus:latest
     container_name: tjudge-prometheus
@@ -188,18 +221,15 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.time=7d'
       - '--web.enable-lifecycle'
-    depends_on:
-      alertmanager:
-        condition: service_healthy
     networks:
       - tjudge-network
     restart: unless-stopped
+    profiles:
+      - monitoring
 
-  # Grafana для визуализации
+  # Grafana (optional - comment out on very weak hardware)
   grafana:
     image: grafana/grafana:latest
     container_name: tjudge-grafana
@@ -209,60 +239,22 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deployments/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
-      - loki
     networks:
       - tjudge-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # Loki для логов
-  loki:
-    image: grafana/loki:latest
-    container_name: tjudge-loki
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./deployments/loki/loki-config.yml:/etc/loki/local-config.yaml
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - tjudge-network
-    restart: unless-stopped
-    # Note: Loki image has no shell/wget/curl, so we disable health check
-    # Loki availability is checked by Promtail connection
-
-  # Promtail для сбора логов
-  promtail:
-    image: grafana/promtail:latest
-    container_name: tjudge-promtail
-    volumes:
-      - ./deployments/promtail/promtail-config.yml:/etc/promtail/config.yml
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    networks:
-      - tjudge-network
-    restart: unless-stopped
+    profiles:
+      - monitoring
 
 volumes:
   postgres_data:
   redis_data:
   prometheus_data:
   grafana_data:
-  loki_data:
 
 networks:
   tjudge-network:

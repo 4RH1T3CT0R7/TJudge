@@ -15,6 +15,13 @@ COPY web/ ./
 # Build frontend
 RUN npm run build
 
+# Dependencies caching stage
+FROM golang:1.24-alpine AS deps
+
+WORKDIR /deps
+COPY go.mod go.sum ./
+RUN go mod download
+
 # Go build stage
 FROM golang:1.24-alpine AS builder
 
@@ -24,11 +31,11 @@ RUN apk add --no-cache git make
 # Set working directory
 WORKDIR /build
 
+# Copy cached dependencies
+COPY --from=deps /go/pkg /go/pkg
+
 # Copy go mod files
 COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
 
 # Copy source code
 COPY . .
@@ -36,8 +43,9 @@ COPY . .
 # Copy frontend dist from frontend builder
 COPY --from=frontend-builder /frontend/dist ./internal/web/dist
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/api ./cmd/api
+# Build the binary with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/api ./cmd/api
 
 # Final stage
 FROM alpine:latest

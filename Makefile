@@ -1,30 +1,49 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list
 
 # Default target
 help:
 	@echo "TJudge - High-Load Tournament System"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make help          - Show this help message"
+	@echo ""
+	@echo "  === Quick Deploy (Self-Hosted) ==="
+	@echo "  make deploy        - Auto-detect profile and deploy"
+	@echo "  make deploy-weak   - Deploy for weak hardware (2 cores, 4GB RAM)"
+	@echo "  make deploy-medium - Deploy for medium hardware (4 cores, 8GB RAM)"
+	@echo "  make deploy-strong - Deploy for strong hardware (8+ cores, 16GB+ RAM)"
+	@echo "  make detect-profile - Detect recommended profile for your hardware"
+	@echo ""
+	@echo "  === Backup & Restore ==="
+	@echo "  make backup        - Create database backup"
+	@echo "  make restore       - Restore from backup (BACKUP=path/to/file.sql.gz)"
+	@echo "  make backup-list   - List available backups"
+	@echo ""
+	@echo "  === Development ==="
 	@echo "  make deps          - Download dependencies"
 	@echo "  make build         - Build all binaries"
+	@echo "  make run-api       - Run API server locally"
+	@echo "  make run-worker    - Run worker locally"
+	@echo "  make lint          - Run linters"
+	@echo "  make fmt           - Format code"
+	@echo ""
+	@echo "  === Testing ==="
 	@echo "  make test          - Run all tests"
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
-	@echo "  make benchmark           - Run performance benchmarks"
-	@echo "  make benchmark-interpret - Run benchmarks with interpretation"
+	@echo "  make benchmark     - Run performance benchmarks"
 	@echo "  make test-load     - Run load tests"
-	@echo "  make lint          - Run linters"
-	@echo "  make run-api       - Run API server"
-	@echo "  make run-worker    - Run worker"
+	@echo ""
+	@echo "  === Docker ==="
 	@echo "  make docker-build  - Build all Docker images"
-	@echo "  make docker-build-executor - Build tjudge-cli executor image"
-	@echo "  make docker-up     - Start Docker Compose"
+	@echo "  make docker-up     - Start Docker Compose (dev)"
 	@echo "  make docker-down   - Stop Docker Compose"
+	@echo ""
+	@echo "  === Database ==="
 	@echo "  make migrate-up    - Apply database migrations"
 	@echo "  make migrate-down  - Rollback database migrations"
 	@echo "  make admin         - Make user admin (EMAIL=user@example.com)"
+	@echo ""
 	@echo "  make clean         - Clean build artifacts"
 
 # Download dependencies
@@ -212,3 +231,51 @@ endif
 		|| echo "Failed to update user. Make sure the container is running and user exists."
 	@echo ""
 	@echo "Done! User must log out and log in again to get the new role."
+
+# =============================================================================
+# Self-Hosted Deployment
+# =============================================================================
+
+# Auto-detect profile and deploy
+deploy:
+	@./scripts/quick-deploy.sh
+
+# Deploy with weak profile (2 cores, 4GB RAM)
+deploy-weak:
+	@./scripts/quick-deploy.sh weak
+
+# Deploy with medium profile (4 cores, 8GB RAM)
+deploy-medium:
+	@./scripts/quick-deploy.sh medium
+
+# Deploy with strong profile (8+ cores, 16GB+ RAM)
+deploy-strong:
+	@./scripts/quick-deploy.sh strong
+
+# Detect recommended profile for your hardware
+detect-profile:
+	@./scripts/detect-profile.sh
+
+# =============================================================================
+# Backup & Restore
+# =============================================================================
+
+# Create database backup
+backup:
+	@./scripts/backup.sh
+
+# Restore database from backup
+restore:
+ifndef BACKUP
+	@echo "Usage: make restore BACKUP=backups/tjudge_YYYYMMDD_HHMMSS.sql.gz"
+	@echo ""
+	@echo "Available backups:"
+	@ls -lh backups/tjudge_*.sql.gz 2>/dev/null || echo "  No backups found"
+	@exit 1
+endif
+	@./scripts/restore.sh $(BACKUP)
+
+# List available backups
+backup-list:
+	@echo "Available backups:"
+	@ls -lh backups/tjudge_*.sql.gz 2>/dev/null || echo "  No backups found"
