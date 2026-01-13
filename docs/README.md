@@ -14,6 +14,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура системы, компоненты, потоки данных |
 | [API_GUIDE.md](API_GUIDE.md) | REST API эндпоинты, WebSocket |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Схема БД, миграции |
+| [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md) | Тестирование производительности |
 
 ## Быстрые ссылки
 
@@ -29,6 +30,7 @@ cd web && npm run dev  # Фронтенд
 # Тестирование
 make test
 make lint
+make benchmark
 ```
 
 | URL | Сервис |
@@ -36,6 +38,7 @@ make lint
 | http://localhost:8080 | Веб-приложение |
 | http://localhost:8080/api/v1 | REST API |
 | http://localhost:3000 | Grafana (admin/admin) |
+| http://localhost:9092 | Prometheus |
 
 ## Архитектура
 
@@ -65,7 +68,7 @@ make lint
 
 | Backend | Frontend | Инфраструктура |
 |---------|----------|----------------|
-| Go 1.24 | React 18 | PostgreSQL 15 |
+| Go 1.24 | React 19 | PostgreSQL 15 |
 | Chi Router | TypeScript | Redis 7 |
 | WebSocket | Tailwind CSS 4 | Docker |
-| pgx/sqlx | Zustand | Prometheus/Grafana |
+| JWT | Zustand | Prometheus/Grafana/Loki |

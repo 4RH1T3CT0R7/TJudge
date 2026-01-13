@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go)
-![React](https://img.shields.io/badge/React-18+-61DAFB?style=for-the-badge&logo=react)
+![React](https://img.shields.io/badge/React-19+-61DAFB?style=for-the-badge&logo=react)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
@@ -26,9 +26,9 @@
 
 - **Веб-интерфейс** — React SPA для управления турнирами
 - **Командная игра** — создание команд, приглашения по коду
-- **Множество игр** — несколько игр в одном турнире
-- **Real-time** — WebSocket обновления рейтинга
-- **Безопасность** — изоляция в Docker контейнерах
+- **Множество игр** — несколько игр в одном турнире с независимыми рейтингами
+- **Real-time** — WebSocket обновления лидерборда
+- **Безопасность** — изоляция выполнения в Docker контейнерах
 - **Производительность** — 100+ матчей/сек
 
 ---
@@ -50,6 +50,7 @@ curl http://localhost:8080/health
 |--------|-----|
 | Веб-приложение | http://localhost:8080 |
 | Grafana | http://localhost:3000 (admin/admin) |
+| Prometheus | http://localhost:9092 |
 
 ### Назначение администратора
 
@@ -68,18 +69,19 @@ make admin EMAIL=your-email@example.com
 
 | Функция | Описание |
 |---------|----------|
-| Команды | Создание или присоединение по коду |
-| Турниры | Просмотр и участие |
-| Программы | Загрузка решений для каждой игры |
-| Результаты | Real-time позиция в таблице |
+| Команды | Создание или присоединение по коду приглашения |
+| Турниры | Просмотр доступных турниров и участие |
+| Программы | Загрузка стратегий для каждой игры турнира |
+| Результаты | Real-time позиция в таблице лидеров |
 
 ### Для организаторов
 
 | Функция | Описание |
 |---------|----------|
 | Создание турнира | Название, описание, размер команд |
-| Управление играми | Добавление игр с правилами (Markdown) |
-| Контроль | Запуск, приостановка, завершение |
+| Управление играми | Добавление игр с правилами (Markdown), множитель очков |
+| Контроль раундов | Запуск, приостановка, завершение по играм |
+| Мониторинг | Grafana дашборды, метрики Prometheus |
 
 ---
 
@@ -109,11 +111,11 @@ make admin EMAIL=your-email@example.com
 
 | Компонент | Технологии |
 |-----------|------------|
-| Frontend | React 18, TypeScript, Tailwind CSS |
-| API Server | Go 1.24, Chi Router, WebSocket |
-| Worker Pool | Go, автомасштабирование 10-100 |
+| Frontend | React 19, TypeScript, Tailwind CSS 4, Zustand |
+| API Server | Go 1.24, Chi Router, WebSocket, JWT |
+| Worker Pool | Go, автомасштабирование 2-100+ |
 | Database | PostgreSQL 15, Redis 7 |
-| Monitoring | Prometheus, Grafana, Loki |
+| Monitoring | Prometheus, Grafana, Loki, Alertmanager |
 
 ---
 
@@ -123,9 +125,10 @@ make admin EMAIL=your-email@example.com
 |----------|----------|
 | **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** | Полное руководство пользователя и администратора |
 | [docs/SETUP.md](docs/SETUP.md) | Настройка окружения, разработка, деплой |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Детальная архитектура |
-| [docs/API_GUIDE.md](docs/API_GUIDE.md) | REST API и WebSocket |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Детальная архитектура системы |
+| [docs/API_GUIDE.md](docs/API_GUIDE.md) | REST API и WebSocket эндпоинты |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
+| [docs/PERFORMANCE_TESTING.md](docs/PERFORMANCE_TESTING.md) | Тестирование производительности |
 
 ---
 
@@ -146,12 +149,25 @@ cd web && npm run dev  # Терминал 3
 |---------|----------|
 | `make run-api` | API сервер |
 | `make run-worker` | Worker |
-| `make test` | Тесты |
+| `make test` | Unit тесты |
+| `make test-race` | Тесты с детектором гонок |
 | `make lint` | Линтер |
-| `make build` | Сборка |
+| `make build` | Сборка бинарников |
 | `make docker-build` | Docker образы |
+| `make benchmark` | Бенчмарки производительности |
 
 Подробнее: [docs/SETUP.md](docs/SETUP.md)
+
+---
+
+## Поддерживаемые игры
+
+| Игра | Идентификатор | Описание |
+|------|---------------|----------|
+| Дилемма заключённого | `prisoners_dilemma` | Классическая игра теории игр |
+| Перетягивание каната | `tug_of_war` | Стратегическое распределение ресурсов |
+
+Игры реализованы в [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli).
 
 ---
 

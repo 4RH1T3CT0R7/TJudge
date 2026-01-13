@@ -1,17 +1,17 @@
-# TJudge - Tournament System for Game Theory
+# TJudge - Турнирная система для теории игр
 
-## Project Overview
+## Обзор проекта
 
-TJudge is a high-performance tournament system for competitive programming in game theory. Programs submit strategies that compete against each other in various games (Tic-Tac-Toe, Connect4, custom games).
+TJudge — высокопроизводительная турнирная система для соревнований по программированию в теории игр. Программы-стратегии соревнуются друг с другом в различных играх (Дилемма заключённого, Перетягивание каната и др.).
 
-**Stack:** Go 1.24, PostgreSQL 15, Redis 7, Docker, React + Tailwind
+**Стек:** Go 1.24, PostgreSQL 15, Redis 7, Docker, React 19 + Tailwind CSS 4
 
-## Architecture
+## Архитектура
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   API       │────▶│   Worker    │
-│   (React)   │     │   Server    │     │   Pool      │
+│  Frontend   │────▶│     API     │────▶│   Worker    │
+│  (React)    │     │   Server    │     │    Pool     │
 └─────────────┘     └─────────────┘     └─────────────┘
                            │                   │
                            ▼                   ▼
@@ -21,92 +21,97 @@ TJudge is a high-performance tournament system for competitive programming in ga
                     └─────────────┘     └─────────────┘
 ```
 
-### Components
+### Компоненты
 
-| Component | Location | Description |
-|-----------|----------|-------------|
-| API Server | `cmd/api/` | REST API + WebSocket, JWT auth |
-| Worker | `cmd/worker/` | Match processing, auto-scaling pool |
-| Frontend | `web/` | React SPA, embedded in Go binary |
-| tjudge-cli | External | Rust game executor (Docker image) |
+| Компонент | Путь | Описание |
+|-----------|------|----------|
+| API Server | `cmd/api/` | REST API + WebSocket, JWT авторизация |
+| Worker | `cmd/worker/` | Обработка матчей, автомасштабируемый пул |
+| Frontend | `web/` | React SPA, встраивается в Go бинарник |
+| tjudge-cli | Внешний | Rust исполнитель игр (Docker образ) |
 
-## Key Files
+## Ключевые файлы
 
-### Entry Points
-- `cmd/api/main.go` - API server startup, dependency injection
-- `cmd/worker/main.go` - Worker pool startup
-- `cmd/migrations/main.go` - Database migrations runner
-- `cmd/benchmark/main.go` - Benchmark interpreter
+### Точки входа
+- `cmd/api/main.go` — Запуск API сервера, инъекция зависимостей
+- `cmd/worker/main.go` — Запуск пула воркеров
+- `cmd/migrations/main.go` — Запуск миграций БД
+- `cmd/benchmark/main.go` — Интерпретатор бенчмарков
 
-### Domain Logic
-- `internal/domain/models.go` - Core domain entities (Tournament, Match, Program, User)
-- `internal/domain/tournament/service.go` - Tournament management, round-robin generation
-- `internal/domain/auth/service.go` - Authentication service
-- `internal/domain/rating/elo.go` - ELO rating calculations
+### Доменная логика
+- `internal/domain/models.go` — Основные сущности (Tournament, Match, Program, User, Team, Game)
+- `internal/domain/tournament/service.go` — Управление турнирами, генерация round-robin
+- `internal/domain/auth/service.go` — Сервис аутентификации
+- `internal/domain/rating/elo.go` — Расчёт рейтингов ELO
+- `internal/domain/team/service.go` — Управление командами
+- `internal/domain/game/service.go` — Управление играми
 
-### Infrastructure
-- `internal/infrastructure/db/` - PostgreSQL repositories
-- `internal/infrastructure/cache/` - Redis caching layer
-- `internal/infrastructure/queue/` - Match queue (Redis)
-- `internal/infrastructure/executor/executor.go` - Docker-based match executor
-- `internal/worker/pool.go` - Worker pool with auto-scaling
+### Инфраструктура
+- `internal/infrastructure/db/` — PostgreSQL репозитории
+- `internal/infrastructure/cache/` — Слой кэширования Redis
+- `internal/infrastructure/queue/` — Очередь матчей (Redis)
+- `internal/infrastructure/executor/executor.go` — Docker исполнитель матчей
+- `internal/worker/pool.go` — Пул воркеров с автомасштабированием
 
 ### API
-- `internal/api/routes.go` - Route definitions
-- `internal/api/handlers/` - HTTP handlers
-- `internal/api/middleware/` - Auth, rate limiting, logging
+- `internal/api/routes.go` — Определение маршрутов
+- `internal/api/handlers/` — HTTP обработчики
+- `internal/api/middleware/` — Авторизация, rate limiting, логирование
 
 ### Frontend
-- `web/src/` - React application source
-- `internal/web/embed.go` - Frontend embedding for single binary
+- `web/src/` — Исходный код React приложения
+- `internal/web/embed.go` — Встраивание фронтенда в бинарник
 
-## Database Schema
+## Схема базы данных
 
-### Core Tables
+### Основные таблицы
 ```sql
-users           -- User accounts (username, email, password_hash, role)
-programs        -- Submitted programs (user_id, code, language, status)
-tournaments     -- Tournament definitions (name, game_type, status)
-matches         -- Match records (tournament_id, program1_id, program2_id, result)
-ratings         -- ELO ratings per tournament (program_id, tournament_id, rating)
+users                    -- Аккаунты пользователей (username, email, password_hash, role)
+teams                    -- Команды (name, tournament_id, invite_code, leader_id)
+programs                 -- Загруженные программы (team_id, code, language, status)
+games                    -- Определения игр (slug, name, rules, score_multiplier)
+tournaments              -- Определения турниров (name, description, status, max_team_size)
+tournament_games         -- Связь турниров и игр (tournament_id, game_id, is_active, round_status)
+matches                  -- Записи матчей (tournament_id, game_id, program1_id, program2_id, result)
+rating_history           -- История рейтингов (team_id, game_id, rating, delta)
 ```
 
-### Materialized Views
+### Материализованные представления
 ```sql
-leaderboard_global      -- Global rankings across all tournaments
-leaderboard_tournament  -- Per-tournament rankings
+leaderboard_global       -- Глобальные рейтинги
+leaderboard_tournament   -- Рейтинги по турнирам
 ```
 
-Migrations: `migrations/000001_*.sql` through `migrations/000016_*.sql`
+Миграции: `migrations/000001_*.sql` до `migrations/000022_*.sql`
 
-## Match Execution Flow
+## Поток выполнения матчей
 
-1. **Tournament Creation**: Admin creates tournament with game type
-2. **Program Submission**: Users upload programs
-3. **Match Generation**: Round-robin pairs (1 match per pair)
-4. **Queue**: Matches added to Redis priority queue
-5. **Worker Processing**:
-   - Worker dequeues match
-   - Spawns Docker container with tjudge-cli
-   - Passes programs via volume mount
-   - tjudge-cli runs iterations internally (`-i` parameter)
-6. **Result Processing**: ELO ratings updated, WebSocket broadcast
+1. **Создание турнира**: Админ создаёт турнир, добавляет игры
+2. **Регистрация команд**: Команды присоединяются, загружают программы для каждой игры
+3. **Генерация матчей**: Round-robin пары (1 матч на пару)
+4. **Очередь**: Матчи добавляются в приоритетную очередь Redis
+5. **Обработка воркерами**:
+   - Воркер берёт матч из очереди
+   - Запускает Docker контейнер с tjudge-cli
+   - Передаёт программы через монтирование volume
+   - tjudge-cli выполняет итерации (параметр `-i`)
+6. **Обработка результатов**: Обновление ELO рейтингов, WebSocket рассылка
 
 ```go
-// Match generation (simplified from tournament/service.go)
+// Генерация матчей (упрощённо из tournament/service.go)
 for i := 0; i < len(participants); i++ {
     for j := i + 1; j < len(participants); j++ {
-        // 1 match per pair, iterations inside tjudge-cli
+        // 1 матч на пару, итерации внутри tjudge-cli
         createMatch(participants[i], participants[j])
     }
 }
 ```
 
-## Configuration
+## Конфигурация
 
-### Environment Variables
+### Переменные окружения
 ```bash
-# Database
+# База данных
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=tjudge
@@ -124,205 +129,235 @@ JWT_SECRET=your-32-char-secret-minimum
 WORKER_MIN=2
 WORKER_MAX=10
 
-# Server
+# Сервер
 SERVER_PORT=8080
 LOG_LEVEL=info
 ```
 
-## Development Commands
+## Команды разработки
 
 ```bash
-# Setup
-make docker-up          # Start PostgreSQL, Redis
-make migrate-up         # Apply migrations
+# Настройка
+make docker-up          # Запуск PostgreSQL, Redis
+make migrate-up         # Применить миграции
 
-# Development
-make run-api            # Start API server
-make run-worker         # Start worker
+# Разработка
+make run-api            # Запуск API сервера
+make run-worker         # Запуск воркера
 
-# Testing
-make test               # Run unit tests
-make test-race          # Run with race detector
-make benchmark          # Run performance benchmarks
-make benchmark-interpret # Run benchmarks with analysis
+# Тестирование
+make test               # Unit тесты
+make test-race          # С детектором гонок
+make benchmark          # Бенчмарки производительности
+make benchmark-interpret # Бенчмарки с анализом
 
-# Building
-make build              # Build all binaries
-make docker-build       # Build Docker images
+# Сборка
+make build              # Сборка бинарников
+make docker-build       # Сборка Docker образов
 
-# Utilities
-make lint               # Run golangci-lint
-make admin EMAIL=x@y.z  # Make user admin
+# Утилиты
+make lint               # Запуск golangci-lint
+make admin EMAIL=x@y.z  # Назначить администратора
 ```
 
-## API Endpoints
+## API эндпоинты
 
-### Auth
-- `POST /api/v1/auth/register` - User registration
-- `POST /api/v1/auth/login` - Login (returns JWT)
-- `POST /api/v1/auth/refresh` - Refresh token
-- `GET /api/v1/auth/me` - Current user
+### Авторизация
+- `POST /api/v1/auth/register` — Регистрация
+- `POST /api/v1/auth/login` — Вход (возвращает JWT)
+- `POST /api/v1/auth/refresh` — Обновление токена
+- `GET /api/v1/auth/me` — Текущий пользователь
 
-### Tournaments
-- `GET /api/v1/tournaments` - List tournaments
-- `POST /api/v1/tournaments` - Create tournament (admin)
-- `GET /api/v1/tournaments/:id` - Get tournament
-- `POST /api/v1/tournaments/:id/join` - Join tournament
-- `GET /api/v1/tournaments/:id/leaderboard` - Get leaderboard
+### Турниры
+- `GET /api/v1/tournaments` — Список турниров
+- `POST /api/v1/tournaments` — Создать турнир (админ)
+- `GET /api/v1/tournaments/:id` — Получить турнир
+- `POST /api/v1/tournaments/:id/start` — Запустить турнир
+- `GET /api/v1/tournaments/:id/leaderboard` — Таблица лидеров
 
-### Programs
-- `POST /api/v1/programs` - Upload program
-- `GET /api/v1/programs` - List user's programs
-- `GET /api/v1/programs/:id` - Get program details
+### Команды
+- `POST /api/v1/teams` — Создать команду
+- `POST /api/v1/teams/join` — Присоединиться по коду
+- `GET /api/v1/teams/:id` — Получить команду
+- `POST /api/v1/teams/:id/leave` — Покинуть команду
+
+### Игры
+- `GET /api/v1/games` — Список игр
+- `POST /api/v1/games` — Создать игру (админ)
+- `GET /api/v1/games/:id` — Получить игру
+- `PUT /api/v1/games/:id` — Обновить игру
+
+### Программы
+- `POST /api/v1/programs` — Загрузить программу
+- `GET /api/v1/programs` — Список программ пользователя
+- `GET /api/v1/programs/:id` — Детали программы
 
 ### WebSocket
-- `WS /api/v1/ws/tournaments/:id` - Real-time updates (leaderboard, match results)
+- `WS /api/v1/ws/tournaments/:id` — Real-time обновления (лидерборд, результаты матчей)
 
-## Testing
+## Тестирование
 
-### Unit Tests
-Located alongside source files: `*_test.go`
+### Unit тесты
+Расположены рядом с исходными файлами: `*_test.go`
 
-### Benchmark Tests
-`tests/benchmark/` - Performance benchmarks with expected standards
+### Бенчмарки
+`tests/benchmark/` — Бенчмарки производительности
 
 ```bash
-make benchmark-interpret  # Run with interpretation
-go run ./cmd/benchmark -standards  # Show expected values
+make benchmark-interpret  # Запуск с интерпретацией
+go run ./cmd/benchmark -standards  # Показать ожидаемые значения
 ```
 
-### Integration/E2E Tests
+### Интеграционные/E2E тесты
 `tests/integration/`, `tests/e2e/`
 
-## Performance Standards
+## Стандарты производительности
 
-| Operation | Expected | Category |
-|-----------|----------|----------|
+| Операция | Ожидаемое | Категория |
+|----------|-----------|-----------|
 | Health Endpoint | 50µs | API |
-| Tournament List | 5ms | API |
-| Leaderboard | 10ms | API |
-| Queue Enqueue | 500µs | Queue |
-| Match Create (DB) | 2ms | DB |
-| Worker Pool (100 matches) | 100ms | Worker |
+| Список турниров | 5ms | API |
+| Лидерборд | 10ms | API |
+| Добавление в очередь | 500µs | Очередь |
+| Создание матча (БД) | 2ms | БД |
+| Worker Pool (100 матчей) | 100ms | Worker |
 
-Run `make benchmark-interpret` for full analysis.
+Запустите `make benchmark-interpret` для полного анализа.
 
 ## Docker
 
-### Images
-- `tjudge-api` - API server
-- `tjudge-worker` - Worker service
-- `tjudge-cli` - Game executor (Rust)
+### Образы
+- `tjudge-api` — API сервер
+- `tjudge-worker` — Worker сервис
+- `tjudge-cli` — Исполнитель игр (Rust)
 
-### docker-compose.yml Services
-- `api` - API server
-- `worker` - Worker pool
-- `postgres` - Database
-- `redis` - Cache + Queue
-- `prometheus` - Metrics
-- `grafana` - Dashboards
+### Сервисы docker-compose.yml
+- `api` — API сервер
+- `worker` — Пул воркеров
+- `postgres` — База данных
+- `redis` — Кэш + Очередь
+- `prometheus` — Метрики
+- `grafana` — Дашборды
+- `loki` — Логирование
+- `alertmanager` — Оповещения
 
 ## CI/CD
 
 ### GitHub Actions
-- `.github/workflows/ci.yml` - Lint, Test, Build, Security scan
-- `.github/workflows/cd.yml` - Build and push Docker images
+- `.github/workflows/ci.yml` — Lint, Test, Build, Security scan
+- `.github/workflows/cd.yml` — Сборка и публикация Docker образов
+- `.github/workflows/deploy.yml` — Деплой в production
+- `.github/workflows/release.yml` — Управление релизами
 
-### Deployment
-Docker Compose based deployment with blue-green scripts in `scripts/`.
+### Деплой
+Docker Compose деплой с blue-green скриптами в `scripts/`.
 
-## Common Issues
+## Частые проблемы
 
 ### "package requires newer Go version"
-Ensure Go 1.24+ is installed. Check `go version`.
+Убедитесь, что Go 1.24+ установлен. Проверьте `go version`.
 
 ### "pattern all:dist: no matching files found"
-Frontend not built. Run `cd web && npm run build` or use `make docker-build`.
+Фронтенд не собран. Выполните `cd web && npm run build` или `make docker-build`.
 
-### "resource temporarily unavailable" in worker
-Reduce worker count: `WORKER_MIN=2 WORKER_MAX=5`
+### "resource temporarily unavailable" в worker
+Уменьшите количество воркеров: `WORKER_MIN=2 WORKER_MAX=5`
 
-### Database connection issues
-Check `DB_HOST`, `DB_PORT`, `DB_PASSWORD` in `.env`.
+### Проблемы подключения к БД
+Проверьте `DB_HOST`, `DB_PORT`, `DB_PASSWORD` в `.env`.
 
-## File Structure
+## Структура файлов
 
 ```
 TJudge/
-├── cmd/                    # Entry points
-│   ├── api/                # API server
-│   ├── worker/             # Worker service
-│   ├── migrations/         # Migration tool
-│   └── benchmark/          # Benchmark interpreter
+├── cmd/                    # Точки входа
+│   ├── api/                # API сервер
+│   ├── worker/             # Worker сервис
+│   ├── migrations/         # Инструмент миграций
+│   └── benchmark/          # Интерпретатор бенчмарков
 ├── internal/
-│   ├── api/                # HTTP layer
-│   │   ├── handlers/       # Request handlers
+│   ├── api/                # HTTP слой
+│   │   ├── handlers/       # Обработчики запросов
 │   │   ├── middleware/     # Middleware
-│   │   └── routes.go       # Route definitions
-│   ├── domain/             # Business logic
-│   │   ├── auth/           # Authentication
-│   │   ├── tournament/     # Tournament service
-│   │   ├── rating/         # ELO calculations
-│   │   └── models.go       # Domain entities
-│   ├── infrastructure/     # External services
+│   │   └── routes.go       # Определение маршрутов
+│   ├── domain/             # Бизнес-логика
+│   │   ├── auth/           # Аутентификация
+│   │   ├── tournament/     # Сервис турниров
+│   │   ├── rating/         # Расчёт ELO
+│   │   ├── team/           # Сервис команд
+│   │   ├── game/           # Сервис игр
+│   │   └── models.go       # Доменные сущности
+│   ├── infrastructure/     # Внешние сервисы
 │   │   ├── db/             # PostgreSQL
 │   │   ├── cache/          # Redis
-│   │   ├── queue/          # Match queue
-│   │   └── executor/       # Docker executor
-│   ├── worker/             # Worker pool
-│   ├── websocket/          # Real-time updates
-│   └── web/                # Embedded frontend
-├── web/                    # React frontend
-├── migrations/             # SQL migrations
+│   │   ├── queue/          # Очередь матчей
+│   │   └── executor/       # Docker исполнитель
+│   ├── worker/             # Пул воркеров
+│   ├── websocket/          # Real-time обновления
+│   └── web/                # Встроенный фронтенд
+├── web/                    # React фронтенд
+├── migrations/             # SQL миграции
 ├── docker/                 # Dockerfiles
-├── tests/                  # Test suites
-│   ├── benchmark/          # Performance tests
-│   ├── integration/        # Integration tests
-│   └── e2e/                # End-to-end tests
-├── scripts/                # Deployment scripts
-├── docs/                   # Documentation
-├── docker-compose.yml      # Local development
-└── Makefile                # Build commands
+├── tests/                  # Тестовые наборы
+│   ├── benchmark/          # Тесты производительности
+│   ├── integration/        # Интеграционные тесты
+│   ├── e2e/                # End-to-end тесты
+│   ├── load/               # Нагрузочные тесты
+│   ├── performance/        # Тесты производительности
+│   └── chaos/              # Хаос-тесты
+├── scripts/                # Скрипты деплоя
+├── deployments/            # Конфиги развёртывания
+├── docs/                   # Документация
+├── docker-compose.yml      # Локальная разработка
+└── Makefile                # Команды сборки
 ```
 
-## Useful Queries
+## Полезные запросы
 
 ```sql
--- Check pending matches
+-- Проверка ожидающих матчей
 SELECT COUNT(*) FROM matches WHERE status = 'pending';
 
--- Tournament leaderboard
+-- Лидерборд турнира
 SELECT * FROM leaderboard_tournament WHERE tournament_id = 'uuid';
 
--- Refresh materialized views
+-- Обновление материализованных представлений
 REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_global;
 
--- User's programs with ratings
-SELECT p.name, r.rating, r.wins, r.losses
+-- Программы команды с рейтингами
+SELECT p.name, rh.rating, rh.wins, rh.losses
 FROM programs p
-JOIN ratings r ON p.id = r.program_id
-WHERE p.user_id = 'uuid';
+JOIN rating_history rh ON p.team_id = rh.team_id
+WHERE p.team_id = 'uuid';
+
+-- Команды в турнире
+SELECT t.name, t.invite_code, u.username as leader
+FROM teams t
+JOIN users u ON t.leader_id = u.id
+WHERE t.tournament_id = 'uuid';
 ```
 
-## Monitoring
+## Мониторинг
 
-- Prometheus: `http://localhost:9090`
+- Prometheus: `http://localhost:9092`
 - Grafana: `http://localhost:3000` (admin/admin)
-- API Metrics: `http://localhost:8080/metrics`
+- API Метрики: `http://localhost:8080/metrics`
+- Loki (логи): `http://localhost:3100`
 
-## Documentation
+## Документация
 
-| Document | Description |
-|----------|-------------|
-| `docs/SETUP.md` | Development setup, deployment, configuration |
-| `docs/USER_GUIDE.md` | User guide, game rules, strategy examples |
-| `docs/ARCHITECTURE.md` | Detailed architecture |
-| `docs/API_GUIDE.md` | Full API reference |
-| `docs/DATABASE_SCHEMA.md` | Database schema |
+| Документ | Описание |
+|----------|----------|
+| `docs/SETUP.md` | Настройка, разработка, деплой |
+| `docs/USER_GUIDE.md` | Руководство пользователя, правила игр |
+| `docs/ARCHITECTURE.md` | Детальная архитектура |
+| `docs/API_GUIDE.md` | Полный справочник API |
+| `docs/DATABASE_SCHEMA.md` | Схема базы данных |
+| `docs/PERFORMANCE_TESTING.md` | Тестирование производительности |
 
-## Links
+## Ссылки
 
 - API Server: `http://localhost:8080`
 - WebSocket: `ws://localhost:8080/api/v1/ws/tournaments/:id`
-- PostgreSQL: `localhost:5432`
+- PostgreSQL: `localhost:5433` (в Docker)
 - Redis: `localhost:6379`

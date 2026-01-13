@@ -288,74 +288,6 @@ for i in range(n):
 `,
 }
 
-// Bot strategies for Good Deal
-// Protocol: 1. Read iterations, 2. Loop: output integer (offer amount), read opponent's response
-var goodDealStrategies = []string{
-	// Fair split
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(50, flush=True)
-    input()
-`,
-	// Greedy
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(70, flush=True)
-    input()
-`,
-	// Generous
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(40, flush=True)
-    input()
-`,
-	// Random
-	`#!/usr/bin/python3
-import random
-n = int(input())
-for i in range(n):
-    print(random.randint(30, 70), flush=True)
-    input()
-`,
-}
-
-// Bot strategies for Balance of Universe
-// Protocol: Similar to other games
-var balanceOfUniverseStrategies = []string{
-	// Balanced
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(0, flush=True)
-    input()
-`,
-	// Positive
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(1, flush=True)
-    input()
-`,
-	// Negative
-	`#!/usr/bin/python3
-n = int(input())
-for i in range(n):
-    print(-1, flush=True)
-    input()
-`,
-	// Random
-	`#!/usr/bin/python3
-import random
-n = int(input())
-for i in range(n):
-    print(random.choice([-1, 0, 1]), flush=True)
-    input()
-`,
-}
-
 // Map game names to their strategies
 // Supported games: dilemma, tug_of_war (see https://github.com/bmstu-itstech/tjudge-cli)
 var gameStrategies = map[string][]string{
@@ -476,8 +408,8 @@ func TestPerformance_30Teams_Tournament(t *testing.T) {
 		fmt.Printf("   Found game: %s (%s)\n", g.Name, g.ID)
 	}
 
-	// Define the 4 games we want to use
-	targetGames := []string{"prisoners_dilemma", "tug_of_war", "good_deal", "balance_of_universe"}
+	// Define the games we want to use (supported by tjudge-cli)
+	targetGames := []string{"prisoners_dilemma", "tug_of_war"}
 	var availableGames []string
 	for _, gameName := range targetGames {
 		if _, ok := gameIDs[gameName]; ok {

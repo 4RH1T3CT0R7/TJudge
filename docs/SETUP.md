@@ -36,6 +36,7 @@ curl http://localhost:8080/health
 | API | http://localhost:8080/api/v1 | REST API |
 | Grafana | http://localhost:3000 | Мониторинг (admin/admin) |
 | Prometheus | http://localhost:9092 | Метрики |
+| Loki | http://localhost:3100 | Логи |
 
 ---
 
@@ -80,6 +81,9 @@ cd web && npm run dev
 | `make migrate-up` | Применить миграции |
 | `make migrate-down` | Откатить миграции |
 | `make admin EMAIL=x@y.z` | Назначить администратора |
+| `make benchmark` | Бенчмарки производительности |
+| `make benchmark-interpret` | Бенчмарки с анализом |
+| `make test-load` | Нагрузочные тесты |
 
 ### Работа с фронтендом
 
@@ -88,7 +92,16 @@ cd web
 npm run dev        # Режим разработки (http://localhost:5173)
 npm run build      # Сборка для встраивания в Go
 npm run lint       # Линтинг
+npm run preview    # Предпросмотр сборки
 ```
+
+**Стек фронтенда:**
+- React 19
+- TypeScript 5.9
+- Vite 7.2
+- Tailwind CSS 4.1
+- Zustand 5.0 (state management)
+- React Query 5.90
 
 > После `npm run build` запустите `go build` для встраивания в бинарник.
 
@@ -120,7 +133,7 @@ REDIS_PORT=6379
 REDIS_POOL_SIZE=100
 
 # Worker Pool
-WORKER_MIN=10
+WORKER_MIN=2
 WORKER_MAX=100
 WORKER_TIMEOUT=60s
 
@@ -193,6 +206,22 @@ docker-compose up -d --scale worker=5
 curl http://localhost:8080/health
 ```
 
+### Blue-Green деплой
+
+```bash
+# Деплой синей версии
+./scripts/blue-green-deploy.sh blue
+
+# Переключение трафика
+./scripts/switch-traffic.sh blue
+
+# Smoke-тесты
+./scripts/smoke-test.sh
+
+# Откат при проблемах
+./scripts/rollback.sh
+```
+
 ### Рекомендации по ресурсам
 
 | Компонент | CPU | RAM | Реплики |
@@ -231,6 +260,46 @@ histogram_quantile(0.99, tjudge_http_request_duration_seconds_bucket)
 rate(tjudge_matches_total[5m])
 ```
 
+### Loki (логирование)
+
+http://localhost:3100
+
+Логи собираются через Promtail и доступны в Grafana.
+
+### Alertmanager
+
+http://localhost:9093
+
+Настроенные алерты в `deployments/prometheus/alerts/tjudge.yml`.
+
+---
+
+## CI/CD
+
+### GitHub Actions
+
+| Workflow | Описание |
+|----------|----------|
+| `ci.yml` | Lint, Test, Build, Security scan |
+| `cd.yml` | Сборка и публикация Docker образов |
+| `deploy.yml` | Деплой в production |
+| `release.yml` | Управление релизами |
+
+### Запуск CI локально
+
+```bash
+# Линтинг
+make lint
+
+# Тесты
+make test
+make test-race
+
+# Сборка
+make build
+make docker-build
+```
+
 ---
 
 ## Устранение неполадок
@@ -240,10 +309,11 @@ rate(tjudge_matches_total[5m])
 | Проблема | Решение |
 |----------|---------|
 | `role tjudge does not exist` | Локальный PG на 5432, используйте 5433 для Docker |
-| `air: command not found` | `export PATH=$PATH:~/go/bin` |
+| `air: command not found` | `go install github.com/air-verse/air@latest` + `export PATH=$PATH:~/go/bin` |
 | `connection refused :8080` | Сервер не запущен, проверьте логи |
 | `Internal server error` | Миграции не применены: `make migrate-up` |
 | Матчи не обрабатываются | Проверьте воркер: `docker-compose logs worker` |
+| `pattern all:dist: no matching files found` | Фронтенд не собран: `cd web && npm run build` |
 
 ### Диагностика
 
@@ -269,16 +339,21 @@ docker-compose up -d
 
 ```bash
 # PostgreSQL бэкап
-pg_dump -h localhost -U tjudge tjudge > backup.sql
+docker exec tjudge-postgres pg_dump -U tjudge tjudge > backup.sql
+
+# PostgreSQL восстановление
+docker exec -i tjudge-postgres psql -U tjudge -d tjudge < backup.sql
 
 # Redis бэкап
-redis-cli BGSAVE
-cp /data/dump.rdb /backup/
+docker exec tjudge-redis redis-cli BGSAVE
+docker cp tjudge-redis:/data/dump.rdb ./backup/
 ```
 
 ---
 
 ## Безопасность
+
+### Рекомендации
 
 1. **Никогда** не коммитьте секреты в Git
 2. Добавьте `secrets/` и `.env` в `.gitignore`
@@ -286,3 +361,33 @@ cp /data/dump.rdb /backup/
 4. JWT secret минимум 32 символа
 5. Регулярно ротируйте секреты
 6. Настройте rate limiting (`RATE_LIMIT_RPM`)
+
+### Проверка безопасности
+
+```bash
+# Сканирование зависимостей Go
+go list -json -m all | docker run --rm -i sonatypecommunity/nancy:latest sleuth
+
+# Сканирование Docker образов
+docker scan tjudge-api:latest
+```
+
+---
+
+## Kubernetes
+
+Конфигурации для Kubernetes находятся в `deployments/k8s/`.
+
+```bash
+# Применение конфигов
+kubectl apply -f deployments/k8s/
+
+# Проверка статуса
+kubectl get pods -n tjudge
+kubectl get services -n tjudge
+```
+
+---
+
+*Версия документации: 2.0*
+*Последнее обновление: Январь 2026*

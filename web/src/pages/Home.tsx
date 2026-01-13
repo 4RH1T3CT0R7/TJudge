@@ -441,8 +441,6 @@ function TugOfWarVisualization() {
 }
 
 // Game Showcase Component with tabs
-// Удалены визуализации для неподдерживаемых игр (good_deal, balance_of_universe)
-// См. https://github.com/bmstu-itstech/tjudge-cli для списка поддерживаемых игр
 function GameShowcase() {
   const [activeGame, setActiveGame] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
