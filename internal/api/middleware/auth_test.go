@@ -51,7 +51,7 @@ func (m *MockAuthService) IsTokenBlacklisted(ctx context.Context, token string) 
 }
 
 func newTestLogger() *logger.Logger {
-	log, _ := logger.New(logger.Config{Level: "error", Format: "json"})
+	log, _ := logger.New("error", "json")
 	return log
 }
 

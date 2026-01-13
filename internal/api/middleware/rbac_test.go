@@ -242,7 +242,7 @@ func TestMiddlewareChain(t *testing.T) {
 		role, _ := middleware.RequireRoleValue(r.Context())
 		userID, _ := middleware.GetUserID(r.Context())
 		assert.Equal(t, domain.RoleAdmin, role)
-		assert.NotEqual(t, domain.UUID{}, userID)
+		assert.NotEqual(t, uuid.UUID{}, userID)
 		w.WriteHeader(http.StatusOK)
 	})
 

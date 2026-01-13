@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -27,7 +26,7 @@ func TestRateLimit_AllowedRequest(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1:12345", 100, time.Minute).Return(true, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -47,7 +46,7 @@ func TestRateLimit_ExceededLimit(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(false, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1:12345", 100, time.Minute).Return(false, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("Handler should not be called when rate limit exceeded")
@@ -149,7 +148,7 @@ func TestRateLimit_ErrorFailsOpen(t *testing.T) {
 	log := newTestLogger()
 
 	// When limiter returns error, should fail open (allow request)
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(false, assert.AnError)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1:12345", 100, time.Minute).Return(false, assert.AnError)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -182,7 +181,7 @@ func TestRateLimit_DifferentWindows(t *testing.T) {
 			mockLimiter := new(MockRateLimiter)
 			log := newTestLogger()
 
-			mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", tc.limit, tc.window).Return(true, nil)
+			mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1:12345", tc.limit, tc.window).Return(true, nil)
 
 			handler := middleware.RateLimit(mockLimiter, tc.limit, tc.window, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
