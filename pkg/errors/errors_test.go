@@ -262,3 +262,54 @@ func TestAppError_Immutability(t *testing.T) {
 	assert.Equal(t, "Resource not found", original.Message)
 	assert.Nil(t, original.Err)
 }
+
+// --- IsNotFound ---
+
+func TestIsNotFound_DirectAppError(t *testing.T) {
+	assert.True(t, IsNotFound(ErrNotFound))
+}
+
+func TestIsNotFound_WrappedAppError(t *testing.T) {
+	wrapped := fmt.Errorf("context: %w", ErrNotFound)
+	assert.True(t, IsNotFound(wrapped))
+}
+
+func TestIsNotFound_WrongCode(t *testing.T) {
+	assert.False(t, IsNotFound(ErrForbidden))
+}
+
+func TestIsNotFound_Nil(t *testing.T) {
+	assert.False(t, IsNotFound(nil))
+}
+
+func TestIsNotFound_RegularError(t *testing.T) {
+	assert.False(t, IsNotFound(fmt.Errorf("regular error")))
+}
+
+func TestIsNotFound_ProgramNotFound(t *testing.T) {
+	// ErrProgramNotFound also has code 404, so IsNotFound should return true
+	assert.True(t, IsNotFound(ErrProgramNotFound))
+}
+
+func TestAppError_WithMessage_WithError_Chaining(t *testing.T) {
+	innerErr := fmt.Errorf("db error")
+	custom := ErrNotFound.WithMessage("user not found").WithError(innerErr)
+
+	assert.Equal(t, "user not found", custom.Message)
+	assert.Equal(t, http.StatusNotFound, custom.Code)
+	assert.Equal(t, innerErr, custom.Err)
+	assert.Contains(t, custom.Error(), "user not found")
+	assert.Contains(t, custom.Error(), "db error")
+}
+
+func TestWrap_PreservesIs(t *testing.T) {
+	sentinel := fmt.Errorf("sentinel error")
+	wrapped := Wrap(sentinel, "layer1")
+
+	require.NotNil(t, wrapped)
+	assert.True(t, errors.Is(wrapped, sentinel))
+
+	// Double wrap
+	doubleWrapped := Wrap(wrapped, "layer2")
+	assert.True(t, errors.Is(doubleWrapped, sentinel))
+}

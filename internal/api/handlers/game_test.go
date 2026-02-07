@@ -1010,3 +1010,551 @@ func TestGameHandler_ResetGameRound_InvalidGameUUID(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
+
+// =============================================================================
+// Phase 2: Happy-path tests for game handler methods with repos
+// =============================================================================
+
+// Mock types for game handler repos
+
+type MockGameLeaderboardRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameLeaderboardRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID, gameType, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
+}
+
+type MockGameMatchRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameMatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Match), args.Error(1)
+}
+
+type MockGameProgramRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+	args := m.Called(ctx, tournamentID, gameID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Program), args.Error(1)
+}
+
+type MockTournamentGameStatusRepository struct {
+	mock.Mock
+}
+
+func (m *MockTournamentGameStatusRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.TournamentGame), args.Error(1)
+}
+
+func (m *MockTournamentGameStatusRepository) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	return m.Called(ctx, tournamentID, gameID).Error(0)
+}
+
+func (m *MockTournamentGameStatusRepository) SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	return m.Called(ctx, tournamentID, gameID).Error(0)
+}
+
+func (m *MockTournamentGameStatusRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+}
+
+func (m *MockTournamentGameStatusRepository) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	return m.Called(ctx, tournamentID, gameID).Error(0)
+}
+
+func (m *MockTournamentGameStatusRepository) DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error {
+	return m.Called(ctx, tournamentID).Error(0)
+}
+
+type MockGameRatingRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameRatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
+	args := m.Called(ctx, tournamentID, gameID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockGameRatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error) {
+	args := m.Called(ctx, tournamentID, gameID, gameType)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+type MockGameMatchResetRepository struct {
+	mock.Mock
+}
+
+func (m *MockGameMatchResetRepository) DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func newGameHandlerWithAllRepos(t *testing.T) (
+	*GameHandler,
+	*MockGameService,
+	*MockGameLeaderboardRepository,
+	*MockGameMatchRepository,
+	*MockGameProgramRepository,
+	*MockTournamentGameStatusRepository,
+	*MockGameRatingRepository,
+	*MockGameMatchResetRepository,
+) {
+	t.Helper()
+	svc := new(MockGameService)
+	leaderboardRepo := new(MockGameLeaderboardRepository)
+	matchRepo := new(MockGameMatchRepository)
+	programRepo := new(MockGameProgramRepository)
+	tgsRepo := new(MockTournamentGameStatusRepository)
+	ratingRepo := new(MockGameRatingRepository)
+	matchResetRepo := new(MockGameMatchResetRepository)
+
+	log, _ := logger.New("error", "json")
+	handler := NewGameHandlerWithRepos(svc, leaderboardRepo, matchRepo, nil, log)
+	handler.SetProgramRepo(programRepo)
+	handler.SetTournamentGameStatusRepo(tgsRepo)
+	handler.SetRatingRepo(ratingRepo)
+	handler.SetMatchResetRepo(matchResetRepo)
+
+	return handler, svc, leaderboardRepo, matchRepo, programRepo, tgsRepo, ratingRepo, matchResetRepo
+}
+
+// --- GetGameLeaderboard success ---
+
+func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
+	handler, svc, leaderboardRepo, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+	leaderboardRepo.On("GetLeaderboardByGameType", mock.Anything, tournamentID, "dilemma", 100).
+		Return([]*domain.LeaderboardEntry{{Rank: 1, Rating: 1500}}, nil)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGameLeaderboard(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []*domain.LeaderboardEntry
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Len(t, result, 1)
+	svc.AssertExpectations(t)
+	leaderboardRepo.AssertExpectations(t)
+}
+
+func TestGameHandler_GetGameLeaderboard_GameNotFound(t *testing.T) {
+	handler, svc, _, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).Return(nil, errors.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGameLeaderboard(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+// --- GetGameMatches success ---
+
+func TestGameHandler_GetGameMatches_Success(t *testing.T) {
+	handler, svc, _, matchRepo, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f domain.MatchFilter) bool {
+		return f.GameType == "dilemma" && *f.TournamentID == tournamentID
+	})).Return([]*domain.Match{{ID: uuid.New()}}, nil)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGameMatches(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []*domain.Match
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Len(t, result, 1)
+}
+
+func TestGameHandler_GetGameMatches_WithStatusFilter(t *testing.T) {
+	handler, svc, _, matchRepo, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f domain.MatchFilter) bool {
+		return f.Status == domain.MatchStatus("completed")
+	})).Return([]*domain.Match{}, nil)
+
+	req := httptest.NewRequest("GET", "/?status=completed", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGameMatches(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+// --- GetGamePrograms success ---
+
+func TestGameHandler_GetGamePrograms_Success(t *testing.T) {
+	handler, _, _, _, programRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	programRepo.On("GetByTournamentAndGame", mock.Anything, tournamentID, gameID).
+		Return([]*domain.Program{{ID: uuid.New(), Name: "solution.py"}}, nil)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGamePrograms(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []*domain.Program
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Len(t, result, 1)
+}
+
+func TestGameHandler_GetGamePrograms_ServiceError(t *testing.T) {
+	handler, _, _, _, programRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	programRepo.On("GetByTournamentAndGame", mock.Anything, tournamentID, gameID).
+		Return(nil, errors.ErrInternal)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetGamePrograms(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+// --- GetTournamentGamesWithStatus success ---
+
+func TestGameHandler_GetTournamentGamesWithStatus_Success(t *testing.T) {
+	handler, svc, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tgsRepo.On("GetTournamentGames", mock.Anything, tournamentID).
+		Return([]*domain.TournamentGame{{TournamentID: tournamentID, GameID: gameID, IsActive: true}}, nil)
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma", DisplayName: "Prisoner's Dilemma"}, nil)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetTournamentGamesWithStatus(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []TournamentGameWithDetails
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Len(t, result, 1)
+	assert.Equal(t, "dilemma", result[0].GameName)
+	assert.True(t, result[0].IsActive)
+}
+
+// --- MarkGameRoundCompleted success ---
+
+func TestGameHandler_MarkGameRoundCompleted_Success(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tgsRepo.On("MarkRoundCompleted", mock.Anything, tournamentID, gameID).Return(nil)
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.MarkGameRoundCompleted(rr, req)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	tgsRepo.AssertExpectations(t)
+}
+
+func TestGameHandler_MarkGameRoundCompleted_RepoError(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tgsRepo.On("MarkRoundCompleted", mock.Anything, tournamentID, gameID).Return(errors.ErrInternal)
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.MarkGameRoundCompleted(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+// --- SetActiveGame success ---
+
+func TestGameHandler_SetActiveGame_Success(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tgsRepo.On("SetActiveGame", mock.Anything, tournamentID, gameID).Return(nil)
+
+	body, _ := json.Marshal(SetActiveGameRequest{GameID: gameID})
+	req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.SetActiveGame(rr, req)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	tgsRepo.AssertExpectations(t)
+}
+
+func TestGameHandler_SetActiveGame_InvalidBody(t *testing.T) {
+	handler, _, _, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+
+	req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte("invalid")))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.SetActiveGame(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+// --- DeactivateAllGames success ---
+
+func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+
+	tgsRepo.On("DeactivateAllGames", mock.Anything, tournamentID).Return(nil)
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.DeactivateAllGames(rr, req)
+
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	tgsRepo.AssertExpectations(t)
+}
+
+func TestGameHandler_DeactivateAllGames_RepoError(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+
+	tgsRepo.On("DeactivateAllGames", mock.Anything, tournamentID).Return(errors.ErrInternal)
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.DeactivateAllGames(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+// --- GetActiveGame success ---
+
+func TestGameHandler_GetActiveGame_Success(t *testing.T) {
+	handler, svc, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tgsRepo.On("GetActiveGame", mock.Anything, tournamentID).
+		Return(&domain.TournamentGame{TournamentID: tournamentID, GameID: gameID, IsActive: true}, nil)
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma", DisplayName: "Prisoner's Dilemma"}, nil)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetActiveGame(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result TournamentGameWithDetails
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Equal(t, "dilemma", result.GameName)
+	assert.True(t, result.IsActive)
+}
+
+func TestGameHandler_GetActiveGame_NotFound(t *testing.T) {
+	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+
+	tgsRepo.On("GetActiveGame", mock.Anything, tournamentID).
+		Return(nil, errors.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetActiveGame(rr, req)
+
+	// Returns 200 with null
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+// --- ResetGameRound success ---
+
+func TestGameHandler_ResetGameRound_Success(t *testing.T) {
+	handler, svc, _, _, _, tgsRepo, ratingRepo, matchResetRepo := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+	ratingRepo.On("DeleteRatingHistoryForGame", mock.Anything, tournamentID, gameID, "dilemma").
+		Return(int64(5), nil)
+	matchResetRepo.On("DeleteMatchesForGame", mock.Anything, tournamentID, "dilemma").
+		Return(int64(10), nil)
+	ratingRepo.On("ResetParticipantsForGame", mock.Anything, tournamentID, gameID).
+		Return(int64(3), nil)
+	tgsRepo.On("ResetGameRound", mock.Anything, tournamentID, gameID).Return(nil)
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.ResetGameRound(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result ResetGameRoundResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	assert.Equal(t, int64(10), result.MatchesDeleted)
+	assert.Equal(t, int64(3), result.ParticipantsReset)
+	assert.Equal(t, int64(5), result.RatingHistoryReset)
+}
+
+func TestGameHandler_ResetGameRound_NoRatingRepo(t *testing.T) {
+	svc := new(MockGameService)
+	tgsRepo := new(MockTournamentGameStatusRepository)
+	log, _ := logger.New("error", "json")
+	handler := NewGameHandler(svc, log)
+	handler.SetTournamentGameStatusRepo(tgsRepo)
+	// ratingRepo is nil
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.ResetGameRound(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "rating repository not configured")
+}
+
+func TestGameHandler_ResetGameRound_NoMatchResetRepo(t *testing.T) {
+	svc := new(MockGameService)
+	tgsRepo := new(MockTournamentGameStatusRepository)
+	ratingRepo := new(MockGameRatingRepository)
+	log, _ := logger.New("error", "json")
+	handler := NewGameHandler(svc, log)
+	handler.SetTournamentGameStatusRepo(tgsRepo)
+	handler.SetRatingRepo(ratingRepo)
+	// matchResetRepo is nil
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	req := httptest.NewRequest("POST", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.ResetGameRound(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.Contains(t, rr.Body.String(), "match reset repository not configured")
+}

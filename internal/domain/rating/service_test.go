@@ -5,10 +5,13 @@ import (
 	"math"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -226,4 +229,157 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 
 	// 400 point difference → ~0.91
 	assert.True(t, math.Abs(scoreA-0.76) < 0.05)
+}
+
+// --- ProcessMatchResult (requires LeaderboardCache via miniredis) ---
+
+func newTestRatingServiceWithCache(t *testing.T) (*Service, *MockRatingRepository) {
+	t.Helper()
+	repo := new(MockRatingRepository)
+	log, _ := logger.New("error", "json")
+
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	testCache := cache.NewFromClient(client)
+	leaderboardCache := cache.NewLeaderboardCache(testCache)
+
+	return &Service{
+		calculator:       NewDefaultEloCalculator(),
+		repo:             repo,
+		leaderboardCache: leaderboardCache,
+		log:              log,
+	}, repo
+}
+
+func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
+	svc, repo := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	tID := uuid.New()
+	p1, p2 := uuid.New(), uuid.New()
+	winner := 1
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tID,
+		Program1ID:   p1,
+		Program2ID:   p2,
+		Winner:       &winner,
+	}
+
+	// updateParticipantRating for p1 and p2
+	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	// updateMatchStats
+	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
+
+	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
+	svc, repo := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	tID := uuid.New()
+	p1, p2 := uuid.New(), uuid.New()
+	winner := 2
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tID,
+		Program1ID:   p1,
+		Program2ID:   p2,
+		Winner:       &winner,
+	}
+
+	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p1, false, false).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p2, true, false).Return(nil)
+
+	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestService_ProcessMatchResult_Draw(t *testing.T) {
+	svc, repo := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	tID := uuid.New()
+	p1, p2 := uuid.New(), uuid.New()
+	winner := 0
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tID,
+		Program1ID:   p1,
+		Program2ID:   p2,
+		Winner:       &winner,
+	}
+
+	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p1, false, true).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p2, false, true).Return(nil)
+
+	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
+}
+
+func TestService_ProcessMatchResult_UpdateRatingError_Program1(t *testing.T) {
+	svc, repo := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	tID := uuid.New()
+	p1, p2 := uuid.New(), uuid.New()
+	winner := 1
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tID,
+		Program1ID:   p1,
+		Program2ID:   p2,
+		Winner:       &winner,
+	}
+
+	// First updateParticipantRating (p1) fails at Create
+	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(errors.ErrInternal).Once()
+
+	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
+
+	assert.Error(t, err)
+}
+
+func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
+	svc, repo := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	tID := uuid.New()
+	p1, p2 := uuid.New(), uuid.New()
+	winner := 1 // Higher rated wins — small change expected
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: tID,
+		Program1ID:   p1,
+		Program2ID:   p2,
+		Winner:       &winner,
+	}
+
+	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
+	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
+
+	err := svc.ProcessMatchResult(ctx, match, 2800, 400)
+
+	require.NoError(t, err)
+	repo.AssertExpectations(t)
 }

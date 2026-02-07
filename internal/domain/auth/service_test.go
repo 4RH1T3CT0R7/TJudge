@@ -478,3 +478,273 @@ func TestService_comparePassword(t *testing.T) {
 	err = service.comparePassword(string(hash), "wrongpassword")
 	assert.Error(t, err)
 }
+
+// --- Login edge cases ---
+
+func TestService_Login_ByEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	password := "SecurePass123!"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
+	user := &domain.User{
+		ID:           uuid.New(),
+		Username:     "emailuser",
+		Email:        "email@example.com",
+		PasswordHash: string(hash),
+		Role:         domain.RoleUser,
+	}
+
+	req := &LoginRequest{
+		Email:    "email@example.com",
+		Password: password,
+	}
+
+	userRepo.On("GetByEmail", ctx, req.Email).Return(user, nil)
+
+	resp, err := service.Login(ctx, req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, user.ID, resp.User.ID)
+	assert.Empty(t, resp.User.PasswordHash)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_Login_NoUsernameOrEmail(t *testing.T) {
+	service, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &LoginRequest{
+		Password: "SomePass123!",
+	}
+
+	resp, err := service.Login(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.True(t, errors.IsAppError(err))
+}
+
+func TestService_Login_RepoError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &LoginRequest{
+		Username: "testuser",
+		Password: "SomePass123!",
+	}
+
+	userRepo.On("GetByUsername", ctx, "testuser").Return(nil, errors.ErrInternal)
+
+	resp, err := service.Login(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	userRepo.AssertExpectations(t)
+}
+
+// --- UpdateProfile ---
+
+func TestService_UpdateProfile_Success(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "old@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+
+	req := &UpdateProfileRequest{
+		Email: "new@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	require.NoError(t, err)
+	assert.Equal(t, "new@example.com", result.Email)
+	assert.Empty(t, result.PasswordHash)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+
+	req := &UpdateProfileRequest{
+		Password: "NewSecurePass123!",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result.PasswordHash)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateProfile_WeakPassword(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+
+	req := &UpdateProfileRequest{
+		Password: "weak",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestService_UpdateProfile_UserNotFound(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
+
+	req := &UpdateProfileRequest{
+		Email: "new@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateProfile_InvalidUserID(t *testing.T) {
+	service, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &UpdateProfileRequest{
+		Email: "new@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, "not-a-uuid", req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestService_UpdateProfile_UpdateError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(errors.ErrInternal)
+
+	req := &UpdateProfileRequest{
+		Email: "new@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	userRepo.AssertExpectations(t)
+}
+
+// --- Register edge cases ---
+
+func TestService_Register_CreateError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &RegisterRequest{
+		Username: "testuser",
+		Email:    "test@example.com",
+		Password: "SecurePass123!",
+	}
+
+	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
+	userRepo.On("Create", ctx, mock.AnythingOfType("*domain.User")).Return(errors.ErrInternal)
+
+	resp, err := service.Register(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_Register_ExistsError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &RegisterRequest{
+		Username: "testuser",
+		Email:    "test@example.com",
+		Password: "SecurePass123!",
+	}
+
+	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, errors.ErrInternal)
+
+	resp, err := service.Register(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	userRepo.AssertExpectations(t)
+}
+
+// --- RefreshTokens edge cases ---
+
+func TestService_RefreshTokens_GetUserError(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, nil)
+	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	blacklist.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
+}
