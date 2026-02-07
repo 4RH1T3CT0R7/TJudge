@@ -105,6 +105,7 @@ type CreateTournamentRequest struct {
 	Description     string `json:"description"`
 	GameType        string `json:"game_type"`
 	MaxParticipants int    `json:"max_participants"`
+	MaxTeamSize     int    `json:"max_team_size,omitempty"`
 	StartTime       string `json:"start_time,omitempty"`
 }
 

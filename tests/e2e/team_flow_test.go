@@ -94,6 +94,7 @@ func createTournamentHelper(t *testing.T, client *TestClient) string {
 		Description:     "Tournament for team E2E testing",
 		GameType:        "tictactoe",
 		MaxParticipants: 20,
+		MaxTeamSize:     10,
 	}
 
 	resp, err := client.doRequest("POST", "/api/v1/tournaments", req)
@@ -249,7 +250,12 @@ func TestE2E_TeamJoinByCode(t *testing.T) {
 
 		resp, err := client2.doRequest("POST", "/api/v1/teams/join", req)
 		require.NoError(t, err)
-		assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, resp.StatusCode)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Join team failed: status=%d body=%s invite_code=%s", resp.StatusCode, string(body), inviteCode)
+		}
 		resp.Body.Close()
 	})
 
