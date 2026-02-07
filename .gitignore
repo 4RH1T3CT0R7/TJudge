@@ -1,6 +1,7 @@
 # IDE
 .idea/
 .vscode/
+.run/
 *.swp
 *.swo
 *~
@@ -16,11 +17,16 @@ bin/
 *.out
 vendor/
 
+# Go compiled binaries (root level)
+/api
+/benchmark
+
 # Environment and secrets
 .env
 .env.local
 .env.*.local
 .env.profile
+.env.production
 secrets/
 
 # Backups
@@ -28,6 +34,7 @@ backups/
 
 # Build artifacts
 web/dist/
+internal/web/dist/
 build/
 coverage.out
 coverage.html
