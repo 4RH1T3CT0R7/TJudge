@@ -40,21 +40,26 @@ func TestDistributedLock_Lock(t *testing.T) {
 	})
 
 	t.Run("lock expires after TTL", func(t *testing.T) {
-		token1, err := lock.Lock(ctx, "test-lock-3", 100*time.Millisecond)
+		// Use miniredis with FastForward to simulate TTL expiry
+		cacheWithMR, mr := setupTestCacheWithMR(t)
+		defer cacheWithMR.Close()
+		lockWithMR := NewDistributedLock(cacheWithMR)
+
+		token1, err := lockWithMR.Lock(ctx, "test-lock-3", 100*time.Millisecond)
 		require.NoError(t, err)
 		assert.NotEmpty(t, token1)
 
-		// Wait for lock to expire
-		time.Sleep(150 * time.Millisecond)
+		// Fast-forward miniredis time to expire the lock
+		mr.FastForward(200 * time.Millisecond)
 
 		// Should be able to acquire again
-		token2, err := lock.Lock(ctx, "test-lock-3", 5*time.Second)
+		token2, err := lockWithMR.Lock(ctx, "test-lock-3", 5*time.Second)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token2)
 		assert.NotEqual(t, token1, token2)
 
 		// Cleanup
-		_ = lock.Unlock(ctx, "test-lock-3", token2)
+		_ = lockWithMR.Unlock(ctx, "test-lock-3", token2)
 	})
 }
 
@@ -75,18 +80,26 @@ func TestDistributedLock_TryLock(t *testing.T) {
 	})
 
 	t.Run("retries and eventually acquires lock", func(t *testing.T) {
+		// Use miniredis with FastForward to simulate TTL expiry during retries
+		cacheWithMR, mr := setupTestCacheWithMR(t)
+		defer cacheWithMR.Close()
+		lockWithMR := NewDistributedLock(cacheWithMR)
+
 		// First lock with short TTL
-		token1, err := lock.Lock(ctx, "test-trylock-2", 200*time.Millisecond)
+		token1, err := lockWithMR.Lock(ctx, "test-trylock-2", 200*time.Millisecond)
 		require.NoError(t, err)
 
-		// Try to acquire in another goroutine, should retry and succeed
-		token2, err := lock.TryLock(ctx, "test-trylock-2", 5*time.Second, 5, 100*time.Millisecond)
+		// Fast-forward to expire the lock before TryLock retries
+		mr.FastForward(300 * time.Millisecond)
+
+		// TryLock should succeed now that the lock has expired
+		token2, err := lockWithMR.TryLock(ctx, "test-trylock-2", 5*time.Second, 5, 100*time.Millisecond)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token2)
 		assert.NotEqual(t, token1, token2)
 
 		// Cleanup
-		_ = lock.Unlock(ctx, "test-trylock-2", token2)
+		_ = lockWithMR.Unlock(ctx, "test-trylock-2", token2)
 	})
 
 	t.Run("fails after max attempts", func(t *testing.T) {
@@ -310,12 +323,4 @@ func TestDistributedLock_IsLocked(t *testing.T) {
 	})
 }
 
-// setupTestCache creates a test cache instance
-// You'll need to implement this based on your test setup
-func setupTestCache(t *testing.T) *Cache {
-	// This is a placeholder - implement based on your test infrastructure
-	// For integration tests, use a real Redis instance or testcontainers
-	// For unit tests, you might want to mock the Cache interface
-	t.Skip("Implement setupTestCache with real Redis or mock")
-	return nil
-}
+// setupTestCache is defined in test_helpers_test.go

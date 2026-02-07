@@ -3,11 +3,16 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/metrics"
 	"github.com/google/uuid"
@@ -317,6 +322,201 @@ func TestInMemoryQueue_PriorityOrder(t *testing.T) {
 			}
 		}
 	}
+}
+
+// --- Integration tests using miniredis ---
+
+func setupTestQueueManager(t *testing.T) *QueueManager {
+	t.Helper()
+
+	mr := miniredis.RunT(t)
+	log, _ := logger.New("error", "json")
+	m := testMetrics()
+
+	// Parse miniredis address into host and port for config.RedisConfig.
+	host, portStr, err := net.SplitHostPort(mr.Addr())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	cfg := &config.RedisConfig{
+		Host: host,
+		Port: port,
+	}
+
+	realCache, err := cache.New(cfg, log, m)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = realCache.Close()
+	})
+
+	return NewQueueManager(realCache, log, m)
+}
+
+func TestQueueManager_EnqueueDequeue_PriorityOrdering(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Enqueue matches with different priorities in arbitrary order:
+	// low first, then medium, then high.
+	lowMatch := testMatch(domain.PriorityLow)
+	medMatch := testMatch(domain.PriorityMedium)
+	highMatch := testMatch(domain.PriorityHigh)
+
+	require.NoError(t, qm.Enqueue(ctx, lowMatch))
+	require.NoError(t, qm.Enqueue(ctx, medMatch))
+	require.NoError(t, qm.Enqueue(ctx, highMatch))
+
+	// Dequeue should respect priority: high -> medium -> low.
+	first, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.Equal(t, highMatch.ID, first.ID, "first dequeued match should be high priority")
+
+	second, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.Equal(t, medMatch.ID, second.ID, "second dequeued match should be medium priority")
+
+	third, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, third)
+	assert.Equal(t, lowMatch.ID, third.ID, "third dequeued match should be low priority")
+
+	// Queue should now be empty.
+	empty, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	assert.Nil(t, empty, "queue should be empty after all matches dequeued")
+}
+
+func TestQueueManager_GetStats(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Enqueue matches of different priorities.
+	for i := 0; i < 3; i++ {
+		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+	}
+	for i := 0; i < 2; i++ {
+		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
+	}
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+
+	stats, err := qm.GetStats(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, int64(3), stats.High)
+	assert.Equal(t, int64(2), stats.Medium)
+	assert.Equal(t, int64(1), stats.Low)
+	assert.Equal(t, int64(6), stats.Total)
+}
+
+func TestQueueManager_GetStats_Empty(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	stats, err := qm.GetStats(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, stats)
+
+	assert.Equal(t, int64(0), stats.High)
+	assert.Equal(t, int64(0), stats.Medium)
+	assert.Equal(t, int64(0), stats.Low)
+	assert.Equal(t, int64(0), stats.Total)
+}
+
+func TestQueueManager_GetQueueSize_Integration(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Initially empty.
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), size)
+
+	// Add a match.
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+
+	size, err = qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}
+
+func TestQueueManager_GetTotalQueueSize(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+
+	total, err := qm.GetTotalQueueSize(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), total)
+}
+
+func TestQueueManager_Clear(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+
+	err := qm.Clear(ctx)
+	require.NoError(t, err)
+
+	total, err := qm.GetTotalQueueSize(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+}
+
+func TestQueueManager_Health(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	err := qm.Health(ctx)
+	assert.NoError(t, err)
+}
+
+func TestQueueManager_Dequeue_EmptyQueue(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	match, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	assert.Nil(t, match)
+}
+
+func TestQueueManager_FIFO_WithinSamePriority(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	first := testMatch(domain.PriorityMedium)
+	second := testMatch(domain.PriorityMedium)
+	third := testMatch(domain.PriorityMedium)
+
+	require.NoError(t, qm.Enqueue(ctx, first))
+	require.NoError(t, qm.Enqueue(ctx, second))
+	require.NoError(t, qm.Enqueue(ctx, third))
+
+	// Within the same priority, matches should be dequeued in FIFO order.
+	got1, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got1)
+	assert.Equal(t, first.ID, got1.ID)
+
+	got2, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got2)
+	assert.Equal(t, second.ID, got2.ID)
+
+	got3, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got3)
+	assert.Equal(t, third.ID, got3.ID)
 }
 
 func BenchmarkInMemoryQueue_LPush(b *testing.B) {

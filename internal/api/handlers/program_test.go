@@ -524,3 +524,679 @@ func TestProgramHandler_Delete(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
+
+func TestProgramHandler_Get_ServiceError(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("repository error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		programID := uuid.New()
+
+		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.Get(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("missing user ID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		programID := uuid.New()
+		reqBody := map[string]string{
+			"name":      "New Name",
+			"code_path": "/new/path",
+			"language":  "javascript",
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.Update(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("invalid UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+
+		reqBody := map[string]string{
+			"name":      "New Name",
+			"code_path": "/new/path",
+			"language":  "javascript",
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/invalid-uuid", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "invalid-uuid")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Update(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid body", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBufferString("invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Update(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("ownership check error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, errors.ErrInternal.WithMessage("database error"))
+
+		reqBody := map[string]string{
+			"name":      "New Name",
+			"code_path": "/new/path",
+			"language":  "javascript",
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Update(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("get program error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		reqBody := map[string]string{
+			"name":      "New Name",
+			"code_path": "/new/path",
+			"language":  "javascript",
+		}
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrInternal.WithMessage("database error"))
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Update(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("missing user ID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		programID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.Delete(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("ownership check error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Delete(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("get program error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Delete(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("repo delete error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		program := &domain.Program{
+			ID:       programID,
+			Name:     "test-program",
+			UserID:   userID,
+			FilePath: nil,
+		}
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
+		mockRepo.On("Delete", mock.Anything, programID).Return(errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Delete(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProgramHandler_GetVersions(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		gameID := uuid.New()
+
+		programs := []*domain.Program{
+			{
+				ID:       uuid.New(),
+				UserID:   userID,
+				Name:     "v1",
+				GameType: "chess",
+				Language: "python",
+				Version:  1,
+			},
+			{
+				ID:       uuid.New(),
+				UserID:   userID,
+				Name:     "v2",
+				GameType: "chess",
+				Language: "python",
+				Version:  2,
+			},
+		}
+
+		mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(programs, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response []*domain.Program
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Len(t, response, 2)
+		assert.Equal(t, "v1", response[0].Name)
+		assert.Equal(t, "v2", response[1].Name)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("missing team_id", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		gameID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?game_id="+gameID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("missing game_id", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		teamID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid team_id", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		gameID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id=invalid-uuid&game_id="+gameID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid game_id", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		teamID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id=invalid-uuid", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("no access", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		otherUserID := uuid.New()
+		teamID := uuid.New()
+		gameID := uuid.New()
+
+		programs := []*domain.Program{
+			{
+				ID:       uuid.New(),
+				UserID:   otherUserID,
+				Name:     "v1",
+				GameType: "chess",
+				Language: "python",
+				Version:  1,
+			},
+		}
+
+		mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(programs, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("missing user ID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		teamID := uuid.New()
+		gameID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("repo error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		gameID := uuid.New()
+
+		mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(nil, errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.GetVersions(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProgramHandler_ClearProgramErrors(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		tournamentID := uuid.New()
+
+		mockRepo.On("ClearErrorMessages", mock.Anything, tournamentID).Return(int64(5), nil)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/programs/clear-errors", nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", tournamentID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.ClearProgramErrors(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(5), response["cleared"])
+		assert.Contains(t, response["message"], "5")
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("invalid UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/programs/clear-errors", nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "invalid-uuid")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.ClearProgramErrors(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("repo error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		tournamentID := uuid.New()
+
+		mockRepo.On("ClearErrorMessages", mock.Anything, tournamentID).Return(int64(0), errors.ErrInternal.WithMessage("database error"))
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/programs/clear-errors", nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", tournamentID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.ClearProgramErrors(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestProgramHandler_Download(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("not owner", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("missing user ID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		programID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("invalid UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/invalid-uuid/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "invalid-uuid")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("file path nil", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		program := &domain.Program{
+			ID:       programID,
+			UserID:   userID,
+			Name:     "test-program",
+			FilePath: nil,
+		}
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
