@@ -2,8 +2,8 @@ package worker
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
-	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
@@ -15,7 +15,7 @@ import (
 
 // ErrMatchNotFound используется когда матч не найден в БД (был удалён)
 // Это не ошибка обработки - матч просто нужно пропустить
-var ErrMatchNotFound = fmt.Errorf("match not found in database")
+var ErrMatchNotFound = stderrors.New("match not found in database")
 
 // MatchRepository интерфейс для работы с матчами
 type MatchRepository interface {
@@ -169,19 +169,16 @@ func (p *Processor) updateRatings(ctx context.Context, match *domain.Match, resu
 }
 
 // isNotFoundError проверяет, является ли ошибка типом "not found"
-// Проверяет как AppError, так и строковое содержимое
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Проверяем через errors package
+	// Проверяем через errors package (AppError с кодом 404)
 	if errors.IsNotFound(err) {
 		return true
 	}
 
-	// Проверяем строковое содержимое (для wrapped errors)
-	errStr := err.Error()
-	return strings.Contains(errStr, "not found") ||
-		strings.Contains(errStr, "no rows")
+	// Проверяем sentinel error
+	return stderrors.Is(err, ErrMatchNotFound)
 }

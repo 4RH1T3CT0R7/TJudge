@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -183,5 +184,14 @@ func writeError(w http.ResponseWriter, err error) {
 	appErr := errors.ToAppError(err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.Code)
-	_, _ = w.Write([]byte(`{"error":"` + appErr.Message + `"}`))
+
+	type errorResponse struct {
+		Error string `json:"error"`
+	}
+	data, marshalErr := json.Marshal(errorResponse{Error: appErr.Message})
+	if marshalErr != nil {
+		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+		return
+	}
+	_, _ = w.Write(data)
 }

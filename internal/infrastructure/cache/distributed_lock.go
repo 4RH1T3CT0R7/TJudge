@@ -71,29 +71,34 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 	return "", fmt.Errorf("failed to acquire lock after %d attempts: %w", maxAttempts, lastErr)
 }
 
-// Unlock освобождает блокировку
+// Unlock освобождает блокировку атомарно с помощью Lua скрипта
 func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string) error {
 	lockKey := fmt.Sprintf("lock:%s", key)
 
-	// Проверяем, что token совпадает перед освобождением
-	// Это предотвращает освобождение чужой блокировки
-	currentToken, err := dl.cache.Get(ctx, lockKey)
+	// Lua script atomically checks token and deletes if matching
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	result, err := dl.cache.Eval(ctx, script, []string{lockKey}, token)
 	if err != nil {
-		return fmt.Errorf("failed to get lock token: %w", err)
+		return fmt.Errorf("failed to unlock: %w", err)
 	}
 
-	if currentToken == "" {
-		// Блокировка уже освобождена или истекла
+	// result is 0 if token didn't match (or key already gone), 1 if deleted
+	if val, ok := result.(int64); ok && val == 0 {
+		// Key was already gone or token mismatch -- not necessarily an error
+		// If key doesn't exist, it was already unlocked (TTL expired)
+		exists, _ := dl.cache.Exists(ctx, lockKey)
+		if exists {
+			return errors.ErrConflict.WithMessage("lock token mismatch")
+		}
+		// Already unlocked -- safe no-op
 		return nil
-	}
-
-	if currentToken != token {
-		return errors.ErrConflict.WithMessage("lock token mismatch")
-	}
-
-	// Удаляем блокировку
-	if err := dl.cache.Del(ctx, lockKey); err != nil {
-		return fmt.Errorf("failed to delete lock: %w", err)
 	}
 
 	return nil

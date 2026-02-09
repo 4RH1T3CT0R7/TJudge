@@ -85,7 +85,9 @@ func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 			}
 
 			// Strict-Transport-Security (только для HTTPS)
-			if config.StrictTransportSecurity != "" && r.TLS != nil {
+			// Also set HSTS when behind a reverse proxy that terminates TLS and
+			// forwards the protocol via X-Forwarded-Proto.
+			if config.StrictTransportSecurity != "" && (r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https") {
 				w.Header().Set("Strict-Transport-Security", config.StrictTransportSecurity)
 			}
 

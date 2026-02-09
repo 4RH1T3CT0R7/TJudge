@@ -56,6 +56,7 @@ func (s *DBTestSuite) SetupSuite() {
 		User:           user,
 		Password:       password,
 		Name:           dbName,
+		SSLMode:        "disable",
 		MaxConnections: 10,
 		MaxIdle:        5,
 		MaxLifetime:    5 * time.Minute,

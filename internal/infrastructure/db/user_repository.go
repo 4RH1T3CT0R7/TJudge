@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -52,7 +53,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 	`
 
 	err := r.db.QueryRowWithMetrics(ctx, "user_get_by_id", &user, query, id)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("user not found")
 	}
 	if err != nil {
@@ -73,7 +74,7 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*d
 	`
 
 	err := r.db.QueryRowWithMetrics(ctx, "user_get_by_username", &user, query, username)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("user not found")
 	}
 	if err != nil {
@@ -94,7 +95,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	`
 
 	err := r.db.QueryRowWithMetrics(ctx, "user_get_by_email", &user, query, email)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("user not found")
 	}
 	if err != nil {
@@ -120,7 +121,7 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 		user.PasswordHash,
 	).Scan(&user.UpdatedAt)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return errors.ErrNotFound.WithMessage("user not found")
 	}
 	if err != nil {

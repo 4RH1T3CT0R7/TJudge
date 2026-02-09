@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -45,6 +46,7 @@ type InMemoryLoginTracker struct {
 	attempts map[string][]LoginAttempt
 	lockouts map[string]time.Time
 	mu       sync.RWMutex
+	done     chan struct{}
 }
 
 // NewInMemoryLoginTracker создаёт новый tracker
@@ -52,6 +54,7 @@ func NewInMemoryLoginTracker() *InMemoryLoginTracker {
 	tracker := &InMemoryLoginTracker{
 		attempts: make(map[string][]LoginAttempt),
 		lockouts: make(map[string]time.Time),
+		done:     make(chan struct{}),
 	}
 
 	// Запускаем cleanup горутину
@@ -140,13 +143,23 @@ func (t *InMemoryLoginTracker) countRecentFailedAttempts(username string) int {
 	return count
 }
 
+// Close останавливает cleanup горутину
+func (t *InMemoryLoginTracker) Close() {
+	close(t.done)
+}
+
 // cleanupLoop периодически очищает старые записи
 func (t *InMemoryLoginTracker) cleanupLoop() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		t.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			t.cleanup()
+		case <-t.done:
+			return
+		}
 	}
 }
 
@@ -258,7 +271,10 @@ func (t *RedisLoginTracker) GetRecentAttempts(ctx context.Context, username stri
 	}
 
 	var count int
-	_, _ = fmt.Sscanf(val, "%d", &count)
+	if _, err := fmt.Sscanf(val, "%d", &count); err != nil {
+		log.Printf("WARN: failed to parse login attempt count for key %s: %v, treating as 0", key, err)
+		return 0, nil
+	}
 	return count, nil
 }
 

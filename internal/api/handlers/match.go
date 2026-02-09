@@ -155,13 +155,18 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем кэш результата
-	cachedResult, err := h.matchCache.Get(r.Context(), id)
-	if err == nil && cachedResult != nil {
-		h.log.Info("Match result from cache",
+	// Проверяем кэш матча
+	cachedMatch, cacheErr := h.matchCache.GetMatch(r.Context(), id)
+	if cacheErr == nil && cachedMatch != nil {
+		h.log.Info("Match from cache",
 			zap.String("match_id", id.String()),
 		)
-		writeJSON(w, http.StatusOK, cachedResult)
+		// Фильтруем сообщение об ошибке в зависимости от прав пользователя
+		userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+		userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+		isAdmin := userRole == domain.RoleAdmin
+		cachedMatch = h.filterMatchError(r.Context(), cachedMatch, userID, isAdmin)
+		writeJSON(w, http.StatusOK, cachedMatch)
 		return
 	}
 

@@ -69,7 +69,11 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 
 	entries := make([]*domain.LeaderboardEntry, 0, len(results))
 	for i, result := range results {
-		programID, err := uuid.Parse(result.Member.(string))
+		memberStr, ok := result.Member.(string)
+		if !ok {
+			continue
+		}
+		programID, err := uuid.Parse(memberStr)
 		if err != nil {
 			continue
 		}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // TournamentCache - кэш для турниров
@@ -192,18 +193,24 @@ func (tc *TournamentCache) GetList(ctx context.Context, filter string) ([]*domai
 	return tournaments, nil
 }
 
-// InvalidateList инвалидирует кэшированные списки турниров
+// InvalidateList инвалидирует кэшированные списки турниров используя SCAN
 func (tc *TournamentCache) InvalidateList(ctx context.Context) error {
-	// Инвалидируем все возможные комбинации списков
-	patterns := []string{
-		"tournaments:list:*",
+	pattern := "tournaments:list:*"
+	var cursor uint64
+	for {
+		keys, nextCursor, err := tc.cache.Scan(ctx, cursor, pattern, 100)
+		if err != nil {
+			return fmt.Errorf("failed to scan tournament list keys: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := tc.cache.Del(ctx, keys...); err != nil {
+				tc.cache.log.Error("Failed to delete tournament list cache keys", zap.Error(err))
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
 	}
-
-	for _, pattern := range patterns {
-		// В продакшене здесь нужно использовать SCAN для удаления по паттерну
-		// Для простоты просто удаляем известные ключи
-		_ = tc.cache.Del(ctx, pattern)
-	}
-
 	return nil
 }

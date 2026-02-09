@@ -160,16 +160,16 @@ func main() {
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
-	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, matchScheduler, log)
-	programHandler.SetGameLookup(gameService)
-	programHandler.SetMatchChecker(matchRepo)
-	programHandler.SetRoundChecker(gameRepo)
+	programHandler := handlers.NewProgramHandler(
+		programRepo, tournamentRepo, matchScheduler,
+		gameService, matchRepo, gameRepo,
+		cfg.Storage.ProgramsPath, log,
+	)
 	matchHandler := handlers.NewMatchHandlerFull(matchRepo, matchCache, programRepo, queueManager, log)
-	gameHandler := handlers.NewGameHandlerWithRepos(gameService, tournamentRepo, matchRepo, tournamentRepo, log)
-	gameHandler.SetProgramRepo(programRepo)
-	gameHandler.SetTournamentGameStatusRepo(gameRepo)
-	gameHandler.SetRatingRepo(ratingRepo)
-	gameHandler.SetMatchResetRepo(matchRepo)
+	gameHandler := handlers.NewGameHandler(
+		gameService, tournamentRepo, matchRepo, tournamentRepo,
+		programRepo, gameRepo, ratingRepo, matchRepo, log,
+	)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 	systemHandler := handlers.NewSystemHandler(log)
@@ -193,10 +193,11 @@ func main() {
 
 	// Создаём HTTP сервер
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      apiServer.Handler(),
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
+		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:           apiServer.Handler(),
+		ReadTimeout:       cfg.Server.ReadTimeout,
+		WriteTimeout:      cfg.Server.WriteTimeout,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	// Metrics server (если включен)

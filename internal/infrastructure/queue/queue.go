@@ -276,16 +276,14 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 		return 0, nil
 	}
 
-	// Очищаем очередь и добавляем только валидные матчи
-	if err := qm.cache.Del(ctx, queueKey); err != nil {
-		return 0, fmt.Errorf("failed to clear queue: %w", err)
+	// Atomically replace the queue: DEL + LPUSH in a single MULTI/EXEC transaction.
+	// Reverse the order so that after LPUSH the queue preserves the original ordering.
+	reversed := make([][]byte, len(validMatches))
+	for i, v := range validMatches {
+		reversed[len(validMatches)-1-i] = v
 	}
-
-	// Добавляем валидные матчи обратно (в обратном порядке для сохранения очерёдности)
-	for i := len(validMatches) - 1; i >= 0; i-- {
-		if err := qm.cache.LPush(ctx, queueKey, validMatches[i]); err != nil {
-			qm.log.LogError("Failed to re-enqueue valid match", err)
-		}
+	if err := qm.cache.ReplaceList(ctx, queueKey, reversed); err != nil {
+		return 0, fmt.Errorf("failed to atomically replace queue: %w", err)
 	}
 
 	return purgedCount, nil

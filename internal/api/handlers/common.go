@@ -40,13 +40,21 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_, _ = buf.WriteTo(w)
 }
 
+// errorResponse структура для JSON ответа с ошибкой
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
 // writeError пишет ошибку в ответ
 func writeError(w http.ResponseWriter, err error) {
 	appErr := errors.ToAppError(err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.Code)
 
-	// Используем статический JSON для простых ошибок (избегаем аллокаций)
-	response := []byte(`{"error":"` + appErr.Message + `"}`)
-	_, _ = w.Write(response)
+	data, marshalErr := json.Marshal(errorResponse{Error: appErr.Message})
+	if marshalErr != nil {
+		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+		return
+	}
+	_, _ = w.Write(data)
 }

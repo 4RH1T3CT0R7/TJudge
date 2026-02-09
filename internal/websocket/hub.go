@@ -112,7 +112,10 @@ func (h *Hub) unregisterClient(client *Client) {
 	if clients, ok := h.tournaments[client.tournamentID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
-			close(client.send)
+			if !client.closed {
+				client.closed = true
+				close(client.send)
+			}
 
 			// Удаляем пустую map турнира
 			if len(clients) == 0 {
@@ -129,8 +132,8 @@ func (h *Hub) unregisterClient(client *Client) {
 
 // broadcastMessage отправляет сообщение всем клиентам турнира
 func (h *Hub) broadcastMessage(message *Message) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	clients, ok := h.tournaments[message.TournamentID]
 	if !ok {
@@ -154,7 +157,10 @@ func (h *Hub) broadcastMessage(message *Message) {
 				zap.String("tournament_id", client.tournamentID.String()),
 				zap.String("user_id", client.userID.String()),
 			)
-			close(client.send)
+			if !client.closed {
+				client.closed = true
+				close(client.send)
+			}
 			delete(clients, client)
 		}
 	}
@@ -192,7 +198,10 @@ func (h *Hub) shutdown() {
 	// Закрываем все подключения
 	for tournamentID, clients := range h.tournaments {
 		for client := range clients {
-			close(client.send)
+			if !client.closed {
+				client.closed = true
+				close(client.send)
+			}
 			delete(clients, client)
 		}
 		delete(h.tournaments, tournamentID)

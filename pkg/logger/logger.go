@@ -49,14 +49,18 @@ func NewWithOptions(opts Options) (*Logger, error) {
 
 	if opts.Format == "json" {
 		encoderConfig = zap.NewProductionEncoderConfig()
-		encoder = zapcore.NewJSONEncoder(encoderConfig)
 	} else {
 		encoderConfig = zap.NewDevelopmentEncoderConfig()
-		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
 
 	encoderConfig.TimeKey = "ts"
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	if opts.Format == "json" {
+		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	} else {
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
+	}
 
 	// Создаём WriteSyncer
 	var writeSyncer zapcore.WriteSyncer

@@ -235,6 +235,7 @@ func TestDatabaseConfig_DSN(t *testing.T) {
 		User:     "tjudge",
 		Password: "secret",
 		Name:     "tjudge",
+		SSLMode:  "disable",
 	}
 	dsn := cfg.DSN()
 	assert.Contains(t, dsn, "host=localhost")
@@ -242,6 +243,7 @@ func TestDatabaseConfig_DSN(t *testing.T) {
 	assert.Contains(t, dsn, "user=tjudge")
 	assert.Contains(t, dsn, "password=secret")
 	assert.Contains(t, dsn, "dbname=tjudge")
+	assert.Contains(t, dsn, "sslmode=disable")
 }
 
 func TestDatabaseConfig_DSNURL(t *testing.T) {
@@ -251,6 +253,7 @@ func TestDatabaseConfig_DSNURL(t *testing.T) {
 		User:     "tjudge",
 		Password: "secret",
 		Name:     "tjudge",
+		SSLMode:  "disable",
 	}
 	url := cfg.DSNURL()
 	assert.Equal(t, "postgres://tjudge:secret@localhost:5432/tjudge?sslmode=disable", url)

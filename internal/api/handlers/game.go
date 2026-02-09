@@ -83,49 +83,29 @@ type GameHandler struct {
 	log                      *logger.Logger
 }
 
-// NewGameHandler создаёт новый game handler
-func NewGameHandler(gameService GameService, log *logger.Logger) *GameHandler {
-	return &GameHandler{
-		gameService: gameService,
-		log:         log,
-	}
-}
-
-// NewGameHandlerWithRepos создаёт game handler с репозиториями для расширенной функциональности
-func NewGameHandlerWithRepos(
+// NewGameHandler создаёт новый game handler с полным набором зависимостей
+func NewGameHandler(
 	gameService GameService,
 	leaderboardRepo GameLeaderboardRepository,
 	matchRepo GameMatchRepository,
 	tournamentRepo GameTournamentRepository,
+	programRepo GameProgramRepository,
+	tournamentGameStatusRepo TournamentGameStatusRepository,
+	ratingRepo GameRatingRepository,
+	matchResetRepo GameMatchResetRepository,
 	log *logger.Logger,
 ) *GameHandler {
 	return &GameHandler{
-		gameService:     gameService,
-		leaderboardRepo: leaderboardRepo,
-		matchRepo:       matchRepo,
-		tournamentRepo:  tournamentRepo,
-		log:             log,
+		gameService:              gameService,
+		leaderboardRepo:          leaderboardRepo,
+		matchRepo:                matchRepo,
+		tournamentRepo:           tournamentRepo,
+		programRepo:              programRepo,
+		tournamentGameStatusRepo: tournamentGameStatusRepo,
+		ratingRepo:               ratingRepo,
+		matchResetRepo:           matchResetRepo,
+		log:                      log,
 	}
-}
-
-// SetProgramRepo устанавливает репозиторий программ
-func (h *GameHandler) SetProgramRepo(programRepo GameProgramRepository) {
-	h.programRepo = programRepo
-}
-
-// SetTournamentGameStatusRepo устанавливает репозиторий для работы со статусом игр турнира
-func (h *GameHandler) SetTournamentGameStatusRepo(repo TournamentGameStatusRepository) {
-	h.tournamentGameStatusRepo = repo
-}
-
-// SetRatingRepo устанавливает репозиторий рейтингов
-func (h *GameHandler) SetRatingRepo(repo GameRatingRepository) {
-	h.ratingRepo = repo
-}
-
-// SetMatchResetRepo устанавливает репозиторий для удаления матчей
-func (h *GameHandler) SetMatchResetRepo(repo GameMatchResetRepository) {
-	h.matchResetRepo = repo
 }
 
 // Create создаёт новую игру

@@ -305,8 +305,9 @@ func TestIsNotFoundError(t *testing.T) {
 		{"nil", nil, false},
 		{"ErrNotFound", errors.ErrNotFound, true},
 		{"AppError_NotFound", errors.ErrNotFound.WithMessage("x"), true},
-		{"not_found_string", fmt.Errorf("resource not found in db"), true},
-		{"no_rows_string", fmt.Errorf("sql: no rows in result set"), true},
+		{"ErrMatchNotFound", ErrMatchNotFound, true},
+		{"not_found_string", fmt.Errorf("resource not found in db"), false},
+		{"no_rows_string", fmt.Errorf("sql: no rows in result set"), false},
 		{"generic_error", fmt.Errorf("connection refused"), false},
 	}
 

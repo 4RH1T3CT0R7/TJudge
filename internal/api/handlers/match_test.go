@@ -97,14 +97,16 @@ func TestMatchHandler_Get(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, log)
 
 		matchID := uuid.New()
-		cachedResult := &domain.MatchResult{
-			MatchID: matchID,
-			Score1:  2,
-			Score2:  1,
-			Winner:  1,
+		cachedMatch := &domain.Match{
+			ID:           matchID,
+			TournamentID: uuid.New(),
+			Program1ID:   uuid.New(),
+			Program2ID:   uuid.New(),
+			GameType:     "chess",
+			Status:       domain.MatchCompleted,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(cachedResult, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(cachedMatch, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
 
@@ -118,10 +120,10 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.MatchResult
+		var response domain.Match
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
-		assert.Equal(t, cachedResult.MatchID, response.MatchID)
+		assert.Equal(t, cachedMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
 		// Repository should not be called if cache hit
@@ -143,7 +145,7 @@ func TestMatchHandler_Get(t *testing.T) {
 			Status:       domain.MatchRunning,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(dbMatch, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
@@ -192,7 +194,7 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		matchID := uuid.New()
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(nil, errors.ErrNotFound.WithMessage("match not found"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
@@ -738,7 +740,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: nil,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		userID := uuid.New()
@@ -784,7 +786,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &emptyErr,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		userID := uuid.New()
@@ -834,7 +836,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		adminID := uuid.New()
@@ -894,7 +896,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			Name:   "my-bot",
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
@@ -957,7 +959,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			Name:   "opponent-bot",
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
@@ -1018,7 +1020,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			Name:   "my-bot",
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program1ID).Return(failedProgram, nil)
 
@@ -1069,7 +1071,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
@@ -1122,7 +1124,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		// Program lookup fails - error message should be hidden
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(nil, errors.ErrNotFound.WithMessage("program not found"))
@@ -1174,7 +1176,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		mockCache.On("Get", mock.Anything, matchID).Return(nil, nil)
+		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		userID := uuid.New()

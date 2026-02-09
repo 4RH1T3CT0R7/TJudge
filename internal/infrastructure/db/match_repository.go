@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -79,7 +80,7 @@ func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ma
 		&match.CreatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("match not found")
 	}
 	if err != nil {
@@ -132,6 +133,10 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
 		matches = append(matches, &match)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return matches, nil
@@ -187,6 +192,10 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 		matches = append(matches, &match)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return matches, nil
 }
 
@@ -238,6 +247,10 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
 		matches = append(matches, &match)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return matches, nil
@@ -331,6 +344,10 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
 		matches = append(matches, &match)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return matches, nil
@@ -645,6 +662,10 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 		matches = append(matches, &match)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return matches, nil
 }
 
@@ -910,6 +931,10 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 		matches = append(matches, &match)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	// Определяем, есть ли ещё страницы
 	hasMore := len(matches) > pageReq.GetLimit()
 	if hasMore {
@@ -978,6 +1003,10 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 		matches = append(matches, &match)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return matches, nil
 }
 
@@ -1042,6 +1071,10 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		rounds = append(rounds, &round)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	// Теперь получаем матчи для каждого раунда и игры
 	for _, round := range rounds {
 		matchQuery := `
@@ -1082,6 +1115,10 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 				return nil, errors.Wrap(err, "failed to scan match")
 			}
 			round.Matches = append(round.Matches, &match)
+		}
+		if err := matchRows.Err(); err != nil {
+			matchRows.Close()
+			return nil, fmt.Errorf("rows iteration error: %w", err)
 		}
 		matchRows.Close()
 	}

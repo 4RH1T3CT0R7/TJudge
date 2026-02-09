@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
+	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -76,7 +78,7 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		&program.CreatedAt,
 		&program.UpdatedAt,
 	)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrProgramNotFound
 	}
 	if err != nil {
@@ -127,6 +129,10 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		programs = append(programs, &p)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return programs, nil
 }
 
@@ -171,6 +177,10 @@ func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID u
 		programs = append(programs, &p)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return programs, nil
 }
 
@@ -191,7 +201,7 @@ func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program)
 		program.ErrorMessage,
 	).Scan(&program.UpdatedAt)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return errors.ErrProgramNotFound
 	}
 	if err != nil {
@@ -316,6 +326,10 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 		programs = append(programs, &p)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return programs, nil
 }
 
@@ -358,6 +372,10 @@ func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, tea
 			return nil, errors.Wrap(err, "failed to scan program")
 		}
 		programs = append(programs, &p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return programs, nil

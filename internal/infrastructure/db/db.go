@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,6 +20,7 @@ type DB struct {
 	*sqlx.DB
 	log     *logger.Logger
 	metrics *metrics.Metrics
+	done    chan struct{}
 }
 
 // New создаёт новое подключение к базе данных
@@ -51,6 +53,7 @@ func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*D
 		DB:      db,
 		log:     log,
 		metrics: m,
+		done:    make(chan struct{}),
 	}
 
 	// Запускаем мониторинг метрик пула
@@ -64,13 +67,18 @@ func (db *DB) monitorConnectionPool() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		stats := db.Stats()
-		db.metrics.SetDBConnections(
-			stats.InUse,
-			stats.Idle,
-			stats.OpenConnections,
-		)
+	for {
+		select {
+		case <-ticker.C:
+			stats := db.Stats()
+			db.metrics.SetDBConnections(
+				stats.InUse,
+				stats.Idle,
+				stats.OpenConnections,
+			)
+		case <-db.done:
+			return
+		}
 	}
 }
 
@@ -95,7 +103,7 @@ func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest inter
 	err := db.SelectContext(ctx, dest, query, args...)
 	db.metrics.RecordDBQuery(queryType, time.Since(start))
 
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		db.log.LogError("Database query failed", err,
 			zap.String("query_type", queryType),
 		)
@@ -110,7 +118,7 @@ func (db *DB) QueryRowWithMetrics(ctx context.Context, queryType string, dest in
 	err := db.GetContext(ctx, dest, query, args...)
 	db.metrics.RecordDBQuery(queryType, time.Since(start))
 
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		db.log.LogError("Database query row failed", err,
 			zap.String("query_type", queryType),
 		)
@@ -134,6 +142,7 @@ func (db *DB) Health(ctx context.Context) error {
 
 // Close закрывает соединение с базой данных
 func (db *DB) Close() error {
+	close(db.done)
 	db.log.Info("Closing database connection")
 	return db.DB.Close()
 }
@@ -178,7 +187,7 @@ func (ps *PreparedStatement) QueryContext(ctx context.Context, queryType string,
 	err := ps.stmt.SelectContext(ctx, dest, arg)
 	ps.db.metrics.RecordDBQuery(queryType, time.Since(start))
 
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		ps.db.log.LogError("Prepared statement query failed", err,
 			zap.String("query_type", queryType),
 		)

@@ -200,11 +200,13 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 // RefreshTokens обновляет access token используя refresh token
 // Реализует token rotation: старый refresh token инвалидируется
 func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*AuthResponse, error) {
-	// Проверяем, не в blacklist ли токен (token rotation protection)
+	// Проверяем, не в blacklist ли токен (token rotation protection).
+	// Fail-closed: if the blacklist check fails (e.g. Redis is down), we reject
+	// the request rather than allowing a potentially revoked token through.
 	isBlacklisted, err := s.tokenBlacklist.IsBlacklisted(ctx, refreshToken)
 	if err != nil {
 		s.log.LogError("Failed to check token blacklist", err)
-		// Продолжаем, но логируем ошибку
+		return nil, fmt.Errorf("failed to verify token blacklist: %w", err)
 	}
 	if isBlacklisted {
 		s.log.Warn("Attempt to reuse blacklisted refresh token")
@@ -223,11 +225,13 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Token Rotation: добавляем старый refresh token в blacklist
-	// Это предотвращает повторное использование токена
+	// Token Rotation: добавляем старый refresh token в blacklist.
+	// Это предотвращает повторное использование токена.
+	// Fail-closed: if we cannot blacklist the old token, abort the rotation to
+	// prevent the old token from remaining valid and being reused.
 	if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
 		s.log.LogError("Failed to blacklist old refresh token", err)
-		// Продолжаем, но логируем ошибку
+		return nil, fmt.Errorf("failed to blacklist old refresh token: %w", err)
 	}
 
 	s.log.Info("Tokens refreshed with rotation",
@@ -257,7 +261,9 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 
 // Logout выполняет выход пользователя, добавляя токены в чёрный список
 func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) error {
-	// Добавляем access token в blacklist
+	// Добавляем access token в blacklist.
+	// Fail-closed: if we cannot blacklist the tokens, return an error so the
+	// client knows the logout was not fully processed.
 	claims, err := s.jwtManager.ValidateToken(accessToken)
 	if err != nil {
 		// Access token может быть уже истёкшим, это OK
@@ -267,6 +273,7 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 		if ttl > 0 {
 			if err := s.tokenBlacklist.Add(ctx, accessToken, ttl); err != nil {
 				s.log.LogError("Failed to blacklist access token", err)
+				return fmt.Errorf("failed to blacklist access token: %w", err)
 			}
 		}
 	}
@@ -276,6 +283,7 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 		// Refresh token добавляем с полным TTL, т.к. его expiry может быть позже
 		if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
 			s.log.LogError("Failed to blacklist refresh token", err)
+			return fmt.Errorf("failed to blacklist refresh token: %w", err)
 		}
 	}
 

@@ -74,9 +74,16 @@ type ProgramHandler struct {
 }
 
 // NewProgramHandler создаёт новый program handler
-func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentParticipantAdder, matchScheduler MatchScheduler, log *logger.Logger) *ProgramHandler {
-	// Создаём директорию для загрузок (используем PROGRAMS_PATH для согласованности с worker)
-	uploadDir := os.Getenv("PROGRAMS_PATH")
+func NewProgramHandler(
+	programRepo ProgramRepository,
+	tournamentRepo TournamentParticipantAdder,
+	matchScheduler MatchScheduler,
+	gameLookup GameLookup,
+	matchChecker MatchExistenceChecker,
+	roundChecker RoundCompletionChecker,
+	uploadDir string,
+	log *logger.Logger,
+) *ProgramHandler {
 	if uploadDir == "" {
 		uploadDir = "/data/programs"
 	}
@@ -89,25 +96,13 @@ func NewProgramHandler(programRepo ProgramRepository, tournamentRepo TournamentP
 		programRepo:    programRepo,
 		tournamentRepo: tournamentRepo,
 		matchScheduler: matchScheduler,
+		gameLookup:     gameLookup,
+		matchChecker:   matchChecker,
+		roundChecker:   roundChecker,
 		uploadDir:      uploadDir,
 		maxFileSize:    10 * 1024 * 1024, // 10MB
 		log:            log,
 	}
-}
-
-// SetGameLookup устанавливает GameLookup для проверки игр
-func (h *ProgramHandler) SetGameLookup(gameLookup GameLookup) {
-	h.gameLookup = gameLookup
-}
-
-// SetMatchChecker устанавливает MatchExistenceChecker для проверки наличия матчей
-func (h *ProgramHandler) SetMatchChecker(matchChecker MatchExistenceChecker) {
-	h.matchChecker = matchChecker
-}
-
-// SetRoundChecker устанавливает RoundCompletionChecker для проверки завершения раунда
-func (h *ProgramHandler) SetRoundChecker(roundChecker RoundCompletionChecker) {
-	h.roundChecker = roundChecker
 }
 
 // detectLanguage определяет язык программирования по расширению файла
@@ -635,8 +630,16 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		filename = program.Name + ext
 	}
 
+	// Санитизируем имя файла для безопасного использования в заголовке
+	safeName := strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || r == '\r' || r == '\n' {
+			return '_'
+		}
+		return r
+	}, filename)
+
 	// Устанавливаем заголовки для скачивания
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", safeName))
 	w.Header().Set("Content-Type", "application/octet-stream")
 
 	// Копируем файл в response

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	stderrors "errors"
 	"fmt"
 	"math/big"
 
@@ -65,7 +66,7 @@ func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tea
 		&team.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("team not found")
 	}
 	if err != nil {
@@ -95,7 +96,7 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 		&team.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("team not found")
 	}
 	if err != nil {
@@ -138,6 +139,10 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 		}
 
 		teams = append(teams, &team)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return teams, nil
@@ -203,6 +208,10 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 		teams = append(teams, &team)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return teams, nil
 }
 
@@ -221,7 +230,7 @@ func (r *TeamRepository) Update(ctx context.Context, team *domain.Team) error {
 		team.LeaderID,
 	).Scan(&team.UpdatedAt)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return errors.ErrNotFound.WithMessage("team not found")
 	}
 	if err != nil {
@@ -326,6 +335,10 @@ func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*d
 		members = append(members, &member)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return members, nil
 }
 
@@ -395,7 +408,7 @@ func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournament
 		&team.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("user not in any team in this tournament")
 	}
 	if err != nil {
@@ -476,6 +489,10 @@ func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUI
 			return nil, errors.Wrap(err, "failed to scan user")
 		}
 		members = append(members, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return &domain.TeamWithMembers{

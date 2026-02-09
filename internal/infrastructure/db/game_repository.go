@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -61,7 +62,7 @@ func (r *GameRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Gam
 		&game.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("game not found")
 	}
 	if err != nil {
@@ -90,7 +91,7 @@ func (r *GameRepository) GetByName(ctx context.Context, name string) (*domain.Ga
 		&game.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("game not found")
 	}
 	if err != nil {
@@ -156,6 +157,10 @@ func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]
 		games = append(games, &game)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return games, nil
 }
 
@@ -174,7 +179,7 @@ func (r *GameRepository) Update(ctx context.Context, game *domain.Game) error {
 		game.Rules,
 	).Scan(&game.UpdatedAt)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return errors.ErrNotFound.WithMessage("game not found")
 	}
 	if err != nil {
@@ -238,6 +243,10 @@ func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 		}
 
 		games = append(games, &game)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return games, nil
@@ -313,7 +322,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 		&tg.CreatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("tournament game not found")
 	}
 	if err != nil {
@@ -358,6 +367,10 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 		tgs = append(tgs, &tg)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return tgs, nil
 }
 
@@ -396,7 +409,7 @@ func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gam
 	`
 
 	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&completed)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		// Если связи нет, считаем раунд не завершённым
 		return false, nil
 	}
@@ -505,7 +518,7 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 		&tg.CreatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("no active game found")
 	}
 	if err != nil {
@@ -525,7 +538,7 @@ func (r *GameRepository) IsGameActive(ctx context.Context, tournamentID, gameID 
 	`
 
 	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&isActive)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {

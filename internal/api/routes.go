@@ -119,14 +119,20 @@ func (s *Server) setupRoutes() {
 
 	// API v1
 	s.router.Route("/api/v1", func(r chi.Router) {
-		// Auth routes (публичные)
+		// Auth routes
 		r.Route("/auth", func(r chi.Router) {
+			// Public auth endpoints (no authentication required)
 			r.Post("/register", s.authHandler.Register)
 			r.Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
-			r.Post("/logout", s.authHandler.Logout)
-			r.Get("/me", s.authHandler.Me)
-			r.Put("/profile", s.authHandler.UpdateProfile)
+
+			// Protected auth endpoints (require valid JWT)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Auth(s.authService, s.log))
+				r.Post("/logout", s.authHandler.Logout)
+				r.Get("/me", s.authHandler.Me)
+				r.Put("/profile", s.authHandler.UpdateProfile)
+			})
 		})
 
 		// Tournament routes

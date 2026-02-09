@@ -9,11 +9,15 @@ func (u *User) Validate() error {
 	errs := validator.ValidationErrors{}
 
 	if err := validator.ValidateUsername(u.Username); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if err := validator.ValidateEmail(u.Email); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if errs.HasErrors() {
@@ -32,25 +36,39 @@ func (p *Program) Validate() error {
 	errs := validator.ValidationErrors{}
 
 	if err := validator.ValidateRequired("name", p.Name); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	} else if err := validator.ValidateLength("name", p.Name, 1, 100); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if err := validator.ValidateRequired("game_type", p.GameType); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	} else if err := validator.ValidateLength("game_type", p.GameType, 1, 50); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if err := validator.ValidateRequired("code_path", p.CodePath); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if err := validator.ValidateRequired("language", p.Language); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	} else if err := validator.ValidateLength("language", p.Language, 1, 50); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if errs.HasErrors() {
@@ -64,15 +82,23 @@ func (t *Tournament) Validate() error {
 	errs := validator.ValidationErrors{}
 
 	if err := validator.ValidateRequired("name", t.Name); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	} else if err := validator.ValidateLength("name", t.Name, 1, 255); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	if err := validator.ValidateRequired("game_type", t.GameType); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	} else if err := validator.ValidateLength("game_type", t.GameType, 1, 50); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	// Валидация статуса
@@ -83,7 +109,9 @@ func (t *Tournament) Validate() error {
 		string(TournamentCancelled),
 	}
 	if err := validator.ValidateEnum("status", string(t.Status), validStatuses); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	// Валидация max_participants
@@ -109,7 +137,9 @@ func (m *Match) Validate() error {
 		string(MatchFailed),
 	}
 	if err := validator.ValidateEnum("status", string(m.Status), validStatuses); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	// Валидация приоритета
@@ -119,7 +149,9 @@ func (m *Match) Validate() error {
 		string(PriorityLow),
 	}
 	if err := validator.ValidateEnum("priority", string(m.Priority), validPriorities); err != nil {
-		errs = append(errs, err.(*validator.ValidationError))
+		if ve, ok := err.(*validator.ValidationError); ok {
+			errs = append(errs, ve)
+		}
 	}
 
 	// Программы не должны быть одинаковыми

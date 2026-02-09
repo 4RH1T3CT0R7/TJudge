@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -77,7 +78,7 @@ func (r *LeaderboardRefresher) refresh() {
 	_, err := r.db.ExecContext(ctx, "SELECT refresh_leaderboards()")
 	if err != nil {
 		// Проверяем, существует ли функция
-		if err == sql.ErrNoRows || isUndefinedFunctionError(err) {
+		if errors.Is(err, sql.ErrNoRows) || isUndefinedFunctionError(err) {
 			r.log.Info("Leaderboard materialized views not yet created, skipping refresh")
 			return
 		}

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -52,7 +53,7 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 func (c *Cache) Get(ctx context.Context, key string) (string, error) {
 	val, err := c.client.Get(ctx, key).Result()
 
-	if err == redis.Nil {
+	if stderrors.Is(err, redis.Nil) {
 		c.metrics.RecordCacheMiss("get")
 		return "", nil
 	}
@@ -124,7 +125,7 @@ func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member stri
 func (c *Cache) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) ([]redis.Z, error) {
 	result, err := c.client.ZRevRangeWithScores(ctx, key, start, stop).Result()
 
-	if err == redis.Nil {
+	if stderrors.Is(err, redis.Nil) {
 		c.metrics.RecordCacheMiss("zrevrange")
 		return []redis.Z{}, nil
 	}
@@ -171,7 +172,7 @@ func (c *Cache) LPush(ctx context.Context, key string, values ...interface{}) er
 // RPop удаляет и возвращает последний элемент списка
 func (c *Cache) RPop(ctx context.Context, key string) (string, error) {
 	val, err := c.client.RPop(ctx, key).Result()
-	if err == redis.Nil {
+	if stderrors.Is(err, redis.Nil) {
 		return "", nil
 	}
 	if err != nil {
@@ -184,7 +185,7 @@ func (c *Cache) RPop(ctx context.Context, key string) (string, error) {
 // BRPop блокирующее удаление последнего элемента из списка
 func (c *Cache) BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error) {
 	result, err := c.client.BRPop(ctx, timeout, keys...).Result()
-	if err == redis.Nil {
+	if stderrors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	if err != nil {
@@ -239,12 +240,52 @@ func (c *Cache) Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 	return c.client.Subscribe(ctx, channels...)
 }
 
+// ReplaceList atomically replaces a list with the given values using MULTI/EXEC pipeline.
+// It deletes the key and then pushes all values back in a single transaction.
+func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) error {
+	pipe := c.client.TxPipeline()
+	pipe.Del(ctx, key)
+	if len(values) > 0 {
+		args := make([]interface{}, len(values))
+		for i, v := range values {
+			args[i] = v
+		}
+		pipe.LPush(ctx, key, args...)
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.log.LogError("Redis ReplaceList failed", err, zap.String("key", key))
+		return err
+	}
+	return nil
+}
+
 // Health проверяет здоровье Redis
 func (c *Cache) Health(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	return c.client.Ping(ctx).Err()
+}
+
+// Eval выполняет Lua скрипт на Redis
+func (c *Cache) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+	result, err := c.client.Eval(ctx, script, keys, args...).Result()
+	if err != nil {
+		c.log.LogError("Redis EVAL failed", err)
+		return nil, err
+	}
+	return result, nil
+}
+
+// Scan итеративно сканирует ключи Redis по паттерну
+func (c *Cache) Scan(ctx context.Context, cursor uint64, pattern string, count int64) ([]string, uint64, error) {
+	keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, count).Result()
+	if err != nil {
+		c.log.LogError("Redis SCAN failed", err, zap.String("pattern", pattern))
+		return nil, 0, err
+	}
+	return keys, nextCursor, nil
 }
 
 // Close закрывает соединение с Redis

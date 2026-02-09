@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,10 @@ type Pool struct {
 	totalWorkers     atomic.Int32
 	matchesProcessed atomic.Int64
 	matchesFailed    atomic.Int64
+
+	// Per-worker cancellation for scale-down support.
+	workerMu      sync.Mutex
+	workerCancels []context.CancelFunc
 }
 
 // NewPool создаёт новый пул воркеров
@@ -102,6 +107,15 @@ func (p *Pool) Stop() {
 
 // spawnWorker создаёт нового воркера
 func (p *Pool) spawnWorker() {
+	// Create a per-worker context derived from the pool context.
+	// This allows individual workers to be cancelled during scale-down
+	// without stopping the entire pool.
+	workerCtx, workerCancel := context.WithCancel(p.ctx)
+
+	p.workerMu.Lock()
+	p.workerCancels = append(p.workerCancels, workerCancel)
+	p.workerMu.Unlock()
+
 	current := p.totalWorkers.Add(1)
 
 	p.wg.Add(1)
@@ -115,38 +129,52 @@ func (p *Pool) spawnWorker() {
 
 		for {
 			select {
-			case <-p.ctx.Done():
+			case <-workerCtx.Done():
 				p.log.Debug("Worker stopped", zap.Int32("worker_id", workerID))
 				return
 			default:
-				p.processNext(workerID)
+			}
+
+			idle := p.processNext(workerCtx, workerID)
+			if idle {
+				// Queue was empty; back off before polling again to avoid
+				// a tight busy-wait loop that wastes CPU.
+				select {
+				case <-workerCtx.Done():
+					p.log.Debug("Worker stopped", zap.Int32("worker_id", workerID))
+					return
+				case <-time.After(100 * time.Millisecond):
+				}
 			}
 		}
 	}()
 }
 
-// processNext обрабатывает следующий матч из очереди
-func (p *Pool) processNext(workerID int32) {
-	// Увеличиваем счётчик активных воркеров
-	p.activeWorkers.Add(1)
-	defer p.activeWorkers.Add(-1)
-
+// processNext обрабатывает следующий матч из очереди.
+// It returns true when the queue was empty (the worker is idle),
+// allowing the caller to back off before the next poll.
+func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool) {
 	// Получаем матч из очереди
-	ctx, cancel := context.WithTimeout(p.ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(workerCtx, 5*time.Second)
 	defer cancel()
 
 	match, err := p.queue.Dequeue(ctx)
 	if err != nil {
 		p.log.LogError("Failed to dequeue match", err, zap.Int32("worker_id", workerID))
 		time.Sleep(time.Second)
-		return
+		return true
 	}
 
 	// Очередь пустая
 	if match == nil {
-		time.Sleep(100 * time.Millisecond)
-		return
+		return true
 	}
+
+	// A match was dequeued -- mark the worker as actively processing.
+	// Only count workers as active when they are actually handling a
+	// match, not while polling an empty queue.
+	p.activeWorkers.Add(1)
+	defer p.activeWorkers.Add(-1)
 
 	// Обрабатываем матч
 	p.log.Info("Processing match",
@@ -159,7 +187,7 @@ func (p *Pool) processNext(workerID int32) {
 	p.metrics.RecordMatchStart()
 
 	// Создаём контекст с таймаутом для обработки
-	processCtx, processCancel := context.WithTimeout(p.ctx, p.config.Timeout)
+	processCtx, processCancel := context.WithTimeout(workerCtx, p.config.Timeout)
 	defer processCancel()
 
 	// Обрабатываем с retry
@@ -186,6 +214,8 @@ func (p *Pool) processNext(workerID int32) {
 		zap.String("status", status),
 		zap.Duration("duration", duration),
 	)
+
+	return false
 }
 
 // processWithRetry обрабатывает матч с повторными попытками
@@ -208,7 +238,7 @@ func (p *Pool) processWithRetry(ctx context.Context, match *domain.Match) error 
 
 		// Если матч не найден в БД - пропускаем без retry
 		// Это означает, что матч или турнир был удалён
-		if err == ErrMatchNotFound {
+		if errors.Is(err, ErrMatchNotFound) {
 			p.log.Info("Match skipped (not found in database)",
 				zap.String("match_id", match.ID.String()),
 			)
@@ -289,8 +319,27 @@ func (p *Pool) scale() {
 		for i := 0; i < toSpawn; i++ {
 			p.spawnWorker()
 		}
+	} else if targetWorkers < currentWorkers {
+		toRemove := currentWorkers - targetWorkers
+		p.log.Info("Scaling down workers",
+			zap.Int("current", currentWorkers),
+			zap.Int("target", targetWorkers),
+			zap.Int64("queue_size", queueSize),
+		)
+
+		p.workerMu.Lock()
+		// Cancel excess workers from the end of the slice.
+		if toRemove > len(p.workerCancels) {
+			toRemove = len(p.workerCancels)
+		}
+		removed := p.workerCancels[len(p.workerCancels)-toRemove:]
+		p.workerCancels = p.workerCancels[:len(p.workerCancels)-toRemove]
+		p.workerMu.Unlock()
+
+		for _, cancelFn := range removed {
+			cancelFn()
+		}
 	}
-	// Для scale down воркеры сами завершатся при ctx.Done()
 }
 
 // metricsMonitor обновляет метрики пула

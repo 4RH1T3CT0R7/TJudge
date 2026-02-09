@@ -47,6 +47,7 @@ type DatabaseConfig struct {
 	User           string        `yaml:"user"`
 	Password       string        `yaml:"password"`
 	Name           string        `yaml:"name"`
+	SSLMode        string        `yaml:"sslmode"`
 	MaxConnections int           `yaml:"max_connections"`
 	MaxIdle        int           `yaml:"max_idle"`
 	MaxLifetime    time.Duration `yaml:"max_lifetime"`
@@ -55,16 +56,16 @@ type DatabaseConfig struct {
 // DSN возвращает строку подключения к PostgreSQL (формат key=value)
 func (c DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		c.Host, c.Port, c.User, c.Password, c.Name,
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode,
 	)
 }
 
 // DSNURL возвращает строку подключения в URL формате (для golang-migrate)
 func (c DatabaseConfig) DSNURL() string {
 	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		c.User, c.Password, c.Host, c.Port, c.Name,
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		c.User, c.Password, c.Host, c.Port, c.Name, c.SSLMode,
 	)
 }
 
@@ -235,6 +236,7 @@ func Load() (*Config, error) {
 			User:           getEnv("DB_USER", "tjudge"),
 			Password:       getEnvOrFile("DB_PASSWORD", "secret"), // Поддержка Docker secrets
 			Name:           getEnv("DB_NAME", "tjudge"),
+			SSLMode:        getEnv("DB_SSLMODE", "disable"),
 			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", 50),
 			MaxIdle:        getEnvInt("DB_MAX_IDLE", 10),
 			MaxLifetime:    getEnvDuration("DB_MAX_LIFETIME", 1*time.Hour),

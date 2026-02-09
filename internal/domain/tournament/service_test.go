@@ -832,7 +832,7 @@ func TestService_Start(t *testing.T) {
 
 func TestService_Complete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, broadcaster, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, broadcaster, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -843,21 +843,24 @@ func TestService_Complete(t *testing.T) {
 			Status:   domain.TournamentActive,
 		}
 
-		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
-		tournamentRepo.On("Update", ctx, mock.AnythingOfType("*domain.Tournament")).Return(nil)
+		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+			Return(nil)
+		// Complete now calls tournamentRepo.GetByID directly (bypassing cache)
+		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
 		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
 
 		err := service.Complete(ctx, tournamentID)
 		require.NoError(t, err)
 
-		tournamentRepo.AssertCalled(t, "Update", ctx, mock.MatchedBy(func(t *domain.Tournament) bool {
+		tournamentRepo.AssertCalled(t, "Update", mock.Anything, mock.MatchedBy(func(t *domain.Tournament) bool {
 			return t.Status == domain.TournamentCompleted && t.EndTime != nil
 		}))
 		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "tournament_update", mock.Anything)
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -868,7 +871,9 @@ func TestService_Complete(t *testing.T) {
 			Status:   domain.TournamentPending,
 		}
 
-		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+			Return(nil)
+		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
 
 		err := service.Complete(ctx, tournamentID)
 		assert.Error(t, err)
@@ -877,6 +882,24 @@ func TestService_Complete(t *testing.T) {
 		require.NotNil(t, appErr)
 		assert.Equal(t, 409, appErr.Code)
 		assert.Contains(t, appErr.Message, "not active")
+	})
+
+	t.Run("lock_error", func(t *testing.T) {
+		service, _, _, _, _, distributedLock, _ := newTestService(t)
+		ctx := context.Background()
+
+		tournamentID := uuid.New()
+
+		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+			Return(fmt.Errorf("redis connection lost"))
+
+		err := service.Complete(ctx, tournamentID)
+		assert.Error(t, err)
+		assert.True(t, errors.IsAppError(err))
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 409, appErr.Code)
+		assert.Contains(t, appErr.Message, "could not complete tournament")
 	})
 }
 
@@ -1564,10 +1587,13 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 		require.NoError(t, err)
 
 		matchRepo.AssertCalled(t, "CreateBatch", ctx, mock.MatchedBy(func(matches []*domain.Match) bool {
-			// Should only create 1 match: newProgram vs otherProgram
-			return len(matches) == 1 &&
-				matches[0].Program1ID == newProgramID &&
-				matches[0].Program2ID == otherProgram.ID
+			// Should create 2 bidirectional matches: newProgram vs otherProgram and otherProgram vs newProgram
+			if len(matches) != 2 {
+				return false
+			}
+			hasForward := matches[0].Program1ID == newProgramID && matches[0].Program2ID == otherProgram.ID
+			hasReverse := matches[1].Program1ID == otherProgram.ID && matches[1].Program2ID == newProgramID
+			return hasForward && hasReverse
 		}))
 		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "matches_created", mock.Anything)
 	})

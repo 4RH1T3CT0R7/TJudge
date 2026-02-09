@@ -33,6 +33,7 @@ func setupTestDB(t *testing.T) *db.DB {
 		User:           getEnv("DB_USER", "tjudge"),
 		Password:       getEnv("DB_PASSWORD", "secret"),
 		Name:           getEnv("DB_NAME", "tjudge"),
+		SSLMode:        getEnv("DB_SSLMODE", "disable"),
 		MaxConnections: 10,
 		MaxIdle:        5,
 		MaxLifetime:    5 * time.Minute,

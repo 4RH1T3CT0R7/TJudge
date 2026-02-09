@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -24,8 +26,9 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 			// Получаем IP адрес клиента
 			ip := getClientIP(r)
 
-			// Bypass rate limiting for localhost (for tests)
-			if isLocalhost(ip) {
+			// Bypass rate limiting for localhost only in non-production environments
+			// (useful for local development and tests).
+			if os.Getenv("ENVIRONMENT") != "production" && isLocalhost(ip) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -38,7 +41,11 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 				log.LogError("Rate limit check failed", err,
 					zap.String("ip", ip),
 				)
-				// В случае ошибки пропускаем запрос (fail open)
+				// Intentional fail-open: when the rate limiter backend (Redis) is
+				// unavailable, we allow the request through to preserve service
+				// availability. Rate limiting is a best-effort protection; dropping
+				// legitimate traffic due to an infrastructure failure is worse than
+				// temporarily losing rate limit enforcement.
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -82,11 +89,18 @@ func isLocalhost(ip string) bool {
 	return false
 }
 
-// getClientIP извлекает IP адрес клиента из запроса
+// getClientIP извлекает IP адрес клиента из запроса.
+// X-Forwarded-For может contain a comma-separated list of IPs when multiple
+// proxies are involved: "client, proxy1, proxy2". The leftmost (first) entry
+// is the original client IP.
 func getClientIP(r *http.Request) string {
 	// Проверяем заголовки прокси
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return ip
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first (leftmost) IP — the original client address.
+		if idx := strings.IndexByte(xff, ','); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
 	}
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
 		return ip

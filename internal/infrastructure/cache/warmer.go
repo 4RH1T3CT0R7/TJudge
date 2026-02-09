@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -32,6 +33,7 @@ type CacheWarmer struct {
 	log              *logger.Logger
 	warmupInterval   time.Duration
 	stopChan         chan struct{}
+	stopOnce         sync.Once
 }
 
 // NewCacheWarmer создаёт новый warmer
@@ -87,7 +89,9 @@ func (cw *CacheWarmer) Start(ctx context.Context) {
 
 // Stop останавливает прогрев кэша
 func (cw *CacheWarmer) Stop() {
-	close(cw.stopChan)
+	cw.stopOnce.Do(func() {
+		close(cw.stopChan)
+	})
 }
 
 // WarmUp выполняет полный прогрев кэша

@@ -6,6 +6,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -39,6 +40,10 @@ func NewService(repo RatingRepository, leaderboardCache *cache.LeaderboardCache,
 
 // ProcessMatchResult обрабатывает результат матча и обновляет рейтинги
 func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, rating1, rating2 int) error {
+	if match.Winner == nil {
+		return errors.ErrValidation.WithMessage("match has no winner")
+	}
+
 	// Вычисляем новые рейтинги
 	newRating1, newRating2, change1, change2 := s.calculator.ProcessMatch(rating1, rating2, *match.Winner)
 
@@ -111,6 +116,10 @@ func (s *Service) updateParticipantRating(
 
 // updateMatchStats обновляет статистику матчей (wins/losses/draws)
 func (s *Service) updateMatchStats(ctx context.Context, match *domain.Match) error {
+	if match.Winner == nil {
+		return errors.ErrValidation.WithMessage("match has no winner")
+	}
+
 	winner := *match.Winner
 
 	// Обновляем статистику для первого игрока

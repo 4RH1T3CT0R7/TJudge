@@ -19,81 +19,51 @@ func NewRateLimiter(cache *Cache) *RateLimiter {
 }
 
 // Allow проверяет, разрешён ли запрос для данного ключа
-// Использует алгоритм fixed window counter
+// Использует атомарный Lua скрипт с алгоритмом fixed window counter
 func (rl *RateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
-	// Получаем текущее количество запросов
-	current, err := rl.cache.Get(ctx, key)
+	script := `
+		local current = redis.call("INCR", KEYS[1])
+		if current == 1 then
+			redis.call("EXPIRE", KEYS[1], ARGV[1])
+		end
+		return current
+	`
+	windowSeconds := int(window.Seconds())
+	result, err := rl.cache.Eval(ctx, script, []string{key}, windowSeconds)
 	if err != nil {
-		return false, fmt.Errorf("failed to get rate limit counter: %w", err)
+		return false, fmt.Errorf("rate limit check failed: %w", err)
 	}
 
-	// Если ключа нет, это первый запрос
-	if current == "" {
-		// Устанавливаем счётчик в 1 с TTL равным окну
-		if err := rl.cache.Set(ctx, key, 1, window); err != nil {
-			return false, fmt.Errorf("failed to set rate limit counter: %w", err)
-		}
-		return true, nil
+	count, ok := result.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected rate limit result type")
 	}
 
-	// Парсим текущее значение
-	count := 0
-	if current != "" {
-		_, _ = fmt.Sscanf(current, "%d", &count)
-	}
-
-	// Проверяем лимит
-	if count >= limit {
-		return false, nil
-	}
-
-	// Увеличиваем счётчик
-	newCount := count + 1
-	if err := rl.cache.Set(ctx, key, newCount, window); err != nil {
-		return false, fmt.Errorf("failed to increment rate limit counter: %w", err)
-	}
-
-	return true, nil
+	return count <= int64(limit), nil
 }
 
-// AllowWithIncr проверяет лимит используя Redis INCR (более эффективно)
+// AllowWithIncr проверяет лимит используя атомарный Lua скрипт с INCRBY
 func (rl *RateLimiter) AllowWithIncr(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
-	// Используем SetNX для установки начального значения
-	set, err := rl.cache.SetNX(ctx, key, 0, window)
+	script := `
+		local current = redis.call("INCRBY", KEYS[1], ARGV[2])
+		if current == tonumber(ARGV[2]) then
+			redis.call("EXPIRE", KEYS[1], ARGV[1])
+		end
+		return current
+	`
+	windowSeconds := int(window.Seconds())
+	increment := 1
+	result, err := rl.cache.Eval(ctx, script, []string{key}, windowSeconds, increment)
 	if err != nil {
-		return false, fmt.Errorf("failed to init rate limit counter: %w", err)
+		return false, fmt.Errorf("rate limit check failed: %w", err)
 	}
 
-	// Если ключ был установлен, устанавливаем TTL
-	if set {
-		if err := rl.cache.Expire(ctx, key, window); err != nil {
-			return false, fmt.Errorf("failed to set rate limit TTL: %w", err)
-		}
+	count, ok := result.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected rate limit result type")
 	}
 
-	// Получаем текущее значение
-	current, err := rl.cache.Get(ctx, key)
-	if err != nil {
-		return false, fmt.Errorf("failed to get rate limit counter: %w", err)
-	}
-
-	count := 0
-	if current != "" {
-		_, _ = fmt.Sscanf(current, "%d", &count)
-	}
-
-	// Проверяем лимит
-	if count >= limit {
-		return false, nil
-	}
-
-	// Инкрементируем
-	newCount := count + 1
-	if err := rl.cache.Set(ctx, key, newCount, window); err != nil {
-		return false, fmt.Errorf("failed to increment rate limit counter: %w", err)
-	}
-
-	return true, nil
+	return count <= int64(limit), nil
 }
 
 // Reset сбрасывает счётчик для ключа

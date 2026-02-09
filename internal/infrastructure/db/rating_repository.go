@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	stderrors "errors"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -161,7 +162,7 @@ func (r *RatingRepository) GetParticipantRating(ctx context.Context, tournamentI
 	`
 
 	err := r.db.QueryRowContext(ctx, query, tournamentID, programID).Scan(&rating)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return 0, errors.ErrNotFound.WithMessage("tournament participant not found")
 	}
 	if err != nil {
@@ -181,7 +182,7 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 
 	// Получаем рейтинг первого участника
 	err = r.db.QueryRowContext(ctx, query, tournamentID, program1ID).Scan(&rating1)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return 0, 0, errors.ErrNotFound.WithMessage("program1 not found in tournament")
 	}
 	if err != nil {
@@ -190,7 +191,7 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 
 	// Получаем рейтинг второго участника
 	err = r.db.QueryRowContext(ctx, query, tournamentID, program2ID).Scan(&rating2)
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return 0, 0, errors.ErrNotFound.WithMessage("program2 not found in tournament")
 	}
 	if err != nil {

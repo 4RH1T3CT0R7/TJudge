@@ -32,6 +32,7 @@ type Client struct {
 	tournamentID uuid.UUID
 	userID       uuid.UUID
 	log          *logger.Logger
+	closed       bool // tracks whether send channel has been closed
 }
 
 // NewClient создаёт нового WebSocket клиента
@@ -99,21 +100,16 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				return
 			}
-			_, _ = w.Write(message)
 
-			// Добавляем queued сообщения в текущий фрейм
+			// Отправляем queued сообщения как отдельные WebSocket фреймы
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				_, _ = w.Write([]byte{'\n'})
-				_, _ = w.Write(<-c.send)
-			}
-
-			if err := w.Close(); err != nil {
-				return
+				if err := c.conn.WriteMessage(websocket.TextMessage, <-c.send); err != nil {
+					return
+				}
 			}
 
 		case <-ticker.C:

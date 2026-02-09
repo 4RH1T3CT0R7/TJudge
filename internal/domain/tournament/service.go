@@ -393,35 +393,51 @@ func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, parti
 
 // Complete завершает турнир
 func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
-	tournament, err := s.GetByID(ctx, tournamentID)
-	if err != nil {
-		return err
-	}
+	// Используем distributed lock для предотвращения одновременного завершения
+	lockKey := fmt.Sprintf("tournament:complete:%s", tournamentID.String())
 
-	if tournament.Status != domain.TournamentActive {
-		return errors.ErrConflict.WithMessage("tournament is not active")
-	}
+	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
+		// Получаем турнир напрямую из БД (минуя кэш) для избежания stale данных
+		tournament, err := s.tournamentRepo.GetByID(ctx, tournamentID)
+		if err != nil {
+			return err
+		}
 
-	now := time.Now()
-	tournament.Status = domain.TournamentCompleted
-	tournament.EndTime = &now
+		if tournament.Status != domain.TournamentActive {
+			return errors.ErrConflict.WithMessage("tournament is not active")
+		}
 
-	if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
-		return fmt.Errorf("failed to complete tournament: %w", err)
-	}
+		now := time.Now()
+		tournament.Status = domain.TournamentCompleted
+		tournament.EndTime = &now
 
-	s.log.Info("Tournament completed",
-		zap.String("tournament_id", tournamentID.String()),
-	)
+		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
+			return fmt.Errorf("failed to complete tournament: %w", err)
+		}
 
-	_ = s.tournamentCache.Invalidate(ctx, tournamentID)
+		s.log.Info("Tournament completed",
+			zap.String("tournament_id", tournamentID.String()),
+		)
 
-	// Отправляем broadcast обновление
-	s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
-		"status":   tournament.Status,
-		"end_time": tournament.EndTime,
+		_ = s.tournamentCache.Invalidate(ctx, tournamentID)
+
+		// Отправляем broadcast обновление
+		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
+			"status":   tournament.Status,
+			"end_time": tournament.EndTime,
+		})
+
+		return nil
 	})
 
+	// Обрабатываем ошибку блокировки
+	if lockErr != nil {
+		if errors.IsAppError(lockErr) {
+			return lockErr
+		}
+		s.log.Error("Lock error during tournament completion", zap.Error(lockErr))
+		return errors.ErrConflict.WithMessage("could not complete tournament, try again later")
+	}
 	return nil
 }
 
@@ -586,7 +602,8 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 				continue
 			}
 
-			match := &domain.Match{
+			// Матч 1: новая программа как Program1, существующая как Program2
+			match1 := &domain.Match{
 				ID:           uuid.New(),
 				TournamentID: req.TournamentID,
 				Program1ID:   req.NewProgramID,
@@ -597,7 +614,7 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 				CreatedAt:    now,
 			}
 
-			if err := match.Validate(); err != nil {
+			if err := match1.Validate(); err != nil {
 				s.log.Error("Invalid match generated",
 					zap.Error(err),
 					zap.String("program1_id", req.NewProgramID.String()),
@@ -606,7 +623,28 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 				continue
 			}
 
-			matches = append(matches, match)
+			// Матч 2: существующая программа как Program1, новая как Program2
+			match2 := &domain.Match{
+				ID:           uuid.New(),
+				TournamentID: req.TournamentID,
+				Program1ID:   prog.ID,
+				Program2ID:   req.NewProgramID,
+				GameType:     tournament.GameType,
+				Status:       domain.MatchPending,
+				Priority:     domain.PriorityHigh, // Новые матчи с высоким приоритетом
+				CreatedAt:    now,
+			}
+
+			if err := match2.Validate(); err != nil {
+				s.log.Error("Invalid reverse match generated",
+					zap.Error(err),
+					zap.String("program1_id", prog.ID.String()),
+					zap.String("program2_id", req.NewProgramID.String()),
+				)
+				continue
+			}
+
+			matches = append(matches, match1, match2)
 		}
 
 		if len(matches) == 0 {

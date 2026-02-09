@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -89,7 +90,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 		&tournament.UpdatedAt,
 	)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("tournament not found")
 	}
 	if err != nil {
@@ -186,6 +187,10 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 		tournaments = append(tournaments, &tournament)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return tournaments, nil
 }
 
@@ -215,7 +220,7 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.To
 		tournament.Version,
 	).Scan(&tournament.UpdatedAt, &tournament.Version)
 
-	if err == sql.ErrNoRows {
+	if stderrors.Is(err, sql.ErrNoRows) {
 		return errors.ErrConcurrentUpdate
 	}
 	if err != nil {
@@ -342,6 +347,10 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 		participants = append(participants, &p)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return participants, nil
 }
 
@@ -387,6 +396,10 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 			return nil, errors.Wrap(err, "failed to scan participant")
 		}
 		participants = append(participants, &p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return participants, nil
@@ -445,6 +458,10 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 		result[gameType] = append(result[gameType], &p)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	return result, nil
 }
 
@@ -492,6 +509,10 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 			return nil, errors.Wrap(err, "failed to scan participant")
 		}
 		participants = append(participants, &p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return participants, nil
@@ -718,6 +739,10 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 		tournaments = append(tournaments, &tournament)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, false, fmt.Errorf("rows iteration error: %w", err)
+	}
+
 	// Определяем, есть ли ещё страницы
 	hasMore := len(tournaments) > pageReq.GetLimit()
 	if hasMore {
@@ -887,6 +912,10 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 		}
 
 		entries = append(entries, &entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return entries, nil
