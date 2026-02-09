@@ -495,3 +495,156 @@ func TestAuthHandler_Me(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
+
+func TestAuthHandler_UpdateProfile(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("success", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		userID := uuid.New()
+		token := "valid_access_token"
+		claims := &auth.Claims{
+			UserID:   userID,
+			Username: "testuser",
+		}
+
+		updateReq := auth.UpdateProfileRequest{
+			Email:    "newemail@example.com",
+			Password: "newpassword123",
+		}
+
+		expectedUser := &domain.User{
+			ID:       userID,
+			Username: "testuser",
+			Email:    "newemail@example.com",
+			Role:     domain.RoleUser,
+		}
+
+		mockService.On("ValidateToken", token).Return(claims, nil)
+		mockService.On("UpdateProfile", mock.Anything, userID.String(), &updateReq).Return(expectedUser, nil)
+
+		body, _ := json.Marshal(updateReq)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response domain.User
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, expectedUser.ID, response.ID)
+		assert.Equal(t, expectedUser.Email, response.Email)
+		assert.Equal(t, expectedUser.Username, response.Username)
+
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("missing auth header", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", nil)
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("invalid auth header", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", nil)
+		req.Header.Set("Authorization", "InvalidFormat")
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		token := "expired_token"
+		mockService.On("ValidateToken", token).Return(nil, errors.ErrUnauthorized.WithMessage("invalid token"))
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("invalid JSON body", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		userID := uuid.New()
+		token := "valid_access_token"
+		claims := &auth.Claims{
+			UserID:   userID,
+			Username: "testuser",
+		}
+
+		mockService.On("ValidateToken", token).Return(claims, nil)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", bytes.NewBufferString("invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		mockService.AssertExpectations(t)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		mockService := new(MockAuthService)
+		handler := NewAuthHandler(mockService, log)
+
+		userID := uuid.New()
+		token := "valid_access_token"
+		claims := &auth.Claims{
+			UserID:   userID,
+			Username: "testuser",
+		}
+
+		updateReq := auth.UpdateProfileRequest{
+			Email: "newemail@example.com",
+		}
+
+		mockService.On("ValidateToken", token).Return(claims, nil)
+		mockService.On("UpdateProfile", mock.Anything, userID.String(), &updateReq).Return(nil, errors.ErrNotFound.WithMessage("user not found"))
+
+		body, _ := json.Marshal(updateReq)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		handler.UpdateProfile(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockService.AssertExpectations(t)
+	})
+}

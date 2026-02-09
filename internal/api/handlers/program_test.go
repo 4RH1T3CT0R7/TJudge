@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -1196,6 +1197,303 @@ func TestProgramHandler_Download(t *testing.T) {
 		handler.Download(w, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+// MockRoundCompletionChecker mocks the RoundCompletionChecker interface
+type MockRoundCompletionChecker struct {
+	mock.Mock
+}
+
+func (m *MockRoundCompletionChecker) IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, tournamentID, gameID)
+	return args.Bool(0), args.Error(1)
+}
+
+// MockMatchExistenceChecker mocks the MatchExistenceChecker interface
+type MockMatchExistenceChecker struct {
+	mock.Mock
+}
+
+func (m *MockMatchExistenceChecker) HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockMatchExistenceChecker) HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockMatchExistenceChecker) GetActiveGameType(ctx context.Context, tournamentID uuid.UUID) (string, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.String(0), args.Error(1)
+}
+
+// createMultipartRequest is a helper that builds a multipart/form-data request
+// with the given fields and an optional file attachment.
+func createMultipartRequest(t *testing.T, fields map[string]string, fileName string, fileContent []byte) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	if fileName != "" && fileContent != nil {
+		part, err := writer.CreateFormFile("file", fileName)
+		require.NoError(t, err)
+		_, err = part.Write(fileContent)
+		require.NoError(t, err)
+	}
+
+	for k, v := range fields {
+		err := writer.WriteField(k, v)
+		require.NoError(t, err)
+	}
+
+	err := writer.Close()
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/programs", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
+}
+
+func TestProgramHandler_FileUpload(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("missing required fields", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+
+		// Multipart form with file but no team_id, tournament_id, game_id
+		req := createMultipartRequest(t, map[string]string{
+			"name": "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid team_id UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       "not-a-uuid",
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid tournament_id UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		gameID := uuid.New()
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": "not-a-uuid",
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid game_id UUID", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       "not-a-uuid",
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("round completed blocks upload", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		mockRoundChecker := new(MockRoundCompletionChecker)
+		handler := &ProgramHandler{
+			programRepo:  mockRepo,
+			uploadDir:    t.TempDir(),
+			maxFileSize:  10 * 1024 * 1024,
+			roundChecker: mockRoundChecker,
+			log:          log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		mockRoundChecker.On("IsRoundCompleted", mock.Anything, tournamentID, gameID).Return(true, nil)
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		mockRoundChecker.AssertExpectations(t)
+	})
+
+	t.Run("running matches blocks upload", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		mockMatchChecker := new(MockMatchExistenceChecker)
+		handler := &ProgramHandler{
+			programRepo:  mockRepo,
+			uploadDir:    t.TempDir(),
+			maxFileSize:  10 * 1024 * 1024,
+			matchChecker: mockMatchChecker,
+			log:          log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		mockMatchChecker.On("HasAnyRunningMatches", mock.Anything, tournamentID).Return(true, nil)
+		mockMatchChecker.On("GetActiveGameType", mock.Anything, tournamentID).Return("prisoners_dilemma", nil)
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		mockMatchChecker.AssertExpectations(t)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		mockRepo.On("GetLatestVersion", mock.Anything, teamID, gameID).Return(2, nil)
+		mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
+			return p.UserID == userID &&
+				p.Name == "My Strategy" &&
+				p.Language == "python" &&
+				p.Version == 3 &&
+				p.TeamID != nil && *p.TeamID == teamID &&
+				p.TournamentID != nil && *p.TournamentID == tournamentID &&
+				p.GameID != nil && *p.GameID == gameID &&
+				p.FilePath != nil && *p.FilePath != ""
+		})).Return(nil)
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response domain.Program
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, "My Strategy", response.Name)
+		assert.Equal(t, "python", response.Language)
+		assert.Equal(t, 3, response.Version)
+		assert.Equal(t, userID, response.UserID)
 
 		mockRepo.AssertExpectations(t)
 	})
