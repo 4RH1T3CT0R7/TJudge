@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
 
 // --- Types ---
-export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin';
+export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin'
+  | 'cry' | 'sleep' | 'fly' | 'attack' | 'shield' | 'teleport' | 'transform';
 
 export interface SpaceInvaderProps {
   size?: 'sm' | 'md' | 'lg';
@@ -12,6 +13,8 @@ export interface SpaceInvaderProps {
   shake?: boolean;
   jump?: boolean;
   speechBubble?: string | null;
+  colorFilter?: string;
+  controlledPose?: InvaderPose | null;
 }
 
 // --- Colors (violet/purple) ---
@@ -149,6 +152,8 @@ export function SpaceInvader({
   shake = false,
   jump = false,
   speechBubble = null,
+  colorFilter,
+  controlledPose = null,
 }: SpaceInvaderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [eyePos, setEyePos] = useState<EyePos>({ col: 3, row: 1 });
@@ -169,6 +174,11 @@ export function SpaceInvader({
   const poseTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const particleIdRef = useRef(0);
+
+  // Sync controlled pose from parent
+  useEffect(() => {
+    if (controlledPose) setPose(controlledPose);
+  }, [controlledPose]);
 
   // Pose change callback
   useEffect(() => {
@@ -461,11 +471,143 @@ export function SpaceInvader({
     </>
   );
 
+  const renderCryPose = () => (
+    <div style={{ position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Tear particles */}
+      {[0, 1].map((i) => (
+        <div
+          key={`tear-${i}`}
+          style={{
+            position: 'absolute',
+            top: '40%',
+            left: i === 0 ? '30%' : '62%',
+            width: '3px',
+            height: '6px',
+            background: '#60a5fa',
+            borderRadius: '50%',
+            animation: 'tear-fall 1s ease-in infinite',
+            animationDelay: `${i * 0.4}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+
+  const renderSleepPose = () => (
+    <div style={{ position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Zzz floating */}
+      {['Z', 'z', 'z'].map((ch, i) => (
+        <span
+          key={`zzz-${i}`}
+          style={{
+            position: 'absolute',
+            top: `${10 + i * 12}%`,
+            right: `${5 - i * 8}%`,
+            fontSize: `${14 - i * 2}px`,
+            color: '#a78bfa',
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            opacity: 0.8,
+            animation: 'zzz-float 2s ease-out infinite',
+            animationDelay: `${i * 0.5}s`,
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </div>
+  );
+
+  const renderFlyPose = () => (
+    <div style={{ animation: 'fly-drift 2s ease-in-out infinite', position: 'relative' }}>
+      {renderHandsUpPose()}
+      {/* Rocket particles (downward) */}
+      {[0, 1, 2].map((i) => (
+        <div
+          key={`flame-${i}`}
+          style={{
+            position: 'absolute',
+            bottom: '-8px',
+            left: `${35 + i * 12}%`,
+            width: '4px',
+            height: '10px',
+            background: i === 1 ? '#f59e0b' : '#ef4444',
+            borderRadius: '0 0 2px 2px',
+            opacity: 0.8,
+            animation: 'particle-fly 0.5s ease-out infinite',
+            animationDelay: `${i * 0.15}s`,
+            '--px': '0px',
+            '--py': '15px',
+          } as React.CSSProperties}
+        />
+      ))}
+    </div>
+  );
+
+  const renderAttackPose = () => (
+    <div style={{ position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Flash effect */}
+      <div
+        style={{
+          position: 'absolute',
+          right: '-20px',
+          top: '45%',
+          color: '#ef4444',
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          fontWeight: 'bold',
+          animation: 'fade-in 0.2s ease-out',
+          whiteSpace: 'pre',
+        }}
+      >
+        {'>>>--->'}
+      </div>
+    </div>
+  );
+
+  const renderShieldPose = () => (
+    <div style={{ animation: 'shield-pulse 1.5s ease-in-out infinite', position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Shield barrier overlay */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: '-6px',
+          border: '2px solid rgba(74,222,128,0.5)',
+          borderRadius: '8px',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
+
+  const renderTeleportPose = () => (
+    <div style={{ animation: 'teleport-glitch 0.8s ease-in-out' }}>
+      {renderIdlePose()}
+    </div>
+  );
+
+  const renderTransformPose = () => (
+    <div style={{ filter: colorFilter || undefined }}>
+      {renderIdlePose()}
+    </div>
+  );
+
   const renderPose = () => {
     switch (pose) {
       case 'handsUp': return renderHandsUpPose();
       case 'dance': return renderDancePose();
       case 'run': return renderRunPose();
+      case 'cry': return renderCryPose();
+      case 'sleep': return renderSleepPose();
+      case 'fly': return renderFlyPose();
+      case 'attack': return renderAttackPose();
+      case 'shield': return renderShieldPose();
+      case 'teleport': return renderTeleportPose();
+      case 'transform': return renderTransformPose();
       case 'spin':
       case 'idle':
       default: return renderIdlePose();

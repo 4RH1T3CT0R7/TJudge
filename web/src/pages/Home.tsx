@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
+import { TerminalQuest } from '../components/TerminalQuest';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -689,8 +690,13 @@ export function Home() {
         <GameShowcase />
       </div>
 
-      {/* Key Concepts */}
+      {/* Interactive Terminal Quest */}
       <div ref={(el) => { sectionsRef.current[0] = el; }} className="reveal-on-scroll">
+        <TerminalQuest />
+      </div>
+
+      {/* Key Concepts */}
+      <div ref={(el) => { sectionsRef.current[1] = el; }} className="reveal-on-scroll">
         <h2 className="text-2xl font-bold text-gray-100 mb-2 text-center">
           Ключевые концепции
         </h2>
@@ -722,7 +728,7 @@ export function Home() {
       </div>
 
       {/* How it works */}
-      <div ref={(el) => { sectionsRef.current[1] = el; }} className="reveal-on-scroll rounded-2xl p-8" style={{ background: 'rgba(17,24,39,0.4)' }}>
+      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll rounded-2xl p-8" style={{ background: 'rgba(17,24,39,0.4)' }}>
         <h2 className="text-2xl font-bold text-gray-100 mb-8 text-center">
           Как это работает
         </h2>
@@ -747,7 +753,7 @@ export function Home() {
       </div>
 
       {/* CTA Section */}
-      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll text-center py-8">
+      <div ref={(el) => { sectionsRef.current[3] = el; }} className="reveal-on-scroll text-center py-8">
         <h2 className="text-2xl font-bold text-gray-100 mb-4">
           Готовы проверить свою стратегию?
         </h2>
