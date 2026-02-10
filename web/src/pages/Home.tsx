@@ -638,7 +638,7 @@ export function Home() {
         </div>
 
         {/* SpaceInvader mascot — bright, interactive, overflow-visible for jump */}
-        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 z-10">
+        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2" style={{ zIndex: 60 }}>
           <SpaceInvader size="md" interactive />
         </div>
 

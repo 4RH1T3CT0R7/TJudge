@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import { SpaceInvader } from '../components/SpaceInvader';
 import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, TournamentGameWithDetails } from '../types';
 
 // Game-specific icons and colors configuration
@@ -58,6 +59,9 @@ export function GameDetail() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadInvaderBubble, setUploadInvaderBubble] = useState<string | null>('// жду код...');
+  const [uploadInvaderShake, setUploadInvaderShake] = useState(false);
+  const [uploadInvaderJump, setUploadInvaderJump] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
@@ -168,6 +172,7 @@ export function GameDetail() {
     setIsUploading(true);
     setUploadError(null);
     setUploadSuccess(false);
+    setUploadInvaderBubble('// загружаю...');
 
     try {
       const formData = new FormData();
@@ -187,8 +192,14 @@ export function GameDetail() {
         setUploadError(`⚠️ Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
       } else {
         setUploadSuccess(true);
+        setUploadInvaderBubble('{ загружено: true }');
+        setUploadInvaderJump(true);
+        setTimeout(() => setUploadInvaderJump(false), 100);
         // Hide success message after 3 seconds
-        setTimeout(() => setUploadSuccess(false), 3000);
+        setTimeout(() => {
+          setUploadSuccess(false);
+          setUploadInvaderBubble('// жду код...');
+        }, 3000);
       }
 
       // Clear file input
@@ -197,6 +208,10 @@ export function GameDetail() {
       }
     } catch (err: unknown) {
       console.error('Upload failed:', err);
+      setUploadInvaderBubble('// ошибка!');
+      setUploadInvaderShake(true);
+      setTimeout(() => setUploadInvaderShake(false), 100);
+      setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
       // Try to extract error message from API response
       if (err && typeof err === 'object' && 'message' in err) {
         setUploadError((err as { message: string }).message);
@@ -213,6 +228,7 @@ export function GameDetail() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
+    setUploadInvaderBubble('// давай сюда!');
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -221,6 +237,7 @@ export function GameDetail() {
     // Only set dragging to false if we're leaving the drop zone entirely
     if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
       setIsDragging(false);
+      setUploadInvaderBubble('// жду код...');
     }
   };
 
@@ -259,7 +276,8 @@ export function GameDetail() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-400">Загрузка игры...</p>
+        <SpaceInvader size="sm" />
+        <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
       </div>
     );
   }
@@ -535,6 +553,17 @@ export function GameDetail() {
 
               {/* Upload Form with Drag & Drop */}
               <div className="space-y-3">
+                {/* Upload invader */}
+                <div className="flex justify-center">
+                  <SpaceInvader
+                    size="sm"
+                    speechBubble={uploadInvaderBubble}
+                    shake={uploadInvaderShake}
+                    jump={uploadInvaderJump}
+                    eyeOverride={isDragging ? 'wide' : null}
+                  />
+                </div>
+
                 <input
                   type="file"
                   ref={fileInputRef}

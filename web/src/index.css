@@ -158,6 +158,13 @@
     ring-offset-color: #0a0a0b;
   }
 
+  /* Inputs use background/border transitions, not ring */
+  input:focus-visible,
+  textarea:focus-visible {
+    @apply ring-0 ring-offset-0;
+    outline: none;
+  }
+
   /* JetBrains Mono for code/mono */
   code, .font-mono, .code-block {
     font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
@@ -198,9 +205,10 @@
     @apply hover:shadow-lg;
   }
   .btn-primary:hover {
-    background: rgba(139,92,246,0.1);
+    background: rgba(139,92,246,0.15);
     border-color: var(--color-primary-400);
-    box-shadow: 0 0 20px rgba(139,92,246,0.4), 0 0 40px rgba(139,92,246,0.15);
+    box-shadow: 0 0 50px rgba(139,92,246,0.25), 0 10px 40px -10px rgba(139,92,246,0.3);
+    transform: translateY(-2px);
   }
   .btn-primary:focus {
     @apply ring-primary-400;
@@ -212,9 +220,11 @@
     border: 1px solid #374151;
   }
   .btn-secondary:hover {
-    background: rgba(156,163,175,0.06);
-    border-color: #6b7280;
+    background: rgba(156,163,175,0.12);
+    border-color: #9ca3af;
     color: #e5e7eb;
+    box-shadow: 0 0 30px rgba(156,163,175,0.15);
+    transform: translateY(-1px);
   }
   .btn-secondary:focus {
     @apply ring-gray-400;
@@ -273,7 +283,7 @@
   }
   .input:focus {
     border-color: var(--color-primary-500);
-    box-shadow: 0 0 0 3px rgba(139,92,246,0.15), var(--glow-primary);
+    background: rgba(139,92,246,0.06);
   }
 
   .input:disabled {
@@ -620,6 +630,28 @@
     opacity: 0;
     transform: translate(var(--px), var(--py)) scale(0);
   }
+}
+
+@keyframes pixel-dissolve {
+  0% { opacity: 1; transform: scale(1); filter: blur(0); }
+  50% { opacity: 0.6; transform: scale(1.1); filter: blur(1px); }
+  100% { opacity: 0; transform: scale(0.3); filter: blur(6px); }
+}
+
+.animate-pixel-dissolve {
+  animation: pixel-dissolve 1s ease-out forwards;
+}
+
+@keyframes login-success {
+  0% { transform: scale(1); opacity: 1; }
+  25% { transform: scale(1.2); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.9; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.animate-login-success {
+  animation: login-success 1.2s ease-in-out forwards;
+  filter: drop-shadow(0 0 30px rgba(139,92,246,0.7)) drop-shadow(0 0 60px rgba(139,92,246,0.4));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
+import { SpaceInvader } from '../components/SpaceInvader';
 import type { Tournament, TournamentStatus } from '../types';
 
 const UsersIcon = () => (
@@ -14,17 +15,6 @@ const statusLabels: Record<TournamentStatus, { label: string; className: string 
   active: { label: 'Активный', className: 'badge badge-green' },
   completed: { label: 'Завершён', className: 'badge badge-gray' },
 };
-
-function TournamentSkeleton() {
-  return (
-    <div className="card">
-      <div className="skeleton h-5 w-40 mb-3" />
-      <div className="skeleton h-4 w-full mb-2" />
-      <div className="skeleton h-4 w-3/4 mb-4" />
-      <div className="skeleton h-4 w-24" />
-    </div>
-  );
-}
 
 export function Tournaments() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -74,16 +64,17 @@ export function Tournaments() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <TournamentSkeleton key={i} />
-          ))}
+        <div className="text-center py-12">
+          <SpaceInvader size="sm" />
+          <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
         </div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-400">
+          <SpaceInvader size="sm" eyeOverride="sad" />
+          <p className="text-gray-400 mt-4">
             {filter ? 'Турниры не найдены' : 'Пока нет доступных турниров'}
           </p>
+          <p className="text-gray-500 text-xs mt-1 font-mono">// скоро появятся</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

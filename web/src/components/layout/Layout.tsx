@@ -1,15 +1,22 @@
+import { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { SpaceInvader } from '../SpaceInvader';
 
 export function Layout() {
   const { user, isAuthenticated, logout } = useAuthStore();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   useDarkMode();
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+  const handleLogout = () => {
+    setIsLoggingOut(true);
+    // Delay actual logout so dissolve animation plays fully before auth state changes
+    setTimeout(async () => {
+      await logout();
+      navigate('/login');
+    }, 1000);
   };
 
   return (
@@ -30,24 +37,26 @@ export function Layout() {
 
             {/* Center navigation */}
             <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
-              <Link
-                to="/tournaments"
-                className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
-                style={{ transitionProperty: 'color, text-shadow' }}
-                onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
-              >
-                Турниры
-              </Link>
               {isAuthenticated && (
-                <Link
-                  to="/games"
-                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
-                  onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
-                >
-                  Игры
-                </Link>
+                <>
+                  <Link
+                    to="/tournaments"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
+                    style={{ transitionProperty: 'color, text-shadow' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                  >
+                    Турниры
+                  </Link>
+                  <Link
+                    to="/games"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
+                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                  >
+                    Игры
+                  </Link>
+                </>
               )}
               {user?.role === 'admin' && (
                 <Link
@@ -64,7 +73,7 @@ export function Layout() {
             {/* Auth section */}
             <div className="flex items-center gap-3 shrink-0 z-10">
               {isAuthenticated ? (
-                <>
+                <div className={`flex items-center gap-3 ${isLoggingOut ? 'animate-pixel-dissolve' : ''}`}>
                   <Link
                     to="/profile"
                     className="text-sm text-gray-400 hover:text-primary-400 transition-all duration-200"
@@ -73,13 +82,17 @@ export function Layout() {
                   >
                     {user?.username}
                   </Link>
+                  {isLoggingOut && (
+                    <SpaceInvader size="sm" eyeOverride="sad" />
+                  )}
                   <button
                     onClick={handleLogout}
+                    disabled={isLoggingOut}
                     className="btn btn-secondary text-sm"
                   >
-                    Выйти
+                    {isLoggingOut ? '// ...' : 'Выйти'}
                   </button>
-                </>
+                </div>
               ) : (
                 <Link to="/login" className="btn btn-primary text-sm">
                   Войти
@@ -91,7 +104,7 @@ export function Layout() {
       </header>
 
       {/* Main content with top padding for fixed header */}
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
+      <main className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
         <Outlet />
       </main>
 

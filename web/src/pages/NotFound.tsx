@@ -14,7 +14,9 @@ export function NotFound() {
         style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.4), transparent 70%)' }}
       />
 
-      <SpaceInvader size="lg" className="mb-8" interactive />
+      <div style={{ zIndex: 60, position: 'relative' }}>
+        <SpaceInvader size="lg" className="mb-8" interactive />
+      </div>
 
       <h1
         className="text-7xl md:text-9xl font-extrabold mb-4"

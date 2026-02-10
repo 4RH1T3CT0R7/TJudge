@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
+import { SpaceInvader } from '../components/SpaceInvader';
 import type { Game } from '../types';
 
 // Game-specific icons and colors configuration
@@ -60,7 +61,8 @@ export function Games() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-400">Загрузка игр...</p>
+        <SpaceInvader size="sm" />
+        <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
       </div>
     );
   }
@@ -86,8 +88,10 @@ export function Games() {
       </div>
 
       {games.length === 0 ? (
-        <div className="text-center py-12 bg-gray-800 rounded-lg">
-          <p className="text-gray-400">Игры пока не добавлены</p>
+        <div className="text-center py-12">
+          <SpaceInvader size="sm" />
+          <p className="text-gray-400 mt-4">Игры пока не добавлены</p>
+          <p className="text-gray-500 text-xs mt-1 font-mono">// скоро появятся</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
