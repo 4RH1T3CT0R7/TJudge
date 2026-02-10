@@ -13,16 +13,16 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950">
-      {/* Glassmorphism Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/50">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#0a0a0b' }}>
+      {/* Glassmorphism Header — no border */}
+      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl" style={{ backgroundColor: 'rgba(10,10,11,0.8)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative flex h-16 items-center justify-between">
-            {/* Logo with glow */}
+            {/* Logo with neon glow */}
             <Link to="/" className="flex items-center shrink-0 z-10">
               <span
                 className="text-xl font-bold text-primary-400"
-                style={{ textShadow: '0 0 20px rgba(168,85,247,0.4)' }}
+                style={{ textShadow: '0 0 20px rgba(139,92,246,0.5)' }}
               >
                 TJudge
               </span>
@@ -32,14 +32,19 @@ export function Layout() {
             <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
               <Link
                 to="/tournaments"
-                className="text-gray-300 hover:text-primary-400 hover:bg-gray-800/70 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
+                style={{ transitionProperty: 'color, text-shadow' }}
+                onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
               >
                 Турниры
               </Link>
               {isAuthenticated && (
                 <Link
                   to="/games"
-                  className="text-gray-300 hover:text-primary-400 hover:bg-gray-800/70 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
+                  onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
                 >
                   Игры
                 </Link>
@@ -47,7 +52,9 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-300 hover:text-primary-400 hover:bg-gray-800/70 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
+                  onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
                 >
                   Админ
                 </Link>
@@ -60,7 +67,9 @@ export function Layout() {
                 <>
                   <Link
                     to="/profile"
-                    className="text-sm text-gray-300 hover:text-primary-400 transition-colors"
+                    className="text-sm text-gray-400 hover:text-primary-400 transition-all duration-200"
+                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.4)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
                   >
                     {user?.username}
                   </Link>
@@ -86,8 +95,8 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {/* Minimal Footer */}
-      <footer className="border-t border-gray-800/50 mt-auto">
+      {/* Minimal Footer — no border */}
+      <footer className="mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-gray-500 text-sm">
@@ -101,7 +110,7 @@ export function Layout() {
             >
               <div className="relative">
                 <div className="absolute inset-0 bg-primary-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="relative w-10 h-10 bg-gray-800 rounded-lg p-1 group-hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-shadow duration-300">
+                <div className="relative w-10 h-10 rounded-lg p-1 transition-shadow duration-300" style={{ backgroundColor: 'rgba(31,41,55,0.8)' }}>
                   <img
                     alt="ITS Tech"
                     width="32"

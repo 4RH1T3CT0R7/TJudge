@@ -7,19 +7,19 @@ export function NotFound() {
       {/* Glow orbs */}
       <div
         className="absolute top-1/4 -left-20 w-72 h-72 rounded-full opacity-15 blur-3xl pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.5), transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent 70%)' }}
       />
       <div
         className="absolute bottom-1/4 -right-20 w-72 h-72 rounded-full opacity-10 blur-3xl pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.4), transparent 70%)' }}
       />
 
-      <SpaceInvader size="lg" className="mb-8" />
+      <SpaceInvader size="lg" className="mb-8" interactive />
 
       <h1
         className="text-7xl md:text-9xl font-extrabold mb-4"
         style={{
-          background: 'linear-gradient(135deg, #c084fc, #a855f7, #7c3aed, #c084fc)',
+          background: 'linear-gradient(135deg, #c4b5fd, #8b5cf6, #6d28d9, #c4b5fd)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',

@@ -95,6 +95,8 @@ export function Tournaments() {
                 key={tournament.id}
                 to={`/tournaments/${tournament.id}`}
                 className="card card-hover block"
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-base font-semibold text-gray-100 line-clamp-1">

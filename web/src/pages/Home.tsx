@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 
@@ -574,7 +574,10 @@ function ConceptCard({
   description: string;
 }) {
   return (
-    <div className="card group hover:shadow-lg hover:shadow-black/30 transition-all">
+    <div className="card group transition-all" style={{ border: 'none' }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+    >
       <div className="flex items-start justify-between mb-3">
         <h3 className="text-lg font-bold text-gray-100">{title}</h3>
         <span className="text-xs font-mono bg-gray-800 px-2 py-1 rounded text-gray-400">
@@ -588,33 +591,55 @@ function ConceptCard({
 }
 
 export function Home() {
+  // Scroll reveal observer
+  const sectionsRef = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('revealed');
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    sectionsRef.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="space-y-16">
-      {/* Hero Section — Dark with glow orbs */}
-      <div className="relative overflow-hidden rounded-3xl bg-gray-900/50 border border-gray-800/50 p-8 md:p-12">
-        {/* Glow orbs */}
-        <div
-          className="absolute -top-20 -left-20 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.6), transparent 70%)' }}
-        />
-        <div
-          className="absolute -bottom-32 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
-        />
+      {/* Hero Section — Dark with glow orbs, no border */}
+      <div className="relative overflow-visible rounded-3xl p-8 md:p-12" style={{ background: 'rgba(17,24,39,0.4)' }}>
+        {/* Clip wrapper for glow orbs and grid (prevents bleed) */}
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          {/* Glow orbs */}
+          <div
+            className="absolute -top-20 -left-20 w-72 h-72 rounded-full opacity-25 blur-3xl"
+            style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.6), transparent 70%)' }}
+          />
+          <div
+            className="absolute -bottom-32 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl"
+            style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
+          />
 
-        {/* Grid pattern */}
-        <svg className="absolute inset-0 w-full h-full opacity-5">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#22c55e" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
+          {/* Grid pattern */}
+          <svg className="absolute inset-0 w-full h-full opacity-5">
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#22c55e" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+        </div>
 
-        {/* SpaceInvader mascot */}
-        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 z-10 opacity-70">
-          <SpaceInvader size="md" />
+        {/* SpaceInvader mascot — bright, interactive, overflow-visible for jump */}
+        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 z-10">
+          <SpaceInvader size="md" interactive />
         </div>
 
         {/* Content */}
@@ -665,7 +690,7 @@ export function Home() {
       </div>
 
       {/* Key Concepts */}
-      <div>
+      <div ref={(el) => { sectionsRef.current[0] = el; }} className="reveal-on-scroll">
         <h2 className="text-2xl font-bold text-gray-100 mb-2 text-center">
           Ключевые концепции
         </h2>
@@ -697,7 +722,7 @@ export function Home() {
       </div>
 
       {/* How it works */}
-      <div className="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-8">
+      <div ref={(el) => { sectionsRef.current[1] = el; }} className="reveal-on-scroll rounded-2xl p-8" style={{ background: 'rgba(17,24,39,0.4)' }}>
         <h2 className="text-2xl font-bold text-gray-100 mb-8 text-center">
           Как это работает
         </h2>
@@ -710,7 +735,8 @@ export function Home() {
             { num: '4', title: 'Следите за матчами', desc: 'Наблюдайте за результатами в реальном времени' },
           ].map((step) => (
             <div key={step.num} className="text-center">
-              <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3"
+                style={{ background: 'transparent', border: '1px solid #7c3aed', color: '#a78bfa' }}>
                 {step.num}
               </div>
               <h3 className="font-semibold text-gray-100 mb-2">{step.title}</h3>
@@ -721,7 +747,7 @@ export function Home() {
       </div>
 
       {/* CTA Section */}
-      <div className="text-center py-8">
+      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll text-center py-8">
         <h2 className="text-2xl font-bold text-gray-100 mb-4">
           Готовы проверить свою стратегию?
         </h2>
