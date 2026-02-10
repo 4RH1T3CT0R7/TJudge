@@ -9,24 +9,24 @@ import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, Tourname
 const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
   dilemma: {
     icon: '🤝',
-    bgClass: 'bg-blue-500',
-    textClass: 'text-blue-600 dark:text-blue-400',
-    borderClass: 'border-blue-500',
-    gradientClass: 'from-blue-500 to-blue-600',
+    bgClass: 'bg-primary-500',
+    textClass: 'text-primary-400',
+    borderClass: 'border-primary-500',
+    gradientClass: 'from-primary-500 to-primary-600',
   },
   tug_of_war: {
     icon: '🪢',
-    bgClass: 'bg-emerald-500',
-    textClass: 'text-emerald-600 dark:text-emerald-400',
-    borderClass: 'border-emerald-500',
-    gradientClass: 'from-emerald-500 to-emerald-600',
+    bgClass: 'bg-green-500',
+    textClass: 'text-green-400',
+    borderClass: 'border-green-500',
+    gradientClass: 'from-green-500 to-green-600',
   },
 };
 
 const defaultGameConfig = {
   icon: '🎮',
   bgClass: 'bg-primary-600',
-  textClass: 'text-primary-600 dark:text-primary-400',
+  textClass: 'text-primary-400',
   borderClass: 'border-primary-500',
   gradientClass: 'from-primary-500 to-primary-600',
 };
@@ -259,7 +259,7 @@ export function GameDetail() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Загрузка игры...</p>
+        <p className="text-gray-400">Загрузка игры...</p>
       </div>
     );
   }
@@ -279,15 +279,15 @@ export function GameDetail() {
     <div>
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
-        <Link to="/tournaments" className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+        <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
           Турниры
         </Link>
-        <span className="mx-2 text-gray-400 dark:text-gray-600">/</span>
-        <Link to={`/tournaments/${tournamentId}`} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+        <span className="mx-2 text-gray-600">/</span>
+        <Link to={`/tournaments/${tournamentId}`} className="text-gray-400 hover:text-gray-300">
           Турнир
         </Link>
-        <span className="mx-2 text-gray-400 dark:text-gray-600">/</span>
-        <span className="text-gray-900 dark:text-gray-200">{game.display_name}</span>
+        <span className="mx-2 text-gray-600">/</span>
+        <span className="text-gray-200">{game.display_name}</span>
       </nav>
 
       {/* Header */}
@@ -297,23 +297,23 @@ export function GameDetail() {
             {getGameConfig(game.name).icon}
           </div>
           <div>
-            <h1 className={`text-2xl font-bold mb-1 dark:text-gray-100`}>{game.display_name}</h1>
-            <p className="text-gray-500 dark:text-gray-400">
-              ID игры: <code className="bg-gray-800 dark:bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
+            <h1 className={`text-2xl font-bold mb-1 text-gray-100`}>{game.display_name}</h1>
+            <p className="text-gray-400">
+              ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
             </p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+      <div className="border-b border-gray-700 mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('rules')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'rules'
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                ? 'border-primary-500 text-primary-400'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
             }`}
           >
             Правила
@@ -322,8 +322,8 @@ export function GameDetail() {
             onClick={() => setActiveTab('leaderboard')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'leaderboard'
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                ? 'border-primary-500 text-primary-400'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
             }`}
           >
             Рейтинг ({leaderboard.length})
@@ -332,8 +332,8 @@ export function GameDetail() {
             onClick={() => setActiveTab('matches')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'matches'
-                ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                ? 'border-primary-500 text-primary-400'
+                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
             }`}
           >
             Матчи ({matches.length})
@@ -346,25 +346,25 @@ export function GameDetail() {
         <div className="lg:col-span-2">
           {activeTab === 'rules' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Правила игры</h2>
+              <h2 className="text-lg font-semibold mb-4 text-gray-100">Правила игры</h2>
               {game.rules ? (
-                <div className="prose max-w-none dark:prose-invert">
+                <div className="prose max-w-none prose-invert">
                   <MarkdownRenderer content={game.rules} />
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400">Правила для этой игры не указаны.</p>
+                <p className="text-gray-400">Правила для этой игры не указаны.</p>
               )}
             </div>
           )}
 
           {activeTab === 'leaderboard' && (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Таблица рейтинга</h2>
+              <h2 className="text-lg font-semibold mb-4 text-gray-100">Таблица рейтинга</h2>
               {leaderboard.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                      <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
                         <th className="pb-2 pr-4">#</th>
                         <th className="pb-2 pr-4">Программа</th>
                         <th className="pb-2 pr-4 text-center">Рейтинг</th>
@@ -376,21 +376,21 @@ export function GameDetail() {
                     </thead>
                     <tbody>
                       {leaderboard.map((entry) => (
-                        <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-2 pr-4 font-medium dark:text-gray-200">{entry.rank}</td>
-                          <td className="py-2 pr-4 dark:text-gray-200">{entry.program_name}</td>
-                          <td className="py-2 pr-4 text-center font-medium dark:text-gray-200">{entry.rating}</td>
-                          <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">{entry.wins}</td>
-                          <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">{entry.losses}</td>
-                          <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">{entry.draws}</td>
-                          <td className="py-2 text-center dark:text-gray-200">{entry.total_games}</td>
+                        <tr key={entry.program_id} className="border-b border-gray-800">
+                          <td className="py-2 pr-4 font-medium text-gray-200">{entry.rank}</td>
+                          <td className="py-2 pr-4 text-gray-200">{entry.program_name}</td>
+                          <td className="py-2 pr-4 text-center font-medium text-gray-200">{entry.rating}</td>
+                          <td className="py-2 pr-4 text-center text-green-400">{entry.wins}</td>
+                          <td className="py-2 pr-4 text-center text-red-400">{entry.losses}</td>
+                          <td className="py-2 pr-4 text-center text-gray-400">{entry.draws}</td>
+                          <td className="py-2 text-center text-gray-200">{entry.total_games}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
+                <p className="text-gray-400">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
               )}
             </div>
           )}
@@ -398,9 +398,9 @@ export function GameDetail() {
           {activeTab === 'matches' && (
             <div className="card">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold dark:text-gray-100">Результаты матчей</h2>
+                <h2 className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
                 {matches.length > 0 && (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-sm text-gray-400">
                     Всего: {totalMatches}
                   </span>
                 )}
@@ -410,7 +410,7 @@ export function GameDetail() {
                   <MatchGroups matches={matches} />
                   {/* Pagination */}
                   {totalMatches > matchesPerPage && (
-                    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-700">
                       <button
                         onClick={() => loadMatchesPage(currentPage - 1)}
                         disabled={currentPage === 1}
@@ -418,7 +418,7 @@ export function GameDetail() {
                       >
                         Назад
                       </button>
-                      <span className="text-sm text-gray-600 dark:text-gray-400 px-4">
+                      <span className="text-sm text-gray-400 px-4">
                         Страница {currentPage} из {Math.ceil(totalMatches / matchesPerPage)}
                       </span>
                       <button
@@ -432,7 +432,7 @@ export function GameDetail() {
                   )}
                 </>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400">Матчи ещё не проводились.</p>
+                <p className="text-gray-400">Матчи ещё не проводились.</p>
               )}
             </div>
           )}
@@ -442,50 +442,50 @@ export function GameDetail() {
         <div className="lg:col-span-1">
           {isAuthenticated && myTeam ? (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Ваша программа</h2>
+              <h2 className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>
 
               {/* Show warning if tournament is completed or not accepting submissions */}
               {tournament?.status === 'completed' && (
-                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                  <div className="flex items-center gap-2 text-gray-400">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
                     </svg>
                     <span className="text-sm font-medium">Турнир завершён</span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 mt-1">
                     Загрузка программ больше не доступна
                   </p>
                 </div>
               )}
 
               {tournament?.status === 'pending' && (
-                <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg border border-yellow-200 dark:border-yellow-700">
-                  <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
+                <div className="mb-4 p-3 bg-yellow-900/30 rounded-lg border border-yellow-700">
+                  <div className="flex items-center gap-2 text-yellow-300">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
                     <span className="text-sm font-medium">Турнир ещё не начался</span>
                   </div>
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                  <p className="text-xs text-yellow-400 mt-1">
                     Вы можете загружать программы до начала турнира
                   </p>
                 </div>
               )}
 
               {gameStatus?.round_completed && (
-                <div className="mb-4 p-3 bg-orange-50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-700">
-                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                <div className="mb-4 p-3 bg-orange-900/30 rounded-lg border border-orange-700">
+                  <div className="flex items-center gap-2 text-orange-300">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
                     </svg>
                     <span className="text-sm font-medium">Раунд завершён</span>
                   </div>
-                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  <p className="text-xs text-orange-400 mt-1">
                     Раунд для этой игры завершён, загрузка новых версий закрыта
                   </p>
                   {gameStatus.round_completed_at && (
-                    <p className="text-xs text-orange-500 dark:text-orange-500 mt-1">
+                    <p className="text-xs text-orange-500 mt-1">
                       Завершён: {new Date(gameStatus.round_completed_at).toLocaleString('ru-RU')}
                     </p>
                   )}
@@ -494,18 +494,18 @@ export function GameDetail() {
 
               {/* Current Program */}
               {currentProgram && (
-                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="mb-4 p-3 bg-gray-800 rounded-lg">
                   <div className="flex justify-between items-start mb-2">
-                    <p className="font-medium dark:text-gray-200">{currentProgram.name}</p>
-                    <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded">
+                    <p className="font-medium text-gray-200">{currentProgram.name}</p>
+                    <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
                       v{currentProgram.version}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-400">
                     Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
                   </p>
                   {currentProgram.error_message && (
-                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300">
+                    <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
                       <strong>Ошибка:</strong> {currentProgram.error_message}
                     </div>
                   )}
@@ -555,8 +555,8 @@ export function GameDetail() {
                     relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
                     ${tournament?.status === 'completed' || gameStatus?.round_completed || isUploading ? 'cursor-not-allowed opacity-50' : ''}
                     ${isDragging
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                      : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      ? 'border-primary-500 bg-primary-900/20'
+                      : 'border-gray-600 hover:border-primary-500 hover:bg-gray-800/50'
                     }
                   `}
                 >
@@ -565,22 +565,22 @@ export function GameDetail() {
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-primary-500">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                       </svg>
-                      <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
+                      <p className="text-sm font-medium text-primary-400">
                         Отпустите файл для загрузки
                       </p>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-400 dark:text-gray-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-500">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                       </svg>
                       <div>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <p className="text-sm font-medium text-gray-300">
                           {isUploading ? 'Загрузка...' : tournament?.status === 'completed' ? 'Загрузка закрыта' : gameStatus?.round_completed ? 'Раунд завершён' : 'Перетащите файл сюда'}
                         </p>
                         {tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            или <span className="text-primary-600 dark:text-primary-400 underline">выберите файл</span>
+                          <p className="text-xs text-gray-400 mt-1">
+                            или <span className="text-primary-400 underline">выберите файл</span>
                           </p>
                         )}
                       </div>
@@ -588,14 +588,14 @@ export function GameDetail() {
                   )}
 
                   {isUploading && (
-                    <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 rounded-lg flex items-center justify-center">
+                    <div className="absolute inset-0 bg-gray-900/50 rounded-lg flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                     </div>
                   )}
                 </div>
 
                 {uploadSuccess && (
-                  <div className="p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
+                  <div className="p-2 bg-green-900/30 border border-green-700 rounded text-sm text-green-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
@@ -604,7 +604,7 @@ export function GameDetail() {
                 )}
 
                 {uploadError && (
-                  <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
+                  <div className="p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                     </svg>
@@ -612,7 +612,7 @@ export function GameDetail() {
                   </div>
                 )}
 
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                <p className="text-xs text-gray-400 text-center">
                   Поддерживаемые форматы: .py, .cpp, .c, .go, .rs, .java
                 </p>
               </div>
@@ -620,7 +620,7 @@ export function GameDetail() {
               {/* Previous Versions */}
               {programs.length > 1 && (
                 <div className="mt-6">
-                  <h3 className="font-medium mb-2 dark:text-gray-100">Предыдущие версии</h3>
+                  <h3 className="font-medium mb-2 text-gray-100">Предыдущие версии</h3>
                   <div className="space-y-2">
                     {programs
                       .filter((p) => p.id !== currentProgram?.id)
@@ -628,11 +628,11 @@ export function GameDetail() {
                       .map((program) => (
                         <div
                           key={program.id}
-                          className="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-800 rounded"
+                          className="flex justify-between items-center text-sm p-2 bg-gray-800 rounded"
                         >
                           <div className="flex flex-col">
-                            <span className="dark:text-gray-100">v{program.version}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-gray-100">v{program.version}</span>
+                            <span className="text-xs text-gray-400">
                               {new Date(program.created_at).toLocaleDateString('ru-RU')}
                             </span>
                           </div>
@@ -653,7 +653,7 @@ export function GameDetail() {
                                 alert('Не удалось скачать программу');
                               }
                             }}
-                            className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 text-xs font-medium"
+                            className="text-primary-400 hover:text-primary-300 text-xs font-medium"
                           >
                             Скачать
                           </button>
@@ -665,17 +665,17 @@ export function GameDetail() {
             </div>
           ) : (
             <div className="card">
-              <h2 className="text-lg font-semibold mb-4 dark:text-gray-100">Отправить программу</h2>
+              <h2 className="text-lg font-semibold mb-4 text-gray-100">Отправить программу</h2>
               {!isAuthenticated ? (
-                <p className="text-gray-500 dark:text-gray-400">
-                  <Link to="/login" className="text-primary-600 dark:text-primary-400 hover:underline">
+                <p className="text-gray-400">
+                  <Link to="/login" className="text-primary-400 hover:underline">
                     Войдите
                   </Link>{' '}
                   чтобы отправить программу.
                 </p>
               ) : (
-                <p className="text-gray-500 dark:text-gray-400">
-                  <Link to={`/tournaments/${tournamentId}`} className="text-primary-600 dark:text-primary-400 hover:underline">
+                <p className="text-gray-400">
+                  <Link to={`/tournaments/${tournamentId}`} className="text-primary-400 hover:underline">
                     Присоединитесь к команде
                   </Link>{' '}
                   чтобы отправить программу.
@@ -713,7 +713,7 @@ function MatchGroups({ matches }: { matches: Match[] }) {
   const groupEntries = Object.entries(groupedMatches);
 
   if (groupEntries.length === 0) {
-    return <p className="text-gray-500 dark:text-gray-400">Матчи ещё не проводились.</p>;
+    return <p className="text-gray-400">Матчи ещё не проводились.</p>;
   }
 
   return (
@@ -754,43 +754,43 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
       case 'failed':
         return 'bg-red-600';
       default:
-        return 'bg-gray-300 dark:bg-gray-600';
+        return 'bg-gray-600';
     }
   };
 
   return (
-    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
       {/* Header with aggregate stats */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <div className="flex items-center gap-4">
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={matches[0]?.program1_id}>
+            <p className="text-sm font-medium text-gray-400 truncate max-w-[120px]" title={matches[0]?.program1_id}>
               Программа 1
             </p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total1}</p>
+            <p className="text-2xl font-bold text-gray-100">{stats.total1}</p>
           </div>
-          <div className="text-center text-gray-400 dark:text-gray-500">
+          <div className="text-center text-gray-500">
             <span className="text-lg">vs</span>
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={matches[0]?.program2_id}>
+            <p className="text-sm font-medium text-gray-400 truncate max-w-[120px]" title={matches[0]?.program2_id}>
               Программа 2
             </p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total2}</p>
+            <p className="text-2xl font-bold text-gray-100">{stats.total2}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-sm">
-          <span className="text-green-600 dark:text-green-400" title="Победы 1">
+          <span className="text-green-400" title="Победы 1">
             W1: {stats.wins1}
           </span>
-          <span className="text-gray-500 dark:text-gray-400" title="Ничьи">
+          <span className="text-gray-400" title="Ничьи">
             D: {stats.draws}
           </span>
-          <span className="text-red-600 dark:text-red-400" title="Победы 2">
+          <span className="text-red-400" title="Победы 2">
             W2: {stats.wins2}
           </span>
-          <span className="text-gray-400 dark:text-gray-500">
+          <span className="text-gray-500">
             ({stats.completed}/{matches.length})
           </span>
         </div>
@@ -805,7 +805,7 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
               onClick={() => setActiveIteration(index)}
               className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
                 activeIteration === index
-                  ? 'ring-2 ring-primary-500 ring-offset-1 dark:ring-offset-gray-800'
+                  ? 'ring-2 ring-primary-500 ring-offset-1 ring-offset-gray-800'
                   : 'hover:scale-105'
               }`}
               title={`Итерация ${index + 1}: ${match.status}${match.winner !== undefined ? ` (Победа ${match.winner || 'Ничья'})` : ''}`}
@@ -820,37 +820,37 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
 
       {/* Active iteration details */}
       {activeMatch && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+        <div className="bg-gray-800 rounded-lg p-3 border border-gray-600">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="text-sm font-medium text-gray-300">
               Итерация {activeIteration + 1}
             </span>
             <MatchStatusBadge status={activeMatch.status} />
           </div>
 
           <div className="flex items-center justify-center gap-4 py-2">
-            <span className={`text-xl font-bold ${activeMatch.winner === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+            <span className={`text-xl font-bold ${activeMatch.winner === 1 ? 'text-green-400' : 'text-gray-300'}`}>
               {activeMatch.score1 ?? '-'}
             </span>
             <span className="text-gray-400">:</span>
-            <span className={`text-xl font-bold ${activeMatch.winner === 2 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+            <span className={`text-xl font-bold ${activeMatch.winner === 2 ? 'text-green-400' : 'text-gray-300'}`}>
               {activeMatch.score2 ?? '-'}
             </span>
           </div>
 
           {activeMatch.winner !== undefined && activeMatch.status === 'completed' && (
-            <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-center text-sm text-gray-400">
               {activeMatch.winner === 0 ? 'Ничья' : `Победа Программы ${activeMatch.winner}`}
             </p>
           )}
 
           {activeMatch.error_message && (
-            <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-300">
+            <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-xs text-red-300">
               {activeMatch.error_message}
             </div>
           )}
 
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+          <p className="text-xs text-gray-500 mt-2 text-center">
             {new Date(activeMatch.created_at).toLocaleString('ru-RU')}
           </p>
         </div>
@@ -863,13 +863,13 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
 function MatchStatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'pending':
-      return <span className="text-xs bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300 px-2 py-0.5 rounded">Ожидание</span>;
+      return <span className="text-xs bg-yellow-900/50 text-yellow-300 px-2 py-0.5 rounded">Ожидание</span>;
     case 'running':
-      return <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded">Выполняется</span>;
+      return <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">Выполняется</span>;
     case 'completed':
-      return <span className="text-xs bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 px-2 py-0.5 rounded">Завершён</span>;
+      return <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">Завершён</span>;
     case 'failed':
-      return <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300 px-2 py-0.5 rounded">Ошибка</span>;
+      return <span className="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded">Ошибка</span>;
     default:
       return null;
   }
@@ -885,11 +885,11 @@ function MarkdownRenderer({ content }: { content: string }) {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       // Headers
-      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-900 dark:text-gray-100">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-900 dark:text-gray-100">$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-6 mb-4 text-gray-900 dark:text-gray-100">$1</h1>')
+      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-100">$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-100">$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-6 mb-4 text-gray-100">$1</h1>')
       // Bold
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-100">$1</strong>')
       // Italic
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       // Code blocks
@@ -897,25 +897,25 @@ function MarkdownRenderer({ content }: { content: string }) {
       // Inline code
       .replace(/`([^`]+)`/g, '<code class="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
       // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-600 dark:text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
       // Unordered lists
-      .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-700 dark:text-gray-300">$1</li>')
+      .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-300">$1</li>')
       // Ordered lists
-      .replace(/^\s*\d+\. (.*$)/gim, '<li class="ml-4 list-decimal text-gray-700 dark:text-gray-300">$1</li>')
+      .replace(/^\s*\d+\. (.*$)/gim, '<li class="ml-4 list-decimal text-gray-300">$1</li>')
       // Paragraphs (double newline)
-      .replace(/\n\n/g, '</p><p class="my-3 text-gray-700 dark:text-gray-300">')
+      .replace(/\n\n/g, '</p><p class="my-3 text-gray-300">')
       // Single newlines to <br>
       .replace(/\n/g, '<br />');
 
     // Wrap in paragraph tags
-    html = '<p class="my-3 text-gray-700 dark:text-gray-300">' + html + '</p>';
+    html = '<p class="my-3 text-gray-300">' + html + '</p>';
 
     return html;
   };
 
   return (
     <div
-      className="markdown-content text-gray-700 dark:text-gray-300"
+      className="markdown-content text-gray-300"
       dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
     />
   );

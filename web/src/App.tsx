@@ -12,6 +12,7 @@ import { GameView } from './pages/GameView';
 import { Games } from './pages/Games';
 import { TeamManagement } from './pages/TeamManagement';
 import { AdminPanel } from './pages/AdminPanel';
+import { NotFound } from './pages/NotFound';
 import { useAuthStore } from './store/authStore';
 
 const queryClient = new QueryClient({
@@ -92,6 +93,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

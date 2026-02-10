@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import { SpaceInvader } from '../components/SpaceInvader';
+import { TerminalTypewriter } from '../components/TerminalTypewriter';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -14,7 +16,6 @@ const ArrowRightIcon = () => (
 );
 
 // Game history and detailed info
-// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameDetails: Record<string, { history: string; facts: string[]; applications: string[] }> = {
   dilemma: {
     history: `Дилемма заключённого — одна из самых знаменитых задач теории игр, придуманная в 1950 году математиками Мерриллом Фладом и Мелвином Дрешером в корпорации RAND. Название придумал Альберт Такер, который представил задачу в виде истории о двух преступниках.
@@ -81,20 +82,20 @@ function GameInfoModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden animate-scale-in"
+        className="relative bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden animate-scale-in border border-gray-800"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b dark:border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{gameIcon}</span>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{gameName}</h2>
+            <h2 className="text-xl font-bold text-gray-100">{gameName}</h2>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -102,24 +103,22 @@ function GameInfoModal({
 
         {/* Content */}
         <div className="px-6 py-5 overflow-y-auto max-h-[calc(85vh-80px)] space-y-6">
-          {/* History */}
           <div>
-            <h3 className="text-sm font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-bold text-primary-400 uppercase tracking-wide mb-3">
               История
             </h3>
-            <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+            <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">
               {details.history}
             </div>
           </div>
 
-          {/* Interesting facts */}
           <div>
-            <h3 className="text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wide mb-3">
               Интересные факты
             </h3>
             <ul className="space-y-2">
               {details.facts.map((fact, i) => (
-                <li key={i} className="flex gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <li key={i} className="flex gap-2 text-sm text-gray-300">
                   <span className="text-amber-500 mt-1">•</span>
                   <span>{fact}</span>
                 </li>
@@ -127,14 +126,13 @@ function GameInfoModal({
             </ul>
           </div>
 
-          {/* Applications */}
           <div>
-            <h3 className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-3">
+            <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wide mb-3">
               Где применяется
             </h3>
             <div className="flex flex-wrap gap-2">
               {details.applications.map((app, i) => (
-                <span key={i} className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                <span key={i} className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded-full">
                   {app}
                 </span>
               ))}
@@ -157,45 +155,42 @@ function PrisonersDilemmaMatrix() {
     'dd': { title: 'Равновесие Нэша', desc: 'Оба проигрывают, но это стабильная стратегия' },
   };
 
-  // Размеры ячеек
   const cellSize = 'w-40 h-28';
   const fontSize = 'text-3xl';
 
   return (
     <div className="w-full h-full flex items-center justify-center">
       <table className="border-separate border-spacing-0">
-        {/* Заголовок: Игрок B */}
         <thead>
           <tr>
             <th></th>
             <th></th>
             <th colSpan={2} className="pb-2">
-              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">Игрок B</span>
+              <span className="text-lg font-bold text-blue-400">Игрок B</span>
             </th>
           </tr>
           <tr>
             <th></th>
             <th></th>
-            <th className="w-40 pb-2 text-center text-base font-semibold text-emerald-600 dark:text-emerald-400">
+            <th className="w-40 pb-2 text-center text-base font-semibold text-emerald-400">
               Сотрудничать
             </th>
-            <th className="w-40 pb-2 text-center text-base font-semibold text-red-600 dark:text-red-400">
+            <th className="w-40 pb-2 text-center text-base font-semibold text-red-400">
               Предать
             </th>
           </tr>
         </thead>
         <tbody>
-          {/* Строка 1: Сотрудничать */}
           <tr>
             <td rowSpan={2} className="pr-2 align-middle">
               <span
-                className="text-lg font-bold text-purple-600 dark:text-purple-400"
+                className="text-lg font-bold text-purple-400"
                 style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
               >
                 Игрок A
               </span>
             </td>
-            <td className="pr-3 text-right text-base font-semibold text-emerald-600 dark:text-emerald-400 align-middle">
+            <td className="pr-3 text-right text-base font-semibold text-emerald-400 align-middle">
               Сотр.
             </td>
             <td
@@ -217,9 +212,8 @@ function PrisonersDilemmaMatrix() {
               </div>
             </td>
           </tr>
-          {/* Строка 2: Предать */}
           <tr>
-            <td className="pr-3 text-right text-base font-semibold text-red-600 dark:text-red-400 align-middle">
+            <td className="pr-3 text-right text-base font-semibold text-red-400 align-middle">
               Пред.
             </td>
             <td
@@ -242,7 +236,6 @@ function PrisonersDilemmaMatrix() {
               <div className="absolute top-2 right-2 w-4 h-4 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
             </td>
           </tr>
-          {/* Подсказка */}
           <tr>
             <td></td>
             <td></td>
@@ -250,11 +243,11 @@ function PrisonersDilemmaMatrix() {
               <div className={`text-center transition-opacity duration-200 h-12 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
                 {hoveredCell ? (
                   <>
-                    <div className="text-base font-semibold text-gray-800 dark:text-gray-200">{cellInfo[hoveredCell].title}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{cellInfo[hoveredCell].desc}</div>
+                    <div className="text-base font-semibold text-gray-200">{cellInfo[hoveredCell].title}</div>
+                    <div className="text-sm text-gray-400">{cellInfo[hoveredCell].desc}</div>
                   </>
                 ) : (
-                  <div className="text-sm text-gray-400 dark:text-gray-500">Наведите на ячейку</div>
+                  <div className="text-sm text-gray-500">Наведите на ячейку</div>
                 )}
               </div>
             </td>
@@ -265,7 +258,7 @@ function PrisonersDilemmaMatrix() {
   );
 }
 
-// Tug of War Visualization - With visual rope
+// Tug of War Visualization
 function TugOfWarVisualization() {
   const [rounds, setRounds] = useState([35, 35, 30]);
   const [opponentRounds] = useState([40, 30, 30]);
@@ -298,7 +291,6 @@ function TugOfWarVisualization() {
 
   const results = getResults();
 
-  // Calculate rope position based on current round result
   const getRopePosition = () => {
     if (!showResults) return 50;
     const force = rounds[currentRound];
@@ -313,49 +305,26 @@ function TugOfWarVisualization() {
     <div className="flex flex-col justify-center space-y-3">
       {/* Rope visualization */}
       <div className="relative h-16 mx-2">
-        {/* Background field */}
         <div className="absolute inset-0 flex">
-          <div className={`flex-1 rounded-l-xl transition-colors ${ropePosition < 45 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-800'}`} />
-          <div className={`flex-1 rounded-r-xl transition-colors ${ropePosition > 55 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-800'}`} />
+          <div className={`flex-1 rounded-l-xl transition-colors ${ropePosition < 45 ? 'bg-blue-900/30' : 'bg-gray-800'}`} />
+          <div className={`flex-1 rounded-r-xl transition-colors ${ropePosition > 55 ? 'bg-red-900/30' : 'bg-gray-800'}`} />
         </div>
 
-        {/* Center line */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-600 -translate-x-1/2" />
+        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-600 -translate-x-1/2" />
 
-        {/* Rope */}
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 60" preserveAspectRatio="none">
-          {/* Rope path */}
           <path
             d={`M 10,30 Q 75,${25 + Math.sin(Date.now() / 500) * 3} 150,30 Q 225,${35 + Math.sin(Date.now() / 500) * 3} 290,30`}
-            fill="none"
-            stroke="#b45309"
-            strokeWidth="6"
-            strokeLinecap="round"
+            fill="none" stroke="#b45309" strokeWidth="6" strokeLinecap="round"
           />
           <path
             d={`M 10,30 Q 75,${25 + Math.sin(Date.now() / 500) * 3} 150,30 Q 225,${35 + Math.sin(Date.now() / 500) * 3} 290,30`}
-            fill="none"
-            stroke="#d97706"
-            strokeWidth="4"
-            strokeLinecap="round"
+            fill="none" stroke="#d97706" strokeWidth="4" strokeLinecap="round"
           />
-          {/* Knot */}
-          <circle
-            cx={ropePosition * 3}
-            cy="30"
-            r="10"
-            fill="#dc2626"
-            className="transition-all duration-500"
-          />
-          <circle
-            cx={ropePosition * 3}
-            cy="30"
-            r="6"
-            fill="#fca5a5"
-          />
+          <circle cx={ropePosition * 3} cy="30" r="10" fill="#dc2626" className="transition-all duration-500" />
+          <circle cx={ropePosition * 3} cy="30" r="6" fill="#fca5a5" />
         </svg>
 
-        {/* Players */}
         <div className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
           A
         </div>
@@ -364,7 +333,6 @@ function TugOfWarVisualization() {
         </div>
       </div>
 
-      {/* Round selector when showing results */}
       {showResults && (
         <div className="flex justify-center gap-2">
           {rounds.map((_, i) => (
@@ -374,7 +342,7 @@ function TugOfWarVisualization() {
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                 currentRound === i
                   ? 'bg-primary-500 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                  : 'bg-gray-700 text-gray-300'
               }`}
             >
               Раунд {i + 1}
@@ -383,20 +351,19 @@ function TugOfWarVisualization() {
         </div>
       )}
 
-      {/* Force allocation */}
       <div className="space-y-2">
         {rounds.map((force, index) => (
           <div key={index} className="flex items-center gap-2 text-xs">
-            <span className="w-14 text-gray-500 dark:text-gray-400">Раунд {index + 1}</span>
-            <button onClick={() => adjustRound(index, -5)} disabled={force <= 0 || showResults} className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-600 disabled:opacity-30">−</button>
-            <div className="w-8 text-center font-bold text-blue-600 dark:text-blue-400">{force}</div>
-            <button onClick={() => adjustRound(index, 5)} disabled={remaining <= 0 || showResults} className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-600 disabled:opacity-30">+</button>
-            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <span className="w-14 text-gray-400">Раунд {index + 1}</span>
+            <button onClick={() => adjustRound(index, -5)} disabled={force <= 0 || showResults} className="w-6 h-6 rounded bg-blue-900/50 text-blue-400 disabled:opacity-30">−</button>
+            <div className="w-8 text-center font-bold text-blue-400">{force}</div>
+            <button onClick={() => adjustRound(index, 5)} disabled={remaining <= 0 || showResults} className="w-6 h-6 rounded bg-blue-900/50 text-blue-400 disabled:opacity-30">+</button>
+            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${force}%` }} />
             </div>
             {showResults && (
               <span className={`w-8 text-center font-bold ${
-                force > opponentRounds[index] ? 'text-green-600' : force < opponentRounds[index] ? 'text-red-600' : 'text-gray-500'
+                force > opponentRounds[index] ? 'text-green-400' : force < opponentRounds[index] ? 'text-red-400' : 'text-gray-500'
               }`}>
                 {force > opponentRounds[index] ? '✓' : force < opponentRounds[index] ? '✗' : '–'}
               </span>
@@ -405,14 +372,12 @@ function TugOfWarVisualization() {
         ))}
       </div>
 
-      {/* Remaining indicator */}
       {!showResults && remaining > 0 && (
-        <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-          Осталось распределить: <span className="font-bold text-blue-600">{remaining}</span>
+        <div className="text-center text-xs text-gray-400">
+          Осталось распределить: <span className="font-bold text-blue-400">{remaining}</span>
         </div>
       )}
 
-      {/* Battle button / Results */}
       <div className="text-center">
         {!showResults ? (
           <button
@@ -420,17 +385,17 @@ function TugOfWarVisualization() {
             disabled={remaining > 0}
             className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold shadow-lg hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100"
           >
-            {remaining > 0 ? `Ещё ${remaining}` : '⚔️ Тянуть!'}
+            {remaining > 0 ? `Ещё ${remaining}` : 'Тянуть!'}
           </button>
         ) : (
           <div className="space-y-1">
             <div className={`text-sm font-bold ${
-              results.winner === 'A' ? 'text-blue-600' : results.winner === 'B' ? 'text-red-600' : 'text-gray-600'
+              results.winner === 'A' ? 'text-blue-400' : results.winner === 'B' ? 'text-red-400' : 'text-gray-400'
             }`}>
-              {results.winner === 'A' ? '🎉 Победа!' : results.winner === 'B' ? '😔 Поражение' : '🤝 Ничья'}
-              <span className="text-gray-400 font-normal ml-2">({results.playerWins}:{results.opponentWins})</span>
+              {results.winner === 'A' ? 'Победа!' : results.winner === 'B' ? 'Поражение' : 'Ничья'}
+              <span className="text-gray-500 font-normal ml-2">({results.playerWins}:{results.opponentWins})</span>
             </div>
-            <button onClick={() => { setShowResults(false); setRounds([35, 35, 30]); }} className="text-xs text-gray-400 hover:text-gray-600 underline">
+            <button onClick={() => { setShowResults(false); setRounds([35, 35, 30]); }} className="text-xs text-gray-500 hover:text-gray-300 underline">
               Заново
             </button>
           </div>
@@ -445,13 +410,12 @@ function GameShowcase() {
   const [activeGame, setActiveGame] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
   const games = [
     {
       id: 'dilemma',
       name: 'Дилемма заключённого',
       icon: '🤝',
-      color: 'blue',
+      color: 'purple',
       description: 'Классическая задача теории игр, демонстрирующая конфликт между индивидуальной и коллективной рациональностью.',
       rules: [
         { text: 'Взаимное сотрудничество', result: 'оба получают по 3 очка', color: 'green' },
@@ -479,35 +443,35 @@ function GameShowcase() {
 
   const currentGame = games[activeGame];
   const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
-    blue: {
-      bg: 'bg-blue-100 dark:bg-blue-900/30',
-      text: 'text-blue-600 dark:text-blue-400',
-      border: 'border-blue-200 dark:border-blue-800',
+    purple: {
+      bg: 'bg-primary-900/30',
+      text: 'text-primary-400',
+      border: 'border-primary-700',
     },
     green: {
-      bg: 'bg-green-100 dark:bg-green-900/30',
-      text: 'text-green-600 dark:text-green-400',
-      border: 'border-green-200 dark:border-green-800',
+      bg: 'bg-green-900/30',
+      text: 'text-green-400',
+      border: 'border-green-700',
     },
-    purple: {
-      bg: 'bg-purple-100 dark:bg-purple-900/30',
-      text: 'text-purple-600 dark:text-purple-400',
-      border: 'border-purple-200 dark:border-purple-800',
+    blue: {
+      bg: 'bg-blue-900/30',
+      text: 'text-blue-400',
+      border: 'border-blue-700',
     },
     orange: {
-      bg: 'bg-orange-100 dark:bg-orange-900/30',
-      text: 'text-orange-600 dark:text-orange-400',
-      border: 'border-orange-200 dark:border-orange-800',
+      bg: 'bg-orange-900/30',
+      text: 'text-orange-400',
+      border: 'border-orange-700',
     },
     yellow: {
-      bg: 'bg-yellow-100 dark:bg-yellow-900/30',
-      text: 'text-yellow-600 dark:text-yellow-400',
-      border: 'border-yellow-200 dark:border-yellow-800',
+      bg: 'bg-yellow-900/30',
+      text: 'text-yellow-400',
+      border: 'border-yellow-700',
     },
     red: {
-      bg: 'bg-red-100 dark:bg-red-900/30',
-      text: 'text-red-600 dark:text-red-400',
-      border: 'border-red-200 dark:border-red-800',
+      bg: 'bg-red-900/30',
+      text: 'text-red-400',
+      border: 'border-red-700',
     },
   };
 
@@ -522,7 +486,7 @@ function GameShowcase() {
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
               activeGame === index
                 ? `${colorClasses[game.color].bg} ${colorClasses[game.color].text} ${colorClasses[game.color].border} border-2 shadow-lg scale-105`
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-2 border-transparent'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border-2 border-transparent'
             }`}
           >
             <span className="text-xl">{game.icon}</span>
@@ -533,7 +497,6 @@ function GameShowcase() {
 
       {/* Game content */}
       <div className="grid md:grid-cols-2 gap-8 items-start">
-        {/* Description */}
         <div className="space-y-4" key={currentGame.id}>
           <div className="flex items-center gap-3">
             <span className="text-4xl">{currentGame.icon}</span>
@@ -542,17 +505,17 @@ function GameShowcase() {
             </h2>
           </div>
 
-          <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+          <p className="text-gray-300 leading-relaxed">
             {currentGame.description}
           </p>
 
           <div className="space-y-3">
             {currentGame.rules.map((rule, index) => (
               <div key={index} className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${colorClasses[rule.color].bg.replace('/30', '')} ${colorClasses[rule.color].text.includes('dark:') ? '' : ''}`}
+                <div className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: rule.color === 'green' ? '#22c55e' : rule.color === 'red' ? '#ef4444' : rule.color === 'yellow' ? '#eab308' : rule.color === 'blue' ? '#3b82f6' : '#a855f7' }}
                 />
-                <span className="text-gray-700 dark:text-gray-300 text-sm">
+                <span className="text-gray-300 text-sm">
                   <strong>{rule.text}</strong> — {rule.result}
                 </span>
               </div>
@@ -565,10 +528,9 @@ function GameShowcase() {
             </p>
           </div>
 
-          {/* Learn more button */}
           <button
             onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors group"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-primary-400 transition-colors group"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -581,14 +543,13 @@ function GameShowcase() {
         </div>
 
         {/* Visualization */}
-        <div className="flex justify-center items-center bg-white dark:bg-gray-800/80 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 transition-all">
+        <div className="flex justify-center items-center bg-gray-800/50 rounded-2xl p-4 border border-gray-700 transition-all">
           <div className="w-full animate-fade-in" key={currentGame.id + '-viz'}>
             {currentGame.visualization}
           </div>
         </div>
       </div>
 
-      {/* Game info modal */}
       <GameInfoModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -613,15 +574,15 @@ function ConceptCard({
   description: string;
 }) {
   return (
-    <div className="card group hover:shadow-lg dark:hover:shadow-black/30 transition-all">
+    <div className="card group hover:shadow-lg hover:shadow-black/30 transition-all">
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h3>
-        <span className="text-xs font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-gray-500 dark:text-gray-400">
+        <h3 className="text-lg font-bold text-gray-100">{title}</h3>
+        <span className="text-xs font-mono bg-gray-800 px-2 py-1 rounded text-gray-400">
           {year}
         </span>
       </div>
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{description}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400">— {author}</p>
+      <p className="text-sm text-gray-300 mb-3">{description}</p>
+      <p className="text-xs text-gray-500">— {author}</p>
     </div>
   );
 }
@@ -629,93 +590,64 @@ function ConceptCard({
 export function Home() {
   return (
     <div className="space-y-16">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-primary-700 to-indigo-800 p-8 md:p-12 text-white">
-        {/* Game Theory Network Background */}
-        <div className="absolute inset-0 overflow-hidden">
-          {/* Grid pattern */}
-          <svg className="absolute inset-0 w-full h-full opacity-5" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
+      {/* Hero Section — Dark with glow orbs */}
+      <div className="relative overflow-hidden rounded-3xl bg-gray-900/50 border border-gray-800/50 p-8 md:p-12">
+        {/* Glow orbs */}
+        <div
+          className="absolute -top-20 -left-20 w-72 h-72 rounded-full opacity-20 blur-3xl pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.6), transparent 70%)' }}
+        />
+        <div
+          className="absolute -bottom-32 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
+        />
 
-          {/* Network nodes and connections */}
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
-            {/* Connection lines */}
-            <g className="opacity-20">
-              <line x1="650" y1="80" x2="720" y2="150" stroke="white" strokeWidth="2" />
-              <line x1="720" y1="150" x2="680" y2="250" stroke="white" strokeWidth="2" />
-              <line x1="680" y1="250" x2="750" y2="320" stroke="white" strokeWidth="2" />
-              <line x1="650" y1="80" x2="580" y2="140" stroke="white" strokeWidth="2" />
-              <line x1="580" y1="140" x2="620" y2="220" stroke="white" strokeWidth="2" />
-              <line x1="620" y1="220" x2="680" y2="250" stroke="white" strokeWidth="2" />
-              <line x1="580" y1="140" x2="520" y2="200" stroke="white" strokeWidth="2" />
-              <line x1="720" y1="150" x2="780" y2="200" stroke="white" strokeWidth="2" />
-            </g>
+        {/* Grid pattern */}
+        <svg className="absolute inset-0 w-full h-full opacity-5">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#22c55e" strokeWidth="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
 
-            {/* Nodes */}
-            <g className="opacity-30">
-              <circle cx="650" cy="80" r="12" fill="white" />
-              <circle cx="720" cy="150" r="16" fill="white" />
-              <circle cx="680" cy="250" r="14" fill="white" />
-              <circle cx="750" cy="320" r="10" fill="white" />
-              <circle cx="580" cy="140" r="10" fill="white" />
-              <circle cx="620" cy="220" r="8" fill="white" />
-              <circle cx="520" cy="200" r="6" fill="white" />
-              <circle cx="780" cy="200" r="8" fill="white" />
-            </g>
-
-            {/* Animated pulsing node */}
-            <circle cx="720" cy="150" r="16" fill="none" stroke="white" strokeWidth="2" opacity="0.4">
-              <animate attributeName="r" values="16;24;16" dur="2s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
-            </circle>
-          </svg>
-
-          {/* Payoff matrix hint */}
-          <div className="absolute bottom-8 right-8 opacity-10 hidden lg:block">
-            <div className="grid grid-cols-2 gap-1 text-4xl font-mono font-bold">
-              <div className="w-16 h-16 bg-white/20 rounded flex items-center justify-center">3,3</div>
-              <div className="w-16 h-16 bg-white/20 rounded flex items-center justify-center">0,5</div>
-              <div className="w-16 h-16 bg-white/20 rounded flex items-center justify-center">5,0</div>
-              <div className="w-16 h-16 bg-white/20 rounded flex items-center justify-center">1,1</div>
-            </div>
-          </div>
-
-          {/* Floating symbols */}
-          <div className="absolute top-12 right-20 text-6xl opacity-10 animate-pulse">∑</div>
-          <div className="absolute bottom-20 right-40 text-5xl opacity-10">∞</div>
-          <div className="absolute top-1/3 right-1/4 text-4xl opacity-10">≠</div>
+        {/* SpaceInvader mascot */}
+        <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 z-10 opacity-70">
+          <SpaceInvader size="md" />
         </div>
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-block px-3 py-1 bg-white/20 rounded-full text-sm font-medium mb-4 backdrop-blur-sm">
+        {/* Content */}
+        <div className="relative z-10 max-w-3xl mx-auto text-center">
+          <div className="inline-block px-3 py-1 bg-primary-500/20 rounded-full text-sm font-medium text-primary-300 mb-4 border border-primary-500/30">
             Теория игр в действии
           </div>
-          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight tracking-tight">
+          <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight tracking-tight text-white">
             Соревнуйтесь в стратегическом мышлении
           </h1>
-          <p className="text-lg md:text-xl text-white/80 mb-8 leading-relaxed">
+          <p className="text-lg text-gray-400 mb-8 leading-relaxed">
             TJudge — платформа для турниров по теории игр.
             Ваши алгоритмы сражаются друг с другом в классических задачах:
             дилемма заключённого, перетягивание каната и другие.
           </p>
 
-          <div className="flex flex-wrap gap-4">
+          {/* Terminal Typewriter */}
+          <div className="my-8">
+            <TerminalTypewriter />
+          </div>
+
+          {/* CTA buttons */}
+          <div className="flex flex-wrap justify-center gap-4">
             <Link
               to="/tournaments"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-primary-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors shadow-lg shadow-black/20"
+              className="btn btn-primary text-lg px-8 py-3"
             >
               <TrophyIcon />
               К турнирам
             </Link>
             <Link
               to="/games"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-colors border border-white/30 backdrop-blur-sm"
+              className="btn btn-secondary text-lg px-8 py-3"
             >
               Правила игр
               <ArrowRightIcon />
@@ -726,7 +658,7 @@ export function Home() {
 
       {/* Game Showcase with tabs */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 text-center">
+        <h2 className="text-2xl font-bold text-gray-100 mb-6 text-center">
           Игры на платформе
         </h2>
         <GameShowcase />
@@ -734,10 +666,10 @@ export function Home() {
 
       {/* Key Concepts */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2 text-center">
+        <h2 className="text-2xl font-bold text-gray-100 mb-2 text-center">
           Ключевые концепции
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 text-center mb-8 max-w-2xl mx-auto">
+        <p className="text-gray-400 text-center mb-8 max-w-2xl mx-auto">
           Теория игр — раздел математики, изучающий стратегические взаимодействия
           между рациональными агентами
         </p>
@@ -765,60 +697,35 @@ export function Home() {
       </div>
 
       {/* How it works */}
-      <div className="bg-gray-100 dark:bg-gray-800/50 rounded-2xl p-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-8 text-center">
+      <div className="bg-gray-900/50 border border-gray-800/50 rounded-2xl p-8">
+        <h2 className="text-2xl font-bold text-gray-100 mb-8 text-center">
           Как это работает
         </h2>
 
         <div className="grid md:grid-cols-4 gap-6">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
-              1
+          {[
+            { num: '1', title: 'Создайте команду', desc: 'Соберите команду или участвуйте индивидуально' },
+            { num: '2', title: 'Напишите стратегию', desc: 'Разработайте алгоритм принятия решений' },
+            { num: '3', title: 'Загрузите программу', desc: 'Отправьте код на платформу для участия' },
+            { num: '4', title: 'Следите за матчами', desc: 'Наблюдайте за результатами в реальном времени' },
+          ].map((step) => (
+            <div key={step.num} className="text-center">
+              <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
+                {step.num}
+              </div>
+              <h3 className="font-semibold text-gray-100 mb-2">{step.title}</h3>
+              <p className="text-sm text-gray-400">{step.desc}</p>
             </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Создайте команду</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Соберите команду или участвуйте индивидуально
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
-              2
-            </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Напишите стратегию</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Разработайте алгоритм принятия решений
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
-              3
-            </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Загрузите программу</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Отправьте код на платформу для участия
-            </p>
-          </div>
-
-          <div className="text-center">
-            <div className="w-12 h-12 bg-primary-600 text-white rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3">
-              4
-            </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Следите за матчами</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Наблюдайте за результатами в реальном времени
-            </p>
-          </div>
+          ))}
         </div>
       </div>
 
       {/* CTA Section */}
       <div className="text-center py-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+        <h2 className="text-2xl font-bold text-gray-100 mb-4">
           Готовы проверить свою стратегию?
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-xl mx-auto">
+        <p className="text-gray-400 mb-6 max-w-xl mx-auto">
           Присоединяйтесь к активным турнирам и соревнуйтесь с другими участниками
         </p>
         <Link

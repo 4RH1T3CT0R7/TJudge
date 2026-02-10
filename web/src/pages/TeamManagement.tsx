@@ -136,7 +136,7 @@ export function TeamManagement() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Загрузка команды...</p>
+        <p className="text-gray-400">Загрузка команды...</p>
       </div>
     );
   }
@@ -144,7 +144,7 @@ export function TeamManagement() {
   if (error || !teamData) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Команда не найдена'}</p>
+        <p className="text-red-400">{error || 'Команда не найдена'}</p>
         <Link to="/tournaments" className="btn btn-secondary mt-4">
           Назад к турнирам
         </Link>
@@ -160,18 +160,18 @@ export function TeamManagement() {
     <div className="max-w-3xl mx-auto">
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
-        <Link to="/tournaments" className="text-gray-500 hover:text-gray-700">
+        <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
           Турниры
         </Link>
-        <span className="mx-2 text-gray-400">/</span>
+        <span className="mx-2 text-gray-600">/</span>
         <Link
           to={`/tournaments/${teamData.tournament_id}`}
-          className="text-gray-500 hover:text-gray-700"
+          className="text-gray-400 hover:text-gray-300"
         >
           Турнир
         </Link>
-        <span className="mx-2 text-gray-400">/</span>
-        <span className="text-gray-900">{teamData.name}</span>
+        <span className="mx-2 text-gray-600">/</span>
+        <span className="text-gray-200">{teamData.name}</span>
       </nav>
 
       {/* Team Header */}
@@ -205,9 +205,9 @@ export function TeamManagement() {
             </div>
           ) : (
             <div>
-              <h1 className="text-2xl font-bold">{teamData.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-100">{teamData.name}</h1>
               {isLeader && (
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
                   Вы капитан
                 </span>
               )}
@@ -221,9 +221,9 @@ export function TeamManagement() {
           )}
         </div>
 
-        <div className="text-sm text-gray-500 space-y-1">
+        <div className="text-sm text-gray-400 space-y-1">
           <p>
-            Код команды: <code className="bg-gray-100 px-2 py-0.5 rounded">{teamData.code}</code>
+            Код команды: <code className="bg-gray-800 text-primary-300 px-2 py-0.5 rounded font-mono">{teamData.code}</code>
           </p>
           <p>Создана: {new Date(teamData.created_at).toLocaleDateString('ru-RU')}</p>
         </div>
@@ -232,7 +232,7 @@ export function TeamManagement() {
       {/* Invite Section */}
       {isLeader && (
         <div className="card mb-6">
-          <h2 className="text-lg font-semibold mb-4">Пригласить участников</h2>
+          <h2 className="text-lg font-semibold mb-4 text-gray-100">Пригласить участников</h2>
 
           {showInvite && inviteLink ? (
             <div className="space-y-3">
@@ -241,16 +241,16 @@ export function TeamManagement() {
                   type="text"
                   value={inviteLink}
                   readOnly
-                  className="input flex-1 bg-gray-50"
+                  className="input flex-1 bg-gray-800"
                 />
                 <button onClick={handleCopyInvite} className="btn btn-primary">
                   {copied ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <p className="text-sm text-gray-500">
-                Код приглашения: <code className="bg-gray-100 px-2 py-0.5 rounded">{inviteCode}</code>
+              <p className="text-sm text-gray-400">
+                Код приглашения: <code className="bg-gray-800 text-primary-300 px-2 py-0.5 rounded font-mono">{inviteCode}</code>
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 Отправьте эту ссылку другим участникам для вступления в команду.
               </p>
             </div>
@@ -264,26 +264,26 @@ export function TeamManagement() {
 
       {/* Members List */}
       <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4">Участники команды ({members.length})</h2>
+        <h2 className="text-lg font-semibold mb-4 text-gray-100">Участники команды ({members.length})</h2>
 
-        <div className="divide-y">
+        <div className="divide-y divide-gray-800">
           {members.map((member) => (
             <div key={member.id} className="py-3 flex justify-between items-center">
               <div>
-                <p className="font-medium">
+                <p className="font-medium text-gray-200">
                   {member.username}
                   {member.id === teamData.leader_id && (
-                    <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                    <span className="ml-2 text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
                       Капитан
                     </span>
                   )}
                   {member.id === user?.id && (
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                    <span className="ml-2 text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">
                       Вы
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-gray-500">{member.email}</p>
+                <p className="text-sm text-gray-400">{member.email}</p>
               </div>
 
               {isLeader && member.id !== user?.id && (
@@ -306,7 +306,7 @@ export function TeamManagement() {
                   ) : (
                     <button
                       onClick={() => setMemberToRemove(member.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="text-red-400 hover:text-red-300 text-sm"
                     >
                       Удалить
                     </button>
@@ -320,12 +320,12 @@ export function TeamManagement() {
 
       {/* Leave Team */}
       {isMember && (
-        <div className="card border-red-200">
-          <h2 className="text-lg font-semibold mb-4 text-red-600">Опасная зона</h2>
+        <div className="card border-red-900/50">
+          <h2 className="text-lg font-semibold mb-4 text-red-400">Опасная зона</h2>
 
           {confirmLeave ? (
             <div className="space-y-3">
-              <p className="text-gray-600">
+              <p className="text-gray-400">
                 {isLeader
                   ? 'Вы капитан команды. Если вы покинете команду, капитанство перейдёт к другому участнику. Если вы последний участник, команда будет удалена.'
                   : 'Вы уверены, что хотите покинуть эту команду?'}

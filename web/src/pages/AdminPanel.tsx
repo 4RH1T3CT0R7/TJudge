@@ -624,7 +624,7 @@ export function AdminPanel() {
   if (user?.role !== 'admin') {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500 dark:text-red-400">Доступ запрещён. Требуются права администратора.</p>
+        <p className="text-red-400">Доступ запрещён. Требуются права администратора.</p>
       </div>
     );
   }
@@ -632,7 +632,7 @@ export function AdminPanel() {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400">Загрузка...</p>
+        <p className="text-gray-400">Загрузка...</p>
       </div>
     );
   }
@@ -646,10 +646,10 @@ export function AdminPanel() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Панель администратора</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-100">Панель администратора</h1>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+      <div className="border-b border-gray-700 mb-6">
         <nav className="-mb-px flex gap-4">
           {tabs.map((tab) => (
             <button
@@ -657,8 +657,8 @@ export function AdminPanel() {
               onClick={() => setActiveTab(tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                  ? 'border-primary-500 text-primary-400'
+                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
               }`}
             >
               {tab.label}
@@ -671,7 +671,7 @@ export function AdminPanel() {
       {activeTab === 'games' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Управление играми</h2>
+            <h2 className="text-lg font-semibold text-gray-100">Управление играми</h2>
             <button onClick={() => setShowGameForm(true)} className="btn btn-primary">
               Добавить игру
             </button>
@@ -680,14 +680,14 @@ export function AdminPanel() {
           {/* Game Form Modal */}
           {showGameForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4 text-gray-100">
                   {editingGame ? 'Редактировать игру' : 'Создать новую игру'}
                 </h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                    <label className="block text-sm font-medium mb-1 text-gray-300">
                       Название (уникальный идентификатор)
                     </label>
                     <input
@@ -700,13 +700,13 @@ export function AdminPanel() {
                       className="input"
                       placeholder="game_name"
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                       Только строчные буквы, цифры и подчёркивания
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Отображаемое название</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-300">Отображаемое название</label>
                     <input
                       type="text"
                       value={gameForm.display_name}
@@ -719,7 +719,7 @@ export function AdminPanel() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Правила (Markdown)</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-300">Правила (Markdown)</label>
                     <textarea
                       value={gameForm.rules}
                       onChange={(e) => setGameForm({ ...gameForm, rules: e.target.value })}
@@ -729,7 +729,7 @@ export function AdminPanel() {
                   </div>
 
                   {gameError && (
-                    <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
+                    <div className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
                       {gameError}
                     </div>
                   )}
@@ -753,7 +753,7 @@ export function AdminPanel() {
 
           {/* Games List */}
           {games.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
               Игры ещё не созданы.
             </div>
           ) : (
@@ -761,12 +761,12 @@ export function AdminPanel() {
               {games.map((game) => (
                 <div key={game.id} className="card flex justify-between items-start">
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{game.display_name}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <h3 className="font-semibold text-gray-100">{game.display_name}</h3>
+                    <p className="text-sm text-gray-400">
                       <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
                     </p>
                     {game.rules && (
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
+                      <p className="text-sm text-gray-300 mt-2 line-clamp-2">
                         {game.rules.substring(0, 150)}...
                       </p>
                     )}
@@ -813,7 +813,7 @@ export function AdminPanel() {
       {activeTab === 'tournaments' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Управление турнирами</h2>
+            <h2 className="text-lg font-semibold text-gray-100">Управление турнирами</h2>
             <button onClick={() => setShowTournamentForm(true)} className="btn btn-primary">
               Создать турнир
             </button>
@@ -822,12 +822,12 @@ export function AdminPanel() {
           {/* Tournament Form Modal */}
           {showTournamentForm && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Создать турнир</h2>
+              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <h2 className="text-xl font-bold mb-4 text-gray-100">Создать турнир</h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Название *</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-300">Название *</label>
                     <input
                       type="text"
                       value={tournamentForm.name}
@@ -840,19 +840,19 @@ export function AdminPanel() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Игры турнира *</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">Игры турнира *</label>
                     {games.length === 0 ? (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-gray-400">
                         Сначала создайте игры во вкладке "Игры"
                       </p>
                     ) : (
                       <div className="space-y-3">
                         {/* Available games */}
-                        <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-700">
+                        <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-600 rounded-lg p-3 bg-gray-700">
                           {games.map((game) => (
                             <label
                               key={game.id}
-                              className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-600 rounded cursor-pointer"
+                              className="flex items-center gap-3 p-2 hover:bg-gray-600 rounded cursor-pointer"
                             >
                               <input
                                 type="checkbox"
@@ -861,8 +861,8 @@ export function AdminPanel() {
                                 className="w-4 h-4 text-primary-600 rounded"
                               />
                               <div>
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{game.display_name}</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">({game.name})</span>
+                                <span className="font-medium text-gray-100">{game.display_name}</span>
+                                <span className="text-xs text-gray-400 ml-2">({game.name})</span>
                               </div>
                             </label>
                           ))}
@@ -871,24 +871,24 @@ export function AdminPanel() {
                         {/* Selected games with order controls */}
                         {selectedGameIds.length > 0 && (
                           <div>
-                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            <p className="text-sm font-medium text-gray-300 mb-2">
                               Порядок игр (раунды будут запускаться в этом порядке):
                             </p>
-                            <div className="space-y-2 border border-primary-200 dark:border-primary-800 rounded-lg p-3 bg-primary-50 dark:bg-primary-900/20">
+                            <div className="space-y-2 border border-primary-800 rounded-lg p-3 bg-primary-900/20">
                               {selectedGameIds.map((gameId, index) => {
                                 const game = games.find(g => g.id === gameId);
                                 if (!game) return null;
                                 return (
                                   <div
                                     key={gameId}
-                                    className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+                                    className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold text-primary-600 dark:text-primary-400 w-6">
+                                      <span className="text-sm font-bold text-primary-400 w-6">
                                         {index + 1}.
                                       </span>
                                       <span className="text-lg">{getGameIcon(game.name)}</span>
-                                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                                      <span className="font-medium text-gray-100">
                                         {game.display_name}
                                       </span>
                                     </div>
@@ -897,7 +897,7 @@ export function AdminPanel() {
                                         type="button"
                                         onClick={() => moveGameUp(index)}
                                         disabled={index === 0}
-                                        className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30"
+                                        className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
                                         title="Вверх"
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -908,7 +908,7 @@ export function AdminPanel() {
                                         type="button"
                                         onClick={() => moveGameDown(index)}
                                         disabled={index === selectedGameIds.length - 1}
-                                        className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30"
+                                        className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
                                         title="Вниз"
                                       >
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -925,14 +925,14 @@ export function AdminPanel() {
                       </div>
                     )}
                     {selectedGameIds.length > 0 && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      <p className="text-xs text-gray-400 mt-1">
                         Выбрано игр: {selectedGameIds.length}
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Описание</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-300">Описание</label>
                     <textarea
                       value={tournamentForm.description}
                       onChange={(e) =>
@@ -945,7 +945,7 @@ export function AdminPanel() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Макс. размер команды</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-300">Макс. размер команды</label>
                       <input
                         type="number"
                         value={tournamentForm.max_team_size}
@@ -962,7 +962,7 @@ export function AdminPanel() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Макс. участников</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-300">Макс. участников</label>
                       <input
                         type="number"
                         value={tournamentForm.max_participants}
@@ -981,7 +981,7 @@ export function AdminPanel() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дата начала</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-300">Дата начала</label>
                       <input
                         type="datetime-local"
                         value={tournamentForm.start_time}
@@ -993,7 +993,7 @@ export function AdminPanel() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Дата окончания</label>
+                      <label className="block text-sm font-medium mb-1 text-gray-300">Дата окончания</label>
                       <input
                         type="datetime-local"
                         value={tournamentForm.end_time}
@@ -1018,13 +1018,13 @@ export function AdminPanel() {
                       }
                       className="w-4 h-4"
                     />
-                    <label htmlFor="is_permanent" className="text-sm text-gray-700 dark:text-gray-300">
+                    <label htmlFor="is_permanent" className="text-sm text-gray-300">
                       Постоянный турнир (всегда принимает новых участников)
                     </label>
                   </div>
 
                   {tournamentError && (
-                    <div className="p-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
+                    <div className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
                       {tournamentError}
                     </div>
                   )}
@@ -1048,11 +1048,11 @@ export function AdminPanel() {
 
           {/* Action Error */}
           {actionError && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+            <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-lg text-sm text-red-400">
               {actionError}
               <button
                 onClick={() => setActionError(null)}
-                className="ml-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                className="ml-2 text-red-400 hover:text-red-300"
               >
                 ✕
               </button>
@@ -1062,30 +1062,30 @@ export function AdminPanel() {
           {/* Tournament Games Management Modal */}
           {managingTournamentId && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  <h2 className="text-xl font-bold text-gray-100">
                     Управление играми турнира
                   </h2>
                   <button
                     onClick={closeTournamentGamesManagement}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    className="text-gray-400 hover:text-gray-300"
                   >
                     ✕
                   </button>
                 </div>
 
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <p className="text-sm text-gray-400 mb-4">
                   Выберите активную игру. Только активная игра может принимать загрузку программ.
                   Кнопка «Запустить раунд» запустит матчи только для активной игры.
                 </p>
 
                 {isLoadingTournamentGames ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-8 text-gray-400">
                     Загрузка игр...
                   </div>
                 ) : managingTournamentGames.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-8 text-gray-400">
                     В этом турнире нет игр
                   </div>
                 ) : (
@@ -1098,8 +1098,8 @@ export function AdminPanel() {
                           key={game.id}
                           className={`p-3 border rounded-lg transition-colors ${
                             isActive
-                              ? 'border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/20'
-                              : 'border-gray-200 dark:border-gray-700'
+                              ? 'border-green-600 bg-green-900/20'
+                              : 'border-gray-700'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -1107,16 +1107,16 @@ export function AdminPanel() {
                               <span className="text-2xl">{getGameIcon(game.name)}</span>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                                  <p className="font-medium text-gray-100">
                                     {game.display_name}
                                   </p>
                                   {isActive && (
-                                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 text-xs rounded-full font-medium">
+                                    <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
                                       Активна
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <p className="text-xs text-gray-400">
                                   {game.name}
                                   {gameStatus && ` • Раунд ${gameStatus.current_round}`}
                                 </p>
@@ -1179,7 +1179,7 @@ export function AdminPanel() {
 
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
               Турниры ещё не созданы.
             </div>
           ) : (
@@ -1188,12 +1188,12 @@ export function AdminPanel() {
                 <div key={tournament.id} className="card">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100">{tournament.name}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <h3 className="font-semibold text-gray-100">{tournament.name}</h3>
+                      <p className="text-sm text-gray-400">
                         Код: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{tournament.code}</code>
                       </p>
                       {tournament.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
+                        <p className="text-sm text-gray-300 mt-1 line-clamp-2">
                           {tournament.description}
                         </p>
                       )}
@@ -1202,16 +1202,16 @@ export function AdminPanel() {
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
                           tournament.status === 'pending'
-                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300'
+                            ? 'bg-yellow-900/50 text-yellow-300'
                             : tournament.status === 'active'
-                            ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                            ? 'bg-green-900/50 text-green-300'
+                            : 'bg-gray-700 text-gray-300'
                         }`}
                       >
                         {statusLabels[tournament.status]}
                       </span>
                       {tournament.is_permanent && (
-                        <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium">
+                        <span className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs font-medium">
                           Постоянный
                         </span>
                       )}
@@ -1296,11 +1296,11 @@ export function AdminPanel() {
       {/* Programs Tab */}
       {activeTab === 'programs' && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Просмотр загруженных программ</h2>
+          <h2 className="text-lg font-semibold text-gray-100 mb-4">Просмотр загруженных программ</h2>
 
           {/* Tournament selector */}
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+            <label className="block text-sm font-medium mb-2 text-gray-300">
               Выберите турнир
             </label>
             <select
@@ -1319,14 +1319,14 @@ export function AdminPanel() {
 
           {/* Loading state */}
           {isLoadingPrograms && (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-gray-400">
               Загрузка программ...
             </div>
           )}
 
           {/* No tournament selected */}
           {!selectedTournamentId && !isLoadingPrograms && (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
               Выберите турнир для просмотра загруженных программ
             </div>
           )}
@@ -1335,7 +1335,7 @@ export function AdminPanel() {
           {selectedTournamentId && !isLoadingPrograms && (
             <div className="space-y-6">
               {tournamentGames.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
                   В этом турнире нет игр
                 </div>
               ) : (
@@ -1363,15 +1363,15 @@ export function AdminPanel() {
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{getGameIcon(game.name)}</span>
                           <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                            <h3 className="font-semibold text-gray-100">
                               {game.display_name}
                             </h3>
                             <div className="flex items-center gap-2">
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                              <p className="text-sm text-gray-400">
                                 {totalPrograms} {totalPrograms === 1 ? 'программа' : totalPrograms < 5 ? 'программы' : 'программ'}
                               </p>
                               {programsWithErrors > 0 && (
-                                <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded-full">
+                                <span className="px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded-full">
                                   {programsWithErrors} с ошибкой
                                 </span>
                               )}
@@ -1381,14 +1381,14 @@ export function AdminPanel() {
                       </div>
 
                       {programs.length === 0 && details.length === 0 ? (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-sm text-gray-400">
                           Программы ещё не загружены
                         </p>
                       ) : programs.length > 0 ? (
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                              <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
                                 <th className="pb-2 pr-4">#</th>
                                 <th className="pb-2 pr-4">Программа</th>
                                 <th className="pb-2 pr-4">Команда</th>
@@ -1405,38 +1405,38 @@ export function AdminPanel() {
                               {programs.map((entry) => {
                                 const error = entry.team_id ? errorLookup.get(entry.team_id) : undefined;
                                 return (
-                                  <tr key={entry.program_id} className="border-b border-gray-100 dark:border-gray-800">
-                                    <td className="py-2 pr-4 font-medium text-gray-600 dark:text-gray-400">{entry.rank}</td>
+                                  <tr key={entry.program_id} className="border-b border-gray-800">
+                                    <td className="py-2 pr-4 font-medium text-gray-400">{entry.rank}</td>
                                     <td className="py-2 pr-4">
-                                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                                      <div className="font-medium text-gray-100">
                                         {entry.program_name}
                                       </div>
-                                      <code className="text-xs text-gray-500 dark:text-gray-500 font-mono">
+                                      <code className="text-xs text-gray-500 font-mono">
                                         {entry.program_id.substring(0, 8)}...
                                       </code>
                                     </td>
-                                    <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                    <td className="py-2 pr-4 text-gray-300">
                                       {entry.team_name || '-'}
                                     </td>
-                                    <td className="py-2 pr-4 text-center font-bold text-gray-900 dark:text-gray-100">
+                                    <td className="py-2 pr-4 text-center font-bold text-gray-100">
                                       {entry.rating}
                                     </td>
-                                    <td className="py-2 pr-4 text-center text-green-600 dark:text-green-400">
+                                    <td className="py-2 pr-4 text-center text-green-400">
                                       {entry.wins}
                                     </td>
-                                    <td className="py-2 pr-4 text-center text-red-600 dark:text-red-400">
+                                    <td className="py-2 pr-4 text-center text-red-400">
                                       {entry.losses}
                                     </td>
-                                    <td className="py-2 pr-4 text-center text-gray-500 dark:text-gray-400">
+                                    <td className="py-2 pr-4 text-center text-gray-400">
                                       {entry.draws}
                                     </td>
-                                    <td className="py-2 pr-4 text-center text-gray-600 dark:text-gray-300">
+                                    <td className="py-2 pr-4 text-center text-gray-300">
                                       {entry.total_games}
                                     </td>
                                     <td className="py-2 pr-4">
                                       {error ? (
                                         <div className="group relative">
-                                          <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded cursor-help">
+                                          <span className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded cursor-help">
                                             Ошибка
                                           </span>
                                           <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
@@ -1444,7 +1444,7 @@ export function AdminPanel() {
                                           </div>
                                         </div>
                                       ) : (
-                                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                        <span className="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">
                                           OK
                                         </span>
                                       )}
@@ -1452,7 +1452,7 @@ export function AdminPanel() {
                                     <td className="py-2">
                                       <button
                                         onClick={() => handleDownloadProgram(entry.program_id, entry.program_name)}
-                                        className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 text-sm"
+                                        className="text-primary-400 hover:text-primary-300 text-sm"
                                         title="Скачать программу"
                                       >
                                         ⬇️ Скачать
@@ -1469,7 +1469,7 @@ export function AdminPanel() {
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr className="text-left text-sm text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                              <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
                                 <th className="pb-2 pr-4">Программа</th>
                                 <th className="pb-2 pr-4">Версия</th>
                                 <th className="pb-2 pr-4">Язык</th>
@@ -1479,25 +1479,25 @@ export function AdminPanel() {
                             </thead>
                             <tbody>
                               {details.map((prog) => (
-                                <tr key={prog.id} className="border-b border-gray-100 dark:border-gray-800">
+                                <tr key={prog.id} className="border-b border-gray-800">
                                   <td className="py-2 pr-4">
-                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                    <div className="font-medium text-gray-100">
                                       {prog.name}
                                     </div>
-                                    <code className="text-xs text-gray-500 dark:text-gray-500 font-mono">
+                                    <code className="text-xs text-gray-500 font-mono">
                                       {prog.id.substring(0, 8)}...
                                     </code>
                                   </td>
-                                  <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                  <td className="py-2 pr-4 text-gray-300">
                                     v{prog.version}
                                   </td>
-                                  <td className="py-2 pr-4 text-gray-600 dark:text-gray-300">
+                                  <td className="py-2 pr-4 text-gray-300">
                                     {prog.language}
                                   </td>
                                   <td className="py-2 pr-4">
                                     {prog.error_message ? (
                                       <div className="group relative">
-                                        <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded cursor-help">
+                                        <span className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded cursor-help">
                                           Ошибка
                                         </span>
                                         <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
@@ -1505,7 +1505,7 @@ export function AdminPanel() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded">
+                                      <span className="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">
                                         OK
                                       </span>
                                     )}
@@ -1513,7 +1513,7 @@ export function AdminPanel() {
                                   <td className="py-2">
                                     <button
                                       onClick={() => handleDownloadProgram(prog.id, prog.name)}
-                                      className="text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 text-sm"
+                                      className="text-primary-400 hover:text-primary-300 text-sm"
                                       title="Скачать программу"
                                     >
                                       ⬇️ Скачать
@@ -1538,7 +1538,7 @@ export function AdminPanel() {
       {activeTab === 'system' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Состояние системы</h2>
+            <h2 className="text-lg font-semibold text-gray-100">Состояние системы</h2>
             <button
               onClick={loadSystemData}
               disabled={isLoadingSystem}
@@ -1549,88 +1549,88 @@ export function AdminPanel() {
           </div>
 
           {systemError && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-400">
+            <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
               {systemError}
             </div>
           )}
 
           {isLoadingSystem && !queueStats && !matchStats ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-gray-400">
               Загрузка данных системы...
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
               {/* Queue Stats Card */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                   <span className="text-xl">📊</span>
                   Очередь матчей
                 </h3>
                 {queueStats ? (
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                      <span className="text-gray-600 dark:text-gray-400">Всего в очереди</span>
-                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{queueStats.total}</span>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-700">
+                      <span className="text-gray-400">Всего в очереди</span>
+                      <span className="text-2xl font-bold text-gray-100">{queueStats.total}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3 pt-2">
                       <div className="text-center">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Высокий</div>
-                        <div className="text-lg font-semibold text-red-600 dark:text-red-400">{queueStats.high}</div>
+                        <div className="text-xs text-gray-400 mb-1">Высокий</div>
+                        <div className="text-lg font-semibold text-red-400">{queueStats.high}</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Средний</div>
-                        <div className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">{queueStats.medium}</div>
+                        <div className="text-xs text-gray-400 mb-1">Средний</div>
+                        <div className="text-lg font-semibold text-yellow-400">{queueStats.medium}</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Низкий</div>
-                        <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">{queueStats.low}</div>
+                        <div className="text-xs text-gray-400 mb-1">Низкий</div>
+                        <div className="text-lg font-semibold text-blue-400">{queueStats.low}</div>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                  <p className="text-gray-400">Нет данных</p>
                 )}
               </div>
 
               {/* Match Stats Card */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                   <span className="text-xl">🎮</span>
                   Статистика матчей
                 </h3>
                 {matchStats ? (
                   <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                      <span className="text-gray-600 dark:text-gray-400">Всего матчей</span>
-                      <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{matchStats.total}</span>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-700">
+                      <span className="text-gray-400">Всего матчей</span>
+                      <span className="text-2xl font-bold text-gray-100">{matchStats.total}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">Ожидают</span>
-                        <span className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded font-medium">{matchStats.pending}</span>
+                        <span className="text-gray-400">Ожидают</span>
+                        <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded font-medium">{matchStats.pending}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">Выполняются</span>
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded font-medium">{matchStats.running}</span>
+                        <span className="text-gray-400">Выполняются</span>
+                        <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded font-medium">{matchStats.running}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">Завершены</span>
-                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-medium">{matchStats.completed}</span>
+                        <span className="text-gray-400">Завершены</span>
+                        <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded font-medium">{matchStats.completed}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">С ошибкой</span>
-                        <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded font-medium">{matchStats.failed}</span>
+                        <span className="text-gray-400">С ошибкой</span>
+                        <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded font-medium">{matchStats.failed}</span>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                  <p className="text-gray-400">Нет данных</p>
                 )}
               </div>
 
               {/* System Metrics Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                   <span className="text-xl">💻</span>
                   Нагрузка сервера
                 </h3>
@@ -1638,19 +1638,19 @@ export function AdminPanel() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* CPU */}
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
                         <span>🔧</span> CPU
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
-                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                          <span className="text-xs font-semibold inline-block text-gray-400">
                             {systemMetrics.cpu.usage_percent.toFixed(1)}%
                           </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-gray-400">
                             {systemMetrics.cpu.cores} ядер
                           </span>
                         </div>
-                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.cpu.usage_percent, 100)}%` }}
                             className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
@@ -1664,7 +1664,7 @@ export function AdminPanel() {
                         </div>
                       </div>
                       {systemMetrics.cpu.model_name && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={systemMetrics.cpu.model_name}>
+                        <p className="text-xs text-gray-400 truncate" title={systemMetrics.cpu.model_name}>
                           {systemMetrics.cpu.model_name}
                         </p>
                       )}
@@ -1672,19 +1672,19 @@ export function AdminPanel() {
 
                     {/* Memory */}
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
                         <span>🧠</span> Память
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
-                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                          <span className="text-xs font-semibold inline-block text-gray-400">
                             {systemMetrics.memory.used_percent.toFixed(1)}%
                           </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-gray-400">
                             {formatBytes(systemMetrics.memory.used)} / {formatBytes(systemMetrics.memory.total)}
                           </span>
                         </div>
-                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.memory.used_percent, 100)}%` }}
                             className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
@@ -1697,26 +1697,26 @@ export function AdminPanel() {
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-gray-400">
                         Свободно: {formatBytes(systemMetrics.memory.free)}
                       </p>
                     </div>
 
                     {/* Disk */}
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
                         <span>💾</span> Диск ({systemMetrics.disk.path})
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
-                          <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                          <span className="text-xs font-semibold inline-block text-gray-400">
                             {systemMetrics.disk.used_percent.toFixed(1)}%
                           </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-gray-400">
                             {formatBytes(systemMetrics.disk.used)} / {formatBytes(systemMetrics.disk.total)}
                           </span>
                         </div>
-                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                        <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.disk.used_percent, 100)}%` }}
                             className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
@@ -1729,19 +1729,19 @@ export function AdminPanel() {
                           />
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-xs text-gray-400">
                         Свободно: {formatBytes(systemMetrics.disk.free)}
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400">Нет данных</p>
+                  <p className="text-gray-400">Нет данных</p>
                 )}
 
                 {/* Temperature sensors */}
                 {systemMetrics && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  <div className="mt-6 pt-4 border-t border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
                       <span>🌡️</span> Температура
                     </div>
                     {systemMetrics.temperature && systemMetrics.temperature.length > 0 ? (
@@ -1751,10 +1751,10 @@ export function AdminPanel() {
                             key={idx}
                             className={`px-3 py-2 rounded-lg text-sm ${
                               temp.temperature > 80
-                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                ? 'bg-red-900/30 text-red-400'
                                 : temp.temperature > 60
-                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                ? 'bg-yellow-900/30 text-yellow-400'
+                                : 'bg-green-900/30 text-green-400'
                             }`}
                           >
                             <span className="font-medium">{temp.temperature.toFixed(1)}°C</span>
@@ -1763,7 +1763,7 @@ export function AdminPanel() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-gray-400">
                         Датчики температуры недоступны на этой системе (macOS не поддерживает)
                       </p>
                     )}
@@ -1772,26 +1772,26 @@ export function AdminPanel() {
 
                 {/* Go runtime info */}
                 {systemMetrics && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  <div className="mt-6 pt-4 border-t border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
                       <span>🐹</span> Go Runtime
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Версия:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.version}</span>
+                        <span className="text-gray-400">Версия:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.go.version}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Горутины:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.goroutines}</span>
+                        <span className="text-gray-400">Горутины:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.go.goroutines}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Heap:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{formatBytes(systemMetrics.go.heap_alloc)}</span>
+                        <span className="text-gray-400">Heap:</span>
+                        <span className="ml-2 font-medium text-gray-100">{formatBytes(systemMetrics.go.heap_alloc)}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">GC:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.go.num_gc} циклов</span>
+                        <span className="text-gray-400">GC:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.go.num_gc} циклов</span>
                       </div>
                     </div>
                   </div>
@@ -1799,26 +1799,26 @@ export function AdminPanel() {
 
                 {/* Host info */}
                 {systemMetrics && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  <div className="mt-4 pt-4 border-t border-gray-700">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
                       <span>🖥️</span> Система
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Хост:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.hostname}</span>
+                        <span className="text-gray-400">Хост:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.host.hostname}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">ОС:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.platform} {systemMetrics.host.platform_version}</span>
+                        <span className="text-gray-400">ОС:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.host.platform} {systemMetrics.host.platform_version}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Архитектура:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{systemMetrics.host.arch}</span>
+                        <span className="text-gray-400">Архитектура:</span>
+                        <span className="ml-2 font-medium text-gray-100">{systemMetrics.host.arch}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500 dark:text-gray-400">Uptime:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">{formatUptime(systemMetrics.host.uptime)}</span>
+                        <span className="text-gray-400">Uptime:</span>
+                        <span className="ml-2 font-medium text-gray-100">{formatUptime(systemMetrics.host.uptime)}</span>
                       </div>
                     </div>
                   </div>
@@ -1828,7 +1828,7 @@ export function AdminPanel() {
               {/* Failed Matches Card */}
               {failedMatches.length > 0 && (
                 <div className="card md:col-span-2">
-                  <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                     <span className="text-xl">⚠️</span>
                     Провалившиеся матчи ({failedMatches.length})
                   </h3>
@@ -1836,22 +1836,22 @@ export function AdminPanel() {
                     {failedMatches.map((match) => (
                       <div
                         key={match.id}
-                        className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                        className="p-3 bg-red-900/20 border border-red-800 rounded-lg"
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          <div className="text-sm font-medium text-gray-100">
                             Матч {match.id.substring(0, 8)}...
                           </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-gray-400">
                             {match.game_type}
                           </span>
                         </div>
                         {match.error_message && (
-                          <div className="text-sm text-red-700 dark:text-red-400 font-mono bg-red-100 dark:bg-red-900/30 p-2 rounded text-xs whitespace-pre-wrap break-words">
+                          <div className="text-sm text-red-400 font-mono bg-red-900/30 p-2 rounded text-xs whitespace-pre-wrap break-words">
                             {match.error_message}
                           </div>
                         )}
-                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="mt-2 text-xs text-gray-400">
                           Код ошибки: {match.error_code || 'N/A'}
                         </div>
                       </div>
@@ -1862,7 +1862,7 @@ export function AdminPanel() {
 
               {/* Queue Actions Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                   <span className="text-xl">🛠</span>
                   Управление очередью
                 </h3>
@@ -1882,7 +1882,7 @@ export function AdminPanel() {
                     {isClearing ? 'Очистка...' : 'Очистить всю очередь'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                <p className="text-xs text-gray-400 mt-3">
                   «Удалить невалидные матчи» — удаляет из очереди матчи, которые не существуют в базе данных.
                   «Очистить всю очередь» — удаляет все матчи из очереди (требует подтверждения).
                 </p>
