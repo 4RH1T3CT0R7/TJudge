@@ -7,6 +7,16 @@ export default defineConfig({
   build: {
     outDir: '../internal/web/dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-data': ['axios', '@tanstack/react-query', 'zustand'],
+          'vendor-markdown': ['react-markdown', 'remark-gfm'],
+        },
+      },
+    },
   },
   server: {
     proxy: {

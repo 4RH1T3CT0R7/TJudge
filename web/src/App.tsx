@@ -1,19 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/layout/Layout';
-import { Home } from './pages/Home';
-import { Login } from './pages/Login';
-import { Profile } from './pages/Profile';
-import { Tournaments } from './pages/Tournaments';
-import { TournamentDetail } from './pages/TournamentDetail';
-import { GameDetail } from './pages/GameDetail';
-import { GameView } from './pages/GameView';
-import { Games } from './pages/Games';
-import { TeamManagement } from './pages/TeamManagement';
-import { AdminPanel } from './pages/AdminPanel';
-import { NotFound } from './pages/NotFound';
+import { PageLoader } from './components/PageLoader';
 import { useAuthStore } from './store/authStore';
+
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Tournaments = lazy(() => import('./pages/Tournaments').then(m => ({ default: m.Tournaments })));
+const TournamentDetail = lazy(() => import('./pages/TournamentDetail').then(m => ({ default: m.TournamentDetail })));
+const GameDetail = lazy(() => import('./pages/GameDetail').then(m => ({ default: m.GameDetail })));
+const GameView = lazy(() => import('./pages/GameView').then(m => ({ default: m.GameView })));
+const Games = lazy(() => import('./pages/Games').then(m => ({ default: m.Games })));
+const TeamManagement = lazy(() => import('./pages/TeamManagement').then(m => ({ default: m.TeamManagement })));
+const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,42 +62,44 @@ function AppContent() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
-        <Route path="login" element={<Login />} />
-        <Route path="tournaments" element={<Tournaments />} />
-        <Route path="tournaments/:id" element={<TournamentDetail />} />
-        <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
-        <Route path="games" element={<Games />} />
-        <Route path="games/:id" element={<GameView />} />
-        <Route
-          path="teams/:id"
-          element={
-            <ProtectedRoute>
-              <TeamManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="admin"
-          element={
-            <ProtectedRoute>
-              <AdminPanel />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="login" element={<Login />} />
+          <Route path="tournaments" element={<Tournaments />} />
+          <Route path="tournaments/:id" element={<TournamentDetail />} />
+          <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
+          <Route path="games" element={<Games />} />
+          <Route path="games/:id" element={<GameView />} />
+          <Route
+            path="teams/:id"
+            element={
+              <ProtectedRoute>
+                <TeamManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <ProtectedRoute>
+                <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 

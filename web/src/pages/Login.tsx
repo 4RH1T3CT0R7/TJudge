@@ -142,8 +142,8 @@ export function Login() {
   return (
     <div className="flex-1 flex flex-col">
       <div className="w-full max-w-sm mx-auto my-auto py-2">
-        {/* Invader */}
-        <div className={`flex justify-center mb-3 ${loginSuccess ? 'animate-login-success' : ''}`}>
+        {/* Invader — z-index above fixed header (z-50) so speech bubble isn't clipped */}
+        <div className={`flex justify-center mb-3 relative z-[60] ${loginSuccess ? 'animate-login-success' : ''}`}>
           <SpaceInvader
             size="md"
             interactive
