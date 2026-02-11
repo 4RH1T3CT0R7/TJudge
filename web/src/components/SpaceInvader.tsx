@@ -471,26 +471,38 @@ export function SpaceInvader({
     </>
   );
 
+  // Effect size scales with invader size
+  const effectFontSize = size === 'sm' ? '10px' : size === 'lg' ? '16px' : '12px';
+
   const renderCryPose = () => (
-    <div style={{ position: 'relative' }}>
-      {renderIdlePose()}
-      {/* Tear particles */}
-      {[0, 1].map((i) => (
-        <div
-          key={`tear-${i}`}
-          style={{
-            position: 'absolute',
-            top: '40%',
-            left: i === 0 ? '30%' : '62%',
-            width: '3px',
-            height: '6px',
-            background: '#60a5fa',
-            borderRadius: '50%',
-            animation: 'tear-fall 1s ease-in infinite',
-            animationDelay: `${i * 0.4}s`,
-          }}
-        />
-      ))}
+    <div>
+      {IDLE_TOP.flatMap((line, i) => [bodyLine(line, `ct${i}a`), bodyLine(line, `ct${i}b`)])}
+      {[0, 1, 2].flatMap((r) => [eyeRow(r, `ce${r}a`), eyeRow(r, `ce${r}b`)])}
+      {/* Zero-height anchor right below eye rows — tears fall from here */}
+      <div style={{ position: 'relative', height: 0, overflow: 'visible', zIndex: 10 }}>
+        {[
+          { left: '35%', delay: '0s', ch: ';' },
+          { left: '63%', delay: '0s', ch: ';' },
+          { left: '35%', delay: '0.7s', ch: ',' },
+          { left: '63%', delay: '0.7s', ch: ',' },
+          { left: '36%', delay: '1.4s', ch: '.' },
+          { left: '64%', delay: '1.4s', ch: '.' },
+        ].map((t, i) => (
+          <span key={`tear-${i}`} style={{
+            position: 'absolute', top: 0, left: t.left,
+            color: '#60a5fa', fontFamily: "'Courier New', Consolas, monospace",
+            fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
+            textShadow: '0 0 6px rgba(96,165,250,0.7)',
+            animation: 'tear-fall 1.4s ease-in infinite',
+            animationDelay: t.delay, pointerEvents: 'none',
+          }}>{t.ch}</span>
+        ))}
+      </div>
+      {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ca${i}a`), bodyLine(line, `ca${i}b`)])}
+      {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `cm${i}a`), bodyLine(line, `cm${i}b`)])}
+      <div style={{ animation: 'tentacle-wiggle 2s ease-in-out infinite' }}>
+        {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `cl${i}a`), bodyLine(line, `cl${i}b`)])}
+      </div>
     </div>
   );
 
@@ -523,25 +535,34 @@ export function SpaceInvader({
   const renderFlyPose = () => (
     <div style={{ animation: 'fly-drift 2s ease-in-out infinite', position: 'relative' }}>
       {renderHandsUpPose()}
-      {/* Rocket particles (downward) */}
-      {[0, 1, 2].map((i) => (
-        <div
+      {/* ASCII flame exhaust */}
+      {[
+        { left: '35%', delay: '0s', ch: '^', color: '#ef4444' },
+        { left: '47%', delay: '0.15s', ch: '*', color: '#f59e0b' },
+        { left: '59%', delay: '0.3s', ch: '^', color: '#ef4444' },
+      ].map((f, i) => (
+        <span
           key={`flame-${i}`}
           style={{
             position: 'absolute',
-            bottom: '-8px',
-            left: `${35 + i * 12}%`,
-            width: '4px',
-            height: '10px',
-            background: i === 1 ? '#f59e0b' : '#ef4444',
-            borderRadius: '0 0 2px 2px',
-            opacity: 0.8,
+            bottom: '-0.8em',
+            left: f.left,
+            color: f.color,
+            fontFamily: "'Courier New', Consolas, monospace",
+            fontSize: effectFontSize,
+            fontWeight: 'bold',
+            lineHeight: 1,
+            textShadow: `0 0 6px ${f.color}80`,
+            opacity: 0.9,
             animation: 'particle-fly 0.5s ease-out infinite',
-            animationDelay: `${i * 0.15}s`,
+            animationDelay: f.delay,
             '--px': '0px',
             '--py': '15px',
+            pointerEvents: 'none',
           } as React.CSSProperties}
-        />
+        >
+          {f.ch}
+        </span>
       ))}
     </div>
   );
@@ -569,18 +590,33 @@ export function SpaceInvader({
   );
 
   const renderShieldPose = () => (
-    <div style={{ animation: 'shield-pulse 1.5s ease-in-out infinite', position: 'relative' }}>
+    <div style={{
+      animation: 'shield-pulse 1.5s ease-in-out infinite',
+      position: 'relative',
+      borderRadius: '8px',
+      padding: '2px',
+    }}>
       {renderIdlePose()}
-      {/* Shield barrier overlay */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: '-6px',
-          border: '2px solid rgba(74,222,128,0.5)',
-          borderRadius: '8px',
-          pointerEvents: 'none',
-        }}
-      />
+      {/* ASCII shield brackets */}
+      <span style={{
+        position: 'absolute', top: '50%', left: '-1.5em', transform: 'translateY(-50%)',
+        color: '#4ade80', fontFamily: "'Courier New', Consolas, monospace",
+        fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
+        textShadow: '0 0 8px rgba(74,222,128,0.7)', pointerEvents: 'none',
+      }}>[</span>
+      <span style={{
+        position: 'absolute', top: '50%', right: '-1.5em', transform: 'translateY(-50%)',
+        color: '#4ade80', fontFamily: "'Courier New', Consolas, monospace",
+        fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
+        textShadow: '0 0 8px rgba(74,222,128,0.7)', pointerEvents: 'none',
+      }}>]</span>
+      {/* Shield border overlay */}
+      <div style={{
+        position: 'absolute', inset: '-4px', borderRadius: '8px',
+        border: '1.5px solid rgba(74,222,128,0.4)',
+        pointerEvents: 'none',
+        animation: 'shield-border-pulse 1.5s ease-in-out infinite',
+      }} />
     </div>
   );
 

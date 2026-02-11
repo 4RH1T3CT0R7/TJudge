@@ -109,18 +109,24 @@ function TypingLine({ line, onDone }: { line: TerminalLine; onDone?: () => void 
 
 function TabPopup({ matches, selected }: { matches: string[]; selected: number }) {
   if (matches.length === 0) return null;
+  const maxVisible = 8;
+  const start = Math.max(0, Math.min(selected - 3, matches.length - maxVisible));
+  const end = Math.min(matches.length, start + maxVisible);
+  const visible = matches.slice(start, end);
+
   return (
-    <div className="absolute bottom-full left-0 mb-1 bg-gray-800 border border-gray-700 rounded-lg p-2 text-xs max-w-sm z-20">
-      {matches.slice(0, 8).map((m, i) => (
+    <div className="mb-1 bg-gray-800 border border-gray-700 rounded-lg p-2 text-xs max-w-sm">
+      {start > 0 && <div className="text-gray-600 px-2 mb-0.5">...</div>}
+      {visible.map((m, i) => (
         <div
           key={m}
-          className={`px-2 py-0.5 rounded ${i === selected ? 'bg-primary-600 text-white' : 'text-gray-400'}`}
+          className={`px-2 py-0.5 rounded ${start + i === selected ? 'bg-primary-600 text-white' : 'text-gray-400'}`}
         >
           {m}
         </div>
       ))}
-      {matches.length > 8 && (
-        <div className="text-gray-600 px-2 mt-1">+{matches.length - 8} more</div>
+      {end < matches.length && (
+        <div className="text-gray-600 px-2 mt-0.5">...ещё {matches.length - end}</div>
       )}
     </div>
   );
@@ -140,16 +146,16 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom (also when tab popup appears)
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [state.terminalLines]);
+  }, [state.terminalLines, tabMatches]);
 
   // Focus input on click anywhere in terminal
   const focusInput = useCallback(() => {
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   }, []);
 
   // Handle history navigation from state
@@ -173,6 +179,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
         } else if (matches.length > 1) {
           setTabMatches(matches);
           setTabIndex(0);
+          setInput(matches[0]);
         }
       } else {
         // Cycle through matches
@@ -268,8 +275,11 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
           </div>
         )}
 
+        {/* Tab completion popup — in flow above input to avoid clipping by overflow container */}
+        <TabPopup matches={tabMatches} selected={tabIndex} />
+
         {/* Input line */}
-        <div className="flex items-center gap-1 mt-1 relative">
+        <div className="flex items-center gap-1 mt-1">
           <span className="text-green-500 select-none">$</span>
           <div className="flex-1 relative">
             {/* Syntax-highlighted overlay */}
@@ -286,10 +296,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
               className="w-full bg-transparent text-transparent caret-green-400 outline-none font-mono text-sm leading-6 pl-1"
               spellCheck={false}
               autoComplete="off"
-              autoFocus
             />
-            {/* Tab completion popup */}
-            <TabPopup matches={tabMatches} selected={tabIndex} />
           </div>
           {!input && <span className="terminal-cursor text-green-400">_</span>}
         </div>

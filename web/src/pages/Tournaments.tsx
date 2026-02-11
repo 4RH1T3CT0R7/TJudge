@@ -69,12 +69,15 @@ export function Tournaments() {
           <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
         </div>
       ) : tournaments.length === 0 ? (
-        <div className="text-center py-12">
-          <SpaceInvader size="sm" eyeOverride="sad" />
-          <p className="text-gray-400 mt-4">
+        <div className="text-center py-16">
+          <div className="relative inline-block">
+            <SpaceInvader size="md" controlledPose="cry" eyeOverride="sad" speechBubble="// пусто..." />
+          </div>
+          <p className="text-gray-400 mt-6 text-xl">
             {filter ? 'Турниры не найдены' : 'Пока нет доступных турниров'}
           </p>
-          <p className="text-gray-500 text-xs mt-1 font-mono">// скоро появятся</p>
+          <p className="text-gray-600 text-base mt-2 font-mono">{'> ожидание новых турниров...'}</p>
+          <p className="text-gray-700 text-sm mt-1 font-mono">// создайте первый турнир в панели админа</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

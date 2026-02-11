@@ -80,14 +80,15 @@ export function Login() {
 
     try {
       await login(username, password);
+      clearTimeout(speechTimerRef.current);
       setSpeechBubble('<3');
       setJumpInvader(true);
       setTimeout(() => setJumpInvader(false), 700);
       setTimeout(() => {
         setSpeechBubble('{ доступ: "открыт" }');
         setLoginSuccess(true);
-      }, 900);
-      setTimeout(() => navigate('/tournaments'), 2200);
+      }, 500);
+      setTimeout(() => navigate('/'), 1400);
     } catch {
       setError('// неверный логин или пароль');
       clearTimeout(errorTimerRef.current);

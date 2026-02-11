@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 import { TerminalQuest } from '../components/TerminalQuest';
+import { PixelGrid } from '../components/PixelGrid';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -592,6 +593,7 @@ function ConceptCard({
 }
 
 export function Home() {
+  const heroRef = useRef<HTMLDivElement>(null);
   // Scroll reveal observer
   const sectionsRef = useRef<(HTMLDivElement | null)[]>([]);
   useEffect(() => {
@@ -614,7 +616,7 @@ export function Home() {
   return (
     <div className="space-y-16">
       {/* Hero Section — Dark with glow orbs, no border */}
-      <div className="relative overflow-visible rounded-3xl p-8 md:p-12" style={{ background: 'rgba(17,24,39,0.4)' }}>
+      <div ref={heroRef} className="relative overflow-visible rounded-3xl p-8 md:p-12" style={{ background: 'rgba(17,24,39,0.4)' }}>
         {/* Clip wrapper for glow orbs and grid (prevents bleed) */}
         <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
           {/* Glow orbs */}
@@ -626,6 +628,9 @@ export function Home() {
             className="absolute -bottom-32 right-1/4 w-96 h-96 rounded-full opacity-15 blur-3xl"
             style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
           />
+
+          {/* Pixel grid dots */}
+          <PixelGrid heroRef={heroRef} />
 
           {/* Grid pattern */}
           <svg className="absolute inset-0 w-full h-full opacity-5">
