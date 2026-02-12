@@ -1,16 +1,19 @@
 # Multi-stage build для tjudge-cli
-# Stage 1: Сборка Rust приложения
-FROM rust:1.85-alpine AS builder
+# Stage 1: Сборка Rust приложения (Debian-based — musl/Alpine падает с SIGBUS на Apple Silicon)
+FROM rust:1.85-bookworm AS builder
 
-# Устанавливаем необходимые зависимости для сборки
-RUN apk add --no-cache musl-dev git
+RUN apt-get update && apt-get install -y --no-install-recommends git musl-tools && rm -rf /var/lib/apt/lists/*
+
+# Добавляем musl target для статической линковки (совместимость с Alpine runtime)
+RUN rustup target add $(uname -m)-unknown-linux-musl
 
 # Клонируем tjudge-cli
 WORKDIR /build
 RUN git clone --depth 1 https://github.com/bmstu-itstech/tjudge-cli.git .
 
-# Собираем в release режиме (для native архитектуры)
-RUN cargo build --release
+# Собираем статический бинарник для musl (работает на Alpine)
+RUN cargo build --release --target $(uname -m)-unknown-linux-musl \
+    && cp target/$(uname -m)-unknown-linux-musl/release/tjudge-cli /usr/local/bin/tjudge-cli
 
 # Stage 2: Runtime образ с поддержкой всех языков
 FROM alpine:3.19
@@ -50,7 +53,7 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
 RUN adduser -D -H -s /sbin/nologin tjudge
 
 # Копируем бинарник tjudge-cli
-COPY --from=builder /build/target/release/tjudge-cli /usr/local/bin/tjudge-cli
+COPY --from=builder /usr/local/bin/tjudge-cli /usr/local/bin/tjudge-cli
 
 # Делаем бинарник исполняемым
 RUN chmod +x /usr/local/bin/tjudge-cli
