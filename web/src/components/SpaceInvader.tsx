@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
 
 // --- Types ---
-export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin'
+export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin' | 'spinStop'
   | 'cry' | 'sleep' | 'fly' | 'attack' | 'shield' | 'teleport' | 'transform';
 
 export interface SpaceInvaderProps {
@@ -164,6 +164,7 @@ export function SpaceInvader({
   const [pose, setPose] = useState<InvaderPose>('idle');
   const [animClass, setAnimClass] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
+  const spinContainerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<HTMLDivElement>(null);
   const shatteringRef = useRef(false);
   const [impactEyes, setImpactEyes] = useState<'crossed' | null>(null);
@@ -607,7 +608,40 @@ export function SpaceInvader({
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
     if (pose === 'spin') {
-      setTimeout(() => setPose('idle'), 300);
+      const el = spinContainerRef.current;
+      if (el) {
+        // Read current rotation from the running animation
+        const cs = getComputedStyle(el);
+        const mx = cs.transform;
+        let angle = 0;
+        if (mx && mx !== 'none') {
+          const vals = mx.match(/matrix\(([^)]+)\)/);
+          if (vals) {
+            const [a, b] = vals[1].split(',').map(Number);
+            angle = Math.atan2(b, a) * (180 / Math.PI);
+          }
+        }
+        // Freeze at current angle, smoothly finish to next full turn
+        el.style.animation = 'none';
+        el.style.transform = `rotate(${angle}deg)`;
+        let target = (Math.floor(angle / 360) + 1) * 360;
+        let remaining = target - angle;
+        // If too little left (<60°), add another full turn to avoid a jerky micro-rotation
+        if (remaining < 60) { target += 360; remaining += 360; }
+        // Duration proportional to remaining angle (spin speed = 720°/s → ease-out ~half)
+        const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
+        requestAnimationFrame(() => {
+          el.style.transition = `transform ${dur}s ease-out`;
+          el.style.transform = `rotate(${target}deg)`;
+          setTimeout(() => {
+            el.style.transition = '';
+            el.style.transform = '';
+            el.style.animation = '';
+            setPose('idle');
+          }, dur * 1000 + 20);
+        });
+      }
+      setPose('spinStop');
     }
   }, [pose]);
 
@@ -885,6 +919,7 @@ export function SpaceInvader({
       case 'teleport': return renderTeleportPose();
       case 'transform': return renderTransformPose();
       case 'spin':
+      case 'spinStop':
       case 'idle':
       default: return renderIdlePose();
     }
@@ -935,19 +970,21 @@ export function SpaceInvader({
               transform: 'translateX(-50%) rotate(45deg)',
               width: '8px',
               height: '8px',
-              background: 'rgba(17,24,39,0.92)',
-              borderRight: '1px solid rgba(139,92,246,0.3)',
-              borderBottom: '1px solid rgba(139,92,246,0.3)',
+              background: impactSpeech ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
+              borderRight: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
+              borderBottom: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
             }}
           />
         </div>
       )}
 
       {/* Single float animation container — glow via filter on container, NOT text-shadow per char */}
-      <div style={{
+      <div ref={spinContainerRef} style={{
         animation: pose === 'spin'
           ? 'spin-invader 0.5s linear infinite'
-          : 'invader-float 3s ease-in-out infinite',
+          : pose === 'spinStop'
+            ? 'none'
+            : 'invader-float 3s ease-in-out infinite',
         willChange: 'transform',
       }}>
         <div style={{
