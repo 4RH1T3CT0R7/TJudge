@@ -621,15 +621,72 @@
   100% { transform: scaleY(1); }
 }
 
-@keyframes particle-fly {
+/* --- Character burst: extracted chars fly from original position outward --- */
+@keyframes char-burst {
   0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
     opacity: 1;
-    transform: translate(0, 0) scale(1);
   }
   100% {
-    opacity: 0;
-    transform: translate(var(--px), var(--py)) scale(0);
+    transform: translate(var(--px), var(--py)) scale(0.7) rotate(var(--pr));
+    opacity: 0.85;
   }
+}
+
+/* T-1000: characters fly back to original position (smooth liquid metal) */
+@keyframes char-return {
+  0% {
+    transform: translate(var(--px), var(--py)) scale(0.7) rotate(var(--pr));
+    opacity: 0.85;
+  }
+  75% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 0;
+  }
+}
+
+/* Regeneration: burst particles fall under gravity and dissolve */
+@keyframes char-gravity {
+  0% {
+    transform: translate(var(--px), var(--py)) rotate(var(--pr)) scale(0.7);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(var(--px), calc(var(--py) + 80px)) rotate(calc(var(--pr) + 120deg)) scale(0.1);
+    opacity: 0;
+  }
+}
+
+/* Regeneration: new character spawns in the hole with pop-in */
+@keyframes char-regen {
+  0% {
+    transform: scale(0) rotate(-60deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.4) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+/* Glitch: characters jitter wildly and vanish */
+@keyframes char-glitch {
+  0%   { transform: translate(var(--px), var(--py)); opacity: 0.85; }
+  15%  { transform: translate(calc(var(--px) + 8px), calc(var(--py) - 5px)); opacity: 1; }
+  30%  { transform: translate(calc(var(--px) - 6px), calc(var(--py) + 6px)); opacity: 0.1; }
+  45%  { transform: translate(calc(var(--px) + 3px), calc(var(--py) - 2px)); opacity: 0.95; }
+  60%  { transform: translate(calc(var(--px) - 10px), calc(var(--py) + 3px)); opacity: 0.15; }
+  75%  { transform: translate(calc(var(--px) + 5px), calc(var(--py) - 8px)); opacity: 0.8; }
+  90%  { transform: translate(calc(var(--px) - 2px), calc(var(--py) + 1px)); opacity: 0.1; }
+  100% { transform: translate(0, 0) scale(0); opacity: 0; }
 }
 
 @keyframes pixel-dissolve {

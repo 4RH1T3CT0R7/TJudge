@@ -25,8 +25,6 @@ const EYE_BG_COLOR = '#2e1065';
 // --- Size map ---
 const SIZE_MAP: Record<string, string> = { sm: '5px', md: '8px', lg: '12px' };
 
-// --- Particle colors ---
-const PARTICLE_COLORS = ['#8b5cf6', '#a78bfa', '#4ade80', '#ffffff', '#c4b5fd'];
 
 // --- ASCII art helpers ---
 function body(n: number, softEdges = false): string {
@@ -98,6 +96,12 @@ function getClosedEyeLine(lineRow: number): string {
   return lineRow === 1 ? '--------' : '........';
 }
 
+function getCrossedEyeLine(lineRow: number): string {
+  if (lineRow === 0) return '.X....X.';
+  if (lineRow === 1) return '...XX...';
+  return '.X....X.';
+}
+
 // --- Cached style objects (avoid recreating on each render) ---
 const BODY_STYLE = { color: BODY_COLOR } as const;
 const EYE_BG_STYLE = { color: EYE_BG_COLOR } as const;
@@ -106,6 +110,10 @@ const PUPIL_STYLE = {
   textShadow: '0 0 6px rgba(255,255,255,0.8)',
 } as const;
 const CLOSED_EYE_STYLE = { color: BODY_COLOR, opacity: 0.7 } as const;
+const CROSSED_EYE_STYLE = {
+  color: '#ef4444',
+  textShadow: '0 0 6px rgba(239,68,68,0.8)',
+} as const;
 
 // --- Rendering helper ---
 function renderEyeSegment(content: string): ReactNode[] {
@@ -123,23 +131,19 @@ function renderEyeSegment(content: string): ReactNode[] {
       while (j < content.length && content[j] === '-') j++;
       parts.push(<span key={key++} style={CLOSED_EYE_STYLE}>{content.slice(i, j)}</span>);
       i = j;
+    } else if (content[i] === 'X') {
+      let j = i;
+      while (j < content.length && content[j] === 'X') j++;
+      parts.push(<span key={key++} style={CROSSED_EYE_STYLE}>{content.slice(i, j)}</span>);
+      i = j;
     } else {
       let j = i;
-      while (j < content.length && content[j] !== '@' && content[j] !== '-') j++;
+      while (j < content.length && content[j] !== '@' && content[j] !== '-' && content[j] !== 'X') j++;
       parts.push(<span key={key++} style={EYE_BG_STYLE}>{content.slice(i, j)}</span>);
       i = j;
     }
   }
   return parts;
-}
-
-// --- Particle ---
-interface Particle {
-  id: number;
-  vx: number;
-  vy: number;
-  color: string;
-  size: number;
 }
 
 // --- Main component ---
@@ -158,8 +162,12 @@ export function SpaceInvader({
   const containerRef = useRef<HTMLDivElement>(null);
   const [eyePos, setEyePos] = useState<EyePos>({ col: 3, row: 1 });
   const [pose, setPose] = useState<InvaderPose>('idle');
-  const [particles, setParticles] = useState<Particle[]>([]);
   const [animClass, setAnimClass] = useState('');
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const particlesRef = useRef<HTMLDivElement>(null);
+  const shatteringRef = useRef(false);
+  const [impactEyes, setImpactEyes] = useState<'crossed' | null>(null);
+  const [impactSpeech, setImpactSpeech] = useState<string | null>(null);
 
   // Use refs for state that only affects eye rendering to avoid re-render cascades
   const isHoveredRef = useRef(false);
@@ -171,9 +179,9 @@ export function SpaceInvader({
   const clickCountRef = useRef(0);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pointerDownPos = useRef<{ x: number; y: number; time: number } | null>(null);
   const poseTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const particleIdRef = useRef(0);
 
   // Sync controlled pose from parent
   useEffect(() => {
@@ -260,7 +268,6 @@ export function SpaceInvader({
         clearTimeout(poseTimerRef.current);
         setPose('idle');
         setAnimClass('animate-bounce-in');
-        spawnParticles(6);
         setTimeout(() => setAnimClass(''), 600);
         forceEyeUpdate(c => c + 1);
       }
@@ -306,30 +313,264 @@ export function SpaceInvader({
     };
   }, [interactive]);
 
-  // --- Particle spawner ---
-  const spawnParticles = useCallback((count: number) => {
-    const ids: number[] = [];
-    const newParticles: Particle[] = [];
-    for (let i = 0; i < count; i++) {
-      const id = particleIdRef.current++;
-      ids.push(id);
-      newParticles.push({
-        id,
-        vx: (Math.random() - 0.5) * 100,
-        vy: -(Math.random() * 60 + 20),
-        color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
-        size: Math.random() * 3 + 2,
-      });
+  // --- Impact effect: chaotic character-shaped hole via canvas mask ---
+  const impactAtPoint = useCallback((clientX: number, clientY: number) => {
+    const bodyEl = bodyRef.current;
+    const particles = particlesRef.current;
+    if (!bodyEl || !particles || shatteringRef.current) return;
+    shatteringRef.current = true;
+
+    const bodyRect = bodyEl.getBoundingClientRect();
+    const relX = clientX - bodyRect.left;
+    const relY = clientY - bodyRect.top;
+
+    // Monospace font metrics
+    const fontSizePx = parseFloat(SIZE_MAP[size] || SIZE_MAP.md);
+    const charW = fontSizePx * 0.6;
+
+    // Hole & scatter params
+    const holeRadius = size === 'sm' ? 14 : size === 'lg' ? 30 : 20;
+    const scatterDist = size === 'sm' ? 30 : size === 'lg' ? 70 : 50;
+    const pFontSize = fontSizePx + 'px'; // Must match invader body font size exactly
+
+    const SPEECHES = ['// SEGFAULT', 'Error 500!', 'core dumped', 'panic()', '// \u0431\u043e\u043b\u044c\u043d\u043e!', 'FATAL ERROR', '{ hp: 0 }'];
+    const NEON_COLORS = ['#a78bfa', '#4ade80', '#ffffff', '#67e8f9', '#c084fc', '#34d399'];
+
+    // Recursively collect leaf text-row divs (handles wrapper divs for legs/dance)
+    function getLeafRows(el: HTMLElement): HTMLElement[] {
+      const out: HTMLElement[] = [];
+      for (const child of Array.from(el.children)) {
+        if (child.tagName !== 'DIV') continue;
+        const div = child as HTMLElement;
+        const hasDivKids = Array.from(div.children).some(c => c.tagName === 'DIV');
+        if (hasDivKids) out.push(...getLeafRows(div));
+        else out.push(div);
+      }
+      return out;
     }
-    setParticles(prev => [...prev, ...newParticles]);
+
+    // Extract characters with chaotic jagged edge (not a perfect circle)
+    const rows = getLeafRows(bodyEl);
+    const innerR = holeRadius * 0.6;
+    const outerR = holeRadius * 1.25;
+    const extracted: { char: string; x: number; y: number; jw: number; jh: number }[] = [];
+
+    for (const row of rows) {
+      const rr = row.getBoundingClientRect();
+      const text = row.textContent || '';
+      const rowCY = rr.top - bodyRect.top + rr.height / 2;
+      const rowTop = rr.top - bodyRect.top;
+      for (let c = 0; c < text.length; c++) {
+        const ch = text[c];
+        if (ch === ' ' || ch === '.') continue;
+        const cx = c * charW + charW / 2;
+        const dx = cx - relX;
+        const dy = rowCY - relY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        let include = false;
+        if (dist < innerR) {
+          include = true; // core: always
+        } else if (dist < outerR) {
+          // edge: probabilistic → jagged boundary
+          const prob = 1 - (dist - innerR) / (outerR - innerR);
+          include = Math.random() < prob * 0.8 + 0.15;
+        }
+        if (include) {
+          extracted.push({
+            char: ch, x: cx, y: rowTop,
+            // Per-char size jitter for irregular cutouts
+            jw: charW * (1 + Math.random() * 0.35),
+            jh: fontSizePx * (1 + Math.random() * 0.3),
+          });
+        }
+      }
+    }
+
+    if (extracted.length === 0) {
+      shatteringRef.current = false;
+      return;
+    }
+
+    // --- Canvas mask: character-shaped cutouts (not a circle) ---
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(bodyRect.width);
+    canvas.height = Math.ceil(bodyRect.height);
+    const ctx = canvas.getContext('2d')!;
+
+    const buildMask = (holes: typeof extracted) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'black';
+      for (const h of holes) {
+        ctx.fillRect(h.x - h.jw / 2, h.y - (h.jh - fontSizePx) / 2, h.jw, h.jh);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      const url = canvas.toDataURL();
+      bodyEl.style.setProperty('mask-image', `url(${url})`);
+      bodyEl.style.setProperty('-webkit-mask-image', `url(${url})`);
+      bodyEl.style.setProperty('mask-size', '100% 100%');
+      bodyEl.style.setProperty('-webkit-mask-size', '100% 100%');
+    };
+
+    const clearMask = () => {
+      bodyEl.style.removeProperty('mask-image');
+      bodyEl.style.removeProperty('-webkit-mask-image');
+      bodyEl.style.removeProperty('mask-size');
+      bodyEl.style.removeProperty('-webkit-mask-size');
+    };
+
+    // --- Phase 1 (0ms): hole + particles + speech + shake ---
+    buildMask(extracted);
+
+    for (const ec of extracted) {
+      const span = document.createElement('span');
+      const color = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
+      const angle = Math.atan2(ec.y + fontSizePx / 2 - relY, ec.x - relX) + (Math.random() - 0.5) * 0.5;
+      const dist = scatterDist * (0.7 + Math.random() * 0.6);
+      const tx = Math.cos(angle) * dist;
+      const ty = Math.sin(angle) * dist;
+      const rot = (Math.random() - 0.5) * 540;
+      span.textContent = ec.char;
+      span.style.cssText = [
+        `position:absolute;left:${ec.x}px;top:${ec.y}px`,
+        `color:${color};font-family:'Courier New',monospace;font-size:${pFontSize}`,
+        'font-weight:bold;line-height:1',
+        `text-shadow:0 0 8px ${color},0 0 16px ${color}80`,
+        'pointer-events:none;z-index:25',
+        `--px:${tx}px;--py:${ty}px;--pr:${rot}deg`,
+        'animation:char-burst 0.35s cubic-bezier(0.22,1,0.36,1) both',
+      ].join(';');
+      particles.appendChild(span);
+    }
+
+    const speech = SPEECHES[Math.floor(Math.random() * SPEECHES.length)];
+    setImpactSpeech(speech);
+    setAnimClass('animate-shake');
+
+    // --- Phase 2 (400ms): crossed eyes ---
+    setTimeout(() => setImpactEyes('crossed'), 400);
+
+    // --- Phase 3 (900ms): 3 DRAMATICALLY different healing modes ---
+    const healMode = Math.floor(Math.random() * 3);
+
+    // Dynamic timing based on mode
+    const recoveryTime = healMode === 1 ? 1700 : 1300;
+    const cleanupTime = healMode === 1 ? 2000 : 1600;
+
     setTimeout(() => {
-      setParticles(prev => prev.filter(p => !ids.includes(p.id)));
-    }, 700);
-  }, []);
+      const els = Array.from(particles.children) as HTMLElement[];
+
+      if (healMode === 0) {
+        // ═══ T-1000: particles fly BACK smoothly, hole fills edges→center ═══
+        els.forEach(p => { p.style.animation = 'char-return 0.4s cubic-bezier(0.22,1,0.36,1) both'; });
+        const sorted = [...extracted].sort((a, b) => {
+          const da = Math.hypot(a.x - relX, a.y + fontSizePx / 2 - relY);
+          const db = Math.hypot(b.x - relX, b.y + fontSizePx / 2 - relY);
+          return db - da; // farthest first → heals first
+        });
+        const steps = 6;
+        const perStep = Math.ceil(sorted.length / steps);
+        for (let i = 0; i < steps; i++) {
+          setTimeout(() => {
+            const remaining = sorted.slice(Math.min((i + 1) * perStep, sorted.length));
+            if (remaining.length === 0) clearMask();
+            else buildMask(remaining);
+          }, i * 60);
+        }
+
+      } else if (healMode === 1) {
+        // ═══ REGENERATION: particles fall with gravity + NEW chars grow in hole ═══
+        // Burst particles fall under gravity
+        els.forEach(p => { p.style.animation = 'char-gravity 0.6s ease-in both'; });
+
+        // Spawn regen particles at each hole position (staggered, random order)
+        const regenOrder = [...extracted].sort(() => Math.random() - 0.5);
+        const stagger = Math.max(12, 400 / regenOrder.length);
+        const remaining = [...extracted];
+
+        regenOrder.forEach((ec, i) => {
+          const delay = i * stagger + Math.random() * 15;
+          setTimeout(() => {
+            // New character pops into existence at hole position
+            const regen = document.createElement('span');
+            const startColor = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
+            regen.textContent = ec.char;
+            regen.style.cssText = [
+              `position:absolute;left:${ec.x}px;top:${ec.y}px`,
+              `color:${startColor};font-family:'Courier New',monospace;font-size:${pFontSize}`,
+              'font-weight:bold;line-height:1',
+              `text-shadow:0 0 10px ${startColor},0 0 20px ${startColor}60`,
+              'pointer-events:none;z-index:20',
+              'animation:char-regen 0.22s cubic-bezier(0.34,1.56,0.64,1) both',
+              'transition:color 0.2s ease-out,text-shadow 0.2s ease-out',
+            ].join(';');
+            particles.appendChild(regen);
+
+            // Transition neon → invader purple (wound heals)
+            setTimeout(() => {
+              regen.style.color = BODY_COLOR;
+              regen.style.textShadow = `0 0 4px ${BODY_COLOR}50`;
+            }, 100);
+
+            // Remove from mask + remove regen particle (original char takes over)
+            setTimeout(() => {
+              const idx = remaining.findIndex(r => r.x === ec.x && r.y === ec.y);
+              if (idx >= 0) remaining.splice(idx, 1);
+              if (remaining.length === 0) clearMask();
+              else buildMask(remaining);
+              regen.remove();
+            }, 300);
+          }, delay);
+        });
+
+      } else {
+        // ═══ GLITCH: wild jitter + hole strobes on/off + sudden snap ═══
+        els.forEach(p => { p.style.animation = 'char-glitch 0.4s steps(8) both'; });
+        const shuffled = [...extracted].sort(() => Math.random() - 0.5);
+        const flicker = [1, 0, 0.65, 0, 0.4, 0, 0.2, 0, 0.05, 0];
+        flicker.forEach((factor, i) => {
+          setTimeout(() => {
+            if (factor <= 0) clearMask();
+            else {
+              const count = Math.ceil(shuffled.length * factor);
+              buildMask(shuffled.slice(0, count));
+            }
+          }, i * 38);
+        });
+      }
+    }, 900);
+
+    // --- Phase 4: recovery ---
+    setTimeout(() => {
+      setImpactEyes(null);
+      setImpactSpeech(null);
+      setAnimClass('');
+    }, recoveryTime);
+
+    // --- Phase 5: cleanup ---
+    setTimeout(() => {
+      while (particles.firstChild) particles.removeChild(particles.firstChild);
+      clearMask();
+      shatteringRef.current = false;
+    }, cleanupTime);
+  }, [size]);
 
   // --- Click handler ---
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     if (!interactive) return;
+
+    // Suppress click if pointer moved (scroll/drag) or held too long (long press)
+    const down = pointerDownPos.current;
+    if (down) {
+      const dx = e.clientX - down.x;
+      const dy = e.clientY - down.y;
+      if (dx * dx + dy * dy > 25) return; // >5px movement → not a tap
+      if (Date.now() - down.time > 300) return; // held >300ms → not a tap
+    }
 
     clickCountRef.current++;
     const count = clickCountRef.current;
@@ -340,31 +581,26 @@ export function SpaceInvader({
     if (count >= 5) {
       clickCountRef.current = 0;
       setPose('run');
-      spawnParticles(10);
       setTimeout(() => setPose('idle'), 3000);
       return;
     }
 
-    setAnimClass('');
-    requestAnimationFrame(() => {
-      setAnimClass('animate-bounce-in');
-      spawnParticles(Math.min(6 + count * 2, 12));
-    });
-    setTimeout(() => setAnimClass(''), 600);
-  }, [interactive, spawnParticles]);
+    // Impact effect at click point
+    impactAtPoint(e.clientX, e.clientY);
+  }, [interactive, impactAtPoint]);
 
   // --- Double click ---
   const handleDoubleClick = useCallback(() => {
     if (!interactive) return;
     setPose('handsUp');
-    spawnParticles(8);
     setTimeout(() => { setPose('dance'); }, 500);
     setTimeout(() => setPose('idle'), 2500);
-  }, [interactive, spawnParticles]);
+  }, [interactive]);
 
   // --- Long press ---
-  const handlePointerDown = useCallback(() => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
+    pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
     longPressTimerRef.current = setTimeout(() => { setPose('spin'); }, 500);
   }, [interactive]);
 
@@ -389,6 +625,7 @@ export function SpaceInvader({
 
   // --- Determine effective eye state ---
   const eyeState = (() => {
+    if (impactEyes === 'crossed') return 'crossed';
     if (eyeOverride === 'closed') return 'closed';
     if (eyeOverride === 'sad') return 'sad';
     if (eyeOverride === 'wide') return 'wide';
@@ -409,6 +646,9 @@ export function SpaceInvader({
     if (eyeState === 'closed') {
       leftEye = getClosedEyeLine(lineRow);
       rightEye = getClosedEyeLine(lineRow);
+    } else if (eyeState === 'crossed') {
+      leftEye = getCrossedEyeLine(lineRow);
+      rightEye = getCrossedEyeLine(lineRow);
     } else if (eyeState === 'sad') {
       const sadPos = { col: 3, row: 2 };
       leftEye = getEyeLine(sadPos, lineRow);
@@ -665,8 +905,8 @@ export function SpaceInvader({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Speech bubble */}
-      {speechBubble && (
+      {/* Speech bubble (impactSpeech overrides parent speechBubble) */}
+      {(impactSpeech || speechBubble) && (
         <div
           style={{
             position: 'absolute',
@@ -674,19 +914,19 @@ export function SpaceInvader({
             left: '50%',
             transform: 'translateX(-50%)',
             whiteSpace: 'nowrap',
-            background: 'rgba(17,24,39,0.92)',
-            color: '#a78bfa',
+            background: impactSpeech ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
+            color: impactSpeech ? '#fca5a5' : '#a78bfa',
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             fontSize: '11px',
             padding: '4px 10px',
             borderRadius: '6px',
-            border: '1px solid rgba(139,92,246,0.3)',
+            border: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
             pointerEvents: 'none',
             zIndex: 30,
             animation: 'fade-in 0.2s ease-out',
           }}
         >
-          {speechBubble}
+          {impactSpeech || speechBubble}
           <div
             style={{
               position: 'absolute',
@@ -703,27 +943,6 @@ export function SpaceInvader({
         </div>
       )}
 
-      {/* Particles */}
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            borderRadius: '1px',
-            pointerEvents: 'none',
-            zIndex: 20,
-            '--px': `${p.vx}px`,
-            '--py': `${p.vy}px`,
-            animation: 'particle-fly 0.7s ease-out forwards',
-          } as React.CSSProperties}
-        />
-      ))}
-
       {/* Single float animation container — glow via filter on container, NOT text-shadow per char */}
       <div style={{
         animation: pose === 'spin'
@@ -734,8 +953,21 @@ export function SpaceInvader({
         <div style={{
           animation: 'invader-glow 2.5s ease-in-out infinite',
           willChange: 'filter',
+          position: 'relative',
         }}>
+          {/* Particle container for flying character debris */}
           <div
+            ref={particlesRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 25,
+              overflow: 'visible',
+            }}
+          />
+          <div
+            ref={bodyRef}
             style={{
               fontFamily: "'Courier New', Consolas, 'Liberation Mono', monospace",
               fontSize: SIZE_MAP[size] || SIZE_MAP.md,
