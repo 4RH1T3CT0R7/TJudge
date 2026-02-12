@@ -1180,8 +1180,10 @@ func TestService_RunAllMatches(t *testing.T) {
 		// No pending matches -- trigger new round generation
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
-		tournamentRepo.On("GetLatestParticipants", ctx, tournamentID).Return(participants, nil)
-		matchRepo.On("GetNextRoundNumber", ctx, tournamentID).Return(1, nil)
+		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{
+			"chess": participants,
+		}, nil)
+		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, "chess").Return(1, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
 
@@ -1220,7 +1222,7 @@ func TestService_RunAllMatches(t *testing.T) {
 		assert.Contains(t, appErr.Message, "not active")
 	})
 
-	t.Run("less_than_2_participants", func(t *testing.T) {
+	t.Run("no_participants", func(t *testing.T) {
 		service, tournamentRepo, matchRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
@@ -1232,13 +1234,9 @@ func TestService_RunAllMatches(t *testing.T) {
 			Status:   domain.TournamentActive,
 		}
 
-		participants := []*domain.TournamentParticipant{
-			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New(), Rating: 1500},
-		}
-
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
-		tournamentRepo.On("GetLatestParticipants", ctx, tournamentID).Return(participants, nil)
+		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{}, nil)
 
 		count, err := service.RunAllMatches(ctx, tournamentID)
 		assert.Error(t, err)

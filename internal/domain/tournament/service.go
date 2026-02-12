@@ -724,41 +724,53 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
-		// Получаем участников (только последние версии программ каждой команды)
-		participants, err := s.tournamentRepo.GetLatestParticipants(ctx, tournamentID)
+		// Получаем участников сгруппированных по играм (чтобы не сводить программы разных игр)
+		participantsByGame, err := s.tournamentRepo.GetLatestParticipantsGroupedByGame(ctx, tournamentID)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get participants: %w", err)
 		}
 
-		if len(participants) < 2 {
+		if len(participantsByGame) == 0 {
 			return 0, errors.ErrValidation.WithMessage("need at least 2 participants to run matches")
 		}
 
-		// Получаем следующий номер раунда
-		roundNumber, err := s.matchRepo.GetNextRoundNumber(ctx, tournamentID)
-		if err != nil {
-			s.log.Warn("Failed to get next round number, using 1",
-				zap.Error(err),
+		// Генерируем матчи отдельно для каждой игры
+		for gameType, participants := range participantsByGame {
+			if len(participants) < 2 {
+				s.log.Warn("Skipping game with fewer than 2 participants",
+					zap.String("game_type", gameType),
+					zap.Int("participants", len(participants)),
+				)
+				continue
+			}
+
+			roundNumber, err := s.matchRepo.GetNextRoundNumberByGame(ctx, tournamentID, gameType)
+			if err != nil {
+				s.log.Warn("Failed to get next round number for game, using 1",
+					zap.String("game_type", gameType),
+					zap.Error(err),
+				)
+				roundNumber = 1
+			}
+
+			gameMatches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityMedium)
+			if err != nil {
+				return 0, fmt.Errorf("failed to generate matches for game %s: %w", gameType, err)
+			}
+
+			if err := s.matchRepo.CreateBatch(ctx, gameMatches); err != nil {
+				return 0, fmt.Errorf("failed to create matches for game %s: %w", gameType, err)
+			}
+
+			matches = append(matches, gameMatches...)
+
+			s.log.Info("Generated new round of matches for game",
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_type", gameType),
+				zap.Int("round_number", roundNumber),
+				zap.Int("matches_count", len(gameMatches)),
 			)
-			roundNumber = 1
 		}
-
-		// Генерируем новый раунд матчей
-		matches, err = s.generateRoundRobinMatches(tournament, participants, roundNumber)
-		if err != nil {
-			return 0, fmt.Errorf("failed to generate matches: %w", err)
-		}
-
-		// Сохраняем матчи в БД
-		if err := s.matchRepo.CreateBatch(ctx, matches); err != nil {
-			return 0, fmt.Errorf("failed to create matches: %w", err)
-		}
-
-		s.log.Info("Generated new round of matches",
-			zap.String("tournament_id", tournamentID.String()),
-			zap.Int("round_number", roundNumber),
-			zap.Int("matches_count", len(matches)),
-		)
 	}
 
 	// Добавляем все матчи в очередь
