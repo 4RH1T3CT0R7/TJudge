@@ -1,17 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { SpaceInvader } from '../SpaceInvader';
 import { AnimatedOutlet } from '../motion/AnimatedOutlet';
-import { MatrixRain } from '../MatrixRain';
 import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
-import { useIdleDetector } from '../../hooks/useIdleDetector';
 
 export function Layout() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [matrixActive, setMatrixActive] = useState(false);
   useDarkMode();
   const navigate = useNavigate();
 
@@ -20,16 +17,6 @@ export function Layout() {
   useKonamiCode(useCallback(() => {
     activateGodMode();
   }, [activateGodMode]));
-
-  // Idle 5min → matrix rain
-  const idleStage = useIdleDetector();
-  useEffect(() => {
-    if (idleStage === 'idle5m') setMatrixActive(true);
-  }, [idleStage]);
-
-  const handleMatrixWakeUp = useCallback(() => {
-    setMatrixActive(false);
-  }, []);
 
   const handleLogout = () => {
     setIsLoggingOut(true);
@@ -174,9 +161,6 @@ export function Layout() {
           }} />
         </div>
       )}
-
-      {/* Matrix rain idle easter egg */}
-      <MatrixRain active={matrixActive} onWakeUp={handleMatrixWakeUp} />
 
     </div>
   );
