@@ -145,7 +145,6 @@ export function TournamentDetail() {
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
-  const [isRunningMatches, setIsRunningMatches] = useState(false);
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
   const [isRefreshingMatches, setIsRefreshingMatches] = useState(false);
 
@@ -302,24 +301,6 @@ export function TournamentDetail() {
       setActionError(errorMessage);
     } finally {
       setIsCompleting(false);
-    }
-  };
-
-  const handleRunAllMatches = async () => {
-    if (!tournament) return;
-
-    setIsRunningMatches(true);
-    setActionError(null);
-    try {
-      const result = await api.runAllMatches(tournament.id);
-      setActionError(null);
-      alert(`Запущено ${result.enqueued} матчей`);
-    } catch (err: unknown) {
-      console.error('Failed to run matches:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Не удалось запустить матчи';
-      setActionError(errorMessage);
-    } finally {
-      setIsRunningMatches(false);
     }
   };
 
@@ -568,6 +549,10 @@ export function TournamentDetail() {
   }
 
   const totalMatches = matchRounds.reduce((sum, r) => sum + r.total_matches, 0);
+  const activeGame = gamesStatus.find(g => g.is_active) || null;
+  const activeGameHasRunningMatches = activeGame && matchRounds.some(
+    r => r.game_type === activeGame.game_name && (r.pending_count > 0 || r.running_count > 0)
+  );
   const tabs: { id: TabType; label: string; icon: React.FC; count?: number }[] = [
     { id: 'info', label: 'Информация', icon: InfoCircleIcon },
     { id: 'leaderboard', label: 'Таблица', icon: ChartBarIcon },
@@ -692,12 +677,22 @@ export function TournamentDetail() {
             {isAdmin && tournament.status === 'active' && (
               <>
                 <button
-                  onClick={handleRunAllMatches}
-                  disabled={isRunningMatches}
+                  onClick={() => {
+                    if (activeGame) {
+                      handleRunGameMatches(activeGame.game_id, activeGame.game_name, activeGame.game_display_name);
+                    }
+                  }}
+                  disabled={!!runningGameId || !activeGame || !!activeGameHasRunningMatches}
                   className="btn btn-primary"
                 >
                   <PlayIcon />
-                  {isRunningMatches ? 'Запуск...' : 'Запустить раунды'}
+                  {runningGameId
+                    ? 'Запуск...'
+                    : activeGameHasRunningMatches
+                      ? 'Раунд выполняется...'
+                      : activeGame
+                        ? 'Запустить раунд'
+                        : 'Нет активной игры'}
                 </button>
                 <button
                   onClick={handleRetryFailedMatches}
@@ -808,6 +803,7 @@ export function TournamentDetail() {
             runningGameId={runningGameId}
             settingActiveGameId={settingActiveGameId}
             resettingGameId={resettingGameId}
+            matchRounds={matchRounds}
           />
         )}
 
@@ -1425,6 +1421,7 @@ function GamesTab({
   runningGameId,
   settingActiveGameId,
   resettingGameId,
+  matchRounds,
 }: {
   games: Game[];
   gamesStatus: TournamentGameWithDetails[];
@@ -1438,6 +1435,7 @@ function GamesTab({
   runningGameId?: string | null;
   settingActiveGameId?: string | null;
   resettingGameId?: string | null;
+  matchRounds?: MatchRound[];
 }) {
   const handleRunMatches = async (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
@@ -1500,6 +1498,11 @@ function GamesTab({
           const gameStatus = gamesStatus.find(g => g.game_id === game.id);
           const isActive = gameStatus?.is_active || false;
           const currentRound = gameStatus?.current_round || 0;
+          const hasActiveMatches = (matchRounds || []).some(
+            r => r.game_type === game.name && (r.pending_count > 0 || r.running_count > 0)
+          );
+          const roundInProgress = currentRound > 0 && gameStatus?.round_completed === false;
+          const isRoundRunning = hasActiveMatches || roundInProgress;
 
           return (
             <Link
@@ -1575,13 +1578,18 @@ function GamesTab({
                       <>
                         <button
                           onClick={(e) => handleRunMatches(e, game)}
-                          disabled={runningGameId === game.id}
+                          disabled={runningGameId === game.id || isRoundRunning}
                           className="btn btn-primary text-xs py-1.5 px-3"
                         >
                           {runningGameId === game.id ? (
                             <>
                               <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                               Запуск...
+                            </>
+                          ) : isRoundRunning ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Раунд выполняется...
                             </>
                           ) : (
                             <>
@@ -1732,7 +1740,7 @@ function MatchesTab({
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
-  const [expandedRounds, setExpandedRounds] = useState<Set<number>>(new Set());
+  const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Проверяем, есть ли активные матчи (pending или running)
@@ -1751,20 +1759,20 @@ function MatchesTab({
     return () => clearInterval(interval);
   }, [autoRefresh, hasActiveMatches, onRefresh]);
 
-  const toggleRound = (roundNumber: number) => {
+  const toggleRound = (roundKey: string) => {
     setExpandedRounds(prev => {
       const next = new Set(prev);
-      if (next.has(roundNumber)) {
-        next.delete(roundNumber);
+      if (next.has(roundKey)) {
+        next.delete(roundKey);
       } else {
-        next.add(roundNumber);
+        next.add(roundKey);
       }
       return next;
     });
   };
 
   const expandAll = () => {
-    setExpandedRounds(new Set(rounds.map(r => r.round_number)));
+    setExpandedRounds(new Set(rounds.map(r => `${r.round_number}-${r.game_type}`)));
   };
 
   const collapseAll = () => {
@@ -1928,8 +1936,8 @@ function MatchesTab({
           <RoundCard
             key={`${round.round_number}-${round.game_type}`}
             round={round}
-            isExpanded={expandedRounds.has(round.round_number)}
-            onToggle={() => toggleRound(round.round_number)}
+            isExpanded={expandedRounds.has(`${round.round_number}-${round.game_type}`)}
+            onToggle={() => toggleRound(`${round.round_number}-${round.game_type}`)}
           />
         ))}
       </div>

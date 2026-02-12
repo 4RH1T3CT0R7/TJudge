@@ -252,7 +252,7 @@ func Load() (*Config, error) {
 			MinWorkers:    getEnvInt("WORKER_MIN", 10),
 			MaxWorkers:    getEnvInt("WORKER_MAX", 1000),
 			QueueSize:     getEnvInt("WORKER_QUEUE_SIZE", 10000),
-			Timeout:       getEnvDuration("WORKER_TIMEOUT", 30*time.Second),
+			Timeout:       getEnvDuration("WORKER_TIMEOUT", 90*time.Second),
 			RetryAttempts: getEnvInt("WORKER_RETRY_ATTEMPTS", 3),
 			RetryDelay:    getEnvDuration("WORKER_RETRY_DELAY", 5*time.Second),
 		},
