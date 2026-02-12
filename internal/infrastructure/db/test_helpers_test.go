@@ -82,6 +82,7 @@ func createTestUser(t *testing.T, repo *db.UserRepository, suffix string) *domai
 }
 
 // createTestTournament creates a tournament in the database for testing.
+// The creatorID must reference an existing user in the database.
 func createTestTournament(t *testing.T, repo *db.TournamentRepository, code string, creatorID uuid.UUID) *domain.Tournament {
 	t.Helper()
 	ctx := context.Background()
@@ -103,6 +104,33 @@ func createTestTournament(t *testing.T, repo *db.TournamentRepository, code stri
 	require.NoError(t, err)
 
 	return tournament
+}
+
+// createTestTournamentWithUser creates a user and a tournament in the database for testing.
+// It ensures the creator exists in the users table to satisfy FK constraints.
+func createTestTournamentWithUser(t *testing.T, tournamentRepo *db.TournamentRepository, userRepo *db.UserRepository, code string) (*domain.Tournament, *domain.User) {
+	t.Helper()
+	ctx := context.Background()
+
+	user := createTestUser(t, userRepo, "tourney_"+code)
+
+	tournament := &domain.Tournament{
+		ID:              uuid.New(),
+		Code:            code,
+		Name:            "Test Tournament " + code,
+		Description:     "Test Description",
+		GameType:        "prisoners_dilemma",
+		Status:          domain.TournamentPending,
+		MaxParticipants: intPtr(100),
+		MaxTeamSize:     3,
+		IsPermanent:     false,
+		CreatorID:       uuidPtr(user.ID),
+	}
+
+	err := tournamentRepo.Create(ctx, tournament)
+	require.NoError(t, err)
+
+	return tournament, user
 }
 
 // Helper functions for reading environment variables.

@@ -3,6 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { TeamWithMembers } from '../types';
+import { SpaceInvader } from '../components/SpaceInvader';
+import { InvaderPresence } from '../components/motion/InvaderPresence';
+import type { InvaderPose } from '../components/SpaceInvader';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export function TeamManagement() {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +15,7 @@ export function TeamManagement() {
   const { user } = useAuthStore();
   const [teamData, setTeamData] = useState<TeamWithMembers | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
 
   // Edit state
@@ -27,6 +33,10 @@ export function TeamManagement() {
   const [isLeaving, setIsLeaving] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
+
+  // Invader state
+  const [invaderPose, setInvaderPose] = useState<InvaderPose>('idle');
+  const [invaderSpeech, setInvaderSpeech] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -88,7 +98,9 @@ export function TeamManagement() {
     try {
       await navigator.clipboard.writeText(inviteLink);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setInvaderPose('handsUp');
+      setInvaderSpeech('// скопировано!');
+      setTimeout(() => { setCopied(false); setInvaderPose('idle'); setInvaderSpeech(null); }, 2000);
     } catch {
       // Fallback for older browsers
       const textarea = document.createElement('textarea');
@@ -133,17 +145,20 @@ export function TeamManagement() {
     }
   };
 
+  if (showLoading) {
+    return <TerminalLoader />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Загрузка команды...</p>
-      </div>
-    );
+    return null;
   }
 
   if (error || !teamData) {
     return (
       <div className="text-center py-12">
+        <div className="flex justify-center mb-4">
+          <SpaceInvader size="sm" controlledPose="cry" speechBubble="// не найдено" eyeOverride="sad" />
+        </div>
         <p className="text-red-400">{error || 'Команда не найдена'}</p>
         <Link to="/tournaments" className="btn btn-secondary mt-4">
           Назад к турнирам
@@ -155,6 +170,29 @@ export function TeamManagement() {
   const { members } = teamData;
   const isLeader = user?.id === teamData.leader_id;
   const isMember = members.some((m) => m.id === user?.id);
+
+  // Set initial invader pose based on role
+  useEffect(() => {
+    if (isLeader) {
+      setInvaderPose('salute');
+      setInvaderSpeech('// капитан на мостике');
+      setTimeout(() => { setInvaderPose('idle'); setInvaderSpeech(null); }, 2500);
+    } else {
+      setInvaderSpeech('// в строю');
+      setTimeout(() => setInvaderSpeech(null), 2500);
+    }
+  }, [isLeader]);
+
+  // React to confirmLeave
+  useEffect(() => {
+    if (confirmLeave) {
+      setInvaderPose('cry');
+      setInvaderSpeech('// не уходи!');
+    } else {
+      setInvaderPose('idle');
+      setInvaderSpeech(null);
+    }
+  }, [confirmLeave]);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -204,13 +242,20 @@ export function TeamManagement() {
               </button>
             </div>
           ) : (
-            <div>
-              <h1 className="text-2xl font-bold text-gray-100">{teamData.name}</h1>
-              {isLeader && (
-                <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
-                  Вы капитан
-                </span>
-              )}
+            <div className="flex items-center gap-3">
+              <InvaderPresence
+                size="sm"
+                controlledPose={invaderPose}
+                speechBubble={invaderSpeech}
+              />
+              <div>
+                <h1 className="text-2xl font-bold text-gray-100">{teamData.name}</h1>
+                {isLeader && (
+                  <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
+                    Вы капитан
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

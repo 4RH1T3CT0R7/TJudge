@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { SpaceInvader } from '../components/SpaceInvader';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type { Game } from '../types';
 
 // Game-specific icons and colors configuration
@@ -37,6 +39,7 @@ const getGameConfig = (gameName: string) => gameConfig[gameName] || defaultGameC
 export function Games() {
   const [games, setGames] = useState<Game[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,18 +61,20 @@ export function Games() {
     }
   };
 
+  if (showLoading) {
+    return <TerminalLoader />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="text-center py-12">
-        <SpaceInvader size="sm" />
-        <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
-      </div>
-    );
+    return null;
   }
 
   if (error) {
     return (
       <div className="text-center py-12">
+        <div className="flex justify-center mb-4">
+          <SpaceInvader size="sm" controlledPose="dizzy" speechBubble="// ошибка загрузки" eyeOverride="sad" />
+        </div>
         <p className="text-red-400">{error}</p>
         <button onClick={loadGames} className="btn btn-secondary mt-4">
           Попробовать снова
@@ -89,7 +94,7 @@ export function Games() {
 
       {games.length === 0 ? (
         <div className="text-center py-12">
-          <SpaceInvader size="sm" />
+          <SpaceInvader size="sm" controlledPose="cry" speechBubble="// пусто..." eyeOverride="sad" />
           <p className="text-gray-400 mt-4">Игры пока не добавлены</p>
           <p className="text-gray-500 text-xs mt-1 font-mono">// скоро появятся</p>
         </div>

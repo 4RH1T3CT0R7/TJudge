@@ -110,21 +110,32 @@ func TestQueueManager_GetQueueKey(t *testing.T) {
 }
 
 func TestQueueManager_GetQueueSize(t *testing.T) {
-	cache := new(MockCache)
-	qm := &QueueManager{
-		cache:   nil, // We'll set it through a different test
-		log:     testLogger(),
-		metrics: testMetrics(),
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// All queues start empty
+	for _, priority := range []domain.MatchPriority{domain.PriorityHigh, domain.PriorityMedium, domain.PriorityLow} {
+		size, err := qm.GetQueueSize(ctx, priority)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), size)
 	}
 
-	// Setup mock expectations for each priority
-	cache.On("LLen", mock.Anything, "queue:high").Return(int64(5), nil)
-	cache.On("LLen", mock.Anything, "queue:medium").Return(int64(10), nil)
-	cache.On("LLen", mock.Anything, "queue:low").Return(int64(3), nil)
+	// Enqueue matches to different priorities
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
 
-	// Note: This test is a demonstration of the interface
-	// Actual testing requires dependency injection refactoring
-	_ = qm
+	highSize, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), highSize)
+
+	medSize, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), medSize)
+
+	lowSize, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), lowSize)
 }
 
 func TestMatch_Serialization(t *testing.T) {
@@ -546,4 +557,93 @@ func BenchmarkInMemoryQueue_BRPop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = q.BRPop(ctx, time.Second, "test")
 	}
+}
+
+// --- Concurrency / Race Detection Tests ---
+
+func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	const enqueueGoroutines = 5
+	const matchesPerGoroutine = 20
+	totalMatches := enqueueGoroutines * matchesPerGoroutine
+
+	// Track all enqueued match IDs for verification.
+	enqueuedIDs := make(chan uuid.UUID, totalMatches)
+
+	var enqueueWg sync.WaitGroup
+	enqueueWg.Add(enqueueGoroutines)
+
+	// Launch concurrent enqueuers.
+	for g := 0; g < enqueueGoroutines; g++ {
+		go func() {
+			defer enqueueWg.Done()
+			for i := 0; i < matchesPerGoroutine; i++ {
+				match := testMatch(domain.PriorityMedium)
+				err := qm.Enqueue(ctx, match)
+				assert.NoError(t, err)
+				enqueuedIDs <- match.ID
+			}
+		}()
+	}
+
+	// Wait for all enqueues to complete, then close the channel.
+	enqueueWg.Wait()
+	close(enqueuedIDs)
+
+	// Collect all enqueued IDs.
+	expectedIDs := make(map[uuid.UUID]struct{}, totalMatches)
+	for id := range enqueuedIDs {
+		expectedIDs[id] = struct{}{}
+	}
+	require.Equal(t, totalMatches, len(expectedIDs), "all enqueued IDs should be unique")
+
+	// Verify total queue size.
+	total, err := qm.GetTotalQueueSize(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(totalMatches), total)
+
+	// Concurrently dequeue all matches.
+	const dequeueGoroutines = 3
+	dequeuedIDs := make(chan uuid.UUID, totalMatches)
+
+	var dequeueWg sync.WaitGroup
+	dequeueWg.Add(dequeueGoroutines)
+
+	for g := 0; g < dequeueGoroutines; g++ {
+		go func() {
+			defer dequeueWg.Done()
+			for {
+				match, err := qm.Dequeue(ctx)
+				if err != nil {
+					return
+				}
+				if match == nil {
+					// Queue is empty (BRPop timed out).
+					return
+				}
+				dequeuedIDs <- match.ID
+			}
+		}()
+	}
+
+	dequeueWg.Wait()
+	close(dequeuedIDs)
+
+	// Collect all dequeued IDs.
+	gotIDs := make(map[uuid.UUID]struct{})
+	for id := range dequeuedIDs {
+		gotIDs[id] = struct{}{}
+	}
+
+	// Every dequeued match must have been enqueued.
+	for id := range gotIDs {
+		_, found := expectedIDs[id]
+		assert.True(t, found, "dequeued ID %s was not enqueued", id)
+	}
+
+	// All enqueued matches should have been dequeued.
+	assert.Equal(t, len(expectedIDs), len(gotIDs),
+		"total dequeued (%d) should equal total enqueued (%d)", len(gotIDs), len(expectedIDs))
 }

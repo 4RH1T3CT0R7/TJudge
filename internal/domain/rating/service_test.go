@@ -2,7 +2,6 @@ package rating
 
 import (
 	"context"
-	"math"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -227,8 +226,8 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 	// Expected scores should sum to ~1.0
 	assert.InDelta(t, 1.0, scoreA+scoreB, 0.001)
 
-	// 400 point difference → ~0.91
-	assert.True(t, math.Abs(scoreA-0.76) < 0.05)
+	// 200 point difference → ~0.76
+	assert.InDelta(t, 0.76, scoreA, 0.01)
 }
 
 // --- ProcessMatchResult (requires LeaderboardCache via miniredis) ---
@@ -266,10 +265,10 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// updateParticipantRating for p1 and p2
+	// Equal ratings (1500 vs 1500), p1 wins: new1=1516, new2=1484
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, 1516).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, 1484).Return(nil)
 	// updateMatchStats
 	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
 	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
@@ -295,9 +294,10 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
+	// Equal ratings (1500 vs 1500), p2 wins: new1=1484, new2=1516
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, 1484).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, 1516).Return(nil)
 	repo.On("UpdateParticipantStats", ctx, tID, p1, false, false).Return(nil)
 	repo.On("UpdateParticipantStats", ctx, tID, p2, true, false).Return(nil)
 
@@ -322,9 +322,10 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 		Winner:       &winner,
 	}
 
+	// Equal ratings, draw: no change (1500+32*(0.5-0.5)=1500)
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p1, 1500).Return(nil)
+	repo.On("UpdateParticipantRating", ctx, tID, p2, 1500).Return(nil)
 	repo.On("UpdateParticipantStats", ctx, tID, p1, false, true).Return(nil)
 	repo.On("UpdateParticipantStats", ctx, tID, p2, false, true).Return(nil)
 
@@ -372,6 +373,8 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 		Winner:       &winner,
 	}
 
+	// 2800 vs 400: expected score for 2800 ≈ 1.0, so change ≈ 0
+	// K=32, expected ≈ 0.9999..., new1 ≈ 2800, new2 ≈ 400
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
 	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
 	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
@@ -382,4 +385,25 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 
 	require.NoError(t, err)
 	repo.AssertExpectations(t)
+}
+
+func TestService_ProcessMatchResult_NilWinner(t *testing.T) {
+	svc, _ := newTestRatingServiceWithCache(t)
+	ctx := context.Background()
+
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+		Winner:       nil,
+	}
+
+	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
+	assert.Error(t, err)
+	assert.True(t, errors.IsAppError(err))
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 400, appErr.Code)
+	assert.Contains(t, appErr.Message, "no winner")
 }

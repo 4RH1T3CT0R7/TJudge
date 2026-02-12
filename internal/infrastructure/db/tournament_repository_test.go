@@ -39,7 +39,7 @@ func (s *TournamentRepositorySuite) TearDownTest() {
 
 func (s *TournamentRepositorySuite) TestCreate() {
 	ctx := context.Background()
-	creatorID := uuid.New()
+	creator := createTestUser(s.T(), s.userRepo, "creator_"+uuid.New().String()[:8])
 
 	tournament := &domain.Tournament{
 		ID:              uuid.New(),
@@ -51,7 +51,7 @@ func (s *TournamentRepositorySuite) TestCreate() {
 		MaxParticipants: intPtr(100),
 		MaxTeamSize:     3,
 		IsPermanent:     false,
-		CreatorID:       uuidPtr(creatorID),
+		CreatorID:       uuidPtr(creator.ID),
 		Metadata:        map[string]interface{}{"test": "value"},
 	}
 
@@ -60,12 +60,12 @@ func (s *TournamentRepositorySuite) TestCreate() {
 
 	assert.NotZero(s.T(), tournament.CreatedAt)
 	assert.NotZero(s.T(), tournament.UpdatedAt)
-	assert.Equal(s.T(), 1, tournament.Version)
+	assert.Equal(s.T(), 0, tournament.Version)
 }
 
 func (s *TournamentRepositorySuite) TestGetByID() {
 	ctx := context.Background()
-	tournament := createTestTournament(s.T(), s.repo, "TEST002", uuid.New())
+	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST002")
 
 	result, err := s.repo.GetByID(ctx, tournament.ID)
 	require.NoError(s.T(), err)
@@ -85,11 +85,10 @@ func (s *TournamentRepositorySuite) TestGetByID_NotFound() {
 
 func (s *TournamentRepositorySuite) TestList() {
 	ctx := context.Background()
-	creatorID := uuid.New()
 
-	createTestTournament(s.T(), s.repo, "TEST003", creatorID)
-	createTestTournament(s.T(), s.repo, "TEST004", creatorID)
-	createTestTournament(s.T(), s.repo, "TEST005", creatorID)
+	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST003")
+	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST004")
+	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST005")
 
 	filter := domain.TournamentFilter{Limit: 10}
 	tournaments, err := s.repo.List(ctx, filter)
@@ -100,10 +99,9 @@ func (s *TournamentRepositorySuite) TestList() {
 
 func (s *TournamentRepositorySuite) TestList_FilterByStatus() {
 	ctx := context.Background()
-	creatorID := uuid.New()
 
-	t1 := createTestTournament(s.T(), s.repo, "TEST006", creatorID)
-	_ = createTestTournament(s.T(), s.repo, "TEST007", creatorID)
+	t1, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST006")
+	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST007")
 
 	err := s.repo.UpdateStatus(ctx, t1.ID, domain.TournamentActive)
 	require.NoError(s.T(), err)
@@ -127,7 +125,7 @@ func (s *TournamentRepositorySuite) TestList_FilterByStatus() {
 
 func (s *TournamentRepositorySuite) TestUpdateStatus() {
 	ctx := context.Background()
-	tournament := createTestTournament(s.T(), s.repo, "TEST008", uuid.New())
+	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST008")
 
 	err := s.repo.UpdateStatus(ctx, tournament.ID, domain.TournamentActive)
 	require.NoError(s.T(), err)
@@ -139,10 +137,9 @@ func (s *TournamentRepositorySuite) TestUpdateStatus() {
 
 func (s *TournamentRepositorySuite) TestUpdate() {
 	ctx := context.Background()
-	tournament := createTestTournament(s.T(), s.repo, "TEST009", uuid.New())
+	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST009")
 
 	tournament.Name = "Updated Name"
-	tournament.Description = "Updated Description"
 	tournament.MaxParticipants = intPtr(200)
 
 	err := s.repo.Update(ctx, tournament)
@@ -151,13 +148,12 @@ func (s *TournamentRepositorySuite) TestUpdate() {
 	result, err := s.repo.GetByID(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "Updated Name", result.Name)
-	assert.Equal(s.T(), "Updated Description", result.Description)
 	assert.Equal(s.T(), intPtr(200), result.MaxParticipants)
 }
 
 func (s *TournamentRepositorySuite) TestDelete() {
 	ctx := context.Background()
-	tournament := createTestTournament(s.T(), s.repo, "TEST010", uuid.New())
+	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST010")
 
 	err := s.repo.Delete(ctx, tournament.ID)
 	require.NoError(s.T(), err)

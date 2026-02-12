@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -150,8 +151,10 @@ func TestPool_StartStop(t *testing.T) {
 	// Start pool
 	pool.Start()
 
-	// Give workers time to start
-	time.Sleep(100 * time.Millisecond)
+	// Wait for workers to start
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 10*time.Millisecond)
 
 	stats := pool.GetStats()
 	assert.GreaterOrEqual(t, stats.TotalWorkers, cfg.MinWorkers)
@@ -189,7 +192,9 @@ func TestPool_ProcessMatch(t *testing.T) {
 	pool.Start()
 
 	// Wait for processing
-	time.Sleep(500 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return processor.GetProcessedCount() >= 1
+	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
@@ -225,7 +230,9 @@ func TestPool_RetryOnFailure(t *testing.T) {
 	pool.Start()
 
 	// Wait for processing with retries
-	time.Sleep(1 * time.Second)
+	require.Eventually(t, func() bool {
+		return processor.GetProcessedCount() >= 1
+	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
@@ -246,7 +253,10 @@ func TestPool_GetStats(t *testing.T) {
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
 	pool.Start()
-	time.Sleep(100 * time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 10*time.Millisecond)
 
 	stats := pool.GetStats()
 
@@ -281,8 +291,10 @@ func TestPool_ConcurrentProcessing(t *testing.T) {
 
 	pool.Start()
 
-	// Wait for processing
-	time.Sleep(1 * time.Second)
+	// Wait for all matches to be processed
+	require.Eventually(t, func() bool {
+		return processor.GetProcessedCount() >= 10
+	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
@@ -360,7 +372,11 @@ func TestPool_FailedMatchCounting(t *testing.T) {
 	processor.On("Process", mock.Anything, match).Return(errors.New("processing failed"))
 
 	pool.Start()
-	time.Sleep(500 * time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return pool.GetStats().MatchesFailed >= 1
+	}, 5*time.Second, 10*time.Millisecond)
+
 	pool.Stop()
 
 	stats := pool.GetStats()
@@ -384,7 +400,10 @@ func TestPool_Wait(t *testing.T) {
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
 	pool.Start()
-	time.Sleep(50 * time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Cancel context
 	pool.cancel()
@@ -426,7 +445,11 @@ func TestPool_GetMatchesProcessed(t *testing.T) {
 	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Return(nil)
 
 	pool.Start()
-	time.Sleep(1 * time.Second)
+
+	require.Eventually(t, func() bool {
+		return pool.GetMatchesProcessed() >= 5
+	}, 5*time.Second, 10*time.Millisecond)
+
 	pool.Stop()
 
 	assert.Equal(t, int64(5), pool.GetMatchesProcessed())

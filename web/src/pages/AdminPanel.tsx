@@ -1,7 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
+import { SpaceInvader } from '../components/SpaceInvader';
+import type { InvaderPose } from '../components/SpaceInvader';
+import { useSequenceTyping } from '../hooks/useEasterEggs';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match, TournamentGameWithDetails } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
@@ -50,6 +55,7 @@ export function AdminPanel() {
   const [games, setGames] = useState<Game[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
 
   // Game form state
   const [showGameForm, setShowGameForm] = useState(false);
@@ -81,6 +87,109 @@ export function AdminPanel() {
   // Delete confirmation
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [deleteTournamentId, setDeleteTournamentId] = useState<string | null>(null);
+
+  // Admin invader state
+  const [adminPose, setAdminPose] = useState<InvaderPose>('salute');
+  const [adminSpeech, setAdminSpeech] = useState<string | null>('// приветствую, admin');
+  const [speechVisible, setSpeechVisible] = useState(true);
+  const adminTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Helper: set invader reaction with auto-reset to idle
+  const setAdminReaction = useCallback((pose: InvaderPose, speech: string | null, duration = 3000) => {
+    clearTimeout(adminTimerRef.current);
+    clearTimeout(idleTimerRef.current);
+    setAdminPose(pose);
+    setAdminSpeech(speech);
+    setSpeechVisible(true);
+    idleTimerRef.current = setTimeout(() => {
+      setSpeechVisible(false);
+      setTimeout(() => {
+        setAdminPose('idle');
+        setAdminSpeech(null);
+      }, 300);
+    }, duration);
+  }, []);
+
+  // Salute on mount, then idle after 2.5s (NO sleep)
+  useEffect(() => {
+    adminTimerRef.current = setTimeout(() => {
+      setSpeechVisible(false);
+      setTimeout(() => {
+        setAdminPose('idle');
+        setAdminSpeech(null);
+      }, 300);
+    }, 2500);
+    return () => {
+      clearTimeout(adminTimerRef.current);
+      clearTimeout(idleTimerRef.current);
+    };
+  }, []);
+
+  // "sudo" easter egg — full green hacker theme
+  const [sudoMode, setSudoMode] = useState(false);
+  const [sudoActivating, setSudoActivating] = useState(false);
+  const sudoCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useSequenceTyping('sudo', useCallback(() => {
+    if (sudoMode || sudoActivating) return;
+    setSudoActivating(true);
+    setAdminReaction('transform', '// ROOT ACCESS GRANTED', 4000);
+
+    // Phase 1: cinematic activation
+    setTimeout(() => {
+      setSudoMode(true);
+      setSudoActivating(false);
+    }, 2000);
+  }, [sudoMode, sudoActivating, setAdminReaction]));
+
+  // Sudo matrix rain canvas
+  useEffect(() => {
+    if (!sudoMode) return;
+    const canvas = sudoCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const CHARS = 'アイウエオカキクケコサシスセソタチツテト0123456789ABCDEF';
+    let columns: number[] = [];
+    let raf: number;
+
+    const resize = () => {
+      canvas.width = canvas.parentElement?.clientWidth || window.innerWidth;
+      canvas.height = canvas.parentElement?.clientHeight || window.innerHeight;
+      const cols = Math.floor(canvas.width / 14);
+      columns = Array(cols).fill(0).map(() => Math.random() * canvas.height);
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+
+    const draw = () => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '12px monospace';
+
+      columns.forEach((y, i) => {
+        const char = CHARS[Math.floor(Math.random() * CHARS.length)];
+        ctx.fillStyle = Math.random() > 0.85 ? '#00ff41' : 'rgba(0,255,65,0.3)';
+        ctx.fillText(char, i * 14, y);
+        if (y > canvas.height && Math.random() > 0.975) {
+          columns[i] = 0;
+        } else {
+          columns[i] = y + 14;
+        }
+      });
+
+      raf = requestAnimationFrame(draw);
+    };
+
+    raf = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+    };
+  }, [sudoMode]);
 
   // Action errors
   const [actionError, setActionError] = useState<string | null>(null);
@@ -183,8 +292,19 @@ export function AdminPanel() {
       setSystemError('Не удалось загрузить данные системы');
     }
 
+    // Invader reactions to system state
+    const q = results[0].status === 'fulfilled' ? results[0].value : null;
+    const fm = results[3].status === 'fulfilled' ? (results[3].value || []) : [];
+    if (fm.length > 0) {
+      setAdminReaction('dizzy', '// ошибки!', 4000);
+    } else if (q && q.total > 50) {
+      setAdminReaction('run', '// очередь растёт!', 4000);
+    } else if (q && q.total === 0) {
+      setAdminReaction('idle', '// всё чисто', 3000);
+    }
+
     setIsLoadingSystem(false);
-  }, []);
+  }, [setAdminReaction]);
 
   // Auto-refresh system data when on system tab
   useEffect(() => {
@@ -241,6 +361,7 @@ export function AdminPanel() {
 
     setIsSavingGame(true);
     setGameError(null);
+    setAdminReaction('typing', '// создаём...', 2000);
 
     try {
       if (editingGame) {
@@ -253,6 +374,7 @@ export function AdminPanel() {
         const newGame = await api.createGame(gameForm);
         setGames([...games, newGame]);
       }
+      setAdminReaction('celebrate', '// готово!', 2000);
       resetGameForm();
     } catch (err) {
       console.error('Failed to save game:', err);
@@ -263,16 +385,19 @@ export function AdminPanel() {
   };
 
   const handleDeleteGame = async (id: string) => {
+    setAdminReaction('cry', '// удаляем...', 2000);
     try {
       await api.deleteGame(id);
       setGames(games.filter((g) => g.id !== id));
       setDeleteGameId(null);
     } catch (err) {
       console.error('Failed to delete game:', err);
+      setAdminReaction('dizzy', '// ошибка!', 2000);
     }
   };
 
   const handleDeleteTournament = async (id: string) => {
+    setAdminReaction('cry', '// удаляем...', 2000);
     try {
       await api.deleteTournament(id);
       setTournaments(tournaments.filter((t) => t.id !== id));
@@ -287,6 +412,7 @@ export function AdminPanel() {
 
   const handleStartTournament = async (id: string) => {
     setActionError(null);
+    setAdminReaction('fly', '// запуск!', 3000);
     try {
       await api.startTournament(id);
       loadData();
@@ -629,12 +755,12 @@ export function AdminPanel() {
     );
   }
 
+  if (showLoading) {
+    return <TerminalLoader />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Загрузка...</p>
-      </div>
-    );
+    return null;
   }
 
   const tabs: { id: AdminTab; label: string }[] = [
@@ -645,8 +771,33 @@ export function AdminPanel() {
   ];
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6 text-gray-100">Панель администратора</h1>
+    <div className={`relative ${sudoMode ? 'sudo-theme' : ''} ${sudoActivating ? 'sudo-activating' : ''}`}>
+      {/* Sudo matrix rain background */}
+      {sudoMode && (
+        <canvas
+          ref={sudoCanvasRef}
+          className="absolute inset-0 pointer-events-none opacity-[0.07] z-0"
+          style={{ width: '100%', height: '100%' }}
+        />
+      )}
+      {/* Sudo scanline overlay */}
+      {sudoMode && (
+        <div className="sudo-scanlines absolute inset-0 pointer-events-none z-[1]" />
+      )}
+      {/* Sudo CRT vignette */}
+      {sudoMode && (
+        <div className="sudo-vignette absolute inset-0 pointer-events-none z-[1]" />
+      )}
+
+      <div className="relative z-[2]">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className={`text-2xl font-bold ${sudoMode ? 'sudo-text' : 'text-gray-100'}`}>
+          {sudoMode ? 'root@tjudge:~# admin' : 'Панель администратора'}
+        </h1>
+        <div className="relative">
+          <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} />
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-700 mb-6">
@@ -1891,6 +2042,7 @@ export function AdminPanel() {
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }

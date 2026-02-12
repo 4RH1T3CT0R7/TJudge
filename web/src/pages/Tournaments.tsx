@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { SpaceInvader } from '../components/SpaceInvader';
+import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type { Tournament, TournamentStatus } from '../types';
 
 const UsersIcon = () => (
@@ -19,6 +22,7 @@ const statusLabels: Record<TournamentStatus, { label: string; className: string 
 export function Tournaments() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
   const [filter, setFilter] = useState<TournamentStatus | ''>('');
 
   useEffect(() => {
@@ -63,12 +67,9 @@ export function Tournaments() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
-        <div className="text-center py-12">
-          <SpaceInvader size="sm" />
-          <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
-        </div>
-      ) : tournaments.length === 0 ? (
+      {showLoading ? (
+        <TerminalLoader />
+      ) : isLoading ? null : tournaments.length === 0 ? (
         <div className="text-center py-16">
           <div className="relative inline-block">
             <SpaceInvader size="md" controlledPose="cry" eyeOverride="sad" speechBubble="// пусто..." />
@@ -80,48 +81,49 @@ export function Tournaments() {
           <p className="text-gray-700 text-sm mt-1 font-mono">// создайте первый турнир в панели админа</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StaggerList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {tournaments.map((tournament) => {
             const status = statusLabels[tournament.status];
 
             return (
-              <Link
-                key={tournament.id}
-                to={`/tournaments/${tournament.id}`}
-                className="card card-hover block"
-                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-base font-semibold text-gray-100 line-clamp-1">
-                    {tournament.name}
-                  </h3>
-                  <span className={status.className}>{status.label}</span>
-                </div>
-
-                {tournament.description && (
-                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">
-                    {tournament.description}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between text-sm text-gray-400">
-                  <div className="flex items-center gap-1">
-                    <UsersIcon />
-                    <span>До {tournament.max_team_size} чел.</span>
+              <StaggerItem key={tournament.id}>
+                <Link
+                  to={`/tournaments/${tournament.id}`}
+                  className="card card-hover block"
+                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-base font-semibold text-gray-100 line-clamp-1">
+                      {tournament.name}
+                    </h3>
+                    <span className={status.className}>{status.label}</span>
                   </div>
-                  <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
-                    {tournament.code}
-                  </code>
-                </div>
 
-                {tournament.is_permanent && (
-                  <span className="badge badge-blue mt-3 text-xs">Постоянный</span>
-                )}
-              </Link>
+                  {tournament.description && (
+                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+                      {tournament.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between text-sm text-gray-400">
+                    <div className="flex items-center gap-1">
+                      <UsersIcon />
+                      <span>До {tournament.max_team_size} чел.</span>
+                    </div>
+                    <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
+                      {tournament.code}
+                    </code>
+                  </div>
+
+                  {tournament.is_permanent && (
+                    <span className="badge badge-blue mt-3 text-xs">Постоянный</span>
+                  )}
+                </Link>
+              </StaggerItem>
             );
           })}
-        </div>
+        </StaggerList>
       )}
     </div>
   );

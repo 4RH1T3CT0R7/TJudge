@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"mime/multipart"
 	"os"
 	"path/filepath"
 	"testing"
@@ -254,4 +256,133 @@ func TestGetBasePath(t *testing.T) {
 	fs := newTestStorage(t)
 	assert.NotEmpty(t, fs.GetBasePath())
 	assert.Equal(t, fs.basePath, fs.GetBasePath())
+}
+
+// fakeMultipartFile wraps bytes.Reader to satisfy multipart.File interface
+type fakeMultipartFile struct {
+	*bytes.Reader
+}
+
+func (f *fakeMultipartFile) Close() error {
+	return nil
+}
+
+// --- SaveProgram ---
+
+func TestSaveProgram_Success(t *testing.T) {
+	fs := newTestStorage(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	gameID := uuid.New()
+
+	content := []byte("print('hello')")
+	file := &fakeMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "solution.py",
+		Size:     int64(len(content)),
+	}
+
+	path, err := fs.SaveProgram(ctx, teamID, gameID, 1, file, header)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, path)
+
+	// Verify file exists on disk
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.False(t, info.IsDir())
+	assert.Equal(t, int64(len(content)), info.Size())
+}
+
+func TestSaveProgram_TooLarge(t *testing.T) {
+	fs := newTestStorage(t)
+	ctx := context.Background()
+
+	content := []byte("small")
+	file := &fakeMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "solution.py",
+		Size:     2048, // exceeds 1024 limit
+	}
+
+	_, err := fs.SaveProgram(ctx, uuid.New(), uuid.New(), 1, file, header)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "file too large")
+}
+
+func TestSaveProgram_DisallowedExtension(t *testing.T) {
+	fs := newTestStorage(t)
+	ctx := context.Background()
+
+	content := []byte("bad binary")
+	file := &fakeMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "program.exe",
+		Size:     10,
+	}
+
+	_, err := fs.SaveProgram(ctx, uuid.New(), uuid.New(), 1, file, header)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "file type not allowed")
+}
+
+func TestSaveProgram_VersionedFilename(t *testing.T) {
+	fs := newTestStorage(t)
+	ctx := context.Background()
+
+	content := []byte("code")
+	file := &fakeMultipartFile{Reader: bytes.NewReader(content)}
+	header := &multipart.FileHeader{
+		Filename: "solution.py",
+		Size:     int64(len(content)),
+	}
+
+	path, err := fs.SaveProgram(ctx, uuid.New(), uuid.New(), 5, file, header)
+
+	require.NoError(t, err)
+	assert.Contains(t, path, "v5_solution.py")
+}
+
+// --- NewFileStorage default MaxFileSize ---
+
+func TestNewFileStorage_DefaultMaxFileSize(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	basePath := t.TempDir()
+
+	fs, err := NewFileStorage(Config{BasePath: basePath, MaxFileSize: -1}, log)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(10*1024*1024), fs.maxFileSize)
+}
+
+// --- sanitizeFilename double dots ---
+
+func TestSanitizeFilename_DoubleDots(t *testing.T) {
+	result := sanitizeFilename("file..name.py")
+	assert.NotContains(t, result, "..")
+	assert.Contains(t, result, "_")
+}
+
+// --- GetLatestProgramPath skips directories ---
+
+func TestGetLatestProgramPath_SkipsDirectories(t *testing.T) {
+	fs := newTestStorage(t)
+	teamID := uuid.New()
+	gameID := uuid.New()
+
+	dir := filepath.Join(fs.basePath, teamID.String(), gameID.String())
+	require.NoError(t, os.MkdirAll(dir, 0755))
+
+	// Create a subdirectory that looks like a high-version entry
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "v99_fake"), 0755))
+	// Create an actual file with version 1
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "v1_solution.py"), []byte("code"), 0644))
+
+	path, version, err := fs.GetLatestProgramPath(teamID, gameID)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, version)
+	assert.Contains(t, path, "v1_solution.py")
 }

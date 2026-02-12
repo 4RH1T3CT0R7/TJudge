@@ -81,6 +81,7 @@ export function Login() {
     try {
       await login(username, password);
       clearTimeout(speechTimerRef.current);
+
       setSpeechBubble('<3');
       setJumpInvader(true);
       setTimeout(() => setJumpInvader(false), 700);

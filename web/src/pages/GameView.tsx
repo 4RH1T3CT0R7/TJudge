@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import type { Game } from '../types';
+import { InvaderPresence } from '../components/motion/InvaderPresence';
+import { SpaceInvader } from '../components/SpaceInvader';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 // Simple Markdown renderer
 function MarkdownRenderer({ content }: { content: string }) {
@@ -55,6 +59,7 @@ export function GameView() {
   const { id } = useParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,18 +85,20 @@ export function GameView() {
     }
   };
 
+  if (showLoading) {
+    return <TerminalLoader />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="text-center py-12">
-        <div className="w-10 h-10 border-4 border-primary-800 border-t-primary-400 rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-gray-400">Загрузка игры...</p>
-      </div>
-    );
+    return null;
   }
 
   if (error || !game) {
     return (
       <div className="text-center py-12">
+        <div className="flex justify-center mb-4">
+          <SpaceInvader size="sm" controlledPose="cry" speechBubble="// игра не найдена" eyeOverride="sad" />
+        </div>
         <p className="text-red-400 mb-4">{error || 'Игра не найдена'}</p>
         <Link to="/games" className="btn btn-secondary">
           Назад к списку игр
@@ -151,6 +158,15 @@ export function GameView() {
             >
               Найти турниры
             </Link>
+            {/* Peek invader */}
+            <div className="flex justify-end mt-4">
+              <InvaderPresence
+                size="sm"
+                entrance="peek"
+                controlledPose="peek"
+                speechBubble="// попробуй!"
+              />
+            </div>
           </div>
         </div>
       </div>

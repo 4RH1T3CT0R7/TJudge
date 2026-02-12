@@ -1,14 +1,35 @@
-import { useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { SpaceInvader } from '../SpaceInvader';
+import { AnimatedOutlet } from '../motion/AnimatedOutlet';
+import { MatrixRain } from '../MatrixRain';
+import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
+import { useIdleDetector } from '../../hooks/useIdleDetector';
 
 export function Layout() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [matrixActive, setMatrixActive] = useState(false);
   useDarkMode();
   const navigate = useNavigate();
+
+  // Easter eggs
+  const { godMode, activateGodMode } = useGodMode();
+  useKonamiCode(useCallback(() => {
+    activateGodMode();
+  }, [activateGodMode]));
+
+  // Idle 5min → matrix rain
+  const idleStage = useIdleDetector();
+  useEffect(() => {
+    if (idleStage === 'idle5m') setMatrixActive(true);
+  }, [idleStage]);
+
+  const handleMatrixWakeUp = useCallback(() => {
+    setMatrixActive(false);
+  }, []);
 
   const handleLogout = () => {
     setIsLoggingOut(true);
@@ -26,7 +47,10 @@ export function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative flex h-16 items-center justify-between">
             {/* Logo with neon glow */}
-            <Link to="/" className="flex items-center shrink-0 z-10">
+            <Link
+              to="/"
+              className="flex items-center gap-2 shrink-0 z-10"
+            >
               <span
                 className="text-xl font-bold text-primary-400"
                 style={{ textShadow: '0 0 20px rgba(139,92,246,0.5)' }}
@@ -83,7 +107,7 @@ export function Layout() {
                     {user?.username}
                   </Link>
                   {isLoggingOut && (
-                    <SpaceInvader size="sm" eyeOverride="sad" />
+                    <SpaceInvader size="sm" controlledPose="cry" eyeOverride="sad" speechBubble="// до свидания..." />
                   )}
                   <button
                     onClick={handleLogout}
@@ -105,7 +129,7 @@ export function Layout() {
 
       {/* Main content with top padding for fixed header */}
       <main className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
-        <Outlet />
+        <AnimatedOutlet />
       </main>
 
       {/* Minimal Footer — no border */}
@@ -140,6 +164,20 @@ export function Layout() {
           </div>
         </div>
       </footer>
+
+      {/* God mode scanline overlay */}
+      {godMode && (
+        <div className="fixed inset-0 z-[80] pointer-events-none animate-scanline-flash" style={{ mixBlendMode: 'overlay' }}>
+          <div className="w-full h-full" style={{
+            background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139,92,246,0.03) 2px, rgba(139,92,246,0.03) 4px)',
+            animation: 'scanline-flash 0.1s ease-out',
+          }} />
+        </div>
+      )}
+
+      {/* Matrix rain idle easter egg */}
+      <MatrixRain active={matrixActive} onWakeUp={handleMatrixWakeUp} />
+
     </div>
   );
 }

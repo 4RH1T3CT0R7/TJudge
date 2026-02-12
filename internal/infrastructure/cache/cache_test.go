@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -216,4 +218,246 @@ func TestCache_ZIncrBy(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	assert.Equal(t, float64(150), result[0].Score)
+}
+
+func TestCache_ReplaceList(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "replace-list", "old1", "old2"))
+
+	err := c.ReplaceList(ctx, "replace-list", [][]byte{[]byte("new1"), []byte("new2")})
+	require.NoError(t, err)
+
+	result, err := c.LRange(ctx, "replace-list", 0, -1)
+	require.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Contains(t, result, "new1")
+	assert.Contains(t, result, "new2")
+}
+
+func TestCache_ReplaceList_Empty(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "replace-empty", "old1", "old2"))
+
+	err := c.ReplaceList(ctx, "replace-empty", [][]byte{})
+	require.NoError(t, err)
+
+	length, err := c.LLen(ctx, "replace-empty")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), length)
+}
+
+func TestCache_Eval_SimpleScript(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	result, err := c.Eval(ctx, "return 1+1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), result)
+}
+
+func TestCache_Scan_WithPattern(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "scan:a", "1", time.Minute))
+	require.NoError(t, c.Set(ctx, "scan:b", "2", time.Minute))
+	require.NoError(t, c.Set(ctx, "other:c", "3", time.Minute))
+
+	var allKeys []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := c.Scan(ctx, cursor, "scan:*", 100)
+		require.NoError(t, err)
+		allKeys = append(allKeys, keys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	assert.Len(t, allKeys, 2)
+	assert.Contains(t, allKeys, "scan:a")
+	assert.Contains(t, allKeys, "scan:b")
+}
+
+func TestCache_Scan_NoResults(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	var allKeys []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := c.Scan(ctx, cursor, "nonexistent:*", 100)
+		require.NoError(t, err)
+		allKeys = append(allKeys, keys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	assert.Empty(t, allKeys)
+}
+
+func TestCache_Close(t *testing.T) {
+	c := setupTestCache(t)
+
+	err := c.Close()
+	assert.NoError(t, err)
+}
+
+func TestCache_Del_Multiple(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "k1", "v1", time.Minute))
+	require.NoError(t, c.Set(ctx, "k2", "v2", time.Minute))
+	require.NoError(t, c.Set(ctx, "k3", "v3", time.Minute))
+
+	err := c.Del(ctx, "k1", "k2", "k3")
+	require.NoError(t, err)
+
+	for _, key := range []string{"k1", "k2", "k3"} {
+		exists, err := c.Exists(ctx, key)
+		require.NoError(t, err)
+		assert.False(t, exists, "key %s should be deleted", key)
+	}
+}
+
+func TestCache_Set_TTL(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "ttl-key", "value", 100*time.Millisecond))
+
+	exists, err := c.Exists(ctx, "ttl-key")
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	mr.FastForward(200 * time.Millisecond)
+
+	exists, err = c.Exists(ctx, "ttl-key")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestCache_ZRevRangeWithScores_Empty(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	result, err := c.ZRevRangeWithScores(ctx, "nonexistent-zset", 0, -1)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
+}
+
+func TestCache_LPush_LLen_Multiple(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "multi-list", "item1"))
+	length, err := c.LLen(ctx, "multi-list")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), length)
+
+	require.NoError(t, c.LPush(ctx, "multi-list", "item2"))
+	length, err = c.LLen(ctx, "multi-list")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), length)
+
+	require.NoError(t, c.LPush(ctx, "multi-list", "item3"))
+	length, err = c.LLen(ctx, "multi-list")
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), length)
+}
+
+func TestCache_BRPop_WithItem(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "brpop-list", "hello"))
+
+	result, err := c.BRPop(ctx, 1*time.Second, "brpop-list")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, []string{"brpop-list", "hello"}, result)
+}
+
+// --- Concurrency / Race Detection Tests ---
+
+func TestCache_ConcurrentReadWrite(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	const goroutines = 10
+	const iterations = 100
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				key := fmt.Sprintf("concurrent-key-%d-%d", id, i)
+				value := fmt.Sprintf("value-%d-%d", id, i)
+
+				require.NotPanics(t, func() {
+					err := c.Set(ctx, key, value, 5*time.Minute)
+					assert.NoError(t, err)
+
+					got, err := c.Get(ctx, key)
+					assert.NoError(t, err)
+					assert.Equal(t, value, got)
+
+					err = c.Del(ctx, key)
+					assert.NoError(t, err)
+				})
+			}
+		}(g)
+	}
+
+	wg.Wait()
+}
+
+func TestCache_ConcurrentSortedSet(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	const goroutines = 5
+	const iterations = 100
+	const zsetKey = "concurrent-zset"
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				member := fmt.Sprintf("member-%d-%d", id, i)
+				score := float64(id*iterations + i)
+
+				require.NotPanics(t, func() {
+					err := c.ZAdd(ctx, zsetKey, score, member)
+					assert.NoError(t, err)
+
+					results, err := c.ZRevRangeWithScores(ctx, zsetKey, 0, 9)
+					assert.NoError(t, err)
+					assert.NotNil(t, results)
+				})
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	// After all goroutines finish, the sorted set should contain all members.
+	results, err := c.ZRevRangeWithScores(ctx, zsetKey, 0, -1)
+	require.NoError(t, err)
+	assert.Equal(t, goroutines*iterations, len(results))
 }

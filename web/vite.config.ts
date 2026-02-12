@@ -14,6 +14,7 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-data': ['axios', '@tanstack/react-query', 'zustand'],
           'vendor-markdown': ['react-markdown', 'remark-gfm'],
+          'vendor-motion': ['motion'],
         },
       },
     },

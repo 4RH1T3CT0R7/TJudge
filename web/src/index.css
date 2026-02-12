@@ -772,6 +772,278 @@
   animation: rainbow-hue 3s linear infinite;
 }
 
+/* New pose animations: celebrate, dizzy, typing */
+@keyframes char-confetti {
+  0% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(60px) translateX(var(--confetti-drift, 10px)) rotate(360deg);
+  }
+}
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-5deg); }
+  40% { transform: rotate(5deg); }
+  60% { transform: rotate(-3deg); }
+  80% { transform: rotate(3deg); }
+}
+
+@keyframes typing-hands {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-2px); }
+}
+
+/* Matrix rain for idle easter egg */
+@keyframes matrix-fall {
+  0% { transform: translateY(-100%); opacity: 1; }
+  80% { opacity: 0.7; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+/* Scanline flash for konami */
+@keyframes scanline-flash {
+  0% { transform: translateY(-100%); opacity: 0.6; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+/* Achievement toast */
+@keyframes achievement-enter {
+  0% { transform: translateX(120%); opacity: 0; }
+  60% { transform: translateX(-5%); opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes achievement-exit {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+/* Slot machine digit roll */
+@keyframes slot-roll {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(0); }
+}
+
+/* ===== Sudo Hacker Theme ===== */
+
+/* Activation flash */
+.sudo-activating {
+  animation: sudo-flash 2s ease-out;
+}
+
+@keyframes sudo-flash {
+  0% { filter: brightness(1); }
+  5% { filter: brightness(3); }
+  10% { filter: brightness(1); }
+  15% { filter: brightness(2.5); }
+  20% { filter: brightness(1); }
+  30% { filter: brightness(1.5) hue-rotate(60deg); }
+  50% { filter: brightness(1) hue-rotate(0deg); }
+  100% { filter: brightness(1); }
+}
+
+/* Green text color */
+.sudo-text {
+  color: #00ff41 !important;
+  text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+}
+
+/* Base sudo theme overrides */
+.sudo-theme {
+  --sudo-green: #00ff41;
+  --sudo-green-dim: rgba(0, 255, 65, 0.3);
+  --sudo-green-glow: rgba(0, 255, 65, 0.15);
+  --sudo-bg: #0a0a0a;
+}
+
+.sudo-theme .card {
+  background: rgba(0, 10, 0, 0.85) !important;
+  border: 1px solid rgba(0, 255, 65, 0.25) !important;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.08), inset 0 0 30px rgba(0, 255, 65, 0.02) !important;
+}
+
+.sudo-theme .card:hover {
+  border-color: rgba(0, 255, 65, 0.5) !important;
+  box-shadow: 0 0 25px rgba(0, 255, 65, 0.15), inset 0 0 30px rgba(0, 255, 65, 0.03) !important;
+}
+
+.sudo-theme h1,
+.sudo-theme h2,
+.sudo-theme h3,
+.sudo-theme h4 {
+  color: #00ff41 !important;
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
+.sudo-theme p,
+.sudo-theme span,
+.sudo-theme td,
+.sudo-theme th,
+.sudo-theme label,
+.sudo-theme div {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+.sudo-theme .text-gray-100,
+.sudo-theme .text-gray-200,
+.sudo-theme .text-gray-300 {
+  color: #00ff41 !important;
+}
+
+.sudo-theme .text-gray-400,
+.sudo-theme .text-gray-500 {
+  color: rgba(0, 255, 65, 0.5) !important;
+}
+
+.sudo-theme .border-gray-700,
+.sudo-theme .border-gray-600 {
+  border-color: rgba(0, 255, 65, 0.2) !important;
+}
+
+.sudo-theme .bg-gray-800,
+.sudo-theme .bg-gray-700 {
+  background-color: rgba(0, 10, 0, 0.6) !important;
+}
+
+.sudo-theme .btn-primary {
+  color: #00ff41 !important;
+  border-color: rgba(0, 255, 65, 0.4) !important;
+}
+.sudo-theme .btn-primary:hover {
+  background: rgba(0, 255, 65, 0.12) !important;
+  border-color: #00ff41 !important;
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.3) !important;
+}
+
+.sudo-theme .btn-secondary {
+  color: rgba(0, 255, 65, 0.6) !important;
+  border-color: rgba(0, 255, 65, 0.2) !important;
+}
+.sudo-theme .btn-secondary:hover {
+  background: rgba(0, 255, 65, 0.08) !important;
+  border-color: rgba(0, 255, 65, 0.4) !important;
+}
+
+.sudo-theme .btn-danger {
+  color: #ff4141 !important;
+  border-color: rgba(255, 65, 65, 0.3) !important;
+  text-shadow: 0 0 8px rgba(255, 65, 65, 0.4);
+}
+
+.sudo-theme .input {
+  color: #00ff41 !important;
+  border-color: rgba(0, 255, 65, 0.3) !important;
+  background: rgba(0, 10, 0, 0.4) !important;
+}
+.sudo-theme .input:focus {
+  border-color: #00ff41 !important;
+  background: rgba(0, 255, 65, 0.06) !important;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.15) !important;
+}
+
+.sudo-theme .input::placeholder {
+  color: rgba(0, 255, 65, 0.25) !important;
+}
+
+.sudo-theme select option {
+  background: #0a0a0a !important;
+  color: #00ff41 !important;
+}
+
+.sudo-theme .border-primary-500 {
+  border-color: #00ff41 !important;
+}
+
+.sudo-theme .text-primary-400 {
+  color: #00ff41 !important;
+}
+
+/* Badge overrides */
+.sudo-theme .badge-yellow {
+  background: rgba(0, 255, 65, 0.15) !important;
+  color: #00ff41 !important;
+}
+.sudo-theme .badge-green {
+  background: rgba(0, 255, 65, 0.25) !important;
+  color: #00ff41 !important;
+}
+.sudo-theme .badge-gray {
+  background: rgba(0, 255, 65, 0.1) !important;
+  color: rgba(0, 255, 65, 0.6) !important;
+}
+
+/* Scanline overlay */
+.sudo-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.015) 2px,
+    rgba(0, 255, 65, 0.015) 4px
+  );
+}
+
+/* CRT vignette */
+.sudo-vignette {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+}
+
+/* Progress bars in sudo mode */
+.sudo-theme .bg-green-500,
+.sudo-theme .bg-yellow-500,
+.sudo-theme .bg-red-500 {
+  background-color: #00ff41 !important;
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+}
+
+.sudo-theme .bg-green-900\/30,
+.sudo-theme .bg-green-900\/50 {
+  background-color: rgba(0, 255, 65, 0.15) !important;
+}
+
+.sudo-theme .text-green-400,
+.sudo-theme .text-green-300 {
+  color: #00ff41 !important;
+}
+
+.sudo-theme .text-yellow-400,
+.sudo-theme .text-yellow-300 {
+  color: #00ff41 !important;
+}
+
+.sudo-theme .text-blue-400 {
+  color: rgba(0, 255, 65, 0.7) !important;
+}
+
+.sudo-theme .text-red-400 {
+  color: #ff4141 !important;
+  text-shadow: 0 0 6px rgba(255, 65, 65, 0.3);
+}
+
+/* Tab border */
+.sudo-theme .border-primary-500 {
+  border-color: #00ff41 !important;
+}
+
+/* Code blocks */
+.sudo-theme code {
+  color: #00ff41 !important;
+  background: rgba(0, 255, 65, 0.08) !important;
+}
+
+/* ===== End Sudo Theme ===== */
+
 @media (prefers-reduced-motion: reduce) {
   .invader-float,
   .invader-breathe,

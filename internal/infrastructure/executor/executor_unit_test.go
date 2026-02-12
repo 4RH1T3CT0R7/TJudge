@@ -202,3 +202,124 @@ func TestBoolPtr(t *testing.T) {
 	assert.True(t, *trueVal)
 	assert.False(t, *falseVal)
 }
+
+// --- parseResult (additional) ---
+
+func TestParseResult_LargeScores(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(0, "999999 888888", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 999999, result.Score1)
+	assert.Equal(t, 888888, result.Score2)
+	assert.Equal(t, 1, result.Winner)
+}
+
+func TestParseResult_ZeroScores(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(0, "0 0", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Score1)
+	assert.Equal(t, 0, result.Score2)
+	assert.Equal(t, 0, result.Winner) // Draw
+}
+
+func TestParseResult_WhitespaceOutput(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(0, "  15   10  \n", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 15, result.Score1)
+	assert.Equal(t, 10, result.Score2)
+	assert.Equal(t, 1, result.Winner)
+}
+
+func TestParseResult_ThreeNumbers(t *testing.T) {
+	e := newTestExecutor(t)
+
+	_, err := e.parseResult(0, "10 15 20", "")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected 2 scores")
+}
+
+func TestParseResult_ExitCodeGeneric(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(3, "", "unknown error")
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, result.ErrorCode)
+	assert.Contains(t, result.ErrorMessage, "код 3")
+}
+
+func TestParseResult_ErrorWithStdoutAndStderr(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// stdout must be >20 chars or contain no spaces to pass the filter in parseResult
+	longStdout := "traceback in main function call"
+	result, err := e.parseResult(1, longStdout, "error msg")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Winner)
+	assert.Equal(t, 1, result.ErrorCode)
+	assert.Contains(t, result.ErrorMessage, "stderr")
+	assert.Contains(t, result.ErrorMessage, "error msg")
+	assert.Contains(t, result.ErrorMessage, "stdout")
+	assert.Contains(t, result.ErrorMessage, longStdout)
+}
+
+func TestParseResult_NullBytesInError(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(1, "", "error\x00message")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.ErrorCode)
+	assert.NotContains(t, result.ErrorMessage, "\x00")
+	assert.Contains(t, result.ErrorMessage, "errormessage")
+}
+
+// --- buildCommand (additional) ---
+
+func TestBuildCommand_ZeroIterations(t *testing.T) {
+	e := newTestExecutor(t)
+	e.config.DefaultIterations = 0
+
+	cmd := e.buildCommand("dilemma", "/programs/p1.py", "/programs/p2.py")
+
+	assert.Equal(t, []string{"dilemma", "/programs/p1.py", "/programs/p2.py"}, cmd)
+	assert.NotContains(t, cmd, "-i")
+}
+
+func TestBuildCommand_NegativeIterations(t *testing.T) {
+	e := newTestExecutor(t)
+	e.config.DefaultIterations = -1
+
+	cmd := e.buildCommand("dilemma", "/programs/p1.py", "/programs/p2.py")
+
+	assert.Equal(t, []string{"dilemma", "/programs/p1.py", "/programs/p2.py"}, cmd)
+	assert.NotContains(t, cmd, "-i")
+}
+
+func TestBuildCommand_EmptyGameType(t *testing.T) {
+	e := newTestExecutor(t)
+
+	cmd := e.buildCommand("", "/programs/p1.py", "/programs/p2.py")
+
+	assert.Equal(t, "", cmd[0])
+}
+
+// --- hostToContainerPath (additional) ---
+
+func TestHostToContainerPath_ExactMatch(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result := e.hostToContainerPath("/data/programs")
+
+	assert.Equal(t, "/programs", result)
+}

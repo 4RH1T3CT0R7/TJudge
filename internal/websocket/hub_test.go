@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,8 +37,15 @@ func startHub(t *testing.T, hub *Hub) context.CancelFunc {
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
 	// Give the hub goroutine time to start
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	return cancel
+}
+
+func waitForStats(t *testing.T, hub *Hub, key string, expected int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		return hub.GetStats()[key] == expected
+	}, time.Second, time.Millisecond)
 }
 
 func TestHub_RegisterSingleClient(t *testing.T) {
@@ -49,7 +57,7 @@ func TestHub_RegisterSingleClient(t *testing.T) {
 	client := newTestClient(hub, tournamentID, uuid.New())
 
 	hub.register <- client
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 1)
 
 	stats := hub.GetStats()
 	assert.Equal(t, 1, stats["tournaments"])
@@ -67,7 +75,7 @@ func TestHub_RegisterMultipleClientsSameTournament(t *testing.T) {
 
 	hub.register <- c1
 	hub.register <- c2
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 2)
 
 	stats := hub.GetStats()
 	assert.Equal(t, 1, stats["tournaments"])
@@ -84,7 +92,7 @@ func TestHub_RegisterDifferentTournaments(t *testing.T) {
 
 	hub.register <- c1
 	hub.register <- c2
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 2)
 
 	stats := hub.GetStats()
 	assert.Equal(t, 2, stats["tournaments"])
@@ -102,10 +110,10 @@ func TestHub_UnregisterOneOfTwo(t *testing.T) {
 
 	hub.register <- c1
 	hub.register <- c2
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 2)
 
 	hub.unregister <- c1
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 1)
 
 	stats := hub.GetStats()
 	assert.Equal(t, 1, stats["tournaments"])
@@ -121,10 +129,10 @@ func TestHub_UnregisterLastInTournament(t *testing.T) {
 	client := newTestClient(hub, tournamentID, uuid.New())
 
 	hub.register <- client
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 1)
 
 	hub.unregister <- client
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 0)
 
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
@@ -140,8 +148,9 @@ func TestHub_UnregisterUnregistered(t *testing.T) {
 
 	// Unregistering a client that was never registered should not panic
 	hub.unregister <- client
-	time.Sleep(10 * time.Millisecond)
 
+	// Give time for processing, then verify stats are still zero
+	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
 }
@@ -157,14 +166,18 @@ func TestHub_BroadcastToRegisteredClients(t *testing.T) {
 
 	hub.register <- c1
 	hub.register <- c2
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 2)
 
 	hub.broadcast <- &Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypeMatchUpdate,
 		Payload:      map[string]string{"status": "completed"},
 	}
-	time.Sleep(10 * time.Millisecond)
+
+	// Wait for both clients to receive the message
+	require.Eventually(t, func() bool {
+		return len(c1.send) == 1 && len(c2.send) == 1
+	}, time.Second, time.Millisecond)
 
 	// Both clients should receive the message
 	require.Len(t, c1.send, 1)
@@ -187,8 +200,9 @@ func TestHub_BroadcastNoClients(t *testing.T) {
 		Type:         MessageTypeLeaderboardUpdate,
 		Payload:      nil,
 	}
-	time.Sleep(10 * time.Millisecond)
 
+	// Give time for processing
+	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
 }
@@ -210,10 +224,13 @@ func TestHub_Broadcast_PublicMethod(t *testing.T) {
 	client := newTestClient(hub, tournamentID, uuid.New())
 
 	hub.register <- client
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 1)
 
 	hub.Broadcast(tournamentID, "test_type", map[string]string{"key": "value"})
-	time.Sleep(10 * time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return len(client.send) == 1
+	}, time.Second, time.Millisecond)
 
 	require.Len(t, client.send, 1)
 	data := <-client.send
@@ -231,12 +248,12 @@ func TestHub_Shutdown(t *testing.T) {
 		hub.Run(ctx)
 		close(done)
 	}()
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 
 	tournamentID := uuid.New()
 	client := newTestClient(hub, tournamentID, uuid.New())
 	hub.register <- client
-	time.Sleep(10 * time.Millisecond)
+	waitForStats(t, hub, "total_clients", 1)
 
 	cancel()
 
@@ -250,4 +267,143 @@ func TestHub_Shutdown(t *testing.T) {
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
 	assert.Equal(t, 0, stats["total_clients"])
+}
+
+func TestHub_BroadcastToSlowClient_DisconnectsClient(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+
+	// Create a slow client with a send buffer of size 1
+	log, _ := logger.New("error", "json")
+	slowClient := &Client{
+		hub:          hub,
+		conn:         nil,
+		send:         make(chan []byte, 1),
+		tournamentID: tournamentID,
+		userID:       uuid.New(),
+		log:          log,
+	}
+
+	hub.register <- slowClient
+	waitForStats(t, hub, "total_clients", 1)
+
+	// Fill the slow client's send buffer
+	slowClient.send <- []byte("filler")
+
+	// Broadcast a message; the slow client's buffer is full so it should be disconnected
+	hub.broadcast <- &Message{
+		TournamentID: tournamentID,
+		Type:         MessageTypeMatchUpdate,
+		Payload:      map[string]string{"status": "completed"},
+	}
+
+	// The slow client should be removed from the hub
+	waitForStats(t, hub, "total_clients", 0)
+
+	stats := hub.GetStats()
+	assert.Equal(t, 0, stats["total_clients"])
+}
+
+func TestHub_DoubleUnregister_NoPanic(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+	client := newTestClient(hub, tournamentID, uuid.New())
+
+	hub.register <- client
+	waitForStats(t, hub, "total_clients", 1)
+
+	// First unregister
+	hub.unregister <- client
+	waitForStats(t, hub, "total_clients", 0)
+
+	// Second unregister should not panic
+	hub.unregister <- client
+
+	// Give time for the second unregister to be processed
+	time.Sleep(10 * time.Millisecond)
+
+	stats := hub.GetStats()
+	assert.Equal(t, 0, stats["tournaments"])
+	assert.Equal(t, 0, stats["total_clients"])
+}
+
+func TestHub_BroadcastOtherTournament_NotReceived(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentA := uuid.New()
+	tournamentB := uuid.New()
+
+	clientA := newTestClient(hub, tournamentA, uuid.New())
+
+	hub.register <- clientA
+	waitForStats(t, hub, "total_clients", 1)
+
+	// Broadcast to tournament B (where clientA is NOT registered)
+	hub.broadcast <- &Message{
+		TournamentID: tournamentB,
+		Type:         MessageTypeLeaderboardUpdate,
+		Payload:      map[string]string{"rank": "1"},
+	}
+
+	// Give time for the broadcast to be processed
+	time.Sleep(10 * time.Millisecond)
+
+	// Client A should NOT have received anything
+	select {
+	case <-clientA.send:
+		t.Fatal("client should not receive a message broadcast to a different tournament")
+	default:
+		// OK - no message received
+	}
+}
+
+func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+	const numGoroutines = 20
+
+	var wg sync.WaitGroup
+
+	// Concurrently register clients
+	clients := make([]*Client, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		clients[i] = newTestClient(hub, tournamentID, uuid.New())
+	}
+
+	// Half goroutines register, half broadcast
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			hub.register <- clients[idx]
+		}(i)
+	}
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hub.Broadcast(tournamentID, string(MessageTypeMatchUpdate), map[string]string{"data": "test"})
+		}()
+	}
+
+	wg.Wait()
+
+	// Wait for all registrations to complete
+	waitForStats(t, hub, "total_clients", numGoroutines)
+
+	stats := hub.GetStats()
+	assert.Equal(t, 1, stats["tournaments"])
+	assert.Equal(t, numGoroutines, stats["total_clients"])
 }

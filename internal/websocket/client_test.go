@@ -122,3 +122,81 @@ func TestClient_sendPong(t *testing.T) {
 		t.Fatal("timed out waiting for sendPong")
 	}
 }
+
+func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
+	hub := newTestHub(t)
+	tournamentID := uuid.New()
+	log, _ := logger.New("error", "json")
+
+	// Create a client with a send buffer of size 1
+	client := &Client{
+		hub:          hub,
+		conn:         nil,
+		send:         make(chan []byte, 1),
+		tournamentID: tournamentID,
+		userID:       uuid.New(),
+		log:          log,
+	}
+
+	// Fill the send buffer
+	client.send <- []byte("filler")
+
+	// sendPong should not panic when the buffer is full
+	assert.NotPanics(t, func() {
+		client.sendPong()
+	})
+
+	// The buffer should still contain only the filler message
+	require.Len(t, client.send, 1)
+	data := <-client.send
+	assert.Equal(t, []byte("filler"), data)
+}
+
+func TestClient_handleMessage_EmptyPayload(t *testing.T) {
+	hub := newTestHub(t)
+	tournamentID := uuid.New()
+	client := newTestClient(hub, tournamentID, uuid.New())
+
+	// Valid JSON message with no payload field
+	msg := Message{
+		TournamentID: tournamentID,
+		Type:         MessageTypePing,
+	}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	// Should handle gracefully and send a pong response
+	assert.NotPanics(t, func() {
+		client.handleMessage(data)
+	})
+
+	// Since the type is ping, we should still get a pong back
+	select {
+	case pongData := <-client.send:
+		var pong Message
+		require.NoError(t, json.Unmarshal(pongData, &pong))
+		assert.Equal(t, MessageTypePong, pong.Type)
+		assert.Equal(t, tournamentID, pong.TournamentID)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for pong response")
+	}
+
+	// Also test with an unknown type and nil payload -- should not panic, no message sent
+	unknownMsg := Message{
+		TournamentID: tournamentID,
+		Type:         MessageType("some_type"),
+	}
+	unknownData, err := json.Marshal(unknownMsg)
+	require.NoError(t, err)
+
+	assert.NotPanics(t, func() {
+		client.handleMessage(unknownData)
+	})
+
+	select {
+	case <-client.send:
+		t.Fatal("should not receive anything for unknown type with empty payload")
+	default:
+		// OK
+	}
+}

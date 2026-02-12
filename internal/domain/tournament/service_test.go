@@ -41,6 +41,9 @@ func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 
 func (m *MockTournamentRepository) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
 	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]*domain.Tournament), args.Error(1)
 }
 
@@ -1908,6 +1911,171 @@ func TestConcurrentStart(t *testing.T) {
 		assert.Equal(t, int64(1), successCount, "expected exactly one start to succeed")
 		assert.Equal(t, int64(concurrentStarts-1), errorCount, "expected remaining starts to fail")
 		assert.Equal(t, int64(1), startCount, "tournament should be started exactly once")
+	})
+}
+
+// -----------------------------------------------------------------------------
+// TestService_generateRoundRobinMatches_EdgeCases
+// -----------------------------------------------------------------------------
+
+func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
+	t.Run("one_participant_generates_zero_matches", func(t *testing.T) {
+		service, _, _, _, _, _, _ := newTestService(t)
+
+		tournamentID := uuid.New()
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Solo Tournament",
+			GameType: "prisoners_dilemma",
+			Status:   domain.TournamentActive,
+		}
+
+		participants := []*domain.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New(), Rating: 1500},
+		}
+
+		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		require.NoError(t, err)
+		assert.Len(t, matches, 0, "1 participant cannot play against anyone, expected 0 matches")
+	})
+
+	t.Run("four_participants_generates_12_matches", func(t *testing.T) {
+		service, _, _, _, _, _, _ := newTestService(t)
+
+		tournamentID := uuid.New()
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Four Player Tournament",
+			GameType: "prisoners_dilemma",
+			Status:   domain.TournamentActive,
+		}
+
+		p1 := uuid.New()
+		p2 := uuid.New()
+		p3 := uuid.New()
+		p4 := uuid.New()
+		participants := []*domain.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p1, Rating: 1500},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p2, Rating: 1500},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p3, Rating: 1500},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p4, Rating: 1500},
+		}
+
+		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		require.NoError(t, err)
+		// Bidirectional round-robin: n*(n-1) = 4*3 = 12 matches
+		// Each pair plays in both directions (AB and BA)
+		assert.Len(t, matches, 12, "4 participants should generate 4*3=12 bidirectional matches")
+
+		// Build a set of all (Program1ID, Program2ID) pairs to verify uniqueness
+		type pair struct{ a, b uuid.UUID }
+		seen := make(map[pair]bool)
+		programIDs := []uuid.UUID{p1, p2, p3, p4}
+
+		for _, m := range matches {
+			assert.Equal(t, tournamentID, m.TournamentID)
+			assert.Equal(t, "prisoners_dilemma", m.GameType)
+			assert.Equal(t, domain.MatchPending, m.Status)
+			assert.Equal(t, 1, m.RoundNumber)
+			assert.NotEqual(t, m.Program1ID, m.Program2ID, "no self-play allowed")
+
+			p := pair{m.Program1ID, m.Program2ID}
+			assert.False(t, seen[p], "duplicate match pair detected: %v vs %v", m.Program1ID, m.Program2ID)
+			seen[p] = true
+		}
+
+		// Verify every ordered pair exists (both directions for each unordered pair)
+		for i := 0; i < len(programIDs); i++ {
+			for j := 0; j < len(programIDs); j++ {
+				if i == j {
+					continue
+				}
+				p := pair{programIDs[i], programIDs[j]}
+				assert.True(t, seen[p], "missing match: %v vs %v", programIDs[i], programIDs[j])
+			}
+		}
+	})
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_SkipsSameTeam
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_SkipsSameTeam(t *testing.T) {
+	t.Run("skips_programs_from_same_team", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, queueManager, broadcaster, distributedLock, _ := newTestService(t)
+		ctx := context.Background()
+
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+		teamID := uuid.New()
+		otherTeamID := uuid.New()
+		newProgramID := uuid.New()
+		sameTeamProgramID := uuid.New()
+		otherTeamProgramID := uuid.New()
+
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Active Tournament",
+			GameType: "prisoners_dilemma",
+			Status:   domain.TournamentActive,
+		}
+
+		// Three programs: one is the new program, one from the same team, one from a different team.
+		// Only the program from the different team should produce matches.
+		programs := []*domain.Program{
+			{ID: newProgramID, Name: "New Bot", GameType: "prisoners_dilemma", TeamID: &teamID},
+			{ID: sameTeamProgramID, Name: "Teammate Bot", GameType: "prisoners_dilemma", TeamID: &teamID},
+			{ID: otherTeamProgramID, Name: "Opponent Bot", GameType: "prisoners_dilemma", TeamID: &otherTeamID},
+		}
+
+		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+			Return(nil)
+		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+		programRepo := new(MockProgramRepository)
+		programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
+		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
+		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		broadcaster.On("Broadcast", tournamentID, "matches_created", mock.Anything).Return()
+
+		req := &ScheduleNewProgramMatchesRequest{
+			TournamentID: tournamentID,
+			GameID:       gameID,
+			NewProgramID: newProgramID,
+			TeamID:       teamID,
+		}
+
+		err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+		require.NoError(t, err)
+
+		// Exactly 2 matches: newProgram vs otherTeamProgram (forward and reverse)
+		// The same-team program must be excluded entirely.
+		matchRepo.AssertCalled(t, "CreateBatch", ctx, mock.MatchedBy(func(matches []*domain.Match) bool {
+			if len(matches) != 2 {
+				return false
+			}
+
+			hasForward := false
+			hasReverse := false
+			for _, m := range matches {
+				// No match should involve the same-team program
+				assert.NotEqual(t, sameTeamProgramID, m.Program1ID, "same-team program must not appear as Program1")
+				assert.NotEqual(t, sameTeamProgramID, m.Program2ID, "same-team program must not appear as Program2")
+
+				if m.Program1ID == newProgramID && m.Program2ID == otherTeamProgramID {
+					hasForward = true
+				}
+				if m.Program1ID == otherTeamProgramID && m.Program2ID == newProgramID {
+					hasReverse = true
+				}
+			}
+			return hasForward && hasReverse
+		}))
+
+		// Verify enqueue was called exactly 2 times (one per match)
+		queueManager.AssertNumberOfCalls(t, "Enqueue", 2)
+		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "matches_created", mock.Anything)
 	})
 }
 

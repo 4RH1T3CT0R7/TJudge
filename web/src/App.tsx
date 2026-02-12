@@ -1,9 +1,11 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { PageLoader } from './components/PageLoader';
 import { useAuthStore } from './store/authStore';
+import { InvaderProvider } from './context/InvaderContext';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
@@ -106,9 +108,13 @@ function AppContent() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <MotionConfig reducedMotion="user">
+        <InvaderProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </InvaderProvider>
+      </MotionConfig>
     </QueryClientProvider>
   );
 }

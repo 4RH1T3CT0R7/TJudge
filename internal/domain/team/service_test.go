@@ -593,3 +593,77 @@ func TestService_DeleteTeam_Error(t *testing.T) {
 	err := svc.DeleteTeam(ctx, id)
 	assert.Error(t, err)
 }
+
+// --- Additional edge cases ---
+
+func TestService_JoinTeamByCode_MaxTeamSize1(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, tID := uuid.New(), uuid.New()
+
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 1}, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil) // Already at limit
+
+	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "CODE", UserID: uuid.New()})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "full")
+}
+
+func TestService_LeaveTeam_LeaderWithMultipleMembers_TransfersLeadership(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	member1ID := uuid.New()
+	member2ID := uuid.New()
+
+	team := &domain.Team{ID: teamID, LeaderID: leaderID}
+
+	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(3, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{
+		{TeamID: teamID, UserID: leaderID},
+		{TeamID: teamID, UserID: member1ID},
+		{TeamID: teamID, UserID: member2ID},
+	}, nil)
+	teamRepo.On("Update", ctx, mock.Anything).Return(nil)
+	teamRepo.On("RemoveMember", ctx, teamID, leaderID).Return(nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	require.NoError(t, err)
+	// Leadership should transfer to first non-leader member
+	assert.Equal(t, member1ID, team.LeaderID)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_JoinTeamByCode_AddMemberError(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 5}, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(false, nil)
+	teamRepo.On("AddMember", ctx, mock.Anything).Return(errors.ErrInternal)
+
+	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "CODE", UserID: userID})
+	assert.Error(t, err)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_GetUserTeamInTournament_Success(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	tID, userID := uuid.New(), uuid.New()
+	team := &domain.Team{ID: uuid.New(), TournamentID: tID}
+
+	teamRepo.On("GetUserTeamInTournament", ctx, tID, userID).Return(team, nil)
+
+	result, err := svc.GetUserTeamInTournament(ctx, tID, userID)
+	require.NoError(t, err)
+	assert.Equal(t, team.ID, result.ID)
+}

@@ -4,6 +4,7 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 import { TerminalQuest } from '../components/TerminalQuest';
 import { PixelGrid } from '../components/PixelGrid';
+import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -710,55 +711,36 @@ export function Home() {
           между рациональными агентами
         </p>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <ConceptCard
-            title="Равновесие Нэша"
-            author="Джон Нэш"
-            year="1950"
-            description="Состояние, при котором ни один игрок не может улучшить свой результат, изменив только свою стратегию."
-          />
-          <ConceptCard
-            title="Оптимальность по Парето"
-            author="Вильфредо Парето"
-            year="1896"
-            description="Состояние, при котором невозможно улучшить положение одного игрока, не ухудшив положение другого."
-          />
-          <ConceptCard
-            title="Доминирующая стратегия"
-            author="Теория игр"
-            year="XX век"
-            description="Стратегия, которая приносит лучший результат независимо от действий других игроков."
-          />
-        </div>
-      </div>
-
-      {/* How it works */}
-      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll rounded-2xl p-8" style={{ background: 'rgba(17,24,39,0.4)' }}>
-        <h2 className="text-2xl font-bold text-gray-100 mb-8 text-center">
-          Как это работает
-        </h2>
-
-        <div className="grid md:grid-cols-4 gap-6">
-          {[
-            { num: '1', title: 'Создайте команду', desc: 'Соберите команду или участвуйте индивидуально' },
-            { num: '2', title: 'Напишите стратегию', desc: 'Разработайте алгоритм принятия решений' },
-            { num: '3', title: 'Загрузите программу', desc: 'Отправьте код на платформу для участия' },
-            { num: '4', title: 'Следите за матчами', desc: 'Наблюдайте за результатами в реальном времени' },
-          ].map((step) => (
-            <div key={step.num} className="text-center">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold mx-auto mb-3"
-                style={{ background: 'transparent', border: '1px solid #7c3aed', color: '#a78bfa' }}>
-                {step.num}
-              </div>
-              <h3 className="font-semibold text-gray-100 mb-2">{step.title}</h3>
-              <p className="text-sm text-gray-400">{step.desc}</p>
-            </div>
-          ))}
-        </div>
+        <StaggerList className="grid md:grid-cols-3 gap-6">
+          <StaggerItem>
+            <ConceptCard
+              title="Равновесие Нэша"
+              author="Джон Нэш"
+              year="1950"
+              description="Состояние, при котором ни один игрок не может улучшить свой результат, изменив только свою стратегию."
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <ConceptCard
+              title="Оптимальность по Парето"
+              author="Вильфредо Парето"
+              year="1896"
+              description="Состояние, при котором невозможно улучшить положение одного игрока, не ухудшив положение другого."
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <ConceptCard
+              title="Доминирующая стратегия"
+              author="Теория игр"
+              year="XX век"
+              description="Стратегия, которая приносит лучший результат независимо от действий других игроков."
+            />
+          </StaggerItem>
+        </StaggerList>
       </div>
 
       {/* CTA Section */}
-      <div ref={(el) => { sectionsRef.current[3] = el; }} className="reveal-on-scroll text-center py-8">
+      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll text-center py-8">
         <h2 className="text-2xl font-bold text-gray-100 mb-4">
           Готовы проверить свою стратегию?
         </h2>

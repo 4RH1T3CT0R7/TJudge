@@ -748,3 +748,91 @@ func TestService_RefreshTokens_GetUserError(t *testing.T) {
 	blacklist.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 }
+
+// --- Additional edge cases ---
+
+func TestService_RefreshTokens_BlacklistCheckError(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	// Simulate Redis down — fail-closed should reject the request
+	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, errors.ErrInternal)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "blacklist")
+	blacklist.AssertExpectations(t)
+}
+
+func TestService_Logout_WithBothTokens(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	require.NoError(t, err)
+	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(nil)
+	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(nil)
+
+	err = service.Logout(ctx, accessToken, refreshToken)
+
+	require.NoError(t, err)
+	blacklist.AssertExpectations(t)
+}
+
+func TestService_RefreshTokens_BlacklistAddError(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:       userID,
+		Username: "testuser",
+		Email:    "test@example.com",
+		Role:     domain.RoleUser,
+	}
+
+	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, nil)
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	// Old token blacklist fails — should abort rotation (fail-closed)
+	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "blacklist")
+	blacklist.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_Register_InvalidEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &RegisterRequest{
+		Username: "testuser",
+		Email:    "not-an-email",
+		Password: "SecurePass123!",
+	}
+
+	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
+
+	resp, err := service.Register(ctx, req)
+
+	// The user.Validate() should catch invalid email
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+}

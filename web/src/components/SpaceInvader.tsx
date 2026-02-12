@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react'
 
 // --- Types ---
 export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin' | 'spinStop'
-  | 'cry' | 'sleep' | 'fly' | 'attack' | 'shield' | 'teleport' | 'transform';
+  | 'cry' | 'sleep' | 'fly' | 'attack' | 'shield' | 'teleport' | 'transform'
+  | 'celebrate' | 'peek' | 'salute' | 'dizzy' | 'typing';
 
 export interface SpaceInvaderProps {
   size?: 'sm' | 'md' | 'lg';
@@ -906,6 +907,112 @@ export function SpaceInvader({
     </div>
   );
 
+  const renderCelebratePose = () => (
+    <div style={{ position: 'relative' }}>
+      {renderHandsUpPose()}
+      {/* Confetti particles */}
+      {Array.from({ length: 12 }).map((_, i) => {
+        const chars = ['*', '+', '.', '~', '^'];
+        const colors = ['#fbbf24', '#4ade80', '#a78bfa', '#60a5fa', '#f472b6'];
+        return (
+          <span
+            key={`confetti-${i}`}
+            style={{
+              position: 'absolute',
+              top: '-0.5em',
+              left: `${10 + (i / 12) * 80}%`,
+              color: colors[i % colors.length],
+              fontFamily: "'Courier New', Consolas, monospace",
+              fontSize: effectFontSize,
+              fontWeight: 'bold',
+              pointerEvents: 'none',
+              animation: 'char-confetti 1.8s ease-out infinite',
+              animationDelay: `${i * 0.15}s`,
+            }}
+          >
+            {chars[i % chars.length]}
+          </span>
+        );
+      })}
+    </div>
+  );
+
+  const renderPeekPose = () => (
+    <div style={{
+      clipPath: 'inset(0 0 0 50%)',
+      position: 'relative',
+      paddingLeft: '25%',
+    }}>
+      {renderIdlePose()}
+    </div>
+  );
+
+  const SALUTE_TOP = [
+    body(4, true)+SP4+SP4+SP4+SP4+SP4+SP4+SP4+SP4+SP4+body(4, true),
+    SP4+body(4, true)+SP4+SP4+SP4+SP4+SP4+SP4+SP4+body(4, true)+SP4,
+    SP4+SP4+body(4, true)+'+**+'+SP4+SP4+SP4+'+**+'+SP4+SP4+SP4+SP4,
+    SP4+SP4+SP4+'+**+'+SP4+SP4+SP4+'+**+'+SP4+SP4+SP4,
+    SP4+SP4+body(28, true)+SP4+SP4,
+    SP4+body(36, true)+SP4,
+  ];
+
+  const renderSalutePose = () => (
+    <>
+      {SALUTE_TOP.flatMap((line, i) => [bodyLine(line, `st${i}a`), bodyLine(line, `st${i}b`)])}
+      {[0, 1, 2].flatMap((r) => [eyeRow(r, `se${r}a`), eyeRow(r, `se${r}b`)])}
+      {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `sa${i}a`), bodyLine(line, `sa${i}b`)])}
+      {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `sm${i}a`), bodyLine(line, `sm${i}b`)])}
+      {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `sl${i}a`), bodyLine(line, `sl${i}b`)])}
+    </>
+  );
+
+  const renderDizzyPose = () => (
+    <div style={{ animation: 'wobble 1s ease-in-out infinite', position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Spinning stars */}
+      {['*', '+', '*'].map((ch, i) => (
+        <span
+          key={`star-${i}`}
+          style={{
+            position: 'absolute',
+            top: `${5 + i * 8}%`,
+            right: `${-5 + i * 12}%`,
+            color: '#fbbf24',
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            fontWeight: 'bold',
+            animation: `spin-invader ${1.5 + i * 0.3}s linear infinite`,
+            opacity: 0.8,
+          }}
+        >
+          {ch}
+        </span>
+      ))}
+    </div>
+  );
+
+  const renderTypingPose = () => (
+    <div style={{ position: 'relative' }}>
+      {renderIdlePose()}
+      {/* Keyboard */}
+      <div style={{
+        position: 'absolute',
+        bottom: '-1.2em',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        color: '#6b7280',
+        fontFamily: "'Courier New', Consolas, monospace",
+        fontSize: effectFontSize,
+        fontWeight: 'bold',
+        whiteSpace: 'pre',
+        animation: 'typing-hands 0.3s steps(2) infinite',
+        pointerEvents: 'none',
+      }}>
+        [====]
+      </div>
+    </div>
+  );
+
   const renderPose = () => {
     switch (pose) {
       case 'handsUp': return renderHandsUpPose();
@@ -918,6 +1025,11 @@ export function SpaceInvader({
       case 'shield': return renderShieldPose();
       case 'teleport': return renderTeleportPose();
       case 'transform': return renderTransformPose();
+      case 'celebrate': return renderCelebratePose();
+      case 'peek': return renderPeekPose();
+      case 'salute': return renderSalutePose();
+      case 'dizzy': return renderDizzyPose();
+      case 'typing': return renderTypingPose();
       case 'spin':
       case 'spinStop':
       case 'idle':

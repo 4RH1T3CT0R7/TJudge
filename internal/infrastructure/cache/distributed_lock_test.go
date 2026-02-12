@@ -198,18 +198,18 @@ func TestDistributedLock_WithLock(t *testing.T) {
 
 	t.Run("unlocks even if function panics", func(t *testing.T) {
 		defer func() {
-			_ = recover() // Expected panic
+			r := recover()
+			require.NotNil(t, r, "expected panic")
+
+			// Lock should be released after WithLock's internal defer runs
+			isLocked, err := lock.IsLocked(ctx, "test-withlock-3")
+			assert.NoError(t, err)
+			assert.False(t, isLocked)
 		}()
 
 		_ = lock.WithLock(ctx, "test-withlock-3", 5*time.Second, func(ctx context.Context) error {
 			panic("test panic")
 		})
-
-		// Lock should be released
-		time.Sleep(100 * time.Millisecond) // Give defer time to execute
-		isLocked, err := lock.IsLocked(ctx, "test-withlock-3")
-		assert.NoError(t, err)
-		assert.False(t, isLocked)
 	})
 }
 

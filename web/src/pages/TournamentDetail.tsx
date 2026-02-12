@@ -1,8 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuthStore } from '../store/authStore';
+import { SpaceInvader } from '../components/SpaceInvader';
+import type { InvaderPose } from '../components/SpaceInvader';
+import { CinematicOverlay } from '../components/CinematicOverlay';
+import { TerminalLoader } from '../components/TerminalLoader';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type {
   Tournament,
   TournamentStatus,
@@ -142,6 +147,7 @@ export function TournamentDetail() {
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [isLoading, setIsLoading] = useState(true);
+  const showLoading = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
@@ -165,17 +171,69 @@ export function TournamentDetail() {
   const [settingActiveGameId, setSettingActiveGameId] = useState<string | null>(null);
   const [resettingGameId, setResettingGameId] = useState<string | null>(null);
 
+  // Invader state for WS reactions
+  const [wsInvaderPose, setWsInvaderPose] = useState<InvaderPose>('idle');
+  const [wsInvaderSpeech, setWsInvaderSpeech] = useState<string | null>(null);
+  const wsInvaderTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Cinematic state
+  const [cinematicType, setCinematicType] = useState<'tournament_victory' | 'top1_leaderboard' | null>(null);
+  const [cinematicTeamName, setCinematicTeamName] = useState('');
+  const prevLeaderRankRef = useRef<number | null>(null);
+
+  const flashWsInvader = useCallback((pose: InvaderPose, speech: string | null, duration = 2000) => {
+    clearTimeout(wsInvaderTimerRef.current);
+    setWsInvaderPose(pose);
+    setWsInvaderSpeech(speech);
+    wsInvaderTimerRef.current = setTimeout(() => {
+      setWsInvaderPose('idle');
+      setWsInvaderSpeech(null);
+    }, duration);
+  }, []);
+
   const handleWebSocketMessage = useCallback((message: WSMessage) => {
     // WebSocket updates can trigger refresh of data
     if (message.type === 'leaderboard_update') {
+      flashWsInvader('attack', '// обновление!', 800);
       // Refresh cross-game leaderboard on updates
       if (id) {
         api.getCrossGameLeaderboard(id).then(data => {
           setCrossGameLeaderboard(data || []);
+
+          // Check if user's team reached #1
+          if (myTeam && data && data.length > 0) {
+            const userEntry = data.find(e => e.team_id === myTeam.id);
+            if (userEntry) {
+              const wasNotFirst = prevLeaderRankRef.current !== null && prevLeaderRankRef.current > 1;
+              if (userEntry.rank === 1 && wasNotFirst) {
+                setCinematicTeamName(myTeam.name);
+                setCinematicType('top1_leaderboard');
+              }
+              prevLeaderRankRef.current = userEntry.rank;
+            }
+          }
         }).catch(console.error);
       }
+    } else if (message.type === 'tournament_update') {
+      flashWsInvader('handsUp', '// турнир обновлён!', 2000);
+
+      // Check for tournament completion with user's team at #1
+      if (id) {
+        api.getTournament(id).then(t => {
+          setTournament(t);
+          if (t.status === 'completed' && myTeam && crossGameLeaderboard.length > 0) {
+            const userEntry = crossGameLeaderboard.find(e => e.team_id === myTeam.id);
+            if (userEntry && userEntry.rank === 1) {
+              setCinematicTeamName(myTeam.name);
+              setCinematicType('tournament_victory');
+            }
+          }
+        }).catch(console.error);
+      }
+    } else if (message.type === 'match_update') {
+      flashWsInvader('run', '// матч!', 1000);
     }
-  }, [id]);
+  }, [id, flashWsInvader, myTeam, crossGameLeaderboard]);
 
   // WebSocket for real-time updates (hook handles auth internally)
   const { isConnected } = useWebSocket({
@@ -522,22 +580,19 @@ export function TournamentDetail() {
     }
   }, [id, isRefreshingLeaderboard]);
 
+  if (showLoading) {
+    return <TerminalLoader />;
+  }
+
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary-800 border-t-primary-400 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Загрузка турнира...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (error || !tournament) {
     return (
       <div className="text-center py-24">
-        <div className="w-16 h-16 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-          <XMarkIcon />
+        <div className="flex justify-center mb-4">
+          <SpaceInvader size="sm" controlledPose="cry" speechBubble="// ошибка" eyeOverride="sad" />
         </div>
         <p className="text-red-500 text-lg mb-4">{error || 'Турнир не найден'}</p>
         <Link to="/tournaments" className="btn btn-secondary">
@@ -618,6 +673,15 @@ export function TournamentDetail() {
 
   return (
     <div className="animate-fade-in">
+      {/* Cinematic overlay for tournament victory / #1 */}
+      {cinematicType && (
+        <CinematicOverlay
+          type={cinematicType}
+          teamName={cinematicTeamName}
+          onComplete={() => setCinematicType(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <Link to="/tournaments" className="inline-flex items-center gap-2 text-gray-400 hover:text-primary-400 mb-4 transition-colors">
@@ -732,7 +796,7 @@ export function TournamentDetail() {
 
       {/* Tabs */}
       <div className="bg-gray-900 rounded-lg border border-gray-800 mb-6 p-1.5">
-        <nav className="flex gap-1 overflow-x-auto">
+        <nav className="flex gap-1 overflow-x-auto items-center">
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
             return (
@@ -757,6 +821,12 @@ export function TournamentDetail() {
               </button>
             );
           })}
+          {/* WS-reactive mini invader */}
+          {isConnected && wsInvaderPose !== 'idle' && (
+            <div className="ml-auto px-2">
+              <SpaceInvader size="sm" controlledPose={wsInvaderPose} speechBubble={wsInvaderSpeech} />
+            </div>
+          )}
         </nav>
       </div>
 
@@ -1673,8 +1743,8 @@ function TeamsTab({
       {/* Teams list */}
       {teams.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            <UsersIcon />
+          <div className="flex justify-center mb-4">
+            <SpaceInvader size="sm" controlledPose="cry" speechBubble="// пока никого..." eyeOverride="sad" />
           </div>
           <h3 className="empty-state-title">Нет команд</h3>
           <p className="empty-state-description">
