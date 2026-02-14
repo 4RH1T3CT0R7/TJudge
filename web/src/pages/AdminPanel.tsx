@@ -131,6 +131,20 @@ export function AdminPanel() {
   const [sudoActivating, setSudoActivating] = useState(false);
   const sudoCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Tab change with invader reaction (skipped in sudo mode — hacker phrases take over)
+  const handleTabChange = useCallback((tab: AdminTab) => {
+    setActiveTab(tab);
+    if (sudoMode) return;
+    const reactions: Record<AdminTab, [InvaderPose, string]> = {
+      games: ['idle', '// game manager'],
+      tournaments: ['idle', '// tournaments loaded'],
+      programs: ['typing', '// сканирую код...'],
+      system: ['idle', '// мониторинг...'],
+    };
+    const [pose, speech] = reactions[tab];
+    setAdminReaction(pose, speech, 2500);
+  }, [setAdminReaction, sudoMode]);
+
   useSequenceTyping('sudo', useCallback(() => {
     if (sudoMode || sudoActivating) return;
     setSudoActivating(true);
@@ -191,6 +205,35 @@ export function AdminPanel() {
     };
   }, [sudoMode]);
 
+  // Sudo hacker phrases — periodic random phrases when sudo mode is active
+  const SUDO_PHRASES = [
+    '// I\'m in.',
+    '// access granted',
+    '// hack the planet',
+    '// follow the white rabbit',
+    '// the matrix has you',
+    '// wake up, Neo',
+    '// there is no spoon',
+    '// sudo make me a sandwich',
+    '// rm -rf doubts',
+    '// ping reality',
+    '// root@tjudge:~#',
+    '// 01101000 01100001',
+    '// all your base',
+    '// we\'re in the mainframe',
+  ];
+
+  useEffect(() => {
+    if (!sudoMode) return;
+    const tick = () => {
+      const phrase = SUDO_PHRASES[Math.floor(Math.random() * SUDO_PHRASES.length)];
+      setAdminReaction('idle', phrase, 4000);
+    };
+    const first = setTimeout(tick, 5000);
+    const interval = setInterval(tick, 8000 + Math.random() * 4000);
+    return () => { clearTimeout(first); clearInterval(interval); };
+  }, [sudoMode, setAdminReaction]);
+
   // Action errors
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -199,6 +242,7 @@ export function AdminPanel() {
   const [managingTournamentGames, setManagingTournamentGames] = useState<Game[]>([]);
   const [managingTournamentGamesStatus, setManagingTournamentGamesStatus] = useState<TournamentGameWithDetails[]>([]);
   const [isLoadingTournamentGames, setIsLoadingTournamentGames] = useState(false);
+  const showLoadingTournamentGames = useDelayedLoading(isLoadingTournamentGames);
   const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
   const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
   const [resettingGame, setResettingGame] = useState<string | null>(null);
@@ -209,6 +253,7 @@ export function AdminPanel() {
   const [programsData, setProgramsData] = useState<Record<string, LeaderboardEntry[]>>({});
   const [programDetails, setProgramDetails] = useState<Record<string, Program[]>>({});
   const [isLoadingPrograms, setIsLoadingPrograms] = useState(false);
+  const showLoadingPrograms = useDelayedLoading(isLoadingPrograms);
 
   // System tab state
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
@@ -216,6 +261,7 @@ export function AdminPanel() {
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [failedMatches, setFailedMatches] = useState<Match[]>([]);
   const [isLoadingSystem, setIsLoadingSystem] = useState(false);
+  const showLoadingSystem = useDelayedLoading(isLoadingSystem);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
@@ -324,6 +370,7 @@ export function AdminPanel() {
     try {
       await api.clearQueue();
       loadSystemData();
+      setAdminReaction('dizzy', '// очередь пуста', 2500);
     } catch (err) {
       console.error('Failed to clear queue:', err);
       setSystemError('Не удалось очистить очередь');
@@ -615,6 +662,7 @@ export function AdminPanel() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      setAdminReaction('handsUp', '// отправляю файл', 2500);
     } catch (err) {
       console.error('Failed to download program:', err);
       setActionError('Не удалось скачать программу');
@@ -795,7 +843,7 @@ export function AdminPanel() {
           {sudoMode ? 'root@tjudge:~# admin' : 'Панель администратора'}
         </h1>
         <div className="relative">
-          <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} />
+          <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} colorOverride={sudoMode ? '#00ff41' : null} />
         </div>
       </div>
 
@@ -805,7 +853,7 @@ export function AdminPanel() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
                   ? 'border-primary-500 text-primary-400'
@@ -823,7 +871,7 @@ export function AdminPanel() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Управление играми</h2>
-            <button onClick={() => setShowGameForm(true)} className="btn btn-primary">
+            <button onClick={() => { setShowGameForm(true); setAdminReaction('typing', '// новая игра?', 2500); }} className="btn btn-primary">
               Добавить игру
             </button>
           </div>
@@ -965,7 +1013,7 @@ export function AdminPanel() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Управление турнирами</h2>
-            <button onClick={() => setShowTournamentForm(true)} className="btn btn-primary">
+            <button onClick={() => { setShowTournamentForm(true); setAdminReaction('typing', '// создаём турнир?', 2500); }} className="btn btn-primary">
               Создать турнир
             </button>
           </div>
@@ -1231,7 +1279,9 @@ export function AdminPanel() {
                   Кнопка «Запустить раунд» запустит матчи только для активной игры.
                 </p>
 
-                {isLoadingTournamentGames ? (
+                {isLoadingTournamentGames && !showLoadingTournamentGames ? (
+                  null
+                ) : showLoadingTournamentGames ? (
                   <div className="text-center py-8 text-gray-400">
                     Загрузка игр...
                   </div>
@@ -1397,6 +1447,7 @@ export function AdminPanel() {
                             try {
                               await api.completeTournament(tournament.id);
                               loadData();
+                              setAdminReaction('salute', '// турнир окончен', 3000);
                             } catch (err: unknown) {
                               console.error('Failed to complete tournament:', err);
                               const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -1468,8 +1519,8 @@ export function AdminPanel() {
             </select>
           </div>
 
-          {/* Loading state */}
-          {isLoadingPrograms && (
+          {/* Loading state — only show after 1s delay */}
+          {showLoadingPrograms && (
             <div className="text-center py-8 text-gray-400">
               Загрузка программ...
             </div>
@@ -1483,7 +1534,7 @@ export function AdminPanel() {
           )}
 
           {/* Programs data */}
-          {selectedTournamentId && !isLoadingPrograms && (
+          {selectedTournamentId && !isLoadingPrograms && !showLoadingPrograms && (
             <div className="space-y-6">
               {tournamentGames.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
@@ -1705,7 +1756,9 @@ export function AdminPanel() {
             </div>
           )}
 
-          {isLoadingSystem && !queueStats && !matchStats ? (
+          {isLoadingSystem && !queueStats && !matchStats && !showLoadingSystem ? (
+            null
+          ) : showLoadingSystem && !queueStats && !matchStats ? (
             <div className="text-center py-8 text-gray-400">
               Загрузка данных системы...
             </div>

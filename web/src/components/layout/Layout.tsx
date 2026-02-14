@@ -123,9 +123,23 @@ export function Layout() {
       <footer className="mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-gray-500 text-sm">
-              TJudge — Турнирная система по теории игр
-            </p>
+            {/* Partner logos */}
+            <div className="flex items-center gap-4">
+              {[
+                { src: '/bmstu-logo.png', alt: 'МГТУ им. Баумана', h: 'h-9' },
+                { src: '/studsovet-logo.png', alt: 'Студсовет МГТУ', h: 'h-8' },
+                { src: '/iu-logo.png', alt: 'Студ ИУ', h: 'h-7' },
+                { src: '/its-bmstu-logo.png', alt: 'ITS BMSTU', h: 'h-7' },
+                { src: '/bcg-logo.png', alt: 'BCG', h: 'h-7' },
+              ].map((logo) => (
+                <img
+                  key={logo.src}
+                  src={logo.src}
+                  alt={logo.alt}
+                  className={`${logo.h} w-auto opacity-50 hover:opacity-90 transition-opacity duration-300`}
+                />
+              ))}
+            </div>
             <a
               href="https://itsbmstu.ru"
               target="_blank"

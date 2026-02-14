@@ -16,6 +16,7 @@ export interface SpaceInvaderProps {
   speechBubble?: string | null;
   colorFilter?: string;
   controlledPose?: InvaderPose | null;
+  colorOverride?: string | null;
 }
 
 // --- Colors (violet/purple) ---
@@ -159,7 +160,22 @@ export function SpaceInvader({
   speechBubble = null,
   colorFilter,
   controlledPose = null,
+  colorOverride = null,
 }: SpaceInvaderProps) {
+  // Derived colors — override purple with custom color when provided
+  const bodyColor = colorOverride || BODY_COLOR;
+  const accentColor = colorOverride || '#a78bfa';
+  const bodyStyle = colorOverride ? { color: colorOverride } as const : BODY_STYLE;
+
+  // Helper to convert hex to rgb for rgba() usage
+  const hexToRgb = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r},${g},${b}`;
+  };
+  const accentRgb = colorOverride ? hexToRgb(colorOverride) : '139,92,246';
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [eyePos, setEyePos] = useState<EyePos>({ col: 3, row: 1 });
   const [pose, setPose] = useState<InvaderPose>('idle');
@@ -170,6 +186,22 @@ export function SpaceInvader({
   const shatteringRef = useRef(false);
   const [impactEyes, setImpactEyes] = useState<'crossed' | null>(null);
   const [impactSpeech, setImpactSpeech] = useState<string | null>(null);
+
+  // Speech bubble fade-out: keep last text visible during opacity transition
+  const lastSpeechRef = useRef<string | null>(null);
+  const lastSpeechIsImpactRef = useRef(false);
+  const [speechOpacity, setSpeechOpacity] = useState(0);
+
+  useEffect(() => {
+    const text = impactSpeech || speechBubble;
+    if (text) {
+      lastSpeechRef.current = text;
+      lastSpeechIsImpactRef.current = !!impactSpeech;
+      setSpeechOpacity(1);
+    } else {
+      setSpeechOpacity(0);
+    }
+  }, [impactSpeech, speechBubble]);
 
   // Use refs for state that only affects eye rendering to avoid re-render cascades
   const isHoveredRef = useRef(false);
@@ -512,10 +544,10 @@ export function SpaceInvader({
             ].join(';');
             particles.appendChild(regen);
 
-            // Transition neon → invader purple (wound heals)
+            // Transition neon → invader color (wound heals)
             setTimeout(() => {
-              regen.style.color = BODY_COLOR;
-              regen.style.textShadow = `0 0 4px ${BODY_COLOR}50`;
+              regen.style.color = bodyColor;
+              regen.style.textShadow = `0 0 4px ${bodyColor}50`;
             }, 100);
 
             // Remove from mask + remove regen particle (original char takes over)
@@ -671,7 +703,7 @@ export function SpaceInvader({
 
   // --- Build rows ---
   const bodyLine = (text: string, key: string) => (
-    <div key={key} style={BODY_STYLE}>{text}</div>
+    <div key={key} style={bodyStyle}>{text}</div>
   );
 
   const eyeRow = (lineRow: number, key: string) => {
@@ -698,11 +730,11 @@ export function SpaceInvader({
 
     return (
       <div key={key}>
-        <span style={BODY_STYLE}>{EYE_PRE[lineRow]}</span>
+        <span style={bodyStyle}>{EYE_PRE[lineRow]}</span>
         {renderEyeSegment(leftEye)}
-        <span style={BODY_STYLE}>{EYE_MID}</span>
+        <span style={bodyStyle}>{EYE_MID}</span>
         {renderEyeSegment(rightEye)}
-        <span style={BODY_STYLE}>{EYE_SUF[lineRow]}</span>
+        <span style={bodyStyle}>{EYE_SUF[lineRow]}</span>
       </div>
     );
   };
@@ -793,7 +825,7 @@ export function SpaceInvader({
             top: `${10 + i * 12}%`,
             right: `${5 - i * 8}%`,
             fontSize: `${14 - i * 2}px`,
-            color: '#a78bfa',
+            color: accentColor,
             fontFamily: 'monospace',
             fontWeight: 'bold',
             opacity: 0.8,
@@ -1052,8 +1084,8 @@ export function SpaceInvader({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Speech bubble (impactSpeech overrides parent speechBubble) */}
-      {(impactSpeech || speechBubble) && (
+      {/* Speech bubble with fade-in/fade-out via opacity transition */}
+      {lastSpeechRef.current && (
         <div
           style={{
             position: 'absolute',
@@ -1061,19 +1093,20 @@ export function SpaceInvader({
             left: '50%',
             transform: 'translateX(-50%)',
             whiteSpace: 'nowrap',
-            background: impactSpeech ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
-            color: impactSpeech ? '#fca5a5' : '#a78bfa',
+            background: lastSpeechIsImpactRef.current ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
+            color: lastSpeechIsImpactRef.current ? '#fca5a5' : accentColor,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             fontSize: '11px',
             padding: '4px 10px',
             borderRadius: '6px',
-            border: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
+            border: lastSpeechIsImpactRef.current ? '1px solid rgba(239,68,68,0.4)' : `1px solid rgba(${accentRgb},0.3)`,
             pointerEvents: 'none',
             zIndex: 30,
-            animation: 'fade-in 0.2s ease-out',
+            opacity: speechOpacity,
+            transition: 'opacity 0.3s ease',
           }}
         >
-          {impactSpeech || speechBubble}
+          {lastSpeechRef.current}
           <div
             style={{
               position: 'absolute',
@@ -1082,9 +1115,9 @@ export function SpaceInvader({
               transform: 'translateX(-50%) rotate(45deg)',
               width: '8px',
               height: '8px',
-              background: impactSpeech ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
-              borderRight: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
-              borderBottom: impactSpeech ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(139,92,246,0.3)',
+              background: lastSpeechIsImpactRef.current ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
+              borderRight: lastSpeechIsImpactRef.current ? '1px solid rgba(239,68,68,0.4)' : `1px solid rgba(${accentRgb},0.3)`,
+              borderBottom: lastSpeechIsImpactRef.current ? '1px solid rgba(239,68,68,0.4)' : `1px solid rgba(${accentRgb},0.3)`,
             }}
           />
         </div>

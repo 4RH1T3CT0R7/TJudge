@@ -158,15 +158,14 @@ export function GameView() {
             >
               Найти турниры
             </Link>
-            {/* Peek invader */}
-            <div className="flex justify-end mt-4">
-              <InvaderPresence
-                size="sm"
-                entrance="peek"
-                controlledPose="peek"
-                speechBubble="// попробуй!"
-              />
-            </div>
+          </div>
+          {/* Invader — outside card to avoid overflow */}
+          <div className="flex justify-end mt-3 pr-2">
+            <InvaderPresence
+              size="sm"
+              entrance="slideLeft"
+              speechBubble="// попробуй!"
+            />
           </div>
         </div>
       </div>
