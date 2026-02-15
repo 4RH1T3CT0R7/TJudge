@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -85,8 +86,43 @@ func registerAndAuth(t *testing.T, client *TestClient, suffix string) string {
 	return authResp.AccessToken
 }
 
+// registerAndAuthAsAdmin registers a user, promotes them to admin via direct DB
+// update, and re-logs in to obtain a token with admin role. Returns the access token.
+func registerAndAuthAsAdmin(t *testing.T, client *TestClient, suffix string) string {
+	t.Helper()
+	timestamp := time.Now().UnixNano()
+	username := fmt.Sprintf("e2e_%s_%d", suffix, timestamp)
+	password := "SecurePass123!"
+
+	req := RegisterRequest{
+		Username: username,
+		Email:    fmt.Sprintf("%s@test.com", username),
+		Password: password,
+	}
+
+	resp, err := client.doRequest("POST", "/api/v1/auth/register", req)
+	require.NoError(t, err)
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("Register failed for %s: %d - %s", suffix, resp.StatusCode, string(body))
+	}
+
+	var authResp AuthResponse
+	err = json.NewDecoder(resp.Body).Decode(&authResp)
+	resp.Body.Close()
+	require.NoError(t, err)
+	require.NotEmpty(t, authResp.User.ID)
+
+	// Promote to admin and re-login
+	token := promoteToAdmin(t, client, authResp.User.ID, username, password)
+	client.SetToken(token)
+	return token
+}
+
 // createTournamentHelper creates a tournament and returns its ID.
-// Assumes the client already has a valid auth token set.
+// Assumes the client already has a valid auth token set (must be admin).
 func createTournamentHelper(t *testing.T, client *TestClient) string {
 	t.Helper()
 	req := CreateTournamentRequest{
@@ -151,8 +187,8 @@ func TestE2E_TeamCreation(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Step 1: Register and authenticate
-	registerAndAuth(t, client, "teamcreate")
+	// Step 1: Register and authenticate as admin (tournament creation requires admin)
+	registerAndAuthAsAdmin(t, client, "teamcreate")
 
 	// Step 2: Create a tournament
 	tournamentID := createTournamentHelper(t, client)
@@ -214,8 +250,8 @@ func TestE2E_TeamJoinByCode(t *testing.T) {
 	client1 := NewTestClient()
 	client2 := NewTestClient()
 
-	// Step 1: Register user 1 (team leader)
-	registerAndAuth(t, client1, "teamjoin_leader")
+	// Step 1: Register user 1 as admin (tournament creation requires admin)
+	registerAndAuthAsAdmin(t, client1, "teamjoin_leader")
 
 	// Step 2: Create tournament and team as user 1
 	tournamentID := createTournamentHelper(t, client1)
@@ -287,8 +323,8 @@ func TestE2E_TeamLeave(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Setup: register, create tournament, create team
-	registerAndAuth(t, client, "teamleave")
+	// Setup: register as admin (tournament creation requires admin), create tournament, create team
+	registerAndAuthAsAdmin(t, client, "teamleave")
 	tournamentID := createTournamentHelper(t, client)
 	teamResp := createTeamHelper(t, client, tournamentID)
 	teamID := teamResp.ID
@@ -315,8 +351,8 @@ func TestE2E_TeamUpdateName(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Setup: register, create tournament, create team
-	registerAndAuth(t, client, "teamupdate")
+	// Setup: register as admin (tournament creation requires admin), create tournament, create team
+	registerAndAuthAsAdmin(t, client, "teamupdate")
 	tournamentID := createTournamentHelper(t, client)
 	teamResp := createTeamHelper(t, client, tournamentID)
 	teamID := teamResp.ID
@@ -418,8 +454,8 @@ func TestE2E_TournamentTeams(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Setup: register, create tournament, create team
-	registerAndAuth(t, client, "tournteams")
+	// Setup: register as admin (tournament creation requires admin), create tournament, create team
+	registerAndAuthAsAdmin(t, client, "tournteams")
 	tournamentID := createTournamentHelper(t, client)
 	teamResp := createTeamHelper(t, client, tournamentID)
 
@@ -459,8 +495,8 @@ func TestE2E_MyTeamInTournament(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Setup: register, create tournament, create team
-	registerAndAuth(t, client, "myteam")
+	// Setup: register as admin (tournament creation requires admin), create tournament, create team
+	registerAndAuthAsAdmin(t, client, "myteam")
 	tournamentID := createTournamentHelper(t, client)
 	teamResp := createTeamHelper(t, client, tournamentID)
 

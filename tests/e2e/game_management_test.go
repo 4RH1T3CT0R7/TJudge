@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -292,9 +293,23 @@ func TestE2E_TournamentGames(t *testing.T) {
 
 	client := NewTestClient()
 
-	// Register user and create a tournament
+	// Register user and promote to admin (tournament creation requires admin role)
 	accessToken := registerTestUser(t, client, "tourngames")
 	client.SetToken(accessToken)
+
+	// Get user info to promote to admin
+	meResp, err := client.doRequest("GET", "/api/v1/auth/me", nil)
+	require.NoError(t, err)
+	var meData struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
+	err = json.NewDecoder(meResp.Body).Decode(&meData)
+	meResp.Body.Close()
+	require.NoError(t, err)
+
+	adminToken := promoteToAdmin(t, client, meData.ID, meData.Username, "SecurePass123!")
+	client.SetToken(adminToken)
 
 	var tournamentID string
 
