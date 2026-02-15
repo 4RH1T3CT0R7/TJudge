@@ -47,7 +47,7 @@ export function Profile() {
     }
 
     try {
-      await updateProfile({ password: newPassword });
+      await updateProfile({ password: newPassword, current_password: currentPassword });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');

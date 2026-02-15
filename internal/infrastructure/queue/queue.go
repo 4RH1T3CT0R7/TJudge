@@ -91,10 +91,19 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 		deadLetterKey := "queue:dead_letter"
 		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
 			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
+		} else {
+			// Cap dead-letter queue to 1000 entries and set 7-day TTL
+			_ = qm.cache.LTrim(ctx, deadLetterKey, 0, 999)
+			_ = qm.cache.Expire(ctx, deadLetterKey, 7*24*time.Hour)
+		}
+		// Truncate raw data for logging to prevent log injection
+		rawData := result[1]
+		if len(rawData) > 1024 {
+			rawData = rawData[:1024] + "...(truncated)"
 		}
 		qm.log.Error("Failed to unmarshal match, moved to dead-letter queue",
 			zap.Error(err),
-			zap.String("raw_data", result[1]),
+			zap.String("raw_data", rawData),
 			zap.String("queue_key", result[0]),
 		)
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)

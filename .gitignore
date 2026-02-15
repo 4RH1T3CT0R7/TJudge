@@ -19,6 +19,7 @@ vendor/
 
 # Go compiled binaries (root level)
 /api
+/worker
 /benchmark
 
 # Environment and secrets

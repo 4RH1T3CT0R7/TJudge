@@ -188,7 +188,7 @@ export function GameDetail() {
 
       const program = await api.uploadProgram(formData);
       setCurrentProgram(program);
-      setPrograms([...programs, program]);
+      setPrograms(prev => [...prev, program]);
 
       // Check for syntax errors in uploaded program
       if (program.error_message) {

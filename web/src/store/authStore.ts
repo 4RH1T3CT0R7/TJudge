@@ -12,7 +12,7 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
-  updateProfile: (updates: { email?: string; password?: string }) => Promise<void>;
+  updateProfile: (updates: { email?: string; password?: string; current_password?: string }) => Promise<void>;
   initialize: () => Promise<void>;
 }
 

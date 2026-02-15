@@ -637,11 +637,15 @@ func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
+	// Use a real bcrypt hash for "OldPassword123!" so comparePassword works
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
+	require.NoError(t, err)
+
 	user := &domain.User{
 		ID:           userID,
 		Username:     "testuser",
 		Email:        "test@example.com",
-		PasswordHash: "oldhash",
+		PasswordHash: string(oldHash),
 		Role:         domain.RoleUser,
 	}
 
@@ -649,7 +653,8 @@ func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
 	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
 
 	req := &UpdateProfileRequest{
-		Password: "NewSecurePass123!",
+		Password:        "NewSecurePass123!",
+		CurrentPassword: "OldPassword123!",
 	}
 
 	result, err := service.UpdateProfile(ctx, userID.String(), req)
@@ -660,7 +665,7 @@ func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
-func TestService_UpdateProfile_WeakPassword(t *testing.T) {
+func TestService_UpdateProfile_PasswordWithoutCurrent(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
 
@@ -676,7 +681,67 @@ func TestService_UpdateProfile_WeakPassword(t *testing.T) {
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
 	req := &UpdateProfileRequest{
-		Password: "weak",
+		Password: "NewSecurePass123!",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "current password is required")
+}
+
+func TestService_UpdateProfile_WrongCurrentPassword(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: string(oldHash),
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+
+	req := &UpdateProfileRequest{
+		Password:        "NewSecurePass123!",
+		CurrentPassword: "WrongPassword123!",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "current password is incorrect")
+}
+
+func TestService_UpdateProfile_WeakPassword(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "test@example.com",
+		PasswordHash: string(oldHash),
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+
+	req := &UpdateProfileRequest{
+		Password:        "weak",
+		CurrentPassword: "OldPassword123!",
 	}
 
 	result, err := service.UpdateProfile(ctx, userID.String(), req)

@@ -164,8 +164,7 @@ func (db *DB) Health(ctx context.Context) error {
 func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	_, err := db.ExecContext(ctx, "SELECT create_matches_partition_if_needed()")
 	if err != nil {
-		db.log.Warn("Failed to ensure match partitions (function may not exist yet)", zap.Error(err))
-		return nil // Non-fatal: partitions may already exist or function not yet migrated
+		return fmt.Errorf("ensure match partitions: %w", err)
 	}
 	db.log.Info("Match partitions verified")
 	return nil

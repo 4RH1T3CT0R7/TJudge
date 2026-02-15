@@ -215,6 +215,16 @@ func (c *Cache) LRange(ctx context.Context, key string, start, stop int64) ([]st
 	return result, nil
 }
 
+// LTrim обрезает список, оставляя только элементы в диапазоне [start, stop]
+func (c *Cache) LTrim(ctx context.Context, key string, start, stop int64) error {
+	err := c.client.LTrim(ctx, key, start, stop).Err()
+	if err != nil {
+		c.log.LogError("Redis LTRIM failed", err, zap.String("key", key))
+		return err
+	}
+	return nil
+}
+
 // SetNX устанавливает значение только если ключа не существует (для distributed locks)
 func (c *Cache) SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
 	result, err := c.client.SetNX(ctx, key, value, ttl).Result()

@@ -64,8 +64,9 @@ type LoginRequest struct {
 
 // UpdateProfileRequest - запрос на обновление профиля
 type UpdateProfileRequest struct {
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
+	Email           string `json:"email,omitempty"`
+	Password        string `json:"password,omitempty"`
+	CurrentPassword string `json:"current_password,omitempty"`
 }
 
 // AuthResponse - ответ с токенами
@@ -328,6 +329,14 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 
 	// Обновляем пароль если указан
 	if req.Password != "" {
+		// Требуем текущий пароль для смены пароля
+		if req.CurrentPassword == "" {
+			return nil, errors.ErrValidation.WithMessage("current password is required to change password")
+		}
+		if err := s.comparePassword(user.PasswordHash, req.CurrentPassword); err != nil {
+			return nil, errors.ErrInvalidCredentials.WithMessage("current password is incorrect")
+		}
+
 		if err := domain.ValidatePassword(req.Password); err != nil {
 			return nil, errors.ErrValidation.WithError(err)
 		}
