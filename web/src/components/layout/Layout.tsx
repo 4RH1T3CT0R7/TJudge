@@ -6,6 +6,10 @@ import { SpaceInvader } from '../SpaceInvader';
 import { AnimatedOutlet } from '../motion/AnimatedOutlet';
 import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
 
+const GLOW_STYLE = { transitionProperty: 'color, text-shadow' } as const;
+const glowEnter = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; };
+const glowLeave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.textShadow = 'none'; };
+
 export function Layout() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -29,6 +33,9 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#0a0a0b' }}>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-lg">
+        Перейти к содержимому
+      </a>
       {/* Glassmorphism Header — no border */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl" style={{ backgroundColor: 'rgba(10,10,11,0.8)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -52,18 +59,19 @@ export function Layout() {
                 <>
                   <Link
                     to="/tournaments"
-                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
-                    style={{ transitionProperty: 'color, text-shadow' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    style={GLOW_STYLE}
+                    onMouseEnter={glowEnter}
+                    onMouseLeave={glowLeave}
                   >
                     Турниры
                   </Link>
                   <Link
                     to="/games"
-                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
-                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    style={GLOW_STYLE}
+                    onMouseEnter={glowEnter}
+                    onMouseLeave={glowLeave}
                   >
                     Игры
                   </Link>
@@ -72,9 +80,10 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap hover:text-primary-400"
-                  onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                  style={GLOW_STYLE}
+                  onMouseEnter={glowEnter}
+                  onMouseLeave={glowLeave}
                 >
                   Админ
                 </Link>
@@ -87,9 +96,10 @@ export function Layout() {
                 <div className={`flex items-center gap-3 ${isLoggingOut ? 'animate-pixel-dissolve' : ''}`}>
                   <Link
                     to="/profile"
-                    className="text-sm text-gray-400 hover:text-primary-400 transition-all duration-200"
-                    onMouseEnter={(e) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.4)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.textShadow = 'none'; }}
+                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200"
+                    style={GLOW_STYLE}
+                    onMouseEnter={glowEnter}
+                    onMouseLeave={glowLeave}
                   >
                     {user?.username}
                   </Link>
@@ -115,7 +125,7 @@ export function Layout() {
       </header>
 
       {/* Main content with top padding for fixed header */}
-      <main className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
+      <main id="main-content" className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
         <AnimatedOutlet />
       </main>
 
@@ -144,7 +154,7 @@ export function Layout() {
               href="https://itsbmstu.ru"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex gap-3 items-center opacity-70 hover:opacity-100 transition-all duration-300"
+              className="group flex gap-3 items-center opacity-70 hover:opacity-100 transition-opacity duration-300"
             >
               <div className="relative">
                 <div className="absolute inset-0 bg-primary-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

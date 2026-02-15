@@ -202,6 +202,15 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 		}
 
 		if memberCount == 1 {
+			// Проверяем, что турнир не активен
+			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+			if tErr != nil {
+				return errors.Wrap(tErr, "failed to check tournament status")
+			}
+			if tournament.Status == domain.TournamentActive {
+				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
+			}
+
 			// Последний участник - удаляем команду
 			if err := s.teamRepo.Delete(ctx, teamID); err != nil {
 				return errors.Wrap(err, "failed to delete team")

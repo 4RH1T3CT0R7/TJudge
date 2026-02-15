@@ -162,6 +162,21 @@ export function SpaceInvader({
   controlledPose = null,
   colorOverride = null,
 }: SpaceInvaderProps) {
+  const prefersReducedMotion = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  /** Returns `'none'` when the user prefers reduced motion, otherwise the given CSS animation value. */
+  const animate = (value: string): string =>
+    prefersReducedMotion.current ? 'none' : value;
+
   // Derived colors — override purple with custom color when provided
   const bodyColor = colorOverride || BODY_COLOR;
   const accentColor = colorOverride || '#a78bfa';
@@ -745,7 +760,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `e${r}a`), eyeRow(r, `e${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `a${i}a`), bodyLine(line, `a${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `m${i}a`), bodyLine(line, `m${i}b`)])}
-      <div style={{ animation: 'tentacle-wiggle 2s ease-in-out infinite' }}>
+      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `l${i}a`), bodyLine(line, `l${i}b`)])}
       </div>
     </>
@@ -761,7 +776,7 @@ export function SpaceInvader({
   );
 
   const renderDancePose = () => (
-    <div style={{ animation: 'wave-hands 0.4s ease-in-out infinite' }}>
+    <div style={{ animation: animate('wave-hands 0.4s ease-in-out infinite') }}>
       {renderHandsUpPose()}
     </div>
   );
@@ -772,7 +787,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `re${r}a`), eyeRow(r, `re${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ra${i}a`), bodyLine(line, `ra${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `rm${i}a`), bodyLine(line, `rm${i}b`)])}
-      <div style={{ animation: 'run-legs 0.2s ease-in-out infinite' }}>
+      <div style={{ animation: animate('run-legs 0.2s ease-in-out infinite') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `rl${i}a`), bodyLine(line, `rl${i}b`)])}
       </div>
     </>
@@ -800,14 +815,14 @@ export function SpaceInvader({
             color: '#60a5fa', fontFamily: "'Courier New', Consolas, monospace",
             fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
             textShadow: '0 0 6px rgba(96,165,250,0.7)',
-            animation: 'tear-fall 1.4s ease-in infinite',
+            animation: animate('tear-fall 1.4s ease-in infinite'),
             animationDelay: t.delay, pointerEvents: 'none',
           }}>{t.ch}</span>
         ))}
       </div>
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ca${i}a`), bodyLine(line, `ca${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `cm${i}a`), bodyLine(line, `cm${i}b`)])}
-      <div style={{ animation: 'tentacle-wiggle 2s ease-in-out infinite' }}>
+      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `cl${i}a`), bodyLine(line, `cl${i}b`)])}
       </div>
     </div>
@@ -829,7 +844,7 @@ export function SpaceInvader({
             fontFamily: 'monospace',
             fontWeight: 'bold',
             opacity: 0.8,
-            animation: 'zzz-float 2s ease-out infinite',
+            animation: animate('zzz-float 2s ease-out infinite'),
             animationDelay: `${i * 0.5}s`,
           }}
         >
@@ -840,7 +855,7 @@ export function SpaceInvader({
   );
 
   const renderFlyPose = () => (
-    <div style={{ animation: 'fly-drift 2s ease-in-out infinite', position: 'relative' }}>
+    <div style={{ animation: animate('fly-drift 2s ease-in-out infinite'), position: 'relative' }}>
       {renderHandsUpPose()}
       {/* ASCII flame exhaust */}
       {[
@@ -861,7 +876,7 @@ export function SpaceInvader({
             lineHeight: 1,
             textShadow: `0 0 6px ${f.color}80`,
             opacity: 0.9,
-            animation: 'particle-fly 0.5s ease-out infinite',
+            animation: animate('particle-fly 0.5s ease-out infinite'),
             animationDelay: f.delay,
             '--px': '0px',
             '--py': '15px',
@@ -887,7 +902,7 @@ export function SpaceInvader({
           fontFamily: 'monospace',
           fontSize: '10px',
           fontWeight: 'bold',
-          animation: 'fade-in 0.2s ease-out',
+          animation: animate('fade-in 0.2s ease-out'),
           whiteSpace: 'pre',
         }}
       >
@@ -898,7 +913,7 @@ export function SpaceInvader({
 
   const renderShieldPose = () => (
     <div style={{
-      animation: 'shield-pulse 1.5s ease-in-out infinite',
+      animation: animate('shield-pulse 1.5s ease-in-out infinite'),
       position: 'relative',
       borderRadius: '8px',
       padding: '2px',
@@ -922,13 +937,13 @@ export function SpaceInvader({
         position: 'absolute', inset: '-4px', borderRadius: '8px',
         border: '1.5px solid rgba(74,222,128,0.4)',
         pointerEvents: 'none',
-        animation: 'shield-border-pulse 1.5s ease-in-out infinite',
+        animation: animate('shield-border-pulse 1.5s ease-in-out infinite'),
       }} />
     </div>
   );
 
   const renderTeleportPose = () => (
-    <div style={{ animation: 'teleport-glitch 0.8s ease-in-out' }}>
+    <div style={{ animation: animate('teleport-glitch 0.8s ease-in-out') }}>
       {renderIdlePose()}
     </div>
   );
@@ -958,7 +973,7 @@ export function SpaceInvader({
               fontSize: effectFontSize,
               fontWeight: 'bold',
               pointerEvents: 'none',
-              animation: 'char-confetti 1.8s ease-out infinite',
+              animation: animate('char-confetti 1.8s ease-out infinite'),
               animationDelay: `${i * 0.15}s`,
             }}
           >
@@ -999,7 +1014,7 @@ export function SpaceInvader({
   );
 
   const renderDizzyPose = () => (
-    <div style={{ animation: 'wobble 1s ease-in-out infinite', position: 'relative' }}>
+    <div style={{ animation: animate('wobble 1s ease-in-out infinite'), position: 'relative' }}>
       {renderIdlePose()}
       {/* Spinning stars */}
       {['*', '+', '*'].map((ch, i) => (
@@ -1037,7 +1052,7 @@ export function SpaceInvader({
         fontSize: effectFontSize,
         fontWeight: 'bold',
         whiteSpace: 'pre',
-        animation: 'typing-hands 0.3s steps(2) infinite',
+        animation: animate('typing-hands 0.3s steps(2) infinite'),
         pointerEvents: 'none',
       }}>
         [====]
@@ -1133,7 +1148,7 @@ export function SpaceInvader({
         willChange: 'transform',
       }}>
         <div style={{
-          animation: 'invader-glow 2.5s ease-in-out infinite',
+          animation: animate('invader-glow 2.5s ease-in-out infinite'),
           willChange: 'filter',
           position: 'relative',
         }}>

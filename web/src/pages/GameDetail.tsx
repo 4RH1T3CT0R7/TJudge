@@ -145,6 +145,8 @@ export function GameDetail() {
     }
   }, [gameId, tournamentId]);
 
+  const canUpload = tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading;
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
@@ -570,19 +572,30 @@ export function GameDetail() {
                   onChange={handleFileUpload}
                   className="hidden"
                   accept=".py,.cpp,.c,.go,.rs,.java"
+                  aria-label="Загрузить файл программы"
                 />
 
                 {/* Drop Zone */}
                 <div
                   ref={dropZoneRef}
+                  role="button"
+                  tabIndex={canUpload ? 0 : -1}
+                  aria-label="Загрузить файл программы"
+                  aria-disabled={!canUpload || undefined}
+                  onKeyDown={(e) => {
+                    if (canUpload && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleFileSelect();
+                    }
+                  }}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
-                  onClick={tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading ? handleFileSelect : undefined}
+                  onClick={canUpload ? handleFileSelect : undefined}
                   className={`
                     relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
-                    ${tournament?.status === 'completed' || gameStatus?.round_completed || isUploading ? 'cursor-not-allowed opacity-50' : ''}
+                    ${!canUpload ? 'cursor-not-allowed opacity-50' : ''}
                     ${isDragging
                       ? 'border-primary-500 bg-primary-900/20'
                       : 'border-gray-600 hover:border-primary-500 hover:bg-gray-800/50'
@@ -926,7 +939,10 @@ function MarkdownRenderer({ content }: { content: string }) {
       // Inline code
       .replace(/`([^`]+)`/g, '<code class="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
       // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+        const safeUrl = /^(https?:\/\/|mailto:|#)/i.test(url) ? url.replace(/"/g, '&quot;') : '#';
+        return `<a href="${safeUrl}" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      })
       // Unordered lists
       .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-300">$1</li>')
       // Ordered lists

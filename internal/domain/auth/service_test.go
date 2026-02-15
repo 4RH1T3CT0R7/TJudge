@@ -561,6 +561,7 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 	}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, errors.ErrNotFound)
 	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
 
 	req := &UpdateProfileRequest{
@@ -572,6 +573,62 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new@example.com", result.Email)
 	assert.Empty(t, result.PasswordHash)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateProfile_EmailAlreadyInUse(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	otherUserID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "old@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("GetByEmail", ctx, "taken@example.com").Return(&domain.User{ID: otherUserID}, nil)
+
+	req := &UpdateProfileRequest{
+		Email: "taken@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "email already in use")
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateProfile_SameEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "same@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+
+	req := &UpdateProfileRequest{
+		Email: "same@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	require.NoError(t, err)
+	assert.Equal(t, "same@example.com", result.Email)
 	userRepo.AssertExpectations(t)
 }
 
@@ -674,6 +731,7 @@ func TestService_UpdateProfile_UpdateError(t *testing.T) {
 	}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, errors.ErrNotFound)
 	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(errors.ErrInternal)
 
 	req := &UpdateProfileRequest{

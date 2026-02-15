@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 import { TerminalQuest } from '../components/TerminalQuest';
 import { PixelGrid } from '../components/PixelGrid';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -96,9 +97,10 @@ function GameInfoModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -197,7 +199,7 @@ function PrisonersDilemmaMatrix() {
               Сотр.
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-all duration-200 bg-emerald-500 rounded-tl-xl ${hoveredCell === 'cc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-emerald-500 rounded-tl-xl ${hoveredCell === 'cc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('cc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -206,7 +208,7 @@ function PrisonersDilemmaMatrix() {
               </div>
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-all duration-200 bg-red-500 rounded-tr-xl ${hoveredCell === 'cd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-red-500 rounded-tr-xl ${hoveredCell === 'cd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('cd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -220,7 +222,7 @@ function PrisonersDilemmaMatrix() {
               Пред.
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-all duration-200 bg-red-500 rounded-bl-xl ${hoveredCell === 'dc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-red-500 rounded-bl-xl ${hoveredCell === 'dc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('dc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -229,7 +231,7 @@ function PrisonersDilemmaMatrix() {
               </div>
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-all duration-200 bg-amber-500 rounded-br-xl relative ${hoveredCell === 'dd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-amber-500 rounded-br-xl relative ${hoveredCell === 'dd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('dd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -342,7 +344,7 @@ function TugOfWarVisualization() {
             <button
               key={i}
               onClick={() => setCurrentRound(i)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                 currentRound === i
                   ? 'bg-primary-500 text-white'
                   : 'bg-gray-700 text-gray-300'
@@ -362,7 +364,7 @@ function TugOfWarVisualization() {
             <div className="w-8 text-center font-bold text-blue-400">{force}</div>
             <button onClick={() => adjustRound(index, 5)} disabled={remaining <= 0 || showResults} className="w-6 h-6 rounded bg-blue-900/50 text-blue-400 disabled:opacity-30">+</button>
             <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 transition-all" style={{ width: `${force}%` }} />
+              <div className="h-full bg-blue-500 transition-[width]" style={{ width: `${force}%` }} />
             </div>
             {showResults && (
               <span className={`w-8 text-center font-bold ${
@@ -386,7 +388,7 @@ function TugOfWarVisualization() {
           <button
             onClick={() => { setShowResults(true); setCurrentRound(0); }}
             disabled={remaining > 0}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold shadow-lg hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100"
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold shadow-lg hover:scale-105 transition-[transform,opacity] disabled:opacity-50 disabled:hover:scale-100"
           >
             {remaining > 0 ? `Ещё ${remaining}` : 'Тянуть!'}
           </button>
@@ -412,6 +414,7 @@ function TugOfWarVisualization() {
 function GameShowcase() {
   const [activeGame, setActiveGame] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  useEscapeKey(useCallback(() => setModalOpen(false), []), modalOpen);
 
   const games = [
     {
@@ -486,7 +489,7 @@ function GameShowcase() {
           <button
             key={game.id}
             onClick={() => setActiveGame(index)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${
               activeGame === index
                 ? `${colorClasses[game.color].bg} ${colorClasses[game.color].text} ${colorClasses[game.color].border} border-2 shadow-lg scale-105`
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border-2 border-transparent'
@@ -546,7 +549,7 @@ function GameShowcase() {
         </div>
 
         {/* Visualization */}
-        <div className="flex justify-center items-center bg-gray-800/50 rounded-2xl p-4 border border-gray-700 transition-all">
+        <div className="flex justify-center items-center bg-gray-800/50 rounded-2xl p-4 border border-gray-700 transition-colors">
           <div className="w-full animate-fade-in" key={currentGame.id + '-viz'}>
             {currentGame.visualization}
           </div>
@@ -577,7 +580,7 @@ function ConceptCard({
   description: string;
 }) {
   return (
-    <div className="card group transition-all" style={{ border: 'none' }}
+    <div className="card group transition-[box-shadow]" style={{ border: 'none' }}
       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
     >

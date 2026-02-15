@@ -133,6 +133,8 @@ export function Profile() {
               <input
                 type="email"
                 id="email"
+                name="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
@@ -163,6 +165,7 @@ export function Profile() {
               <input
                 type="password"
                 id="currentPassword"
+                name="currentPassword"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 className="input"
@@ -178,6 +181,7 @@ export function Profile() {
               <input
                 type="password"
                 id="newPassword"
+                name="newPassword"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="input"
@@ -194,6 +198,7 @@ export function Profile() {
               <input
                 type="password"
                 id="confirmPassword"
+                name="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="input"

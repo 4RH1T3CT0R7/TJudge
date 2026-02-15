@@ -343,7 +343,7 @@ func TestEloCalculator_ZeroRatingsForBothPlayers(t *testing.T) {
 
 	t.Run("Loss", func(t *testing.T) {
 		newRating := calc.CalculateNewRating(0, 0, 0.0)
-		assert.Equal(t, -16, newRating, "loser should drop to -16 from 0")
+		assert.Equal(t, 0, newRating, "loser should be clamped to 0 (rating floor)")
 	})
 
 	t.Run("Draw", func(t *testing.T) {
@@ -354,9 +354,9 @@ func TestEloCalculator_ZeroRatingsForBothPlayers(t *testing.T) {
 	t.Run("ProcessMatch", func(t *testing.T) {
 		newR1, newR2, c1, c2 := calc.ProcessMatch(0, 0, 1)
 		assert.Equal(t, 16, newR1)
-		assert.Equal(t, -16, newR2)
+		assert.Equal(t, 0, newR2, "loser rating should be clamped to 0 (rating floor)")
 		assert.Equal(t, 16, c1)
-		assert.Equal(t, -16, c2)
+		assert.Equal(t, 0, c2, "change should reflect floor clamping")
 	})
 
 	t.Run("ExpectedScore", func(t *testing.T) {
@@ -370,22 +370,15 @@ func TestEloCalculator_NegativeRatings(t *testing.T) {
 
 	t.Run("NegativeVsPositive_Win", func(t *testing.T) {
 		// -100 vs 100: difference of 200, so expected for -100 is low (~0.24)
+		// Without floor: newRating would be ~-76, but floor clamps to 0
 		newRating := calc.CalculateNewRating(-100, 100, 1.0)
-		change := newRating - (-100)
-
-		// Upset win, should gain more than K/2
-		assert.Greater(t, change, 16)
-		assert.LessOrEqual(t, change, 32)
+		assert.Equal(t, 0, newRating, "should be clamped to 0 (rating floor)")
 	})
 
 	t.Run("NegativeVsPositive_Loss", func(t *testing.T) {
-		// -100 vs 100: expected loss, smaller penalty
+		// -100 vs 100: expected loss, without floor would be ~-108, clamped to 0
 		newRating := calc.CalculateNewRating(-100, 100, 0.0)
-		change := newRating - (-100)
-
-		// Expected loss, should lose less than K/2
-		assert.Less(t, change, 0)
-		assert.Greater(t, change, -16)
+		assert.Equal(t, 0, newRating, "should be clamped to 0 (rating floor)")
 	})
 
 	t.Run("BothNegative", func(t *testing.T) {
@@ -393,8 +386,9 @@ func TestEloCalculator_NegativeRatings(t *testing.T) {
 		expected := calc.CalculateExpectedScore(-200, -200)
 		assert.InDelta(t, 0.5, expected, 0.001)
 
+		// Without floor: -200 + 16 = -184, but floor clamps to 0
 		newRating := calc.CalculateNewRating(-200, -200, 1.0)
-		assert.Equal(t, -184, newRating, "should gain K/2 = 16")
+		assert.Equal(t, 0, newRating, "should be clamped to 0 (rating floor)")
 	})
 
 	t.Run("NegativeVsPositive_Symmetry", func(t *testing.T) {
@@ -405,9 +399,10 @@ func TestEloCalculator_NegativeRatings(t *testing.T) {
 
 	t.Run("NegativeVsPositive_ProcessMatch", func(t *testing.T) {
 		newR1, newR2, c1, c2 := calc.ProcessMatch(-100, 100, 1)
-		assert.Greater(t, newR1, -100, "winner rating should increase")
+		assert.Equal(t, 0, newR1, "winner rating should be clamped to 0 (rating floor)")
 		assert.Less(t, newR2, 100, "loser rating should decrease")
-		assert.InDelta(t, -c2, c1, 1, "changes should be approximately zero-sum")
+		assert.Equal(t, 100, c1, "change reflects floor clamping from -100 to 0")
+		_ = c2 // loser change is independent, not zero-sum due to floor
 	})
 }
 

@@ -8,6 +8,7 @@ import type { InvaderPose } from '../components/SpaceInvader';
 import { CinematicOverlay } from '../components/CinematicOverlay';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   Tournament,
   TournamentStatus,
@@ -158,6 +159,7 @@ export function TournamentDetail() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  useEscapeKey(useCallback(() => setShowJoinModal(false), []), showJoinModal);
   const [isJoining, setIsJoining] = useState(false);
 
   // Action states
@@ -239,6 +241,7 @@ export function TournamentDetail() {
   const { isConnected } = useWebSocket({
     tournamentId: id || '',
     onMessage: handleWebSocketMessage,
+    enabled: true,
   });
 
   const loadTournamentData = useCallback(async () => {
@@ -899,6 +902,7 @@ export function TournamentDetail() {
               <h2 className="text-xl font-bold text-gray-100">Участие в турнире</h2>
               <button
                 onClick={() => setShowJoinModal(false)}
+                aria-label="Закрыть"
                 className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
               >
                 <XMarkIcon />
@@ -911,6 +915,8 @@ export function TournamentDetail() {
                 <div className="flex gap-2">
                   <input
                     type="text"
+                    name="teamName"
+                    autoComplete="off"
                     value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
                     placeholder="Название команды"
@@ -940,6 +946,8 @@ export function TournamentDetail() {
                 <div className="flex gap-2">
                   <input
                     type="text"
+                    name="joinCode"
+                    autoComplete="off"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
                     placeholder="Код приглашения"
@@ -1066,12 +1074,12 @@ function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[] }) {
         {podiumData.map(({ entry, place, height, delay, bgGradient, textColor, medal }) => (
           <div
             key={place}
-            className={`flex-1 max-w-48 transition-all duration-700 ease-out ${
+            className={`flex-1 max-w-48 transition-[transform,opacity] duration-700 ease-out ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             } ${delay}`}
           >
             {/* Winner card */}
-            <div className={`text-center mb-2 transform transition-all duration-500 ${
+            <div className={`text-center mb-2 transform transition-[transform,opacity] duration-500 ${
               isVisible ? 'scale-100' : 'scale-0'
             } ${delay}`}>
               <div className="text-4xl mb-2 animate-bounce" style={{ animationDelay: `${(place - 1) * 200}ms`, animationDuration: '2s' }}>
@@ -1090,7 +1098,7 @@ function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[] }) {
 
             {/* Podium */}
             <div
-              className={`${height} bg-gradient-to-t ${bgGradient} rounded-t-lg shadow-lg relative overflow-hidden transition-all duration-700 ease-out ${
+              className={`${height} bg-gradient-to-t ${bgGradient} rounded-t-lg shadow-lg relative overflow-hidden transition-[transform,opacity] duration-700 ease-out ${
                 isVisible ? 'opacity-100' : 'opacity-0'
               } ${delay}`}
             >
@@ -1302,7 +1310,7 @@ function GeneralLeaderboardTable({
       {entries.map((entry, index) => (
         <div
           key={entry.program_id}
-          className={`p-4 rounded-xl transition-all ${
+          className={`p-4 rounded-xl transition-colors ${
             isDark
               ? `bg-gray-800/50 border border-gray-700 ${getRowClass(index)}`
               : `bg-gray-800/50 border border-gray-800 ${getRowClass(index)} hover:shadow-md`
@@ -1346,7 +1354,7 @@ function GeneralLeaderboardTable({
               {/* Score bar */}
               <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
+                  className={`h-full rounded-full transition-[width] duration-500 ${
                     index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
                     index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
                     index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
@@ -1958,17 +1966,17 @@ function MatchesTab({
             <div className="h-full flex">
               {/* Completed - green */}
               <div
-                className="bg-emerald-500 transition-all duration-500"
+                className="bg-emerald-500 transition-[width] duration-500"
                 style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
               />
               {/* Running - blue, animated */}
               <div
-                className="bg-blue-500 animate-pulse transition-all duration-500"
+                className="bg-blue-500 animate-pulse transition-[width] duration-500"
                 style={{ width: `${(totalStats.running / totalStats.total) * 100}%` }}
               />
               {/* Failed - red */}
               <div
-                className="bg-red-500 transition-all duration-500"
+                className="bg-red-500 transition-[width] duration-500"
                 style={{ width: `${(totalStats.failed / totalStats.total) * 100}%` }}
               />
             </div>
@@ -2112,7 +2120,7 @@ function RoundCard({
           {/* Progress bar */}
           <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-500 transition-all duration-300"
+              className="h-full bg-emerald-500 transition-[width] duration-300"
               style={{ width: `${getProgressPercent()}%` }}
             />
           </div>

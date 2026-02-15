@@ -344,19 +344,41 @@ func TestService_LeaveTeam_RegularMember(t *testing.T) {
 }
 
 func TestService_LeaveTeam_LeaderLastMember(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	teamID := uuid.New()
 	leaderID := uuid.New()
+	tID := uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, teamID).Return(nil)
 
 	err := svc.LeaveTeam(ctx, teamID, leaderID)
 	assert.NoError(t, err)
 	teamRepo.AssertExpectations(t)
+	tournamentRepo.AssertExpectations(t)
+}
+
+func TestService_LeaveTeam_LeaderLastMember_ActiveTournament(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	tID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete team during active tournament")
+	teamRepo.AssertExpectations(t)
+	tournamentRepo.AssertExpectations(t)
 }
 
 func TestService_LeaveTeam_LeaderWithOthers(t *testing.T) {

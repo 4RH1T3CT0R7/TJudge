@@ -84,12 +84,22 @@ func (m *MockProgramRepository) ClearErrorMessages(ctx context.Context, tourname
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// MockTeamMembershipChecker mocks the team membership checker
+type MockTeamMembershipChecker struct {
+	mock.Mock
+}
+
+func (m *MockTeamMembershipChecker) IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, teamID, userID)
+	return args.Bool(0), args.Error(1)
+}
+
 func TestProgramHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
 	t.Run("successfully create program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		reqBody := map[string]string{
@@ -128,7 +138,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 	t.Run("missing user ID in context", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		reqBody := map[string]string{
 			"name":      "My Chess AI",
@@ -150,7 +160,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 	t.Run("invalid request body", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 
@@ -169,7 +179,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 	t.Run("validation error - empty name", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		reqBody := map[string]string{
@@ -199,7 +209,7 @@ func TestProgramHandler_List(t *testing.T) {
 
 	t.Run("successfully list programs", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		expectedPrograms := []*domain.Program{
@@ -243,7 +253,7 @@ func TestProgramHandler_List(t *testing.T) {
 
 	t.Run("missing user ID in context", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", nil)
 		w := httptest.NewRecorder()
@@ -255,7 +265,7 @@ func TestProgramHandler_List(t *testing.T) {
 
 	t.Run("repository error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 
@@ -281,7 +291,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("successfully get program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 		expectedProgram := &domain.Program{
@@ -316,7 +326,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/invalid-uuid", nil)
 
@@ -333,7 +343,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("program not found", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 
@@ -360,7 +370,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 	t.Run("successfully update program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -412,7 +422,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 	t.Run("not the owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -450,7 +460,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 
 	t.Run("successfully delete program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -485,7 +495,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 
 	t.Run("not the owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -511,7 +521,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 
@@ -536,7 +546,7 @@ func TestProgramHandler_Get_ServiceError(t *testing.T) {
 
 	t.Run("repository error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 
@@ -563,7 +573,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 	t.Run("missing user ID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 		reqBody := map[string]string{
@@ -589,7 +599,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 
@@ -618,7 +628,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 	t.Run("invalid body", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -645,7 +655,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 	t.Run("ownership check error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -679,7 +689,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 	t.Run("get program error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -718,7 +728,7 @@ func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
 
 	t.Run("missing user ID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 
@@ -737,7 +747,7 @@ func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
 
 	t.Run("ownership check error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -763,7 +773,7 @@ func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
 
 	t.Run("get program error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -790,7 +800,7 @@ func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
 
 	t.Run("repo delete error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -829,7 +839,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		teamID := uuid.New()
@@ -879,7 +889,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("missing team_id", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		gameID := uuid.New()
@@ -898,7 +908,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("missing game_id", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		teamID := uuid.New()
@@ -917,7 +927,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("invalid team_id", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		gameID := uuid.New()
@@ -936,7 +946,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("invalid game_id", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		teamID := uuid.New()
@@ -955,7 +965,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("no access", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		otherUserID := uuid.New()
@@ -991,7 +1001,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("missing user ID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		teamID := uuid.New()
 		gameID := uuid.New()
@@ -1007,7 +1017,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("repo error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		teamID := uuid.New()
@@ -1035,7 +1045,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		tournamentID := uuid.New()
 
@@ -1064,7 +1074,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/programs/clear-errors", nil)
 
@@ -1081,7 +1091,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 
 	t.Run("repo error", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		tournamentID := uuid.New()
 
@@ -1108,7 +1118,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("not owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -1134,7 +1144,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("missing user ID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		programID := uuid.New()
 
@@ -1153,7 +1163,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 
@@ -1174,7 +1184,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("file path nil", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -1380,13 +1390,115 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
+	t.Run("non_member_blocked", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		mockTeamChecker := new(MockTeamMembershipChecker)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			teamChecker: mockTeamChecker,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(false, nil)
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		mockTeamChecker.AssertExpectations(t)
+	})
+
+	t.Run("team_check_error", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		mockTeamChecker := new(MockTeamMembershipChecker)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			teamChecker: mockTeamChecker,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(false, errors.ErrInternal)
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		mockTeamChecker.AssertExpectations(t)
+	})
+
+	t.Run("nil_team_checker_fails_closed", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := &ProgramHandler{
+			programRepo: mockRepo,
+			uploadDir:   t.TempDir(),
+			maxFileSize: 10 * 1024 * 1024,
+			log:         log,
+		}
+
+		userID := uuid.New()
+		teamID := uuid.New()
+		tournamentID := uuid.New()
+		gameID := uuid.New()
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+			"name":          "My Strategy",
+		}, "strategy.py", []byte("print('hello')"))
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
 	t.Run("round completed blocks upload", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		mockRoundChecker := new(MockRoundCompletionChecker)
+		mockTeamChecker := new(MockTeamMembershipChecker)
 		handler := &ProgramHandler{
 			programRepo:  mockRepo,
 			uploadDir:    t.TempDir(),
 			maxFileSize:  10 * 1024 * 1024,
+			teamChecker:  mockTeamChecker,
 			roundChecker: mockRoundChecker,
 			log:          log,
 		}
@@ -1396,6 +1508,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		tournamentID := uuid.New()
 		gameID := uuid.New()
 
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
 		mockRoundChecker.On("IsRoundCompleted", mock.Anything, tournamentID, gameID).Return(true, nil)
 
 		req := createMultipartRequest(t, map[string]string{
@@ -1418,10 +1531,12 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 	t.Run("running matches blocks upload", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		mockMatchChecker := new(MockMatchExistenceChecker)
+		mockTeamChecker := new(MockTeamMembershipChecker)
 		handler := &ProgramHandler{
 			programRepo:  mockRepo,
 			uploadDir:    t.TempDir(),
 			maxFileSize:  10 * 1024 * 1024,
+			teamChecker:  mockTeamChecker,
 			matchChecker: mockMatchChecker,
 			log:          log,
 		}
@@ -1431,6 +1546,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		tournamentID := uuid.New()
 		gameID := uuid.New()
 
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
 		mockMatchChecker.On("HasAnyRunningMatches", mock.Anything, tournamentID).Return(true, nil)
 		mockMatchChecker.On("GetActiveGameType", mock.Anything, tournamentID).Return("prisoners_dilemma", nil)
 
@@ -1453,8 +1569,10 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
+		mockTeamChecker := new(MockTeamMembershipChecker)
 		handler := &ProgramHandler{
 			programRepo: mockRepo,
+			teamChecker: mockTeamChecker,
 			uploadDir:   t.TempDir(),
 			maxFileSize: 10 * 1024 * 1024,
 			log:         log,
@@ -1465,6 +1583,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		tournamentID := uuid.New()
 		gameID := uuid.New()
 
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
 		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
 			return p.UserID == userID &&
 				p.Name == "My Strategy" &&
