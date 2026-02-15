@@ -293,7 +293,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full bg-transparent text-transparent caret-green-400 outline-none font-mono text-sm leading-6 pl-1"
+              className="w-full bg-transparent text-transparent caret-green-400 outline-none focus-visible:ring-1 focus-visible:ring-green-500/50 font-mono text-sm leading-6 pl-1"
               spellCheck={false}
               autoComplete="off"
             />

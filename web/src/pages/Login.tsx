@@ -176,7 +176,7 @@ export function Login() {
               {'// имя пользователя'}
             </label>
             <div
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-200"
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-green-400 text-sm shrink-0" style={monoFont}>$</span>
@@ -194,7 +194,7 @@ export function Login() {
                   wrapperBlur(e.currentTarget.parentElement);
                 }}
                 className="flex-1 text-gray-100 placeholder:text-gray-600 bg-transparent"
-                style={{ border: 'none', outline: 'none', boxShadow: 'none', ...monoFont }}
+                style={{ border: 'none', boxShadow: 'none', ...monoFont }}
                 autoComplete="username"
                 placeholder="username"
               />
@@ -207,7 +207,7 @@ export function Login() {
               {'// пароль'}
             </label>
             <div
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-200"
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-primary-400 text-sm shrink-0" style={monoFont}>{'>'}</span>
@@ -238,7 +238,7 @@ export function Login() {
                   wrapperBlur(e.currentTarget.parentElement);
                 }}
                 className="flex-1 text-gray-100 placeholder:text-gray-600 bg-transparent"
-                style={{ border: 'none', outline: 'none', boxShadow: 'none', ...monoFont }}
+                style={{ border: 'none', boxShadow: 'none', ...monoFont }}
                 placeholder="********"
               />
             </div>

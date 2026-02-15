@@ -106,7 +106,7 @@ export function Games() {
               <Link
                 key={game.id}
                 to={`/games/${game.id}`}
-                className={`card card-interactive group border-2 ${config.borderClass} transition-all`}
+                className={`card card-interactive group border-2 ${config.borderClass} transition-[border-color,box-shadow,transform]`}
                 onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.12), 0 4px 20px rgba(0,0,0,0.3)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
               >

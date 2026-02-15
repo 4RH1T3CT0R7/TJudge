@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { useSequenceTyping } from '../hooks/useEasterEggs';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match, TournamentGameWithDetails } from '../types';
@@ -246,6 +247,36 @@ export function AdminPanel() {
   const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
   const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
   const [resettingGame, setResettingGame] = useState<string | null>(null);
+
+  // Close modals on Escape — priority order (topmost first), replicating full cleanup from close helpers
+  const anyModalOpen = showGameForm || showTournamentForm || managingTournamentId !== null;
+  useEscapeKey(useCallback(() => {
+    if (managingTournamentId !== null) {
+      // mirrors closeTournamentGamesManagement()
+      setManagingTournamentId(null);
+      setManagingTournamentGames([]);
+      setManagingTournamentGamesStatus([]);
+      setRunningGameMatches(null);
+      setSettingActiveGame(null);
+      return;
+    }
+    if (showTournamentForm) {
+      // mirrors resetTournamentForm()
+      setShowTournamentForm(false);
+      setTournamentForm({ name: '', description: '', game_type: '', max_team_size: 3, max_participants: '', is_permanent: false, start_time: '', end_time: '' });
+      setSelectedGameIds([]);
+      setTournamentError(null);
+      return;
+    }
+    if (showGameForm) {
+      // mirrors resetGameForm()
+      setShowGameForm(false);
+      setEditingGame(null);
+      setGameForm({ name: '', display_name: '', rules: '' });
+      setGameError(null);
+      return;
+    }
+  }, [managingTournamentId, showTournamentForm, showGameForm]), anyModalOpen);
 
   // Programs tab state
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
@@ -891,6 +922,7 @@ export function AdminPanel() {
                     </label>
                     <input
                       type="text"
+                      name="gameName"
                       value={gameForm.name}
                       onChange={(e) =>
                         setGameForm({ ...gameForm, name: e.target.value.toLowerCase() })
@@ -908,6 +940,7 @@ export function AdminPanel() {
                     <label className="block text-sm font-medium mb-1 text-gray-300">Отображаемое название</label>
                     <input
                       type="text"
+                      name="gameDisplayName"
                       value={gameForm.display_name}
                       onChange={(e) =>
                         setGameForm({ ...gameForm, display_name: e.target.value })
@@ -1029,6 +1062,7 @@ export function AdminPanel() {
                     <label className="block text-sm font-medium mb-1 text-gray-300">Название *</label>
                     <input
                       type="text"
+                      name="tournamentName"
                       value={tournamentForm.name}
                       onChange={(e) =>
                         setTournamentForm({ ...tournamentForm, name: e.target.value })
@@ -1268,6 +1302,7 @@ export function AdminPanel() {
                   </h2>
                   <button
                     onClick={closeTournamentGamesManagement}
+                    aria-label="Закрыть"
                     className="text-gray-400 hover:text-gray-300"
                   >
                     ✕
@@ -1857,7 +1892,7 @@ export function AdminPanel() {
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.cpu.usage_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
                               systemMetrics.cpu.usage_percent > 80
                                 ? 'bg-red-500'
                                 : systemMetrics.cpu.usage_percent > 50
@@ -1891,7 +1926,7 @@ export function AdminPanel() {
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.memory.used_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
                               systemMetrics.memory.used_percent > 80
                                 ? 'bg-red-500'
                                 : systemMetrics.memory.used_percent > 50
@@ -1923,7 +1958,7 @@ export function AdminPanel() {
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.disk.used_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-all duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
                               systemMetrics.disk.used_percent > 90
                                 ? 'bg-red-500'
                                 : systemMetrics.disk.used_percent > 70

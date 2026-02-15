@@ -209,7 +209,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
 
           {/* Invader (appears after typing) */}
           {phase >= 1 && (
-            <div className="transition-all duration-500" style={{ transform: phase >= 1 ? 'scale(1)' : 'scale(0)' }}>
+            <div className="transition-transform duration-500" style={{ transform: phase >= 1 ? 'scale(1)' : 'scale(0)' }}>
               <SpaceInvader
                 size="lg"
                 controlledPose={invaderPose}
@@ -278,7 +278,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
           )}
 
           {/* Invader */}
-          <div className="transition-all duration-700" style={{
+          <div className="transition-transform duration-700" style={{
             transform: phase >= 2 ? 'translateY(-20px)' : 'translateY(0)',
           }}>
             <SpaceInvader

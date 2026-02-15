@@ -145,6 +145,7 @@
 
   html {
     scroll-behavior: smooth;
+    color-scheme: dark;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -177,7 +178,7 @@
     @apply px-4 py-2 rounded-lg font-medium inline-flex items-center justify-center gap-2;
     @apply focus:outline-none focus:ring-2 focus:ring-offset-1;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
-    @apply transition-all duration-150 ease-out;
+    @apply transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out;
     @apply active:scale-[0.98];
     position: relative;
     overflow: hidden;
@@ -276,7 +277,7 @@
   .input {
     @apply w-full px-3 py-2 rounded-lg text-gray-100;
     @apply placeholder:text-gray-500;
-    @apply transition-all duration-150;
+    @apply transition-[border-color,background-color] duration-150;
     background: transparent;
     border: 1px solid #374151;
     outline: none;
@@ -300,7 +301,7 @@
   }
 
   .card-hover {
-    @apply transition-all duration-200 ease-out;
+    @apply transition-[transform,box-shadow] duration-200 ease-out;
     @apply hover:-translate-y-0.5;
   }
   .card-hover:hover {
@@ -308,7 +309,7 @@
   }
 
   .card-interactive {
-    @apply cursor-pointer transition-all duration-200 ease-out;
+    @apply cursor-pointer transition-[transform,box-shadow,border-color] duration-200 ease-out;
     @apply hover:-translate-y-0.5;
     @apply active:translate-y-0;
   }
@@ -407,7 +408,7 @@
 
   /* Nav link styles — neon glow on hover */
   .nav-link {
-    @apply px-3 py-2 rounded-md text-sm font-medium transition-all duration-200;
+    @apply px-3 py-2 rounded-md text-sm font-medium transition-[color,text-shadow] duration-200;
     @apply text-gray-400;
   }
   .nav-link:hover {
@@ -429,7 +430,7 @@
   .feature-card {
     @apply rounded-lg p-6;
     @apply hover:-translate-y-0.5;
-    @apply transition-all duration-200 ease-out;
+    @apply transition-[transform,box-shadow] duration-200 ease-out;
     background: rgba(17,24,39,0.8);
   }
   .feature-card:hover {
@@ -531,7 +532,7 @@
 
   /* Tab pill buttons */
   .tab {
-    @apply py-2 px-4 font-medium text-sm rounded-lg transition-all duration-200;
+    @apply py-2 px-4 font-medium text-sm rounded-lg transition-[color,background-color] duration-200;
   }
 }
 
@@ -1045,15 +1046,22 @@
 /* ===== End Sudo Theme ===== */
 
 @media (prefers-reduced-motion: reduce) {
-  .invader-float,
-  .invader-breathe,
-  .invader-glow,
-  .tentacle-wiggle,
-  .terminal-cursor,
-  .btn::after {
-    animation: none !important;
-    transition: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
+
+  .btn, .input, .nav-link, .tab, .badge, .table-row,
+  .card-hover, .card-interactive, .feature-card {
+    transition-duration: 150ms !important;
+    transition-property: color, background-color, border-color, opacity !important;
+  }
+
+  html { scroll-behavior: auto !important; }
+  .skeleton { animation: none !important; }
 }
 
 @layer utilities {

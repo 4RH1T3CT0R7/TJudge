@@ -16,6 +16,16 @@ export function MatrixRain({ active, onWakeUp }: MatrixRainProps) {
   const [invaderPose, setInvaderPose] = useState<InvaderPose>('sleep');
   const [invaderSpeech, setInvaderSpeech] = useState<string | null>('Zzz...');
   const [waking, setWaking] = useState(false);
+  const prefersReducedMotion = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
 
   // Handle user activity — wake up sequence
   useEffect(() => {
@@ -54,6 +64,7 @@ export function MatrixRain({ active, onWakeUp }: MatrixRainProps) {
   // Canvas matrix rain effect
   useEffect(() => {
     if (!active) return;
+    if (prefersReducedMotion.current) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -72,6 +83,11 @@ export function MatrixRain({ active, onWakeUp }: MatrixRainProps) {
     window.addEventListener('resize', resize);
 
     const draw = () => {
+      if (prefersReducedMotion.current) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
       ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 

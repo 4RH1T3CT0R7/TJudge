@@ -145,6 +145,8 @@ export function GameDetail() {
     }
   }, [gameId, tournamentId]);
 
+  const canUpload = tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading;
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
@@ -570,19 +572,30 @@ export function GameDetail() {
                   onChange={handleFileUpload}
                   className="hidden"
                   accept=".py,.cpp,.c,.go,.rs,.java"
+                  aria-label="Загрузить файл программы"
                 />
 
                 {/* Drop Zone */}
                 <div
                   ref={dropZoneRef}
+                  role="button"
+                  tabIndex={canUpload ? 0 : -1}
+                  aria-label="Загрузить файл программы"
+                  aria-disabled={!canUpload || undefined}
+                  onKeyDown={(e) => {
+                    if (canUpload && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      handleFileSelect();
+                    }
+                  }}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
-                  onClick={tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading ? handleFileSelect : undefined}
+                  onClick={canUpload ? handleFileSelect : undefined}
                   className={`
                     relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
-                    ${tournament?.status === 'completed' || gameStatus?.round_completed || isUploading ? 'cursor-not-allowed opacity-50' : ''}
+                    ${!canUpload ? 'cursor-not-allowed opacity-50' : ''}
                     ${isDragging
                       ? 'border-primary-500 bg-primary-900/20'
                       : 'border-gray-600 hover:border-primary-500 hover:bg-gray-800/50'

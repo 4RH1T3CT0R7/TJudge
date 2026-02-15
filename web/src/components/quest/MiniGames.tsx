@@ -242,7 +242,7 @@ function TypingRace({ onEnd }: TypingRaceProps) {
           type="text"
           value={typed}
           onChange={(e) => handleInput(e.target.value)}
-          className="w-full bg-transparent border border-gray-700 rounded px-2 py-1 text-green-400 font-mono text-sm outline-none focus:border-green-500"
+          className="w-full bg-transparent border border-gray-700 rounded px-2 py-1 text-green-400 font-mono text-sm outline-none focus-visible:ring-1 focus-visible:ring-green-500/50 focus:border-green-500"
           spellCheck={false}
           autoComplete="off"
         />
