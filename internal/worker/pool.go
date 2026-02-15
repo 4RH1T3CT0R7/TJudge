@@ -211,8 +211,10 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	start := time.Now()
 	p.metrics.RecordMatchStart()
 
-	// Создаём контекст с таймаутом для обработки
-	processCtx, processCancel := context.WithTimeout(workerCtx, p.config.Timeout)
+	// Derive processCtx from pool context (not workerCtx) so that
+	// scale-down cancellation does not kill in-flight matches.
+	// Pool shutdown (p.ctx cancel) still stops everything.
+	processCtx, processCancel := context.WithTimeout(p.ctx, p.config.Timeout)
 	defer processCancel()
 
 	// Обрабатываем с retry

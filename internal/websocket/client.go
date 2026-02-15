@@ -160,6 +160,13 @@ func (c *Client) sendPong() {
 		return
 	}
 
+	// Recover from send on closed channel — hub may close c.send concurrently
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.Info("sendPong: channel closed, client disconnecting")
+		}
+	}()
+
 	select {
 	case c.send <- data:
 	default:

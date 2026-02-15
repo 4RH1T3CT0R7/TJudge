@@ -46,6 +46,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, isInitialized, user } = useAuthStore();
+
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Загрузка...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppContent() {
   const { initialize, isInitialized, isLoading } = useAuthStore();
 
@@ -85,9 +107,9 @@ function AppContent() {
           <Route
             path="admin"
             element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <AdminPanel />
-              </ProtectedRoute>
+              </AdminRoute>
             }
           />
           <Route

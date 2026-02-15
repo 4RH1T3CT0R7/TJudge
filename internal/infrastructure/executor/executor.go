@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -238,8 +239,10 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	defer logs.Close()
 
 	// Читаем логи используя stdcopy для демультиплексирования
+	// Limit combined log output to 2MB to prevent OOM from malicious programs
+	const maxLogSize = 1 << 20
 	var stdout, stderr bytes.Buffer
-	_, err = stdcopy.StdCopy(&stdout, &stderr, logs)
+	_, err = stdcopy.StdCopy(&stdout, &stderr, io.LimitReader(logs, maxLogSize*2))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read container logs: %w", err)
 	}

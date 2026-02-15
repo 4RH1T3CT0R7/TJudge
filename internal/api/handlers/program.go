@@ -436,10 +436,19 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		Language string `json:"language"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		h.log.Info("Invalid request body", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithError(err))
 		return
+	}
+
+	// BUG-C1 fix: Reject path traversal in code_path.
+	if req.CodePath != "" {
+		cleaned := filepath.Clean(req.CodePath)
+		if strings.Contains(cleaned, "..") {
+			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
+			return
+		}
 	}
 
 	program := &domain.Program{
@@ -548,10 +557,19 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Language string `json:"language"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		h.log.Info("Invalid request body", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithError(err))
 		return
+	}
+
+	// Reject path traversal in code_path.
+	if req.CodePath != "" {
+		cleaned := filepath.Clean(req.CodePath)
+		if strings.Contains(cleaned, "..") {
+			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
+			return
+		}
 	}
 
 	program, err := h.programRepo.GetByID(r.Context(), id)

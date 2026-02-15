@@ -163,11 +163,7 @@ func (s *Server) setupRoutes() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(s.authService, s.log))
 
-				r.Post("/", s.tournamentHandler.Create)
 				r.Post("/{id}/join", s.tournamentHandler.Join)
-				r.Post("/{id}/start", s.tournamentHandler.Start)
-				r.Post("/{id}/complete", s.tournamentHandler.Complete)
-				r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
 				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
 
 				// Добавление игры доступно админам или создателю турнира (проверка в handler)
@@ -176,6 +172,10 @@ func (s *Server) setupRoutes() {
 				// Админские маршруты для турниров
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireAdmin())
+					r.Post("/", s.tournamentHandler.Create)
+					r.Post("/{id}/start", s.tournamentHandler.Start)
+					r.Post("/{id}/complete", s.tournamentHandler.Complete)
+					r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
 					r.Delete("/{id}", s.tournamentHandler.Delete)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
 					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
