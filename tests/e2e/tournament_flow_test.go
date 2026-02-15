@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,9 +14,47 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// promoteToAdmin promotes a user to admin role via direct DB update,
+// then re-logs in to obtain a token that carries the admin role.
+func promoteToAdmin(t *testing.T, client *TestClient, userID, username, password string) string {
+	t.Helper()
+
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "tjudge")
+	dbPass := getEnv("DB_PASSWORD", "secret")
+	dbName := getEnv("DB_NAME", "tjudge_test")
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPass, dbName)
+
+	db, err := sql.Open("postgres", dsn)
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec("UPDATE users SET role = 'admin' WHERE id = $1", userID)
+	require.NoError(t, err)
+
+	// Re-login to get a token with admin role
+	resp, err := client.doRequest("POST", "/api/v1/auth/login", LoginRequest{
+		Username: username,
+		Password: password,
+	})
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var authResp AuthResponse
+	err = json.NewDecoder(resp.Body).Decode(&authResp)
+	require.NoError(t, err)
+
+	return authResp.AccessToken
+}
 
 // Config for E2E tests
 var (
@@ -170,16 +209,18 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 	// ==========================================================================
 	var user1Token, user2Token, user3Token string
 	var user1ID, user2ID, user3ID string
+	var user1Username string
 
 	t.Run("RegisterUsers", func(t *testing.T) {
 		timestamp := time.Now().UnixNano()
+		user1Username = fmt.Sprintf("e2e_user1_%d", timestamp)
 
 		users := []struct {
 			username string
 			tokenPtr *string
 			idPtr    *string
 		}{
-			{fmt.Sprintf("e2e_user1_%d", timestamp), &user1Token, &user1ID},
+			{user1Username, &user1Token, &user1ID},
 			{fmt.Sprintf("e2e_user2_%d", timestamp), &user2Token, &user2ID},
 			{fmt.Sprintf("e2e_user3_%d", timestamp), &user3Token, &user3ID},
 		}
@@ -253,7 +294,14 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 	})
 
 	// ==========================================================================
-	// Step 3: Create tournament (user1 as organizer)
+	// Step 2.5: Promote user1 to admin (tournament creation requires admin role)
+	// ==========================================================================
+	t.Run("PromoteUser1ToAdmin", func(t *testing.T) {
+		user1Token = promoteToAdmin(t, client, user1ID, user1Username, "SecurePass123!")
+	})
+
+	// ==========================================================================
+	// Step 3: Create tournament (user1 as admin)
 	// ==========================================================================
 	var tournamentID string
 
