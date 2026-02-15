@@ -731,6 +731,7 @@ func TestService_Start(t *testing.T) {
 			Return(nil)
 		// Start calls tournamentRepo.GetByID directly (bypassing cache)
 		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(3, nil)
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
 		gameRepo.On("GetTournamentGames", mock.Anything, tournamentID).Return([]*domain.TournamentGame{}, nil)
 		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
@@ -769,6 +770,31 @@ func TestService_Start(t *testing.T) {
 		assert.Contains(t, appErr.Message, "already started")
 	})
 
+	t.Run("too_few_participants", func(t *testing.T) {
+		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		ctx := context.Background()
+
+		tournamentID := uuid.New()
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Test Tournament",
+			GameType: "chess",
+			Status:   domain.TournamentPending,
+		}
+
+		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+			Return(nil)
+		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(1, nil)
+
+		err := service.Start(ctx, tournamentID)
+		assert.Error(t, err)
+		assert.True(t, errors.IsAppError(err))
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Contains(t, appErr.Message, "at least 2 participants")
+	})
+
 	t.Run("repo_update_error", func(t *testing.T) {
 		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
@@ -784,6 +810,7 @@ func TestService_Start(t *testing.T) {
 		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
 			Return(nil)
 		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(5, nil)
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).
 			Return(fmt.Errorf("db write error"))
 
@@ -816,6 +843,7 @@ func TestService_Start(t *testing.T) {
 		distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
 			Return(nil)
 		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(4, nil)
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
 		gameRepo.On("GetTournamentGames", mock.Anything, tournamentID).Return(games, nil)
 		gameRepo.On("SetActiveGame", mock.Anything, tournamentID, gameID).Return(nil)
@@ -1849,6 +1877,7 @@ func TestConcurrentStart(t *testing.T) {
 		}).Return(tournament, nil)
 
 		tournamentRepo.On("GetParticipants", mock.Anything, tournamentID).Return(participants, nil)
+		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(3, nil)
 
 		matchRepo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 

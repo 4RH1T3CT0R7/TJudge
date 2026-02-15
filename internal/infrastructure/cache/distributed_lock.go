@@ -107,7 +107,9 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 	return nil
 }
 
-// WithLock выполняет функцию с захваченной блокировкой
+// WithLock выполняет функцию с захваченной блокировкой.
+// A background goroutine renews the lock at ttl/3 intervals to prevent
+// expiry during long-running operations.
 func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error {
 	// Захватываем блокировку
 	token, err := dl.TryLock(ctx, key, ttl, 3, 100*time.Millisecond)
@@ -115,8 +117,16 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
+	// Start lock renewal goroutine
+	renewCtx, renewCancel := context.WithCancel(ctx)
+	renewDone := make(chan struct{})
+	go dl.renewLoop(renewCtx, key, token, ttl, renewDone)
+
 	// Гарантируем освобождение блокировки
 	defer func() {
+		renewCancel()
+		<-renewDone // wait for renewal goroutine to exit
+
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
@@ -126,6 +136,41 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 
 	// Выполняем функцию
 	return fn(ctx)
+}
+
+// renewLoop periodically extends the lock TTL until the context is cancelled.
+func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token string, ttl time.Duration, done chan struct{}) {
+	defer close(done)
+
+	lockKey := fmt.Sprintf("lock:%s", key)
+	interval := ttl / 3
+	if interval < 500*time.Millisecond {
+		interval = 500 * time.Millisecond
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Lua script: only extend if we still own the lock
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("pexpire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`
+	ttlMs := fmt.Sprintf("%d", ttl.Milliseconds())
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			renewCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_, _ = dl.cache.Eval(renewCtx, script, []string{lockKey}, token, ttlMs)
+			cancel()
+		}
+	}
 }
 
 // generateToken генерирует случайный токен для блокировки

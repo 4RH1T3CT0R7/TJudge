@@ -81,6 +81,12 @@ export const useAuthStore = create<AuthState>()(
         const state = get();
         if (state.isInitialized) return;
 
+        // Register auth failure callback so the API client can notify us
+        // when token refresh fails (instead of doing window.location.href)
+        api.setOnAuthFailure(() => {
+          set({ user: null, isAuthenticated: false, isInitialized: true, isLoading: false });
+        });
+
         // Check if we have a token in localStorage
         const hasToken = localStorage.getItem('access_token');
         if (hasToken) {

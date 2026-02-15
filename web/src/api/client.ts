@@ -27,6 +27,9 @@ class ApiClient {
   // Mutex for token refresh to prevent race conditions
   private refreshPromise: Promise<void> | null = null;
 
+  // Callback for auth failure (allows SPA-friendly redirect without full page reload)
+  private onAuthFailure: (() => void) | null = null;
+
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
@@ -77,8 +80,10 @@ class ApiClient {
             // Refresh failed - just clear tokens locally, don't call logout API
             // (calling logout API would cause another 401 and infinite loop)
             this.clearTokens();
-            // Redirect to login page
-            window.location.href = '/login';
+            // Notify subscribers (e.g. auth store) so React Router can navigate
+            if (this.onAuthFailure) {
+              this.onAuthFailure();
+            }
           }
         }
         return Promise.reject(error);
@@ -104,6 +109,10 @@ class ApiClient {
       });
 
     return this.refreshPromise;
+  }
+
+  setOnAuthFailure(callback: () => void) {
+    this.onAuthFailure = callback;
   }
 
   setAccessToken(token: string) {

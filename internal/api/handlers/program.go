@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -841,6 +842,9 @@ func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// syntaxCheckTimeout is the maximum time allowed for a syntax check command.
+const syntaxCheckTimeout = 10 * time.Second
+
 // runSyntaxCheck выполняет проверку синтаксиса с помощью внешней команды.
 // Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен.
 func runSyntaxCheck(command string, args []string, defaultMsg string) string {
@@ -849,9 +853,15 @@ func runSyntaxCheck(command string, args []string, defaultMsg string) string {
 		return ""
 	}
 
-	cmd := exec.Command(command, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "Syntax check timed out"
+		}
 		errorMsg := strings.TrimSpace(string(output))
 		if errorMsg == "" {
 			errorMsg = defaultMsg

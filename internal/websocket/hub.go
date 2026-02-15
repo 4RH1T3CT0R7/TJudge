@@ -60,8 +60,8 @@ const (
 func NewHub(log *logger.Logger) *Hub {
 	return &Hub{
 		tournaments: make(map[uuid.UUID]map[*Client]bool),
-		register:    make(chan *Client),
-		unregister:  make(chan *Client),
+		register:    make(chan *Client, 64),
+		unregister:  make(chan *Client, 64),
 		broadcast:   make(chan *Message, 256),
 		log:         log,
 	}
@@ -93,6 +93,16 @@ func (h *Hub) registerClient(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	// If the client was already closed (unregister arrived before register
+	// due to buffered channels), skip adding a dead client to the map.
+	if client.closed {
+		h.log.Info("Client already closed, skipping registration",
+			zap.String("tournament_id", client.tournamentID.String()),
+			zap.String("user_id", client.userID.String()),
+		)
+		return
+	}
+
 	if h.tournaments[client.tournamentID] == nil {
 		h.tournaments[client.tournamentID] = make(map[*Client]bool)
 	}
@@ -113,10 +123,6 @@ func (h *Hub) unregisterClient(client *Client) {
 	if clients, ok := h.tournaments[client.tournamentID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
-			if !client.closed {
-				client.closed = true
-				close(client.send)
-			}
 
 			// Удаляем пустую map турнира
 			if len(clients) == 0 {
@@ -128,6 +134,14 @@ func (h *Hub) unregisterClient(client *Client) {
 				zap.String("user_id", client.userID.String()),
 			)
 		}
+	}
+
+	// Always mark client as closed and close the send channel, even if
+	// the client wasn't in the map yet (register still queued in the
+	// buffered channel). This lets registerClient detect the late arrival.
+	if !client.closed {
+		client.closed = true
+		close(client.send)
 	}
 }
 

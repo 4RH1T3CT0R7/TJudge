@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { PageLoader } from './components/PageLoader';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuthStore } from './store/authStore';
 import { InvaderProvider } from './context/InvaderContext';
 
@@ -129,15 +130,17 @@ function AppContent() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <MotionConfig reducedMotion="user">
-        <InvaderProvider>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-        </InvaderProvider>
-      </MotionConfig>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <MotionConfig reducedMotion="user">
+          <InvaderProvider>
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
+          </InvaderProvider>
+        </MotionConfig>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
