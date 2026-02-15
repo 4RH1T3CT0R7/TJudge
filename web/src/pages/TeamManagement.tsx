@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
@@ -38,13 +38,7 @@ export function TeamManagement() {
   const [invaderPose, setInvaderPose] = useState<InvaderPose>('idle');
   const [invaderSpeech, setInvaderSpeech] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id) {
-      loadTeamData();
-    }
-  }, [id]);
-
-  const loadTeamData = async () => {
+  const loadTeamData = useCallback(async () => {
     if (!id) return;
 
     setIsLoading(true);
@@ -60,7 +54,40 @@ export function TeamManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      loadTeamData();
+    }
+  }, [id, loadTeamData]);
+
+  // Set initial invader pose based on role
+  useEffect(() => {
+    if (!teamData || !user) return;
+    const isLeaderRole = user.id === teamData.leader_id;
+    let timer: ReturnType<typeof setTimeout>;
+    if (isLeaderRole) {
+      setInvaderPose('salute');
+      setInvaderSpeech('// капитан на мостике');
+      timer = setTimeout(() => { setInvaderPose('idle'); setInvaderSpeech(null); }, 2500);
+    } else {
+      setInvaderSpeech('// в строю');
+      timer = setTimeout(() => setInvaderSpeech(null), 2500);
+    }
+    return () => clearTimeout(timer);
+  }, [teamData, user]);
+
+  // React to confirmLeave
+  useEffect(() => {
+    if (confirmLeave) {
+      setInvaderPose('cry');
+      setInvaderSpeech('// не уходи!');
+    } else {
+      setInvaderPose('idle');
+      setInvaderSpeech(null);
+    }
+  }, [confirmLeave]);
 
   const handleUpdateName = async () => {
     if (!id || !newName.trim()) return;
@@ -170,29 +197,6 @@ export function TeamManagement() {
   const { members } = teamData;
   const isLeader = user?.id === teamData.leader_id;
   const isMember = members.some((m) => m.id === user?.id);
-
-  // Set initial invader pose based on role
-  useEffect(() => {
-    if (isLeader) {
-      setInvaderPose('salute');
-      setInvaderSpeech('// капитан на мостике');
-      setTimeout(() => { setInvaderPose('idle'); setInvaderSpeech(null); }, 2500);
-    } else {
-      setInvaderSpeech('// в строю');
-      setTimeout(() => setInvaderSpeech(null), 2500);
-    }
-  }, [isLeader]);
-
-  // React to confirmLeave
-  useEffect(() => {
-    if (confirmLeave) {
-      setInvaderPose('cry');
-      setInvaderSpeech('// не уходи!');
-    } else {
-      setInvaderPose('idle');
-      setInvaderSpeech(null);
-    }
-  }, [confirmLeave]);
 
   return (
     <div className="max-w-3xl mx-auto">

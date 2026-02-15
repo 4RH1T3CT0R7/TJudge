@@ -1538,4 +1538,7 @@ func TestGameHandler_ResetGameRound_TransactionError(t *testing.T) {
 	handler.ResetGameRound(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	var errResp map[string]string
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &errResp))
+	assert.Equal(t, "Internal server error", errResp["error"])
 }

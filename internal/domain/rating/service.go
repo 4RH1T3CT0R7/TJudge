@@ -11,7 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// LeaderboardCacher интерфейс для кэширования таблицы лидеров
+// LeaderboardCacher — minimal interface for leaderboard cache used by the rating service.
+// Intentionally narrower than tournament.LeaderboardCacher (interface segregation).
 type LeaderboardCacher interface {
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
 }

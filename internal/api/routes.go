@@ -117,10 +117,15 @@ func (s *Server) setupRoutes() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
+	// Body size limit for JSON endpoints (1MB). Applied per route group
+	// so that file-upload routes (/programs) can set their own higher limit.
+	bodyLimit := middleware.MaxBodySize(1 << 20)
+
 	// API v1
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// Auth routes
 		r.Route("/auth", func(r chi.Router) {
+			r.Use(bodyLimit)
 			// Public auth endpoints (no authentication required)
 			r.Post("/register", s.authHandler.Register)
 			r.Post("/login", s.authHandler.Login)
@@ -137,6 +142,7 @@ func (s *Server) setupRoutes() {
 
 		// Tournament routes
 		r.Route("/tournaments", func(r chi.Router) {
+			r.Use(bodyLimit)
 			// Публичные маршруты
 			r.Get("/", s.tournamentHandler.List)
 			r.Get("/{id}", s.tournamentHandler.Get)
@@ -187,6 +193,7 @@ func (s *Server) setupRoutes() {
 
 		// Game routes
 		r.Route("/games", func(r chi.Router) {
+			r.Use(bodyLimit)
 			// Публичные маршруты
 			r.Get("/", s.gameHandler.List)
 			r.Get("/{id}", s.gameHandler.Get)
@@ -205,6 +212,7 @@ func (s *Server) setupRoutes() {
 
 		// Team routes
 		r.Route("/teams", func(r chi.Router) {
+			r.Use(bodyLimit)
 			r.Use(middleware.Auth(s.authService, s.log))
 
 			r.Post("/", s.teamHandler.Create)
@@ -238,6 +246,7 @@ func (s *Server) setupRoutes() {
 
 		// Match routes
 		r.Route("/matches", func(r chi.Router) {
+			r.Use(bodyLimit)
 			// Публичные маршруты с опциональной аутентификацией
 			// (если пользователь авторизован, покажет полные ошибки для админов)
 			r.Group(func(r chi.Router) {
@@ -268,6 +277,7 @@ func (s *Server) setupRoutes() {
 
 		// System routes (только для админов)
 		r.Route("/system", func(r chi.Router) {
+			r.Use(bodyLimit)
 			r.Use(middleware.Auth(s.authService, s.log))
 			r.Use(middleware.RequireAdmin())
 

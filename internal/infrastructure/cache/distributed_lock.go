@@ -93,7 +93,10 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 	if val, ok := result.(int64); ok && val == 0 {
 		// Key was already gone or token mismatch -- not necessarily an error
 		// If key doesn't exist, it was already unlocked (TTL expired)
-		exists, _ := dl.cache.Exists(ctx, lockKey)
+		exists, err := dl.cache.Exists(ctx, lockKey)
+		if err != nil {
+			return fmt.Errorf("failed to check lock existence: %w", err)
+		}
 		if exists {
 			return errors.ErrConflict.WithMessage("lock token mismatch")
 		}

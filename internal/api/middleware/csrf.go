@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -224,6 +225,23 @@ func (e *CSRFError) Error() string {
 // defaultCSRFErrorHandler обработчик ошибок по умолчанию
 func defaultCSRFErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	http.Error(w, "Forbidden - CSRF token invalid", http.StatusForbidden)
+}
+
+// StartCSRFCleanup starts a background goroutine that periodically cleans up
+// expired CSRF tokens. It stops when the provided context is cancelled.
+func StartCSRFCleanup(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				CleanupExpiredTokens()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // CleanupExpiredTokens удаляет истёкшие токены (запускать периодически)

@@ -214,7 +214,9 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		return e.parseResult(status.StatusCode, stdout, stderr)
 	case <-ctx.Done():
 		// Таймаут - останавливаем контейнер
-		_ = e.dockerClient.ContainerStop(context.Background(), containerID, container.StopOptions{})
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stopCancel()
+		_ = e.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
 		return nil, fmt.Errorf("match execution timeout")
 	}
 

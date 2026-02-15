@@ -626,6 +626,18 @@ func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameI
 // удаляет историю рейтингов, удаляет матчи, сбрасывает участников и статус раунда.
 func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
 	err = r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		// 0. Проверяем наличие активных матчей (pending/running)
+		var activeCount int
+		if txErr := tx.GetContext(ctx, &activeCount, `
+			SELECT COUNT(*) FROM matches
+			WHERE tournament_id = $1 AND game_type = $2 AND status IN ('pending', 'running')
+		`, tournamentID, gameType); txErr != nil {
+			return errors.Wrap(txErr, "failed to check active matches")
+		}
+		if activeCount > 0 {
+			return errors.ErrValidation.WithMessage("cannot reset: there are active or pending matches")
+		}
+
 		// 1. Удаляем историю рейтингов для этой игры (через связь с matches)
 		result, txErr := tx.ExecContext(ctx, `
 			DELETE FROM rating_history rh

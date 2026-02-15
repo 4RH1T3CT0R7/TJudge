@@ -165,7 +165,7 @@ func TestAuth_BlacklistedToken(t *testing.T) {
 	mockAuth.AssertExpectations(t)
 }
 
-func TestAuth_TokenFromQueryParam(t *testing.T) {
+func TestAuth_TokenFromWebSocketProtocol(t *testing.T) {
 	mockAuth := new(MockAuthService)
 	log := newTestLogger()
 
@@ -173,16 +173,17 @@ func TestAuth_TokenFromQueryParam(t *testing.T) {
 	claims := &auth.Claims{UserID: userID}
 	user := &domain.User{ID: userID, Role: domain.RoleUser}
 
-	mockAuth.On("ValidateToken", "query-token").Return(claims, nil)
-	mockAuth.On("IsTokenBlacklisted", mock.Anything, "query-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "query-token").Return(user, nil)
+	mockAuth.On("ValidateToken", "ws-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "ws-token").Return(false, nil)
+	mockAuth.On("GetUserFromToken", mock.Anything, "ws-token").Return(user, nil)
 
 	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Token in query parameter (for WebSocket)
-	req := httptest.NewRequest("GET", "/?token=query-token", nil)
+	// Token in Sec-WebSocket-Protocol header (for WebSocket)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Sec-WebSocket-Protocol", "access_token.ws-token")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)

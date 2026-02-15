@@ -152,41 +152,6 @@ func TestJWTManager_ValidateRefreshToken_Expired(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestJWTManager_ExtractUserID(t *testing.T) {
-	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
-	userID := uuid.New()
-
-	token, err := manager.GenerateAccessToken(userID, "testuser")
-	require.NoError(t, err)
-
-	extractedUserID, err := manager.ExtractUserID(token)
-
-	require.NoError(t, err)
-	assert.Equal(t, userID, extractedUserID)
-}
-
-func TestJWTManager_ExtractUserID_InvalidToken(t *testing.T) {
-	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
-
-	_, err := manager.ExtractUserID("invalid-token")
-	assert.Error(t, err)
-}
-
-func TestJWTManager_ExtractUserID_ExpiredToken(t *testing.T) {
-	manager := NewJWTManager("test-secret", 1*time.Millisecond, 7*24*time.Hour)
-	userID := uuid.New()
-
-	token, err := manager.GenerateAccessToken(userID, "testuser")
-	require.NoError(t, err)
-
-	time.Sleep(10 * time.Millisecond)
-
-	// ExtractUserID doesn't validate, so it should still work
-	extractedUserID, err := manager.ExtractUserID(token)
-	require.NoError(t, err)
-	assert.Equal(t, userID, extractedUserID)
-}
-
 func TestJWTManager_RefreshTokenTTL(t *testing.T) {
 	refreshTTL := 7 * 24 * time.Hour
 	manager := NewJWTManager("test-secret", 15*time.Minute, refreshTTL)

@@ -50,9 +50,17 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				}
 			}
 
-			// Если токена нет в header, проверяем query параметр (для WebSocket)
+			// Если токена нет в header, проверяем Sec-WebSocket-Protocol (для WebSocket)
 			if token == "" {
-				token = r.URL.Query().Get("token")
+				if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
+					for _, p := range strings.Split(proto, ",") {
+						p = strings.TrimSpace(p)
+						if strings.HasPrefix(p, "access_token.") {
+							token = strings.TrimPrefix(p, "access_token.")
+							break
+						}
+					}
+				}
 			}
 
 			if token == "" {

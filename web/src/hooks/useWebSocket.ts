@@ -70,9 +70,11 @@ export function useWebSocket({
     // Build WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${currentTournamentId}?token=${token}`;
+    const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${currentTournamentId}`;
 
-    const ws = new WebSocket(wsUrl);
+    // Send token via Sec-WebSocket-Protocol header instead of URL query string
+    // to avoid exposing JWT in browser history, server logs, and referrer headers
+    const ws = new WebSocket(wsUrl, [`access_token.${token}`]);
 
     ws.onopen = () => {
       if (!mountedRef.current) {

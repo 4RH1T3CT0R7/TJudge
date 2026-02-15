@@ -241,13 +241,7 @@ export function TournamentDetail() {
     onMessage: handleWebSocketMessage,
   });
 
-  useEffect(() => {
-    if (id) {
-      loadTournamentData();
-    }
-  }, [id]);
-
-  const loadTournamentData = async () => {
+  const loadTournamentData = useCallback(async () => {
     if (!id) return;
 
     setIsLoading(true);
@@ -285,7 +279,13 @@ export function TournamentDetail() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id, isAuthenticated]);
+
+  useEffect(() => {
+    if (id) {
+      loadTournamentData();
+    }
+  }, [id, loadTournamentData]);
 
   const handleCreateTeam = async () => {
     if (!id || !teamName.trim()) return;
@@ -1115,7 +1115,7 @@ function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[] }) {
               left: `${5 + i * 5}%`,
               backgroundColor: ['#fbbf24', '#a3a3a3', '#fb923c', '#22c55e', '#3b82f6'][i % 5],
               animationDelay: `${i * 0.1}s`,
-              animationDuration: `${2 + Math.random()}s`,
+              animationDuration: `${2 + (i * 0.37) % 1}s`,
             }}
           />
         ))}

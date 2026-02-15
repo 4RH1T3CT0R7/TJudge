@@ -19,7 +19,8 @@ type TournamentCacher interface {
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// LeaderboardCacher интерфейс для кэширования таблицы лидеров
+// LeaderboardCacher — full interface for leaderboard cache used by the tournament service.
+// Broader than rating.LeaderboardCacher which only needs UpdateRating (interface segregation).
 type LeaderboardCacher interface {
 	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error

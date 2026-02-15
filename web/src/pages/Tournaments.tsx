@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { SpaceInvader } from '../components/SpaceInvader';
@@ -25,11 +25,7 @@ export function Tournaments() {
   const showLoading = useDelayedLoading(isLoading);
   const [filter, setFilter] = useState<TournamentStatus | ''>('');
 
-  useEffect(() => {
-    loadTournaments();
-  }, [filter]);
-
-  const loadTournaments = async () => {
+  const loadTournaments = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await api.getTournaments(filter || undefined);
@@ -39,7 +35,11 @@ export function Tournaments() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadTournaments();
+  }, [loadTournaments]);
 
   return (
     <div>

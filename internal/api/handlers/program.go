@@ -363,24 +363,25 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// Автоматически регистрируем программу как участника турнира
+	// Use program.ID (not local programID) since CreateWithAtomicVersion may regenerate it on retry
 	if h.tournamentRepo != nil {
 		participant := &domain.TournamentParticipant{
 			ID:           uuid.New(),
 			TournamentID: tournamentID,
-			ProgramID:    programID,
+			ProgramID:    program.ID,
 			Rating:       1500, // Начальный рейтинг ELO
 		}
 
 		if err := h.tournamentRepo.AddParticipant(r.Context(), participant); err != nil {
 			h.log.Warn("Failed to add program as tournament participant (may already exist)",
 				zap.Error(err),
-				zap.String("program_id", programID.String()),
+				zap.String("program_id", program.ID.String()),
 				zap.String("tournament_id", tournamentID.String()),
 			)
 			// Не возвращаем ошибку - программа уже создана, участие опционально
 		} else {
 			h.log.Info("Program registered as tournament participant",
-				zap.String("program_id", programID.String()),
+				zap.String("program_id", program.ID.String()),
 				zap.String("tournament_id", tournamentID.String()),
 			)
 		}

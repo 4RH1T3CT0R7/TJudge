@@ -112,24 +112,6 @@ func (jm *JWTManager) ValidateRefreshToken(tokenString string) (uuid.UUID, error
 	return userID, nil
 }
 
-// ExtractUserID извлекает user ID из токена без полной валидации.
-//
-// Deprecated: Do not use for authorization decisions. Token signature is NOT verified.
-// Use ValidateToken instead for any security-sensitive operations.
-func (jm *JWTManager) ExtractUserID(tokenString string) (uuid.UUID, error) {
-	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &Claims{})
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to parse token: %w", err)
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok {
-		return uuid.Nil, fmt.Errorf("invalid token claims")
-	}
-
-	return claims.UserID, nil
-}
-
 // RefreshTokenTTL возвращает время жизни refresh token
 func (jm *JWTManager) RefreshTokenTTL() time.Duration {
 	return jm.refreshTTL

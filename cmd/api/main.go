@@ -11,6 +11,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api"
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
@@ -127,6 +128,9 @@ func main() {
 
 	// Запускаем hub в отдельной горутине
 	go wsHub.Run(ctx)
+
+	// Start periodic CSRF token cleanup
+	middleware.StartCSRFCleanup(ctx)
 
 	// Инициализируем сервисы
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)

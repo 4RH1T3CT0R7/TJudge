@@ -71,8 +71,20 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Echo the exact offered subprotocol per RFC 6455 Section 4.2.2
+	responseHeader := http.Header{}
+	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
+		for _, p := range strings.Split(proto, ",") {
+			p = strings.TrimSpace(p)
+			if strings.HasPrefix(p, "access_token.") {
+				responseHeader.Set("Sec-WebSocket-Protocol", p)
+				break
+			}
+		}
+	}
+
 	// Upgrade HTTP соединения в WebSocket
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		h.log.LogError("Failed to upgrade connection", err,
 			zap.String("tournament_id", tournamentID.String()),

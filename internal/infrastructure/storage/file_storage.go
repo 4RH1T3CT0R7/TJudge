@@ -112,9 +112,9 @@ func (s *FileStorage) SaveProgram(
 		return "", errors.Wrap(err, "failed to write file")
 	}
 
-	// Делаем файл исполняемым
-	if err := os.Chmod(filePath, 0755); err != nil {
-		s.log.Error("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
+	// Restrict file permissions to owner-only read/write
+	if err := os.Chmod(filePath, 0600); err != nil {
+		s.log.Error("Failed to set file permissions", zap.Error(err), zap.String("path", filePath))
 	}
 
 	s.log.Info("Program file saved",
