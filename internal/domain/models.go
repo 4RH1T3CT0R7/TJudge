@@ -89,6 +89,18 @@ type TournamentGame struct {
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 }
 
+// TournamentGameWithDetails содержит данные связи турнир-игра вместе с информацией об игре
+type TournamentGameWithDetails struct {
+	TournamentID     uuid.UUID  `json:"tournament_id" db:"tournament_id"`
+	GameID           uuid.UUID  `json:"game_id" db:"game_id"`
+	GameName         string     `json:"game_name" db:"game_name"`
+	GameDisplayName  string     `json:"game_display_name" db:"game_display_name"`
+	IsActive         bool       `json:"is_active" db:"is_active"`
+	RoundCompleted   bool       `json:"round_completed" db:"round_completed"`
+	RoundCompletedAt *time.Time `json:"round_completed_at,omitempty" db:"round_completed_at"`
+	CurrentRound     int        `json:"current_round" db:"current_round"`
+}
+
 // TournamentStatus - статус турнира
 type TournamentStatus string
 

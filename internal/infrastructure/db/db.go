@@ -132,6 +132,25 @@ func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error
 	return db.DB.BeginTxx(ctx, opts)
 }
 
+// RunInTx выполняет функцию внутри транзакции.
+// Если функция возвращает ошибку, транзакция откатывается.
+func (db *DB) RunInTx(ctx context.Context, fn func(tx *sqlx.Tx) error) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
 // Health проверяет здоровье базы данных
 func (db *DB) Health(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

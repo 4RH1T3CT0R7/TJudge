@@ -5,12 +5,16 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+// LeaderboardCacher интерфейс для кэширования таблицы лидеров
+type LeaderboardCacher interface {
+	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
+}
 
 // RatingRepository интерфейс для работы с рейтингами в БД
 type RatingRepository interface {
@@ -24,12 +28,12 @@ type RatingRepository interface {
 type Service struct {
 	calculator       *EloCalculator
 	repo             RatingRepository
-	leaderboardCache *cache.LeaderboardCache
+	leaderboardCache LeaderboardCacher
 	log              *logger.Logger
 }
 
 // NewService создаёт новый сервис рейтингов
-func NewService(repo RatingRepository, leaderboardCache *cache.LeaderboardCache, log *logger.Logger) *Service {
+func NewService(repo RatingRepository, leaderboardCache LeaderboardCacher, log *logger.Logger) *Service {
 	return &Service{
 		calculator:       NewDefaultEloCalculator(),
 		repo:             repo,

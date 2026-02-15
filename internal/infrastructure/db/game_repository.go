@@ -9,6 +9,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 // GameRepository - репозиторий для работы с играми
@@ -374,6 +375,54 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 	return tgs, nil
 }
 
+// GetTournamentGamesWithDetails получает все связи турнира с играми, включая данные об играх
+// Выполняет один JOIN запрос вместо N+1 отдельных запросов
+func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error) {
+	query := `
+		SELECT tg.tournament_id, tg.game_id,
+		       g.name AS game_name, g.display_name AS game_display_name,
+		       COALESCE(tg.is_active, false) AS is_active,
+		       COALESCE(tg.round_completed, false) AS round_completed,
+		       tg.round_completed_at,
+		       COALESCE(tg.current_round, 0) AS current_round
+		FROM tournament_games tg
+		INNER JOIN games g ON g.id = tg.game_id
+		WHERE tg.tournament_id = $1
+		ORDER BY tg.created_at ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get tournament games with details")
+	}
+	defer rows.Close()
+
+	var results []*domain.TournamentGameWithDetails
+	for rows.Next() {
+		var d domain.TournamentGameWithDetails
+		err := rows.Scan(
+			&d.TournamentID,
+			&d.GameID,
+			&d.GameName,
+			&d.GameDisplayName,
+			&d.IsActive,
+			&d.RoundCompleted,
+			&d.RoundCompletedAt,
+			&d.CurrentRound,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to scan tournament game with details")
+		}
+		results = append(results, &d)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return results, nil
+}
+
 // MarkRoundCompleted отмечает раунд игры как завершённый
 func (r *GameRepository) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `
@@ -571,4 +620,64 @@ func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameI
 	}
 
 	return nil
+}
+
+// ResetGameRoundFull выполняет полный сброс раунда игры в одной транзакции:
+// удаляет историю рейтингов, удаляет матчи, сбрасывает участников и статус раунда.
+func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
+	err = r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		// 1. Удаляем историю рейтингов для этой игры (через связь с matches)
+		result, txErr := tx.ExecContext(ctx, `
+			DELETE FROM rating_history rh
+			WHERE rh.tournament_id = $1
+			AND rh.match_id IN (
+				SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
+			)
+		`, tournamentID, gameType)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to delete rating history")
+		}
+		ratingHistoryDeleted, _ = result.RowsAffected()
+
+		// 2. Удаляем матчи
+		result, txErr = tx.ExecContext(ctx, `
+			DELETE FROM matches
+			WHERE tournament_id = $1 AND game_type = $2
+		`, tournamentID, gameType)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to delete matches")
+		}
+		matchesDeleted, _ = result.RowsAffected()
+
+		// 3. Сбрасываем рейтинги участников (через связь с programs)
+		result, txErr = tx.ExecContext(ctx, `
+			UPDATE tournament_participants tp
+			SET rating = 1000, wins = 0, losses = 0, draws = 0
+			FROM programs p
+			WHERE tp.program_id = p.id
+			AND tp.tournament_id = $1
+			AND p.game_id = $2
+		`, tournamentID, gameID)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to reset participants")
+		}
+		participantsReset, _ = result.RowsAffected()
+
+		// 4. Сбрасываем номер раунда
+		result, txErr = tx.ExecContext(ctx, `
+			UPDATE tournament_games
+			SET current_round = 0, round_completed = false, round_completed_at = NULL
+			WHERE tournament_id = $1 AND game_id = $2
+		`, tournamentID, gameID)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to reset game round")
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return errors.ErrNotFound.WithMessage("tournament game not found")
+		}
+
+		return nil
+	})
+	return
 }

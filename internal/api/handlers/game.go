@@ -52,10 +52,12 @@ type GameProgramRepository interface {
 // TournamentGameStatusRepository интерфейс для получения статуса игр в турнире
 type TournamentGameStatusRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
+	GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error)
 	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error)
 	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
+	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
 }
 
@@ -566,8 +568,8 @@ func (h *GameHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Получаем связи турнира с играми
-	tournamentGames, err := h.tournamentGameStatusRepo.GetTournamentGames(r.Context(), tournamentID)
+	// Получаем связи турнира с играми вместе с данными об играх (один JOIN запрос)
+	details, err := h.tournamentGameStatusRepo.GetTournamentGamesWithDetails(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get tournament games status", err,
 			zap.String("tournament_id", tournamentID.String()),
@@ -576,28 +578,19 @@ func (h *GameHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Обогащаем данными об играх
-	result := make([]TournamentGameWithDetails, 0, len(tournamentGames))
-	for _, tg := range tournamentGames {
-		g, err := h.gameService.GetByID(r.Context(), tg.GameID)
-		if err != nil {
-			h.log.LogError("Failed to get game details", err,
-				zap.String("game_id", tg.GameID.String()),
-			)
-			continue
-		}
-
+	result := make([]TournamentGameWithDetails, 0, len(details))
+	for _, d := range details {
 		item := TournamentGameWithDetails{
-			TournamentID:    tg.TournamentID,
-			GameID:          tg.GameID,
-			GameName:        g.Name,
-			GameDisplayName: g.DisplayName,
-			IsActive:        tg.IsActive,
-			RoundCompleted:  tg.RoundCompleted,
-			CurrentRound:    tg.CurrentRound,
+			TournamentID:    d.TournamentID,
+			GameID:          d.GameID,
+			GameName:        d.GameName,
+			GameDisplayName: d.GameDisplayName,
+			IsActive:        d.IsActive,
+			RoundCompleted:  d.RoundCompleted,
+			CurrentRound:    d.CurrentRound,
 		}
-		if tg.RoundCompletedAt != nil {
-			formatted := tg.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
+		if d.RoundCompletedAt != nil {
+			formatted := d.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
 			item.RoundCompletedAt = &formatted
 		}
 		result = append(result, item)
@@ -808,17 +801,9 @@ func (h *GameHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем наличие репозиториев
+	// Проверяем наличие репозитория
 	if h.tournamentGameStatusRepo == nil {
 		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
-		return
-	}
-	if h.ratingRepo == nil {
-		writeError(w, errors.ErrInternal.WithMessage("rating repository not configured"))
-		return
-	}
-	if h.matchResetRepo == nil {
-		writeError(w, errors.ErrInternal.WithMessage("match reset repository not configured"))
 		return
 	}
 
@@ -834,42 +819,10 @@ func (h *GameHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// 1. Удаляем историю рейтингов для этой игры
-	ratingHistoryDeleted, err := h.ratingRepo.DeleteRatingHistoryForGame(ctx, tournamentID, gameID, g.Name)
+	// Выполняем полный сброс раунда в одной транзакции
+	matchesDeleted, participantsReset, ratingHistoryDeleted, err := h.tournamentGameStatusRepo.ResetGameRoundFull(ctx, tournamentID, gameID, g.Name)
 	if err != nil {
-		h.log.LogError("Failed to delete rating history", err,
-			zap.String("tournament_id", tournamentID.String()),
-			zap.String("game_id", gameID.String()),
-		)
-		writeError(w, err)
-		return
-	}
-
-	// 2. Удаляем матчи
-	matchesDeleted, err := h.matchResetRepo.DeleteMatchesForGame(ctx, tournamentID, g.Name)
-	if err != nil {
-		h.log.LogError("Failed to delete matches", err,
-			zap.String("tournament_id", tournamentID.String()),
-			zap.String("game_type", g.Name),
-		)
-		writeError(w, err)
-		return
-	}
-
-	// 3. Сбрасываем рейтинги участников
-	participantsReset, err := h.ratingRepo.ResetParticipantsForGame(ctx, tournamentID, gameID)
-	if err != nil {
-		h.log.LogError("Failed to reset participants", err,
-			zap.String("tournament_id", tournamentID.String()),
-			zap.String("game_id", gameID.String()),
-		)
-		writeError(w, err)
-		return
-	}
-
-	// 4. Сбрасываем номер раунда
-	if err := h.tournamentGameStatusRepo.ResetGameRound(ctx, tournamentID, gameID); err != nil {
-		h.log.LogError("Failed to reset game round number", err,
+		h.log.LogError("Failed to reset game round", err,
 			zap.String("tournament_id", tournamentID.String()),
 			zap.String("game_id", gameID.String()),
 		)

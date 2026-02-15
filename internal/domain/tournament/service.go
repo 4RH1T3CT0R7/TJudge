@@ -6,12 +6,25 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+// TournamentCacher интерфейс для кэширования турниров
+type TournamentCacher interface {
+	Set(ctx context.Context, tournament *domain.Tournament) error
+	Get(ctx context.Context, tournamentID uuid.UUID) (*domain.Tournament, error)
+	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
+}
+
+// LeaderboardCacher интерфейс для кэширования таблицы лидеров
+type LeaderboardCacher interface {
+	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
+	Clear(ctx context.Context, tournamentID uuid.UUID) error
+}
 
 // TournamentRepository интерфейс для работы с турнирами
 type TournamentRepository interface {
@@ -71,8 +84,8 @@ type Service struct {
 	matchRepo        MatchRepository
 	queueManager     QueueManager
 	gameRepo         GameRepository
-	tournamentCache  *cache.TournamentCache
-	leaderboardCache *cache.LeaderboardCache
+	tournamentCache  TournamentCacher
+	leaderboardCache LeaderboardCacher
 	broadcaster      Broadcaster
 	distributedLock  DistributedLock
 	log              *logger.Logger
@@ -84,8 +97,8 @@ func NewService(
 	matchRepo MatchRepository,
 	queueManager QueueManager,
 	gameRepo GameRepository,
-	tournamentCache *cache.TournamentCache,
-	leaderboardCache *cache.LeaderboardCache,
+	tournamentCache TournamentCacher,
+	leaderboardCache LeaderboardCacher,
 	broadcaster Broadcaster,
 	distributedLock DistributedLock,
 	log *logger.Logger,
@@ -465,6 +478,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 
 	// Инвалидируем кэш
 	_ = s.tournamentCache.Invalidate(ctx, tournamentID)
+	_ = s.leaderboardCache.Clear(ctx, tournamentID)
 
 	return nil
 }

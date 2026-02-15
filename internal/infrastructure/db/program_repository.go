@@ -9,6 +9,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // ProgramRepository - репозиторий для работы с программами
@@ -49,6 +50,52 @@ func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program)
 	}
 
 	return nil
+}
+
+// CreateWithAtomicVersion создаёт программу с атомарным назначением версии.
+// Версия вычисляется как COALESCE(MAX(version), 0) + 1 внутри INSERT.
+// При конкурентных загрузках уникальный индекс может вызвать конфликт;
+// в этом случае запрос автоматически повторяется (до 3 раз).
+func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
+	query := `
+		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, error_message, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+			COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
+		)
+		RETURNING version, created_at, updated_at
+	`
+
+	const maxRetries = 3
+	for attempt := range maxRetries {
+		err := r.db.QueryRowContext(ctx, query,
+			program.ID,
+			program.UserID,
+			program.TeamID,
+			program.TournamentID,
+			program.GameID,
+			program.Name,
+			program.GameType,
+			program.CodePath,
+			program.FilePath,
+			program.Language,
+			program.ErrorMessage,
+		).Scan(&program.Version, &program.CreatedAt, &program.UpdatedAt)
+
+		if err == nil {
+			return nil
+		}
+
+		// Retry on unique constraint violation (concurrent version collision)
+		var pqErr *pq.Error
+		if stderrors.As(err, &pqErr) && pqErr.Code == "23505" && attempt < maxRetries-1 {
+			program.ID = uuid.New() // New ID for retry since the failed INSERT may have consumed the old one
+			continue
+		}
+
+		return errors.Wrap(err, "failed to create program with atomic version")
+	}
+
+	return errors.Wrap(fmt.Errorf("max retries exceeded"), "failed to create program with atomic version")
 }
 
 // GetByID получает программу по ID

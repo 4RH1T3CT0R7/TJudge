@@ -23,6 +23,7 @@ import (
 // ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
 	Create(ctx context.Context, program *domain.Program) error
+	CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error)
 	Update(ctx context.Context, program *domain.Program) error
@@ -280,16 +281,10 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// Определяем язык по расширению
 	language := detectLanguage(header.Filename)
 
-	// Получаем последнюю версию программы для этой команды и игры
-	version := 1
-	if latestVersion, err := h.programRepo.GetLatestVersion(r.Context(), teamID, gameID); err == nil {
-		version = latestVersion + 1
-	}
-
-	// Создаём уникальный путь для файла
+	// Создаём уникальный путь для файла (version будет назначена атомарно при INSERT)
 	programID := uuid.New()
 	ext := filepath.Ext(header.Filename)
-	fileName := fmt.Sprintf("%s_%s_%s_v%d%s", teamID.String()[:8], gameID.String()[:8], programID.String()[:8], version, ext)
+	fileName := fmt.Sprintf("%s_%s_%s%s", teamID.String()[:8], gameID.String()[:8], programID.String()[:8], ext)
 	filePath := filepath.Join(h.uploadDir, fileName)
 
 	// Сохраняем файл
@@ -344,7 +339,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		)
 	}
 
-	// Создаём запись в БД
+	// Создаём запись в БД с атомарным назначением версии
 	program := &domain.Program{
 		ID:           programID,
 		UserID:       userID,
@@ -357,10 +352,9 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		FilePath:     &filePath,
 		Language:     language,
 		ErrorMessage: syntaxError,
-		Version:      version,
 	}
 
-	if err := h.programRepo.Create(r.Context(), program); err != nil {
+	if err := h.programRepo.CreateWithAtomicVersion(r.Context(), program); err != nil {
 		h.log.LogError("Failed to create program", err)
 		// Удаляем загруженный файл при ошибке
 		os.Remove(filePath)
@@ -401,7 +395,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		zap.String("user_id", userID.String()),
 		zap.String("team_id", teamID.String()),
 		zap.String("file", header.Filename),
-		zap.Int("version", version),
+		zap.Int("version", program.Version),
 	)
 
 	writeJSON(w, http.StatusCreated, program)
@@ -803,102 +797,20 @@ func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// validatePythonSyntax проверяет синтаксис Python файла с помощью py_compile
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validatePythonSyntax(filePath string) string {
-	// Проверяем, доступен ли python3
-	_, lookErr := exec.LookPath("python3")
+// runSyntaxCheck выполняет проверку синтаксиса с помощью внешней команды.
+// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен.
+func runSyntaxCheck(command string, args []string, defaultMsg string) string {
+	_, lookErr := exec.LookPath(command)
 	if lookErr != nil {
-		// python3 не найден в PATH - пропускаем проверку синтаксиса
-		// (программа будет проверена при выполнении матча)
 		return ""
 	}
 
-	// Используем py_compile для проверки синтаксиса
-	cmd := exec.Command("python3", "-m", "py_compile", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Парсим вывод ошибки
-		errorMsg := strings.TrimSpace(string(output))
-		if errorMsg == "" {
-			errorMsg = "Синтаксическая ошибка в Python коде"
-		}
-		// Ограничиваем длину сообщения
-		if len(errorMsg) > 500 {
-			errorMsg = errorMsg[:500] + "..."
-		}
-		return errorMsg
-	}
-	return ""
-}
-
-// validateJavaScriptSyntax проверяет синтаксис JavaScript файла с помощью Node.js
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validateJavaScriptSyntax(filePath string) string {
-	// Используем Node.js для проверки синтаксиса (--check парсит, но не выполняет)
-	cmd := exec.Command("node", "--check", filePath)
+	cmd := exec.Command(command, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		errorMsg := strings.TrimSpace(string(output))
 		if errorMsg == "" {
-			errorMsg = "Синтаксическая ошибка в JavaScript коде"
-		}
-		if len(errorMsg) > 500 {
-			errorMsg = errorMsg[:500] + "..."
-		}
-		return errorMsg
-	}
-	return ""
-}
-
-// validateRubySyntax проверяет синтаксис Ruby файла
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validateRubySyntax(filePath string) string {
-	// Используем ruby -c для проверки синтаксиса
-	cmd := exec.Command("ruby", "-c", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		errorMsg := strings.TrimSpace(string(output))
-		if errorMsg == "" {
-			errorMsg = "Синтаксическая ошибка в Ruby коде"
-		}
-		if len(errorMsg) > 500 {
-			errorMsg = errorMsg[:500] + "..."
-		}
-		return errorMsg
-	}
-	return ""
-}
-
-// validatePHPSyntax проверяет синтаксис PHP файла
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validatePHPSyntax(filePath string) string {
-	// Используем php -l для проверки синтаксиса
-	cmd := exec.Command("php", "-l", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		errorMsg := strings.TrimSpace(string(output))
-		if errorMsg == "" {
-			errorMsg = "Синтаксическая ошибка в PHP коде"
-		}
-		if len(errorMsg) > 500 {
-			errorMsg = errorMsg[:500] + "..."
-		}
-		return errorMsg
-	}
-	return ""
-}
-
-// validateLuaSyntax проверяет синтаксис Lua файла
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validateLuaSyntax(filePath string) string {
-	// Используем luac для проверки синтаксиса (-p = parse only, don't generate output)
-	cmd := exec.Command("luac", "-p", filePath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		errorMsg := strings.TrimSpace(string(output))
-		if errorMsg == "" {
-			errorMsg = "Синтаксическая ошибка в Lua коде"
+			errorMsg = defaultMsg
 		}
 		if len(errorMsg) > 500 {
 			errorMsg = errorMsg[:500] + "..."
@@ -913,17 +825,16 @@ func validateLuaSyntax(filePath string) string {
 func validateSyntax(language, filePath string) string {
 	switch language {
 	case "python":
-		return validatePythonSyntax(filePath)
+		return runSyntaxCheck("python3", []string{"-m", "py_compile", filePath}, "Синтаксическая ошибка в Python коде")
 	case "javascript":
-		return validateJavaScriptSyntax(filePath)
+		return runSyntaxCheck("node", []string{"--check", filePath}, "Синтаксическая ошибка в JavaScript коде")
 	case "ruby":
-		return validateRubySyntax(filePath)
+		return runSyntaxCheck("ruby", []string{"-c", filePath}, "Синтаксическая ошибка в Ruby коде")
 	case "php":
-		return validatePHPSyntax(filePath)
+		return runSyntaxCheck("php", []string{"-l", filePath}, "Синтаксическая ошибка в PHP коде")
 	case "lua":
-		return validateLuaSyntax(filePath)
+		return runSyntaxCheck("luac", []string{"-p", filePath}, "Синтаксическая ошибка в Lua коде")
 	default:
-		// Для неподдерживаемых языков пропускаем проверку
 		return ""
 	}
 }

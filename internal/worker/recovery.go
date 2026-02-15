@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -33,6 +34,9 @@ type RecoveryService struct {
 	stuckDuration    time.Duration // Время, после которого running матч считается застрявшим
 	batchSize        int           // Размер батча для восстановления
 	periodicInterval time.Duration // Интервал периодической проверки
+
+	// Мьютекс для предотвращения перекрытия startup и periodic recovery
+	mu sync.Mutex
 
 	// Для graceful shutdown
 	stopCh chan struct{}
@@ -77,6 +81,9 @@ func NewRecoveryService(
 // 1. Сбрасывает "застрявшие" running матчи в pending
 // 2. Добавляет все pending матчи в очередь Redis
 func (s *RecoveryService) RecoverOnStartup(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.log.Info("Starting match recovery...")
 
 	// Проверяем текущий размер очереди
@@ -220,6 +227,9 @@ func (s *RecoveryService) runPeriodic() {
 
 // runPeriodicRecovery выполняет одну итерацию периодического восстановления
 func (s *RecoveryService) runPeriodicRecovery() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

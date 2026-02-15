@@ -1,0 +1,3 @@
+-- No-op: the index idx_programs_team_game_version is created by migration 000014.
+-- This migration's up step uses IF NOT EXISTS, so rolling back should not drop
+-- an index that belongs to an earlier migration.

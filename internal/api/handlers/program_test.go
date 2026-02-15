@@ -30,6 +30,11 @@ func (m *MockProgramRepository) Create(ctx context.Context, program *domain.Prog
 	return args.Error(0)
 }
 
+func (m *MockProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
+	args := m.Called(ctx, program)
+	return args.Error(0)
+}
+
 func (m *MockProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
@@ -1460,12 +1465,10 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		tournamentID := uuid.New()
 		gameID := uuid.New()
 
-		mockRepo.On("GetLatestVersion", mock.Anything, teamID, gameID).Return(2, nil)
-		mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
+		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
 			return p.UserID == userID &&
 				p.Name == "My Strategy" &&
 				p.Language == "python" &&
-				p.Version == 3 &&
 				p.TeamID != nil && *p.TeamID == teamID &&
 				p.TournamentID != nil && *p.TournamentID == tournamentID &&
 				p.GameID != nil && *p.GameID == gameID &&
@@ -1492,7 +1495,6 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "My Strategy", response.Name)
 		assert.Equal(t, "python", response.Language)
-		assert.Equal(t, 3, response.Version)
 		assert.Equal(t, userID, response.UserID)
 
 		mockRepo.AssertExpectations(t)

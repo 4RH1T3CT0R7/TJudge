@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -15,9 +16,11 @@ import (
 
 // QueueManager управляет очередями матчей с приоритетами
 type QueueManager struct {
-	cache   *cache.Cache
-	log     *logger.Logger
-	metrics *metrics.Metrics
+	cache             *cache.Cache
+	log               *logger.Logger
+	metrics           *metrics.Metrics
+	lastMetricsUpdate time.Time
+	metricsMu         sync.Mutex
 }
 
 // NewQueueManager создаёт новый менеджер очередей
@@ -126,8 +129,16 @@ func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
-// updateQueueSizeMetrics обновляет метрики размеров очередей
+// updateQueueSizeMetrics обновляет метрики размеров очередей (max once per second)
 func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
+	qm.metricsMu.Lock()
+	if time.Since(qm.lastMetricsUpdate) < time.Second {
+		qm.metricsMu.Unlock()
+		return
+	}
+	qm.lastMetricsUpdate = time.Now()
+	qm.metricsMu.Unlock()
+
 	priorities := []domain.MatchPriority{
 		domain.PriorityHigh,
 		domain.PriorityMedium,
