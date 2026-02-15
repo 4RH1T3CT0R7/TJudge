@@ -124,8 +124,10 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 	}
 
 	// Кэшируем результат
-	if err := p.matchCache.Set(ctx, match.ID, result); err != nil {
-		p.log.LogError("Failed to cache match result", err)
+	if p.matchCache != nil {
+		if err := p.matchCache.Set(ctx, match.ID, result); err != nil {
+			p.log.LogError("Failed to cache match result", err)
+		}
 	}
 
 	// Если матч успешно завершён, обновляем рейтинги

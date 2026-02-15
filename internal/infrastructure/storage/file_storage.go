@@ -105,11 +105,17 @@ func (s *FileStorage) SaveProgram(
 	}
 	defer dst.Close()
 
-	// Копируем содержимое
-	written, err := io.Copy(dst, file)
+	// Копируем содержимое (enforce actual size limit regardless of header)
+	written, err := io.Copy(dst, io.LimitReader(file, s.maxFileSize+1))
 	if err != nil {
 		os.Remove(filePath) // Удаляем частично записанный файл
 		return "", errors.Wrap(err, "failed to write file")
+	}
+
+	// Enforce actual file size (header.Size can be spoofed by the client)
+	if written > s.maxFileSize {
+		os.Remove(filePath)
+		return "", errors.ErrBadRequest.WithMessage(fmt.Sprintf("file too large, max size is %d bytes", s.maxFileSize))
 	}
 
 	// Restrict file permissions to owner-only read/write

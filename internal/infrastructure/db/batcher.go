@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"time"
 
@@ -207,7 +208,7 @@ func (bi *BulkInserter) buildInsertQuery() string {
 			placeholders += ", "
 		}
 		query += col
-		placeholders += "$" + string(rune('1'+i))
+		placeholders += "$" + fmt.Sprintf("%d", i+1)
 	}
 
 	bi.query = query + ") " + placeholders + ")"
