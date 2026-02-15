@@ -214,7 +214,9 @@ export function TournamentDetail() {
               prevLeaderRankRef.current = userEntry.rank;
             }
           }
-        }).catch(console.error);
+        }).catch(err => {
+          console.error('Failed to refresh leaderboard:', err);
+        });
       }
     } else if (message.type === 'tournament_update') {
       flashWsInvader('handsUp', '// турнир обновлён!', 2000);
@@ -230,7 +232,9 @@ export function TournamentDetail() {
               setCinematicType('tournament_victory');
             }
           }
-        }).catch(console.error);
+        }).catch(err => {
+          console.error('Failed to refresh tournament:', err);
+        });
       }
     } else if (message.type === 'match_update') {
       flashWsInvader('run', '// матч!', 1000);

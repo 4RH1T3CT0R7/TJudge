@@ -193,6 +193,8 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			}
 			return nil, fmt.Errorf("error waiting for container: %w", err)
 		}
+		// errCh fired with nil error — unexpected, treat as error
+		return nil, fmt.Errorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
 		// Получаем логи контейнера
 		stdout, stderr, err := e.getContainerLogs(ctx, containerID)
@@ -219,8 +221,6 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		_ = e.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
 		return nil, fmt.Errorf("match execution timeout")
 	}
-
-	return nil, fmt.Errorf("unexpected execution flow")
 }
 
 // getContainerLogs получает логи контейнера

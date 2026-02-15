@@ -1,62 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import api from '../api/client';
 import type { Game } from '../types';
 import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-
-// Simple Markdown renderer
-function MarkdownRenderer({ content }: { content: string }) {
-  const parseMarkdown = (text: string): string => {
-    let html = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      // Headers
-      .replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold mt-4 mb-2 text-gray-100">$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold mt-6 mb-3 text-gray-100">$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold mt-6 mb-4 text-gray-100">$1</h1>')
-      // Bold
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-100">$1</strong>')
-      // Italic
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      // Code blocks
-      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-3"><code>$2</code></pre>')
-      // Inline code
-      .replace(/`([^`]+)`/g, '<code class="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
-      // Tables
-      .replace(/\|(.+)\|/g, (match) => {
-        const cells = match.split('|').filter(c => c.trim());
-        if (cells.every(c => c.trim().match(/^-+$/))) {
-          return ''; // Skip separator row
-        }
-        const cellHtml = cells.map(c => `<td class="border border-gray-600 px-3 py-2">${c.trim()}</td>`).join('');
-        return `<tr>${cellHtml}</tr>`;
-      })
-      // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
-        const safeUrl = /^(https?:\/\/|mailto:|#)/i.test(url) ? url.replace(/"/g, '&quot;') : '#';
-        return `<a href="${safeUrl}" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
-      })
-      // Unordered lists
-      .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-300">$1</li>')
-      // Paragraphs
-      .replace(/\n\n/g, '</p><p class="my-3 text-gray-300">')
-      .replace(/\n/g, '<br />');
-
-    html = '<p class="my-3 text-gray-300">' + html + '</p>';
-    return html;
-  };
-
-  return (
-    <div
-      className="markdown-content text-gray-300"
-      dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
-    />
-  );
-}
 
 export function GameView() {
   const { id } = useParams<{ id: string }>();
@@ -65,13 +16,7 @@ export function GameView() {
   const showLoading = useDelayedLoading(isLoading);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id) {
-      loadGame();
-    }
-  }, [id]);
-
-  const loadGame = async () => {
+  const loadGame = useCallback(async () => {
     if (!id) return;
 
     setIsLoading(true);
@@ -86,7 +31,13 @@ export function GameView() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      loadGame();
+    }
+  }, [id, loadGame]);
 
   if (showLoading) {
     return <TerminalLoader />;
@@ -140,7 +91,9 @@ export function GameView() {
             <h2 className="text-xl font-semibold mb-4 text-gray-100">Правила игры</h2>
             {game.rules ? (
               <div className="prose max-w-none prose-invert">
-                <MarkdownRenderer content={game.rules} />
+                <div className="markdown-content text-gray-300">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{game.rules}</ReactMarkdown>
+                </div>
               </div>
             ) : (
               <p className="text-gray-400">Правила для этой игры не указаны.</p>
