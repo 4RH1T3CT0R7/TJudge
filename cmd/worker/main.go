@@ -69,6 +69,9 @@ func main() {
 		log.Fatal("Database health check failed", zap.Error(err))
 	}
 
+	// Обеспечиваем наличие партиций таблицы matches
+	_ = database.EnsureMatchPartitions(context.Background())
+
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {

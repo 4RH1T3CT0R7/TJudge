@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -183,10 +184,17 @@ func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload inte
 	select {
 	case h.broadcast <- message:
 	default:
-		h.log.Error("Broadcast channel full, message dropped",
-			zap.String("tournament_id", tournamentID.String()),
-			zap.String("type", messageType),
-		)
+		// Channel full, try with timeout before dropping
+		timer := time.NewTimer(time.Second)
+		defer timer.Stop()
+		select {
+		case h.broadcast <- message:
+		case <-timer.C:
+			h.log.Error("Broadcast channel full, message dropped after 1s timeout",
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("type", messageType),
+			)
+		}
 	}
 }
 

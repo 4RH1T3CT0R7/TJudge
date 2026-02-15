@@ -89,6 +89,9 @@ func main() {
 		log.Fatal("Database health check failed", zap.Error(err))
 	}
 
+	// Обеспечиваем наличие партиций таблицы matches
+	_ = database.EnsureMatchPartitions(context.Background())
+
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {
@@ -167,6 +170,7 @@ func main() {
 	programHandler := handlers.NewProgramHandler(
 		programRepo, tournamentRepo, matchScheduler,
 		gameService, matchRepo, gameRepo,
+		teamRepo,
 		cfg.Storage.ProgramsPath, log,
 	)
 	matchHandler := handlers.NewMatchHandlerFull(matchRepo, matchCache, programRepo, queueManager, log)

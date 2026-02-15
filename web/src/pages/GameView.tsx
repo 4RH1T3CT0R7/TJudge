@@ -36,7 +36,10 @@ function MarkdownRenderer({ content }: { content: string }) {
         return `<tr>${cellHtml}</tr>`;
       })
       // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+        const safeUrl = /^(https?:\/\/|mailto:|#)/i.test(url) ? url.replace(/"/g, '&quot;') : '#';
+        return `<a href="${safeUrl}" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      })
       // Unordered lists
       .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-300">$1</li>')
       // Paragraphs

@@ -61,6 +61,11 @@ type RoundCompletionChecker interface {
 	IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
 }
 
+// TeamMembershipChecker интерфейс для проверки членства в команде
+type TeamMembershipChecker interface {
+	IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error)
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
 	programRepo    ProgramRepository
@@ -69,6 +74,7 @@ type ProgramHandler struct {
 	gameLookup     GameLookup
 	matchChecker   MatchExistenceChecker
 	roundChecker   RoundCompletionChecker
+	teamChecker    TeamMembershipChecker
 	uploadDir      string
 	maxFileSize    int64
 	log            *logger.Logger
@@ -82,6 +88,7 @@ func NewProgramHandler(
 	gameLookup GameLookup,
 	matchChecker MatchExistenceChecker,
 	roundChecker RoundCompletionChecker,
+	teamChecker TeamMembershipChecker,
 	uploadDir string,
 	log *logger.Logger,
 ) *ProgramHandler {
@@ -100,6 +107,7 @@ func NewProgramHandler(
 		gameLookup:     gameLookup,
 		matchChecker:   matchChecker,
 		roundChecker:   roundChecker,
+		teamChecker:    teamChecker,
 		uploadDir:      uploadDir,
 		maxFileSize:    10 * 1024 * 1024, // 10MB
 		log:            log,
@@ -224,6 +232,23 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	gameID, err := uuid.Parse(gameIDStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game_id"))
+		return
+	}
+
+	// Проверяем что пользователь является членом команды
+	if h.teamChecker == nil {
+		h.log.Error("Team membership checker not configured")
+		writeError(w, errors.ErrInternal.WithMessage("authorization service unavailable"))
+		return
+	}
+	isMember, err := h.teamChecker.IsUserInTeam(r.Context(), teamID, userID)
+	if err != nil {
+		h.log.LogError("Failed to check team membership", err)
+		writeError(w, errors.ErrInternal.WithMessage("failed to verify team membership"))
+		return
+	}
+	if !isMember {
+		writeError(w, errors.ErrForbidden.WithMessage("you are not a member of this team"))
 		return
 	}
 

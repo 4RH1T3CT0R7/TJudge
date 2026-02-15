@@ -158,6 +158,11 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 
 	if err != nil {
 		if errors.IsAppError(err) && errors.GetAppError(err).Code == 404 {
+			// Dummy bcrypt comparison to prevent timing-based user enumeration
+			_ = bcrypt.CompareHashAndPassword(
+				[]byte("$2a$12$000000000000000000000uGVYlKMFeX7iKOQKZ3d2fXxqFaE6D.e"),
+				[]byte(req.Password),
+			)
 			return nil, errors.ErrInvalidCredentials
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
@@ -310,7 +315,14 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 	}
 
 	// Обновляем email если указан
-	if req.Email != "" {
+	if req.Email != "" && req.Email != user.Email {
+		existingUser, existErr := s.userRepo.GetByEmail(ctx, req.Email)
+		if existErr != nil && !errors.IsNotFound(existErr) {
+			return nil, fmt.Errorf("failed to check email uniqueness: %w", existErr)
+		}
+		if existErr == nil && existingUser.ID != user.ID {
+			return nil, errors.ErrAlreadyExists.WithMessage("email already in use")
+		}
 		user.Email = req.Email
 	}
 

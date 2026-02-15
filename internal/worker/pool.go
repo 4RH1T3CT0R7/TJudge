@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -122,6 +123,30 @@ func (p *Pool) spawnWorker() {
 	go func() {
 		defer p.wg.Done()
 		defer p.totalWorkers.Add(-1)
+		defer func() {
+			if r := recover(); r != nil {
+				p.log.Error("Worker panic recovered",
+					zap.Int32("worker_id", current),
+					zap.Any("panic", r),
+					zap.String("stack", string(debug.Stack())),
+				)
+				// Respawn worker if pool is still running and below minimum capacity
+				if p.ctx.Err() == nil {
+					time.AfterFunc(time.Second, func() {
+						if p.ctx.Err() != nil {
+							return // Pool was stopped, do not respawn
+						}
+						if int(p.totalWorkers.Load()) < p.config.MinWorkers {
+							p.log.Info("Respawning worker after panic",
+								zap.Int32("current_workers", p.totalWorkers.Load()),
+								zap.Int("min_workers", p.config.MinWorkers),
+							)
+							p.spawnWorker()
+						}
+					})
+				}
+			}
+		}()
 
 		workerID := current
 
@@ -288,7 +313,10 @@ func (p *Pool) scale() {
 	// Логика масштабирования
 	var targetWorkers int
 
-	if queueSize > 100 {
+	if currentWorkers < p.config.MinWorkers {
+		// Ниже минимума (например, после паники воркера) - восстанавливаем
+		targetWorkers = p.config.MinWorkers
+	} else if queueSize > 100 {
 		// Много задач - увеличиваем воркеры
 		targetWorkers = currentWorkers + 10
 	} else if queueSize > 50 {

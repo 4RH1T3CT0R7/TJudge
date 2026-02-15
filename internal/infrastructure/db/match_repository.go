@@ -1075,52 +1075,61 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// Теперь получаем матчи для каждого раунда и игры
+	// Получаем все матчи турнира одним запросом вместо N+1
+	matchQuery := `
+		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
+		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
+		FROM matches
+		WHERE tournament_id = $1
+		ORDER BY round_number, game_type, created_at ASC
+	`
+
+	matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get matches")
+	}
+	defer matchRows.Close()
+
+	// Индексируем раунды по (round_number, game_type) для быстрого поиска
+	type roundKey struct {
+		roundNumber int
+		gameType    string
+	}
+	roundIndex := make(map[roundKey]*domain.MatchRound, len(rounds))
 	for _, round := range rounds {
-		matchQuery := `
-			SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
-			       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
-			FROM matches
-			WHERE tournament_id = $1 AND round_number = $2 AND game_type = $3
-			ORDER BY created_at ASC
-		`
+		roundIndex[roundKey{round.RoundNumber, round.GameType}] = round
+	}
 
-		matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, round.RoundNumber, round.GameType)
+	for matchRows.Next() {
+		var match domain.Match
+		err := matchRows.Scan(
+			&match.ID,
+			&match.TournamentID,
+			&match.Program1ID,
+			&match.Program2ID,
+			&match.GameType,
+			&match.Status,
+			&match.Priority,
+			&match.RoundNumber,
+			&match.Score1,
+			&match.Score2,
+			&match.Winner,
+			&match.ErrorCode,
+			&match.ErrorMessage,
+			&match.StartedAt,
+			&match.CompletedAt,
+			&match.CreatedAt,
+		)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get matches for round")
+			return nil, errors.Wrap(err, "failed to scan match")
 		}
-
-		for matchRows.Next() {
-			var match domain.Match
-			err := matchRows.Scan(
-				&match.ID,
-				&match.TournamentID,
-				&match.Program1ID,
-				&match.Program2ID,
-				&match.GameType,
-				&match.Status,
-				&match.Priority,
-				&match.RoundNumber,
-				&match.Score1,
-				&match.Score2,
-				&match.Winner,
-				&match.ErrorCode,
-				&match.ErrorMessage,
-				&match.StartedAt,
-				&match.CompletedAt,
-				&match.CreatedAt,
-			)
-			if err != nil {
-				matchRows.Close()
-				return nil, errors.Wrap(err, "failed to scan match")
-			}
+		key := roundKey{match.RoundNumber, match.GameType}
+		if round, ok := roundIndex[key]; ok {
 			round.Matches = append(round.Matches, &match)
 		}
-		if err := matchRows.Err(); err != nil {
-			matchRows.Close()
-			return nil, fmt.Errorf("rows iteration error: %w", err)
-		}
-		matchRows.Close()
+	}
+	if err := matchRows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
 	return rounds, nil

@@ -87,7 +87,16 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 	// result[0] содержит имя очереди, result[1] - данные
 	var match domain.Match
 	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
-		qm.log.LogError("Failed to unmarshal match", err)
+		// Push to dead-letter queue for manual inspection
+		deadLetterKey := "queue:dead_letter"
+		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
+			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
+		}
+		qm.log.Error("Failed to unmarshal match, moved to dead-letter queue",
+			zap.Error(err),
+			zap.String("raw_data", result[1]),
+			zap.String("queue_key", result[0]),
+		)
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
 	}
 

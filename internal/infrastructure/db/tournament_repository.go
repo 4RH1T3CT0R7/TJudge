@@ -203,17 +203,20 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.To
 
 	query := `
 		UPDATE tournaments
-		SET name = $2, status = $3, max_participants = $4, start_time = $5,
-		    end_time = $6, metadata = $7, version = version + 1
-		WHERE id = $1 AND version = $8
+		SET name = $2, description = $3, status = $4, max_participants = $5, max_team_size = $6,
+		    is_permanent = $7, start_time = $8, end_time = $9, metadata = $10, version = version + 1
+		WHERE id = $1 AND version = $11
 		RETURNING updated_at, version
 	`
 
 	err = r.db.QueryRowContext(ctx, query,
 		tournament.ID,
 		tournament.Name,
+		tournament.Description,
 		tournament.Status,
 		tournament.MaxParticipants,
+		tournament.MaxTeamSize,
+		tournament.IsPermanent,
 		tournament.StartTime,
 		tournament.EndTime,
 		metadata,

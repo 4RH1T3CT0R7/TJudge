@@ -239,6 +239,7 @@ export function TournamentDetail() {
   const { isConnected } = useWebSocket({
     tournamentId: id || '',
     onMessage: handleWebSocketMessage,
+    enabled: true,
   });
 
   const loadTournamentData = useCallback(async () => {

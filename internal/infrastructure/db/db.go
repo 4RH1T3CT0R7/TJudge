@@ -159,6 +159,18 @@ func (db *DB) Health(ctx context.Context) error {
 	return db.PingContext(ctx)
 }
 
+// EnsureMatchPartitions создаёт партиции таблицы matches для текущего и следующего месяца.
+// Вызывается при старте приложения для гарантии наличия партиций.
+func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
+	_, err := db.ExecContext(ctx, "SELECT create_matches_partition_if_needed()")
+	if err != nil {
+		db.log.Warn("Failed to ensure match partitions (function may not exist yet)", zap.Error(err))
+		return nil // Non-fatal: partitions may already exist or function not yet migrated
+	}
+	db.log.Info("Match partitions verified")
+	return nil
+}
+
 // Close закрывает соединение с базой данных
 func (db *DB) Close() error {
 	close(db.done)

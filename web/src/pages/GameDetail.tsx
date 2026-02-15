@@ -926,7 +926,10 @@ function MarkdownRenderer({ content }: { content: string }) {
       // Inline code
       .replace(/`([^`]+)`/g, '<code class="bg-gray-800 text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono">$1</code>')
       // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
+        const safeUrl = /^(https?:\/\/|mailto:|#)/i.test(url) ? url.replace(/"/g, '&quot;') : '#';
+        return `<a href="${safeUrl}" class="text-primary-400 hover:underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      })
       // Unordered lists
       .replace(/^\s*[-*] (.*$)/gim, '<li class="ml-4 text-gray-300">$1</li>')
       // Ordered lists

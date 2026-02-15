@@ -34,6 +34,10 @@ func (ec *EloCalculator) CalculateNewRating(currentRating, opponentRating int, s
 	change := float64(ec.kFactor) * (score - expectedScore)
 	newRating := float64(currentRating) + change
 
+	if newRating < 0 {
+		return 0
+	}
+
 	return int(math.Round(newRating))
 }
 
