@@ -93,6 +93,7 @@ func main() {
 	if err := database.EnsureMatchPartitions(context.Background()); err != nil {
 		log.Error("Failed to ensure match partitions", zap.Error(err))
 	}
+	database.StartPartitionMaintenance()
 
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)

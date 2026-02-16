@@ -170,6 +170,30 @@ func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	return nil
 }
 
+// StartPartitionMaintenance launches a background goroutine that periodically
+// ensures match partitions exist for the current and next month. This prevents
+// partition-not-found errors if the application runs for extended periods
+// without restart.
+func (db *DB) StartPartitionMaintenance() {
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := db.EnsureMatchPartitions(ctx); err != nil {
+					db.log.Error("Periodic partition maintenance failed", zap.Error(err))
+				}
+				cancel()
+			case <-db.done:
+				return
+			}
+		}
+	}()
+}
+
 // Close закрывает соединение с базой данных
 func (db *DB) Close() error {
 	close(db.done)

@@ -208,12 +208,54 @@ func TestBoolPtr(t *testing.T) {
 func TestParseResult_LargeScores(t *testing.T) {
 	e := newTestExecutor(t)
 
-	result, err := e.parseResult(0, "999999 888888", "")
+	// Scores within the allowed bound [0, 100000]
+	result, err := e.parseResult(0, "99999 88888", "")
 
 	require.NoError(t, err)
-	assert.Equal(t, 999999, result.Score1)
-	assert.Equal(t, 888888, result.Score2)
+	assert.Equal(t, 99999, result.Score1)
+	assert.Equal(t, 88888, result.Score2)
 	assert.Equal(t, 1, result.Winner)
+}
+
+func TestParseResult_ScoresOutOfBounds(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// Default config (0 iterations) → floor of 100_000
+	_, err := e.parseResult(0, "999999 888888", "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scores out of bounds")
+}
+
+func TestParseResult_HighIterationsAcceptsLargeScores(t *testing.T) {
+	e := newTestExecutor(t)
+	e.config.DefaultIterations = 500 // maxScore = 500*1000 = 500_000
+
+	result, err := e.parseResult(0, "450000 300000", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 450000, result.Score1)
+	assert.Equal(t, 300000, result.Score2)
+	assert.Equal(t, 1, result.Winner)
+}
+
+func TestParseResult_HighIterationsStillRejectsExtremeScores(t *testing.T) {
+	e := newTestExecutor(t)
+	e.config.DefaultIterations = 500 // maxScore = 500_000
+
+	_, err := e.parseResult(0, "999999 888888", "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scores out of bounds")
+}
+
+func TestParseResult_NegativeScore(t *testing.T) {
+	e := newTestExecutor(t)
+
+	_, err := e.parseResult(0, "-1 50", "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scores out of bounds")
 }
 
 func TestParseResult_ZeroScores(t *testing.T) {
