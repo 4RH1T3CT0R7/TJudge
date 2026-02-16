@@ -299,10 +299,10 @@ func (h *GameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
-	userRole, _ := r.Context().Value(middleware.RoleKey).(string)
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
 
 	// Проверяем права: админ или создатель турнира
-	isAdmin := userRole == "admin"
+	isAdmin := userRole == domain.RoleAdmin
 	isCreator := false
 
 	if !isAdmin && h.tournamentRepo != nil {

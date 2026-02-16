@@ -552,7 +552,7 @@ func TestGameHandler_AddGameToTournament_AdminSuccess(t *testing.T) {
 	rctx.URLParams.Add("id", tournamentID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-	ctx = context.WithValue(ctx, middleware.RoleKey, "admin")
+	ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleAdmin)
 	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
 

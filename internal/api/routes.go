@@ -234,6 +234,7 @@ func (s *Server) setupRoutes() {
 		// Program routes (все требуют аутентификации)
 		r.Route("/programs", func(r chi.Router) {
 			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(middleware.MaxBodySize(10 << 20)) // 10MB for file uploads
 
 			r.Post("/", s.programHandler.Create)
 			r.Get("/", s.programHandler.List)

@@ -114,9 +114,9 @@ func (t *Tournament) Validate() error {
 		}
 	}
 
-	// Валидация max_participants
-	if t.MaxParticipants != nil && *t.MaxParticipants <= 0 {
-		errs.Add("max_participants", "max_participants must be positive")
+	// Валидация max_participants (минимум 2, т.к. турнир требует ≥2 участников)
+	if t.MaxParticipants != nil && *t.MaxParticipants < 2 {
+		errs.Add("max_participants", "max_participants must be at least 2")
 	}
 
 	if errs.HasErrors() {

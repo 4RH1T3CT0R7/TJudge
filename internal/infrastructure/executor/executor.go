@@ -320,6 +320,19 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 		return nil, fmt.Errorf("invalid score2: %s", scores[1])
 	}
 
+	// Validate score bounds to prevent extreme values from malicious bot output.
+	// Scale the ceiling with configured iterations so legitimate high-iteration
+	// runs are not rejected.  1000 points-per-iteration is a generous upper
+	// bound for any supported game type; the floor of 100 000 covers the
+	// default 100-iteration setting comfortably.
+	maxScore := e.config.DefaultIterations * 1000
+	if maxScore < 100_000 {
+		maxScore = 100_000
+	}
+	if score1 < 0 || score1 > maxScore || score2 < 0 || score2 > maxScore {
+		return nil, fmt.Errorf("scores out of bounds [0, %d]: %d, %d", maxScore, score1, score2)
+	}
+
 	result.Score1 = score1
 	result.Score2 = score2
 
