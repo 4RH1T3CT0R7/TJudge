@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 
 // --- Types ---
 export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin' | 'spinStop'
@@ -148,6 +148,24 @@ function renderEyeSegment(content: string): ReactNode[] {
   return parts;
 }
 
+const eyeSegmentCache = new Map<string, ReactNode[]>();
+function renderEyeSegmentCached(content: string): ReactNode[] {
+  let cached = eyeSegmentCache.get(content);
+  if (!cached) {
+    cached = renderEyeSegment(content);
+    eyeSegmentCache.set(content, cached);
+  }
+  return cached;
+}
+
+// --- Utility ---
+function hexToRgb(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
+
 // --- Main component ---
 export function SpaceInvader({
   size = 'md',
@@ -180,25 +198,22 @@ export function SpaceInvader({
   // Derived colors — override purple with custom color when provided
   const bodyColor = colorOverride || BODY_COLOR;
   const accentColor = colorOverride || '#a78bfa';
-  const bodyStyle = colorOverride ? { color: colorOverride } as const : BODY_STYLE;
-
-  // Helper to convert hex to rgb for rgba() usage
-  const hexToRgb = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `${r},${g},${b}`;
-  };
+  const bodyStyle = useMemo(
+    () => colorOverride ? { color: colorOverride } as const : BODY_STYLE,
+    [colorOverride]
+  );
   const accentRgb = colorOverride ? hexToRgb(colorOverride) : '139,92,246';
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [eyePos, setEyePos] = useState<EyePos>({ col: 3, row: 1 });
   const [pose, setPose] = useState<InvaderPose>('idle');
+  const poseRef = useRef<InvaderPose>('idle');
   const [animClass, setAnimClass] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   const spinContainerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<HTMLDivElement>(null);
   const shatteringRef = useRef(false);
+  const spinMaxTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [impactEyes, setImpactEyes] = useState<'crossed' | null>(null);
   const [impactSpeech, setImpactSpeech] = useState<string | null>(null);
 
@@ -237,8 +252,9 @@ export function SpaceInvader({
     if (controlledPose) setPose(controlledPose);
   }, [controlledPose]);
 
-  // Pose change callback
+  // Keep poseRef in sync + callback
   useEffect(() => {
+    poseRef.current = pose;
     onPoseChange?.(pose);
   }, [pose, onPoseChange]);
 
@@ -260,12 +276,15 @@ export function SpaceInvader({
     }
   }, [jump]);
 
-  // --- Eye tracking (RAF-throttled) ---
+  // --- Eye tracking (debounced — max ~10 updates/s to avoid repaint flicker) ---
+  const lastEyeTime = useRef(0);
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (rafRef.current) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = 0;
+        const now = performance.now();
+        if (now - lastEyeTime.current < 100) return; // 100ms debounce
         if (!containerRef.current) return;
 
         const rect = containerRef.current.getBoundingClientRect();
@@ -288,6 +307,7 @@ export function SpaceInvader({
         const key = `${col}-${row}`;
         if (key !== lastRef.current) {
           lastRef.current = key;
+          lastEyeTime.current = now;
           setEyePos({ col, row });
         }
       });
@@ -300,6 +320,39 @@ export function SpaceInvader({
     };
   }, []);
 
+  // --- Smooth spin deceleration (reusable) ---
+  const smoothStopSpin = useCallback(() => {
+    const el = spinContainerRef.current;
+    if (!el) { setPose('idle'); return; }
+    const cs = getComputedStyle(el);
+    const mx = cs.transform;
+    let angle = 0;
+    if (mx && mx !== 'none') {
+      const vals = mx.match(/matrix\(([^)]+)\)/);
+      if (vals) {
+        const [a, b] = vals[1].split(',').map(Number);
+        angle = Math.atan2(b, a) * (180 / Math.PI);
+      }
+    }
+    el.style.animation = 'none';
+    el.style.transform = `rotate(${angle}deg)`;
+    let target = (Math.floor(angle / 360) + 1) * 360;
+    let remaining = target - angle;
+    if (remaining < 60) { target += 360; remaining += 360; }
+    const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
+    setPose('spinStop');
+    requestAnimationFrame(() => {
+      el.style.transition = `transform ${dur}s ease-out`;
+      el.style.transform = `rotate(${target}deg)`;
+      setTimeout(() => {
+        el.style.transition = '';
+        el.style.transform = '';
+        el.style.animation = '';
+        setPose('idle');
+      }, dur * 1000 + 20);
+    });
+  }, []);
+
   // --- Cursor leave/enter detection (stable — no state in deps) ---
   useEffect(() => {
     if (!interactive) return;
@@ -307,17 +360,30 @@ export function SpaceInvader({
     const onLeave = () => {
       cursorGoneRef.current = true;
       forceEyeUpdate(c => c + 1);
-      poseTimerRef.current = setTimeout(() => {
-        setPose('handsUp');
-      }, 3000);
+      // If spinning, smoothly decelerate first
+      if (poseRef.current === 'spin') {
+        clearTimeout(spinMaxTimerRef.current);
+        smoothStopSpin();
+        // After spin stops, wait then go to handsUp
+        poseTimerRef.current = setTimeout(() => {
+          setPose('handsUp');
+        }, 2000);
+      } else {
+        poseTimerRef.current = setTimeout(() => {
+          setPose('handsUp');
+        }, 3000);
+      }
     };
     const onEnter = () => {
       if (cursorGoneRef.current) {
         cursorGoneRef.current = false;
         clearTimeout(poseTimerRef.current);
-        setPose('idle');
-        setAnimClass('animate-bounce-in');
-        setTimeout(() => setAnimClass(''), 600);
+        // Don't interrupt a smooth spin-stop in progress
+        if (poseRef.current !== 'spinStop') {
+          setPose('idle');
+          setAnimClass('animate-bounce-in');
+          setTimeout(() => setAnimClass(''), 600);
+        }
         forceEyeUpdate(c => c + 1);
       }
     };
@@ -330,7 +396,7 @@ export function SpaceInvader({
       clearTimeout(poseTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive]);
+  }, [interactive, smoothStopSpin]);
 
   // --- Idle boredom timer (debounced — only resets every 2s max) ---
   useEffect(() => {
@@ -650,48 +716,23 @@ export function SpaceInvader({
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
-    longPressTimerRef.current = setTimeout(() => { setPose('spin'); }, 500);
-  }, [interactive]);
+    longPressTimerRef.current = setTimeout(() => {
+      setPose('spin');
+      // Auto-stop spin after 4 seconds
+      clearTimeout(spinMaxTimerRef.current);
+      spinMaxTimerRef.current = setTimeout(() => {
+        if (poseRef.current === 'spin') smoothStopSpin();
+      }, 4000);
+    }, 500);
+  }, [interactive, smoothStopSpin]);
 
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
+    clearTimeout(spinMaxTimerRef.current);
     if (pose === 'spin') {
-      const el = spinContainerRef.current;
-      if (el) {
-        // Read current rotation from the running animation
-        const cs = getComputedStyle(el);
-        const mx = cs.transform;
-        let angle = 0;
-        if (mx && mx !== 'none') {
-          const vals = mx.match(/matrix\(([^)]+)\)/);
-          if (vals) {
-            const [a, b] = vals[1].split(',').map(Number);
-            angle = Math.atan2(b, a) * (180 / Math.PI);
-          }
-        }
-        // Freeze at current angle, smoothly finish to next full turn
-        el.style.animation = 'none';
-        el.style.transform = `rotate(${angle}deg)`;
-        let target = (Math.floor(angle / 360) + 1) * 360;
-        let remaining = target - angle;
-        // If too little left (<60°), add another full turn to avoid a jerky micro-rotation
-        if (remaining < 60) { target += 360; remaining += 360; }
-        // Duration proportional to remaining angle (spin speed = 720°/s → ease-out ~half)
-        const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
-        requestAnimationFrame(() => {
-          el.style.transition = `transform ${dur}s ease-out`;
-          el.style.transform = `rotate(${target}deg)`;
-          setTimeout(() => {
-            el.style.transition = '';
-            el.style.transform = '';
-            el.style.animation = '';
-            setPose('idle');
-          }, dur * 1000 + 20);
-        });
-      }
-      setPose('spinStop');
+      smoothStopSpin();
     }
-  }, [pose]);
+  }, [pose, smoothStopSpin]);
 
   // --- Hover (use ref + minimal re-render) ---
   const handleMouseEnter = useCallback(() => {
@@ -746,9 +787,9 @@ export function SpaceInvader({
     return (
       <div key={key}>
         <span style={bodyStyle}>{EYE_PRE[lineRow]}</span>
-        {renderEyeSegment(leftEye)}
+        {renderEyeSegmentCached(leftEye)}
         <span style={bodyStyle}>{EYE_MID}</span>
-        {renderEyeSegment(rightEye)}
+        {renderEyeSegmentCached(rightEye)}
         <span style={bodyStyle}>{EYE_SUF[lineRow]}</span>
       </div>
     );
@@ -760,7 +801,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `e${r}a`), eyeRow(r, `e${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `a${i}a`), bodyLine(line, `a${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `m${i}a`), bodyLine(line, `m${i}b`)])}
-      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
+      <div style={tentacleWiggleStyle}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `l${i}a`), bodyLine(line, `l${i}b`)])}
       </div>
     </>
@@ -776,7 +817,7 @@ export function SpaceInvader({
   );
 
   const renderDancePose = () => (
-    <div style={{ animation: animate('wave-hands 0.4s ease-in-out infinite') }}>
+    <div style={waveHandsStyle}>
       {renderHandsUpPose()}
     </div>
   );
@@ -787,7 +828,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `re${r}a`), eyeRow(r, `re${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ra${i}a`), bodyLine(line, `ra${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `rm${i}a`), bodyLine(line, `rm${i}b`)])}
-      <div style={{ animation: animate('run-legs 0.2s ease-in-out infinite') }}>
+      <div style={runLegsStyle}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `rl${i}a`), bodyLine(line, `rl${i}b`)])}
       </div>
     </>
@@ -822,7 +863,7 @@ export function SpaceInvader({
       </div>
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ca${i}a`), bodyLine(line, `ca${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `cm${i}a`), bodyLine(line, `cm${i}b`)])}
-      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
+      <div style={tentacleWiggleStyle}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `cl${i}a`), bodyLine(line, `cl${i}b`)])}
       </div>
     </div>
@@ -1084,6 +1125,64 @@ export function SpaceInvader({
     }
   };
 
+  // --- Memoized pose animation styles ---
+  const tentacleWiggleStyle = useMemo(() => ({
+    animation: prefersReducedMotion.current ? 'none' : 'tentacle-wiggle 2s ease-in-out infinite',
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  const waveHandsStyle = useMemo(() => ({
+    animation: prefersReducedMotion.current ? 'none' : 'wave-hands 0.4s ease-in-out infinite',
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  const runLegsStyle = useMemo(() => ({
+    animation: prefersReducedMotion.current ? 'none' : 'run-legs 0.2s ease-in-out infinite',
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  // --- Memoized styles: prevent React from touching animation DOM on eye-only re-renders ---
+  const floatStyle = useMemo(() => ({
+    animation: pose === 'spin'
+      ? 'spin-invader 0.5s linear infinite'
+      : pose === 'spinStop'
+        ? 'none'
+        : 'invader-float 3s ease-in-out infinite',
+    willChange: 'transform' as const,
+  }), [pose]);
+
+  const glowStyle = useMemo(() => ({
+    animation: prefersReducedMotion.current ? 'none' : 'invader-glow 2.5s ease-in-out infinite',
+    willChange: 'filter' as const,
+    position: 'relative' as const,
+    isolation: 'isolate' as const,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  const particlesStyle = useMemo(() => ({
+    position: 'absolute' as const,
+    inset: 0,
+    pointerEvents: 'none' as const,
+    zIndex: 25,
+    overflow: 'visible' as const,
+  }), []);
+
+  // Memoize body container style — prevents React from patching style props on every
+  // eye-tracking re-render. `translateZ(0)` promotes the text to its own GPU layer so
+  // the parent's filter animation (invader-glow) composites a cached texture instead
+  // of re-rasterizing the text on every frame.
+  const bodyContainerStyle = useMemo(() => ({
+    fontFamily: "'Courier New', Consolas, 'Liberation Mono', monospace",
+    fontSize: SIZE_MAP[size] || SIZE_MAP.md,
+    lineHeight: 1,
+    whiteSpace: 'pre' as const,
+    userSelect: 'none' as const,
+    cursor: interactive ? 'pointer' : 'default',
+    transform: 'translateZ(0)',
+    willChange: 'transform' as const,
+    backfaceVisibility: 'hidden' as const,
+  }), [size, interactive]);
+
   return (
     <div
       ref={containerRef}
@@ -1111,8 +1210,8 @@ export function SpaceInvader({
             background: lastSpeechIsImpactRef.current ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
             color: lastSpeechIsImpactRef.current ? '#fca5a5' : accentColor,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: '11px',
-            padding: '4px 10px',
+            fontSize: '0.75rem',
+            padding: '0.25rem 0.625rem',
             borderRadius: '6px',
             border: lastSpeechIsImpactRef.current ? '1px solid rgba(239,68,68,0.4)' : `1px solid rgba(${accentRgb},0.3)`,
             pointerEvents: 'none',
@@ -1139,40 +1238,16 @@ export function SpaceInvader({
       )}
 
       {/* Single float animation container — glow via filter on container, NOT text-shadow per char */}
-      <div ref={spinContainerRef} style={{
-        animation: pose === 'spin'
-          ? 'spin-invader 0.5s linear infinite'
-          : pose === 'spinStop'
-            ? 'none'
-            : 'invader-float 3s ease-in-out infinite',
-        willChange: 'transform',
-      }}>
-        <div style={{
-          animation: animate('invader-glow 2.5s ease-in-out infinite'),
-          willChange: 'filter',
-          position: 'relative',
-        }}>
+      <div ref={spinContainerRef} style={floatStyle}>
+        <div style={glowStyle}>
           {/* Particle container for flying character debris */}
           <div
             ref={particlesRef}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              pointerEvents: 'none',
-              zIndex: 25,
-              overflow: 'visible',
-            }}
+            style={particlesStyle}
           />
           <div
             ref={bodyRef}
-            style={{
-              fontFamily: "'Courier New', Consolas, 'Liberation Mono', monospace",
-              fontSize: SIZE_MAP[size] || SIZE_MAP.md,
-              lineHeight: 1,
-              whiteSpace: 'pre',
-              userSelect: 'none',
-              cursor: interactive ? 'pointer' : 'default',
-            }}
+            style={bodyContainerStyle}
           >
             {renderPose()}
           </div>

@@ -10,6 +10,7 @@ export function AnimatedOutlet() {
     <AnimatePresence mode="wait">
       <motion.div
         key={location.pathname}
+        className="flex-1 flex flex-col"
         variants={pageTransitionVariants}
         initial="initial"
         animate="animate"

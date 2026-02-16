@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
+import { CinematicOverlay } from '../components/CinematicOverlay';
 
 const GREETINGS = [
   'console.log("привет!")',
@@ -24,6 +25,7 @@ export function Login() {
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
   const speechTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [showCinematic, setShowCinematic] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
@@ -82,14 +84,22 @@ export function Login() {
       await login(username, password);
       clearTimeout(speechTimerRef.current);
 
-      setSpeechBubble('<3');
-      setJumpInvader(true);
-      setTimeout(() => setJumpInvader(false), 700);
-      setTimeout(() => {
-        setSpeechBubble('{ доступ: "открыт" }');
-        setLoginSuccess(true);
-      }, 500);
-      setTimeout(() => navigate('/'), 1400);
+      const currentUser = useAuthStore.getState().user;
+      const cinematicKey = currentUser ? `cinematic_first_login_${currentUser.id}` : null;
+
+      if (currentUser && cinematicKey && !localStorage.getItem(cinematicKey)) {
+        localStorage.setItem(cinematicKey, '1');
+        setShowCinematic(true);
+      } else {
+        setSpeechBubble('<3');
+        setJumpInvader(true);
+        setTimeout(() => setJumpInvader(false), 700);
+        setTimeout(() => {
+          setSpeechBubble('{ доступ: "открыт" }');
+          setLoginSuccess(true);
+        }, 500);
+        setTimeout(() => navigate('/'), 1400);
+      }
     } catch {
       setError('// неверный логин или пароль');
       clearTimeout(errorTimerRef.current);
@@ -100,6 +110,10 @@ export function Login() {
       setTimeout(() => setShakeInvader(false), 600);
     }
   };
+
+  const handleCinematicComplete = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
 
   // Eye override based on focused field
   const getEyeOverride = useCallback(() => {
@@ -140,9 +154,19 @@ export function Login() {
     }
   };
 
+  if (showCinematic) {
+    return (
+      <CinematicOverlay
+        type="first_login"
+        username={useAuthStore.getState().user?.username}
+        onComplete={handleCinematicComplete}
+      />
+    );
+  }
+
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="w-full max-w-sm mx-auto my-auto py-2">
+    <div className="flex-1 flex flex-col items-center justify-center pb-12">
+      <div className="w-full max-w-sm mx-auto py-2">
         {/* Invader — z-index above fixed header (z-50) so speech bubble isn't clipped */}
         <div className={`flex justify-center mb-3 relative z-[60] ${loginSuccess ? 'animate-login-success' : ''}`}>
           <SpaceInvader

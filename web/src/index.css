@@ -146,6 +146,8 @@
   html {
     scroll-behavior: smooth;
     color-scheme: dark;
+    /* Fluid base font-size: 16px on ≤1440, scales to ~18.5px on 2K (2560px) */
+    font-size: clamp(1rem, calc(0.75rem + 0.25vw), 1.25rem);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -544,7 +546,6 @@
 
 /* Removed invader-breathe: 3 nested animations caused layout thrashing. Float + glow is enough. */
 
-/* Use filter: drop-shadow instead of text-shadow — GPU-composited, not per-character repaint */
 @keyframes invader-glow {
   0%, 100% { filter: drop-shadow(0 0 8px rgba(139,92,246,0.4)); }
   50% { filter: drop-shadow(0 0 16px rgba(139,92,246,0.7)) drop-shadow(0 0 30px rgba(109,40,217,0.2)); }
