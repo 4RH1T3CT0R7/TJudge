@@ -300,20 +300,64 @@ export function SpaceInvader({
     };
   }, []);
 
+  // --- Code-watching eye animation when cursor leaves the page ---
+  const codeWatchIntervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  const startCodeWatchAnimation = useCallback(() => {
+    // Simulate eyes scanning left→right as if watching code being typed
+    let col = 0;
+    let row = 1; // middle row — looking straight ahead / slightly up
+    let lineLength = 10 + Math.floor(Math.random() * 20); // random "line length"
+    let pauseCounter = 0;
+
+    codeWatchIntervalRef.current = setInterval(() => {
+      // Small pause at "end of line" before jumping back
+      if (pauseCounter > 0) {
+        pauseCounter--;
+        return;
+      }
+
+      col++;
+      if (col > 6) {
+        // "Carriage return" — eyes jump back to left, slight vertical shift
+        col = 0;
+        row = Math.random() < 0.5 ? 1 : (Math.random() < 0.5 ? 0 : 2);
+        lineLength = 10 + Math.floor(Math.random() * 20);
+        pauseCounter = 2; // brief pause at line start
+      }
+
+      // Occasionally "pause to read" (eyes stop moving for a moment)
+      if (Math.random() < 0.15) {
+        pauseCounter = 1;
+      }
+
+      setEyePos({ col: Math.min(6, col), row });
+    }, 150);
+  }, []);
+
+  const stopCodeWatchAnimation = useCallback(() => {
+    if (codeWatchIntervalRef.current) {
+      clearInterval(codeWatchIntervalRef.current);
+      codeWatchIntervalRef.current = undefined;
+    }
+  }, []);
+
   // --- Cursor leave/enter detection (stable — no state in deps) ---
   useEffect(() => {
     if (!interactive) return;
 
     const onLeave = () => {
       cursorGoneRef.current = true;
+      startCodeWatchAnimation();
       forceEyeUpdate(c => c + 1);
       poseTimerRef.current = setTimeout(() => {
-        setPose('handsUp');
+        setPose('typing');
       }, 3000);
     };
     const onEnter = () => {
       if (cursorGoneRef.current) {
         cursorGoneRef.current = false;
+        stopCodeWatchAnimation();
         clearTimeout(poseTimerRef.current);
         setPose('idle');
         setAnimClass('animate-bounce-in');
@@ -327,10 +371,11 @@ export function SpaceInvader({
     return () => {
       document.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('mouseenter', onEnter);
+      stopCodeWatchAnimation();
       clearTimeout(poseTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive]);
+  }, [interactive, startCodeWatchAnimation, stopCodeWatchAnimation]);
 
   // --- Idle boredom timer (debounced — only resets every 2s max) ---
   useEffect(() => {
@@ -711,7 +756,8 @@ export function SpaceInvader({
     if (eyeOverride === 'closed') return 'closed';
     if (eyeOverride === 'sad') return 'sad';
     if (eyeOverride === 'wide') return 'wide';
-    if (cursorGoneRef.current) return 'sad';
+    // When cursor leaves page, eyes follow code (animated via setEyePos), not sad
+    if (cursorGoneRef.current) return 'normal';
     if (isHoveredRef.current) return 'wide';
     return 'normal';
   })();
