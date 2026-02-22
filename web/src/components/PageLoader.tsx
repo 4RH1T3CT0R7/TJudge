@@ -1,6 +1,16 @@
+import { useState, useEffect } from 'react';
 import { SpaceInvader } from './SpaceInvader';
 
 export function PageLoader() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-fade-in">
       <SpaceInvader size="sm" />
