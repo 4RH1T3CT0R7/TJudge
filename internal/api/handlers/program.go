@@ -443,13 +443,20 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Reject path traversal and enforce upload directory boundary.
+	// Reject path traversal and enforce upload directory boundary for absolute paths.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
-		uploadDir := filepath.Clean(h.uploadDir)
-		if strings.Contains(cleaned, "..") || !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
-			writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
+		if strings.Contains(cleaned, "..") {
+			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
 			return
+		}
+		// Absolute paths must be within the upload directory
+		if filepath.IsAbs(cleaned) {
+			uploadDir := filepath.Clean(h.uploadDir)
+			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
+				writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
+				return
+			}
 		}
 		req.CodePath = cleaned
 	}
@@ -566,13 +573,20 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject path traversal and enforce upload directory boundary.
+	// Reject path traversal and enforce upload directory boundary for absolute paths.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
-		uploadDir := filepath.Clean(h.uploadDir)
-		if strings.Contains(cleaned, "..") || !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
-			writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
+		if strings.Contains(cleaned, "..") {
+			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
 			return
+		}
+		// Absolute paths must be within the upload directory
+		if filepath.IsAbs(cleaned) {
+			uploadDir := filepath.Clean(h.uploadDir)
+			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
+				writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
+				return
+			}
 		}
 		req.CodePath = cleaned
 	}
