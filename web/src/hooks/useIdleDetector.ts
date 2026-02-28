@@ -24,6 +24,7 @@ export function useIdleDetector({ enabled = true }: UseIdleDetectorOptions = {})
     );
   }, [enabled]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!enabled) return;
 
@@ -43,6 +44,7 @@ export function useIdleDetector({ enabled = true }: UseIdleDetectorOptions = {})
       window.removeEventListener('scroll', onActivity);
     };
   }, [enabled, resetTimers]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return stage;
 }

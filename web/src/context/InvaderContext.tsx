@@ -270,6 +270,7 @@ export function InvaderProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useInvaderContext() {
   const ctx = useContext(InvaderCtx);
   if (!ctx) throw new Error('useInvaderContext must be used within InvaderProvider');

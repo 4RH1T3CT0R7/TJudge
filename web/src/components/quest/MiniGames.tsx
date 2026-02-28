@@ -38,7 +38,8 @@ function AsciiPong({ onEnd }: PongProps) {
     return () => clearInterval(frameRef.current);
   }, [running, ballDx, ballDy]);
 
-  // Collision detection
+  // Collision detection — game loop requires synchronous state updates
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // Player paddle (left side, x=1)
     if (ballX <= 1) {
@@ -67,6 +68,7 @@ function AsciiPong({ onEnd }: PongProps) {
       }
     }
   }, [ballX, ballY, playerY, aiY]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // AI movement
   useEffect(() => {
@@ -81,7 +83,8 @@ function AsciiPong({ onEnd }: PongProps) {
     return () => clearInterval(t);
   }, [running, ballY]);
 
-  // Check win/lose
+  // Check win/lose — game loop state transitions
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (playerScore >= 3) {
       setRunning(false);
@@ -93,6 +96,7 @@ function AsciiPong({ onEnd }: PongProps) {
       onEnd('lose');
     }
   }, [playerScore, aiScore, onEnd]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Keyboard controls
   useEffect(() => {

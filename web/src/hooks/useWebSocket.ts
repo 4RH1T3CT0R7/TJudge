@@ -33,6 +33,9 @@ export function useWebSocket({
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
 
+  // Ref to hold the connect function so onclose can reference it without forward declaration
+  const connectRef = useRef<() => void>(() => {});
+
   // Update refs when values change
   useEffect(() => {
     tournamentIdRef.current = tournamentId;
@@ -98,7 +101,7 @@ export function useWebSocket({
         reconnectAttempts.current++;
         // Exponential backoff: 1s, 2s, 4s, 8s, 16s
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 16000);
-        reconnectTimeoutRef.current = setTimeout(connect, delay);
+        reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
       }
     };
 
@@ -119,6 +122,11 @@ export function useWebSocket({
 
     wsRef.current = ws;
   }, []); // Empty deps - uses refs
+
+  // Keep connectRef in sync with connect
+  useEffect(() => {
+    connectRef.current = connect;
+  });
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -143,6 +151,7 @@ export function useWebSocket({
   }, [connect, disconnect]);
 
   // Connect when tournamentId changes (with debounce)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // Don't connect if disabled
     if (!enabled) {
@@ -178,6 +187,7 @@ export function useWebSocket({
       disconnect();
     };
   }, [tournamentId, enabled, connect, disconnect]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { isConnected, disconnect, reconnect };
 }

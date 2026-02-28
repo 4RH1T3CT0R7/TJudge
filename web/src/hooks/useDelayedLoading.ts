@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 export function useDelayedLoading(isLoading: boolean, delay = 1000): boolean {
   const [show, setShow] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!isLoading) {
       setShow(false);
@@ -15,6 +16,7 @@ export function useDelayedLoading(isLoading: boolean, delay = 1000): boolean {
     const timer = setTimeout(() => setShow(true), delay);
     return () => clearTimeout(timer);
   }, [isLoading, delay]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return show;
 }

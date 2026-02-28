@@ -329,7 +329,6 @@ export function SpaceInvader({
       document.removeEventListener('mouseenter', onEnter);
       clearTimeout(poseTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactive]);
 
   // --- Idle boredom timer (debounced — only resets every 2s max) ---
@@ -606,7 +605,7 @@ export function SpaceInvader({
       clearMask();
       shatteringRef.current = false;
     }, cleanupTime);
-  }, [size]);
+  }, [size, bodyColor]);
 
   // --- Click handler ---
   const handleClick = useCallback((e: React.MouseEvent) => {

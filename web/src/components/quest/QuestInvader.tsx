@@ -21,7 +21,8 @@ export function QuestInvader({ state }: QuestInvaderProps) {
   const prevJumpRef = useRef(invaderJump);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Trigger jump animation
+  // Trigger jump animation — timer-driven state transition
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (invaderJump !== prevJumpRef.current) {
       prevJumpRef.current = invaderJump;
@@ -31,7 +32,7 @@ export function QuestInvader({ state }: QuestInvaderProps) {
     }
   }, [invaderJump]);
 
-  // Shake on attack
+  // Shake on attack — timer-driven state transition
   useEffect(() => {
     if (invaderPose === 'attack') {
       setShakeTrigger(true);
@@ -39,6 +40,7 @@ export function QuestInvader({ state }: QuestInvaderProps) {
       return () => clearTimeout(t);
     }
   }, [invaderPose]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Eye override based on mood
   const eyeOverride = (() => {

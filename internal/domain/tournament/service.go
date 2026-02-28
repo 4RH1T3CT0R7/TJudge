@@ -2,7 +2,9 @@ package tournament
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -130,12 +132,19 @@ type CreateRequest struct {
 	CreatorID       *uuid.UUID             `json:"-"` // Устанавливается из контекста, не из JSON
 }
 
-// generateCode генерирует уникальный код турнира (6-8 символов)
+// generateCode генерирует уникальный код турнира (6 символов)
+// Использует crypto/rand для равномерного распределения символов
 func generateCode() string {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // без похожих символов I,O,0,1
 	code := make([]byte, 6)
+	max := big.NewInt(int64(len(charset)))
 	for i := range code {
-		code[i] = charset[uuid.New()[i]%byte(len(charset))]
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			// crypto/rand failure indicates broken OS entropy — panic rather than silently degrade
+			panic("crypto/rand.Int failed: " + err.Error())
+		}
+		code[i] = charset[n.Int64()]
 	}
 	return string(code)
 }

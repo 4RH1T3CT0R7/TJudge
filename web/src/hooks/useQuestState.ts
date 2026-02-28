@@ -314,7 +314,7 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
 
       // Check objective completion
       let objectives = state.objectives;
-      let completedObjectives = [...state.completedObjectives];
+      const completedObjectives = [...state.completedObjectives];
       const completedId = checkObjective(state, cmd, result);
       if (completedId && !completedObjectives.includes(completedId)) {
         completedObjectives.push(completedId);
@@ -404,7 +404,7 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
     case 'END_MINIGAME': {
       const gameId = state.activeGame;
       let objectives = state.objectives;
-      let completedObjectives = [...state.completedObjectives];
+      const completedObjectives = [...state.completedObjectives];
       const lines: TerminalLine[] = [];
 
       if (action.result === 'win' && gameId && !completedObjectives.includes(gameId)) {

@@ -76,7 +76,8 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
   }, []);
 
   useEffect(() => {
-    return () => timerRef.current.forEach(clearTimeout);
+    const timers = timerRef.current;
+    return () => timers.forEach(clearTimeout);
   }, []);
 
   // First login cinematic sequence

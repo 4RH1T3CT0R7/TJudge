@@ -7,6 +7,8 @@ import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, TournamentGameWithDetails } from '../types';
 
+const remarkPlugins = [remarkGfm];
+
 // Game-specific icons and colors configuration
 // Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
@@ -372,7 +374,7 @@ export function GameDetail() {
               {game.rules ? (
                 <div className="prose max-w-none prose-invert">
                   <div className="markdown-content text-gray-300">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{game.rules}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={remarkPlugins}>{game.rules}</ReactMarkdown>
                   </div>
                 </div>
               ) : (

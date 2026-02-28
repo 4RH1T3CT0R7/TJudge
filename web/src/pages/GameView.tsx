@@ -9,6 +9,8 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
+const remarkPlugins = [remarkGfm];
+
 export function GameView() {
   const { id } = useParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
@@ -92,7 +94,7 @@ export function GameView() {
             {game.rules ? (
               <div className="prose max-w-none prose-invert">
                 <div className="markdown-content text-gray-300">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{game.rules}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={remarkPlugins}>{game.rules}</ReactMarkdown>
                 </div>
               </div>
             ) : (

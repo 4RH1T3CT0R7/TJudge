@@ -26,6 +26,9 @@ export function TerminalTypewriter() {
   const charIndex = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Ref to hold tick so it can self-schedule without forward reference
+  const tickRef = useRef<() => void>(() => {});
+
   const currentPhrase = PHRASES[phraseIndex];
 
   const tick = useCallback(() => {
@@ -35,7 +38,7 @@ export function TerminalTypewriter() {
         if (charIndex.current < full.length) {
           charIndex.current++;
           setDisplayedText(full.slice(0, charIndex.current));
-          timerRef.current = setTimeout(tick, 80);
+          timerRef.current = setTimeout(() => tickRef.current(), 80);
         } else {
           setPhase('paused');
         }
@@ -48,7 +51,7 @@ export function TerminalTypewriter() {
         if (charIndex.current > 0) {
           charIndex.current--;
           setDisplayedText(currentPhrase.text.slice(0, charIndex.current));
-          timerRef.current = setTimeout(tick, 40);
+          timerRef.current = setTimeout(() => tickRef.current(), 40);
         } else {
           setPhase('waiting');
         }
@@ -64,6 +67,11 @@ export function TerminalTypewriter() {
         break;
     }
   }, [phase, currentPhrase]);
+
+  // Keep tickRef in sync
+  useEffect(() => {
+    tickRef.current = tick;
+  });
 
   useEffect(() => {
     timerRef.current = setTimeout(tick, phase === 'typing' ? 80 : 0);

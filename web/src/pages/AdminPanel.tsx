@@ -20,6 +20,23 @@ const gameIcons: Record<string, string> = {
 };
 const getGameIcon = (gameName: string) => gameIcons[gameName] || '🎮';
 
+const SUDO_PHRASES = [
+  '// I\'m in.',
+  '// access granted',
+  '// hack the planet',
+  '// follow the white rabbit',
+  '// the matrix has you',
+  '// wake up, Neo',
+  '// there is no spoon',
+  '// sudo make me a sandwich',
+  '// rm -rf doubts',
+  '// ping reality',
+  '// root@tjudge:~#',
+  '// 01101000 01100001',
+  '// all your base',
+  '// we\'re in the mainframe',
+];
+
 const statusLabels: Record<TournamentStatus, string> = {
   pending: 'Ожидание',
   active: 'Активный',
@@ -205,24 +222,6 @@ export function AdminPanel() {
       window.removeEventListener('resize', resize);
     };
   }, [sudoMode]);
-
-  // Sudo hacker phrases — periodic random phrases when sudo mode is active
-  const SUDO_PHRASES = [
-    '// I\'m in.',
-    '// access granted',
-    '// hack the planet',
-    '// follow the white rabbit',
-    '// the matrix has you',
-    '// wake up, Neo',
-    '// there is no spoon',
-    '// sudo make me a sandwich',
-    '// rm -rf doubts',
-    '// ping reality',
-    '// root@tjudge:~#',
-    '// 01101000 01100001',
-    '// all your base',
-    '// we\'re in the mainframe',
-  ];
 
   useEffect(() => {
     if (!sudoMode) return;

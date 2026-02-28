@@ -188,7 +188,12 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     animId: number;
   } | null>(null);
   const clicksRef = useRef<{ x: number; y: number; time: number }[]>([]);
-  const startTimeRef = useRef(performance.now() / 1000);
+  const startTimeRef = useRef(0);
+
+  // Initialize start time lazily in effect to avoid impure call during render
+  useEffect(() => {
+    startTimeRef.current = performance.now() / 1000;
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;

@@ -158,7 +158,8 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // Handle history navigation from state
+  // Handle history navigation from state — syncs external state to local input
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (state.historyIndex >= 0 && state.historyIndex < state.commandHistory.length) {
       setInput(state.commandHistory[state.historyIndex]);
@@ -166,6 +167,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
       // Only clear if we navigated down past the last entry
     }
   }, [state.historyIndex, state.commandHistory]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     // Tab completion
