@@ -12,7 +12,7 @@ export default defineConfig({
         manualChunks: {
           'three': ['three'],
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-data': ['axios', '@tanstack/react-query', 'zustand'],
+          'vendor-data': ['axios', 'zustand'],
           'vendor-markdown': ['react-markdown', 'remark-gfm'],
           'vendor-motion': ['motion'],
         },

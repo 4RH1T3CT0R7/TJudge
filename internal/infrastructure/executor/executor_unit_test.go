@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
@@ -364,4 +365,49 @@ func TestHostToContainerPath_ExactMatch(t *testing.T) {
 	result := e.hostToContainerPath("/data/programs")
 
 	assert.Equal(t, "/programs", result)
+}
+
+func TestHostToContainerPath_TraversalNormalized(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// Path with ".." is cleaned by filepath.Clean before prefix check,
+	// so "/data/programs/../programs/evil" becomes "/data/programs/evil"
+	// and still maps correctly under the container path.
+	result := e.hostToContainerPath("/data/programs/../programs/evil")
+	assert.Equal(t, "/programs/evil", result)
+
+	// Path that tries to escape programsPath is cleaned and does NOT
+	// match the prefix, so it stays as-is (filepath.Clean resolves ".." fully).
+	result2 := e.hostToContainerPath("/data/programs/../../etc/passwd")
+	assert.Equal(t, "/etc/passwd", result2)
+	assert.False(t, strings.HasPrefix(result2, "/programs"),
+		"traversal path should not map into container programs dir")
+}
+
+func TestHostToContainerPath_DotSegments(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// Redundant dot segments are cleaned
+	result := e.hostToContainerPath("/data/programs/./team1/../team1/solution.py")
+	assert.Equal(t, "/programs/team1/solution.py", result)
+}
+
+func TestHostToContainerPath_SiblingDirectory(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// "/data/programs-evil" starts with "/data/programs" but is NOT a subdirectory.
+	// Must not be remapped.
+	result := e.hostToContainerPath("/data/programs-evil/secret.py")
+	assert.Equal(t, "/data/programs-evil/secret.py", result,
+		"sibling directory should not be remapped")
+	assert.False(t, strings.HasPrefix(result, "/programs"),
+		"sibling directory path must not map into container programs dir")
+}
+
+func TestHostToContainerPath_TrailingSlashInput(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// filepath.Clean removes trailing slash, should still match
+	result := e.hostToContainerPath("/data/programs/team1/")
+	assert.Equal(t, "/programs/team1", result)
 }

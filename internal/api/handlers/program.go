@@ -443,13 +443,15 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// BUG-C1 fix: Reject path traversal in code_path.
+	// Reject path traversal and enforce upload directory boundary.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
-		if strings.Contains(cleaned, "..") {
-			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
+		uploadDir := filepath.Clean(h.uploadDir)
+		if strings.Contains(cleaned, "..") || !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
+			writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
 			return
 		}
+		req.CodePath = cleaned
 	}
 
 	program := &domain.Program{
@@ -564,13 +566,15 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject path traversal in code_path.
+	// Reject path traversal and enforce upload directory boundary.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
-		if strings.Contains(cleaned, "..") {
-			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
+		uploadDir := filepath.Clean(h.uploadDir)
+		if strings.Contains(cleaned, "..") || !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
+			writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
 			return
 		}
+		req.CodePath = cleaned
 	}
 
 	program, err := h.programRepo.GetByID(r.Context(), id)
