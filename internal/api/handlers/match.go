@@ -217,7 +217,14 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Status filter
 	if status := r.URL.Query().Get("status"); status != "" {
-		filter.Status = domain.MatchStatus(status)
+		s := domain.MatchStatus(status)
+		switch s {
+		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed:
+			filter.Status = s
+		default:
+			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed"))
+			return
+		}
 	}
 
 	// Game type filter

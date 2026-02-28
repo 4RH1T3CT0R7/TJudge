@@ -108,20 +108,20 @@ func (tc *TournamentCache) GetParticipantsCount(ctx context.Context, tournamentI
 func (tc *TournamentCache) IncrementParticipantsCount(ctx context.Context, tournamentID uuid.UUID) error {
 	key := fmt.Sprintf("tournament:%s:participants_count", tournamentID.String())
 
-	// Проверяем существование ключа
-	exists, err := tc.cache.Exists(ctx, key)
+	// INCR is atomic: creates key with value 1 if it doesn't exist, increments otherwise
+	val, err := tc.cache.Incr(ctx, key)
 	if err != nil {
 		return err
 	}
 
-	if !exists {
-		// Если ключа нет, устанавливаем 1
-		return tc.cache.Set(ctx, key, 1, tc.ttl)
+	// Only set TTL when the key was just created (value == 1) to avoid
+	// resetting the expiry on every increment.
+	if val == 1 {
+		if err := tc.cache.Expire(ctx, key, tc.ttl); err != nil {
+			return err
+		}
 	}
-
-	// Иначе инкрементируем
-	_, err = tc.cache.client.Incr(ctx, key).Result()
-	return err
+	return nil
 }
 
 // SetMatchStatistics сохраняет статистику матчей турнира

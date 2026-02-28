@@ -37,8 +37,33 @@ func (qm *QueueManager) getQueueKey(priority domain.MatchPriority) string {
 	return fmt.Sprintf("queue:%s", priority)
 }
 
+// dedupKey is the Redis SET key used for match deduplication
+const dedupKey = "queue:dedup"
+
+// dedupTTL is the TTL for the deduplication set
+const dedupTTL = 24 * time.Hour
+
 // Enqueue добавляет матч в очередь с учётом приоритета
 func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error {
+	// Проверяем дедупликацию: SADD возвращает 0, если элемент уже существует
+	added, err := qm.cache.SAdd(ctx, dedupKey, match.ID.String())
+	if err != nil {
+		qm.log.LogError("Failed to check dedup set", err,
+			zap.String("match_id", match.ID.String()),
+		)
+		// Продолжаем даже при ошибке дедупликации — лучше дублировать, чем потерять
+	} else if added == 0 {
+		qm.log.Info("Match already enqueued, skipping",
+			zap.String("match_id", match.ID.String()),
+		)
+		return nil
+	}
+
+	// Обновляем TTL на dedup set
+	if err := qm.cache.Expire(ctx, dedupKey, dedupTTL); err != nil {
+		qm.log.LogError("Failed to set dedup TTL", err)
+	}
+
 	// Сериализуем матч
 	data, err := json.Marshal(match)
 	if err != nil {
@@ -48,6 +73,12 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 	// Добавляем в соответствующую очередь
 	queueKey := qm.getQueueKey(match.Priority)
 	if err := qm.cache.LPush(ctx, queueKey, data); err != nil {
+		// Откатываем запись в dedup set, так как матч не был добавлен в очередь
+		if sremErr := qm.cache.SRem(ctx, dedupKey, match.ID.String()); sremErr != nil {
+			qm.log.LogError("Failed to rollback dedup entry on enqueue failure", sremErr,
+				zap.String("match_id", match.ID.String()),
+			)
+		}
 		return fmt.Errorf("failed to enqueue match: %w", err)
 	}
 
@@ -107,6 +138,13 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 			zap.String("queue_key", result[0]),
 		)
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
+	}
+
+	// Удаляем из dedup set, чтобы матч мог быть повторно поставлен в очередь в будущем
+	if err := qm.cache.SRem(ctx, dedupKey, match.ID.String()); err != nil {
+		qm.log.LogError("Failed to remove match from dedup set after dequeue", err,
+			zap.String("match_id", match.ID.String()),
+		)
 	}
 
 	// Обновляем метрики
@@ -190,6 +228,11 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 		}
 	}
 
+	// Очищаем dedup set
+	if err := qm.cache.Del(ctx, dedupKey); err != nil {
+		return fmt.Errorf("failed to clear dedup set: %w", err)
+	}
+
 	qm.log.Info("All queues cleared")
 	return nil
 }
@@ -265,7 +308,10 @@ func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(
 	return purged, nil
 }
 
-// purgeQueueInvalidMatches очищает одну очередь от невалидных матчей
+// purgeQueueInvalidMatches очищает одну очередь от невалидных матчей.
+// NOTE: There is a small window between LRange and ReplaceList where
+// newly enqueued items could be lost. This is acceptable because purge
+// is an admin-only operation that should not run during active match processing.
 func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority domain.MatchPriority, validator func(matchID string) bool) (int64, error) {
 	queueKey := qm.getQueueKey(priority)
 

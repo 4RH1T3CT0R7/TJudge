@@ -41,6 +41,10 @@ func (m *MockRatingRepository) UpdateParticipantStats(ctx context.Context, tourn
 	return m.Called(ctx, tournamentID, programID, won, draw).Error(0)
 }
 
+func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error {
+	return m.Called(ctx, tournamentID, programID, newRating, won, draw).Error(0)
+}
+
 func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 	repo := new(MockRatingRepository)
 	log, _ := logger.New("error", "json")
@@ -51,119 +55,6 @@ func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 		leaderboardCache: nil,
 		log:              log,
 	}, repo
-}
-
-// --- updateParticipantRating ---
-
-func TestService_updateParticipantRating_Success(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	matchID := uuid.New()
-	programID := uuid.New()
-	tID := uuid.New()
-
-	match := &domain.Match{ID: matchID, TournamentID: tID}
-
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, programID, 1016).Return(nil)
-
-	err := svc.updateParticipantRating(ctx, match, programID, 1000, 1016, 16)
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestService_updateParticipantRating_CreateError(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-
-	match := &domain.Match{ID: uuid.New(), TournamentID: uuid.New()}
-	repo.On("Create", ctx, mock.Anything).Return(errors.ErrInternal)
-
-	err := svc.updateParticipantRating(ctx, match, uuid.New(), 1000, 1016, 16)
-	assert.Error(t, err)
-}
-
-func TestService_updateParticipantRating_UpdateError(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	tID := uuid.New()
-	programID := uuid.New()
-
-	match := &domain.Match{ID: uuid.New(), TournamentID: tID}
-	repo.On("Create", ctx, mock.Anything).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, programID, 1016).Return(errors.ErrInternal)
-
-	err := svc.updateParticipantRating(ctx, match, programID, 1000, 1016, 16)
-	assert.Error(t, err)
-}
-
-// --- updateMatchStats ---
-
-func TestService_updateMatchStats_Player1Wins(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	tID := uuid.New()
-	p1, p2 := uuid.New(), uuid.New()
-	winner := 1
-
-	match := &domain.Match{TournamentID: tID, Program1ID: p1, Program2ID: p2, Winner: &winner}
-
-	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
-
-	err := svc.updateMatchStats(ctx, match)
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestService_updateMatchStats_Player2Wins(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	tID := uuid.New()
-	p1, p2 := uuid.New(), uuid.New()
-	winner := 2
-
-	match := &domain.Match{TournamentID: tID, Program1ID: p1, Program2ID: p2, Winner: &winner}
-
-	repo.On("UpdateParticipantStats", ctx, tID, p1, false, false).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, true, false).Return(nil)
-
-	err := svc.updateMatchStats(ctx, match)
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestService_updateMatchStats_Draw(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	tID := uuid.New()
-	p1, p2 := uuid.New(), uuid.New()
-	winner := 0
-
-	match := &domain.Match{TournamentID: tID, Program1ID: p1, Program2ID: p2, Winner: &winner}
-
-	repo.On("UpdateParticipantStats", ctx, tID, p1, false, true).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, false, true).Return(nil)
-
-	err := svc.updateMatchStats(ctx, match)
-	assert.NoError(t, err)
-	repo.AssertExpectations(t)
-}
-
-func TestService_updateMatchStats_Program1Error(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	tID := uuid.New()
-	p1, p2 := uuid.New(), uuid.New()
-	winner := 1
-
-	match := &domain.Match{TournamentID: tID, Program1ID: p1, Program2ID: p2, Winner: &winner}
-
-	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(errors.ErrInternal)
-	// Program2 should not be called
-
-	err := svc.updateMatchStats(ctx, match)
-	assert.Error(t, err)
 }
 
 // --- GetRatingHistory ---
@@ -267,11 +158,8 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 
 	// Equal ratings (1500 vs 1500), p1 wins: new1=1516, new2=1484
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, 1516).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, 1484).Return(nil)
-	// updateMatchStats
-	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1516, true, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1484, false, false).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -296,10 +184,8 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 
 	// Equal ratings (1500 vs 1500), p2 wins: new1=1484, new2=1516
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, 1484).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, 1516).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p1, false, false).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, true, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1484, false, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1516, true, false).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -324,10 +210,8 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 
 	// Equal ratings, draw: no change (1500+32*(0.5-0.5)=1500)
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, 1500).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, 1500).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p1, false, true).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, false, true).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1500, false, true).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1500, false, true).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -350,7 +234,7 @@ func TestService_ProcessMatchResult_UpdateRatingError_Program1(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// First updateParticipantRating (p1) fails at Create
+	// First updateParticipantRatingAndStats (p1) fails at Create
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(errors.ErrInternal).Once()
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
@@ -376,10 +260,8 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 	// 2800 vs 400: expected score for 2800 ≈ 1.0, so change ≈ 0
 	// K=32, expected ≈ 0.9999..., new1 ≈ 2800, new2 ≈ 400
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p1, mock.AnythingOfType("int")).Return(nil)
-	repo.On("UpdateParticipantRating", ctx, tID, p2, mock.AnythingOfType("int")).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p1, true, false).Return(nil)
-	repo.On("UpdateParticipantStats", ctx, tID, p2, false, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, mock.AnythingOfType("int"), true, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, mock.AnythingOfType("int"), false, false).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 2800, 400)
 

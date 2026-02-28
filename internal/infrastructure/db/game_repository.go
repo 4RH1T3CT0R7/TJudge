@@ -664,7 +664,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 		// 3. Сбрасываем рейтинги участников (через связь с programs)
 		result, txErr = tx.ExecContext(ctx, `
 			UPDATE tournament_participants tp
-			SET rating = 1000, wins = 0, losses = 0, draws = 0
+			SET rating = 1500, wins = 0, losses = 0, draws = 0
 			FROM programs p
 			WHERE tp.program_id = p.id
 			AND tp.tournament_id = $1

@@ -23,6 +23,7 @@ type RatingRepository interface {
 	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error)
 	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, newRating int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
+	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error
 }
 
 // Service - сервис для работы с рейтингами
@@ -62,22 +63,28 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 		zap.Int("rating2_change", change2),
 	)
 
-	// Обновляем рейтинг первого участника
-	if err := s.updateParticipantRating(ctx, match, match.Program1ID, rating1, newRating1, change1); err != nil {
+	winner := *match.Winner
+
+	// Определяем статистику для каждого участника
+	var won1, draw1, won2, draw2 bool
+	if winner == 1 {
+		won1 = true
+	} else if winner == 0 {
+		draw1 = true
+		draw2 = true
+	}
+	if winner == 2 {
+		won2 = true
+	}
+
+	// Обновляем рейтинг и статистику первого участника атомарно
+	if err := s.updateParticipantRatingAndStats(ctx, match, match.Program1ID, rating1, newRating1, change1, won1, draw1); err != nil {
 		return err
 	}
 
-	// Обновляем рейтинг второго участника
-	if err := s.updateParticipantRating(ctx, match, match.Program2ID, rating2, newRating2, change2); err != nil {
+	// Обновляем рейтинг и статистику второго участника атомарно
+	if err := s.updateParticipantRatingAndStats(ctx, match, match.Program2ID, rating2, newRating2, change2, won2, draw2); err != nil {
 		return err
-	}
-
-	// Обновляем статистику (wins/losses/draws)
-	if err := s.updateMatchStats(ctx, match); err != nil {
-		s.log.LogError("Failed to update match stats", err,
-			zap.String("match_id", match.ID.String()),
-		)
-		// Не возвращаем ошибку, так как основные обновления успешны
 	}
 
 	// Обновляем leaderboard в кэше
@@ -92,12 +99,13 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	return nil
 }
 
-// updateParticipantRating обновляет рейтинг участника в БД
-func (s *Service) updateParticipantRating(
+// updateParticipantRatingAndStats обновляет рейтинг и статистику участника атомарно
+func (s *Service) updateParticipantRatingAndStats(
 	ctx context.Context,
 	match *domain.Match,
 	programID uuid.UUID,
 	oldRating, newRating, change int,
+	won, draw bool,
 ) error {
 	// Создаём запись в истории рейтингов
 	history := &domain.RatingHistory{
@@ -115,39 +123,8 @@ func (s *Service) updateParticipantRating(
 		return err
 	}
 
-	// Обновляем текущий рейтинг участника
-	return s.repo.UpdateParticipantRating(ctx, match.TournamentID, programID, newRating)
-}
-
-// updateMatchStats обновляет статистику матчей (wins/losses/draws)
-func (s *Service) updateMatchStats(ctx context.Context, match *domain.Match) error {
-	if match.Winner == nil {
-		return errors.ErrValidation.WithMessage("match has no winner")
-	}
-
-	winner := *match.Winner
-
-	// Обновляем статистику для первого игрока
-	var won1, draw1 bool
-	if winner == 1 {
-		won1 = true
-	} else if winner == 0 {
-		draw1 = true
-	}
-
-	if err := s.repo.UpdateParticipantStats(ctx, match.TournamentID, match.Program1ID, won1, draw1); err != nil {
-		return err
-	}
-
-	// Обновляем статистику для второго игрока
-	var won2, draw2 bool
-	if winner == 2 {
-		won2 = true
-	} else if winner == 0 {
-		draw2 = true
-	}
-
-	return s.repo.UpdateParticipantStats(ctx, match.TournamentID, match.Program2ID, won2, draw2)
+	// Атомарно обновляем рейтинг и статистику участника
+	return s.repo.UpdateParticipantRatingAndStats(ctx, match.TournamentID, programID, newRating, won, draw)
 }
 
 // GetRatingHistory получает историю рейтинга программы

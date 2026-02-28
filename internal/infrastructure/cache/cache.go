@@ -107,6 +107,16 @@ func (c *Cache) Expire(ctx context.Context, key string, ttl time.Duration) error
 	return nil
 }
 
+// Incr атомарно увеличивает значение ключа на 1. Создаёт ключ со значением 1 если не существует.
+func (c *Cache) Incr(ctx context.Context, key string) (int64, error) {
+	val, err := c.client.Incr(ctx, key).Result()
+	if err != nil {
+		c.log.LogError("Redis INCR failed", err, zap.String("key", key))
+		return 0, err
+	}
+	return val, nil
+}
+
 // ZAdd добавляет элемент в sorted set
 func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member string) error {
 	err := c.client.ZAdd(ctx, key, redis.Z{
@@ -220,6 +230,26 @@ func (c *Cache) LTrim(ctx context.Context, key string, start, stop int64) error 
 	err := c.client.LTrim(ctx, key, start, stop).Err()
 	if err != nil {
 		c.log.LogError("Redis LTRIM failed", err, zap.String("key", key))
+		return err
+	}
+	return nil
+}
+
+// SAdd добавляет элементы в множество (SET). Возвращает количество добавленных элементов.
+func (c *Cache) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	count, err := c.client.SAdd(ctx, key, members...).Result()
+	if err != nil {
+		c.log.LogError("Redis SADD failed", err, zap.String("key", key))
+		return 0, err
+	}
+	return count, nil
+}
+
+// SRem удаляет элементы из множества (SET)
+func (c *Cache) SRem(ctx context.Context, key string, members ...interface{}) error {
+	err := c.client.SRem(ctx, key, members...).Err()
+	if err != nil {
+		c.log.LogError("Redis SREM failed", err, zap.String("key", key))
 		return err
 	}
 	return nil

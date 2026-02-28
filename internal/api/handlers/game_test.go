@@ -1112,8 +1112,8 @@ func (m *MockGameRatingRepository) ResetParticipantsForGame(ctx context.Context,
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockGameRatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error) {
-	args := m.Called(ctx, tournamentID, gameID, gameType)
+func (m *MockGameRatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
+	args := m.Called(ctx, tournamentID, gameType)
 	return args.Get(0).(int64), args.Error(1)
 }
 

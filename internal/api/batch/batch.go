@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -248,7 +249,7 @@ type bodyReader struct {
 
 func (b *bodyReader) Read(p []byte) (n int, err error) {
 	if b.offset >= len(b.data) {
-		return 0, fmt.Errorf("EOF")
+		return 0, io.EOF
 	}
 	n = copy(p, b.data[b.offset:])
 	b.offset += n

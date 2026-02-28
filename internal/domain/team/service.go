@@ -348,11 +348,26 @@ func (s *Service) GetInviteLink(ctx context.Context, teamID, leaderID uuid.UUID,
 
 // DeleteTeam удаляет команду (для админа)
 func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
+	// Get team to check tournament status
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+
+	// Check tournament is not active
+	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+	if err != nil {
+		return err
+	}
+
+	if tournament.Status == domain.TournamentActive || tournament.Status == domain.TournamentCompleted {
+		return errors.ErrBadRequest.WithMessage("cannot delete team from active or completed tournament")
+	}
+
 	if err := s.teamRepo.Delete(ctx, teamID); err != nil {
 		return err
 	}
 
 	s.log.Info("Team deleted by admin", zap.String("team_id", teamID.String()))
-
 	return nil
 }

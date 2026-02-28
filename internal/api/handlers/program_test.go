@@ -289,26 +289,30 @@ func TestProgramHandler_List(t *testing.T) {
 func TestProgramHandler_Get(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully get program", func(t *testing.T) {
+	t.Run("successfully get program as owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
+		userID := uuid.New()
 		programID := uuid.New()
 		expectedProgram := &domain.Program{
 			ID:       programID,
-			UserID:   uuid.New(),
+			UserID:   userID,
 			Name:     "Chess AI",
 			GameType: "chess",
 			Language: "python",
 		}
 
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(expectedProgram, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", programID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
 
@@ -324,15 +328,79 @@ func TestProgramHandler_Get(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
+	t.Run("successfully get program as admin", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+		expectedProgram := &domain.Program{
+			ID:       programID,
+			UserID:   uuid.New(), // different user
+			Name:     "Chess AI",
+			GameType: "chess",
+			Language: "python",
+		}
+
+		mockRepo.On("GetByID", mock.Anything, programID).Return(expectedProgram, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleAdmin)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Get(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("forbidden when not owner", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Get(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
+
+		userID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/invalid-uuid", nil)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
 
@@ -345,9 +413,34 @@ func TestProgramHandler_Get(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
+		userID := uuid.New()
 		programID := uuid.New()
 
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrNotFound.WithMessage("program not found"))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Get(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("no auth context returns 401", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
+
+		programID := uuid.New()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
 
@@ -359,9 +452,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		handler.Get(w, req)
 
-		assert.Equal(t, http.StatusNotFound, w.Code)
-
-		mockRepo.AssertExpectations(t)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
 
@@ -548,15 +639,19 @@ func TestProgramHandler_Get_ServiceError(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
+		userID := uuid.New()
 		programID := uuid.New()
 
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrInternal.WithMessage("database error"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", programID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
 

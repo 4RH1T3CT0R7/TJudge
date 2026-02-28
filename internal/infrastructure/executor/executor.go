@@ -283,6 +283,8 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 			errorParts = append(errorParts, "❌ Программа 2 завершилась с ошибкой:")
 			result.Winner = 1 // Побеждает программа 1
 		default:
+			// System error: unknown exit code. ErrorCode is already set from exitCode above.
+			// Winner stays 0 (draw) and ErrorCode signals this match should be recorded as failed.
 			errorParts = append(errorParts, fmt.Sprintf("❌ Ошибка выполнения (код %d):", exitCode))
 		}
 

@@ -114,7 +114,12 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 			ErrorCode:    1,
 			ErrorMessage: err.Error(),
 		}
-		_ = p.matchRepo.UpdateResult(ctx, match.ID, errorResult)
+		if dbErr := p.matchRepo.UpdateResult(ctx, match.ID, errorResult); dbErr != nil {
+			p.log.Error("Failed to save error result to database",
+				zap.String("match_id", match.ID.String()),
+				zap.Error(dbErr),
+			)
+		}
 		return fmt.Errorf("failed to execute match: %w", err)
 	}
 

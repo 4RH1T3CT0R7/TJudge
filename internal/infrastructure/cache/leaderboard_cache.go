@@ -46,7 +46,10 @@ func (lc *LeaderboardCache) IncrementRating(ctx context.Context, tournamentID, p
 	return lc.cache.ZIncrBy(ctx, key, float64(delta), programID.String())
 }
 
-// GetTop получает топ N программ из leaderboard
+// GetTop получает топ N программ из leaderboard.
+// NOTE: Returns partial data — only Rank, ProgramID, and Rating are populated.
+// Other LeaderboardEntry fields (ProgramName, TeamID, TeamName, Wins, Losses, Draws, TotalGames)
+// are zero-valued. Callers needing complete data should query the DB instead.
 func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	key := lc.getKey(tournamentID)
 	results, err := lc.cache.ZRevRangeWithScores(ctx, key, 0, int64(limit-1))

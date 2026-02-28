@@ -1002,25 +1002,33 @@ func TestService_Delete(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_GetLeaderboard(t *testing.T) {
-	t.Run("cache_hit", func(t *testing.T) {
+	t.Run("always_queries_db_for_complete_data", func(t *testing.T) {
 		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
 		programID := uuid.New()
 
-		// Pre-populate leaderboard cache
+		// Pre-populate leaderboard cache (partial data: only ProgramID + Rating)
 		err := service.leaderboardCache.UpdateRating(ctx, tournamentID, programID, 1800)
 		require.NoError(t, err)
+
+		// DB returns complete data including ProgramName, Wins, Losses, etc.
+		entries := []*domain.LeaderboardEntry{
+			{Rank: 1, ProgramID: programID, ProgramName: "bot-v1", Rating: 1800, Wins: 5, Losses: 2, TotalGames: 7},
+		}
+		tournamentRepo.On("GetLeaderboard", ctx, tournamentID, 10).Return(entries, nil)
 
 		result, err := service.GetLeaderboard(ctx, tournamentID, 10)
 		require.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, programID, result[0].ProgramID)
 		assert.Equal(t, 1800, result[0].Rating)
+		assert.Equal(t, "bot-v1", result[0].ProgramName)
+		assert.Equal(t, 5, result[0].Wins)
 
-		// Repo should NOT be called
-		tournamentRepo.AssertNotCalled(t, "GetLeaderboard", mock.Anything, mock.Anything, mock.Anything)
+		// DB is always called to get complete leaderboard data
+		tournamentRepo.AssertCalled(t, "GetLeaderboard", ctx, tournamentID, 10)
 	})
 
 	t.Run("cache_miss_repo", func(t *testing.T) {

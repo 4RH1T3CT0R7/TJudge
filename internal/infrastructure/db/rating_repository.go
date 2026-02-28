@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	stderrors "errors"
+	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -206,7 +207,7 @@ func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournam
 	// Сначала получаем программы для этой игры
 	query := `
 		UPDATE tournament_participants tp
-		SET rating = 1000, wins = 0, losses = 0, draws = 0
+		SET rating = 1500, wins = 0, losses = 0, draws = 0
 		FROM programs p
 		WHERE tp.program_id = p.id
 		AND tp.tournament_id = $1
@@ -226,8 +227,42 @@ func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournam
 	return rows, nil
 }
 
+// UpdateParticipantRatingAndStats atomically updates rating and stats for a participant
+func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error {
+	var statsField string
+	if won {
+		statsField = "wins = wins + 1"
+	} else if draw {
+		statsField = "draws = draws + 1"
+	} else {
+		statsField = "losses = losses + 1"
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE tournament_participants
+		SET rating = $3, %s
+		WHERE tournament_id = $1 AND program_id = $2
+	`, statsField)
+
+	result, err := r.db.ExecWithMetrics(ctx, "rating_update_participant_and_stats", query, tournamentID, programID, newRating)
+	if err != nil {
+		return errors.Wrap(err, "failed to update participant rating and stats")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("tournament participant not found")
+	}
+
+	return nil
+}
+
 // DeleteRatingHistoryForGame удаляет историю рейтингов для определённой игры
-func (r *RatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error) {
+func (r *RatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
 	query := `
 		DELETE FROM rating_history rh
 		WHERE rh.tournament_id = $1

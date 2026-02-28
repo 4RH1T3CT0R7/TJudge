@@ -515,11 +515,33 @@ func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 // Get обрабатывает получение программы
 // GET /api/v1/programs/:id
 func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID, err := middleware.RequireUserID(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
 		return
+	}
+
+	// Admins can view any program
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	if userRole != domain.RoleAdmin {
+		// Проверяем владение программой
+		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
+		if err != nil {
+			h.log.LogError("Failed to check ownership", err)
+			writeError(w, err)
+			return
+		}
+		if !isOwner {
+			writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
+			return
+		}
 	}
 
 	program, err := h.programRepo.GetByID(r.Context(), id)
@@ -637,16 +659,20 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем владение программой
-	isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
-	if err != nil {
-		h.log.LogError("Failed to check ownership", err)
-		writeError(w, err)
-		return
-	}
-	if !isOwner {
-		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
-		return
+	// Admins can download any program
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	if userRole != domain.RoleAdmin {
+		// Проверяем владение программой
+		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
+		if err != nil {
+			h.log.LogError("Failed to check ownership", err)
+			writeError(w, err)
+			return
+		}
+		if !isOwner {
+			writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
+			return
+		}
 	}
 
 	program, err := h.programRepo.GetByID(r.Context(), id)
@@ -663,6 +689,25 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filePath := *program.FilePath
+
+	// Validate file path is within upload directory
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		h.log.Error("Failed to resolve absolute file path", zap.Error(err), zap.String("path", filePath))
+		writeError(w, errors.ErrInternal.WithMessage("invalid file path"))
+		return
+	}
+	absUploadDir, err := filepath.Abs(h.uploadDir)
+	if err != nil {
+		h.log.Error("Failed to resolve absolute upload dir", zap.Error(err), zap.String("upload_dir", h.uploadDir))
+		writeError(w, errors.ErrInternal.WithMessage("invalid upload directory"))
+		return
+	}
+	if !strings.HasPrefix(absFilePath, absUploadDir+string(os.PathSeparator)) {
+		h.log.Error("File path outside upload directory", zap.String("path", filePath), zap.String("upload_dir", h.uploadDir))
+		writeError(w, errors.ErrForbidden.WithMessage("access denied"))
+		return
+	}
 
 	// Проверяем существование файла
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

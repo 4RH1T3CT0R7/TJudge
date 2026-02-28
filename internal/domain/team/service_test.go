@@ -595,21 +595,66 @@ func TestService_GetTeamsByTournament_Success(t *testing.T) {
 }
 
 func TestService_DeleteTeam_Success(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	id := uuid.New()
+	tID := uuid.New()
 
+	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, id).Return(nil)
 
 	err := svc.DeleteTeam(ctx, id)
 	assert.NoError(t, err)
 }
 
-func TestService_DeleteTeam_Error(t *testing.T) {
+func TestService_DeleteTeam_ActiveTournament(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	id := uuid.New()
+	tID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+
+	err := svc.DeleteTeam(ctx, id)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete team from active or completed tournament")
+}
+
+func TestService_DeleteTeam_CompletedTournament(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	id := uuid.New()
+	tID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentCompleted}, nil)
+
+	err := svc.DeleteTeam(ctx, id)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete team from active or completed tournament")
+}
+
+func TestService_DeleteTeam_TeamNotFound(t *testing.T) {
 	svc, teamRepo, _ := newTestTeamService(t)
 	ctx := context.Background()
 	id := uuid.New()
 
+	teamRepo.On("GetByID", ctx, id).Return(nil, errors.ErrNotFound)
+
+	err := svc.DeleteTeam(ctx, id)
+	assert.Error(t, err)
+}
+
+func TestService_DeleteTeam_DeleteError(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	id := uuid.New()
+	tID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, id).Return(errors.ErrNotFound)
 
 	err := svc.DeleteTeam(ctx, id)

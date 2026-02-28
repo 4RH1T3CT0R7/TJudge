@@ -153,7 +153,7 @@ func (s *FileStorage) DeleteProgram(ctx context.Context, path string) error {
 		return errors.Wrap(err, "failed to get absolute base path")
 	}
 
-	if !strings.HasPrefix(absPath, absBasePath) {
+	if !strings.HasPrefix(absPath, absBasePath+string(os.PathSeparator)) {
 		return errors.ErrForbidden.WithMessage("path outside storage directory")
 	}
 

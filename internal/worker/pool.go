@@ -35,6 +35,8 @@ type Pool struct {
 	metrics          *metrics.Metrics
 	ctx              context.Context
 	cancel           context.CancelFunc
+	shutdownCtx      context.Context    // stays alive during graceful shutdown; cancelled after grace period
+	shutdownCancel   context.CancelFunc // cancels shutdownCtx
 	wg               sync.WaitGroup
 	activeWorkers    atomic.Int32
 	totalWorkers     atomic.Int32
@@ -55,15 +57,18 @@ func NewPool(
 	m *metrics.Metrics,
 ) *Pool {
 	ctx, cancel := context.WithCancel(context.Background())
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 
 	return &Pool{
-		config:    cfg,
-		queue:     queue,
-		processor: processor,
-		log:       log,
-		metrics:   m,
-		ctx:       ctx,
-		cancel:    cancel,
+		config:         cfg,
+		queue:          queue,
+		processor:      processor,
+		log:            log,
+		metrics:        m,
+		ctx:            ctx,
+		cancel:         cancel,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
 	}
 }
 
@@ -94,11 +99,36 @@ func (p *Pool) Start() {
 func (p *Pool) Stop() {
 	p.log.Info("Stopping worker pool...")
 
-	// Отменяем контекст
+	// Cancel the dequeue loop so workers stop picking up new matches.
 	p.cancel()
 
-	// Ждём завершения всех воркеров
-	p.wg.Wait()
+	// Wait for all workers (including in-flight matches) to finish.
+	// In-flight matches use shutdownCtx, which is still alive at this point,
+	// so they continue processing until their individual timeout expires.
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	// Give in-flight matches up to Timeout to finish, then force-cancel.
+	grace := p.config.Timeout
+	if grace == 0 {
+		grace = 30 * time.Second
+	}
+	select {
+	case <-done:
+		// All workers finished within grace period
+	case <-time.After(grace):
+		p.log.Warn("Grace period expired, cancelling in-flight matches",
+			zap.Duration("grace_period", grace),
+		)
+		p.shutdownCancel()
+		<-done // Wait for workers to react to cancellation
+	}
+
+	// Ensure shutdownCtx is always cleaned up.
+	p.shutdownCancel()
 
 	p.log.Info("Worker pool stopped",
 		zap.Int64("matches_processed", p.matchesProcessed.Load()),
@@ -211,10 +241,10 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	start := time.Now()
 	p.metrics.RecordMatchStart()
 
-	// Derive processCtx from pool context (not workerCtx) so that
-	// scale-down cancellation does not kill in-flight matches.
-	// Pool shutdown (p.ctx cancel) still stops everything.
-	processCtx, processCancel := context.WithTimeout(p.ctx, p.config.Timeout)
+	// Derive processCtx from shutdownCtx so that scale-down (workerCtx cancel)
+	// does NOT kill in-flight matches, but pool shutdown CAN signal them after
+	// the grace period expires. Each match also has its individual timeout.
+	processCtx, processCancel := context.WithTimeout(p.shutdownCtx, p.config.Timeout)
 	defer processCancel()
 
 	// Обрабатываем с retry

@@ -64,7 +64,7 @@ type TournamentGameStatusRepository interface {
 // GameRatingRepository интерфейс для сброса рейтингов
 type GameRatingRepository interface {
 	ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error)
-	DeleteRatingHistoryForGame(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, error)
+	DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error)
 }
 
 // GameMatchResetRepository интерфейс для удаления матчей
@@ -468,7 +468,14 @@ func (h *GameHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
 
 	// Status filter
 	if status := r.URL.Query().Get("status"); status != "" {
-		filter.Status = domain.MatchStatus(status)
+		s := domain.MatchStatus(status)
+		switch s {
+		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed:
+			filter.Status = s
+		default:
+			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed"))
+			return
+		}
 	}
 
 	// Pagination

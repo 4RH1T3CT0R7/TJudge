@@ -504,11 +504,9 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 
 // GetLeaderboard получает таблицу лидеров турнира
 func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
-	// Проверяем кэш
-	cached, err := s.leaderboardCache.GetTop(ctx, tournamentID, limit)
-	if err == nil && cached != nil && len(cached) > 0 {
-		return cached, nil
-	}
+	// NOTE: The leaderboard cache (Redis sorted set) only stores ProgramID + Rating.
+	// It does not contain ProgramName, TeamID, TeamName, Wins, Losses, Draws, TotalGames.
+	// Therefore we always query the DB to return complete data to the API.
 
 	// Получаем из БД
 	leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)

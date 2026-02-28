@@ -88,7 +88,14 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Status filter
 	if status := r.URL.Query().Get("status"); status != "" {
-		filter.Status = domain.TournamentStatus(status)
+		s := domain.TournamentStatus(status)
+		switch s {
+		case domain.TournamentPending, domain.TournamentActive, domain.TournamentCompleted, domain.TournamentCancelled:
+			filter.Status = s
+		default:
+			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, active, completed, cancelled"))
+			return
+		}
 	}
 
 	// Game type filter

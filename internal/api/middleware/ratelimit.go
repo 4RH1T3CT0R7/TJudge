@@ -3,10 +3,10 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -90,21 +90,13 @@ func isLocalhost(ip string) bool {
 }
 
 // getClientIP извлекает IP адрес клиента из запроса.
-// X-Forwarded-For может contain a comma-separated list of IPs when multiple
-// proxies are involved: "client, proxy1, proxy2". The leftmost (first) entry
-// is the original client IP.
+// Uses RemoteAddr which is already set by chi's RealIP middleware
+// from trusted proxy headers. Don't re-read raw headers to avoid
+// spoofing bypass.
 func getClientIP(r *http.Request) string {
-	// Проверяем заголовки прокси
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first (leftmost) IP — the original client address.
-		if idx := strings.IndexByte(xff, ','); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" {
-		return ip
-	}
-	// Используем RemoteAddr
-	return r.RemoteAddr
+	return host
 }
