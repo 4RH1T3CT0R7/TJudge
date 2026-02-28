@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -44,8 +45,8 @@ func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath strin
 	return &Executor{
 		config:           cfg,
 		dockerClient:     cli,
-		programsPath:     programsPath,
-		hostProgramsPath: hostProgramsPath,
+		programsPath:     filepath.Clean(programsPath),
+		hostProgramsPath: filepath.Clean(hostProgramsPath),
 		containerPath:    "/programs", // Фиксированный путь внутри контейнера
 		log:              log,
 	}, nil
@@ -238,8 +239,9 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	}
 	defer logs.Close()
 
-	// Читаем логи используя stdcopy для демультиплексирования
-	// Limit combined log output to 2MB to prevent OOM from malicious programs
+	// Читаем логи используя stdcopy для демультиплексирования.
+	// maxLogSize (1MB) — лимит на каждый поток; LimitReader получает
+	// maxLogSize*2 (2MB) как суммарный потолок для stdout + stderr.
 	const maxLogSize = 1 << 20
 	var stdout, stderr bytes.Buffer
 	_, err = stdcopy.StdCopy(&stdout, &stderr, io.LimitReader(logs, maxLogSize*2))
@@ -368,14 +370,31 @@ func (e *Executor) cleanup(containerID string) {
 	}
 }
 
-// hostToContainerPath преобразует путь на хосте в путь внутри контейнера
+// hostToContainerPath преобразует путь на хосте в путь внутри контейнера.
+// Применяет filepath.Clean для нормализации и отвергает пути, выходящие
+// за пределы programsPath (defense-in-depth против path traversal).
 func (e *Executor) hostToContainerPath(hostPath string) string {
-	// Если путь начинается с programsPath, заменяем на containerPath
-	if strings.HasPrefix(hostPath, e.programsPath) {
-		return strings.Replace(hostPath, e.programsPath, e.containerPath, 1)
+	cleaned := filepath.Clean(hostPath)
+
+	// Exact match of the programs directory itself
+	if cleaned == e.programsPath {
+		return e.containerPath
 	}
-	// Если путь не в programsPath, оставляем как есть (для обратной совместимости)
-	return hostPath
+
+	// Must be a proper subdirectory (with separator) to prevent
+	// sibling directory false positives like /data/programs-evil
+	prefix := e.programsPath + string(filepath.Separator)
+	if strings.HasPrefix(cleaned, prefix) {
+		return e.containerPath + cleaned[len(e.programsPath):]
+	}
+
+	// Path is outside programsPath — log warning for visibility
+	e.log.Warn("Path does not match programsPath prefix, using as-is",
+		zap.String("host_path", hostPath),
+		zap.String("cleaned_path", cleaned),
+		zap.String("programs_path", e.programsPath),
+	)
+	return cleaned
 }
 
 // buildCommand формирует аргументы для запуска tjudge-cli

@@ -105,7 +105,7 @@ func TestProgramHandler_Create(t *testing.T) {
 		reqBody := map[string]string{
 			"name":      "My Chess AI",
 			"game_type": "chess",
-			"code_path": "/programs/chess/ai.py",
+			"code_path": "/data/programs/chess/ai.py",
 			"language":  "python",
 		}
 
@@ -143,7 +143,7 @@ func TestProgramHandler_Create(t *testing.T) {
 		reqBody := map[string]string{
 			"name":      "My Chess AI",
 			"game_type": "chess",
-			"code_path": "/programs/chess/ai.py",
+			"code_path": "/data/programs/chess/ai.py",
 			"language":  "python",
 		}
 
@@ -185,7 +185,7 @@ func TestProgramHandler_Create(t *testing.T) {
 		reqBody := map[string]string{
 			"name":      "", // Invalid
 			"game_type": "chess",
-			"code_path": "/programs/chess/ai.py",
+			"code_path": "/data/programs/chess/ai.py",
 			"language":  "python",
 		}
 
@@ -386,7 +386,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 
@@ -429,7 +429,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 
@@ -578,7 +578,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 		programID := uuid.New()
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 
@@ -605,7 +605,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 
@@ -664,7 +664,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 
@@ -696,7 +696,7 @@ func TestProgramHandler_Update_AdditionalCases(t *testing.T) {
 
 		reqBody := map[string]string{
 			"name":      "New Name",
-			"code_path": "/new/path",
+			"code_path": "/data/programs/new/path",
 			"language":  "javascript",
 		}
 

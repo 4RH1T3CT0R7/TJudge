@@ -249,13 +249,28 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 func (p *Pool) processWithRetry(ctx context.Context, match *domain.Match) error {
 	var lastErr error
 
+	const maxRetryDelay = 30 * time.Second
 	for attempt := 1; attempt <= p.config.RetryAttempts; attempt++ {
 		if attempt > 1 {
+			delay := p.config.RetryDelay * time.Duration(attempt)
+			if delay > maxRetryDelay {
+				p.log.Warn("Retry delay capped",
+					zap.String("match_id", match.ID.String()),
+					zap.Duration("computed_delay", delay),
+					zap.Duration("capped_to", maxRetryDelay),
+				)
+				delay = maxRetryDelay
+			}
 			p.log.Info("Retrying match",
 				zap.String("match_id", match.ID.String()),
 				zap.Int("attempt", attempt),
+				zap.Duration("delay", delay),
 			)
-			time.Sleep(p.config.RetryDelay * time.Duration(attempt))
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 
 		err := p.processor.Process(ctx, match)

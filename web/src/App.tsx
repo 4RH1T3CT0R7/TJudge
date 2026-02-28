@@ -1,6 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { PageLoader } from './components/PageLoader';
@@ -19,15 +18,6 @@ const Games = lazy(() => import('./pages/Games').then(m => ({ default: m.Games }
 const TeamManagement = lazy(() => import('./pages/TeamManagement').then(m => ({ default: m.TeamManagement })));
 const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 1,
-    },
-  },
-});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, isInitialized } = useAuthStore();
@@ -131,15 +121,13 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <MotionConfig reducedMotion="user">
-          <InvaderProvider>
-            <BrowserRouter>
-              <AppContent />
-            </BrowserRouter>
-          </InvaderProvider>
-        </MotionConfig>
-      </QueryClientProvider>
+      <MotionConfig reducedMotion="user">
+        <InvaderProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </InvaderProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }

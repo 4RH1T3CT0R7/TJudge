@@ -259,11 +259,11 @@ export function TournamentDetail() {
       setTournament(tournamentData);
 
       const [teamsData, gamesData, crossGameData, matchRoundsData, gamesStatusData] = await Promise.all([
-        api.getTournamentTeams(id).catch(() => []),
-        api.getTournamentGames(id).catch(() => []),
-        api.getCrossGameLeaderboard(id).catch(() => []),
-        api.getMatchesByRounds(id).catch(() => []),
-        api.getTournamentGamesStatus(id).catch(() => []),
+        api.getTournamentTeams(id).catch(err => { console.error('Failed to load teams:', err); return []; }),
+        api.getTournamentGames(id).catch(err => { console.error('Failed to load games:', err); return []; }),
+        api.getCrossGameLeaderboard(id).catch(err => { console.error('Failed to load leaderboard:', err); return []; }),
+        api.getMatchesByRounds(id).catch(err => { console.error('Failed to load match rounds:', err); return []; }),
+        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to load games status:', err); return []; }),
       ]);
 
       setTeams(teamsData || []);
@@ -409,8 +409,8 @@ export function TournamentDetail() {
           lastPending = inProgress;
           // Refresh data
           const [leaderboardData, matchRoundsData] = await Promise.all([
-            api.getCrossGameLeaderboard(tournamentId).catch(() => []),
-            api.getMatchesByRounds(tournamentId).catch(() => []),
+            api.getCrossGameLeaderboard(tournamentId).catch(err => { console.error('Failed to refresh leaderboard:', err); return []; }),
+            api.getMatchesByRounds(tournamentId).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
           ]);
           setCrossGameLeaderboard(leaderboardData);
           setMatchRounds(matchRoundsData || []);
@@ -469,9 +469,9 @@ export function TournamentDetail() {
       waitForMatchesAndAutoRetry(id, result.enqueued).then(() => {
         // Final refresh after all matches complete
         Promise.all([
-          api.getTournamentGamesStatus(id).catch(() => []),
-          api.getMatchesByRounds(id).catch(() => []),
-          api.getCrossGameLeaderboard(id).catch(() => []),
+          api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
+          api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
+          api.getCrossGameLeaderboard(id).catch(err => { console.error('Failed to refresh leaderboard:', err); return []; }),
         ]).then(([gamesStatusData, matchRoundsData, leaderboardData]) => {
           setGamesStatus(gamesStatusData || []);
           setMatchRounds(matchRoundsData || []);
@@ -481,8 +481,8 @@ export function TournamentDetail() {
 
       // Immediate refresh
       const [gamesStatusData, matchRoundsData] = await Promise.all([
-        api.getTournamentGamesStatus(id).catch(() => []),
-        api.getMatchesByRounds(id).catch(() => []),
+        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
+        api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
       ]);
       setGamesStatus(gamesStatusData || []);
       setMatchRounds(matchRoundsData || []);
@@ -542,8 +542,8 @@ export function TournamentDetail() {
       );
       // Reload games status and matches
       const [gamesStatusData, matchRoundsData] = await Promise.all([
-        api.getTournamentGamesStatus(id).catch(() => []),
-        api.getMatchesByRounds(id).catch(() => []),
+        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
+        api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
       ]);
       setGamesStatus(gamesStatusData || []);
       setMatchRounds(matchRoundsData || []);
