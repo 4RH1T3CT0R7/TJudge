@@ -399,8 +399,12 @@ func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*do
 // BcryptCost стоимость хеширования bcrypt (12 для production security)
 const BcryptCost = 12
 
-// hashPassword хеширует пароль используя bcrypt с повышенной стоимостью
+// hashPassword хеширует пароль используя bcrypt с повышенной стоимостью.
+// bcrypt silently truncates inputs longer than 72 bytes, so we reject them explicitly.
 func (s *Service) hashPassword(password string) (string, error) {
+	if len([]byte(password)) > 72 {
+		return "", errors.ErrValidation.WithMessage("password is too long")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {
 		return "", err
@@ -408,7 +412,11 @@ func (s *Service) hashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// comparePassword сравнивает пароль с хешом
+// comparePassword сравнивает пароль с хешом.
+// Rejects passwords > 72 bytes to prevent bcrypt truncation collisions.
 func (s *Service) comparePassword(hash, password string) error {
+	if len([]byte(password)) > 72 {
+		return errors.ErrInvalidCredentials.WithMessage("invalid credentials")
+	}
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }

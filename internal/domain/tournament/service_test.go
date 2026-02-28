@@ -1178,7 +1178,7 @@ func TestService_CreateMatch(t *testing.T) {
 
 func TestService_RunAllMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, _, matchRepo, queueManager, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1187,6 +1187,7 @@ func TestService_RunAllMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, Status: domain.MatchPending},
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return(pendingMatches, nil)
 		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
 
@@ -1198,7 +1199,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1216,6 +1217,7 @@ func TestService_RunAllMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: program2ID, Rating: 1500},
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		// No pending matches -- trigger new round generation
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
@@ -1237,7 +1239,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1248,6 +1250,7 @@ func TestService_RunAllMatches(t *testing.T) {
 			Status:   domain.TournamentPending,
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 
@@ -1262,7 +1265,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("no_participants", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1273,6 +1276,7 @@ func TestService_RunAllMatches(t *testing.T) {
 			Status:   domain.TournamentActive,
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{}, nil)
@@ -1294,7 +1298,7 @@ func TestService_RunAllMatches(t *testing.T) {
 
 func TestService_RunGameMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, _, matchRepo, queueManager, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1306,6 +1310,7 @@ func TestService_RunGameMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, GameType: gameType, Status: domain.MatchPending},
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, tournamentID, gameType).Return(pendingMatches, nil)
 		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
 
@@ -1317,7 +1322,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1338,6 +1343,7 @@ func TestService_RunGameMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: program3ID},
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, tournamentID, gameType).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsByGame", ctx, tournamentID, gameType).Return(participants, nil)
@@ -1352,7 +1358,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1364,6 +1370,7 @@ func TestService_RunGameMatches(t *testing.T) {
 			Status:   domain.TournamentCompleted,
 		}
 
+		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, tournamentID, gameType).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 

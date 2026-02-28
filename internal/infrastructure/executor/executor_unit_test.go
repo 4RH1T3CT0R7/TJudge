@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
@@ -87,17 +86,19 @@ func TestBuildCommand_WithIterationsAndVerbose(t *testing.T) {
 func TestHostToContainerPath_MatchingPrefix(t *testing.T) {
 	e := newTestExecutor(t)
 
-	result := e.hostToContainerPath("/data/programs/team1/game1/v1_solution.py")
+	result, err := e.hostToContainerPath("/data/programs/team1/game1/v1_solution.py")
 
+	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1/game1/v1_solution.py", result)
 }
 
 func TestHostToContainerPath_NonMatchingPrefix(t *testing.T) {
 	e := newTestExecutor(t)
 
-	result := e.hostToContainerPath("/other/path/solution.py")
+	_, err := e.hostToContainerPath("/other/path/solution.py")
 
-	assert.Equal(t, "/other/path/solution.py", result)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "outside programs directory")
 }
 
 // --- parseResult ---
@@ -362,8 +363,9 @@ func TestBuildCommand_EmptyGameType(t *testing.T) {
 func TestHostToContainerPath_ExactMatch(t *testing.T) {
 	e := newTestExecutor(t)
 
-	result := e.hostToContainerPath("/data/programs")
+	result, err := e.hostToContainerPath("/data/programs")
 
+	require.NoError(t, err)
 	assert.Equal(t, "/programs", result)
 }
 
@@ -373,22 +375,22 @@ func TestHostToContainerPath_TraversalNormalized(t *testing.T) {
 	// Path with ".." is cleaned by filepath.Clean before prefix check,
 	// so "/data/programs/../programs/evil" becomes "/data/programs/evil"
 	// and still maps correctly under the container path.
-	result := e.hostToContainerPath("/data/programs/../programs/evil")
+	result, err := e.hostToContainerPath("/data/programs/../programs/evil")
+	require.NoError(t, err)
 	assert.Equal(t, "/programs/evil", result)
 
-	// Path that tries to escape programsPath is cleaned and does NOT
-	// match the prefix, so it stays as-is (filepath.Clean resolves ".." fully).
-	result2 := e.hostToContainerPath("/data/programs/../../etc/passwd")
-	assert.Equal(t, "/etc/passwd", result2)
-	assert.False(t, strings.HasPrefix(result2, "/programs"),
-		"traversal path should not map into container programs dir")
+	// Path that tries to escape programsPath returns error now.
+	_, err = e.hostToContainerPath("/data/programs/../../etc/passwd")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "outside programs directory")
 }
 
 func TestHostToContainerPath_DotSegments(t *testing.T) {
 	e := newTestExecutor(t)
 
 	// Redundant dot segments are cleaned
-	result := e.hostToContainerPath("/data/programs/./team1/../team1/solution.py")
+	result, err := e.hostToContainerPath("/data/programs/./team1/../team1/solution.py")
+	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1/solution.py", result)
 }
 
@@ -396,18 +398,17 @@ func TestHostToContainerPath_SiblingDirectory(t *testing.T) {
 	e := newTestExecutor(t)
 
 	// "/data/programs-evil" starts with "/data/programs" but is NOT a subdirectory.
-	// Must not be remapped.
-	result := e.hostToContainerPath("/data/programs-evil/secret.py")
-	assert.Equal(t, "/data/programs-evil/secret.py", result,
-		"sibling directory should not be remapped")
-	assert.False(t, strings.HasPrefix(result, "/programs"),
-		"sibling directory path must not map into container programs dir")
+	// Must return error, not silently pass through.
+	_, err := e.hostToContainerPath("/data/programs-evil/secret.py")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "outside programs directory")
 }
 
 func TestHostToContainerPath_TrailingSlashInput(t *testing.T) {
 	e := newTestExecutor(t)
 
 	// filepath.Clean removes trailing slash, should still match
-	result := e.hostToContainerPath("/data/programs/team1/")
+	result, err := e.hostToContainerPath("/data/programs/team1/")
+	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1", result)
 }

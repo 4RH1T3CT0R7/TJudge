@@ -41,7 +41,7 @@ COPY go.mod go.sum ./
 COPY . .
 
 # Copy frontend dist from frontend builder
-COPY --from=frontend-builder /internal/web/dist ./internal/web/dist
+COPY --from=frontend-builder /frontend/dist ./internal/web/dist
 
 # Build the binary with cache mount for faster rebuilds
 RUN --mount=type=cache,target=/root/.cache/go-build \

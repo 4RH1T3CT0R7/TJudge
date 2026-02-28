@@ -170,10 +170,21 @@ func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	return nil
 }
 
+// EnsureRatingHistoryPartitions создаёт партиции таблицы rating_history для текущего и следующего месяца.
+// Вызывается при старте приложения для гарантии наличия партиций.
+func (db *DB) EnsureRatingHistoryPartitions(ctx context.Context) error {
+	_, err := db.ExecContext(ctx, "SELECT create_rating_history_partition_if_needed()")
+	if err != nil {
+		return fmt.Errorf("ensure rating_history partitions: %w", err)
+	}
+	db.log.Info("Rating history partitions verified")
+	return nil
+}
+
 // StartPartitionMaintenance launches a background goroutine that periodically
-// ensures match partitions exist for the current and next month. This prevents
-// partition-not-found errors if the application runs for extended periods
-// without restart.
+// ensures partitions exist for the current and next month for all partitioned
+// tables (matches, rating_history). This prevents partition-not-found errors
+// if the application runs for extended periods without restart.
 func (db *DB) StartPartitionMaintenance() {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
@@ -182,11 +193,17 @@ func (db *DB) StartPartitionMaintenance() {
 		for {
 			select {
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				if err := db.EnsureMatchPartitions(ctx); err != nil {
-					db.log.Error("Periodic partition maintenance failed", zap.Error(err))
+				ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := db.EnsureMatchPartitions(ctx1); err != nil {
+					db.log.Error("Periodic match partition maintenance failed", zap.Error(err))
 				}
-				cancel()
+				cancel1()
+
+				ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := db.EnsureRatingHistoryPartitions(ctx2); err != nil {
+					db.log.Error("Periodic rating_history partition maintenance failed", zap.Error(err))
+				}
+				cancel2()
 			case <-db.done:
 				return
 			}

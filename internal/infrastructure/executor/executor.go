@@ -64,8 +64,14 @@ func (e *Executor) Execute(ctx context.Context, match *domain.Match, program1Pat
 	start := time.Now()
 
 	// Преобразуем пути к программам для использования внутри контейнера
-	containerProgram1 := e.hostToContainerPath(program1Path)
-	containerProgram2 := e.hostToContainerPath(program2Path)
+	containerProgram1, err := e.hostToContainerPath(program1Path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid program1 path: %w", err)
+	}
+	containerProgram2, err := e.hostToContainerPath(program2Path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid program2 path: %w", err)
+	}
 
 	// Создаём контекст с таймаутом
 	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
@@ -375,28 +381,23 @@ func (e *Executor) cleanup(containerID string) {
 // hostToContainerPath преобразует путь на хосте в путь внутри контейнера.
 // Применяет filepath.Clean для нормализации и отвергает пути, выходящие
 // за пределы programsPath (defense-in-depth против path traversal).
-func (e *Executor) hostToContainerPath(hostPath string) string {
+func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 	cleaned := filepath.Clean(hostPath)
 
 	// Exact match of the programs directory itself
 	if cleaned == e.programsPath {
-		return e.containerPath
+		return e.containerPath, nil
 	}
 
 	// Must be a proper subdirectory (with separator) to prevent
 	// sibling directory false positives like /data/programs-evil
 	prefix := e.programsPath + string(filepath.Separator)
 	if strings.HasPrefix(cleaned, prefix) {
-		return e.containerPath + cleaned[len(e.programsPath):]
+		return e.containerPath + cleaned[len(e.programsPath):], nil
 	}
 
-	// Path is outside programsPath — log warning for visibility
-	e.log.Warn("Path does not match programsPath prefix, using as-is",
-		zap.String("host_path", hostPath),
-		zap.String("cleaned_path", cleaned),
-		zap.String("programs_path", e.programsPath),
-	)
-	return cleaned
+	// Path is outside programsPath — return error
+	return "", fmt.Errorf("path %q is outside programs directory %q", cleaned, e.programsPath)
 }
 
 // buildCommand формирует аргументы для запуска tjudge-cli

@@ -69,10 +69,16 @@ func main() {
 		log.Fatal("Database health check failed", zap.Error(err))
 	}
 
-	// Обеспечиваем наличие партиций таблицы matches
+	// Обеспечиваем наличие партиций таблицы matches и rating_history
 	if err := database.EnsureMatchPartitions(context.Background()); err != nil {
 		log.Error("Failed to ensure match partitions", zap.Error(err))
 	}
+	if err := database.EnsureRatingHistoryPartitions(context.Background()); err != nil {
+		log.Error("Failed to ensure rating_history partitions", zap.Error(err))
+	}
+
+	// Запускаем периодическое обслуживание партиций (каждые 24ч)
+	database.StartPartitionMaintenance()
 
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)

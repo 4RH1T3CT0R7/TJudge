@@ -292,7 +292,7 @@ func Load() (*Config, error) {
 			Path:    getEnv("METRICS_PATH", "/metrics"),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: []string{getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")},
+			AllowedOrigins: splitAndTrim(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders: []string{"Content-Type", "Authorization"},
 			MaxAge:         getEnvInt("CORS_MAX_AGE", 3600),
@@ -313,6 +313,19 @@ func Load() (*Config, error) {
 }
 
 // Вспомогательные функции для чтения переменных окружения
+
+// splitAndTrim splits a comma-separated string into trimmed non-empty parts.
+func splitAndTrim(s string) []string {
+	parts := strings.Split(s, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {

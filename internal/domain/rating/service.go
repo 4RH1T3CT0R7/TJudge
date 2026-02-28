@@ -21,9 +21,9 @@ type LeaderboardCacher interface {
 type RatingRepository interface {
 	Create(ctx context.Context, history *domain.RatingHistory) error
 	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error)
-	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, newRating int) error
+	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
-	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error
+	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
 }
 
 // Service - сервис для работы с рейтингами
@@ -123,8 +123,8 @@ func (s *Service) updateParticipantRatingAndStats(
 		return err
 	}
 
-	// Атомарно обновляем рейтинг и статистику участника
-	return s.repo.UpdateParticipantRatingAndStats(ctx, match.TournamentID, programID, newRating, won, draw)
+	// Атомарно обновляем рейтинг и статистику участника (delta-based to avoid last-writer-wins race)
+	return s.repo.UpdateParticipantRatingAndStats(ctx, match.TournamentID, programID, change, won, draw)
 }
 
 // GetRatingHistory получает историю рейтинга программы

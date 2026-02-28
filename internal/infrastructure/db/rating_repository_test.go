@@ -221,7 +221,8 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating() {
 	s.addParticipant(tournament.ID, program.ID, 1500)
 
 	ctx := context.Background()
-	err := s.repo.UpdateParticipantRating(ctx, tournament.ID, program.ID, 1600)
+	// Delta-based: +100 from 1500 = 1600
+	err := s.repo.UpdateParticipantRating(ctx, tournament.ID, program.ID, 100)
 	require.NoError(s.T(), err)
 
 	// Verify the rating was updated
@@ -233,7 +234,7 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating() {
 func (s *RatingRepositorySuite) TestUpdateParticipantRating_NotFound() {
 	ctx := context.Background()
 
-	err := s.repo.UpdateParticipantRating(ctx, uuid.New(), uuid.New(), 1600)
+	err := s.repo.UpdateParticipantRating(ctx, uuid.New(), uuid.New(), 100)
 	assert.Error(s.T(), err)
 	assert.True(s.T(), errors.IsNotFound(err))
 }

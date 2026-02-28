@@ -732,6 +732,20 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 // RunAllMatches запускает все pending матчи турнира (для админа)
 // Если нет pending матчей, создаёт новый раунд round-robin матчей
 func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	// Используем distributed lock для предотвращения дублирования матчей
+	lockKey := fmt.Sprintf("tournament:run_matches:%s", tournamentID.String())
+
+	var enqueued int
+	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
+		var err error
+		enqueued, err = s.runAllMatchesLocked(ctx, tournamentID)
+		return err
+	})
+
+	return enqueued, lockErr
+}
+
+func (s *Service) runAllMatchesLocked(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	// Получаем все pending матчи
 	matches, err := s.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
 	if err != nil {
@@ -828,6 +842,20 @@ func (s *Service) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (in
 
 // RunGameMatches запускает матчи для конкретной игры в турнире
 func (s *Service) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	// Используем distributed lock для предотвращения дублирования матчей
+	lockKey := fmt.Sprintf("tournament:run_game_matches:%s:%s", tournamentID.String(), gameType)
+
+	var enqueued int
+	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
+		var err error
+		enqueued, err = s.runGameMatchesLocked(ctx, tournamentID, gameType)
+		return err
+	})
+
+	return enqueued, lockErr
+}
+
+func (s *Service) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
 	// Получаем pending матчи для конкретной игры
 	matches, err := s.matchRepo.GetPendingByTournamentAndGame(ctx, tournamentID, gameType)
 	if err != nil {

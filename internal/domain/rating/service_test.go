@@ -33,16 +33,16 @@ func (m *MockRatingRepository) GetByProgramID(ctx context.Context, programID uui
 	return args.Get(0).([]*domain.RatingHistory), args.Error(1)
 }
 
-func (m *MockRatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, newRating int) error {
-	return m.Called(ctx, tournamentID, programID, newRating).Error(0)
+func (m *MockRatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
+	return m.Called(ctx, tournamentID, programID, ratingDelta).Error(0)
 }
 
 func (m *MockRatingRepository) UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error {
 	return m.Called(ctx, tournamentID, programID, won, draw).Error(0)
 }
 
-func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error {
-	return m.Called(ctx, tournamentID, programID, newRating, won, draw).Error(0)
+func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error {
+	return m.Called(ctx, tournamentID, programID, ratingDelta, won, draw).Error(0)
 }
 
 func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
@@ -156,10 +156,10 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings (1500 vs 1500), p1 wins: new1=1516, new2=1484
+	// Equal ratings (1500 vs 1500), p1 wins: delta1=+16, delta2=-16
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1516, true, false).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1484, false, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 16, true, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, -16, false, false).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -182,10 +182,10 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings (1500 vs 1500), p2 wins: new1=1484, new2=1516
+	// Equal ratings (1500 vs 1500), p2 wins: delta1=-16, delta2=+16
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1484, false, false).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1516, true, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, -16, false, false).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 16, true, false).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -208,10 +208,10 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings, draw: no change (1500+32*(0.5-0.5)=1500)
+	// Equal ratings, draw: no change (delta=0)
 	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 1500, false, true).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 1500, false, true).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 0, false, true).Return(nil)
+	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 0, false, true).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 

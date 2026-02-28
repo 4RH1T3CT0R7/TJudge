@@ -86,15 +86,15 @@ func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID u
 	return history, nil
 }
 
-// UpdateParticipantRating обновляет рейтинг участника турнира
-func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, newRating int) error {
+// UpdateParticipantRating обновляет рейтинг участника турнира (delta-based)
+func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
 	query := `
 		UPDATE tournament_participants
-		SET rating = $3
+		SET rating = GREATEST(0, rating + $3)
 		WHERE tournament_id = $1 AND program_id = $2
 	`
 
-	result, err := r.db.ExecWithMetrics(ctx, "rating_update_participant", query, tournamentID, programID, newRating)
+	result, err := r.db.ExecWithMetrics(ctx, "rating_update_participant", query, tournamentID, programID, ratingDelta)
 	if err != nil {
 		return errors.Wrap(err, "failed to update participant rating")
 	}
@@ -227,8 +227,8 @@ func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournam
 	return rows, nil
 }
 
-// UpdateParticipantRatingAndStats atomically updates rating and stats for a participant
-func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, newRating int, won bool, draw bool) error {
+// UpdateParticipantRatingAndStats atomically updates rating (delta-based) and stats for a participant
+func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error {
 	var statsField string
 	if won {
 		statsField = "wins = wins + 1"
@@ -240,11 +240,11 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 
 	query := fmt.Sprintf(`
 		UPDATE tournament_participants
-		SET rating = $3, %s
+		SET rating = GREATEST(0, rating + $3), %s
 		WHERE tournament_id = $1 AND program_id = $2
 	`, statsField)
 
-	result, err := r.db.ExecWithMetrics(ctx, "rating_update_participant_and_stats", query, tournamentID, programID, newRating)
+	result, err := r.db.ExecWithMetrics(ctx, "rating_update_participant_and_stats", query, tournamentID, programID, ratingDelta)
 	if err != nil {
 		return errors.Wrap(err, "failed to update participant rating and stats")
 	}
