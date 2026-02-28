@@ -528,28 +528,19 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admins can view any program
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-	if userRole != domain.RoleAdmin {
-		// Проверяем владение программой
-		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
-		if err != nil {
-			h.log.LogError("Failed to check ownership", err)
-			writeError(w, err)
-			return
-		}
-		if !isOwner {
-			writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
-			return
-		}
-	}
-
 	program, err := h.programRepo.GetByID(r.Context(), id)
 	if err != nil {
 		h.log.LogError("Failed to get program", err,
 			zap.String("program_id", id.String()),
 		)
 		writeError(w, err)
+		return
+	}
+
+	// Admins can view any program; others must own it
+	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	if userRole != domain.RoleAdmin && program.UserID != userID {
+		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
 		return
 	}
 

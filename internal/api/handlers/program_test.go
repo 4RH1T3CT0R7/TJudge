@@ -303,7 +303,6 @@ func TestProgramHandler_Get(t *testing.T) {
 			Language: "python",
 		}
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(expectedProgram, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
@@ -368,8 +367,12 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		userID := uuid.New()
 		programID := uuid.New()
+		otherProgram := &domain.Program{
+			ID:     programID,
+			UserID: uuid.New(), // different user
+		}
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(otherProgram, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
 
@@ -416,7 +419,6 @@ func TestProgramHandler_Get(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrNotFound.WithMessage("program not found"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
@@ -642,7 +644,6 @@ func TestProgramHandler_Get_ServiceError(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrInternal.WithMessage("database error"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String(), nil)
