@@ -17,10 +17,11 @@ bin/
 *.out
 vendor/
 
-# Go compiled binaries (root level)
+# Go compiled binaries
 /api
 /worker
 /benchmark
+web/api
 
 # Environment and secrets
 .env
