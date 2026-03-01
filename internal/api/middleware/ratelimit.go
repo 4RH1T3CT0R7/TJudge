@@ -100,10 +100,8 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 					fallback.cleanup(10 * time.Minute)
 				}
 			} else {
-				select {
-				case <-ticker.C:
-					fallback.cleanup(10 * time.Minute)
-				}
+				<-ticker.C
+				fallback.cleanup(10 * time.Minute)
 			}
 		}
 	}()
