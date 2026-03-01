@@ -106,10 +106,17 @@ func main() {
 	// Инициализируем queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
-	// Инициализируем event bus для worker (cache handlers only, no WebSocket)
+	// Инициализируем event bus для worker
 	eventBus := events.NewSyncBus(log)
 	eventBus.Subscribe(
 		eventhandlers.NewLeaderboardCacheHandler(leaderboardCache, log),
+		events.MatchResultProcessed{},
+	)
+
+	// Redis Pub/Sub bridge: forward events to API process for WebSocket broadcast
+	redisEventPub := events.NewRedisEventPublisher(redisCache, log)
+	eventBus.Subscribe(
+		redisEventPub,
 		events.MatchResultProcessed{},
 	)
 

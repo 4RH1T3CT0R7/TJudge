@@ -162,6 +162,17 @@ func main() {
 		events.MatchesCreated{}, events.MatchResultProcessed{},
 	)
 
+	// Redis Pub/Sub bridge: receive events from worker process for WebSocket broadcast.
+	// Uses a dedicated bus so that worker-originated events only trigger broadcast,
+	// avoiding double cache updates (worker already updated its own cache).
+	wsBus := events.NewSyncBus(log)
+	wsBus.Subscribe(
+		eventhandlers.NewBroadcastHandler(wsHub, log),
+		events.MatchResultProcessed{},
+	)
+	redisEventSub := events.NewRedisEventSubscriber(redisCache, wsBus, log)
+	go redisEventSub.Start(ctx)
+
 	// Инициализируем сервисы
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
@@ -290,6 +301,9 @@ func main() {
 			log.Error("Metrics server forced to shutdown", zap.Error(err))
 		}
 	}
+
+	// Останавливаем Redis event subscriber
+	redisEventSub.Stop()
 
 	// Останавливаем WebSocket hub
 	cancel()
