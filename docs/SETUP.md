@@ -72,7 +72,7 @@ cd web && npm run dev
 | `make dev` | API с hot reload (air) |
 | `make run-api` | Запуск API сервера |
 | `make run-worker` | Запуск воркера |
-| `make test` | Unit тесты |
+| `make test` | Unit тесты (~1350 в 25 пакетах) |
 | `make test-race` | Тесты с детектором гонок |
 | `make test-coverage` | Тесты с покрытием |
 | `make lint` | Линтер (golangci-lint) |
@@ -389,5 +389,5 @@ kubectl get services -n tjudge
 
 ---
 
-*Версия документации: 2.0*
-*Последнее обновление: Январь 2026*
+*Версия документации: 3.0*
+*Последнее обновление: Март 2026*

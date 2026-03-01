@@ -11,10 +11,17 @@
 | Документ | Описание |
 |----------|----------|
 | [SETUP.md](SETUP.md) | Настройка окружения, локальная разработка, деплой |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура системы, компоненты, потоки данных |
-| [API_GUIDE.md](API_GUIDE.md) | REST API эндпоинты, WebSocket |
-| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Схема БД, миграции |
-| [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md) | Тестирование производительности |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура системы, Domain Events, компоненты, потоки данных |
+| [API_GUIDE.md](API_GUIDE.md) | REST API эндпоинты, WebSocket протокол, формат ответов |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Схема БД, таблицы, миграции, полезные запросы |
+| [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md) | Бенчмарки, нагрузочные тесты, метрики, профилирование |
+
+## Для деплоя
+
+| Документ | Описание |
+|----------|----------|
+| [SELF_HOSTED.md](SELF_HOSTED.md) | Self-hosted развёртывание с Docker Compose |
+| [SETUP.md](SETUP.md) | Production деплой, Kubernetes, blue-green, секреты |
 
 ## Быстрые ссылки
 
@@ -23,14 +30,15 @@
 docker-compose up -d
 
 # Локальная разработка
-make run-api      # API сервер
-make run-worker   # Worker
-cd web && npm run dev  # Фронтенд
+make run-api          # API сервер
+make run-worker       # Worker
+cd web && npm run dev # Фронтенд
 
 # Тестирование
-make test
-make lint
-make benchmark
+make test             # Unit тесты (~1350)
+make test-race        # С детектором гонок
+make lint             # Линтер
+make benchmark        # Бенчмарки
 ```
 
 | URL | Сервис |
@@ -40,29 +48,31 @@ make benchmark
 | http://localhost:3000 | Grafana (admin/admin) |
 | http://localhost:9092 | Prometheus |
 
-## Архитектура
+## Архитектура (обзор)
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Frontend   │────▶│     API     │────▶│  PostgreSQL │
-│  (React)    │◀────│    (Go)     │◀────│             │
-└─────────────┘     └──────┬──────┘     └─────────────┘
-                          │
-                    ┌─────▼─────┐
-                    │   Redis   │
-                    │ (очередь) │
-                    └─────┬─────┘
-                          │
-              ┌───────────┼───────────┐
-              ▼           ▼           ▼
-        ┌─────────┐ ┌─────────┐ ┌─────────┐
-        │ Worker  │ │ Worker  │ │ Worker  │
-        └────┬────┘ └────┬────┘ └────┬────┘
-             │           │           │
-        ┌────▼───────────▼───────────▼────┐
-        │      Docker (tjudge-cli)        │
-        └─────────────────────────────────┘
+│  Frontend   │────▶│     API     │────▶│  PostgreSQL  │
+│  (React)    │◀────│  (Go/Chi)   │◀────│              │
+└─────────────┘     └──────┬──────┘     └──────────────┘
+                           │ Event Bus
+                     ┌─────▼─────┐
+                     │   Redis   │
+                     │ кэш+очередь│
+                     └─────┬─────┘
+                           │
+               ┌───────────┼───────────┐
+               ▼           ▼           ▼
+         ┌─────────┐ ┌─────────┐ ┌─────────┐
+         │ Worker  │ │ Worker  │ │ Worker  │
+         └────┬────┘ └────┬────┘ └────┬────┘
+              │           │           │
+         ┌────▼───────────▼───────────▼────┐
+         │      Docker (tjudge-cli)        │
+         └─────────────────────────────────┘
 ```
+
+Подробнее: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Технологии
 
@@ -71,4 +81,5 @@ make benchmark
 | Go 1.24 | React 19 | PostgreSQL 15 |
 | Chi Router | TypeScript | Redis 7 |
 | WebSocket | Tailwind CSS 4 | Docker |
-| JWT | Zustand | Prometheus/Grafana/Loki |
+| JWT + RBAC | Zustand | Prometheus/Grafana/Loki |
+| Event Bus | Vite 7.2 | Alertmanager |

@@ -131,6 +131,7 @@ make admin EMAIL=your-email@example.com
 |-----------|------------|
 | Frontend | React 19, TypeScript, Tailwind CSS 4, Zustand |
 | API Server | Go 1.24, Chi Router, JWT, WebSocket |
+| Domain Events | In-process Event Bus — декаплинг side-effects (кэш, broadcast) от бизнес-логики |
 | Worker Pool | Go, автомасштабирование 2-100+, приоритетная очередь |
 | Database | PostgreSQL 15 (22 миграции), материализованные представления для лидерборда |
 | Cache/Queue | Redis 7, кэширование турниров/лидерборда, очередь матчей, rate limiting |
@@ -172,7 +173,7 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 | **Запуск** | `make run-api` | API сервер |
 | | `make run-worker` | Worker |
 | | `make dev` | API с hot reload (air) |
-| **Тесты** | `make test` | Unit тесты (1100+ тестов, 21 пакет) |
+| **Тесты** | `make test` | Unit тесты (1350+ тестов, 25 пакетов) |
 | | `make test-race` | С детектором гонок |
 | | `make test-coverage` | С отчётом покрытия (HTML) |
 | | `make test-integration` | Интеграционные (PostgreSQL + Redis) |
@@ -195,11 +196,21 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 | Пакет | Покрытие |
 |-------|----------|
 | errors, logger, metrics, validator, game | 100% |
-| batch, pagination, config | 93-97% |
+| batch, pagination, config, events | 93-100% |
 | auth, middleware, domain models | 89-94% |
 | rating, team, tournament | 82-92% |
-| handlers, worker | 70-74% |
-| cache, websocket, queue, storage | 53-62% |
+| handlers, worker, websocket | 70-80% |
+| cache, queue, storage | 53-62% |
+
+### Уровни тестирования
+
+| Уровень | Количество | Описание |
+|---------|------------|----------|
+| Unit | ~1350 | Бизнес-логика, handlers, middleware, cache, worker |
+| DB Integration | ~60 | PostgreSQL репозитории |
+| E2E | 18 | HTTP API через запущенный сервер |
+| Benchmark | — | Производительность компонентов |
+| Load | — | Нагрузочное тестирование API |
 
 ### CI/CD
 
@@ -242,6 +253,7 @@ TJudge/
 ├── internal/
 │   ├── api/                    # HTTP слой
 │   │   ├── handlers/           #   Обработчики запросов
+│   │   ├── httputil/           #   Общие HTTP-утилиты
 │   │   ├── middleware/         #   Auth, rate limiting, CORS, CSRF
 │   │   ├── batch/              #   Batch API
 │   │   └── routes.go           #   Маршруты
@@ -252,6 +264,10 @@ TJudge/
 │   │   ├── team/               #   Команды
 │   │   ├── game/               #   Игры
 │   │   └── models.go           #   Доменные сущности
+│   ├── events/                 # Domain Events (шина событий)
+│   │   ├── bus.go              #   SyncBus, NoopBus
+│   │   ├── events.go           #   Типы событий
+│   │   └── handlers/           #   Cache, Broadcast обработчики
 │   ├── infrastructure/         # Внешние сервисы
 │   │   ├── db/                 #   PostgreSQL репозитории
 │   │   ├── cache/              #   Redis кэширование

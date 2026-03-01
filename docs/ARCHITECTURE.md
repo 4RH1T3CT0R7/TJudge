@@ -2,95 +2,317 @@
 
 ## Обзор
 
-TJudge построен на принципах Clean Architecture и состоит из трёх основных компонентов:
+TJudge построен на принципах Clean Architecture с чётким разделением на слои:
 
-1. **API Server** — HTTP/WebSocket эндпоинты
-2. **Worker Pool** — Исполнение матчей с автомасштабированием
-3. **Executor** — Изолированные Docker-контейнеры
+1. **API Server** (`cmd/api`) — HTTP/WebSocket эндпоинты, middleware, маршрутизация
+2. **Worker Pool** (`cmd/worker`) — обработка матчей с автомасштабированием
+3. **Domain** (`internal/domain`) — бизнес-логика, не зависящая от инфраструктуры
+4. **Events** (`internal/events`) — синхронная шина событий для декаплинга side-effects
+5. **Infrastructure** (`internal/infrastructure`) — PostgreSQL, Redis, Docker, файловое хранилище
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Frontend   │────▶│  API Server │────▶│  PostgreSQL  │
+│  (React)    │◀────│   (Go/Chi)  │◀────│              │
+└─────────────┘     └──────┬──────┘     └──────────────┘
+       ▲                   │
+       │ WebSocket         │ Event Bus
+       └───────────────────┤
+                     ┌─────▼─────┐
+                     │   Redis   │
+                     │ кэш+очередь│
+                     └─────┬─────┘
+                           │
+               ┌───────────┼───────────┐
+               ▼           ▼           ▼
+         ┌─────────┐ ┌─────────┐ ┌─────────┐
+         │ Worker  │ │ Worker  │ │ Worker  │
+         └────┬────┘ └────┬────┘ └────┬────┘
+              │           │           │
+         ┌────▼───────────▼───────────▼────┐
+         │    Docker контейнеры            │
+         │    (tjudge-cli, Rust)           │
+         └─────────────────────────────────┘
+```
+
+---
 
 ## Структура проекта
 
 ```
 tjudge/
 ├── cmd/
-│   ├── api/          # Точка входа API сервера
-│   ├── worker/       # Точка входа Worker сервиса
-│   ├── migrations/   # Миграции БД
-│   └── benchmark/    # Интерпретатор бенчмарков
+│   ├── api/              # Точка входа API сервера
+│   ├── worker/           # Точка входа Worker сервиса
+│   ├── migrations/       # Инструмент миграций БД
+│   └── benchmark/        # Интерпретатор бенчмарков
 ├── internal/
-│   ├── api/          # HTTP хендлеры, middleware, маршруты
-│   ├── domain/       # Бизнес-логика
-│   │   ├── auth/     # JWT, логин, права доступа
-│   │   ├── rating/   # Расчёт ELO
-│   │   ├── tournament/ # Логика турниров
-│   │   ├── team/     # Логика команд
-│   │   ├── game/     # Логика игр
-│   │   └── models.go # Доменные сущности
-│   ├── infrastructure/
-│   │   ├── cache/    # Операции с Redis
-│   │   ├── db/       # Репозитории PostgreSQL
-│   │   ├── executor/ # Исполнение матчей в Docker
-│   │   ├── queue/    # Приоритетная очередь
-│   │   └── storage/  # Файловое хранилище программ
-│   ├── websocket/    # Real-time обновления
-│   └── worker/       # Управление пулом воркеров
-├── pkg/              # Общие утилиты
-│   ├── errors/       # Кастомные ошибки
-│   ├── logger/       # Структурированное логирование (zap)
-│   ├── metrics/      # Prometheus метрики
-│   ├── pagination/   # Курсорная пагинация
-│   └── validator/    # Валидация входных данных
-├── deployments/      # Docker, K8s, Prometheus конфиги
-└── tests/            # Интеграционные, E2E, нагрузочные, хаос-тесты
+│   ├── api/              # HTTP слой
+│   │   ├── handlers/     #   Обработчики запросов
+│   │   ├── httputil/     #   Общие HTTP-утилиты (WriteJSON, WriteError)
+│   │   ├── middleware/   #   Auth, rate limiting, CORS, CSRF, logging
+│   │   ├── batch/        #   Batch API
+│   │   └── routes.go     #   Определение маршрутов
+│   ├── domain/           # Бизнес-логика (чистый слой)
+│   │   ├── auth/         #   JWT, логин, права доступа
+│   │   ├── rating/       #   Расчёт ELO рейтингов
+│   │   ├── tournament/   #   Управление турнирами, round-robin
+│   │   ├── team/         #   Управление командами
+│   │   ├── game/         #   Управление играми
+│   │   └── models.go     #   Доменные сущности
+│   ├── events/           # Шина событий (Domain Events)
+│   │   ├── bus.go        #   Bus interface, SyncBus, NoopBus
+│   │   ├── events.go     #   Типы событий (structs)
+│   │   └── handlers/     #   Обработчики событий
+│   │       ├── cache.go  #     Инвалидация кэша
+│   │       └── broadcast.go  # WebSocket рассылка
+│   ├── infrastructure/   # Внешние сервисы
+│   │   ├── cache/        #   Redis кэширование + distributed locks
+│   │   ├── db/           #   PostgreSQL репозитории
+│   │   ├── executor/     #   Docker исполнитель матчей
+│   │   ├── queue/        #   Приоритетная очередь (Redis)
+│   │   └── storage/      #   Файловое хранилище программ
+│   ├── websocket/        # Real-time обновления (WebSocket Hub)
+│   ├── worker/           # Пул воркеров с автомасштабированием
+│   └── web/              # Встроенный фронтенд (embed.go)
+├── pkg/                  # Общие утилиты (без зависимости на internal)
+│   ├── errors/           #   AppError, предопределённые ошибки
+│   ├── logger/           #   Структурированное логирование (zap)
+│   ├── metrics/          #   Prometheus метрики
+│   ├── pagination/       #   Курсорная пагинация
+│   └── validator/        #   Валидация входных данных
+├── web/                  # React фронтенд (React 19, TypeScript, Tailwind CSS 4)
+├── migrations/           # SQL миграции (22 шт.)
+├── tests/
+│   ├── e2e/              # End-to-end тесты (18 тестов)
+│   ├── integration/      # Интеграционные тесты (PostgreSQL + Redis)
+│   ├── benchmark/        # Бенчмарки производительности
+│   ├── load/             # Нагрузочные тесты
+│   ├── performance/      # Тесты специфических сценариев
+│   └── chaos/            # Хаос-тесты устойчивости
+├── deployments/          # Prometheus, Grafana, Loki, K8s конфиги
+├── scripts/              # Деплой, бэкапы, blue-green
+├── docker/               # Dockerfiles
+└── docs/                 # Документация
 ```
+
+---
 
 ## Потоки данных
 
-### Турнирный поток
+### Турнирный жизненный цикл
 
 ```
-1. Админ создаёт турнир → API валидирует → БД сохраняет
-2. Админ добавляет игры → Связь tournament_games создаётся
-3. Команды присоединяются → Distributed lock → Команда добавлена
-4. Команды загружают программы → Программы сохраняются в storage
-5. Админ стартует раунд игры → Генерация round-robin расписания → Матчи в очередь
-6. Воркеры забирают → Исполнение в Docker → Результаты в БД → Обновление рейтингов
-7. WebSocket рассылает обновления → Клиенты получают real-time данные
+1. Админ создаёт турнир
+   API → TournamentService.Create → DB
+   → Event: TournamentCreated → [Cache.Set]
+
+2. Админ добавляет игры к турниру
+   API → TournamentService.AddGame → DB (tournament_games)
+
+3. Команды регистрируются и загружают программы
+   API → TeamService.Create → DB (teams, team_members)
+   API → ProgramService.Upload → Storage + DB (programs)
+
+4. Команды присоединяются к турниру (загружают программу)
+   API → TournamentService.Join → Distributed Lock → DB
+   → Event: ParticipantJoined → [Cache.Invalidate, Leaderboard.UpdateRating]
+
+5. Админ стартует раунд игры
+   API → TournamentService.StartGameRound → Round-robin пары → Queue
+   → Event: TournamentStarted → [Cache.Invalidate, WS.Broadcast]
+   → Event: MatchesCreated → [WS.Broadcast]
+
+6. Воркеры обрабатывают матчи
+   Worker → Queue.Dequeue → Docker Executor → tjudge-cli
+   → RatingService.ProcessMatchResult → DB (rating_history)
+   → Event: MatchResultProcessed → [Leaderboard.Update, WS.Broadcast]
+
+7. Админ завершает турнир
+   API → TournamentService.Complete → DB
+   → Event: TournamentCompleted → [Cache.Invalidate, WS.Broadcast]
 ```
 
-### Исполнение матчей
+### Исполнение матча (детально)
 
 ```
-Очередь (Redis) → Worker → Docker Executor → Результат → БД + Кэш
-     ↑                                              │
-     └──────────── Retry при ошибке ────────────────┘
+                        ┌──────────────┐
+                        │ Redis Queue  │
+                        │ (prioritized)│
+                        └──────┬───────┘
+                               │ Dequeue
+                        ┌──────▼───────┐
+                        │    Worker    │
+                        │  Processor   │
+                        └──────┬───────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │   Docker Executor   │
+                    │                     │
+                    │  ┌───────────────┐  │
+                    │  │  tjudge-cli   │  │
+                    │  │  (Rust)       │  │
+                    │  │               │  │
+                    │  │  Program1.py  │  │
+                    │  │  vs           │  │
+                    │  │  Program2.py  │  │
+                    │  └───────┬───────┘  │
+                    │          │ stdout   │
+                    └──────────┼──────────┘
+                               │ Parse result
+                    ┌──────────▼──────────┐
+                    │  Rating Service     │
+                    │  (ELO calculation)  │
+                    │                     │
+                    │  → DB update        │
+                    │  → Event publish    │
+                    └─────────────────────┘
 ```
+
+---
+
+## Domain Events
+
+### Проблема
+
+Сервисы (Tournament, Rating) напрямую вызывали cache invalidation, leaderboard update, WebSocket broadcast. Каждый метод "помнил" обо всех side-effects. Добавление нового side-effect требовало правки всех методов во всех сервисах.
+
+### Решение
+
+In-process синхронная шина событий (`internal/events/`). Сервисы эмитят события, обработчики реагируют. Side-effects декаплены от бизнес-логики.
+
+### Архитектура
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌─────────────────────┐
+│ TournamentService│───▶│   SyncBus    │───▶│ TournamentCacheHandler│
+│                 │     │   (events)   │     │ LeaderboardCacheHandler│
+│ RatingService   │───▶│              │───▶│ BroadcastHandler      │
+└─────────────────┘     └──────────────┘     └─────────────────────┘
+      Publish                                     Handle
+```
+
+### Bus interface
+
+```go
+type Handler interface {
+    Handle(ctx context.Context, event any) error
+}
+
+type Bus interface {
+    Publish(ctx context.Context, event any)
+    Subscribe(handler Handler, eventTypes ...any)
+}
+```
+
+**SyncBus** — основная реализация. `Publish` вызывает подписчиков синхронно. Ошибки обработчиков логируются (ERROR), но не прерывают цепочку — side-effects не блокируют основной flow.
+
+**NoopBus** — для unit-тестов (ничего не делает).
+
+### Типы событий
+
+| Событие | Кто публикует | Данные |
+|---------|---------------|--------|
+| `TournamentCreated` | TournamentService.Create | Tournament object |
+| `TournamentStarted` | TournamentService.Start | TournamentID, Status |
+| `TournamentCompleted` | TournamentService.Complete | TournamentID, Status |
+| `TournamentDeleted` | TournamentService.Delete | TournamentID |
+| `ParticipantJoined` | TournamentService.Join | TournamentID, ProgramID, InitialRating |
+| `MatchesCreated` | TournamentService.ScheduleMatches | TournamentID, ProgramID, MatchCount |
+| `MatchResultProcessed` | RatingService.ProcessMatchResult | TournamentID, MatchID, Program IDs, Ratings, Winner |
+| `GameRoundReset` | GameRoundHandler.ResetGameRound | TournamentID, GameID |
+
+### Обработчики
+
+**TournamentCacheHandler** — инвалидация кэша турниров:
+
+| Событие | Действие |
+|---------|----------|
+| TournamentCreated | `tournamentCache.Set(tournament)` |
+| TournamentStarted | `tournamentCache.Invalidate(id)` |
+| TournamentCompleted | `tournamentCache.Invalidate(id)` |
+| TournamentDeleted | `tournamentCache.Invalidate(id)` + `leaderboardCache.Clear(id)` |
+| ParticipantJoined | `tournamentCache.Invalidate(id)` |
+| GameRoundReset | `tournamentCache.Invalidate(id)` + `leaderboardCache.Clear(id)` |
+
+**LeaderboardCacheHandler** — обновление кэша лидерборда:
+
+| Событие | Действие |
+|---------|----------|
+| ParticipantJoined | `leaderboardCache.UpdateRating(tid, pid, initialRating)` + `InvalidateFullLeaderboard(tid)` |
+| MatchResultProcessed | `leaderboardCache.UpdateRating` x2 + `InvalidateFullLeaderboard(tid)` |
+| GameRoundReset | `leaderboardCache.Clear(tid)` |
+
+**BroadcastHandler** — WebSocket рассылка:
+
+| Событие | WebSocket тип |
+|---------|---------------|
+| TournamentStarted | `tournament_update` |
+| TournamentCompleted | `tournament_update` |
+| MatchesCreated | `matches_created` |
+| MatchResultProcessed | `match_result` |
+
+### Что НЕ является событием
+
+| Операция | Причина |
+|----------|---------|
+| Cache-aside чтение (GetByID → cache.Get/Set) | Read-path, не side-effect |
+| Leaderboard чтение (GetLeaderboard → cache.Get/Set + singleflight) | Read-path |
+| Очередь матчей (EnqueueBatch) | Основная бизнес-логика |
+| Запись в БД | Основная бизнес-логика |
+
+### Wiring
+
+**API Server** (`cmd/api/main.go`):
+```go
+eventBus := events.NewSyncBus(log)
+
+// Все обработчики
+eventBus.Subscribe(cacheHandler, TournamentCreated{}, TournamentStarted{}, ...)
+eventBus.Subscribe(leaderboardHandler, ParticipantJoined{}, MatchResultProcessed{}, ...)
+eventBus.Subscribe(broadcastHandler, TournamentStarted{}, MatchResultProcessed{}, ...)
+
+tournamentService := tournament.NewService(..., eventBus, ...)
+ratingService := rating.NewService(repo, eventBus, log)
+```
+
+**Worker** (`cmd/worker/main.go`):
+```go
+eventBus := events.NewSyncBus(log)
+
+// Worker: только cache handlers (нет WebSocket)
+eventBus.Subscribe(leaderboardHandler, MatchResultProcessed{})
+
+ratingService := rating.NewService(repo, eventBus, log)
+```
+
+---
 
 ## Ключевые компоненты
 
 ### API Server (`cmd/api`)
 
-- Chi роутер со стеком middleware
-- JWT аутентификация + RBAC (роли: user, admin)
-- Rate limiting (настраивается)
-- CSRF защита
-- Сжатие ответов (gzip)
-- WebSocket для real-time обновлений
+Chi роутер со стеком middleware:
 
-**Middleware стек:**
 ```
 Request → Recovery → Logger → CORS → Compress → RateLimit → Auth → RBAC → Handler
 ```
+
+- JWT аутентификация + RBAC (роли: `user`, `admin`)
+- Rate limiting с Redis (основной) + in-memory fallback (2x лимит при падении Redis)
+- CSRF защита, CORS, gzip-сжатие
+- Единый формат ответов через `httputil.WriteJSON` (envelope `{"data": ...}`)
+- WebSocket Hub для real-time обновлений
 
 ### Worker Pool (`internal/worker`)
 
 - Динамическое масштабирование (мин: 2, макс: 100+)
 - Приоритетная очередь (HIGH → MEDIUM → LOW)
 - Exponential backoff retry
-- Graceful shutdown
-- Recovery при панике
+- Graceful shutdown + recovery при панике
 
 **Автомасштабирование:**
+
 | Размер очереди | Действие |
 |----------------|----------|
 | > 100 задач | +10 воркеров |
@@ -99,152 +321,176 @@ Request → Recovery → Logger → CORS → Compress → RateLimit → Auth →
 
 ### Docker Executor (`internal/infrastructure/executor`)
 
-Ограничения безопасности:
-- Сеть: отключена (`--network none`)
-- Память: лимит 512MB
-- CPU: 100ms на 100ms период
-- Файловая система: read-only
-- Таймаут: 60 сек
-- Процессы: максимум 100
-- Seccomp/AppArmor профили
+Sandbox-ограничения для безопасного исполнения пользовательских программ:
+
+| Ресурс | Ограничение |
+|--------|-------------|
+| Сеть | `--network none` (отключена) |
+| Память | 512MB лимит |
+| CPU | 100ms на 100ms период |
+| Файловая система | read-only |
+| Таймаут | 60 секунд |
+| Процессы | максимум 100 |
+| Безопасность | Seccomp + AppArmor профили |
+
+### Cache (`internal/infrastructure/cache`)
+
+Многоуровневая система кэширования на Redis:
+
+| Компонент | TTL | Описание |
+|-----------|-----|----------|
+| `tournament_cache.go` | 5 мин | Кэш данных турниров (JSON) |
+| `leaderboard_cache.go` | 30 сек | Sorted set + JSON кэш лидерборда |
+| `match_cache.go` | 24ч | Результаты матчей |
+| `ratelimiter.go` | настр. | Rate limiting per-IP |
+| `token_blacklist.go` | TTL токена | Blacklist JWT при logout |
+| `distributed_lock.go` | настр. | Mutex для конкурентных операций |
+| `warmer.go` | — | Прогрев кэша при старте |
 
 ### База данных (`internal/infrastructure/db`)
 
 - Connection pooling (макс 100 соединений)
-- Prepared statements
-- Optimistic locking (поле version)
-- Партиционирование таблицы matches (помесячно)
+- Prepared statements для частых запросов
+- Optimistic locking (поле `version`) для конкурентных обновлений
+- Партиционирование таблицы `matches` (помесячно)
 - Материализованные представления для лидербордов
 
-**Репозитории:**
-- `user_repository.go` — пользователи
-- `team_repository.go` — команды
-- `program_repository.go` — программы
-- `tournament_repository.go` — турниры
-- `game_repository.go` — игры
-- `match_repository.go` — матчи
-- `rating_repository.go` — рейтинги
+---
 
-### Кэш (`internal/infrastructure/cache`)
+## Конкурентность и безопасность
 
-- Результаты матчей: TTL 24ч
-- Таблицы лидеров: TTL 30 сек
-- Distributed locks для конкурентности
-- Прогрев кэша при старте
-- Token blacklist для logout
-
-**Компоненты:**
-- `cache.go` — основной кэш
-- `leaderboard_cache.go` — кэш лидербордов
-- `match_cache.go` — кэш матчей
-- `ratelimiter.go` — rate limiting
-- `token_blacklist.go` — blacklist JWT
-- `distributed_lock.go` — распределённые блокировки
-- `warmer.go` — прогрев кэша
-
-## Конкурентность
-
-| Операция | Защита |
-|----------|--------|
-| Присоединение к команде | Distributed lock |
+| Операция | Механизм защиты |
+|----------|-----------------|
+| Присоединение к турниру | Distributed lock (Redis) |
 | Старт раунда турнира | Distributed lock + optimistic lock |
-| Обработка матчей | Atomic counters |
-| WebSocket broadcast | RWMutex |
-| Запись в БД | Транзакции |
+| Обработка результатов матчей | Atomic DB updates + event bus |
+| WebSocket broadcast | RWMutex в Hub |
+| Записи в БД | PostgreSQL транзакции |
+| Rate limiting | Redis (основной) + in-memory fallback |
+
+---
 
 ## Масштабирование
 
 ### Горизонтальное
 
-- **API**: Stateless, масштабирование репликами (за балансировщиком)
-- **Workers**: Масштабирование по размеру очереди
+- **API**: Stateless серверы за балансировщиком
+- **Workers**: Масштабирование по размеру очереди (автомасштабирование)
 - **БД**: Read replicas (опционально)
 - **Redis**: Cluster mode (опционально)
 
 ### Вертикальное
 
-- Worker pool автомасштабируется 2→100+ по нагрузке
-- Connection pool БД настраивается динамически
+- Worker pool автомасштабируется 2 → 100+ по нагрузке
+- Connection pool БД настраивается через `DB_MAX_CONNECTIONS`
+
+---
 
 ## Доменные сущности
 
 ```go
-// Основные сущности (internal/domain/models.go)
+// internal/domain/models.go — основные сущности
 
 type User struct {
-    ID           uuid.UUID
-    Username     string
-    Email        string
-    PasswordHash string
-    Role         string // "user" | "admin"
+    ID, Username, Email, PasswordHash, Role string
+}
+
+type Tournament struct {
+    ID              uuid.UUID
+    Name            string
+    Description     string
+    Status          TournamentStatus    // "pending" | "active" | "completed"
+    MaxTeamSize     int
+    MaxParticipants *int                // nil = без ограничений
+    CreatorID       *uuid.UUID
+    IsPerpetual     bool
+    Version         int                 // optimistic lock
+    Games           []TournamentGame
 }
 
 type Team struct {
-    ID           uuid.UUID
-    TournamentID uuid.UUID
-    Name         string
-    InviteCode   string
-    LeaderID     uuid.UUID
-    Members      []User
+    ID, TournamentID, Name, InviteCode string
+    LeaderID uuid.UUID
+    Members  []User
+}
+
+type Program struct {
+    ID, TeamID, GameID           uuid.UUID
+    Name, Language, FilePath     string
+    Status                       string  // "pending" | "ready" | "error"
+}
+
+type Match struct {
+    ID, TournamentID, GameID     uuid.UUID
+    Program1ID, Program2ID       uuid.UUID
+    Winner                       *int    // 1, 2, 0 (ничья), nil (не завершён)
+    Status                       string  // "pending" | "running" | "completed" | "failed"
+    Score1, Score2               int
+    Version                      int
 }
 
 type Game struct {
     ID              uuid.UUID
-    Slug            string // "prisoners_dilemma"
+    Slug            string              // "prisoners_dilemma"
     Name            string
-    Rules           string // Markdown
+    Rules           string              // Markdown
     ScoreMultiplier float64
-}
-
-type Tournament struct {
-    ID          uuid.UUID
-    Name        string
-    Description string
-    Status      string // "pending" | "active" | "completed"
-    MaxTeamSize int
-    Games       []TournamentGame
-}
-
-type TournamentGame struct {
-    TournamentID uuid.UUID
-    GameID       uuid.UUID
-    IsActive     bool
-    RoundStatus  string // "pending" | "running" | "completed"
-    RoundNumber  int
-}
-
-type Program struct {
-    ID       uuid.UUID
-    TeamID   uuid.UUID
-    GameID   uuid.UUID
-    Name     string
-    Language string
-    FilePath string
-    Status   string // "pending" | "compiling" | "ready" | "error"
-}
-
-type Match struct {
-    ID           uuid.UUID
-    TournamentID uuid.UUID
-    GameID       uuid.UUID
-    Program1ID   uuid.UUID
-    Program2ID   uuid.UUID
-    WinnerID     *uuid.UUID
-    Status       string // "pending" | "running" | "completed" | "failed"
-    Score1       int
-    Score2       int
-    RoundNumber  int
-    ErrorCode    *string
-    ErrorMessage *string
 }
 ```
 
-## Метрики
+---
 
-Основные Prometheus метрики:
+## Обработка ошибок
+
+```go
+// pkg/errors — типизированные ошибки с HTTP кодами
+var (
+    ErrNotFound         // 404
+    ErrUnauthorized     // 401
+    ErrForbidden        // 403
+    ErrValidation       // 400
+    ErrConflict         // 409
+    ErrInternal         // 500
+    ErrRateLimitExceeded // 429
+)
+```
+
+Все API ответы оборачиваются в единый формат:
+
+```json
+// Успех
+{"data": { ... }}
+
+// Ошибка
+{"error": {"code": "NOT_FOUND", "message": "..."}}
+```
+
+---
+
+## WebSocket протокол
+
+### Подключение
+
+```
+WS /api/v1/ws/tournaments/{id}?token=<jwt>
+```
+
+### Типы сообщений
+
+| Тип | Описание | Источник |
+|-----|----------|----------|
+| `leaderboard_update` | Обновление рейтинга/позиции | BroadcastHandler |
+| `match_result` | Результат матча | BroadcastHandler (MatchResultProcessed) |
+| `matches_created` | Новые матчи созданы | BroadcastHandler (MatchesCreated) |
+| `tournament_update` | Изменение статуса турнира | BroadcastHandler |
+| `round_update` | Изменение статуса раунда | Прямой вызов |
+
+---
+
+## Метрики (Prometheus)
 
 ```promql
-# HTTP метрики
+# HTTP
 tjudge_http_requests_total{method, path, status}
 tjudge_http_request_duration_seconds{method, path}
 
@@ -270,67 +516,28 @@ tjudge_db_query_duration_seconds{query_type}
 tjudge_db_connections{state}
 ```
 
-## Обработка ошибок
+---
 
-```go
-// pkg/errors определяет:
-var (
-    ErrNotFound     = errors.New("not found")           // 404
-    ErrUnauthorized = errors.New("unauthorized")        // 401
-    ErrForbidden    = errors.New("forbidden")           // 403
-    ErrValidation   = errors.New("validation error")    // 400
-    ErrConflict     = errors.New("conflict")            // 409
-    ErrInternal     = errors.New("internal error")      // 500
-)
-```
+## Тестирование
 
-Все ошибки оборачиваются с контекстом для отладки.
+| Уровень | Расположение | Количество | Описание |
+|---------|-------------|------------|----------|
+| Unit | `*_test.go` рядом с исходниками | ~1350 | Бизнес-логика, handlers, middleware, cache, worker |
+| DB Integration | `tests/integration/` | ~60 | PostgreSQL репозитории (RUN_INTEGRATION=true) |
+| E2E | `tests/e2e/` | 18 | HTTP API через запущенный сервер |
+| Benchmark | `tests/benchmark/` | — | Производительность компонентов |
+| Load | `tests/load/` | — | Нагрузочное тестирование API |
+| Chaos | `tests/chaos/` | — | Устойчивость к сбоям |
 
-## WebSocket протокол
-
-### Подключение
-
-```
-WS /api/v1/ws/tournaments/{id}?token=<jwt>
-```
-
-### Типы сообщений
-
-```json
-// Обновление лидерборда
-{
-    "type": "leaderboard_update",
-    "payload": {
-        "game_id": "uuid",
-        "entries": [
-            {"rank": 1, "team_name": "Team1", "rating": 1650}
-        ]
-    }
-}
-
-// Обновление матча
-{
-    "type": "match_update",
-    "payload": {
-        "match_id": "uuid",
-        "status": "completed",
-        "score1": 1500,
-        "score2": 1200
-    }
-}
-
-// Обновление статуса раунда
-{
-    "type": "round_update",
-    "payload": {
-        "game_id": "uuid",
-        "round_status": "running",
-        "round_number": 2
-    }
-}
+```bash
+make test               # Unit тесты (~1350)
+make test-race          # С детектором гонок
+make test-integration   # DB интеграционные
+make test-e2e           # End-to-end
+make benchmark          # Бенчмарки
 ```
 
 ---
 
-*Версия документации: 2.0*
-*Последнее обновление: Январь 2026*
+*Версия документации: 3.0*
+*Последнее обновление: Март 2026*
