@@ -50,10 +50,25 @@ func promoteToAdmin(t *testing.T, client *TestClient, userID, username, password
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var authResp AuthResponse
-	err = json.NewDecoder(resp.Body).Decode(&authResp)
+	err = decodeJSON(resp.Body, &authResp)
 	require.NoError(t, err)
 
 	return authResp.AccessToken
+}
+
+// decodeJSON decodes a JSON response body, unwrapping the {"data": ...} envelope if present.
+func decodeJSON(body io.Reader, v interface{}) error {
+	var raw json.RawMessage
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		return err
+	}
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err == nil && envelope.Data != nil {
+		return json.Unmarshal(envelope.Data, v)
+	}
+	return json.Unmarshal(raw, v)
 }
 
 // Config for E2E tests
@@ -113,7 +128,7 @@ func (c *TestClient) doRequest(method, path string, body interface{}) (*http.Res
 
 func (c *TestClient) parseResponse(resp *http.Response, v interface{}) error {
 	defer resp.Body.Close()
-	return json.NewDecoder(resp.Body).Decode(v)
+	return decodeJSON(resp.Body, v)
 }
 
 // Auth DTOs

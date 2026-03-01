@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -304,7 +303,7 @@ func TestE2E_TournamentGames(t *testing.T) {
 		ID       string `json:"id"`
 		Username string `json:"username"`
 	}
-	err = json.NewDecoder(meResp.Body).Decode(&meData)
+	err = decodeJSON(meResp.Body, &meData)
 	meResp.Body.Close()
 	require.NoError(t, err)
 

@@ -4,7 +4,6 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -110,7 +109,7 @@ func registerAndAuthAsAdmin(t *testing.T, client *TestClient, suffix string) str
 	}
 
 	var authResp AuthResponse
-	err = json.NewDecoder(resp.Body).Decode(&authResp)
+	err = decodeJSON(resp.Body, &authResp)
 	resp.Body.Close()
 	require.NoError(t, err)
 	require.NotEmpty(t, authResp.User.ID)
