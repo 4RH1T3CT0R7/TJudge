@@ -7,6 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -387,6 +391,102 @@ func TestCache_BRPop_WithItem(t *testing.T) {
 	assert.Equal(t, []string{"brpop-list", "hello"}, result)
 }
 
+func TestCache_Incr(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	val, err := c.Incr(ctx, "incr-key")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), val)
+
+	val, err = c.Incr(ctx, "incr-key")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), val)
+}
+
+func TestCache_LTrim(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "trim-list", "a", "b", "c", "d"))
+
+	err := c.LTrim(ctx, "trim-list", 0, 1)
+	require.NoError(t, err)
+
+	length, err := c.LLen(ctx, "trim-list")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), length)
+}
+
+func TestCache_SAdd_SRem(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	count, err := c.SAdd(ctx, "test-set", "member1", "member2")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+
+	// Adding same member again returns 0
+	count, err = c.SAdd(ctx, "test-set", "member1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+
+	err = c.SRem(ctx, "test-set", "member1")
+	require.NoError(t, err)
+}
+
+func TestCache_Subscribe(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	sub := c.Subscribe(ctx, "test-chan")
+	require.NotNil(t, sub)
+	_ = sub.Close()
+}
+
+func TestCache_BatchLPush(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	items := map[string][]interface{}{
+		"batch-list-a": {[]byte("a1"), []byte("a2")},
+		"batch-list-b": {[]byte("b1")},
+	}
+
+	err := c.BatchLPush(ctx, items)
+	require.NoError(t, err)
+
+	lenA, err := c.LLen(ctx, "batch-list-a")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), lenA)
+
+	lenB, err := c.LLen(ctx, "batch-list-b")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), lenB)
+}
+
+func TestCache_BatchLPush_Empty(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	err := c.BatchLPush(ctx, nil)
+	require.NoError(t, err)
+
+	err = c.BatchLPush(ctx, map[string][]interface{}{})
+	require.NoError(t, err)
+}
+
+func TestCache_Eval_WithKeys(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "eval-key", "hello", time.Minute))
+
+	result, err := c.Eval(ctx, `return redis.call("GET", KEYS[1])`, []string{"eval-key"})
+	require.NoError(t, err)
+	assert.Equal(t, "hello", result)
+}
+
 // --- Concurrency / Race Detection Tests ---
 
 func TestCache_ConcurrentReadWrite(t *testing.T) {
@@ -460,4 +560,109 @@ func TestCache_ConcurrentSortedSet(t *testing.T) {
 	results, err := c.ZRevRangeWithScores(ctx, zsetKey, 0, -1)
 	require.NoError(t, err)
 	assert.Equal(t, goroutines*iterations, len(results))
+}
+
+// TestCache_ErrorPaths closes miniredis to simulate Redis being down,
+// then verifies that every Cache operation returns an error.
+func TestCache_ErrorPaths(t *testing.T) {
+	mr := miniredis.RunT(t)
+
+	// Use MaxRetries: -1 to disable retries, a short DialTimeout, and small
+	// pool so failed connections return immediately instead of retrying.
+	client := redis.NewClient(&redis.Options{
+		Addr:        mr.Addr(),
+		MaxRetries:  -1,
+		DialTimeout: 10 * time.Millisecond,
+		PoolSize:    1,
+	})
+
+	log, _ := logger.New("error", "json")
+	m := metrics.New()
+
+	c := &Cache{
+		client:  client,
+		log:     log,
+		metrics: m,
+	}
+	ctx := context.Background()
+
+	// Close miniredis to simulate Redis being down.
+	mr.Close()
+
+	// Every operation should now return an error.
+
+	_, err := c.Get(ctx, "key")
+	assert.Error(t, err)
+
+	err = c.Set(ctx, "key", "value", time.Minute)
+	assert.Error(t, err)
+
+	err = c.Del(ctx, "key")
+	assert.Error(t, err)
+
+	_, err = c.Exists(ctx, "key")
+	assert.Error(t, err)
+
+	err = c.Expire(ctx, "key", time.Minute)
+	assert.Error(t, err)
+
+	_, err = c.Incr(ctx, "key")
+	assert.Error(t, err)
+
+	err = c.ZAdd(ctx, "key", 1.0, "member")
+	assert.Error(t, err)
+
+	_, err = c.ZRevRangeWithScores(ctx, "key", 0, -1)
+	assert.Error(t, err)
+
+	err = c.ZIncrBy(ctx, "key", 1.0, "member")
+	assert.Error(t, err)
+
+	err = c.ZRem(ctx, "key", "member")
+	assert.Error(t, err)
+
+	err = c.LPush(ctx, "key", "value")
+	assert.Error(t, err)
+
+	_, err = c.RPop(ctx, "key")
+	assert.Error(t, err)
+
+	_, err = c.BRPop(ctx, time.Millisecond, "key")
+	assert.Error(t, err)
+
+	_, err = c.LLen(ctx, "key")
+	assert.Error(t, err)
+
+	_, err = c.LRange(ctx, "key", 0, -1)
+	assert.Error(t, err)
+
+	err = c.LTrim(ctx, "key", 0, 10)
+	assert.Error(t, err)
+
+	_, err = c.SAdd(ctx, "key", "member")
+	assert.Error(t, err)
+
+	err = c.SRem(ctx, "key", "member")
+	assert.Error(t, err)
+
+	_, err = c.SetNX(ctx, "key", "value", time.Minute)
+	assert.Error(t, err)
+
+	err = c.Publish(ctx, "channel", "message")
+	assert.Error(t, err)
+
+	err = c.ReplaceList(ctx, "key", [][]byte{[]byte("value")})
+	assert.Error(t, err)
+
+	err = c.BatchLPush(ctx, map[string][]interface{}{"key": {"value"}})
+	assert.Error(t, err)
+
+	err = c.Health(ctx)
+	assert.Error(t, err)
+
+	_, err = c.Eval(ctx, "return 1", nil)
+	assert.Error(t, err)
+
+	_, _, err = c.Scan(ctx, 0, "*", 10)
+	assert.Error(t, err)
 }

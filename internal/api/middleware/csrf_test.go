@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -172,4 +173,108 @@ func TestGetCSRFToken_NoCookie(t *testing.T) {
 
 	token := GetCSRFToken(req)
 	assert.Empty(t, token)
+}
+
+func TestCSRF_POST_FormValueToken_OK(t *testing.T) {
+	config := DefaultCSRFConfig()
+	handler := newCSRFHandler(config)
+
+	// Generate a token and store it
+	token, err := generateToken(config.TokenLength)
+	assert.NoError(t, err)
+
+	tokenStore.mu.Lock()
+	tokenStore.tokens[token] = time.Now().Add(time.Duration(config.MaxAge) * time.Second)
+	tokenStore.mu.Unlock()
+	defer func() {
+		tokenStore.mu.Lock()
+		delete(tokenStore.tokens, token)
+		tokenStore.mu.Unlock()
+	}()
+
+	// POST with cookie and form value (no header) — form value is the fallback path
+	req := httptest.NewRequest("POST", "/api/v1/data?csrf_token="+token, nil)
+	req.AddCookie(&http.Cookie{Name: config.CookieName, Value: token})
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestCSRF_POST_ExpiredToken_Forbidden(t *testing.T) {
+	config := DefaultCSRFConfig()
+	handler := newCSRFHandler(config)
+
+	// Generate a token and store it with an expiry in the past
+	token, err := generateToken(config.TokenLength)
+	assert.NoError(t, err)
+
+	tokenStore.mu.Lock()
+	tokenStore.tokens[token] = time.Now().Add(-1 * time.Hour)
+	tokenStore.mu.Unlock()
+	defer func() {
+		tokenStore.mu.Lock()
+		delete(tokenStore.tokens, token)
+		tokenStore.mu.Unlock()
+	}()
+
+	req := httptest.NewRequest("POST", "/api/v1/data", nil)
+	req.AddCookie(&http.Cookie{Name: config.CookieName, Value: token})
+	req.Header.Set(config.HeaderName, token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestCSRF_POST_TokenNotInStore_Forbidden(t *testing.T) {
+	config := DefaultCSRFConfig()
+	handler := newCSRFHandler(config)
+
+	// Generate a valid token but do NOT store it in tokenStore
+	token, err := generateToken(config.TokenLength)
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/api/v1/data", nil)
+	req.AddCookie(&http.Cookie{Name: config.CookieName, Value: token})
+	req.Header.Set(config.HeaderName, token)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+func TestStartCSRFCleanup(t *testing.T) {
+	// Add an expired token to verify cleanup works
+	expiredToken, err := generateToken(CSRFTokenLength)
+	assert.NoError(t, err)
+
+	tokenStore.mu.Lock()
+	tokenStore.tokens[expiredToken] = time.Now().Add(-1 * time.Hour)
+	tokenStore.mu.Unlock()
+	defer func() {
+		tokenStore.mu.Lock()
+		delete(tokenStore.tokens, expiredToken)
+		tokenStore.mu.Unlock()
+	}()
+
+	// Start the cleanup goroutine — it uses a 10-minute ticker internally,
+	// so we just verify it starts without panic and respects cancellation.
+	ctx, cancel := context.WithCancel(context.Background())
+	StartCSRFCleanup(ctx)
+
+	// Manually trigger cleanup (the goroutine calls CleanupExpiredTokens on tick)
+	CleanupExpiredTokens()
+
+	// Verify the expired token was cleaned up
+	tokenStore.mu.RLock()
+	_, exists := tokenStore.tokens[expiredToken]
+	tokenStore.mu.RUnlock()
+	assert.False(t, exists, "Expired token should be cleaned up")
+
+	// Cancel context to stop the goroutine
+	cancel()
+
+	// Brief wait to let the goroutine exit cleanly
+	time.Sleep(50 * time.Millisecond)
 }

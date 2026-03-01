@@ -1947,6 +1947,144 @@ func TestConcurrentStart(t *testing.T) {
 // TestService_generateRoundRobinMatches_EdgeCases
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// generateCode edge cases
+// -----------------------------------------------------------------------------
+
+func TestGenerateCode(t *testing.T) {
+	t.Run("length_is_6", func(t *testing.T) {
+		code := generateCode()
+		assert.Len(t, code, 6)
+	})
+
+	t.Run("charset_excludes_ambiguous", func(t *testing.T) {
+		// Generate many codes and verify no ambiguous characters
+		for i := 0; i < 100; i++ {
+			code := generateCode()
+			for _, ch := range code {
+				assert.NotContains(t, "IOl01", string(ch), "code should not contain ambiguous characters")
+			}
+		}
+	})
+
+	t.Run("unique_codes", func(t *testing.T) {
+		seen := make(map[string]bool)
+		for i := 0; i < 50; i++ {
+			code := generateCode()
+			assert.False(t, seen[code], "duplicate code generated: %s", code)
+			seen[code] = true
+		}
+	})
+}
+
+// -----------------------------------------------------------------------------
+// GetCrossGameLeaderboard edge cases
+// -----------------------------------------------------------------------------
+
+func TestService_GetCrossGameLeaderboard_DBError(t *testing.T) {
+	service, tournamentRepo, _, _, _, _ := newTestService(t)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	tournamentRepo.On("GetCrossGameLeaderboard", ctx, tournamentID).
+		Return(nil, fmt.Errorf("db connection error"))
+
+	entries, err := service.GetCrossGameLeaderboard(ctx, tournamentID)
+	assert.Error(t, err)
+	assert.Nil(t, entries)
+}
+
+// -----------------------------------------------------------------------------
+// RetryFailedMatches edge cases
+// -----------------------------------------------------------------------------
+
+func TestService_RetryFailedMatches_ResetError(t *testing.T) {
+	service, _, matchRepo, _, _, _ := newTestService(t)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	matchRepo.On("ResetFailedMatches", ctx, tournamentID).
+		Return(0, fmt.Errorf("db error"))
+
+	count, err := service.RetryFailedMatches(ctx, tournamentID)
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestService_RetryFailedMatches_EnqueueError(t *testing.T) {
+	service, _, matchRepo, queueMgr, _, _ := newTestService(t)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	matchRepo.On("ResetFailedMatches", ctx, tournamentID).Return(2, nil)
+	matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{
+		{ID: uuid.New(), TournamentID: tournamentID, GameType: "test"},
+	}, nil)
+	queueMgr.On("EnqueueBatch", ctx, mock.Anything).Return(fmt.Errorf("redis error"))
+
+	count, err := service.RetryFailedMatches(ctx, tournamentID)
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+}
+
+// -----------------------------------------------------------------------------
+// Complete edge cases
+// -----------------------------------------------------------------------------
+
+func TestService_Complete_LockError(t *testing.T) {
+	tournamentRepo := new(MockTournamentRepository)
+	matchRepo := new(MockMatchRepository)
+	queueManager := new(MockQueueManager)
+	distributedLock := new(MockDistributedLock)
+
+	testCache := setupTestRedisCache(t)
+	defer testCache.Close()
+
+	tournamentCache := cache.NewTournamentCache(testCache)
+	leaderboardCache := cache.NewLeaderboardCache(testCache)
+
+	log, _ := logger.New("error", "json")
+
+	service := NewService(
+		tournamentRepo, matchRepo, queueManager, nil,
+		tournamentCache, leaderboardCache,
+		events.NoopBus{}, distributedLock, log,
+	)
+
+	tournamentID := uuid.New()
+
+	// Lock fails with a non-AppError → gets wrapped as ErrConflict
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(fmt.Errorf("lock unavailable"))
+
+	err := service.Complete(context.Background(), tournamentID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "could not complete tournament")
+}
+
+// -----------------------------------------------------------------------------
+// Delete edge cases
+// -----------------------------------------------------------------------------
+
+func TestService_Delete_ActiveTournament(t *testing.T) {
+	service, tournamentRepo, _, _, _, _ := newTestService(t)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active",
+		GameType: "test",
+		Status:   domain.TournamentActive,
+	}
+
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	err := service.Delete(ctx, tournamentID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete active tournament")
+}
+
 func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 	t.Run("one_participant_generates_zero_matches", func(t *testing.T) {
 		service, _, _, _, _, _ := newTestService(t)

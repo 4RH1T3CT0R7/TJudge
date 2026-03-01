@@ -431,3 +431,12 @@ func TestRedisLoginTracker_ClearAttempts(t *testing.T) {
 
 	client.AssertExpectations(t)
 }
+
+func TestInMemoryLoginTracker_Close(t *testing.T) {
+	tracker := NewInMemoryLoginTracker()
+
+	// Close should stop the cleanup goroutine without panic.
+	tracker.Close()
+
+	// Double close should panic (channel already closed) — just verify single close works.
+}

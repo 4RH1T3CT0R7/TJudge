@@ -265,6 +265,129 @@ func TestRedisEndToEnd_PublisherToSubscriber(t *testing.T) {
 	assert.Equal(t, event.NewRating1, received.NewRating1)
 }
 
+func TestRedisEventSubscriber_InvalidEnvelopeJSON(t *testing.T) {
+	client, _ := newTestRedisClient(t)
+	log := newTestLogger(t)
+	adapter := &redisCacheAdapter{client: client}
+
+	var mu sync.Mutex
+	var receivedEvents []any
+	recordingBus := &recordingBus{
+		onPublish: func(event any) {
+			mu.Lock()
+			receivedEvents = append(receivedEvents, event)
+			mu.Unlock()
+		},
+	}
+
+	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go sub.Start(ctx)
+	time.Sleep(100 * time.Millisecond)
+
+	// Publish invalid JSON (not a valid envelope).
+	err := client.Publish(ctx, defaultChannel, "not valid json{{{").Err()
+	require.NoError(t, err)
+
+	// Wait a bit — no event should be re-published.
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	assert.Empty(t, receivedEvents)
+	mu.Unlock()
+}
+
+func TestRedisEventSubscriber_InvalidEventData(t *testing.T) {
+	client, _ := newTestRedisClient(t)
+	log := newTestLogger(t)
+	adapter := &redisCacheAdapter{client: client}
+
+	var mu sync.Mutex
+	var receivedEvents []any
+	recordingBus := &recordingBus{
+		onPublish: func(event any) {
+			mu.Lock()
+			receivedEvents = append(receivedEvents, event)
+			mu.Unlock()
+		},
+	}
+
+	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go sub.Start(ctx)
+	time.Sleep(100 * time.Millisecond)
+
+	// Valid envelope but invalid data for MatchResultProcessed (UUID fields won't unmarshal from number).
+	env := envelope{Type: "MatchResultProcessed", Data: json.RawMessage(`{invalid json`)}
+	payload, _ := json.Marshal(env)
+	err := client.Publish(ctx, defaultChannel, payload).Err()
+	require.NoError(t, err)
+
+	// Wait a bit — no event should be re-published due to unmarshal error.
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	assert.Empty(t, receivedEvents)
+	mu.Unlock()
+}
+
+func TestRedisEventPublisher_Handle_PublishError(t *testing.T) {
+	log := newTestLogger(t)
+
+	// Use a failing publisher that always errors.
+	failPub := &failingPublisher{}
+	pub := NewRedisEventPublisher(failPub, log)
+
+	event := MatchResultProcessed{
+		TournamentID: uuid.New(),
+		MatchID:      uuid.New(),
+	}
+
+	err := pub.Handle(context.Background(), event)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "redis publisher: publish")
+}
+
+func TestRedisEventSubscriber_DoubleStop(t *testing.T) {
+	client, _ := newTestRedisClient(t)
+	log := newTestLogger(t)
+	adapter := &redisCacheAdapter{client: client}
+
+	sub := NewRedisEventSubscriber(adapter, NoopBus{}, log)
+
+	ctx := context.Background()
+	done := make(chan struct{})
+	go func() {
+		sub.Start(ctx)
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Double stop should not panic.
+	sub.Stop()
+	assert.NotPanics(t, func() { sub.Stop() })
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscriber did not stop within timeout")
+	}
+}
+
+// failingPublisher always returns an error on Publish.
+type failingPublisher struct{}
+
+func (f *failingPublisher) Publish(_ context.Context, _ string, _ interface{}) error {
+	return assert.AnError
+}
+
 // recordingBus is a test Bus that records all published events.
 type recordingBus struct {
 	onPublish func(event any)

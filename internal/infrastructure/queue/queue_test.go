@@ -669,6 +669,168 @@ func BenchmarkInMemoryQueue_BRPop(b *testing.B) {
 	}
 }
 
+// --- Dequeue dead-letter, dedup, purge tests ---
+
+func TestQueueManager_Dequeue_MalformedJSON_DeadLetter(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Push invalid JSON directly into the high priority queue
+	queueKey := qm.getQueueKey(domain.PriorityHigh)
+	err := qm.cache.LPush(ctx, queueKey, "not-valid-json{{{")
+	require.NoError(t, err)
+
+	// Dequeue should return an error and move the item to dead-letter queue
+	match, err := qm.Dequeue(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to unmarshal match")
+	assert.Nil(t, match)
+
+	// Verify the dead-letter queue has the item
+	dlSize, err := qm.cache.LLen(ctx, "queue:dead_letter")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), dlSize)
+}
+
+func TestQueueManager_Enqueue_Dedup_SkipsDuplicate(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	match := testMatch(domain.PriorityHigh)
+
+	// First enqueue should succeed
+	err := qm.Enqueue(ctx, match)
+	require.NoError(t, err)
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+
+	// Second enqueue of the same match should be skipped (dedup)
+	err = qm.Enqueue(ctx, match)
+	require.NoError(t, err)
+
+	size, err = qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size) // still 1, not 2
+}
+
+func TestQueueManager_PurgeInvalidMatches_AllValid(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	m1 := testMatch(domain.PriorityHigh)
+	m2 := testMatch(domain.PriorityHigh)
+	require.NoError(t, qm.Enqueue(ctx, m1))
+	require.NoError(t, qm.Enqueue(ctx, m2))
+
+	// All matches are valid
+	purged, err := qm.PurgeInvalidMatches(ctx, func(matchID string) bool {
+		return true
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), purged)
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), size)
+}
+
+func TestQueueManager_PurgeInvalidMatches_SomeInvalid(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	validMatch := testMatch(domain.PriorityMedium)
+	invalidMatch := testMatch(domain.PriorityMedium)
+	require.NoError(t, qm.Enqueue(ctx, validMatch))
+	require.NoError(t, qm.Enqueue(ctx, invalidMatch))
+
+	// Only validMatch's ID passes the validator
+	purged, err := qm.PurgeInvalidMatches(ctx, func(matchID string) bool {
+		return matchID == validMatch.ID.String()
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), purged)
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}
+
+func TestQueueManager_PurgeInvalidMatches_AllInvalid(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+
+	purged, err := qm.PurgeInvalidMatches(ctx, func(matchID string) bool {
+		return false // all invalid
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), purged)
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), size)
+}
+
+func TestQueueManager_PurgeInvalidMatches_EmptyQueue(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	purged, err := qm.PurgeInvalidMatches(ctx, func(matchID string) bool {
+		return true
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), purged)
+}
+
+func TestQueueManager_PurgeInvalidMatches_MalformedJSON(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Push invalid JSON directly
+	queueKey := qm.getQueueKey(domain.PriorityHigh)
+	err := qm.cache.LPush(ctx, queueKey, "invalid-json")
+	require.NoError(t, err)
+
+	// Also push a valid match
+	validMatch := testMatch(domain.PriorityHigh)
+	require.NoError(t, qm.Enqueue(ctx, validMatch))
+
+	purged, err := qm.PurgeInvalidMatches(ctx, func(matchID string) bool {
+		return true // all real matches are valid
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), purged) // only the invalid JSON purged
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size) // valid match remains
+}
+
+func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	match := testMatch(domain.PriorityHigh)
+	require.NoError(t, qm.Enqueue(ctx, match))
+
+	// Dequeue the match
+	dequeued, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, dequeued)
+	assert.Equal(t, match.ID, dequeued.ID)
+
+	// Now re-enqueue the same match — should be allowed since dedup was cleared
+	require.NoError(t, qm.Enqueue(ctx, match))
+
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}
+
 // --- Concurrency / Race Detection Tests ---
 
 func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {

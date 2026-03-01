@@ -423,6 +423,177 @@ func TestPool_Wait(t *testing.T) {
 	}
 }
 
+func TestPool_Scale_UpOnLargeQueue(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 2
+	cfg.MaxWorkers = 20
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	// Don't call Start() — set up state manually to avoid spawning real workers.
+	pool.totalWorkers.Store(2)
+
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(150), nil)
+
+	pool.scale()
+
+	// scale() should have spawned extra workers: target = current(2) + 10 = 12
+	// Wait for spawn goroutines to increment totalWorkers.
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers > 2
+	}, 2*time.Second, 10*time.Millisecond)
+
+	pool.Stop()
+}
+
+func TestPool_Scale_DownOnEmptyQueue(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 2
+	cfg.MaxWorkers = 20
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
+
+	// Simulate a pool that has 12 workers but an empty queue and 0 active workers.
+	// Manually populate workerCancels with dummy cancel functions so scale-down
+	// has something to cancel.
+	pool.totalWorkers.Store(12)
+	pool.activeWorkers.Store(0) // 0 < 12/2 → eligible for scale-down
+
+	dummyCancels := make([]context.CancelFunc, 12)
+	for i := range dummyCancels {
+		_, cancel := context.WithCancel(context.Background())
+		dummyCancels[i] = cancel
+	}
+	pool.workerMu.Lock()
+	pool.workerCancels = dummyCancels
+	pool.workerMu.Unlock()
+
+	pool.scale()
+
+	// scale() with queueSize < 10 and activeWorkers < currentWorkers/2
+	// → target = current(12) - 5 = 7
+	// Verify that some cancel functions were removed.
+	pool.workerMu.Lock()
+	remaining := len(pool.workerCancels)
+	pool.workerMu.Unlock()
+	assert.Equal(t, 7, remaining)
+
+	pool.Stop()
+}
+
+func TestPool_Scale_NeverBelowMin(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 3
+	cfg.MaxWorkers = 20
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
+
+	pool.Start()
+
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Even with empty queue, scale should not go below min
+	pool.scale()
+	pool.scale()
+
+	assert.GreaterOrEqual(t, pool.GetStats().TotalWorkers, cfg.MinWorkers)
+
+	pool.Stop()
+}
+
+func TestPool_Scale_NeverAboveMax(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 2
+	cfg.MaxWorkers = 5
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(200), nil)
+
+	pool.Start()
+
+	require.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Multiple scale-ups should never exceed max
+	pool.scale()
+	pool.scale()
+	pool.scale()
+
+	assert.LessOrEqual(t, pool.GetStats().TotalWorkers, cfg.MaxWorkers)
+
+	pool.Stop()
+}
+
+func TestPool_ProcessWithRetry_MatchNotFound(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 1
+	cfg.MaxWorkers = 1
+	cfg.RetryAttempts = 3
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	match := testMatch()
+
+	queue.On("Dequeue", mock.Anything).Return(match, nil).Once()
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
+
+	// Process returns ErrMatchNotFound — should be skipped (not retried), counted as success
+	processor.On("Process", mock.Anything, match).Return(ErrMatchNotFound)
+
+	pool.Start()
+
+	// Wait for the match to be dequeued and handled
+	require.Eventually(t, func() bool {
+		// MatchNotFound is treated as success (nil return), so matchesProcessed increments
+		return pool.GetStats().MatchesProcessed >= 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	pool.Stop()
+
+	// Should NOT be counted as failed
+	assert.Equal(t, int64(0), pool.GetStats().MatchesFailed)
+	// Process should only be called once (no retries)
+	processor.AssertNumberOfCalls(t, "Process", 1)
+}
+
 func TestPool_GetMatchesProcessed(t *testing.T) {
 	cfg := testConfig()
 	cfg.MinWorkers = 1

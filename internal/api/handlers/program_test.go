@@ -1708,3 +1708,178 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+
+func TestDetectLanguage(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		expected string
+	}{
+		{"python", "script.py", "python"},
+		{"go", "main.go", "go"},
+		{"cpp", "solution.cpp", "cpp"},
+		{"cc", "solution.cc", "cpp"},
+		{"c", "main.c", "c"},
+		{"rust", "lib.rs", "rust"},
+		{"java", "Main.java", "java"},
+		{"javascript", "index.js", "javascript"},
+		{"ruby", "app.rb", "ruby"},
+		{"php", "index.php", "php"},
+		{"lua", "script.lua", "lua"},
+		{"unknown_extension", "readme.txt", "unknown"},
+		{"empty_filename", "", "unknown"},
+		{"uppercase_py", "SCRIPT.PY", "python"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := detectLanguage(tt.filename)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetShebang(t *testing.T) {
+	tests := []struct {
+		name     string
+		language string
+		expected string
+	}{
+		{"python", "python", "#!/usr/bin/env python3\n"},
+		{"javascript", "javascript", "#!/usr/bin/env node\n"},
+		{"ruby", "ruby", "#!/usr/bin/env ruby\n"},
+		{"php", "php", "#!/usr/bin/env php\n"},
+		{"lua", "lua", "#!/usr/bin/env lua\n"},
+		{"go_no_shebang", "go", ""},
+		{"cpp_no_shebang", "cpp", ""},
+		{"unknown_no_shebang", "unknown", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getShebang(tt.language)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateSyntax_UnsupportedLanguage(t *testing.T) {
+	result := validateSyntax("go", "/tmp/test.go")
+	assert.Equal(t, "", result)
+}
+
+func TestProgramHandler_Download_Extra(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("invalid_program_id", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, t.TempDir(), log)
+
+		userID := uuid.New()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/bad-uuid/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "bad-uuid")
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("not_owner", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, t.TempDir(), log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("program_not_found", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, t.TempDir(), log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(nil, errors.ErrNotFound)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("no_file_path", func(t *testing.T) {
+		mockRepo := new(MockProgramRepository)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, t.TempDir(), log)
+
+		userID := uuid.New()
+		programID := uuid.New()
+
+		program := &domain.Program{
+			ID:       programID,
+			UserID:   userID,
+			Name:     "test-program",
+			FilePath: nil,
+		}
+
+		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
+
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", programID.String())
+		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		handler.Download(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		mockRepo.AssertExpectations(t)
+	})
+}

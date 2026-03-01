@@ -95,6 +95,61 @@ func TestRateLimiter_Allow_WindowExpiry(t *testing.T) {
 	assert.True(t, allowed, "request should be allowed after window expiry")
 }
 
+func TestRateLimiter_AllowWithIncr(t *testing.T) {
+	c := setupTestCache(t)
+	defer c.Close()
+
+	rl := NewRateLimiter(c)
+	ctx := context.Background()
+
+	allowed, err := rl.AllowWithIncr(ctx, "test:incr", 5, time.Minute)
+	require.NoError(t, err)
+	assert.True(t, allowed, "first request within limit should be allowed")
+}
+
+func TestRateLimiter_AllowWithIncr_ExceedsLimit(t *testing.T) {
+	c := setupTestCache(t)
+	defer c.Close()
+
+	rl := NewRateLimiter(c)
+	ctx := context.Background()
+	limit := 2
+
+	for i := 0; i < limit; i++ {
+		allowed, err := rl.AllowWithIncr(ctx, "test:incr-exceed", limit, time.Minute)
+		require.NoError(t, err)
+		assert.True(t, allowed, "request %d should be allowed", i+1)
+	}
+
+	allowed, err := rl.AllowWithIncr(ctx, "test:incr-exceed", limit, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, allowed, "request exceeding limit should be denied")
+}
+
+func TestRateLimiter_AllowWithIncr_WindowExpiry(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	rl := NewRateLimiter(c)
+	ctx := context.Background()
+	limit := 1
+	window := 10 * time.Second
+
+	allowed, err := rl.AllowWithIncr(ctx, "test:incr-expiry", limit, window)
+	require.NoError(t, err)
+	assert.True(t, allowed)
+
+	denied, err := rl.AllowWithIncr(ctx, "test:incr-expiry", limit, window)
+	require.NoError(t, err)
+	assert.False(t, denied)
+
+	mr.FastForward(window + time.Second)
+
+	allowed, err = rl.AllowWithIncr(ctx, "test:incr-expiry", limit, window)
+	require.NoError(t, err)
+	assert.True(t, allowed, "request should be allowed after window expiry")
+}
+
 func TestRateLimiter_Reset(t *testing.T) {
 	c := setupTestCache(t)
 	defer c.Close()

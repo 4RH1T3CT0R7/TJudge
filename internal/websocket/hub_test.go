@@ -365,6 +365,97 @@ func TestHub_BroadcastOtherTournament_NotReceived(t *testing.T) {
 	}
 }
 
+func TestHub_RegisterClosedClient_Skips(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+	client := newTestClient(hub, tournamentID, uuid.New())
+
+	// Pre-close the client before registration
+	client.closed = true
+	close(client.send)
+
+	hub.register <- client
+	// Give time for the register to be processed
+	time.Sleep(10 * time.Millisecond)
+
+	stats := hub.GetStats()
+	assert.Equal(t, 0, stats["total_clients"])
+	assert.Equal(t, 0, stats["tournaments"])
+}
+
+func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+	client := newTestClient(hub, tournamentID, uuid.New())
+
+	hub.register <- client
+	waitForStats(t, hub, "total_clients", 1)
+
+	// Fill the hub's broadcast channel to capacity (256)
+	for i := 0; i < 256; i++ {
+		hub.broadcast <- &Message{
+			TournamentID: tournamentID,
+			Type:         MessageTypeMatchUpdate,
+			Payload:      map[string]int{"i": i},
+		}
+	}
+
+	// The next Broadcast via public method should use the timeout path
+	// but still eventually deliver (since the hub is processing)
+	hub.Broadcast(tournamentID, string(MessageTypeLeaderboardUpdate), nil)
+
+	// Drain client send channel and verify messages were delivered
+	require.Eventually(t, func() bool {
+		return len(client.send) > 0
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestHub_ShutdownMultipleClients(t *testing.T) {
+	hub := newTestHub(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		hub.Run(ctx)
+		close(done)
+	}()
+	time.Sleep(5 * time.Millisecond)
+
+	tid1 := uuid.New()
+	tid2 := uuid.New()
+	c1 := newTestClient(hub, tid1, uuid.New())
+	c2 := newTestClient(hub, tid1, uuid.New())
+	c3 := newTestClient(hub, tid2, uuid.New())
+
+	hub.register <- c1
+	hub.register <- c2
+	hub.register <- c3
+	waitForStats(t, hub, "total_clients", 3)
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Hub.Run did not return after context cancellation")
+	}
+
+	stats := hub.GetStats()
+	assert.Equal(t, 0, stats["tournaments"])
+	assert.Equal(t, 0, stats["total_clients"])
+
+	// All clients should be closed
+	assert.True(t, c1.closed)
+	assert.True(t, c2.closed)
+	assert.True(t, c3.closed)
+}
+
 func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 	hub := newTestHub(t)
 	cancel := startHub(t, hub)
@@ -406,4 +497,73 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 	stats := hub.GetStats()
 	assert.Equal(t, 1, stats["tournaments"])
 	assert.Equal(t, numGoroutines, stats["total_clients"])
+}
+
+func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
+	hub := newTestHub(t)
+	// Do NOT start hub — broadcast channel will never be drained.
+
+	tournamentID := uuid.New()
+
+	// Fill the broadcast channel to capacity.
+	for i := 0; i < 256; i++ {
+		hub.broadcast <- &Message{
+			TournamentID: tournamentID,
+			Type:         MessageTypeMatchUpdate,
+			Payload:      i,
+		}
+	}
+
+	// This call should hit the timeout path and drop the message after ~1s.
+	done := make(chan struct{})
+	go func() {
+		hub.Broadcast(tournamentID, string(MessageTypeLeaderboardUpdate), nil)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Broadcast returned after timeout.
+	case <-time.After(3 * time.Second):
+		t.Fatal("Broadcast did not return within timeout")
+	}
+
+	// Channel should still have exactly 256 items (dropped message was not added).
+	assert.Equal(t, 256, len(hub.broadcast))
+}
+
+func TestNoopBroadcaster(t *testing.T) {
+	b := NewNoopBroadcaster()
+
+	// Should not panic.
+	assert.NotPanics(t, func() {
+		b.Broadcast(uuid.New(), "test", map[string]string{"key": "value"})
+	})
+}
+
+func TestHub_BroadcastMessage_MarshalError(t *testing.T) {
+	hub := newTestHub(t)
+	cancel := startHub(t, hub)
+	defer cancel()
+
+	tournamentID := uuid.New()
+	client := newTestClient(hub, tournamentID, uuid.New())
+
+	hub.register <- client
+	waitForStats(t, hub, "total_clients", 1)
+
+	// Send a message with a payload that can't be marshaled.
+	hub.broadcast <- &Message{
+		TournamentID: tournamentID,
+		Type:         MessageTypeMatchUpdate,
+		Payload:      make(chan int), // channels can't be marshaled
+	}
+
+	// Give the hub time to process.
+	time.Sleep(50 * time.Millisecond)
+
+	// Client should still be connected (not disconnected due to marshal error).
+	assert.Equal(t, 0, len(client.send), "no message should be sent to client")
+	stats := hub.GetStats()
+	assert.Equal(t, 1, stats["total_clients"])
 }

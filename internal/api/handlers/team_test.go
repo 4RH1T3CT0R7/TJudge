@@ -660,3 +660,54 @@ func TestTeamHandler_Delete_NotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
+
+// --- GetMembers ---
+
+func TestTeamHandler_GetMembers_Success(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	teamID := uuid.New()
+	userID := uuid.New()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req = withChiParam(req, "id", teamID.String())
+
+	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&domain.TeamWithMembers{
+		Team: domain.Team{ID: teamID, Name: "Test"},
+		Members: []domain.User{
+			{ID: userID, Username: "alice"},
+		},
+	}, nil)
+
+	rr := httptest.NewRecorder()
+	h.GetMembers(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "alice")
+}
+
+func TestTeamHandler_GetMembers_InvalidUUID(t *testing.T) {
+	h, _ := newTestTeamHandler()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req = withChiParam(req, "id", "not-uuid")
+
+	rr := httptest.NewRecorder()
+	h.GetMembers(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestTeamHandler_GetMembers_NotFound(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	teamID := uuid.New()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req = withChiParam(req, "id", teamID.String())
+
+	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(nil, errors.ErrNotFound)
+
+	rr := httptest.NewRecorder()
+	h.GetMembers(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+}

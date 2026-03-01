@@ -722,6 +722,96 @@ func TestService_JoinTeamByCode_AddMemberError(t *testing.T) {
 	teamRepo.AssertExpectations(t)
 }
 
+func TestService_LeaveTeam_LeaderWithOthers_GetMembersError(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	tID := uuid.New()
+
+	team := &domain.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID}
+	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(3, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return(nil, errors.ErrInternal)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+	assert.Error(t, err)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_RemoveMember_RemoveMemberError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	memberID := uuid.New()
+	tID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, memberID).Return(true, nil)
+	teamRepo.On("RemoveMember", ctx, teamID, memberID).Return(errors.ErrInternal)
+
+	err := svc.RemoveMember(ctx, teamID, memberID, leaderID)
+	assert.Error(t, err)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_UpdateTeamName_UpdateError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("Update", ctx, mock.Anything).Return(errors.ErrInternal)
+
+	result, err := svc.UpdateTeamName(ctx, teamID, "New Name", leaderID)
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_GetInviteLink_TeamNotFound(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(nil, errors.ErrNotFound)
+
+	link, err := svc.GetInviteLink(ctx, teamID, uuid.New(), "https://example.com")
+	assert.Error(t, err)
+	assert.Empty(t, link)
+}
+
+func TestService_JoinTeamByCode_TournamentError(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	tID := uuid.New()
+	teamID := uuid.New()
+
+	teamRepo.On("GetByCode", ctx, "MYCODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(nil, errors.ErrInternal)
+
+	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "MYCODE", UserID: uuid.New()})
+	assert.Error(t, err)
+}
+
+func TestService_JoinTeamByCode_GetMemberCountError(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	tID := uuid.New()
+	teamID := uuid.New()
+
+	teamRepo.On("GetByCode", ctx, "CODE01").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 5}, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(0, errors.ErrInternal)
+
+	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "CODE01", UserID: uuid.New()})
+	assert.Error(t, err)
+}
+
 func TestService_GetUserTeamInTournament_Success(t *testing.T) {
 	svc, teamRepo, _ := newTestTeamService(t)
 	ctx := context.Background()

@@ -404,6 +404,50 @@ func TestHostToContainerPath_SiblingDirectory(t *testing.T) {
 	assert.Contains(t, err.Error(), "outside programs directory")
 }
 
+// --- Close ---
+
+func TestClose_NilDockerClient(t *testing.T) {
+	e := newTestExecutor(t)
+	e.dockerClient = nil
+
+	err := e.Close()
+	assert.NoError(t, err)
+}
+
+// --- parseResult error message details ---
+
+func TestParseResult_ExitCode1_NoStderr(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(1, "", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Winner)
+	assert.Equal(t, 1, result.ErrorCode)
+	assert.Contains(t, result.ErrorMessage, "Программа 1")
+}
+
+func TestParseResult_ExitCode2_StderrOnly(t *testing.T) {
+	e := newTestExecutor(t)
+
+	result, err := e.parseResult(2, "", "some error details")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Winner)
+	assert.Contains(t, result.ErrorMessage, "stderr")
+	assert.Contains(t, result.ErrorMessage, "some error details")
+}
+
+func TestParseResult_ExitCode1_ShortStdout_Filtered(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// Short stdout with space (e.g. "10 15") should be filtered out
+	result, err := e.parseResult(1, "10 15", "error")
+
+	require.NoError(t, err)
+	assert.NotContains(t, result.ErrorMessage, "stdout")
+}
+
 func TestHostToContainerPath_TrailingSlashInput(t *testing.T) {
 	e := newTestExecutor(t)
 

@@ -320,3 +320,164 @@ func TestRequireUserID(t *testing.T) {
 	_, err = middleware.RequireUserID(emptyCtx)
 	assert.Error(t, err)
 }
+
+func TestOptionalAuth_NonBearerFormat(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	var handlerCalled bool
+	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		_, ok := middleware.GetUserID(r.Context())
+		assert.False(t, ok, "User ID should not be in context for non-Bearer format")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Basic abc123")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.True(t, handlerCalled, "Handler should have been called")
+	mockAuth.AssertExpectations(t)
+}
+
+func TestOptionalAuth_BlacklistedToken(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	userID := uuid.New()
+	claims := &auth.Claims{UserID: userID}
+
+	mockAuth.On("ValidateToken", "blacklisted-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "blacklisted-token").Return(true, nil)
+
+	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ok := middleware.GetUserID(r.Context())
+		assert.False(t, ok, "User ID should not be in context for blacklisted token")
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer blacklisted-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	mockAuth.AssertExpectations(t)
+}
+
+func TestOptionalAuth_GetUserFromTokenError(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	userID := uuid.New()
+	claims := &auth.Claims{UserID: userID}
+
+	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
+	mockAuth.On("GetUserFromToken", mock.Anything, "valid-token").Return(nil, errors.ErrNotFound)
+
+	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// UserID should be set from claims
+		gotID, ok := middleware.GetUserID(r.Context())
+		assert.True(t, ok, "User ID should be in context from claims")
+		assert.Equal(t, userID, gotID)
+
+		// Role should NOT be set
+		roleVal := r.Context().Value(middleware.RoleKey)
+		assert.Nil(t, roleVal, "Role should not be in context when GetUserFromToken fails")
+
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	mockAuth.AssertExpectations(t)
+}
+
+func TestAuth_BlacklistCheckError(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	userID := uuid.New()
+	claims := &auth.Claims{UserID: userID}
+
+	mockAuth.On("ValidateToken", "some-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, assert.AnError)
+
+	handlerCalled := false
+	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer some-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	assert.False(t, handlerCalled, "Handler should not be called when blacklist check fails")
+	mockAuth.AssertExpectations(t)
+}
+
+func TestAuth_GetUserFromTokenError(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	userID := uuid.New()
+	claims := &auth.Claims{UserID: userID}
+
+	mockAuth.On("ValidateToken", "some-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, nil)
+	mockAuth.On("GetUserFromToken", mock.Anything, "some-token").Return(nil, errors.ErrNotFound)
+
+	handlerCalled := false
+	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer some-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.False(t, handlerCalled, "Handler should not be called when GetUserFromToken fails")
+	mockAuth.AssertExpectations(t)
+}
+
+func TestExtractToken_ValidBearer(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer my-token")
+
+	token := middleware.ExtractToken(req)
+	assert.Equal(t, "my-token", token)
+}
+
+func TestExtractToken_EmptyHeader(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	token := middleware.ExtractToken(req)
+	assert.Equal(t, "", token)
+}
+
+func TestExtractToken_NonBearerPrefix(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Basic abc123")
+
+	token := middleware.ExtractToken(req)
+	assert.Equal(t, "", token)
+}

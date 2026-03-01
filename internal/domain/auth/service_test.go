@@ -959,3 +959,89 @@ func TestService_Register_InvalidEmail(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
+
+// --- hashPassword / comparePassword edge cases ---
+
+func TestService_hashPassword_TooLong(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	// bcrypt silently truncates > 72 bytes; hashPassword should reject explicitly
+	longPassword := string(make([]byte, 73))
+	hash, err := service.hashPassword(longPassword)
+
+	assert.Error(t, err)
+	assert.Empty(t, hash)
+	assert.Contains(t, err.Error(), "too long")
+}
+
+func TestService_hashPassword_Empty(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	hash, err := service.hashPassword("")
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+
+	// Verify empty password matches the hash
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(""))
+	assert.NoError(t, err)
+}
+
+func TestService_comparePassword_TooLong(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	hash, _ := bcrypt.GenerateFromPassword([]byte("short"), bcrypt.MinCost)
+	longPassword := string(make([]byte, 73))
+
+	err := service.comparePassword(string(hash), longPassword)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid credentials")
+}
+
+func TestService_comparePassword_InvalidHash(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	err := service.comparePassword("not-a-bcrypt-hash", "password")
+
+	assert.Error(t, err)
+}
+
+// --- Logout edge cases ---
+
+func TestService_Logout_AccessBlacklistError(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	require.NoError(t, err)
+
+	// Blacklist add fails for access token
+	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
+
+	err = service.Logout(ctx, accessToken, "")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blacklist access token")
+	blacklist.AssertExpectations(t)
+}
+
+func TestService_Logout_RefreshBlacklistError(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+
+	// Access token is invalid — that's OK for logout, it just logs
+	// Refresh token blacklist fails
+	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
+
+	err = service.Logout(ctx, "invalid-access-token", refreshToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blacklist refresh token")
+	blacklist.AssertExpectations(t)
+}

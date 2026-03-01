@@ -152,6 +152,28 @@ func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
 	assert.Equal(t, []byte("filler"), data)
 }
 
+func TestClient_sendPong_ClosedChannel_NoPanic(t *testing.T) {
+	hub := newTestHub(t)
+	tournamentID := uuid.New()
+	log, _ := logger.New("error", "json")
+
+	client := &Client{
+		hub:          hub,
+		conn:         nil,
+		send:         make(chan []byte, 1),
+		tournamentID: tournamentID,
+		userID:       uuid.New(),
+		log:          log,
+	}
+
+	// Close the channel to trigger the recover path
+	close(client.send)
+
+	assert.NotPanics(t, func() {
+		client.sendPong()
+	})
+}
+
 func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 	hub := newTestHub(t)
 	tournamentID := uuid.New()
