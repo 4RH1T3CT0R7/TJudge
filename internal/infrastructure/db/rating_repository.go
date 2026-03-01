@@ -7,8 +7,10 @@ import (
 	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 // RatingRepository - репозиторий для работы с рейтингами
@@ -259,6 +261,64 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// ProcessMatchResultAtomic выполняет все обновления рейтингов и статистики для обоих участников
+// матча в одной транзакции. Если любая операция падает — все откатываются.
+func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *rating.ParticipantUpdate) error {
+	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		for _, u := range []*rating.ParticipantUpdate{update1, update2} {
+			// Вставляем запись в историю рейтингов
+			insertQuery := `
+				INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			`
+			_, err := tx.ExecContext(ctx, insertQuery,
+				u.History.ID,
+				u.History.ProgramID,
+				u.History.TournamentID,
+				u.History.OldRating,
+				u.History.NewRating,
+				u.History.Change,
+				u.History.MatchID,
+				u.History.CreatedAt,
+			)
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("failed to create rating history for program %s", u.ProgramID))
+			}
+
+			// Атомарно обновляем рейтинг и статистику участника
+			var statsField string
+			if u.Won {
+				statsField = "wins = wins + 1"
+			} else if u.Draw {
+				statsField = "draws = draws + 1"
+			} else {
+				statsField = "losses = losses + 1"
+			}
+
+			updateQuery := fmt.Sprintf(`
+				UPDATE tournament_participants
+				SET rating = GREATEST(0, rating + $3), %s
+				WHERE tournament_id = $1 AND program_id = $2
+			`, statsField)
+
+			result, err := tx.ExecContext(ctx, updateQuery, u.TournamentID, u.ProgramID, u.RatingDelta)
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("failed to update participant rating and stats for program %s", u.ProgramID))
+			}
+
+			rows, err := result.RowsAffected()
+			if err != nil {
+				return errors.Wrap(err, "failed to get rows affected")
+			}
+			if rows == 0 {
+				return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament participant not found: program %s", u.ProgramID))
+			}
+		}
+
+		return nil
+	})
 }
 
 // DeleteRatingHistoryForGame удаляет историю рейтингов для определённой игры

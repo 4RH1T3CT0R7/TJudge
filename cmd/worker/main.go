@@ -13,6 +13,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
+	"github.com/bmstu-itstech/tjudge/internal/events"
+	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
@@ -104,8 +106,15 @@ func main() {
 	// Инициализируем queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
+	// Инициализируем event bus для worker (cache handlers only, no WebSocket)
+	eventBus := events.NewSyncBus(log)
+	eventBus.Subscribe(
+		eventhandlers.NewLeaderboardCacheHandler(leaderboardCache, log),
+		events.MatchResultProcessed{},
+	)
+
 	// Инициализируем rating service
-	ratingService := rating.NewService(ratingRepo, leaderboardCache, log)
+	ratingService := rating.NewService(ratingRepo, eventBus, log)
 
 	// Проверяем наличие образа tjudge-cli
 	checkTJudgeCLIImage(log)

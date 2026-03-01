@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -17,7 +18,7 @@ func RequireRole(requiredRoles ...domain.Role) func(http.Handler) http.Handler {
 			// Получаем роль из контекста
 			role, ok := r.Context().Value(RoleKey).(domain.Role)
 			if !ok {
-				writeError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
+				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
 				return
 			}
 
@@ -31,7 +32,7 @@ func RequireRole(requiredRoles ...domain.Role) func(http.Handler) http.Handler {
 			}
 
 			if !hasRole {
-				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
+				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
@@ -64,9 +65,9 @@ func SetUserRole(authService AuthService, log *logger.Logger) func(http.Handler)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Извлекаем токен из заголовка
-			token := extractToken(r)
+			token := ExtractToken(r)
 			if token == "" {
-				writeError(w, errors.ErrUnauthorized.WithMessage("missing or invalid authorization header"))
+				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("missing or invalid authorization header"))
 				return
 			}
 
@@ -74,7 +75,7 @@ func SetUserRole(authService AuthService, log *logger.Logger) func(http.Handler)
 			user, err := authService.GetUserFromToken(r.Context(), token)
 			if err != nil {
 				log.Info("Failed to get user from token", zap.Error(err))
-				writeError(w, errors.ErrUnauthorized.WithError(err))
+				httputil.WriteError(w, errors.ErrUnauthorized.WithError(err))
 				return
 			}
 

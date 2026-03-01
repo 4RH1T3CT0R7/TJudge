@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 // TournamentCacher интерфейс для кэширования турниров
@@ -22,11 +24,18 @@ type TournamentCacher interface {
 }
 
 // LeaderboardCacher — full interface for leaderboard cache used by the tournament service.
-// Broader than rating.LeaderboardCacher which only needs UpdateRating (interface segregation).
+// Used for cache-aside reads in GetLeaderboard/GetCrossGameLeaderboard.
 type LeaderboardCacher interface {
 	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
 	Clear(ctx context.Context, tournamentID uuid.UUID) error
+
+	// Full JSON leaderboard cache (short TTL, complete data for API responses)
+	GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+	SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error
+	GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
+	SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error
+	InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error
 }
 
 // TournamentRepository интерфейс для работы с турнирами
@@ -63,11 +72,7 @@ type MatchRepository interface {
 // QueueManager интерфейс для работы с очередями
 type QueueManager interface {
 	Enqueue(ctx context.Context, match *domain.Match) error
-}
-
-// Broadcaster интерфейс для broadcast обновлений
-type Broadcaster interface {
-	Broadcast(tournamentID uuid.UUID, messageType string, payload interface{})
+	EnqueueBatch(ctx context.Context, matches []*domain.Match) error
 }
 
 // DistributedLock интерфейс для распределённых блокировок
@@ -89,9 +94,10 @@ type Service struct {
 	gameRepo         GameRepository
 	tournamentCache  TournamentCacher
 	leaderboardCache LeaderboardCacher
-	broadcaster      Broadcaster
+	eventBus         events.Bus
 	distributedLock  DistributedLock
 	log              *logger.Logger
+	leaderboardSF    singleflight.Group
 }
 
 // NewService создаёт новый сервис турниров
@@ -102,7 +108,7 @@ func NewService(
 	gameRepo GameRepository,
 	tournamentCache TournamentCacher,
 	leaderboardCache LeaderboardCacher,
-	broadcaster Broadcaster,
+	eventBus events.Bus,
 	distributedLock DistributedLock,
 	log *logger.Logger,
 ) *Service {
@@ -113,7 +119,7 @@ func NewService(
 		gameRepo:         gameRepo,
 		tournamentCache:  tournamentCache,
 		leaderboardCache: leaderboardCache,
-		broadcaster:      broadcaster,
+		eventBus:         eventBus,
 		distributedLock:  distributedLock,
 		log:              log,
 	}
@@ -188,10 +194,8 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 		zap.String("game_type", tournament.GameType),
 	)
 
-	// Кэшируем
-	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
-		s.log.Error("Failed to cache tournament", zap.Error(err))
-	}
+	// Publish event (cache side-effects handled by event handlers)
+	s.eventBus.Publish(ctx, events.TournamentCreated{Tournament: tournament})
 
 	return tournament, nil
 }
@@ -290,13 +294,12 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 			zap.String("program_id", req.ProgramID.String()),
 		)
 
-		// Инвалидируем кэш
-		_ = s.tournamentCache.Invalidate(ctx, req.TournamentID)
-
-		// Добавляем в leaderboard кэш
-		if err := s.leaderboardCache.UpdateRating(ctx, req.TournamentID, req.ProgramID, 1500); err != nil {
-			s.log.Error("Failed to update leaderboard cache", zap.Error(err))
-		}
+		// Publish event (cache invalidation + leaderboard update handled by event handlers)
+		s.eventBus.Publish(ctx, events.ParticipantJoined{
+			TournamentID:  req.TournamentID,
+			ProgramID:     req.ProgramID,
+			InitialRating: 1500,
+		})
 
 		return nil
 	})
@@ -362,13 +365,11 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			}
 		}
 
-		// Инвалидируем кэш
-		_ = s.tournamentCache.Invalidate(ctx, tournamentID)
-
-		// Отправляем broadcast обновление
-		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
-			"status":     tournament.Status,
-			"start_time": tournament.StartTime,
+		// Publish event (cache invalidation + broadcast handled by event handlers)
+		s.eventBus.Publish(ctx, events.TournamentStarted{
+			TournamentID: tournamentID,
+			Status:       tournament.Status,
+			StartTime:    tournament.StartTime,
 		})
 
 		return nil
@@ -451,12 +452,11 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 			zap.String("tournament_id", tournamentID.String()),
 		)
 
-		_ = s.tournamentCache.Invalidate(ctx, tournamentID)
-
-		// Отправляем broadcast обновление
-		s.broadcaster.Broadcast(tournamentID, "tournament_update", map[string]interface{}{
-			"status":   tournament.Status,
-			"end_time": tournament.EndTime,
+		// Publish event (cache invalidation + broadcast handled by event handlers)
+		s.eventBus.Publish(ctx, events.TournamentCompleted{
+			TournamentID: tournamentID,
+			Status:       tournament.Status,
+			EndTime:      tournament.EndTime,
 		})
 
 		return nil
@@ -495,33 +495,50 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 		zap.String("tournament_id", tournamentID.String()),
 	)
 
-	// Инвалидируем кэш
-	_ = s.tournamentCache.Invalidate(ctx, tournamentID)
-	_ = s.leaderboardCache.Clear(ctx, tournamentID)
+	// Publish event (cache cleanup handled by event handlers)
+	s.eventBus.Publish(ctx, events.TournamentDeleted{TournamentID: tournamentID})
 
 	return nil
 }
 
 // GetLeaderboard получает таблицу лидеров турнира
 func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
-	// NOTE: The leaderboard cache (Redis sorted set) only stores ProgramID + Rating.
-	// It does not contain ProgramName, TeamID, TeamName, Wins, Losses, Draws, TotalGames.
-	// Therefore we always query the DB to return complete data to the API.
+	// Try full JSON cache first (short TTL, complete data)
+	cached, err := s.leaderboardCache.GetFullLeaderboard(ctx, tournamentID, limit)
+	if err != nil {
+		s.log.Error("Failed to get full leaderboard cache", zap.Error(err))
+	}
+	if cached != nil {
+		return cached, nil
+	}
 
-	// Получаем из БД
-	leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
+	// Cache miss — use singleflight to prevent thundering herd
+	sfKey := fmt.Sprintf("leaderboard:%s:%d", tournamentID, limit)
+	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
+		leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
+		if err != nil {
+			return nil, err
+		}
+
+		// Populate full JSON cache
+		if err := s.leaderboardCache.SetFullLeaderboard(ctx, tournamentID, limit, leaderboard); err != nil {
+			s.log.Error("Failed to set full leaderboard cache", zap.Error(err))
+		}
+
+		// Update sorted set cache for rating lookups
+		for _, entry := range leaderboard {
+			if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
+				s.log.Error("Failed to update leaderboard cache", zap.Error(err))
+			}
+		}
+
+		return leaderboard, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	// Обновляем кэш
-	for _, entry := range leaderboard {
-		if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
-			s.log.Error("Failed to update leaderboard cache", zap.Error(err))
-		}
-	}
-
-	return leaderboard, nil
+	entries, _ := val.([]*domain.LeaderboardEntry)
+	return entries, nil
 }
 
 // CreateMatch создаёт матч и добавляет в очередь
@@ -691,14 +708,9 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 			return fmt.Errorf("failed to create matches: %w", err)
 		}
 
-		// Добавляем матчи в очередь
-		for _, match := range matches {
-			if err := s.queueManager.Enqueue(ctx, match); err != nil {
-				s.log.Error("Failed to enqueue match",
-					zap.Error(err),
-					zap.String("match_id", match.ID.String()),
-				)
-			}
+		// Добавляем матчи в очередь (batch — один Redis pipeline)
+		if err := s.queueManager.EnqueueBatch(ctx, matches); err != nil {
+			return fmt.Errorf("failed to enqueue matches: %w", err)
 		}
 
 		s.log.Info("New program matches scheduled",
@@ -707,10 +719,11 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 			zap.Int("matches_created", len(matches)),
 		)
 
-		// Отправляем broadcast обновление
-		s.broadcaster.Broadcast(req.TournamentID, "matches_created", map[string]interface{}{
-			"program_id":    req.NewProgramID.String(),
-			"matches_count": len(matches),
+		// Publish event (broadcast handled by event handlers)
+		s.eventBus.Publish(ctx, events.MatchesCreated{
+			TournamentID: req.TournamentID,
+			ProgramID:    req.NewProgramID,
+			MatchCount:   len(matches),
 		})
 
 		return nil
@@ -720,12 +733,34 @@ func (s *Service) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNe
 // GetCrossGameLeaderboard возвращает кросс-игровой рейтинг турнира
 // (команда — рейтинг игры 1 — … — рейтинг игры N — позиция в турнире)
 func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
-	// Получаем все программы с их статистикой по играм
-	entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
+	// Try full JSON cache first
+	cached, err := s.leaderboardCache.GetFullCrossGameLeaderboard(ctx, tournamentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)
+		s.log.Error("Failed to get cross-game leaderboard cache", zap.Error(err))
+	}
+	if cached != nil {
+		return cached, nil
 	}
 
+	// Cache miss — use singleflight to prevent thundering herd
+	sfKey := fmt.Sprintf("crossgame:%s", tournamentID)
+	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
+		entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)
+		}
+
+		// Populate cache
+		if err := s.leaderboardCache.SetFullCrossGameLeaderboard(ctx, tournamentID, entries); err != nil {
+			s.log.Error("Failed to set cross-game leaderboard cache", zap.Error(err))
+		}
+
+		return entries, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	entries, _ := val.([]*domain.CrossGameLeaderboardEntry)
 	return entries, nil
 }
 
@@ -818,26 +853,18 @@ func (s *Service) runAllMatchesLocked(ctx context.Context, tournamentID uuid.UUI
 		}
 	}
 
-	// Добавляем все матчи в очередь
-	enqueued := 0
-	for _, match := range matches {
-		if err := s.queueManager.Enqueue(ctx, match); err != nil {
-			s.log.Error("Failed to enqueue match",
-				zap.Error(err),
-				zap.String("match_id", match.ID.String()),
-			)
-			continue
-		}
-		enqueued++
+	// Добавляем все матчи в очередь (batch — один Redis pipeline)
+	if err := s.queueManager.EnqueueBatch(ctx, matches); err != nil {
+		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 
 	s.log.Info("Admin triggered all matches",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.Int("total_pending", len(matches)),
-		zap.Int("enqueued", enqueued),
+		zap.Int("enqueued", len(matches)),
 	)
 
-	return enqueued, nil
+	return len(matches), nil
 }
 
 // RunGameMatches запускает матчи для конкретной игры в турнире
@@ -918,27 +945,19 @@ func (s *Service) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UU
 		)
 	}
 
-	// Добавляем все матчи в очередь
-	enqueued := 0
-	for _, match := range matches {
-		if err := s.queueManager.Enqueue(ctx, match); err != nil {
-			s.log.Error("Failed to enqueue match",
-				zap.Error(err),
-				zap.String("match_id", match.ID.String()),
-			)
-			continue
-		}
-		enqueued++
+	// Добавляем все матчи в очередь (batch — один Redis pipeline)
+	if err := s.queueManager.EnqueueBatch(ctx, matches); err != nil {
+		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 
 	s.log.Info("Admin triggered game matches",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.String("game_type", gameType),
 		zap.Int("total_pending", len(matches)),
-		zap.Int("enqueued", enqueued),
+		zap.Int("enqueued", len(matches)),
 	)
 
-	return enqueued, nil
+	return len(matches), nil
 }
 
 // getLatestParticipantsByGame получает последние версии программ участников для конкретной игры
@@ -1000,23 +1019,16 @@ func (s *Service) RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 
-	enqueued := 0
-	for _, match := range matches {
-		if err := s.queueManager.Enqueue(ctx, match); err != nil {
-			s.log.Error("Failed to enqueue match",
-				zap.Error(err),
-				zap.String("match_id", match.ID.String()),
-			)
-			continue
-		}
-		enqueued++
+	// Добавляем все матчи в очередь (batch — один Redis pipeline)
+	if err := s.queueManager.EnqueueBatch(ctx, matches); err != nil {
+		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 
 	s.log.Info("Admin retried failed matches",
 		zap.String("tournament_id", tournamentID.String()),
 		zap.Int64("reset_count", resetCount),
-		zap.Int("enqueued", enqueued),
+		zap.Int("enqueued", len(matches)),
 	)
 
-	return enqueued, nil
+	return len(matches), nil
 }

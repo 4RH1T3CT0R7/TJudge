@@ -17,6 +17,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
+	"github.com/bmstu-itstech/tjudge/internal/events"
+	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
@@ -117,7 +119,6 @@ func main() {
 	matchRepo := db.NewMatchRepository(database)
 	gameRepo := db.NewGameRepository(database)
 	teamRepo := db.NewTeamRepository(database)
-	ratingRepo := db.NewRatingRepository(database)
 
 	// Инициализируем кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
@@ -141,6 +142,26 @@ func main() {
 	// Start periodic CSRF token cleanup
 	middleware.StartCSRFCleanup(ctx)
 
+	// Инициализируем event bus
+	eventBus := events.NewSyncBus(log)
+
+	eventBus.Subscribe(
+		eventhandlers.NewTournamentCacheHandler(tournamentCache, leaderboardCache, log),
+		events.TournamentCreated{}, events.TournamentStarted{},
+		events.TournamentCompleted{}, events.TournamentDeleted{},
+		events.ParticipantJoined{}, events.GameRoundReset{},
+	)
+	eventBus.Subscribe(
+		eventhandlers.NewLeaderboardCacheHandler(leaderboardCache, log),
+		events.ParticipantJoined{}, events.MatchResultProcessed{},
+		events.GameRoundReset{},
+	)
+	eventBus.Subscribe(
+		eventhandlers.NewBroadcastHandler(wsHub, log),
+		events.TournamentStarted{}, events.TournamentCompleted{},
+		events.MatchesCreated{}, events.MatchResultProcessed{},
+	)
+
 	// Инициализируем сервисы
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
@@ -152,8 +173,8 @@ func main() {
 		gameRepo, // game repository for setting active game
 		tournamentCache,
 		leaderboardCache,
-		wsHub,           // broadcaster
-		distributedLock, // distributed lock
+		eventBus,
+		distributedLock,
 		log,
 	)
 
@@ -179,10 +200,10 @@ func main() {
 		teamRepo,
 		cfg.Storage.ProgramsPath, log,
 	)
-	matchHandler := handlers.NewMatchHandlerFull(matchRepo, matchCache, programRepo, queueManager, log)
+	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandler(
 		gameService, tournamentRepo, matchRepo, tournamentRepo,
-		programRepo, gameRepo, ratingRepo, matchRepo, log,
+		programRepo, gameRepo, eventBus, log,
 	)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)

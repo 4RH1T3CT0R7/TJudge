@@ -41,6 +41,7 @@ type Executor interface {
 // ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error)
 }
 
 // Processor обрабатывает матчи
@@ -94,15 +95,24 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 		return fmt.Errorf("failed to update match status: %w", err)
 	}
 
-	// Получаем программы
-	program1, err := p.programRepo.GetByID(ctx, match.Program1ID)
+	// Получаем обе программы одним запросом
+	programs, err := p.programRepo.GetByIDs(ctx, []uuid.UUID{match.Program1ID, match.Program2ID})
 	if err != nil {
-		return fmt.Errorf("failed to get program1: %w", err)
+		return fmt.Errorf("failed to get programs: %w", err)
 	}
 
-	program2, err := p.programRepo.GetByID(ctx, match.Program2ID)
-	if err != nil {
-		return fmt.Errorf("failed to get program2: %w", err)
+	programMap := make(map[uuid.UUID]*domain.Program, len(programs))
+	for _, prog := range programs {
+		programMap[prog.ID] = prog
+	}
+
+	program1, ok := programMap[match.Program1ID]
+	if !ok {
+		return fmt.Errorf("program1 %s not found", match.Program1ID)
+	}
+	program2, ok := programMap[match.Program2ID]
+	if !ok {
+		return fmt.Errorf("program2 %s not found", match.Program2ID)
 	}
 
 	// Выполняем матч через executor

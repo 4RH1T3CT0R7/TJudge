@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -94,7 +93,7 @@ func TestMatchHandler_Get(t *testing.T) {
 	t.Run("successfully get match from cache", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
 		cachedMatch := &domain.Match{
@@ -121,8 +120,7 @@ func TestMatchHandler_Get(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, cachedMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
@@ -133,7 +131,7 @@ func TestMatchHandler_Get(t *testing.T) {
 	t.Run("successfully get match from database on cache miss", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
 		dbMatch := &domain.Match{
@@ -161,8 +159,7 @@ func TestMatchHandler_Get(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, dbMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
@@ -172,7 +169,7 @@ func TestMatchHandler_Get(t *testing.T) {
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/invalid-uuid", nil)
 
@@ -190,7 +187,7 @@ func TestMatchHandler_Get(t *testing.T) {
 	t.Run("match not found", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
 
@@ -220,7 +217,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("successfully list matches", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		expectedMatches := []*domain.Match{
 			{
@@ -253,8 +250,7 @@ func TestMatchHandler_List(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
 		mockRepo.AssertExpectations(t)
@@ -263,7 +259,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("list with tournament_id filter", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		tournamentID := uuid.New()
 		expectedMatches := []*domain.Match{
@@ -294,7 +290,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("list with status filter", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		expectedMatches := []*domain.Match{
 			{
@@ -324,7 +320,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("list with pagination", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		expectedMatches := []*domain.Match{}
 
@@ -345,7 +341,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("invalid tournament_id", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?tournament_id=invalid", nil)
 		w := httptest.NewRecorder()
@@ -358,7 +354,7 @@ func TestMatchHandler_List(t *testing.T) {
 	t.Run("invalid program_id", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?program_id=invalid", nil)
 		w := httptest.NewRecorder()
@@ -375,7 +371,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 	t.Run("successfully get statistics for all matches", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		expectedStats := &db.MatchStatistics{
 			Total:     100,
@@ -395,8 +391,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response db.MatchStatistics
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, 100, response.Total)
 		assert.Equal(t, 80, response.Completed)
 
@@ -406,7 +401,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 	t.Run("successfully get statistics for specific tournament", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		tournamentID := uuid.New()
 		expectedStats := &db.MatchStatistics{
@@ -427,8 +422,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response db.MatchStatistics
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, 20, response.Total)
 
 		mockRepo.AssertExpectations(t)
@@ -437,7 +431,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 	t.Run("invalid tournament_id", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/statistics?tournament_id=invalid", nil)
 		w := httptest.NewRecorder()
@@ -450,7 +444,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 	t.Run("database error", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		mockRepo.On("GetStatistics", mock.Anything, (*uuid.UUID)(nil)).Return(nil, errors.ErrInternal.WithMessage("database error"))
 
@@ -509,7 +503,7 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		expectedStats := &queue.QueueStats{
 			High:   5,
@@ -528,8 +522,7 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response queue.QueueStats
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, int64(5), response.High)
 		assert.Equal(t, int64(10), response.Medium)
 		assert.Equal(t, int64(3), response.Low)
@@ -542,7 +535,7 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/queue/stats", nil)
 		w := httptest.NewRecorder()
@@ -557,7 +550,7 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("GetStats", mock.Anything).Return(nil, errors.ErrInternal.WithMessage("redis connection failed"))
 
@@ -580,7 +573,7 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("Clear", mock.Anything).Return(nil)
 
@@ -592,8 +585,7 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]string
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "All queues cleared successfully", response["message"])
 
 		mockQueue.AssertExpectations(t)
@@ -603,7 +595,7 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/clear", nil)
 		w := httptest.NewRecorder()
@@ -618,7 +610,7 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("Clear", mock.Anything).Return(errors.ErrInternal.WithMessage("failed to clear queues"))
 
@@ -641,7 +633,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(7), nil)
 
@@ -653,8 +645,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "Invalid matches purged successfully", response["message"])
 		assert.Equal(t, float64(7), response["purged_count"])
 
@@ -665,7 +656,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/purge", nil)
 		w := httptest.NewRecorder()
@@ -680,7 +671,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(0), errors.ErrInternal.WithMessage("purge failed"))
 
@@ -699,7 +690,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandlerFull(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
 
 		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(0), nil)
 
@@ -711,8 +702,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, float64(0), response["purged_count"])
 
 		mockQueue.AssertExpectations(t)
@@ -727,7 +717,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		match := &domain.Match{
@@ -759,8 +749,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Nil(t, response.ErrorMessage)
 
 		mockCache.AssertExpectations(t)
@@ -772,7 +761,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		emptyErr := ""
@@ -805,8 +794,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		// Empty error message is treated as no error - returned as-is
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "", *response.ErrorMessage)
@@ -820,7 +808,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		errorMsg := "runtime error: index out of bounds at line 42"
@@ -855,8 +843,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
@@ -869,7 +856,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		ownerID := uuid.New()
@@ -915,8 +902,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
@@ -930,7 +916,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		programOwnerID := uuid.New()
@@ -978,8 +964,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "Программа оппонента завершилась с ошибкой", *response.ErrorMessage)
 
@@ -993,7 +978,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		ownerID := uuid.New()
@@ -1039,8 +1024,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
@@ -1054,7 +1038,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		userID := uuid.New()
@@ -1089,8 +1073,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		// No winner means we cannot determine failed program, so error is hidden
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
@@ -1104,7 +1087,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandlerWithProgramLookup(mockRepo, mockCache, mockProgramLookup, log)
+		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		userID := uuid.New()
@@ -1144,8 +1127,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
 
@@ -1159,7 +1141,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockCache := new(MockMatchCache)
 
 		// Handler without program lookup - errors should be returned as-is
-		handler := NewMatchHandler(mockRepo, mockCache, log)
+		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
 		errorMsg := "detailed error message"
@@ -1195,8 +1177,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		// Without program lookup, filterMatchError returns match as-is
 		assert.Equal(t, errorMsg, *response.ErrorMessage)

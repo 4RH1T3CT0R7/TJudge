@@ -300,6 +300,27 @@ func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) er
 	return nil
 }
 
+// BatchLPush добавляет несколько элементов в разные списки одним pipeline-запросом.
+// items — map[key][]value, каждый value добавляется в список с ключом key.
+func (c *Cache) BatchLPush(ctx context.Context, items map[string][]interface{}) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	pipe := c.client.Pipeline()
+	for key, values := range items {
+		for _, v := range values {
+			pipe.LPush(ctx, key, v)
+		}
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.log.LogError("Redis BatchLPush failed", err)
+		return err
+	}
+	return nil
+}
+
 // Health проверяет здоровье Redis
 func (c *Cache) Health(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)

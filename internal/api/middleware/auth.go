@@ -2,10 +2,10 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -65,7 +65,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 
 			if token == "" {
 				log.Info("Missing authorization token")
-				writeError(w, errors.ErrUnauthorized)
+				httputil.WriteError(w, errors.ErrUnauthorized)
 				return
 			}
 
@@ -73,7 +73,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			claims, err := authService.ValidateToken(token)
 			if err != nil {
 				log.Info("Invalid token", zap.Error(err))
-				writeError(w, errors.ErrInvalidToken)
+				httputil.WriteError(w, errors.ErrInvalidToken)
 				return
 			}
 
@@ -81,12 +81,12 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.LogError("Failed to check token blacklist", err)
-				writeError(w, errors.ErrInternal)
+				httputil.WriteError(w, errors.ErrInternal)
 				return
 			}
 			if blacklisted {
 				log.Info("Token is blacklisted", zap.String("user_id", claims.UserID.String()))
-				writeError(w, errors.ErrUnauthorized.WithMessage("token has been revoked"))
+				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("token has been revoked"))
 				return
 			}
 
@@ -94,7 +94,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			user, err := authService.GetUserFromToken(r.Context(), token)
 			if err != nil {
 				log.LogError("Failed to get user from token", err)
-				writeError(w, errors.ErrUnauthorized.WithError(err))
+				httputil.WriteError(w, errors.ErrUnauthorized.WithError(err))
 				return
 			}
 
@@ -172,8 +172,8 @@ func RequireUserID(ctx context.Context) (uuid.UUID, error) {
 	return userID, nil
 }
 
-// extractToken извлекает токен из заголовка Authorization
-func extractToken(r *http.Request) string {
+// ExtractToken извлекает токен из заголовка Authorization
+func ExtractToken(r *http.Request) string {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return ""
@@ -185,21 +185,4 @@ func extractToken(r *http.Request) string {
 	}
 
 	return parts[1]
-}
-
-// writeError пишет ошибку в ответ
-func writeError(w http.ResponseWriter, err error) {
-	appErr := errors.ToAppError(err)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(appErr.Code)
-
-	type errorResponse struct {
-		Error string `json:"error"`
-	}
-	data, marshalErr := json.Marshal(errorResponse{Error: appErr.Message})
-	if marshalErr != nil {
-		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
-		return
-	}
-	_, _ = w.Write(data)
 }

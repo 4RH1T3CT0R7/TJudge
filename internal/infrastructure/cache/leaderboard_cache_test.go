@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,6 +145,114 @@ func TestLeaderboardCache_Remove(t *testing.T) {
 	require.Len(t, entries, 1)
 	assert.Equal(t, programB, entries[0].ProgramID)
 	assert.Equal(t, 1600, entries[0].Rating)
+}
+
+func TestLeaderboardCache_FullLeaderboard(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	entries := []*domain.LeaderboardEntry{
+		{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", Rating: 2000, Wins: 10, Losses: 2},
+		{Rank: 2, ProgramID: uuid.New(), ProgramName: "Beta", Rating: 1800, Wins: 8, Losses: 4},
+	}
+
+	t.Run("miss returns nil", func(t *testing.T) {
+		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("set and get", func(t *testing.T) {
+		err := lc.SetFullLeaderboard(ctx, tournamentID, 100, entries)
+		require.NoError(t, err)
+
+		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+		require.NoError(t, err)
+		require.Len(t, result, 2)
+		assert.Equal(t, "Alpha", result[0].ProgramName)
+		assert.Equal(t, 2000, result[0].Rating)
+		assert.Equal(t, 10, result[0].Wins)
+		assert.Equal(t, "Beta", result[1].ProgramName)
+	})
+
+	t.Run("different limits are separate cache entries", func(t *testing.T) {
+		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 50)
+		require.NoError(t, err)
+		assert.Nil(t, result) // limit=50 was never set
+	})
+
+	t.Run("TTL expiration", func(t *testing.T) {
+		mr.FastForward(fullLeaderboardTTL)
+
+		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+		require.NoError(t, err)
+		assert.Nil(t, result) // expired
+	})
+
+	t.Run("invalidate clears all limits", func(t *testing.T) {
+		_ = lc.SetFullLeaderboard(ctx, tournamentID, 100, entries)
+		_ = lc.SetFullLeaderboard(ctx, tournamentID, 50, entries[:1])
+
+		err := lc.InvalidateFullLeaderboard(ctx, tournamentID)
+		require.NoError(t, err)
+
+		r1, _ := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+		r2, _ := lc.GetFullLeaderboard(ctx, tournamentID, 50)
+		assert.Nil(t, r1)
+		assert.Nil(t, r2)
+	})
+}
+
+func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	entries := []*domain.CrossGameLeaderboardEntry{
+		{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", TotalRating: 3500, TotalWins: 15},
+	}
+
+	t.Run("miss returns nil", func(t *testing.T) {
+		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("set and get", func(t *testing.T) {
+		err := lc.SetFullCrossGameLeaderboard(ctx, tournamentID, entries)
+		require.NoError(t, err)
+
+		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		assert.Equal(t, "Alpha", result[0].ProgramName)
+		assert.Equal(t, 3500, result[0].TotalRating)
+	})
+
+	t.Run("TTL expiration", func(t *testing.T) {
+		mr.FastForward(fullLeaderboardTTL)
+
+		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+		require.NoError(t, err)
+		assert.Nil(t, result)
+	})
+
+	t.Run("Clear removes cross-game cache too", func(t *testing.T) {
+		_ = lc.SetFullCrossGameLeaderboard(ctx, tournamentID, entries)
+
+		err := lc.Clear(ctx, tournamentID)
+		require.NoError(t, err)
+
+		result, _ := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+		assert.Nil(t, result)
+	})
 }
 
 func TestLeaderboardCache_Clear(t *testing.T) {

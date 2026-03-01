@@ -135,6 +135,28 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return &program, nil
 }
 
+// GetByIDs получает программы по списку ID за один запрос
+func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
+		       code_path, file_path, language, error_message, version, created_at, updated_at
+		FROM programs
+		WHERE id = ANY($1)
+	`
+
+	var programs []*domain.Program
+	err := r.db.QueryWithMetrics(ctx, "program_get_by_ids", &programs, query, pq.Array(ids))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get programs by ids")
+	}
+
+	return programs, nil
+}
+
 // GetByUserID получает все программы пользователя
 func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error) {
 	query := `

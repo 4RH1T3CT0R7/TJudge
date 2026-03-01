@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +28,7 @@ func TestSystemHandler_GetMetrics_Success(t *testing.T) {
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
 	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 
 	// Verify top-level keys exist
 	assert.Contains(t, result, "cpu")
@@ -48,7 +47,7 @@ func TestSystemHandler_GetMetrics_GoRuntime(t *testing.T) {
 	handler.GetMetrics(rr, req)
 
 	var result SystemMetrics
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 
 	assert.NotEmpty(t, result.Go.Version)
 	assert.Greater(t, result.Go.Goroutines, 0)
@@ -67,7 +66,7 @@ func TestSystemHandler_GetHealth_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 
 	assert.Contains(t, result, "status")
 	assert.Contains(t, result, "timestamp")
@@ -84,7 +83,7 @@ func TestSystemHandler_GetHealth_StatusHealthy(t *testing.T) {
 	handler.GetHealth(rr, req)
 
 	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 
 	// Status should be "healthy" or "warning" depending on system state
 	status, ok := result["status"].(string)

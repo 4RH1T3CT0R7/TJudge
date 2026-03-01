@@ -5,16 +5,21 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
-// LeaderboardCacher — minimal interface for leaderboard cache used by the rating service.
-// Intentionally narrower than tournament.LeaderboardCacher (interface segregation).
-type LeaderboardCacher interface {
-	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
+// ParticipantUpdate содержит данные для обновления рейтинга и статистики одного участника
+type ParticipantUpdate struct {
+	ProgramID    uuid.UUID
+	TournamentID uuid.UUID
+	History      *domain.RatingHistory
+	RatingDelta  int
+	Won          bool
+	Draw         bool
 }
 
 // RatingRepository интерфейс для работы с рейтингами в БД
@@ -24,23 +29,26 @@ type RatingRepository interface {
 	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
 	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
+	// ProcessMatchResultAtomic выполняет все обновления рейтингов и статистики для обоих участников
+	// матча в одной транзакции. Это гарантирует ELO-инвариант (нулевую сумму).
+	ProcessMatchResultAtomic(ctx context.Context, update1, update2 *ParticipantUpdate) error
 }
 
 // Service - сервис для работы с рейтингами
 type Service struct {
-	calculator       *EloCalculator
-	repo             RatingRepository
-	leaderboardCache LeaderboardCacher
-	log              *logger.Logger
+	calculator *EloCalculator
+	repo       RatingRepository
+	eventBus   events.Bus
+	log        *logger.Logger
 }
 
 // NewService создаёт новый сервис рейтингов
-func NewService(repo RatingRepository, leaderboardCache LeaderboardCacher, log *logger.Logger) *Service {
+func NewService(repo RatingRepository, eventBus events.Bus, log *logger.Logger) *Service {
 	return &Service{
-		calculator:       NewDefaultEloCalculator(),
-		repo:             repo,
-		leaderboardCache: leaderboardCache,
-		log:              log,
+		calculator: NewDefaultEloCalculator(),
+		repo:       repo,
+		eventBus:   eventBus,
+		log:        log,
 	}
 }
 
@@ -77,54 +85,60 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 		won2 = true
 	}
 
-	// Обновляем рейтинг и статистику первого участника атомарно
-	if err := s.updateParticipantRatingAndStats(ctx, match, match.Program1ID, rating1, newRating1, change1, won1, draw1); err != nil {
+	// Обновляем рейтинг и статистику обоих участников атомарно в одной транзакции.
+	// Это гарантирует ELO-инвариант: если обновление одного участника упадёт,
+	// обновление другого тоже откатится.
+	update1 := &ParticipantUpdate{
+		ProgramID:    match.Program1ID,
+		TournamentID: match.TournamentID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    match.Program1ID,
+			TournamentID: match.TournamentID,
+			OldRating:    rating1,
+			NewRating:    newRating1,
+			Change:       change1,
+			MatchID:      &match.ID,
+			CreatedAt:    time.Now(),
+		},
+		RatingDelta: change1,
+		Won:         won1,
+		Draw:        draw1,
+	}
+
+	update2 := &ParticipantUpdate{
+		ProgramID:    match.Program2ID,
+		TournamentID: match.TournamentID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    match.Program2ID,
+			TournamentID: match.TournamentID,
+			OldRating:    rating2,
+			NewRating:    newRating2,
+			Change:       change2,
+			MatchID:      &match.ID,
+			CreatedAt:    time.Now(),
+		},
+		RatingDelta: change2,
+		Won:         won2,
+		Draw:        draw2,
+	}
+
+	if err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2); err != nil {
 		return err
 	}
 
-	// Обновляем рейтинг и статистику второго участника атомарно
-	if err := s.updateParticipantRatingAndStats(ctx, match, match.Program2ID, rating2, newRating2, change2, won2, draw2); err != nil {
-		return err
-	}
-
-	// Обновляем leaderboard в кэше
-	if err := s.leaderboardCache.UpdateRating(ctx, match.TournamentID, match.Program1ID, newRating1); err != nil {
-		s.log.LogError("Failed to update leaderboard cache for program1", err)
-	}
-
-	if err := s.leaderboardCache.UpdateRating(ctx, match.TournamentID, match.Program2ID, newRating2); err != nil {
-		s.log.LogError("Failed to update leaderboard cache for program2", err)
-	}
+	s.eventBus.Publish(ctx, events.MatchResultProcessed{
+		TournamentID: match.TournamentID,
+		MatchID:      match.ID,
+		Program1ID:   match.Program1ID,
+		Program2ID:   match.Program2ID,
+		NewRating1:   newRating1,
+		NewRating2:   newRating2,
+		Winner:       *match.Winner,
+	})
 
 	return nil
-}
-
-// updateParticipantRatingAndStats обновляет рейтинг и статистику участника атомарно
-func (s *Service) updateParticipantRatingAndStats(
-	ctx context.Context,
-	match *domain.Match,
-	programID uuid.UUID,
-	oldRating, newRating, change int,
-	won, draw bool,
-) error {
-	// Создаём запись в истории рейтингов
-	history := &domain.RatingHistory{
-		ID:           uuid.New(),
-		ProgramID:    programID,
-		TournamentID: match.TournamentID,
-		OldRating:    oldRating,
-		NewRating:    newRating,
-		Change:       change,
-		MatchID:      &match.ID,
-		CreatedAt:    time.Now(),
-	}
-
-	if err := s.repo.Create(ctx, history); err != nil {
-		return err
-	}
-
-	// Атомарно обновляем рейтинг и статистику участника (delta-based to avoid last-writer-wins race)
-	return s.repo.UpdateParticipantRatingAndStats(ctx, match.TournamentID, programID, change, won, draw)
 }
 
 // GetRatingHistory получает историю рейтинга программы

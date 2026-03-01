@@ -12,6 +12,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -106,7 +107,7 @@ func newTestGameHandler(t *testing.T) (*GameHandler, *MockGameService) {
 	t.Helper()
 	svc := new(MockGameService)
 	log, _ := logger.New("error", "json")
-	return NewGameHandler(svc, nil, nil, nil, nil, nil, nil, nil, log), svc
+	return NewGameHandler(svc, nil, nil, nil, nil, nil, events.NoopBus{}, log), svc
 }
 
 func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGameService, *MockGameTournamentRepository) {
@@ -114,7 +115,7 @@ func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGame
 	svc := new(MockGameService)
 	tournamentRepo := new(MockGameTournamentRepository)
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, nil, nil, log)
+	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, events.NoopBus{}, log)
 	return handler, svc, tournamentRepo
 }
 
@@ -136,7 +137,7 @@ func TestGameHandler_Create_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
 	var result domain.Game
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, gameID, result.ID)
 	assert.Equal(t, "chess", result.Name)
 	svc.AssertExpectations(t)
@@ -206,7 +207,7 @@ func TestGameHandler_List_NoFilters(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []*domain.Game
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 2)
 	svc.AssertExpectations(t)
 }
@@ -275,7 +276,7 @@ func TestGameHandler_Get_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result domain.Game
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, gameID, result.ID)
 	svc.AssertExpectations(t)
 }
@@ -387,7 +388,7 @@ func TestGameHandler_Update_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result domain.Game
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, "Chess Updated", result.DisplayName)
 	svc.AssertExpectations(t)
 }
@@ -516,7 +517,7 @@ func TestGameHandler_GetTournamentGames_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []*domain.Game
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	svc.AssertExpectations(t)
 }
@@ -1103,29 +1104,6 @@ func (m *MockTournamentGameStatusRepository) DeactivateAllGames(ctx context.Cont
 	return m.Called(ctx, tournamentID).Error(0)
 }
 
-type MockGameRatingRepository struct {
-	mock.Mock
-}
-
-func (m *MockGameRatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
-	args := m.Called(ctx, tournamentID, gameID)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-func (m *MockGameRatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
-	args := m.Called(ctx, tournamentID, gameType)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-type MockGameMatchResetRepository struct {
-	mock.Mock
-}
-
-func (m *MockGameMatchResetRepository) DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
-	args := m.Called(ctx, tournamentID, gameType)
-	return args.Get(0).(int64), args.Error(1)
-}
-
 func newGameHandlerWithAllRepos(t *testing.T) (
 	*GameHandler,
 	*MockGameService,
@@ -1133,8 +1111,6 @@ func newGameHandlerWithAllRepos(t *testing.T) (
 	*MockGameMatchRepository,
 	*MockGameProgramRepository,
 	*MockTournamentGameStatusRepository,
-	*MockGameRatingRepository,
-	*MockGameMatchResetRepository,
 ) {
 	t.Helper()
 	svc := new(MockGameService)
@@ -1142,19 +1118,17 @@ func newGameHandlerWithAllRepos(t *testing.T) (
 	matchRepo := new(MockGameMatchRepository)
 	programRepo := new(MockGameProgramRepository)
 	tgsRepo := new(MockTournamentGameStatusRepository)
-	ratingRepo := new(MockGameRatingRepository)
-	matchResetRepo := new(MockGameMatchResetRepository)
 
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, ratingRepo, matchResetRepo, log)
+	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, events.NoopBus{}, log)
 
-	return handler, svc, leaderboardRepo, matchRepo, programRepo, tgsRepo, ratingRepo, matchResetRepo
+	return handler, svc, leaderboardRepo, matchRepo, programRepo, tgsRepo
 }
 
 // --- GetGameLeaderboard success ---
 
 func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
-	handler, svc, leaderboardRepo, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, leaderboardRepo, _, _, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1174,14 +1148,14 @@ func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []*domain.LeaderboardEntry
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	svc.AssertExpectations(t)
 	leaderboardRepo.AssertExpectations(t)
 }
 
 func TestGameHandler_GetGameLeaderboard_GameNotFound(t *testing.T) {
-	handler, svc, _, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, _, _, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1202,7 +1176,7 @@ func TestGameHandler_GetGameLeaderboard_GameNotFound(t *testing.T) {
 // --- GetGameMatches success ---
 
 func TestGameHandler_GetGameMatches_Success(t *testing.T) {
-	handler, svc, _, matchRepo, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, matchRepo, _, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1223,12 +1197,12 @@ func TestGameHandler_GetGameMatches_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []*domain.Match
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 }
 
 func TestGameHandler_GetGameMatches_WithStatusFilter(t *testing.T) {
-	handler, svc, _, matchRepo, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, matchRepo, _, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1253,7 +1227,7 @@ func TestGameHandler_GetGameMatches_WithStatusFilter(t *testing.T) {
 // --- GetGamePrograms success ---
 
 func TestGameHandler_GetGamePrograms_Success(t *testing.T) {
-	handler, _, _, _, programRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, programRepo, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1271,12 +1245,12 @@ func TestGameHandler_GetGamePrograms_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []*domain.Program
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 }
 
 func TestGameHandler_GetGamePrograms_ServiceError(t *testing.T) {
-	handler, _, _, _, programRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, programRepo, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1298,7 +1272,7 @@ func TestGameHandler_GetGamePrograms_ServiceError(t *testing.T) {
 // --- GetTournamentGamesWithStatus success ---
 
 func TestGameHandler_GetTournamentGamesWithStatus_Success(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1321,7 +1295,7 @@ func TestGameHandler_GetTournamentGamesWithStatus_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result []TournamentGameWithDetails
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	assert.Equal(t, "dilemma", result[0].GameName)
 	assert.True(t, result[0].IsActive)
@@ -1330,7 +1304,7 @@ func TestGameHandler_GetTournamentGamesWithStatus_Success(t *testing.T) {
 // --- MarkGameRoundCompleted success ---
 
 func TestGameHandler_MarkGameRoundCompleted_Success(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1350,7 +1324,7 @@ func TestGameHandler_MarkGameRoundCompleted_Success(t *testing.T) {
 }
 
 func TestGameHandler_MarkGameRoundCompleted_RepoError(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1371,7 +1345,7 @@ func TestGameHandler_MarkGameRoundCompleted_RepoError(t *testing.T) {
 // --- SetActiveGame success ---
 
 func TestGameHandler_SetActiveGame_Success(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1392,7 +1366,7 @@ func TestGameHandler_SetActiveGame_Success(t *testing.T) {
 }
 
 func TestGameHandler_SetActiveGame_InvalidBody(t *testing.T) {
-	handler, _, _, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 
 	req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte("invalid")))
@@ -1409,7 +1383,7 @@ func TestGameHandler_SetActiveGame_InvalidBody(t *testing.T) {
 // --- DeactivateAllGames success ---
 
 func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 
 	tgsRepo.On("DeactivateAllGames", mock.Anything, tournamentID).Return(nil)
@@ -1427,7 +1401,7 @@ func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
 }
 
 func TestGameHandler_DeactivateAllGames_RepoError(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 
 	tgsRepo.On("DeactivateAllGames", mock.Anything, tournamentID).Return(errors.ErrInternal)
@@ -1446,7 +1420,7 @@ func TestGameHandler_DeactivateAllGames_RepoError(t *testing.T) {
 // --- GetActiveGame success ---
 
 func TestGameHandler_GetActiveGame_Success(t *testing.T) {
-	handler, svc, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1465,13 +1439,13 @@ func TestGameHandler_GetActiveGame_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result TournamentGameWithDetails
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, "dilemma", result.GameName)
 	assert.True(t, result.IsActive)
 }
 
 func TestGameHandler_GetActiveGame_NotFound(t *testing.T) {
-	handler, _, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 
 	tgsRepo.On("GetActiveGame", mock.Anything, tournamentID).
@@ -1492,7 +1466,7 @@ func TestGameHandler_GetActiveGame_NotFound(t *testing.T) {
 // --- ResetGameRound success ---
 
 func TestGameHandler_ResetGameRound_Success(t *testing.T) {
-	handler, svc, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
@@ -1512,14 +1486,14 @@ func TestGameHandler_ResetGameRound_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var result ResetGameRoundResponse
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
+	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, int64(10), result.MatchesDeleted)
 	assert.Equal(t, int64(3), result.ParticipantsReset)
 	assert.Equal(t, int64(5), result.RatingHistoryReset)
 }
 
 func TestGameHandler_ResetGameRound_TransactionError(t *testing.T) {
-	handler, svc, _, _, _, tgsRepo, _, _ := newGameHandlerWithAllRepos(t)
+	handler, svc, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 

@@ -49,9 +49,25 @@ class ApiClient {
       return config;
     });
 
-    // Response interceptor for error handling
+    // Response interceptor: unwrap standard API envelope and handle errors.
+    // The backend wraps all responses in { data, message?, meta? }.
+    // This interceptor extracts the inner `data` field so callers get the
+    // payload directly (e.g. response.data is Tournament[], not { data: Tournament[] }).
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Only unwrap JSON responses that follow the standard API envelope { data, message?, meta? }.
+        const contentType = response.headers['content-type'] || '';
+        if (
+          contentType.includes('application/json') &&
+          response.data &&
+          typeof response.data === 'object' &&
+          !Array.isArray(response.data) &&
+          'data' in response.data
+        ) {
+          response.data = response.data.data;
+        }
+        return response;
+      },
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config;
 

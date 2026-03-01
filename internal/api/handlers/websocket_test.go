@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func newTestWebSocketHandler(t *testing.T) *WebSocketHandler {
@@ -33,7 +31,7 @@ func TestWebSocketHandler_GetStats(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 
 	var stats map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &stats))
+	decodeJSONData(t, rr.Body, &stats)
 	assert.Contains(t, stats, "tournaments")
 	assert.Contains(t, stats, "total_clients")
 }

@@ -14,13 +14,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// QueueManager управляет очередями матчей с приоритетами
+// QueueManager управляет очередями матчей с приоритетами.
+// Использует weighted fair queueing для предотвращения starvation
+// очередей с низким приоритетом (соотношение 5:3:1 для HIGH:MEDIUM:LOW).
 type QueueManager struct {
 	cache             *cache.Cache
 	log               *logger.Logger
 	metrics           *metrics.Metrics
 	lastMetricsUpdate time.Time
 	metricsMu         sync.Mutex
+
+	// Weighted fair queueing: счётчик dequeue-операций для ротации приоритетов.
+	// Каждые 5 подряд выборок из HIGH переключаемся на MEDIUM (3 выборки),
+	// затем на LOW (1 выборка), после чего цикл повторяется.
+	dequeueMu    sync.Mutex
+	dequeueCount int
 }
 
 // NewQueueManager создаёт новый менеджер очередей
@@ -93,16 +101,88 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 	return nil
 }
 
-// Dequeue извлекает матч из очереди с учётом приоритета
-// Проверяет очереди в порядке: HIGH -> MEDIUM -> LOW
-func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
-	// Используем multi-key BRPOP для эффективного ожидания на всех очередях
-	// Redis вернёт первый доступный элемент из любой очереди (в порядке приоритета)
-	queueKeys := []string{
-		qm.getQueueKey(domain.PriorityHigh),
-		qm.getQueueKey(domain.PriorityMedium),
-		qm.getQueueKey(domain.PriorityLow),
+// weightedQueueKeys возвращает ключи очередей, упорядоченные по приоритету
+// с учётом weighted fair queueing для предотвращения starvation.
+//
+// Цикл из 9 итераций (5+3+1):
+//   - Итерации 0-4: HIGH первый  → H, M, L
+//   - Итерации 5-7: MEDIUM первый → M, H, L
+//   - Итерация 8:   LOW первый   → L, H, M
+//
+// Это гарантирует, что MEDIUM/LOW очереди проверяются первыми
+// как минимум 4/9 ≈ 44% времени, предотвращая starvation.
+func (qm *QueueManager) weightedQueueKeys() []string {
+	qm.dequeueMu.Lock()
+	pos := qm.dequeueCount % 9
+	qm.dequeueCount++
+	qm.dequeueMu.Unlock()
+
+	high := qm.getQueueKey(domain.PriorityHigh)
+	medium := qm.getQueueKey(domain.PriorityMedium)
+	low := qm.getQueueKey(domain.PriorityLow)
+
+	switch {
+	case pos < 5:
+		return []string{high, medium, low}
+	case pos < 8:
+		return []string{medium, high, low}
+	default:
+		return []string{low, high, medium}
 	}
+}
+
+// EnqueueBatch добавляет несколько матчей в очереди одним Redis pipeline-запросом.
+// Значительно быстрее, чем вызов Enqueue в цикле (один round-trip вместо N).
+func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
+	if len(matches) == 0 {
+		return nil
+	}
+
+	// Группируем сериализованные матчи по ключам очередей
+	grouped := make(map[string][]interface{})
+	dedupMembers := make([]interface{}, 0, len(matches))
+
+	for _, match := range matches {
+		data, err := json.Marshal(match)
+		if err != nil {
+			return fmt.Errorf("failed to marshal match %s: %w", match.ID, err)
+		}
+
+		queueKey := qm.getQueueKey(match.Priority)
+		grouped[queueKey] = append(grouped[queueKey], data)
+		dedupMembers = append(dedupMembers, match.ID.String())
+	}
+
+	// Batch SADD для дедупликации
+	if _, err := qm.cache.SAdd(ctx, dedupKey, dedupMembers...); err != nil {
+		qm.log.LogError("Failed to batch add to dedup set", err)
+		// Продолжаем — лучше дублировать, чем потерять
+	}
+	if err := qm.cache.Expire(ctx, dedupKey, dedupTTL); err != nil {
+		qm.log.LogError("Failed to set dedup TTL", err)
+	}
+
+	// Batch LPUSH через pipeline
+	if err := qm.cache.BatchLPush(ctx, grouped); err != nil {
+		return fmt.Errorf("failed to batch enqueue matches: %w", err)
+	}
+
+	// Обновляем метрики
+	qm.updateQueueSizeMetrics(ctx)
+
+	qm.log.Info("Matches batch enqueued",
+		zap.Int("count", len(matches)),
+	)
+
+	return nil
+}
+
+// Dequeue извлекает матч из очереди с учётом приоритета.
+// Использует weighted fair queueing (5:3:1) для предотвращения starvation
+// очередей MEDIUM и LOW при постоянно заполненной HIGH.
+func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
+	// Используем multi-key BRPOP с ротируемым порядком ключей
+	queueKeys := qm.weightedQueueKeys()
 
 	// Блокирующее чтение с таймаутом 1 секунда на все очереди сразу
 	result, err := qm.cache.BRPop(ctx, time.Second, queueKeys...)

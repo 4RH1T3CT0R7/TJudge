@@ -74,6 +74,14 @@ func (m *MockProcessorProgramRepository) GetByID(ctx context.Context, id uuid.UU
 	return args.Get(0).(*domain.Program), args.Error(1)
 }
 
+func (m *MockProcessorProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error) {
+	args := m.Called(ctx, ids)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Program), args.Error(1)
+}
+
 func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProcessorRatingRepository, *MockProcessorProgramRepository, *MockProcessorRatingService, *MockExecutor) {
 	t.Helper()
 	matchRepo := new(MockMatchRepository)
@@ -131,7 +139,7 @@ func TestProcessor_Process_UpdateStatusFatalError(t *testing.T) {
 	matchRepo.AssertExpectations(t)
 }
 
-func TestProcessor_Process_Program1NotFound(t *testing.T) {
+func TestProcessor_Process_GetProgramsError(t *testing.T) {
 	p, matchRepo, _, programRepo, _, _ := newTestProcessor(t)
 	match := &domain.Match{
 		ID:           uuid.New(),
@@ -141,17 +149,17 @@ func TestProcessor_Process_Program1NotFound(t *testing.T) {
 	}
 
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
-	programRepo.On("GetByID", mock.Anything, match.Program1ID).
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
 		Return(nil, errors.ErrNotFound)
 
 	err := p.Process(context.Background(), match)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get program1")
+	assert.Contains(t, err.Error(), "failed to get programs")
 	matchRepo.AssertExpectations(t)
 	programRepo.AssertExpectations(t)
 }
 
-func TestProcessor_Process_Program2NotFound(t *testing.T) {
+func TestProcessor_Process_Program2NotInResults(t *testing.T) {
 	p, matchRepo, _, programRepo, _, _ := newTestProcessor(t)
 	match := &domain.Match{
 		ID:           uuid.New(),
@@ -160,15 +168,15 @@ func TestProcessor_Process_Program2NotFound(t *testing.T) {
 		Program2ID:   uuid.New(),
 	}
 
+	// GetByIDs returns only program1 — program2 is missing
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
-	programRepo.On("GetByID", mock.Anything, match.Program1ID).
-		Return(&domain.Program{ID: match.Program1ID, CodePath: "/path/p1"}, nil)
-	programRepo.On("GetByID", mock.Anything, match.Program2ID).
-		Return(nil, errors.ErrNotFound)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{{ID: match.Program1ID, CodePath: "/path/p1"}}, nil)
 
 	err := p.Process(context.Background(), match)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get program2")
+	assert.Contains(t, err.Error(), "program2")
+	assert.Contains(t, err.Error(), "not found")
 	matchRepo.AssertExpectations(t)
 	programRepo.AssertExpectations(t)
 }
@@ -183,10 +191,11 @@ func TestProcessor_Process_ExecutorFailure(t *testing.T) {
 	}
 
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
-	programRepo.On("GetByID", mock.Anything, match.Program1ID).
-		Return(&domain.Program{ID: match.Program1ID, CodePath: "/path/p1"}, nil)
-	programRepo.On("GetByID", mock.Anything, match.Program2ID).
-		Return(&domain.Program{ID: match.Program2ID, CodePath: "/path/p2"}, nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
 		Return(nil, fmt.Errorf("docker timeout"))
 	matchRepo.On("UpdateResult", mock.Anything, match.ID, mock.AnythingOfType("*domain.MatchResult")).Return(nil)
@@ -213,10 +222,11 @@ func TestProcessor_Process_UpdateResultFailure(t *testing.T) {
 	}
 
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
-	programRepo.On("GetByID", mock.Anything, match.Program1ID).
-		Return(&domain.Program{ID: match.Program1ID, CodePath: "/path/p1"}, nil)
-	programRepo.On("GetByID", mock.Anything, match.Program2ID).
-		Return(&domain.Program{ID: match.Program2ID, CodePath: "/path/p2"}, nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
 		Return(result, nil)
 	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).

@@ -4,13 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -45,16 +43,14 @@ func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Conte
 	return m.Called(ctx, tournamentID, programID, ratingDelta, won, draw).Error(0)
 }
 
+func (m *MockRatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *ParticipantUpdate) error {
+	return m.Called(ctx, update1, update2).Error(0)
+}
+
 func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 	repo := new(MockRatingRepository)
 	log, _ := logger.New("error", "json")
-	// Create service without leaderboard cache (nil) - we test private methods directly
-	return &Service{
-		calculator:       NewDefaultEloCalculator(),
-		repo:             repo,
-		leaderboardCache: nil,
-		log:              log,
-	}, repo
+	return NewService(repo, events.NoopBus{}, log), repo
 }
 
 // --- GetRatingHistory ---
@@ -121,24 +117,11 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 	assert.InDelta(t, 0.76, scoreA, 0.01)
 }
 
-// --- ProcessMatchResult (requires LeaderboardCache via miniredis) ---
+// --- ProcessMatchResult ---
 
 func newTestRatingServiceWithCache(t *testing.T) (*Service, *MockRatingRepository) {
 	t.Helper()
-	repo := new(MockRatingRepository)
-	log, _ := logger.New("error", "json")
-
-	mr := miniredis.RunT(t)
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	testCache := cache.NewFromClient(client)
-	leaderboardCache := cache.NewLeaderboardCache(testCache)
-
-	return &Service{
-		calculator:       NewDefaultEloCalculator(),
-		repo:             repo,
-		leaderboardCache: leaderboardCache,
-		log:              log,
-	}, repo
+	return newTestRatingService(t)
 }
 
 func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
@@ -157,9 +140,11 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 	}
 
 	// Equal ratings (1500 vs 1500), p1 wins: delta1=+16, delta2=-16
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 16, true, false).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, -16, false, false).Return(nil)
+	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p1 && u.RatingDelta == 16 && u.Won && !u.Draw
+	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p2 && u.RatingDelta == -16 && !u.Won && !u.Draw
+	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -183,9 +168,11 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 	}
 
 	// Equal ratings (1500 vs 1500), p2 wins: delta1=-16, delta2=+16
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, -16, false, false).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 16, true, false).Return(nil)
+	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p1 && u.RatingDelta == -16 && !u.Won && !u.Draw
+	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p2 && u.RatingDelta == 16 && u.Won && !u.Draw
+	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -209,9 +196,11 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 	}
 
 	// Equal ratings, draw: no change (delta=0)
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, 0, false, true).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, 0, false, true).Return(nil)
+	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p1 && u.RatingDelta == 0 && !u.Won && u.Draw
+	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
+		return u.ProgramID == p2 && u.RatingDelta == 0 && !u.Won && u.Draw
+	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
@@ -219,7 +208,7 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-func TestService_ProcessMatchResult_UpdateRatingError_Program1(t *testing.T) {
+func TestService_ProcessMatchResult_AtomicError(t *testing.T) {
 	svc, repo := newTestRatingServiceWithCache(t)
 	ctx := context.Background()
 
@@ -234,12 +223,16 @@ func TestService_ProcessMatchResult_UpdateRatingError_Program1(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// First updateParticipantRatingAndStats (p1) fails at Create
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(errors.ErrInternal).Once()
+	// ProcessMatchResultAtomic fails — both updates should be rolled back
+	repo.On("ProcessMatchResultAtomic", ctx,
+		mock.AnythingOfType("*rating.ParticipantUpdate"),
+		mock.AnythingOfType("*rating.ParticipantUpdate"),
+	).Return(errors.ErrInternal)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
 
 	assert.Error(t, err)
+	repo.AssertExpectations(t)
 }
 
 func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
@@ -258,10 +251,10 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 	}
 
 	// 2800 vs 400: expected score for 2800 ≈ 1.0, so change ≈ 0
-	// K=32, expected ≈ 0.9999..., new1 ≈ 2800, new2 ≈ 400
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.RatingHistory")).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p1, mock.AnythingOfType("int"), true, false).Return(nil)
-	repo.On("UpdateParticipantRatingAndStats", ctx, tID, p2, mock.AnythingOfType("int"), false, false).Return(nil)
+	repo.On("ProcessMatchResultAtomic", ctx,
+		mock.AnythingOfType("*rating.ParticipantUpdate"),
+		mock.AnythingOfType("*rating.ParticipantUpdate"),
+	).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 2800, 400)
 

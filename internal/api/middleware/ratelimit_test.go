@@ -145,26 +145,70 @@ func TestRateLimit_XRealIP_Ignored(t *testing.T) {
 	mockLimiter.AssertExpectations(t)
 }
 
-func TestRateLimit_ErrorFailsOpen(t *testing.T) {
+func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// When limiter returns error, should fail open (allow request)
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(false, assert.AnError)
+	// When limiter returns error, should fall back to in-memory limiter (2x limit)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 5, time.Minute).Return(false, assert.AnError)
 
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handlerCalled := 0
+	handler := middleware.RateLimit(mockLimiter, 5, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled++
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// Fallback limit = 5 * 2 = 10 (burst). First 10 requests should pass.
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code, "request %d should pass", i+1)
+	}
+	assert.Equal(t, 10, handlerCalled)
+
+	// Next request should be rate-limited by fallback
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+}
 
-	// Should pass through despite error (fail open)
+func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
+	mockLimiter := new(MockRateLimiter)
+	log := newTestLogger()
+
+	// Both IPs will fail Redis
+	mockLimiter.On("Allow", mock.Anything, mock.Anything, 1, time.Minute).Return(false, assert.AnError)
+
+	handler := middleware.RateLimit(mockLimiter, 1, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Exhaust fallback for IP1 (burst = 2)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// IP1 should now be blocked
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// IP2 should still pass (separate bucket)
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
-	mockLimiter.AssertExpectations(t)
 }
 
 func TestRateLimit_DifferentWindows(t *testing.T) {

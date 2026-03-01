@@ -530,6 +530,116 @@ func TestQueueManager_FIFO_WithinSamePriority(t *testing.T) {
 	assert.Equal(t, third.ID, got3.ID)
 }
 
+func TestQueueManager_EnqueueBatch(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	matches := []*domain.Match{
+		testMatch(domain.PriorityHigh),
+		testMatch(domain.PriorityHigh),
+		testMatch(domain.PriorityMedium),
+		testMatch(domain.PriorityLow),
+	}
+
+	err := qm.EnqueueBatch(ctx, matches)
+	require.NoError(t, err)
+
+	// Verify queue sizes
+	high, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), high)
+
+	med, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), med)
+
+	low, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), low)
+}
+
+func TestQueueManager_EnqueueBatch_Empty(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	err := qm.EnqueueBatch(ctx, nil)
+	require.NoError(t, err)
+
+	err = qm.EnqueueBatch(ctx, []*domain.Match{})
+	require.NoError(t, err)
+
+	total, err := qm.GetTotalQueueSize(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+}
+
+func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	// Наполняем все три очереди по 20 матчей
+	highMatches := make([]*domain.Match, 20)
+	medMatches := make([]*domain.Match, 20)
+	lowMatches := make([]*domain.Match, 20)
+
+	for i := 0; i < 20; i++ {
+		highMatches[i] = testMatch(domain.PriorityHigh)
+		medMatches[i] = testMatch(domain.PriorityMedium)
+		lowMatches[i] = testMatch(domain.PriorityLow)
+
+		require.NoError(t, qm.Enqueue(ctx, highMatches[i]))
+		require.NoError(t, qm.Enqueue(ctx, medMatches[i]))
+		require.NoError(t, qm.Enqueue(ctx, lowMatches[i]))
+	}
+
+	// Dequeue all 60 matches and track which priority was dequeued
+	priorityCounts := map[domain.MatchPriority]int{}
+	for i := 0; i < 60; i++ {
+		match, err := qm.Dequeue(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, match, "expected match at iteration %d", i)
+		priorityCounts[match.Priority]++
+	}
+
+	// Verify all matches were dequeued
+	assert.Equal(t, 20, priorityCounts[domain.PriorityHigh])
+	assert.Equal(t, 20, priorityCounts[domain.PriorityMedium])
+	assert.Equal(t, 20, priorityCounts[domain.PriorityLow])
+}
+
+func TestQueueManager_WeightedQueueKeys_Cycle(t *testing.T) {
+	qm := NewQueueManager(nil, testLogger(), testMetrics())
+
+	// Verify the 9-step cycle pattern
+	high := qm.getQueueKey(domain.PriorityHigh)
+	medium := qm.getQueueKey(domain.PriorityMedium)
+	low := qm.getQueueKey(domain.PriorityLow)
+
+	expected := [][]string{
+		{high, medium, low}, // 0 - HIGH first
+		{high, medium, low}, // 1 - HIGH first
+		{high, medium, low}, // 2 - HIGH first
+		{high, medium, low}, // 3 - HIGH first
+		{high, medium, low}, // 4 - HIGH first
+		{medium, high, low}, // 5 - MEDIUM first
+		{medium, high, low}, // 6 - MEDIUM first
+		{medium, high, low}, // 7 - MEDIUM first
+		{low, high, medium}, // 8 - LOW first
+	}
+
+	// Reset counter
+	qm.dequeueCount = 0
+
+	for i, exp := range expected {
+		got := qm.weightedQueueKeys()
+		assert.Equal(t, exp, got, "cycle position %d", i)
+	}
+
+	// Cycle repeats
+	got := qm.weightedQueueKeys() // position 9 = 0 mod 9
+	assert.Equal(t, []string{high, medium, low}, got, "cycle should repeat at position 9")
+}
+
 func BenchmarkInMemoryQueue_LPush(b *testing.B) {
 	q := NewInMemoryQueue()
 	ctx := context.Background()

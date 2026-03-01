@@ -10,6 +10,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -198,12 +199,9 @@ func (m *MockQueueManager) Enqueue(ctx context.Context, match *domain.Match) err
 	return args.Error(0)
 }
 
-type MockBroadcaster struct {
-	mock.Mock
-}
-
-func (m *MockBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, payload interface{}) {
-	m.Called(tournamentID, messageType, payload)
+func (m *MockQueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
+	args := m.Called(ctx, matches)
+	return args.Error(0)
 }
 
 type MockDistributedLock struct {
@@ -265,7 +263,6 @@ func newTestService(t *testing.T) (
 	*MockTournamentRepository,
 	*MockMatchRepository,
 	*MockQueueManager,
-	*MockBroadcaster,
 	*MockDistributedLock,
 	*MockGameRepository,
 ) {
@@ -274,7 +271,6 @@ func newTestService(t *testing.T) (
 	tournamentRepo := new(MockTournamentRepository)
 	matchRepo := new(MockMatchRepository)
 	queueManager := new(MockQueueManager)
-	broadcaster := new(MockBroadcaster)
 	distributedLock := new(MockDistributedLock)
 	gameRepo := new(MockGameRepository)
 
@@ -293,12 +289,12 @@ func newTestService(t *testing.T) (
 		gameRepo,
 		tournamentCache,
 		leaderboardCache,
-		broadcaster,
+		events.NoopBus{},
 		distributedLock,
 		log,
 	)
 
-	return service, tournamentRepo, matchRepo, queueManager, broadcaster, distributedLock, gameRepo
+	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
 }
 
 // -----------------------------------------------------------------------------
@@ -307,7 +303,7 @@ func newTestService(t *testing.T) (
 
 func TestService_Create(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Tournament")).Return(nil)
@@ -331,7 +327,7 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("validation_error", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		req := &CreateRequest{
@@ -349,7 +345,7 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("repo_error", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Tournament")).
@@ -368,7 +364,7 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("default_max_team_size", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Tournament")).Return(nil)
@@ -402,7 +398,7 @@ func TestService_Create(t *testing.T) {
 
 func TestService_GetByID(t *testing.T) {
 	t.Run("cache_hit", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -427,7 +423,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("cache_miss_repo_hit", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -458,7 +454,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("not_found", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -478,7 +474,7 @@ func TestService_GetByID(t *testing.T) {
 
 func TestService_List(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournaments := []*domain.Tournament{
@@ -497,7 +493,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("default_limit", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournaments := []*domain.Tournament{}
@@ -514,7 +510,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("max_limit", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournaments := []*domain.Tournament{}
@@ -531,7 +527,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("repo_error", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		filter := domain.TournamentFilter{Limit: 10}
@@ -550,7 +546,7 @@ func TestService_List(t *testing.T) {
 
 func TestService_Join(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -586,7 +582,7 @@ func TestService_Join(t *testing.T) {
 	})
 
 	t.Run("tournament_not_found", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -606,7 +602,7 @@ func TestService_Join(t *testing.T) {
 	})
 
 	t.Run("tournament_not_pending", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -632,7 +628,7 @@ func TestService_Join(t *testing.T) {
 	})
 
 	t.Run("tournament_full", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -661,7 +657,7 @@ func TestService_Join(t *testing.T) {
 	})
 
 	t.Run("no_max_participants", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -691,7 +687,7 @@ func TestService_Join(t *testing.T) {
 	})
 
 	t.Run("lock_error", func(t *testing.T) {
-		service, _, _, _, _, distributedLock, _ := newTestService(t)
+		service, _, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -716,7 +712,7 @@ func TestService_Join(t *testing.T) {
 
 func TestService_Start(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, broadcaster, distributedLock, gameRepo := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, gameRepo := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -734,7 +730,6 @@ func TestService_Start(t *testing.T) {
 		tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(3, nil)
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
 		gameRepo.On("GetTournamentGames", mock.Anything, tournamentID).Return([]*domain.TournamentGame{}, nil)
-		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
 
 		err := service.Start(ctx, tournamentID)
 		require.NoError(t, err)
@@ -742,11 +737,10 @@ func TestService_Start(t *testing.T) {
 		tournamentRepo.AssertCalled(t, "Update", mock.Anything, mock.MatchedBy(func(t *domain.Tournament) bool {
 			return t.Status == domain.TournamentActive && t.StartTime != nil
 		}))
-		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "tournament_update", mock.Anything)
 	})
 
 	t.Run("not_pending", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -771,7 +765,7 @@ func TestService_Start(t *testing.T) {
 	})
 
 	t.Run("too_few_participants", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -796,7 +790,7 @@ func TestService_Start(t *testing.T) {
 	})
 
 	t.Run("repo_update_error", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -823,7 +817,7 @@ func TestService_Start(t *testing.T) {
 	})
 
 	t.Run("activates_first_game", func(t *testing.T) {
-		service, tournamentRepo, _, _, broadcaster, distributedLock, gameRepo := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, gameRepo := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -847,7 +841,6 @@ func TestService_Start(t *testing.T) {
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
 		gameRepo.On("GetTournamentGames", mock.Anything, tournamentID).Return(games, nil)
 		gameRepo.On("SetActiveGame", mock.Anything, tournamentID, gameID).Return(nil)
-		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
 
 		err := service.Start(ctx, tournamentID)
 		require.NoError(t, err)
@@ -863,7 +856,7 @@ func TestService_Start(t *testing.T) {
 
 func TestService_Complete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, broadcaster, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -879,7 +872,6 @@ func TestService_Complete(t *testing.T) {
 		// Complete now calls tournamentRepo.GetByID directly (bypassing cache)
 		tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
-		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
 
 		err := service.Complete(ctx, tournamentID)
 		require.NoError(t, err)
@@ -887,11 +879,10 @@ func TestService_Complete(t *testing.T) {
 		tournamentRepo.AssertCalled(t, "Update", mock.Anything, mock.MatchedBy(func(t *domain.Tournament) bool {
 			return t.Status == domain.TournamentCompleted && t.EndTime != nil
 		}))
-		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "tournament_update", mock.Anything)
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -916,7 +907,7 @@ func TestService_Complete(t *testing.T) {
 	})
 
 	t.Run("lock_error", func(t *testing.T) {
-		service, _, _, _, _, distributedLock, _ := newTestService(t)
+		service, _, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -940,7 +931,7 @@ func TestService_Complete(t *testing.T) {
 
 func TestService_Delete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -961,7 +952,7 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("active_tournament", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -984,7 +975,7 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("not_found", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1003,7 +994,7 @@ func TestService_Delete(t *testing.T) {
 
 func TestService_GetLeaderboard(t *testing.T) {
 	t.Run("always_queries_db_for_complete_data", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1032,7 +1023,7 @@ func TestService_GetLeaderboard(t *testing.T) {
 	})
 
 	t.Run("cache_miss_repo", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1052,7 +1043,7 @@ func TestService_GetLeaderboard(t *testing.T) {
 	})
 
 	t.Run("repo_error", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1072,7 +1063,7 @@ func TestService_GetLeaderboard(t *testing.T) {
 
 func TestService_CreateMatch(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1105,7 +1096,7 @@ func TestService_CreateMatch(t *testing.T) {
 	})
 
 	t.Run("tournament_not_found", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1119,7 +1110,7 @@ func TestService_CreateMatch(t *testing.T) {
 	})
 
 	t.Run("validation_error", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1145,7 +1136,7 @@ func TestService_CreateMatch(t *testing.T) {
 	})
 
 	t.Run("queue_error_non_fatal", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1178,7 +1169,7 @@ func TestService_CreateMatch(t *testing.T) {
 
 func TestService_RunAllMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, distLock, _ := newTestService(t)
+		service, _, matchRepo, queueManager, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1189,17 +1180,17 @@ func TestService_RunAllMatches(t *testing.T) {
 
 		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return(pendingMatches, nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		count, err := service.RunAllMatches(ctx, tournamentID)
 		require.NoError(t, err)
 		assert.Equal(t, 2, count)
 
-		queueManager.AssertNumberOfCalls(t, "Enqueue", 2)
+		queueManager.AssertNumberOfCalls(t, "EnqueueBatch", 1)
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1226,7 +1217,7 @@ func TestService_RunAllMatches(t *testing.T) {
 		}, nil)
 		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, "chess").Return(1, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		count, err := service.RunAllMatches(ctx, tournamentID)
 		require.NoError(t, err)
@@ -1239,7 +1230,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1265,7 +1256,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("no_participants", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1298,7 +1289,7 @@ func TestService_RunAllMatches(t *testing.T) {
 
 func TestService_RunGameMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, distLock, _ := newTestService(t)
+		service, _, matchRepo, queueManager, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1312,17 +1303,17 @@ func TestService_RunGameMatches(t *testing.T) {
 
 		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, tournamentID, gameType).Return(pendingMatches, nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		count, err := service.RunGameMatches(ctx, tournamentID, gameType)
 		require.NoError(t, err)
 		assert.Equal(t, 3, count)
 
-		queueManager.AssertNumberOfCalls(t, "Enqueue", 3)
+		queueManager.AssertNumberOfCalls(t, "EnqueueBatch", 1)
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1349,7 +1340,7 @@ func TestService_RunGameMatches(t *testing.T) {
 		tournamentRepo.On("GetLatestParticipantsByGame", ctx, tournamentID, gameType).Return(participants, nil)
 		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, gameType).Return(2, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		count, err := service.RunGameMatches(ctx, tournamentID, gameType)
 		require.NoError(t, err)
@@ -1358,7 +1349,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1390,7 +1381,7 @@ func TestService_RunGameMatches(t *testing.T) {
 
 func TestService_RetryFailedMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, _, _ := newTestService(t)
+		service, _, matchRepo, queueManager, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1404,17 +1395,17 @@ func TestService_RetryFailedMatches(t *testing.T) {
 		}
 
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return(pendingMatches, nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		count, err := service.RetryFailedMatches(ctx, tournamentID)
 		require.NoError(t, err)
 		assert.Equal(t, 3, count)
 
-		queueManager.AssertNumberOfCalls(t, "Enqueue", 3)
+		queueManager.AssertNumberOfCalls(t, "EnqueueBatch", 1)
 	})
 
 	t.Run("no_failed_matches", func(t *testing.T) {
-		service, _, matchRepo, _, _, _, _ := newTestService(t)
+		service, _, matchRepo, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1436,7 +1427,7 @@ func TestService_RetryFailedMatches(t *testing.T) {
 
 func TestService_generateRoundRobinMatches(t *testing.T) {
 	t.Run("two_participants", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1474,7 +1465,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 	})
 
 	t.Run("three_participants", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1507,7 +1498,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 	})
 
 	t.Run("empty_participants", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1531,7 +1522,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 
 func TestService_GetMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, _, matchRepo, _, _, _, _ := newTestService(t)
+		service, _, matchRepo, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1556,7 +1547,7 @@ func TestService_GetMatches(t *testing.T) {
 
 func TestService_GetMatchesByRounds(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, _, matchRepo, _, _, _, _ := newTestService(t)
+		service, _, matchRepo, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1581,7 +1572,7 @@ func TestService_GetMatchesByRounds(t *testing.T) {
 
 func TestService_ScheduleNewProgramMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, broadcaster, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1617,8 +1608,7 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 		programRepo := new(MockProgramRepository)
 		programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
-		broadcaster.On("Broadcast", tournamentID, "matches_created", mock.Anything).Return()
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		req := &ScheduleNewProgramMatchesRequest{
 			TournamentID: tournamentID,
@@ -1639,11 +1629,10 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 			hasReverse := matches[1].Program1ID == otherProgram.ID && matches[1].Program2ID == newProgramID
 			return hasForward && hasReverse
 		}))
-		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "matches_created", mock.Anything)
 	})
 
 	t.Run("completed_tournament", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1679,7 +1668,7 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 	})
 
 	t.Run("no_other_programs", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1727,7 +1716,7 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 
 func TestService_GetCrossGameLeaderboard(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, _, _, _ := newTestService(t)
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1757,7 +1746,6 @@ func TestConcurrentJoin(t *testing.T) {
 		tournamentRepo := new(MockTournamentRepository)
 		matchRepo := new(MockMatchRepository)
 		queueManager := new(MockQueueManager)
-		broadcaster := new(MockBroadcaster)
 
 		// Use real cache for integration test
 		// For unit test, we'll simulate with a counter
@@ -1812,7 +1800,7 @@ func TestConcurrentJoin(t *testing.T) {
 			nil, // gameRepo not needed for join test
 			tournamentCache,
 			leaderboardCache,
-			broadcaster,
+			events.NoopBus{},
 			distributedLock,
 			log,
 		)
@@ -1860,7 +1848,6 @@ func TestConcurrentStart(t *testing.T) {
 		tournamentRepo := new(MockTournamentRepository)
 		matchRepo := new(MockMatchRepository)
 		queueManager := new(MockQueueManager)
-		broadcaster := new(MockBroadcaster)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1905,8 +1892,6 @@ func TestConcurrentStart(t *testing.T) {
 			updateCall.ReturnArguments = mock.Arguments{nil}
 		}).Return(nil)
 
-		broadcaster.On("Broadcast", tournamentID, "tournament_update", mock.Anything).Return()
-
 		// Create service with real distributed lock
 		testCache := setupTestRedisCache(t)
 		defer testCache.Close()
@@ -1924,7 +1909,7 @@ func TestConcurrentStart(t *testing.T) {
 			nil, // gameRepo not needed for concurrent start test
 			tournamentCache,
 			leaderboardCache,
-			broadcaster,
+			events.NoopBus{},
 			distributedLock,
 			log,
 		)
@@ -1964,7 +1949,7 @@ func TestConcurrentStart(t *testing.T) {
 
 func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 	t.Run("one_participant_generates_zero_matches", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1984,7 +1969,7 @@ func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("four_participants_generates_12_matches", func(t *testing.T) {
-		service, _, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -2047,7 +2032,7 @@ func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 
 func TestService_ScheduleNewProgramMatches_SkipsSameTeam(t *testing.T) {
 	t.Run("skips_programs_from_same_team", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, broadcaster, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -2080,8 +2065,7 @@ func TestService_ScheduleNewProgramMatches_SkipsSameTeam(t *testing.T) {
 		programRepo := new(MockProgramRepository)
 		programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
-		queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
-		broadcaster.On("Broadcast", tournamentID, "matches_created", mock.Anything).Return()
+		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
 		req := &ScheduleNewProgramMatchesRequest{
 			TournamentID: tournamentID,
@@ -2117,9 +2101,8 @@ func TestService_ScheduleNewProgramMatches_SkipsSameTeam(t *testing.T) {
 			return hasForward && hasReverse
 		}))
 
-		// Verify enqueue was called exactly 2 times (one per match)
-		queueManager.AssertNumberOfCalls(t, "Enqueue", 2)
-		broadcaster.AssertCalled(t, "Broadcast", tournamentID, "matches_created", mock.Anything)
+		// Verify batch enqueue was called once (with all matches)
+		queueManager.AssertNumberOfCalls(t, "EnqueueBatch", 1)
 	})
 }
 
@@ -2129,7 +2112,6 @@ func TestRaceConditionInJoin(t *testing.T) {
 		tournamentRepo := new(MockTournamentRepository)
 		matchRepo := new(MockMatchRepository)
 		queueManager := new(MockQueueManager)
-		broadcaster := new(MockBroadcaster)
 		distributedLock := new(MockDistributedLock)
 
 		tournamentID := uuid.New()
@@ -2163,7 +2145,7 @@ func TestRaceConditionInJoin(t *testing.T) {
 			nil, // gameRepo not needed for lock failure test
 			tournamentCache,
 			leaderboardCache,
-			broadcaster,
+			events.NoopBus{},
 			distributedLock,
 			log,
 		)

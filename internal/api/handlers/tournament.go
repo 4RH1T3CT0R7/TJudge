@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -102,21 +102,9 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter.GameType = r.URL.Query().Get("game_type")
 
 	// Pagination
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
-			limit = l
-		}
-	}
-	filter.Limit = limit
-
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-	filter.Offset = offset
+	pg := pagination.ParseLimitOffset(r, 50, 0)
+	filter.Limit = pg.Limit
+	filter.Offset = pg.Offset
 
 	// Получаем список турниров
 	tournaments, err := h.tournamentService.List(r.Context(), filter)
@@ -290,15 +278,10 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Получаем limit из query параметров
-	limit := 100
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
-			limit = l
-		}
-	}
+	pg := pagination.ParseLimitOffset(r, 100, 0)
 
 	// Получаем leaderboard
-	leaderboard, err := h.tournamentService.GetLeaderboard(r.Context(), id, limit)
+	leaderboard, err := h.tournamentService.GetLeaderboard(r.Context(), id, pg.Limit)
 	if err != nil {
 		h.log.LogError("Failed to get leaderboard", err,
 			zap.String("tournament_id", id.String()),
@@ -404,22 +387,10 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Получаем параметры пагинации
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
-			limit = l
-		}
-	}
-
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
+	pg := pagination.ParseLimitOffset(r, 50, 0)
 
 	// Получаем матчи
-	matches, err := h.tournamentService.GetMatches(r.Context(), tournamentID, limit, offset)
+	matches, err := h.tournamentService.GetMatches(r.Context(), tournamentID, pg.Limit, pg.Offset)
 	if err != nil {
 		h.log.LogError("Failed to get matches", err,
 			zap.String("tournament_id", tournamentID.String()),

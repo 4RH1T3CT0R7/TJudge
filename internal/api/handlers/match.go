@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -11,6 +10,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -53,27 +53,9 @@ type MatchHandler struct {
 	log           *logger.Logger
 }
 
-// NewMatchHandler создаёт новый match handler
-func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, log *logger.Logger) *MatchHandler {
-	return &MatchHandler{
-		matchRepo:  matchRepo,
-		matchCache: matchCache,
-		log:        log,
-	}
-}
-
-// NewMatchHandlerWithProgramLookup создаёт match handler с возможностью фильтрации ошибок
-func NewMatchHandlerWithProgramLookup(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, log *logger.Logger) *MatchHandler {
-	return &MatchHandler{
-		matchRepo:     matchRepo,
-		matchCache:    matchCache,
-		programLookup: programLookup,
-		log:           log,
-	}
-}
-
-// NewMatchHandlerFull создаёт match handler со всеми зависимостями
-func NewMatchHandlerFull(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
+// NewMatchHandler creates a match handler. Optional dependencies (programLookup,
+// queueManager) can be nil — the handler gracefully degrades when they are absent.
+func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
 	return &MatchHandler{
 		matchRepo:     matchRepo,
 		matchCache:    matchCache,
@@ -231,21 +213,9 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter.GameType = r.URL.Query().Get("game_type")
 
 	// Pagination
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
-			limit = l
-		}
-	}
-	filter.Limit = limit
-
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-	filter.Offset = offset
+	pg := pagination.ParseLimitOffset(r, 50, 0)
+	filter.Limit = pg.Limit
+	filter.Offset = pg.Offset
 
 	// Получаем список матчей
 	matches, err := h.matchRepo.List(r.Context(), filter)

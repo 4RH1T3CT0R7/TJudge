@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 // MockTournamentService mocks the tournament service
@@ -157,8 +156,7 @@ func TestTournamentHandler_Create(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var response domain.Tournament
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedTournament.ID, response.ID)
 		assert.Equal(t, expectedTournament.Name, response.Name)
 
@@ -220,8 +218,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Tournament
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedTournament.ID, response.ID)
 
 		mockService.AssertExpectations(t)
@@ -300,8 +297,7 @@ func TestTournamentHandler_List(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Tournament
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
 		mockService.AssertExpectations(t)
@@ -539,8 +535,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.LeaderboardEntry
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 1800, response[0].Rating)
 
@@ -601,8 +596,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]string
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "completed", response["status"])
 
 		mockService.AssertExpectations(t)
@@ -741,8 +735,7 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "started", response["status"])
 		assert.Equal(t, float64(15), response["enqueued"])
 
@@ -816,8 +809,7 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "started", response["status"])
 		assert.Equal(t, "prisoners_dilemma", response["game_type"])
 		assert.Equal(t, float64(8), response["enqueued"])
@@ -910,8 +902,7 @@ func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "retried", response["status"])
 		assert.Equal(t, float64(3), response["enqueued"])
 
@@ -982,8 +973,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.CrossGameLeaderboardEntry
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 3600, response[0].TotalRating)
 		assert.Equal(t, "Team Alpha", response[0].TeamName)
@@ -1074,8 +1064,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
 		mockService.AssertExpectations(t)
@@ -1112,8 +1101,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 1)
 
 		mockService.AssertExpectations(t)
@@ -1197,8 +1185,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.MatchRound
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 1, response[0].RoundNumber)
 		assert.Equal(t, 6, response[0].TotalMatches)
@@ -1265,8 +1252,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedMatch.ID, response.ID)
 		assert.Equal(t, expectedMatch.TournamentID, response.TournamentID)
 		assert.Equal(t, expectedMatch.Program1ID, response.Program1ID)
@@ -1311,8 +1297,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var response domain.Match
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedMatch.ID, response.ID)
 		assert.Equal(t, domain.PriorityMedium, response.Priority)
 

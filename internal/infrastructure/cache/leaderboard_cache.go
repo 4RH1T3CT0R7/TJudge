@@ -2,12 +2,17 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/metrics"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
+
+const fullLeaderboardTTL = 10 * time.Second
 
 // LeaderboardCache - кэш для таблицы лидеров
 type LeaderboardCache struct {
@@ -74,10 +79,13 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 	for i, result := range results {
 		memberStr, ok := result.Member.(string)
 		if !ok {
+			lc.cache.log.Warn("leaderboard cache: non-string member in sorted set")
 			continue
 		}
 		programID, err := uuid.Parse(memberStr)
 		if err != nil {
+			lc.cache.log.Warn("leaderboard cache: corrupt program ID in sorted set",
+				zap.String("member", memberStr), zap.Error(err))
 			continue
 		}
 
@@ -97,8 +105,122 @@ func (lc *LeaderboardCache) Remove(ctx context.Context, tournamentID, programID 
 	return lc.cache.ZRem(ctx, key, programID.String())
 }
 
-// Clear очищает весь leaderboard турнира
+// Clear очищает весь leaderboard турнира (sorted set + all per-limit JSON caches + cross-game cache)
 func (lc *LeaderboardCache) Clear(ctx context.Context, tournamentID uuid.UUID) error {
 	key := lc.getKey(tournamentID)
-	return lc.cache.Del(ctx, key)
+	// Delete the sorted set
+	if err := lc.cache.Del(ctx, key); err != nil {
+		return err
+	}
+	// Delete all per-limit full JSON caches + cross-game cache via SCAN
+	return lc.InvalidateFullLeaderboard(ctx, tournamentID)
+}
+
+// --- Full JSON leaderboard cache (short TTL, complete data) ---
+
+func (lc *LeaderboardCache) getFullKey(tournamentID uuid.UUID) string {
+	return fmt.Sprintf("leaderboard:full:%s", tournamentID.String())
+}
+
+func (lc *LeaderboardCache) getCrossGameKey(tournamentID uuid.UUID) string {
+	return fmt.Sprintf("leaderboard:crossgame:%s", tournamentID.String())
+}
+
+// GetFullLeaderboard returns the cached full leaderboard JSON, or nil on miss.
+func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
+	data, err := lc.cache.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if data == "" {
+		if lc.metrics != nil {
+			lc.metrics.RecordCacheMiss("leaderboard_full")
+		}
+		return nil, nil
+	}
+	var entries []*domain.LeaderboardEntry
+	if err := json.Unmarshal([]byte(data), &entries); err != nil {
+		lc.cache.log.Warn("leaderboard cache: corrupt full leaderboard JSON, deleting key",
+			zap.String("key", key), zap.String("tournament_id", tournamentID.String()), zap.Error(err))
+		_ = lc.cache.Del(ctx, key)
+		return nil, nil
+	}
+	if lc.metrics != nil {
+		lc.metrics.RecordCacheHit("leaderboard_full")
+	}
+	return entries, nil
+}
+
+// SetFullLeaderboard caches the complete leaderboard with short TTL.
+func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error {
+	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
+}
+
+// GetFullCrossGameLeaderboard returns the cached cross-game leaderboard, or nil on miss.
+func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	key := lc.getCrossGameKey(tournamentID)
+	data, err := lc.cache.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if data == "" {
+		if lc.metrics != nil {
+			lc.metrics.RecordCacheMiss("leaderboard_crossgame")
+		}
+		return nil, nil
+	}
+	var entries []*domain.CrossGameLeaderboardEntry
+	if err := json.Unmarshal([]byte(data), &entries); err != nil {
+		lc.cache.log.Warn("leaderboard cache: corrupt cross-game leaderboard JSON, deleting key",
+			zap.String("key", key), zap.String("tournament_id", tournamentID.String()), zap.Error(err))
+		_ = lc.cache.Del(ctx, key)
+		return nil, nil
+	}
+	if lc.metrics != nil {
+		lc.metrics.RecordCacheHit("leaderboard_crossgame")
+	}
+	return entries, nil
+}
+
+// SetFullCrossGameLeaderboard caches the cross-game leaderboard with short TTL.
+func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error {
+	key := lc.getCrossGameKey(tournamentID)
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
+}
+
+// InvalidateFullLeaderboard deletes the full JSON caches for a tournament.
+func (lc *LeaderboardCache) InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error {
+	// Use Scan to find all limit-specific keys
+	pattern := fmt.Sprintf("leaderboard:full:%s:*", tournamentID.String())
+	crossKey := lc.getCrossGameKey(tournamentID)
+
+	var allKeys []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := lc.cache.Scan(ctx, cursor, pattern, 100)
+		if err != nil {
+			return err
+		}
+		allKeys = append(allKeys, keys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	allKeys = append(allKeys, crossKey)
+
+	if len(allKeys) > 0 {
+		return lc.cache.Del(ctx, allKeys...)
+	}
+	return nil
 }

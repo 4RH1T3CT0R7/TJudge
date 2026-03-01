@@ -601,8 +601,8 @@ func TestTeamHandler_GetMyTeam_NoTeam(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.GetMyTeam(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code) // Returns null, not 404
-	assert.Contains(t, rr.Body.String(), "null")
+	assert.Equal(t, http.StatusOK, rr.Code) // Returns null data, not 404
+	assert.Contains(t, rr.Body.String(), `"data":null`)
 }
 
 func TestTeamHandler_GetMyTeam_MissingUserID(t *testing.T) {

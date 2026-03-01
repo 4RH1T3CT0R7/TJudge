@@ -128,8 +128,7 @@ func TestProgramHandler_Create(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var response domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, reqBody["name"], response.Name)
 		assert.Equal(t, userID, response.UserID)
 
@@ -243,8 +242,7 @@ func TestProgramHandler_List(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, expectedPrograms[0].Name, response[0].Name)
 
@@ -320,8 +318,7 @@ func TestProgramHandler_Get(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedProgram.ID, response.ID)
 
 		mockRepo.AssertExpectations(t)
@@ -506,8 +503,7 @@ func TestProgramHandler_Update(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, reqBody["name"], response.Name)
 
 		mockRepo.AssertExpectations(t)
@@ -974,8 +970,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response []*domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, "v1", response[0].Name)
 		assert.Equal(t, "v2", response[1].Name)
@@ -1160,8 +1155,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response map[string]interface{}
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, float64(5), response["cleared"])
 		assert.Contains(t, response["message"], "5")
 
@@ -1706,8 +1700,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var response domain.Program
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
+		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "My Strategy", response.Name)
 		assert.Equal(t, "python", response.Language)
 		assert.Equal(t, userID, response.UserID)

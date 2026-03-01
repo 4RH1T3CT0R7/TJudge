@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -123,13 +124,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/auth/logout
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем access token из заголовка
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+	accessToken := middleware.ExtractToken(r)
+	if accessToken == "" {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
-
-	accessToken := authHeader[7:] // Remove "Bearer "
 
 	// Извлекаем refresh token из body (опционально)
 	var req struct {
@@ -160,14 +159,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // Me возвращает информацию о текущем пользователе
 // GET /api/v1/auth/me
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+	// Извлекаем токен из заголовка (middleware уже валидировал)
+	token := middleware.ExtractToken(r)
+	if token == "" {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
-
-	token := authHeader[7:] // Remove "Bearer "
 
 	// Получаем пользователя
 	user, err := h.authService.GetUserFromToken(r.Context(), token)
@@ -183,20 +180,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // UpdateProfile обновляет профиль пользователя
 // PUT /api/v1/auth/profile
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		writeError(w, errors.ErrUnauthorized)
-		return
-	}
-
-	token := authHeader[7:] // Remove "Bearer "
-
-	// Валидируем токен и получаем user ID
-	claims, err := h.authService.ValidateToken(token)
+	// Получаем user ID из контекста (установлен auth middleware)
+	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
-		h.log.LogError("Invalid token", err)
-		writeError(w, errors.ErrUnauthorized)
+		writeError(w, err)
 		return
 	}
 
@@ -208,7 +195,7 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обновляем профиль
-	user, err := h.authService.UpdateProfile(r.Context(), claims.UserID.String(), &req)
+	user, err := h.authService.UpdateProfile(r.Context(), userID.String(), &req)
 	if err != nil {
 		h.log.LogError("Failed to update profile", err)
 		writeError(w, err)

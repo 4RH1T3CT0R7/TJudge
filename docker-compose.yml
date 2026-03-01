@@ -15,9 +15,9 @@ services:
     image: postgres:15-alpine
     container_name: tjudge-postgres
     environment:
-      POSTGRES_DB: tjudge
-      POSTGRES_USER: tjudge
-      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ${DB_NAME:-tjudge}
+      POSTGRES_USER: ${DB_USER:-tjudge}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
       - "5433:5432"  # 5433 on host to avoid conflict with local PostgreSQL
@@ -57,9 +57,9 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,18 +79,18 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=dev-secret-key-change-in-production
-      - LOG_LEVEL=info
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FORMAT=json
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - BASE_URL=http://localhost:8080
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -126,19 +126,19 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=tjudge
-      - DB_PASSWORD=secret
-      - DB_NAME=tjudge
+      - DB_USER=${DB_USER:-tjudge}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_NAME=${DB_NAME:-tjudge}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - WORKER_MIN=2
-      - WORKER_MAX=10
-      - LOG_LEVEL=info
+      - WORKER_MIN=${WORKER_MIN:-2}
+      - WORKER_MAX=${WORKER_MAX:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FORMAT=json
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - HOST_PROGRAMS_PATH=/Users/artem/GolandProjects/TJudge/data/programs
+      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-./data/programs}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -206,8 +206,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=
     volumes:
