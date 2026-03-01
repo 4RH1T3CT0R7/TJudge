@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/api ./cmd/api
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.20
 
 # Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates wget

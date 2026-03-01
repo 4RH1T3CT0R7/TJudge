@@ -122,109 +122,37 @@ groups:
           description: "95% матчей обрабатываются дольше 30 секунд."
 
   # Алерты для инфраструктуры
+  # ПРИМЕЧАНИЕ: Алерты pg_up, redis_up, node_* требуют отдельных экспортеров
+  # (postgres-exporter, redis-exporter, node-exporter).
+  # Если вы их используете — раскомментируйте соответствующие алерты.
   - name: infrastructure
     rules:
-      # PostgreSQL недоступен
-      - alert: PostgreSQLDown
-        expr: pg_up == 0
-        for: 1m
-        labels:
-          severity: critical
-          service: database
-        annotations:
-          summary: "PostgreSQL недоступен"
-          description: "PostgreSQL не отвечает более 1 минуты."
+      # PostgreSQL недоступен (требуется postgres-exporter)
+      # - alert: PostgreSQLDown
+      #   expr: pg_up == 0
+      #   for: 1m
+      #   labels:
+      #     severity: critical
+      #     service: database
 
-      # Много соединений к PostgreSQL
-      - alert: HighPostgreSQLConnections
-        expr: pg_stat_activity_count > 40
+      # Redis недоступен (требуется redis-exporter)
+      # - alert: RedisDown
+      #   expr: redis_up == 0
+      #   for: 1m
+      #   labels:
+      #     severity: critical
+      #     service: cache
+
+      # Высокая длительность запросов к БД (из метрик приложения)
+      - alert: HighDBQueryLatency
+        expr: histogram_quantile(0.95, rate(tjudge_db_query_duration_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
           service: database
         annotations:
-          summary: "Много соединений к PostgreSQL"
-          description: "Количество соединений к PostgreSQL превышает 40."
-
-      # Redis недоступен
-      - alert: RedisDown
-        expr: redis_up == 0
-        for: 1m
-        labels:
-          severity: critical
-          service: cache
-        annotations:
-          summary: "Redis недоступен"
-          description: "Redis не отвечает более 1 минуты."
-
-      # Высокое использование памяти Redis
-      - alert: HighRedisMemory
-        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.80
-        for: 5m
-        labels:
-          severity: warning
-          service: cache
-        annotations:
-          summary: "Высокое использование памяти Redis"
-          description: "Redis использует более 80% выделенной памяти."
-
-  # Алерты для ресурсов
-  - name: resources
-    rules:
-      # Высокая загрузка CPU
-      - alert: HighCPUUsage
-        expr: |
-          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Высокая загрузка CPU"
-          description: "CPU загружен более чем на 80% на {{ $labels.instance }}."
-
-      # Критическая загрузка CPU
-      - alert: CriticalCPUUsage
-        expr: |
-          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Критическая загрузка CPU"
-          description: "CPU загружен более чем на 95% на {{ $labels.instance }}."
-
-      # Мало свободной памяти
-      - alert: LowMemory
-        expr: |
-          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 20
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Мало свободной памяти"
-          description: "Доступно менее 20% памяти на {{ $labels.instance }}."
-
-      # Критически мало памяти
-      - alert: CriticalLowMemory
-        expr: |
-          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Критически мало свободной памяти"
-          description: "Доступно менее 10% памяти на {{ $labels.instance }}."
-
-      # Мало места на диске
-      - alert: LowDiskSpace
-        expr: |
-          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Мало места на диске"
-          description: "Доступно менее 20% дискового пространства на {{ $labels.instance }}."
+          summary: "Высокая latency запросов к БД"
+          description: "95-й перцентиль запросов к БД превышает 1 секунду."
 
   # Бизнес-алерты
   - name: business

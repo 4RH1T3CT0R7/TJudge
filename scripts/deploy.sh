@@ -38,15 +38,11 @@ deploy_staging() {
 
     # Pull new images
     log_info "Pulling images for version ${VERSION}..."
-    VERSION=${VERSION} docker-compose -f docker-compose.staging.yml pull
+    VERSION=${VERSION} docker compose -f docker-compose.prod.yml pull
 
-    # Run migrations
-    log_info "Running database migrations..."
-    VERSION=${VERSION} docker-compose -f docker-compose.staging.yml run --rm api /app/bin/migrate up
-
-    # Deploy with rolling update
+    # Deploy with rolling update (migrate service runs automatically via depends_on)
     log_info "Deploying services..."
-    VERSION=${VERSION} docker-compose -f docker-compose.staging.yml up -d --remove-orphans
+    VERSION=${VERSION} docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
     # Wait for health
     log_info "Waiting for services to be healthy..."

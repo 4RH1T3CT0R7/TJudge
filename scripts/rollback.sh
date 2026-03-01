@@ -135,12 +135,16 @@ main() {
         exit 1
     fi
 
-    # Confirm rollback
-    read -p "Are you sure you want to rollback to ${previous_env}? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Rollback cancelled"
-        exit 0
+    # Confirm rollback (skip in non-interactive / CI mode)
+    if [ -t 0 ]; then
+        read -p "Are you sure you want to rollback to ${previous_env}? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Rollback cancelled"
+            exit 0
+        fi
+    else
+        log_info "Non-interactive mode, proceeding with rollback..."
     fi
 
     # Update nginx configuration

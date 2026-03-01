@@ -187,6 +187,7 @@ services:
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
       - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-}
+      - EXECUTOR_DOCKER_IMAGE=${EXECUTOR_DOCKER_IMAGE:-tjudge-cli:latest}
     deploy:
       resources:
         limits:
@@ -210,7 +211,7 @@ services:
 
   # Prometheus (optional - comment out on very weak hardware)
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     container_name: tjudge-prometheus
     ports:
       - "9092:9090"
@@ -231,13 +232,13 @@ services:
 
   # Grafana (optional - comment out on very weak hardware)
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.1.0
     container_name: tjudge-grafana
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana

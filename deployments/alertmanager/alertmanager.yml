@@ -48,16 +48,19 @@ route:
       receiver: 'ops-receiver'
 
 # Получатели уведомлений
+# ВАЖНО: Настройте URL-адреса webhook'ов для production!
+# По умолчанию используется api:8080 (внутренний адрес в Docker сети)
 receivers:
   - name: 'default-receiver'
     # Webhook для интеграций (Telegram, Discord и т.д.)
+    # Настройте URL на свой сервис уведомлений
     webhook_configs:
-      - url: 'http://host.docker.internal:8081/webhook/alerts'
+      - url: 'http://api:8080/internal/webhook/alerts'
         send_resolved: true
 
   - name: 'critical-receiver'
     webhook_configs:
-      - url: 'http://host.docker.internal:8081/webhook/critical'
+      - url: 'http://api:8080/internal/webhook/critical'
         send_resolved: true
     # Email для критических алертов (настроить для production)
     # email_configs:
@@ -66,12 +69,12 @@ receivers:
 
   - name: 'database-receiver'
     webhook_configs:
-      - url: 'http://host.docker.internal:8081/webhook/database'
+      - url: 'http://api:8080/internal/webhook/database'
         send_resolved: true
 
   - name: 'ops-receiver'
     webhook_configs:
-      - url: 'http://host.docker.internal:8081/webhook/ops'
+      - url: 'http://api:8080/internal/webhook/ops'
         send_resolved: true
 
 # Правила подавления алертов

@@ -14,19 +14,21 @@ chmod 700 "$SECRETS_DIR"
 
 # Function to generate random password
 generate_password() {
-    openssl rand -base64 32 | tr -d '/+=' | head -c 32
+    local length=${1:-32}
+    openssl rand -base64 48 | tr -d '/+=' | head -c "$length"
 }
 
 # Function to create secret file if it doesn't exist
 create_secret() {
     local name=$1
+    local length=${2:-32}
     local file="$SECRETS_DIR/${name}.txt"
 
     if [ -f "$file" ]; then
         echo "Secret '$name' already exists, skipping..."
     else
-        echo "Generating secret '$name'..."
-        generate_password > "$file"
+        echo "Generating secret '$name' (${length} chars)..."
+        generate_password "$length" > "$file"
         chmod 600 "$file"
         echo "Created $file"
     fi
@@ -34,7 +36,7 @@ create_secret() {
 
 # Create required secrets
 create_secret "db_password"
-create_secret "jwt_secret"
+create_secret "jwt_secret" 48
 create_secret "redis_password"
 
 echo ""

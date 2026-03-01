@@ -155,7 +155,7 @@ services:
 
   # Alertmanager для оповещений
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.27.0
     container_name: tjudge-alertmanager
     ports:
       - "9093:9093"
@@ -177,7 +177,7 @@ services:
 
   # Prometheus для метрик
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     container_name: tjudge-prometheus
     ports:
       - "9092:9090"
@@ -201,7 +201,7 @@ services:
 
   # Grafana для визуализации
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.1.0
     container_name: tjudge-grafana
     ports:
       - "3000:3000"
@@ -228,7 +228,7 @@ services:
 
   # Loki для логов
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.1.0
     container_name: tjudge-loki
     ports:
       - "3100:3100"
@@ -244,7 +244,7 @@ services:
 
   # Promtail для сбора логов
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:3.1.0
     container_name: tjudge-promtail
     volumes:
       - ./deployments/promtail/promtail-config.yml:/etc/promtail/config.yml

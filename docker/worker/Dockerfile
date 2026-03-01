@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/worker ./cmd/worker
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.20
 
 # Install Docker CLI for running tjudge-cli in containers
 RUN apk --no-cache add docker-cli ca-certificates
