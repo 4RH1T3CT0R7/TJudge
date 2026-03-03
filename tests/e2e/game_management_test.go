@@ -387,6 +387,282 @@ func TestE2E_TournamentGames(t *testing.T) {
 }
 
 // =============================================================================
+// Helper: register a user, promote to admin, return admin token and username
+// =============================================================================
+
+func registerAdmin(t *testing.T, client *TestClient, prefix string) string {
+	t.Helper()
+
+	accessToken := registerTestUser(t, client, prefix)
+	client.SetToken(accessToken)
+
+	meResp, err := client.doRequest("GET", "/api/v1/auth/me", nil)
+	require.NoError(t, err)
+	var meData struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}
+	err = decodeJSON(meResp.Body, &meData)
+	meResp.Body.Close()
+	require.NoError(t, err)
+
+	adminToken := promoteToAdmin(t, client, meData.ID, meData.Username, "SecurePass123!")
+	return adminToken
+}
+
+// =============================================================================
+// E2E Test: Admin Game CRUD (create, read, update)
+// =============================================================================
+
+func TestE2E_AdminGameCRUD(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	client := NewTestClient()
+	timestamp := time.Now().UnixNano()
+
+	// Register user and promote to admin
+	adminToken := registerAdmin(t, client, "admingamecrud")
+	client.SetToken(adminToken)
+
+	var gameID string
+	gameName := fmt.Sprintf("test_game_crud_%d", timestamp)
+	gameDisplayName := fmt.Sprintf("Test Game CRUD %d", timestamp)
+
+	// Step 1: Create a game as admin
+	t.Run("CreateGame", func(t *testing.T) {
+		req := CreateGameRequest{
+			Name:        gameName,
+			DisplayName: gameDisplayName,
+			Rules:       "Standard rules for CRUD test game.",
+		}
+
+		resp, err := client.doRequest("POST", "/api/v1/games", req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Create game failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var game GameResponse
+		err = client.parseResponse(resp, &game)
+		require.NoError(t, err)
+
+		require.NotEmpty(t, game.ID, "created game should have an ID")
+		assert.Equal(t, gameName, game.Name)
+		assert.Equal(t, gameDisplayName, game.DisplayName)
+
+		gameID = game.ID
+	})
+
+	// Step 2: Get the game by ID and verify
+	t.Run("GetCreatedGame", func(t *testing.T) {
+		require.NotEmpty(t, gameID, "game must be created first")
+
+		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/games/%s", gameID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var game GameResponse
+		err = client.parseResponse(resp, &game)
+		require.NoError(t, err)
+
+		assert.Equal(t, gameID, game.ID)
+		assert.Equal(t, gameName, game.Name)
+		assert.Equal(t, gameDisplayName, game.DisplayName)
+	})
+
+	// Step 3: Update the game
+	updatedDisplayName := fmt.Sprintf("Updated Game %d", timestamp)
+
+	t.Run("UpdateGame", func(t *testing.T) {
+		require.NotEmpty(t, gameID, "game must be created first")
+
+		req := UpdateGameRequest{
+			DisplayName: updatedDisplayName,
+			Rules:       "Updated rules for CRUD test game.",
+		}
+
+		resp, err := client.doRequest("PUT", fmt.Sprintf("/api/v1/games/%s", gameID), req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Update game failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var game GameResponse
+		err = client.parseResponse(resp, &game)
+		require.NoError(t, err)
+
+		assert.Equal(t, gameID, game.ID)
+		assert.Equal(t, updatedDisplayName, game.DisplayName)
+	})
+
+	// Step 4: Get again and verify update persisted
+	t.Run("GetUpdatedGame", func(t *testing.T) {
+		require.NotEmpty(t, gameID, "game must be created first")
+
+		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/games/%s", gameID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var game GameResponse
+		err = client.parseResponse(resp, &game)
+		require.NoError(t, err)
+
+		assert.Equal(t, gameID, game.ID)
+		assert.Equal(t, updatedDisplayName, game.DisplayName,
+			"game display name should be updated after PUT")
+	})
+}
+
+// =============================================================================
+// E2E Test: Add Game to Tournament
+// =============================================================================
+
+func TestE2E_GameAddToTournament(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	client := NewTestClient()
+	timestamp := time.Now().UnixNano()
+
+	// Register and promote to admin
+	adminToken := registerAdmin(t, client, "gameaddtourn")
+	client.SetToken(adminToken)
+
+	// Step 1: Create a game
+	var gameID string
+
+	t.Run("CreateGame", func(t *testing.T) {
+		req := CreateGameRequest{
+			Name:        fmt.Sprintf("tourn_game_%d", timestamp),
+			DisplayName: fmt.Sprintf("Tournament Game %d", timestamp),
+			Rules:       "Rules for tournament game add test.",
+		}
+
+		resp, err := client.doRequest("POST", "/api/v1/games", req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Create game failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var game GameResponse
+		err = client.parseResponse(resp, &game)
+		require.NoError(t, err)
+		require.NotEmpty(t, game.ID)
+
+		gameID = game.ID
+	})
+
+	// Step 2: Create a tournament
+	var tournamentID string
+
+	t.Run("CreateTournament", func(t *testing.T) {
+		req := CreateTournamentRequest{
+			Name:            fmt.Sprintf("E2E GameAdd Tournament %d", timestamp),
+			Description:     "Tournament for game-add E2E test",
+			GameType:        "prisoners_dilemma",
+			MaxParticipants: 10,
+		}
+
+		resp, err := client.doRequest("POST", "/api/v1/tournaments", req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Create tournament failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var tournamentResp TournamentResponse
+		err = client.parseResponse(resp, &tournamentResp)
+		require.NoError(t, err)
+		require.NotEmpty(t, tournamentResp.ID)
+
+		tournamentID = tournamentResp.ID
+	})
+
+	// Step 3: Add game to tournament
+	t.Run("AddGameToTournament", func(t *testing.T) {
+		require.NotEmpty(t, gameID, "game must be created first")
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+
+		req := map[string]string{
+			"game_id": gameID,
+		}
+
+		resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/games", tournamentID), req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// AddGameToTournament returns 204 No Content on success
+		require.Equal(t, http.StatusNoContent, resp.StatusCode,
+			"adding game to tournament should return 204 No Content")
+	})
+
+	// Step 4: Verify game appears in tournament's game list
+	t.Run("VerifyGameInTournament", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+		require.NotEmpty(t, gameID, "game must be created first")
+
+		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s/games", tournamentID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var games []GameResponse
+		err = client.parseResponse(resp, &games)
+		require.NoError(t, err)
+
+		found := false
+		for _, g := range games {
+			if g.ID == gameID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "game %s should appear in tournament %s game list", gameID, tournamentID)
+	})
+}
+
+// =============================================================================
+// E2E Test: Game List is Public (no auth required)
+// =============================================================================
+
+func TestE2E_GameListPublic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	// Create a client with no auth token set
+	client := NewTestClient()
+
+	t.Run("ListGamesWithoutAuth", func(t *testing.T) {
+		resp, err := client.doRequest("GET", "/api/v1/games", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode,
+			"game list endpoint should be publicly accessible without authentication")
+
+		var games []GameResponse
+		err = client.parseResponse(resp, &games)
+		require.NoError(t, err)
+
+		// The response should be a valid JSON array (possibly empty)
+		assert.NotNil(t, games, "games list should not be nil")
+		t.Logf("Public game list returned %d games", len(games))
+	})
+}
+
+// =============================================================================
 // E2E Test: Game Validation
 // =============================================================================
 

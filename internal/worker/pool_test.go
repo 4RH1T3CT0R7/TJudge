@@ -594,6 +594,93 @@ func TestPool_ProcessWithRetry_MatchNotFound(t *testing.T) {
 	processor.AssertNumberOfCalls(t, "Process", 1)
 }
 
+func TestPool_PanicRecovery_Respawns(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 2
+	cfg.MaxWorkers = 4
+	cfg.RetryAttempts = 1
+
+	queue := NewMockQueueManager()
+	log := testLogger()
+	m := testMetrics()
+
+	// Track how many times Process has been called.
+	var callCount atomic.Int32
+
+	// Use a custom processor that panics on the first call but succeeds on subsequent calls.
+	processor := NewMockMatchProcessor()
+
+	// We need to return matches so workers actually call Process and trigger the panic.
+	// Return enough matches so the respawned worker can pick one up too.
+	for i := 0; i < 20; i++ {
+		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
+	}
+	queue.On("Dequeue", mock.Anything).Return(nil, nil)
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
+
+	// First call panics, subsequent calls succeed.
+	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Run(func(args mock.Arguments) {
+		n := callCount.Add(1)
+		if n == 1 {
+			panic("test panic for recovery")
+		}
+	}).Return(nil)
+
+	pool := NewPool(cfg, queue, processor, log, m)
+	pool.Start()
+
+	// After the panic, the worker should be respawned (after ~1 second)
+	// and the total worker count should return to at least MinWorkers.
+	assert.Eventually(t, func() bool {
+		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// Verify that Process was called more than once (the panic happened and
+	// the respawned worker continued processing).
+	assert.Eventually(t, func() bool {
+		return callCount.Load() > 1
+	}, 5*time.Second, 100*time.Millisecond)
+
+	pool.Stop()
+}
+
+func TestPool_ProcessWithRetry_ContextCancelled(t *testing.T) {
+	cfg := testConfig()
+	cfg.MinWorkers = 1
+	cfg.MaxWorkers = 1
+	cfg.RetryAttempts = 3
+	cfg.RetryDelay = 2 * time.Second // Long delay so we can cancel during it
+
+	queue := NewMockQueueManager()
+	processor := NewMockMatchProcessor()
+	log := testLogger()
+	m := testMetrics()
+
+	pool := NewPool(cfg, queue, processor, log, m)
+
+	match := testMatch()
+
+	// Processor always fails, triggering retry with backoff
+	processor.On("Process", mock.Anything, match).Return(errors.New("always fails"))
+
+	// Call processWithRetry directly with a cancellable context.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel the context after a short delay — during the retry backoff
+	// between attempt 1 (immediate) and attempt 2 (after RetryDelay * 2 = 4s).
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+
+	err := pool.processWithRetry(ctx, match)
+
+	// The function should return context.Canceled because the context was
+	// cancelled while waiting for the retry delay.
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestPool_GetMatchesProcessed(t *testing.T) {
 	cfg := testConfig()
 	cfg.MinWorkers = 1

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -265,4 +266,82 @@ func TestTournamentCache_GetList_NotFound(t *testing.T) {
 	got, err := tc.GetList(ctx, "nonexistent:filter")
 	require.NoError(t, err)
 	assert.Nil(t, got)
+}
+
+func TestTournamentCache_IncrementParticipantsCount_SetsExpiry(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	tc := NewTournamentCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	err := tc.IncrementParticipantsCount(ctx, tournamentID)
+	require.NoError(t, err)
+
+	// Verify that TTL was set on the key (first increment creates the key with val=1).
+	key := fmt.Sprintf("tournament:%s:participants_count", tournamentID.String())
+	ttl := mr.TTL(key)
+	assert.Greater(t, ttl, time.Duration(0), "TTL should be set after first increment")
+}
+
+func TestTournamentCache_IncrementParticipantsCount_NoExpiryReset(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	tc := NewTournamentCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	// First increment — creates the key with value 1 and sets TTL.
+	err := tc.IncrementParticipantsCount(ctx, tournamentID)
+	require.NoError(t, err)
+
+	key := fmt.Sprintf("tournament:%s:participants_count", tournamentID.String())
+	ttlAfterFirst := mr.TTL(key)
+	assert.Greater(t, ttlAfterFirst, time.Duration(0), "TTL should be set after first increment")
+
+	// Simulate some time passing so TTL decreases.
+	mr.FastForward(10 * time.Second)
+	ttlBeforeSecond := mr.TTL(key)
+
+	// Second increment — value should become 2, TTL should NOT be reset.
+	err = tc.IncrementParticipantsCount(ctx, tournamentID)
+	require.NoError(t, err)
+
+	// Verify value is 2.
+	count, err := tc.GetParticipantsCount(ctx, tournamentID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	// TTL should not have increased (it was only set when val==1).
+	ttlAfterSecond := mr.TTL(key)
+	assert.LessOrEqual(t, ttlAfterSecond, ttlBeforeSecond,
+		"TTL should not be reset on subsequent increments")
+}
+
+func TestTournamentCache_InvalidateList_DeletesAllKeys(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	tc := NewTournamentCache(c)
+	ctx := context.Background()
+
+	// Manually set 3 keys matching the "tournaments:list:*" pattern.
+	mr.Set("tournaments:list:status:active", "data1")
+	mr.Set("tournaments:list:status:pending", "data2")
+	mr.Set("tournaments:list:all", "data3")
+
+	// Verify the keys exist before invalidation.
+	assert.True(t, mr.Exists("tournaments:list:status:active"))
+	assert.True(t, mr.Exists("tournaments:list:status:pending"))
+	assert.True(t, mr.Exists("tournaments:list:all"))
+
+	err := tc.InvalidateList(ctx)
+	require.NoError(t, err)
+
+	// All 3 keys should be deleted.
+	assert.False(t, mr.Exists("tournaments:list:status:active"))
+	assert.False(t, mr.Exists("tournaments:list:status:pending"))
+	assert.False(t, mr.Exists("tournaments:list:all"))
 }

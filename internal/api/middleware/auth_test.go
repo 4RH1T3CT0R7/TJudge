@@ -481,3 +481,38 @@ func TestExtractToken_NonBearerPrefix(t *testing.T) {
 	token := middleware.ExtractToken(req)
 	assert.Equal(t, "", token)
 }
+
+func TestAuth_WebSocket_MultipleProtocols(t *testing.T) {
+	mockAuth := new(MockAuthService)
+	log := newTestLogger()
+
+	userID := uuid.New()
+	claims := &auth.Claims{UserID: userID, Username: "wsuser"}
+	user := &domain.User{ID: userID, Role: domain.RoleUser}
+
+	// The middleware splits comma-separated protocols and finds "access_token.validtoken123"
+	mockAuth.On("ValidateToken", "validtoken123").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "validtoken123").Return(false, nil)
+	mockAuth.On("GetUserFromToken", mock.Anything, "validtoken123").Return(user, nil)
+
+	var capturedUserID uuid.UUID
+	handlerCalled := false
+	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		capturedUserID, _ = middleware.GetUserID(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/ws", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Protocol", "chat, access_token.validtoken123")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, handlerCalled, "Handler should be called with valid WebSocket token")
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, userID, capturedUserID)
+	mockAuth.AssertExpectations(t)
+}

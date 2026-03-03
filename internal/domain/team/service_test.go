@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -823,4 +824,143 @@ func TestService_GetUserTeamInTournament_Success(t *testing.T) {
 	result, err := svc.GetUserTeamInTournament(ctx, tID, userID)
 	require.NoError(t, err)
 	assert.Equal(t, team.ID, result.ID)
+}
+
+// --- LeaveTeam error edge cases ---
+
+func TestService_LeaveTeam_GetMemberCountError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(0, fmt.Errorf("db error"))
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get member count")
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_LeaveTeam_GetMembersError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return(nil, fmt.Errorf("db error"))
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get team members")
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_LeaveTeam_UpdateLeadershipError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	otherID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{
+		{UserID: leaderID},
+		{UserID: otherID},
+	}, nil)
+	teamRepo.On("Update", ctx, mock.MatchedBy(func(t *domain.Team) bool {
+		return t.LeaderID == otherID
+	})).Return(fmt.Errorf("db error"))
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to transfer leadership")
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_LeaveTeam_GetMembersReturnsOnlyLeader(t *testing.T) {
+	// Race condition: GetMemberCount returns 2 but GetMembers only returns
+	// the leader (other members left between the two calls). The team should
+	// be deleted since there are effectively no other members.
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	tournamentID := uuid.New()
+
+	team := &domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tournamentID}
+	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{
+		{UserID: leaderID},
+	}, nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(&domain.Tournament{
+		ID:     tournamentID,
+		Status: domain.TournamentPending,
+	}, nil)
+	teamRepo.On("Delete", ctx, teamID).Return(nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	assert.NoError(t, err)
+	teamRepo.AssertNotCalled(t, "RemoveMember")
+	teamRepo.AssertNotCalled(t, "Update")
+	teamRepo.AssertCalled(t, "Delete", ctx, teamID)
+	teamRepo.AssertExpectations(t)
+}
+
+func TestService_LeaveTeam_GetMembersReturnsOnlyLeader_ActiveTournament(t *testing.T) {
+	// Same race condition, but tournament is active — team cannot be deleted.
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	tournamentID := uuid.New()
+
+	team := &domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tournamentID}
+	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{
+		{UserID: leaderID},
+	}, nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(&domain.Tournament{
+		ID:     tournamentID,
+		Status: domain.TournamentActive,
+	}, nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete team during active tournament")
+	teamRepo.AssertNotCalled(t, "Delete")
+	teamRepo.AssertNotCalled(t, "RemoveMember")
+}
+
+func TestService_RemoveMember_IsUserInTeamError(t *testing.T) {
+	svc, teamRepo, _ := newTestTeamService(t)
+	ctx := context.Background()
+	teamID := uuid.New()
+	leaderID := uuid.New()
+	targetID := uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, targetID).Return(false, fmt.Errorf("db error"))
+
+	err := svc.RemoveMember(ctx, teamID, targetID, leaderID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to check user in team")
+	teamRepo.AssertExpectations(t)
 }

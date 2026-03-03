@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1044,4 +1045,62 @@ func TestService_Logout_RefreshBlacklistError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "blacklist refresh token")
 	blacklist.AssertExpectations(t)
+}
+
+func TestService_Logout_TokenTTLZero(t *testing.T) {
+	// When the access token has expired (TTL <= 0), ValidateToken returns an error.
+	// In this case, the Logout method skips blacklisting the access token entirely
+	// (the ttl > 0 branch is never reached). The function should still return nil.
+	userRepo := new(MockUserRepository)
+	blacklist := new(MockTokenBlacklist)
+	// Use a very short access TTL so the token expires quickly
+	jwtManager := NewJWTManager("test-secret-key-123", 1*time.Millisecond, 7*24*time.Hour)
+	log, _ := logger.New("debug", "json")
+	service := NewService(userRepo, jwtManager, blacklist, log)
+
+	ctx := context.Background()
+
+	userID := uuid.New()
+	accessToken, err := jwtManager.GenerateAccessToken(userID, "testuser")
+	require.NoError(t, err)
+
+	// Wait for the token to expire (TTL becomes 0 or negative)
+	time.Sleep(10 * time.Millisecond)
+
+	// Logout with expired access token and no refresh token.
+	// ValidateToken fails (expired), so the blacklist is NOT called for access token.
+	err = service.Logout(ctx, accessToken, "")
+
+	assert.NoError(t, err)
+	// Verify that blacklist.Add was never called (token expired, TTL <= 0)
+	blacklist.AssertNotCalled(t, "Add")
+}
+
+func TestService_UpdateProfile_GetByEmailInternalError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{
+		ID:           userID,
+		Username:     "testuser",
+		Email:        "old@example.com",
+		PasswordHash: "oldhash",
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	// GetByEmail returns a non-NotFound error (e.g., DB connection error)
+	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, fmt.Errorf("db connection error"))
+
+	req := &UpdateProfileRequest{
+		Email: "new@example.com",
+	}
+
+	result, err := service.UpdateProfile(ctx, userID.String(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "failed to check email uniqueness")
+	userRepo.AssertExpectations(t)
 }

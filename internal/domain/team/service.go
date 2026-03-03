@@ -225,6 +225,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 			return errors.Wrap(err, "failed to get team members")
 		}
 
+		transferred := false
 		for _, m := range members {
 			if m.UserID != userID {
 				team.LeaderID = m.UserID
@@ -232,8 +233,28 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 					return errors.Wrap(err, "failed to transfer leadership")
 				}
 				s.log.Info("Team leadership transferred", zap.String("team_id", teamID.String()), zap.String("new_leader_id", m.UserID.String()))
+				transferred = true
 				break
 			}
+		}
+
+		if !transferred {
+			// Гонка: между GetMemberCount и GetMembers остальные участники покинули команду.
+			// Команда фактически пуста — удаляем её.
+			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+			if tErr != nil {
+				return errors.Wrap(tErr, "failed to check tournament status")
+			}
+			if tournament.Status == domain.TournamentActive {
+				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
+			}
+
+			if err := s.teamRepo.Delete(ctx, teamID); err != nil {
+				return errors.Wrap(err, "failed to delete team")
+			}
+			s.log.Info("Team deleted (no other members found for leadership transfer)",
+				zap.String("team_id", teamID.String()), zap.String("user_id", userID.String()))
+			return nil
 		}
 	}
 

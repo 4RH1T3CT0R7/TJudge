@@ -10,6 +10,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
+	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -652,5 +653,190 @@ func (s *MatchRepositorySuite) TestGetPending() {
 	// Verify they are all pending
 	for _, m := range matches {
 		assert.Equal(s.T(), domain.MatchPending, m.Status)
+	}
+}
+
+// --- GetByID_Success, GetStuckRunning, BatchUpdateStatus, BatchUpdateResults, ListWithCursor ---
+
+func (s *MatchRepositorySuite) TestGetByID_Success() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("gbids")
+	match := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityHigh, 3)
+
+	ctx := context.Background()
+	result, err := s.repo.GetByID(ctx, match.ID)
+	require.NoError(s.T(), err)
+
+	assert.Equal(s.T(), match.ID, result.ID)
+	assert.Equal(s.T(), tournament.ID, result.TournamentID)
+	assert.Equal(s.T(), prog1.ID, result.Program1ID)
+	assert.Equal(s.T(), prog2.ID, result.Program2ID)
+	assert.Equal(s.T(), "prisoners_dilemma", result.GameType)
+	assert.Equal(s.T(), domain.MatchPending, result.Status)
+	assert.Equal(s.T(), domain.PriorityHigh, result.Priority)
+	assert.Equal(s.T(), 3, result.RoundNumber)
+	assert.Nil(s.T(), result.Score1)
+	assert.Nil(s.T(), result.Score2)
+	assert.Nil(s.T(), result.Winner)
+	assert.Nil(s.T(), result.ErrorCode)
+	assert.Nil(s.T(), result.ErrorMessage)
+	assert.Nil(s.T(), result.StartedAt)
+	assert.Nil(s.T(), result.CompletedAt)
+	assert.NotZero(s.T(), result.CreatedAt)
+}
+
+func (s *MatchRepositorySuite) TestGetStuckRunning() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("stuck")
+
+	ctx := context.Background()
+
+	// Create a running match with started_at set far in the past
+	stuckMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+	// Set status to running with an old started_at
+	oldTime := time.Now().Add(-2 * time.Hour)
+	_, err := s.database.ExecContext(ctx,
+		"UPDATE matches SET status = $2, started_at = $3 WHERE id = $1",
+		stuckMatch.ID, domain.MatchRunning, oldTime)
+	require.NoError(s.T(), err)
+
+	// Create a recently-started running match (should NOT be stuck)
+	recentMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+	_, err = s.database.ExecContext(ctx,
+		"UPDATE matches SET status = $2, started_at = NOW() WHERE id = $1",
+		recentMatch.ID, domain.MatchRunning)
+	require.NoError(s.T(), err)
+
+	// Create a pending match (should NOT be returned)
+	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+
+	// Get stuck matches with 1-hour threshold
+	stuckMatches, err := s.repo.GetStuckRunning(ctx, 1*time.Hour, 10)
+	require.NoError(s.T(), err)
+
+	// Should find at least the stuck match
+	var foundStuck bool
+	var foundRecent bool
+	for _, m := range stuckMatches {
+		if m.ID == stuckMatch.ID {
+			foundStuck = true
+		}
+		if m.ID == recentMatch.ID {
+			foundRecent = true
+		}
+	}
+	assert.True(s.T(), foundStuck, "should find the stuck match")
+	assert.False(s.T(), foundRecent, "should NOT find the recently started match")
+}
+
+func (s *MatchRepositorySuite) TestBatchUpdateStatus() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("batus")
+
+	// Create 3 pending matches
+	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+
+	ctx := context.Background()
+	matchIDs := []uuid.UUID{m1.ID, m2.ID, m3.ID}
+
+	// Batch update to completed
+	err := s.repo.BatchUpdateStatus(ctx, matchIDs, domain.MatchCompleted)
+	require.NoError(s.T(), err)
+
+	// Verify all 3 are now completed
+	for _, id := range matchIDs {
+		result, err := s.repo.GetByID(ctx, id)
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), domain.MatchCompleted, result.Status)
+	}
+}
+
+func (s *MatchRepositorySuite) TestBatchUpdateResults() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("batur")
+
+	// Create 3 running matches
+	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
+	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
+	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
+
+	ctx := context.Background()
+
+	results := map[uuid.UUID]*domain.MatchResult{
+		m1.ID: {MatchID: m1.ID, Score1: 10, Score2: 5, Winner: 1},
+		m2.ID: {MatchID: m2.ID, Score1: 3, Score2: 3, Winner: 0},
+		m3.ID: {MatchID: m3.ID, Score1: 0, Score2: 0, Winner: 0, ErrorCode: 1, ErrorMessage: "timeout"},
+	}
+
+	err := s.repo.BatchUpdateResults(ctx, results)
+	require.NoError(s.T(), err)
+
+	// Verify m1: completed with scores
+	r1, err := s.repo.GetByID(ctx, m1.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), domain.MatchCompleted, r1.Status)
+	require.NotNil(s.T(), r1.Score1)
+	assert.Equal(s.T(), 10, *r1.Score1)
+	require.NotNil(s.T(), r1.Score2)
+	assert.Equal(s.T(), 5, *r1.Score2)
+	require.NotNil(s.T(), r1.Winner)
+	assert.Equal(s.T(), 1, *r1.Winner)
+	assert.NotNil(s.T(), r1.CompletedAt)
+
+	// Verify m2: completed draw
+	r2, err := s.repo.GetByID(ctx, m2.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), domain.MatchCompleted, r2.Status)
+	require.NotNil(s.T(), r2.Winner)
+	assert.Equal(s.T(), 0, *r2.Winner)
+
+	// Verify m3: failed with error
+	r3, err := s.repo.GetByID(ctx, m3.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), domain.MatchFailed, r3.Status)
+	require.NotNil(s.T(), r3.ErrorCode)
+	assert.Equal(s.T(), 1, *r3.ErrorCode)
+	require.NotNil(s.T(), r3.ErrorMessage)
+	assert.Equal(s.T(), "timeout", *r3.ErrorMessage)
+}
+
+func (s *MatchRepositorySuite) TestListWithCursor() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("lstcr")
+
+	// Create 5 matches with slight time gaps to ensure distinct created_at values
+	for i := 0; i < 5; i++ {
+		s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
+	}
+
+	ctx := context.Background()
+
+	// First page: get first 2
+	first := 2
+	pageReq := &pagination.PageRequest{First: &first}
+	matches, hasMore, err := s.repo.ListWithCursor(ctx, domain.MatchFilter{
+		TournamentID: &tournament.ID,
+	}, pageReq)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), matches, 2)
+	assert.True(s.T(), hasMore, "should have more pages with 5 total items and limit 2")
+
+	// Use the created_at of the last result as cursor for the next page
+	lastMatch := matches[len(matches)-1]
+	cursor := pagination.NewTimestampCursor(lastMatch.CreatedAt)
+	cursorStr, err := cursor.Encode()
+	require.NoError(s.T(), err)
+
+	// Second page
+	pageReq2 := &pagination.PageRequest{First: &first, After: &cursorStr}
+	matches2, hasMore2, err := s.repo.ListWithCursor(ctx, domain.MatchFilter{
+		TournamentID: &tournament.ID,
+	}, pageReq2)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), matches2, 2)
+	assert.True(s.T(), hasMore2, "should have one more page")
+
+	// Verify no overlap between pages
+	for _, m1 := range matches {
+		for _, m2 := range matches2 {
+			assert.NotEqual(s.T(), m1.ID, m2.ID, "pages should not overlap")
+		}
 	}
 }

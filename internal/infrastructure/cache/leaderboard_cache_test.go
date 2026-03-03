@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -253,6 +254,51 @@ func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
 		result, _ := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
 		assert.Nil(t, result)
 	})
+}
+
+func TestLeaderboardCache_GetFullLeaderboard_CorruptJSON(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	// The full leaderboard key format is "leaderboard:full:<id>:<limit>".
+	limit := 100
+	key := fmt.Sprintf("leaderboard:full:%s:%d", tournamentID.String(), limit)
+
+	// Set corrupt JSON directly via miniredis.
+	mr.Set(key, "not-json{{{")
+	require.True(t, mr.Exists(key), "key should exist before GetFullLeaderboard")
+
+	// GetFullLeaderboard should auto-delete the corrupt key and return nil, nil.
+	result, err := lc.GetFullLeaderboard(ctx, tournamentID, limit)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+
+	// The key should have been deleted.
+	assert.False(t, mr.Exists(key), "corrupt key should be deleted")
+}
+
+func TestLeaderboardCache_GetTop_InvalidUUID(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	// The sorted set key is "leaderboard:<id>".
+	key := fmt.Sprintf("leaderboard:%s", tournamentID.String())
+
+	// Add a member with an invalid UUID string to the sorted set.
+	mr.ZAdd(key, 1500, "not-a-valid-uuid")
+
+	// GetTop should skip the invalid UUID member and return an empty slice.
+	entries, err := lc.GetTop(ctx, tournamentID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "invalid UUID members should be skipped")
 }
 
 func TestLeaderboardCache_Clear(t *testing.T) {

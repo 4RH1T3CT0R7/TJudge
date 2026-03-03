@@ -2298,3 +2298,613 @@ func TestRaceConditionInJoin(t *testing.T) {
 		assert.Contains(t, err.Error(), "lock already held")
 	})
 }
+
+// =============================================================================
+// MockLeaderboardCacher
+// =============================================================================
+
+// MockLeaderboardCacher mocks the LeaderboardCacher interface for tests that
+// need fine-grained control over cache behaviour (e.g. simulating cache-set
+// failures while still returning data from the repository).
+type MockLeaderboardCacher struct {
+	mock.Mock
+}
+
+func (m *MockLeaderboardCacher) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
+}
+
+func (m *MockLeaderboardCacher) UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error {
+	args := m.Called(ctx, tournamentID, programID, rating)
+	return args.Error(0)
+}
+
+func (m *MockLeaderboardCacher) Clear(ctx context.Context, tournamentID uuid.UUID) error {
+	args := m.Called(ctx, tournamentID)
+	return args.Error(0)
+}
+
+func (m *MockLeaderboardCacher) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
+}
+
+func (m *MockLeaderboardCacher) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error {
+	args := m.Called(ctx, tournamentID, limit, entries)
+	return args.Error(0)
+}
+
+func (m *MockLeaderboardCacher) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+	args := m.Called(ctx, tournamentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.CrossGameLeaderboardEntry), args.Error(1)
+}
+
+func (m *MockLeaderboardCacher) SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error {
+	args := m.Called(ctx, tournamentID, entries)
+	return args.Error(0)
+}
+
+func (m *MockLeaderboardCacher) InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error {
+	args := m.Called(ctx, tournamentID)
+	return args.Error(0)
+}
+
+// newTestServiceWithMockLeaderboard creates a Service wired with a
+// MockLeaderboardCacher instead of the real Redis-backed one. This allows
+// tests to assert on cache interactions (e.g. verifying behaviour when
+// SetFullLeaderboard returns an error).
+func newTestServiceWithMockLeaderboard(t *testing.T) (
+	*Service,
+	*MockTournamentRepository,
+	*MockMatchRepository,
+	*MockQueueManager,
+	*MockDistributedLock,
+	*MockGameRepository,
+	*MockLeaderboardCacher,
+) {
+	t.Helper()
+	tournamentRepo := new(MockTournamentRepository)
+	matchRepo := new(MockMatchRepository)
+	queueManager := new(MockQueueManager)
+	distributedLock := new(MockDistributedLock)
+	gameRepo := new(MockGameRepository)
+	leaderboardCache := new(MockLeaderboardCacher)
+
+	testCache := setupTestRedisCache(t)
+	t.Cleanup(func() { testCache.Close() })
+	tournamentCache := cache.NewTournamentCache(testCache)
+
+	log, _ := logger.New("error", "json")
+
+	service := NewService(
+		tournamentRepo,
+		matchRepo,
+		queueManager,
+		gameRepo,
+		tournamentCache,
+		leaderboardCache,
+		events.NoopBus{},
+		distributedLock,
+		log,
+	)
+	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo, leaderboardCache
+}
+
+// =============================================================================
+// New test functions
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// TestService_CreateMatch_EnqueueFailureNonFatal
+// -----------------------------------------------------------------------------
+
+func TestService_CreateMatch_EnqueueFailureNonFatal(t *testing.T) {
+	service, tournamentRepo, matchRepo, queueManager, _, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	program1ID := uuid.New()
+	program2ID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Test Tournament",
+		GameType: "prisoners_dilemma",
+		Status:   domain.TournamentActive,
+	}
+
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+	matchRepo.On("Create", ctx, mock.AnythingOfType("*domain.Match")).Return(nil)
+	queueManager.On("Enqueue", ctx, mock.AnythingOfType("*domain.Match")).
+		Return(fmt.Errorf("redis down"))
+
+	result, err := service.CreateMatch(ctx, tournamentID, program1ID, program2ID, domain.PriorityMedium)
+	// Enqueue failure is non-fatal: the match is still created.
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, program1ID, result.Program1ID)
+	assert.Equal(t, program2ID, result.Program2ID)
+
+	matchRepo.AssertCalled(t, "Create", ctx, mock.AnythingOfType("*domain.Match"))
+	queueManager.AssertCalled(t, "Enqueue", ctx, mock.AnythingOfType("*domain.Match"))
+}
+
+// -----------------------------------------------------------------------------
+// TestService_Join_GetParticipantsCountError
+// -----------------------------------------------------------------------------
+
+func TestService_Join_GetParticipantsCountError(t *testing.T) {
+	service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	maxParticipants := 10
+	tournament := &domain.Tournament{
+		ID:              tournamentID,
+		Name:            "Test Tournament",
+		GameType:        "chess",
+		Status:          domain.TournamentPending,
+		MaxParticipants: &maxParticipants,
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+	tournamentRepo.On("GetParticipantsCount", ctx, tournamentID).
+		Return(0, fmt.Errorf("db connection lost"))
+
+	req := &JoinRequest{
+		TournamentID: tournamentID,
+		ProgramID:    uuid.New(),
+	}
+
+	err := service.Join(ctx, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get participants count")
+	assert.Contains(t, err.Error(), "db connection lost")
+
+	// AddParticipant should never be called because GetParticipantsCount failed.
+	tournamentRepo.AssertNotCalled(t, "AddParticipant", mock.Anything, mock.Anything)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_Start_SetActiveGameFailure_StillSucceeds
+// -----------------------------------------------------------------------------
+
+func TestService_Start_SetActiveGameFailure_StillSucceeds(t *testing.T) {
+	service, tournamentRepo, _, _, distributedLock, gameRepo := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Multi-Game Tournament",
+		GameType: "multi",
+		Status:   domain.TournamentPending,
+	}
+
+	games := []*domain.TournamentGame{
+		{TournamentID: tournamentID, GameID: gameID, IsActive: false},
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(tournament, nil)
+	tournamentRepo.On("GetParticipantsCount", mock.Anything, tournamentID).Return(3, nil)
+	tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Tournament")).Return(nil)
+	gameRepo.On("GetTournamentGames", mock.Anything, tournamentID).Return(games, nil)
+	gameRepo.On("SetActiveGame", mock.Anything, tournamentID, gameID).
+		Return(fmt.Errorf("db write error on game activation"))
+
+	err := service.Start(ctx, tournamentID)
+	// SetActiveGame failure is non-fatal (warn-and-continue).
+	require.NoError(t, err)
+
+	// Tournament status should still be updated.
+	tournamentRepo.AssertCalled(t, "Update", mock.Anything, mock.MatchedBy(func(t *domain.Tournament) bool {
+		return t.Status == domain.TournamentActive && t.StartTime != nil
+	}))
+	gameRepo.AssertCalled(t, "SetActiveGame", mock.Anything, tournamentID, gameID)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_GetLeaderboard_CacheSetFailure_ReturnsData
+// -----------------------------------------------------------------------------
+
+func TestService_GetLeaderboard_CacheSetFailure_ReturnsData(t *testing.T) {
+	service, tournamentRepo, _, _, _, _, leaderboardCache := newTestServiceWithMockLeaderboard(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	programID := uuid.New()
+
+	entries := []*domain.LeaderboardEntry{
+		{Rank: 1, ProgramID: programID, ProgramName: "bot-v1", Rating: 1800, Wins: 5, Losses: 2, TotalGames: 7},
+	}
+
+	// Cache miss on full leaderboard.
+	leaderboardCache.On("GetFullLeaderboard", ctx, tournamentID, 10).
+		Return(nil, nil)
+	// Repository returns data.
+	tournamentRepo.On("GetLeaderboard", ctx, tournamentID, 10).Return(entries, nil)
+	// Cache set fails.
+	leaderboardCache.On("SetFullLeaderboard", ctx, tournamentID, 10, entries).
+		Return(fmt.Errorf("redis write error"))
+	// UpdateRating succeeds for each entry.
+	leaderboardCache.On("UpdateRating", ctx, tournamentID, programID, 1800).
+		Return(nil)
+
+	result, err := service.GetLeaderboard(ctx, tournamentID, 10)
+	// Data should be returned despite cache set failure.
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, programID, result[0].ProgramID)
+	assert.Equal(t, 1800, result[0].Rating)
+	assert.Equal(t, "bot-v1", result[0].ProgramName)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_GetCrossGameLeaderboard_CacheSetFailure
+// -----------------------------------------------------------------------------
+
+func TestService_GetCrossGameLeaderboard_CacheSetFailure(t *testing.T) {
+	service, tournamentRepo, _, _, _, _, leaderboardCache := newTestServiceWithMockLeaderboard(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	entries := []*domain.CrossGameLeaderboardEntry{
+		{Rank: 1, TeamName: "Team Alpha", TotalRating: 3000, TotalWins: 10},
+		{Rank: 2, TeamName: "Team Beta", TotalRating: 2500, TotalWins: 7},
+	}
+
+	// Cache miss.
+	leaderboardCache.On("GetFullCrossGameLeaderboard", ctx, tournamentID).
+		Return(nil, nil)
+	// Repository returns data.
+	tournamentRepo.On("GetCrossGameLeaderboard", ctx, tournamentID).Return(entries, nil)
+	// Cache set fails.
+	leaderboardCache.On("SetFullCrossGameLeaderboard", ctx, tournamentID, entries).
+		Return(fmt.Errorf("redis write error"))
+
+	result, err := service.GetCrossGameLeaderboard(ctx, tournamentID)
+	// Data should still be returned despite cache set failure.
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	assert.Equal(t, "Team Alpha", result[0].TeamName)
+	assert.Equal(t, 3000, result[0].TotalRating)
+	assert.Equal(t, "Team Beta", result[1].TeamName)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_GetLeaderboard_SingleflightDedup
+// -----------------------------------------------------------------------------
+
+func TestService_GetLeaderboard_SingleflightDedup(t *testing.T) {
+	service, tournamentRepo, _, _, _, _, leaderboardCache := newTestServiceWithMockLeaderboard(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	programID := uuid.New()
+
+	entries := []*domain.LeaderboardEntry{
+		{Rank: 1, ProgramID: programID, ProgramName: "bot-v1", Rating: 1800, Wins: 5, Losses: 2, TotalGames: 7},
+	}
+
+	// Cache always misses.
+	leaderboardCache.On("GetFullLeaderboard", mock.Anything, tournamentID, 10).
+		Return(nil, nil)
+	leaderboardCache.On("SetFullLeaderboard", mock.Anything, tournamentID, 10, mock.Anything).
+		Return(nil)
+	leaderboardCache.On("UpdateRating", mock.Anything, tournamentID, programID, 1800).
+		Return(nil)
+
+	// Track how many times the DB is actually called.
+	var dbCallCount int64
+	tournamentRepo.On("GetLeaderboard", mock.Anything, tournamentID, 10).
+		Run(func(args mock.Arguments) {
+			atomic.AddInt64(&dbCallCount, 1)
+			// Simulate slow query so all goroutines pile up.
+			time.Sleep(50 * time.Millisecond)
+		}).
+		Return(entries, nil)
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			result, err := service.GetLeaderboard(ctx, tournamentID, 10)
+			assert.NoError(t, err)
+			assert.Len(t, result, 1)
+		}()
+	}
+
+	wg.Wait()
+
+	// Singleflight must collapse all concurrent calls into a single DB query.
+	assert.Equal(t, int64(1), atomic.LoadInt64(&dbCallCount),
+		"singleflight should deduplicate concurrent GetLeaderboard calls into 1 DB query")
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_GetProgramsError
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_GetProgramsError(t *testing.T) {
+	service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	programRepo := new(MockProgramRepository)
+	programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).
+		Return(nil, fmt.Errorf("program db error"))
+
+	req := &ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: uuid.New(),
+		TeamID:       uuid.New(),
+	}
+
+	err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get programs")
+	assert.Contains(t, err.Error(), "program db error")
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_NoOpponents
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_NoOpponents(t *testing.T) {
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	newProgramID := uuid.New()
+	teamID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	// Only the new program exists (same ID) -- no opponents.
+	programs := []*domain.Program{
+		{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID},
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	programRepo := new(MockProgramRepository)
+	programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
+
+	req := &ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: newProgramID,
+		TeamID:       teamID,
+	}
+
+	err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+	require.NoError(t, err)
+
+	// No matches should be created when there are no opponents.
+	matchRepo.AssertNotCalled(t, "CreateBatch", mock.Anything, mock.Anything)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_SameTeamSkipped
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_SameTeamSkipped(t *testing.T) {
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	teamID := uuid.New()
+	newProgramID := uuid.New()
+	sameTeamProgramID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	// Two programs, but both belong to the same team.
+	programs := []*domain.Program{
+		{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID},
+		{ID: sameTeamProgramID, Name: "Teammate Bot", GameType: "chess", TeamID: &teamID},
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	programRepo := new(MockProgramRepository)
+	programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
+
+	req := &ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: newProgramID,
+		TeamID:       teamID,
+	}
+
+	err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+	require.NoError(t, err)
+
+	// Same-team programs are skipped, so no matches should be created.
+	matchRepo.AssertNotCalled(t, "CreateBatch", mock.Anything, mock.Anything)
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_CreateBatchError
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_CreateBatchError(t *testing.T) {
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	teamID := uuid.New()
+	otherTeamID := uuid.New()
+	newProgramID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	programs := []*domain.Program{
+		{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID},
+		{ID: uuid.New(), Name: "Opponent Bot", GameType: "chess", TeamID: &otherTeamID},
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	programRepo := new(MockProgramRepository)
+	programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
+	matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).
+		Return(fmt.Errorf("db batch insert error"))
+
+	req := &ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: newProgramID,
+		TeamID:       teamID,
+	}
+
+	err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create matches")
+	assert.Contains(t, err.Error(), "db batch insert error")
+}
+
+// -----------------------------------------------------------------------------
+// TestService_ScheduleNewProgramMatches_EnqueueBatchError
+// -----------------------------------------------------------------------------
+
+func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
+	service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	teamID := uuid.New()
+	otherTeamID := uuid.New()
+	newProgramID := uuid.New()
+
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	programs := []*domain.Program{
+		{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID},
+		{ID: uuid.New(), Name: "Opponent Bot", GameType: "chess", TeamID: &otherTeamID},
+	}
+
+	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+
+	programRepo := new(MockProgramRepository)
+	programRepo.On("GetByTournamentAndGame", ctx, tournamentID, gameID).Return(programs, nil)
+	matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
+	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).
+		Return(fmt.Errorf("redis pipeline error"))
+
+	req := &ScheduleNewProgramMatchesRequest{
+		TournamentID: tournamentID,
+		GameID:       gameID,
+		NewProgramID: newProgramID,
+		TeamID:       teamID,
+	}
+
+	err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to enqueue matches")
+	assert.Contains(t, err.Error(), "redis pipeline error")
+}
+
+// -----------------------------------------------------------------------------
+// TestService_RunAllMatches_GameWithLessThan2Participants
+// -----------------------------------------------------------------------------
+
+func TestService_RunAllMatches_GameWithLessThan2Participants(t *testing.T) {
+	service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
+	ctx := context.Background()
+
+	tournamentID := uuid.New()
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "Active Tournament",
+		GameType: "multi",
+		Status:   domain.TournamentActive,
+	}
+
+	// One game has only 1 participant -- should be skipped with a warning.
+	singleParticipant := []*domain.TournamentParticipant{
+		{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New(), Rating: 1500},
+	}
+
+	distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
+	// No pending matches -- triggers new round generation.
+	matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+	tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{
+		"solo_game": singleParticipant,
+	}, nil)
+	// EnqueueBatch is called with an empty slice (no matches generated).
+	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
+
+	count, err := service.RunAllMatches(ctx, tournamentID)
+	// The function should not error -- it just skips games with < 2 participants.
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	// CreateBatch should never be called because the only game was skipped.
+	matchRepo.AssertNotCalled(t, "CreateBatch", mock.Anything, mock.Anything)
+}

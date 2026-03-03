@@ -304,6 +304,115 @@ func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to process match result")
 }
 
+// --- Process full flow ---
+
+func TestProcessor_Process_Success(t *testing.T) {
+	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
+
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+	}
+
+	result := &domain.MatchResult{
+		MatchID:   match.ID,
+		Winner:    1,
+		ErrorCode: 0,
+	}
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
+	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
+	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
+		Return(1200, 1000, nil)
+	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).Return(nil)
+
+	err := p.Process(context.Background(), match)
+	assert.NoError(t, err)
+	matchRepo.AssertExpectations(t)
+	programRepo.AssertExpectations(t)
+	executor.AssertExpectations(t)
+	ratingRepo.AssertExpectations(t)
+	ratingService.AssertExpectations(t)
+}
+
+func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
+	p, matchRepo, ratingRepo, programRepo, _, executor := newTestProcessor(t)
+
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+	}
+
+	result := &domain.MatchResult{
+		MatchID:   match.ID,
+		Winner:    1,
+		ErrorCode: 0,
+	}
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
+	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
+	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
+		Return(0, 0, fmt.Errorf("redis connection lost"))
+
+	err := p.Process(context.Background(), match)
+	assert.NoError(t, err)
+	matchRepo.AssertExpectations(t)
+	programRepo.AssertExpectations(t)
+	executor.AssertExpectations(t)
+	ratingRepo.AssertExpectations(t)
+}
+
+func TestProcessor_Process_ErrorCode_SkipsRatings(t *testing.T) {
+	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
+
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+	}
+
+	result := &domain.MatchResult{
+		MatchID:      match.ID,
+		Winner:       0,
+		ErrorCode:    1,
+		ErrorMessage: "timeout",
+	}
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
+	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
+	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+
+	err := p.Process(context.Background(), match)
+	assert.NoError(t, err)
+	matchRepo.AssertExpectations(t)
+	programRepo.AssertExpectations(t)
+	executor.AssertExpectations(t)
+	ratingRepo.AssertNotCalled(t, "GetParticipantRatings", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
 // --- isNotFoundError ---
 
 func TestIsNotFoundError(t *testing.T) {

@@ -823,3 +823,355 @@ func TestE2E_ErrorHandling(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 }
+
+// =============================================================================
+// E2E Test: Tournament Leaderboard After Start
+// =============================================================================
+
+func TestE2E_TournamentLeaderboardAfterStart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	client := NewTestClient()
+	timestamp := time.Now().UnixNano()
+
+	// =========================================================================
+	// Step 1: Register 3 users
+	// =========================================================================
+	type userInfo struct {
+		token    string
+		id       string
+		username string
+	}
+
+	users := make([]userInfo, 3)
+
+	t.Run("RegisterUsers", func(t *testing.T) {
+		for i := 0; i < 3; i++ {
+			username := fmt.Sprintf("e2e_lb_%d_%d", i, timestamp)
+			req := RegisterRequest{
+				Username: username,
+				Email:    username + "@test.com",
+				Password: "SecurePass123!",
+			}
+
+			resp, err := client.doRequest("POST", "/api/v1/auth/register", req)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("Register user %d failed: %d - %s", i, resp.StatusCode, string(body))
+			}
+
+			var authResp AuthResponse
+			err = client.parseResponse(resp, &authResp)
+			require.NoError(t, err)
+			require.NotEmpty(t, authResp.AccessToken)
+
+			users[i] = userInfo{
+				token:    authResp.AccessToken,
+				id:       authResp.User.ID,
+				username: username,
+			}
+		}
+	})
+
+	// =========================================================================
+	// Step 2: Promote first user to admin
+	// =========================================================================
+	t.Run("PromoteToAdmin", func(t *testing.T) {
+		users[0].token = promoteToAdmin(t, client, users[0].id, users[0].username, "SecurePass123!")
+	})
+
+	// =========================================================================
+	// Step 3: Admin creates tournament
+	// =========================================================================
+	var tournamentID string
+
+	t.Run("CreateTournament", func(t *testing.T) {
+		client.SetToken(users[0].token)
+
+		req := CreateTournamentRequest{
+			Name:            fmt.Sprintf("E2E Leaderboard Test %d", timestamp),
+			Description:     "Tournament for leaderboard E2E test",
+			GameType:        "tictactoe",
+			MaxParticipants: 10,
+		}
+
+		resp, err := client.doRequest("POST", "/api/v1/tournaments", req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Create tournament failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var tournamentResp TournamentResponse
+		err = client.parseResponse(resp, &tournamentResp)
+		require.NoError(t, err)
+		require.NotEmpty(t, tournamentResp.ID)
+
+		tournamentID = tournamentResp.ID
+	})
+
+	// =========================================================================
+	// Step 4: Each user creates a program and joins the tournament
+	// =========================================================================
+	t.Run("CreateProgramsAndJoin", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+
+		for i, u := range users {
+			client.SetToken(u.token)
+
+			// Create program
+			progReq := CreateProgramRequest{
+				Name:     fmt.Sprintf("LB Bot %d", i),
+				CodePath: "e2e_test_bot",
+				Language: "python",
+				GameType: "tictactoe",
+			}
+
+			resp, err := client.doRequest("POST", "/api/v1/programs", progReq)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("Create program for user %d failed: %d - %s", i, resp.StatusCode, string(body))
+			}
+
+			var programResp ProgramResponse
+			err = client.parseResponse(resp, &programResp)
+			require.NoError(t, err)
+			require.NotEmpty(t, programResp.ID)
+
+			// Join tournament
+			joinReq := map[string]string{"program_id": programResp.ID}
+			resp, err = client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Logf("Join tournament for user %d response: %d - %s", i, resp.StatusCode, string(body))
+			}
+			resp.Body.Close()
+		}
+	})
+
+	// =========================================================================
+	// Step 5: Admin starts the tournament
+	// =========================================================================
+	t.Run("StartTournament", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+		client.SetToken(users[0].token)
+
+		resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/start", tournamentID), nil)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.Failf(t, "Start tournament failed", "status: %d, body: %s", resp.StatusCode, string(body))
+		}
+		resp.Body.Close()
+	})
+
+	// =========================================================================
+	// Step 6: Get leaderboard and verify response
+	// =========================================================================
+	t.Run("GetLeaderboard", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+		client.SetToken(users[0].token)
+
+		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s/leaderboard", tournamentID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode,
+			"leaderboard endpoint should return 200 after tournament start")
+
+		// Parse leaderboard; it may be an array or object depending on implementation
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, body, "leaderboard response body should not be empty")
+		t.Logf("Leaderboard response: %s", string(body))
+	})
+}
+
+// =============================================================================
+// E2E Test: Cross-Game Leaderboard
+// =============================================================================
+
+func TestE2E_CrossGameLeaderboard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	client := NewTestClient()
+	timestamp := time.Now().UnixNano()
+
+	// =========================================================================
+	// Step 1: Register users
+	// =========================================================================
+	type userInfo struct {
+		token    string
+		id       string
+		username string
+	}
+
+	users := make([]userInfo, 2)
+
+	t.Run("RegisterUsers", func(t *testing.T) {
+		for i := 0; i < 2; i++ {
+			username := fmt.Sprintf("e2e_cgl_%d_%d", i, timestamp)
+			req := RegisterRequest{
+				Username: username,
+				Email:    username + "@test.com",
+				Password: "SecurePass123!",
+			}
+
+			resp, err := client.doRequest("POST", "/api/v1/auth/register", req)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("Register user %d failed: %d - %s", i, resp.StatusCode, string(body))
+			}
+
+			var authResp AuthResponse
+			err = client.parseResponse(resp, &authResp)
+			require.NoError(t, err)
+			require.NotEmpty(t, authResp.AccessToken)
+
+			users[i] = userInfo{
+				token:    authResp.AccessToken,
+				id:       authResp.User.ID,
+				username: username,
+			}
+		}
+	})
+
+	// =========================================================================
+	// Step 2: Promote first user to admin
+	// =========================================================================
+	t.Run("PromoteToAdmin", func(t *testing.T) {
+		users[0].token = promoteToAdmin(t, client, users[0].id, users[0].username, "SecurePass123!")
+	})
+
+	// =========================================================================
+	// Step 3: Admin creates tournament
+	// =========================================================================
+	var tournamentID string
+
+	t.Run("CreateTournament", func(t *testing.T) {
+		client.SetToken(users[0].token)
+
+		req := CreateTournamentRequest{
+			Name:            fmt.Sprintf("E2E CrossGame LB Test %d", timestamp),
+			Description:     "Tournament for cross-game leaderboard E2E test",
+			GameType:        "tictactoe",
+			MaxParticipants: 10,
+		}
+
+		resp, err := client.doRequest("POST", "/api/v1/tournaments", req)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("Create tournament failed: %d - %s", resp.StatusCode, string(body))
+		}
+
+		var tournamentResp TournamentResponse
+		err = client.parseResponse(resp, &tournamentResp)
+		require.NoError(t, err)
+		require.NotEmpty(t, tournamentResp.ID)
+
+		tournamentID = tournamentResp.ID
+	})
+
+	// =========================================================================
+	// Step 4: Users create programs and join tournament
+	// =========================================================================
+	t.Run("CreateProgramsAndJoin", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+
+		for i, u := range users {
+			client.SetToken(u.token)
+
+			progReq := CreateProgramRequest{
+				Name:     fmt.Sprintf("CGL Bot %d", i),
+				CodePath: "e2e_test_bot",
+				Language: "python",
+				GameType: "tictactoe",
+			}
+
+			resp, err := client.doRequest("POST", "/api/v1/programs", progReq)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("Create program for user %d failed: %d - %s", i, resp.StatusCode, string(body))
+			}
+
+			var programResp ProgramResponse
+			err = client.parseResponse(resp, &programResp)
+			require.NoError(t, err)
+			require.NotEmpty(t, programResp.ID)
+
+			joinReq := map[string]string{"program_id": programResp.ID}
+			resp, err = client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
+			require.NoError(t, err)
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Logf("Join tournament for user %d response: %d - %s", i, resp.StatusCode, string(body))
+			}
+			resp.Body.Close()
+		}
+	})
+
+	// =========================================================================
+	// Step 5: Start tournament
+	// =========================================================================
+	t.Run("StartTournament", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+		client.SetToken(users[0].token)
+
+		resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/start", tournamentID), nil)
+		require.NoError(t, err)
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			require.Failf(t, "Start tournament failed", "status: %d, body: %s", resp.StatusCode, string(body))
+		}
+		resp.Body.Close()
+	})
+
+	// =========================================================================
+	// Step 6: Get cross-game leaderboard
+	// =========================================================================
+	t.Run("GetCrossGameLeaderboard", func(t *testing.T) {
+		require.NotEmpty(t, tournamentID, "tournament must be created first")
+		client.SetToken(users[0].token)
+
+		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/tournaments/%s/cross-game-leaderboard", tournamentID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode,
+			"cross-game leaderboard endpoint should return 200 OK")
+
+		// Response may be an empty array if no results yet, but the endpoint should work
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, body, "cross-game leaderboard response body should not be empty")
+		t.Logf("Cross-game leaderboard response: %s", string(body))
+	})
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -23,10 +24,12 @@ type RatingRepositorySuite struct {
 	userRepo       *db.UserRepository
 	tournamentRepo *db.TournamentRepository
 	programRepo    *db.ProgramRepository
+	gameRepo       *db.GameRepository
 	// track created IDs for cleanup
 	ratingHistoryIDs []uuid.UUID
 	participantIDs   []uuid.UUID
 	programIDs       []uuid.UUID
+	gameIDs          []uuid.UUID
 	tournamentIDs    []uuid.UUID
 	userIDs          []uuid.UUID
 }
@@ -39,13 +42,14 @@ func TestRatingRepositorySuite(t *testing.T) {
 		userRepo:       db.NewUserRepository(database),
 		tournamentRepo: db.NewTournamentRepository(database),
 		programRepo:    db.NewProgramRepository(database),
+		gameRepo:       db.NewGameRepository(database),
 	}
 	suite.Run(t, s)
 }
 
 func (s *RatingRepositorySuite) TearDownTest() {
 	ctx := context.Background()
-	// Delete in FK order: rating_history -> tournament_participants -> programs -> tournaments -> users
+	// Delete in FK order: rating_history -> tournament_participants -> programs -> tournaments -> games -> users
 	for _, id := range s.ratingHistoryIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE id = $1", id)
 	}
@@ -58,12 +62,16 @@ func (s *RatingRepositorySuite) TearDownTest() {
 	for _, id := range s.tournamentIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM tournaments WHERE id = $1", id)
 	}
+	for _, id := range s.gameIDs {
+		_, _ = s.database.ExecContext(ctx, "DELETE FROM games WHERE id = $1", id)
+	}
 	for _, id := range s.userIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM users WHERE id = $1", id)
 	}
 	s.ratingHistoryIDs = nil
 	s.participantIDs = nil
 	s.programIDs = nil
+	s.gameIDs = nil
 	s.tournamentIDs = nil
 	s.userIDs = nil
 }
@@ -366,6 +374,40 @@ func (s *RatingRepositorySuite) TestGetParticipantRatings_Program2NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
+// createGame creates a test game and tracks it for cleanup.
+func (s *RatingRepositorySuite) createGame(name string) *domain.Game {
+	ctx := context.Background()
+	game := &domain.Game{
+		ID:          uuid.New(),
+		Name:        name,
+		DisplayName: "Test Game " + name,
+		Rules:       "Test rules",
+	}
+	err := s.gameRepo.Create(ctx, game)
+	require.NoError(s.T(), err)
+	s.gameIDs = append(s.gameIDs, game.ID)
+	return game
+}
+
+// createProgramWithGame creates a program linked to a game and tracks it for cleanup.
+func (s *RatingRepositorySuite) createProgramWithGame(userID uuid.UUID, gameID *uuid.UUID, name string) *domain.Program {
+	ctx := context.Background()
+	program := &domain.Program{
+		ID:       uuid.New(),
+		UserID:   userID,
+		GameID:   gameID,
+		Name:     name,
+		GameType: "prisoners_dilemma",
+		CodePath: "/tmp/test/" + name + ".py",
+		Language: "python",
+		Version:  1,
+	}
+	err := s.programRepo.Create(ctx, program)
+	require.NoError(s.T(), err)
+	s.programIDs = append(s.programIDs, program.ID)
+	return program
+}
+
 func (s *RatingRepositorySuite) TestRatingHistoryFields() {
 	tournament, program := s.setupRatingPrerequisites("flds")
 	matchID := uuid.New()
@@ -387,4 +429,253 @@ func (s *RatingRepositorySuite) TestRatingHistoryFields() {
 	assert.NotNil(s.T(), result.MatchID)
 	assert.Equal(s.T(), matchID, *result.MatchID)
 	assert.NotZero(s.T(), result.CreatedAt)
+}
+
+// --- ProcessMatchResultAtomic, UpdateParticipantRatingAndStats, ResetParticipantsForGame ---
+
+func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
+	// Setup two participants
+	tournament, program1 := s.setupRatingPrerequisites("pmat1")
+	user2 := s.createUser("rating_pmat2")
+	program2 := s.createProgram(user2.ID, "RatingBot_pmat2")
+
+	s.addParticipant(tournament.ID, program1.ID, 1500)
+	s.addParticipant(tournament.ID, program2.ID, 1500)
+
+	ctx := context.Background()
+
+	matchID := uuid.New()
+	now := time.Now()
+
+	// Program1 wins: gets +32 delta, Program2 loses: gets -32 delta
+	update1 := &rating.ParticipantUpdate{
+		ProgramID:    program1.ID,
+		TournamentID: tournament.ID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    program1.ID,
+			TournamentID: tournament.ID,
+			OldRating:    1500,
+			NewRating:    1532,
+			Change:       32,
+			MatchID:      &matchID,
+			CreatedAt:    now,
+		},
+		RatingDelta: 32,
+		Won:         true,
+		Draw:        false,
+	}
+	update2 := &rating.ParticipantUpdate{
+		ProgramID:    program2.ID,
+		TournamentID: tournament.ID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    program2.ID,
+			TournamentID: tournament.ID,
+			OldRating:    1500,
+			NewRating:    1468,
+			Change:       -32,
+			MatchID:      &matchID,
+			CreatedAt:    now,
+		},
+		RatingDelta: -32,
+		Won:         false,
+		Draw:        false,
+	}
+	s.ratingHistoryIDs = append(s.ratingHistoryIDs, update1.History.ID, update2.History.ID)
+
+	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
+	require.NoError(s.T(), err)
+
+	// Verify ratings are updated
+	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1532, r1)
+
+	r2, err := s.repo.GetParticipantRating(ctx, tournament.ID, program2.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1468, r2)
+
+	// Verify zero-sum: total change is 0
+	assert.Equal(s.T(), 0, (r1-1500)+(r2-1500))
+
+	// Verify stats: program1 has 1 win, program2 has 1 loss
+	var wins1, losses1, wins2, losses2 int
+	err = s.database.QueryRowContext(ctx,
+		"SELECT wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, program1.ID).Scan(&wins1, &losses1)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, wins1)
+	assert.Equal(s.T(), 0, losses1)
+
+	err = s.database.QueryRowContext(ctx,
+		"SELECT wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, program2.ID).Scan(&wins2, &losses2)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, wins2)
+	assert.Equal(s.T(), 1, losses2)
+}
+
+func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
+	tournament, program1 := s.setupRatingPrerequisites("pmdrw")
+	user2 := s.createUser("rating_pmdrw2")
+	program2 := s.createProgram(user2.ID, "RatingBot_pmdrw2")
+
+	s.addParticipant(tournament.ID, program1.ID, 1500)
+	s.addParticipant(tournament.ID, program2.ID, 1500)
+
+	ctx := context.Background()
+
+	matchID := uuid.New()
+	now := time.Now()
+
+	// Draw: both get 0 delta
+	update1 := &rating.ParticipantUpdate{
+		ProgramID:    program1.ID,
+		TournamentID: tournament.ID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    program1.ID,
+			TournamentID: tournament.ID,
+			OldRating:    1500,
+			NewRating:    1500,
+			Change:       0,
+			MatchID:      &matchID,
+			CreatedAt:    now,
+		},
+		RatingDelta: 0,
+		Won:         false,
+		Draw:        true,
+	}
+	update2 := &rating.ParticipantUpdate{
+		ProgramID:    program2.ID,
+		TournamentID: tournament.ID,
+		History: &domain.RatingHistory{
+			ID:           uuid.New(),
+			ProgramID:    program2.ID,
+			TournamentID: tournament.ID,
+			OldRating:    1500,
+			NewRating:    1500,
+			Change:       0,
+			MatchID:      &matchID,
+			CreatedAt:    now,
+		},
+		RatingDelta: 0,
+		Won:         false,
+		Draw:        true,
+	}
+	s.ratingHistoryIDs = append(s.ratingHistoryIDs, update1.History.ID, update2.History.ID)
+
+	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
+	require.NoError(s.T(), err)
+
+	// Both ratings unchanged
+	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1500, r1)
+
+	r2, err := s.repo.GetParticipantRating(ctx, tournament.ID, program2.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1500, r2)
+
+	// Both should have 1 draw
+	var draws1, draws2 int
+	err = s.database.QueryRowContext(ctx,
+		"SELECT draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, program1.ID).Scan(&draws1)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, draws1)
+
+	err = s.database.QueryRowContext(ctx,
+		"SELECT draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, program2.ID).Scan(&draws2)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, draws2)
+}
+
+func (s *RatingRepositorySuite) TestUpdateParticipantRatingAndStats_Win() {
+	tournament, program := s.setupRatingPrerequisites("upras")
+	s.addParticipant(tournament.ID, program.ID, 1500)
+
+	ctx := context.Background()
+
+	err := s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, program.ID, 50, true, false)
+	require.NoError(s.T(), err)
+
+	// Verify rating updated atomically with stats
+	rating, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1550, rating)
+
+	var wins, losses, draws int
+	err = s.database.QueryRowContext(ctx,
+		"SELECT wins, losses, draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, program.ID).Scan(&wins, &losses, &draws)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, wins)
+	assert.Equal(s.T(), 0, losses)
+	assert.Equal(s.T(), 0, draws)
+}
+
+func (s *RatingRepositorySuite) TestResetParticipantsForGame() {
+	user := s.createUser("rating_rstg")
+	tournament := s.createTournament("TRRST1", user.ID)
+	game := s.createGame("rstg_game")
+
+	// Create programs linked to the game
+	prog1 := s.createProgramWithGame(user.ID, &game.ID, "RstBot1")
+	prog2 := s.createProgramWithGame(user.ID, &game.ID, "RstBot2")
+
+	// Add participants
+	s.addParticipant(tournament.ID, prog1.ID, 1500)
+	s.addParticipant(tournament.ID, prog2.ID, 1500)
+
+	ctx := context.Background()
+
+	// Update ratings and stats so they differ from defaults
+	err := s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog1.ID, 200, true, false)
+	require.NoError(s.T(), err)
+	err = s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog2.ID, -100, false, false)
+	require.NoError(s.T(), err)
+
+	// Verify non-default values before reset
+	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, prog1.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1700, r1)
+
+	// Reset all participants for this game
+	affected, err := s.repo.ResetParticipantsForGame(ctx, tournament.ID, game.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), affected)
+
+	// Verify reset to defaults: rating=1500, wins=0, losses=0, draws=0
+	r1After, err := s.repo.GetParticipantRating(ctx, tournament.ID, prog1.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1500, r1After)
+
+	r2After, err := s.repo.GetParticipantRating(ctx, tournament.ID, prog2.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 1500, r2After)
+
+	var wins, losses, draws int
+	err = s.database.QueryRowContext(ctx,
+		"SELECT wins, losses, draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, prog1.ID).Scan(&wins, &losses, &draws)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, wins)
+	assert.Equal(s.T(), 0, losses)
+	assert.Equal(s.T(), 0, draws)
+}
+
+func (s *RatingRepositorySuite) TestResetParticipantsForGame_Empty() {
+	user := s.createUser("rating_rste")
+	tournament := s.createTournament("TRRSE1", user.ID)
+	game := s.createGame("rste_game")
+
+	ctx := context.Background()
+
+	// No participants for this game - should succeed with 0 affected
+	affected, err := s.repo.ResetParticipantsForGame(ctx, tournament.ID, game.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(0), affected)
 }

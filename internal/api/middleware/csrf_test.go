@@ -244,6 +244,28 @@ func TestCSRF_POST_TokenNotInStore_Forbidden(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 }
 
+func TestCSRF_GET_ExistingCookiePreserved(t *testing.T) {
+	config := DefaultCSRFConfig()
+	handler := newCSRFHandler(config)
+
+	// Send a GET request with an existing CSRF cookie
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(&http.Cookie{Name: config.CookieName, Value: "my-token-value"})
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// ensureCSRFToken should NOT overwrite the existing cookie.
+	// Verify that no Set-Cookie header was added to the response.
+	cookies := rr.Result().Cookies()
+	for _, c := range cookies {
+		assert.NotEqual(t, config.CookieName, c.Name,
+			"Set-Cookie should not be sent when CSRF cookie already exists")
+	}
+}
+
 func TestStartCSRFCleanup(t *testing.T) {
 	// Add an expired token to verify cleanup works
 	expiredToken, err := generateToken(CSRFTokenLength)
