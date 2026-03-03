@@ -173,6 +173,8 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	if err := s.comparePassword(user.PasswordHash, req.Password); err != nil {
 		s.log.Info("Invalid password attempt",
 			zap.String("username", req.Username),
+			zap.String("email", req.Email),
+			zap.String("user_id", user.ID.String()),
 		)
 		return nil, errors.ErrInvalidCredentials
 	}
@@ -180,6 +182,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	s.log.Info("User logged in",
 		zap.String("user_id", user.ID.String()),
 		zap.String("username", user.Username),
+		zap.String("email", user.Email),
 	)
 
 	// Генерируем токены

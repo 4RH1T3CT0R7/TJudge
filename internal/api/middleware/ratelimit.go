@@ -92,15 +92,10 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for {
-			if stop != nil {
-				select {
-				case <-stop:
-					return
-				case <-ticker.C:
-					fallback.cleanup(10 * time.Minute)
-				}
-			} else {
-				<-ticker.C
+			select {
+			case <-stop: // receiving from nil channel blocks forever, so cleanup runs indefinitely when no stop channel is provided
+				return
+			case <-ticker.C:
 				fallback.cleanup(10 * time.Minute)
 			}
 		}

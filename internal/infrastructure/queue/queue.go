@@ -53,8 +53,8 @@ const dedupTTL = 24 * time.Hour
 
 // Enqueue добавляет матч в очередь с учётом приоритета
 func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error {
-	// Проверяем дедупликацию: SADD возвращает 0, если элемент уже существует
-	added, err := qm.cache.SAdd(ctx, dedupKey, match.ID.String())
+	// Атомарно проверяем дедупликацию и устанавливаем TTL
+	added, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, match.ID.String())
 	if err != nil {
 		qm.log.LogError("Failed to check dedup set", err,
 			zap.String("match_id", match.ID.String()),
@@ -65,11 +65,6 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 			zap.String("match_id", match.ID.String()),
 		)
 		return nil
-	}
-
-	// Обновляем TTL на dedup set
-	if err := qm.cache.Expire(ctx, dedupKey, dedupTTL); err != nil {
-		qm.log.LogError("Failed to set dedup TTL", err)
 	}
 
 	// Сериализуем матч
@@ -153,13 +148,10 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 		dedupMembers = append(dedupMembers, match.ID.String())
 	}
 
-	// Batch SADD для дедупликации
-	if _, err := qm.cache.SAdd(ctx, dedupKey, dedupMembers...); err != nil {
+	// Атомарно batch SADD + EXPIRE для дедупликации
+	if _, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, dedupMembers...); err != nil {
 		qm.log.LogError("Failed to batch add to dedup set", err)
 		// Продолжаем — лучше дублировать, чем потерять
-	}
-	if err := qm.cache.Expire(ctx, dedupKey, dedupTTL); err != nil {
-		qm.log.LogError("Failed to set dedup TTL", err)
 	}
 
 	// Batch LPUSH через pipeline

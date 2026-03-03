@@ -134,7 +134,13 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 
 			// Проверяем чёрный список
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
-			if err != nil || blacklisted {
+			if err != nil {
+				log.Warn("Blacklist check failed, proceeding with validated token",
+					zap.Error(err),
+					zap.String("user_id", claims.UserID.String()),
+				)
+				// JWT уже валидирован — продолжаем с установкой контекста
+			} else if blacklisted {
 				next.ServeHTTP(w, r)
 				return
 			}

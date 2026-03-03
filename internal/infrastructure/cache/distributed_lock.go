@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // DistributedLock реализует distributed lock на Redis
@@ -167,8 +168,19 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 			return
 		case <-ticker.C:
 			renewCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_, _ = dl.cache.Eval(renewCtx, script, []string{lockKey}, token, ttlMs)
+			result, err := dl.cache.Eval(renewCtx, script, []string{lockKey}, token, ttlMs)
 			cancel()
+			if err != nil {
+				dl.cache.log.Warn("Failed to renew distributed lock",
+					zap.String("key", key),
+					zap.Error(err),
+				)
+			} else if val, ok := result.(int64); ok && val == 0 {
+				dl.cache.log.Warn("Distributed lock lost (token mismatch or expired)",
+					zap.String("key", key),
+				)
+				return
+			}
 		}
 	}
 }

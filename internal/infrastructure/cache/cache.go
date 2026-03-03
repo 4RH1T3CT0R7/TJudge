@@ -245,6 +245,41 @@ func (c *Cache) SAdd(ctx context.Context, key string, members ...interface{}) (i
 	return count, nil
 }
 
+// SAddWithExpire атомарно добавляет элементы в множество и устанавливает TTL через Lua скрипт.
+// Возвращает количество новых добавленных элементов. TTL должен быть >= 1 секунды.
+func (c *Cache) SAddWithExpire(ctx context.Context, key string, ttl time.Duration, members ...interface{}) (int64, error) {
+	if len(members) == 0 {
+		return 0, nil
+	}
+
+	script := `
+local added = redis.call("SADD", KEYS[1], unpack(ARGV, 2))
+redis.call("EXPIRE", KEYS[1], ARGV[1])
+return added
+`
+	ttlSec := int(ttl.Seconds())
+	if ttlSec <= 0 {
+		return 0, fmt.Errorf("SAddWithExpire requires TTL >= 1 second, got %v", ttl)
+	}
+
+	args := make([]interface{}, 0, 1+len(members))
+	args = append(args, ttlSec)
+	args = append(args, members...)
+
+	result, err := c.client.Eval(ctx, script, []string{key}, args...).Result()
+	if err != nil {
+		c.log.LogError("Redis SAddWithExpire failed", err, zap.String("key", key))
+		return 0, err
+	}
+	count, ok := result.(int64)
+	if !ok {
+		err := fmt.Errorf("unexpected result type from SAddWithExpire: %T", result)
+		c.log.LogError("Redis SAddWithExpire unexpected result type", err, zap.String("key", key))
+		return 0, err
+	}
+	return count, nil
+}
+
 // SRem удаляет элементы из множества (SET)
 func (c *Cache) SRem(ctx context.Context, key string, members ...interface{}) error {
 	err := c.client.SRem(ctx, key, members...).Err()
