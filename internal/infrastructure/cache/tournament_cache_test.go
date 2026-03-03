@@ -328,9 +328,9 @@ func TestTournamentCache_InvalidateList_DeletesAllKeys(t *testing.T) {
 	ctx := context.Background()
 
 	// Manually set 3 keys matching the "tournaments:list:*" pattern.
-	mr.Set("tournaments:list:status:active", "data1")
-	mr.Set("tournaments:list:status:pending", "data2")
-	mr.Set("tournaments:list:all", "data3")
+	require.NoError(t, mr.Set("tournaments:list:status:active", "data1"))
+	require.NoError(t, mr.Set("tournaments:list:status:pending", "data2"))
+	require.NoError(t, mr.Set("tournaments:list:all", "data3"))
 
 	// Verify the keys exist before invalidation.
 	assert.True(t, mr.Exists("tournaments:list:status:active"))

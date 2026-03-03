@@ -269,7 +269,7 @@ func TestLeaderboardCache_GetFullLeaderboard_CorruptJSON(t *testing.T) {
 	key := fmt.Sprintf("leaderboard:full:%s:%d", tournamentID.String(), limit)
 
 	// Set corrupt JSON directly via miniredis.
-	mr.Set(key, "not-json{{{")
+	require.NoError(t, mr.Set(key, "not-json{{{"))
 	require.True(t, mr.Exists(key), "key should exist before GetFullLeaderboard")
 
 	// GetFullLeaderboard should auto-delete the corrupt key and return nil, nil.
@@ -293,7 +293,8 @@ func TestLeaderboardCache_GetTop_InvalidUUID(t *testing.T) {
 	key := fmt.Sprintf("leaderboard:%s", tournamentID.String())
 
 	// Add a member with an invalid UUID string to the sorted set.
-	mr.ZAdd(key, 1500, "not-a-valid-uuid")
+	_, err := mr.ZAdd(key, 1500, "not-a-valid-uuid")
+	require.NoError(t, err)
 
 	// GetTop should skip the invalid UUID member and return an empty slice.
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
