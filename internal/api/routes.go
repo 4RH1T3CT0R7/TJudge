@@ -75,6 +75,14 @@ func NewServer(
 func (s *Server) setupMiddleware() {
 	// Базовые middleware
 	s.router.Use(chiMiddleware.RequestID)
+	s.router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if reqID := chiMiddleware.GetReqID(r.Context()); reqID != "" {
+				w.Header().Set("X-Request-ID", reqID)
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	s.router.Use(chiMiddleware.RealIP)
 	s.router.Use(chiMiddleware.Logger)
 	s.router.Use(chiMiddleware.Recoverer)
@@ -103,7 +111,7 @@ func (s *Server) setupMiddleware() {
 		AllowedOrigins:   s.corsConfig.AllowedOrigins,
 		AllowedMethods:   s.corsConfig.AllowedMethods,
 		AllowedHeaders:   s.corsConfig.AllowedHeaders,
-		ExposedHeaders:   []string{"Link", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
+		ExposedHeaders:   []string{"Link", "X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
 		AllowCredentials: true,
 		MaxAge:           s.corsConfig.MaxAge,
 	}))

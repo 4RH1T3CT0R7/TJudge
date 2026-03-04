@@ -386,44 +386,6 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	return nil
 }
 
-// generateRoundRobinMatches генерирует матчи по системе round-robin (каждый с каждым)
-// Каждая пара играет 2 матча (AB и BA), итерации выполняются внутри tjudge-cli через параметр -i
-// Рейтинг = сумма очков из всех матчей
-func (s *Service) generateRoundRobinMatches(tournament *domain.Tournament, participants []*domain.TournamentParticipant, roundNumber int) ([]*domain.Match, error) {
-	var matches []*domain.Match
-	now := time.Now()
-
-	// Каждый участник играет с каждым в обе стороны (AB и BA)
-	for i := 0; i < len(participants); i++ {
-		for j := 0; j < len(participants); j++ {
-			// Пропускаем матч против себя
-			if i == j {
-				continue
-			}
-
-			match := &domain.Match{
-				ID:           uuid.New(),
-				TournamentID: tournament.ID,
-				Program1ID:   participants[i].ProgramID,
-				Program2ID:   participants[j].ProgramID,
-				GameType:     tournament.GameType,
-				Status:       domain.MatchPending,
-				Priority:     domain.PriorityMedium,
-				RoundNumber:  roundNumber,
-				CreatedAt:    now,
-			}
-
-			if err := match.Validate(); err != nil {
-				return nil, fmt.Errorf("invalid match generated: %w", err)
-			}
-
-			matches = append(matches, match)
-		}
-	}
-
-	return matches, nil
-}
-
 // Complete завершает турнир
 func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 	// Используем distributed lock для предотвращения одновременного завершения

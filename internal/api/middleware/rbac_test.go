@@ -230,12 +230,10 @@ func TestMiddlewareChain(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleAdmin}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleAdmin}
 
 	mockAuth.On("ValidateToken", "admin-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "admin-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "admin-token").Return(user, nil)
 
 	// Chain: Auth -> RequireAdmin -> Handler
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -265,12 +263,10 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleUser} // Regular user, not admin
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser} // Regular user, not admin
 
 	mockAuth.On("ValidateToken", "user-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "user-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "user-token").Return(user, nil)
 
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("Handler should not be called for non-admin")

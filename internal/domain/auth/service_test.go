@@ -296,7 +296,7 @@ func TestService_Logout_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	blacklist.On("Add", ctx, token, mock.AnythingOfType("time.Duration")).Return(nil)
@@ -327,7 +327,7 @@ func TestService_Logout_ExpiredToken(t *testing.T) {
 
 	ctx := context.Background()
 
-	token, err := jwtManager.GenerateAccessToken(uuid.New(), "testuser")
+	token, err := jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -355,7 +355,7 @@ func TestService_ValidateToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 
 	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	claims, err := service.ValidateToken(token)
@@ -378,7 +378,7 @@ func TestService_GetUserByToken_Success(t *testing.T) {
 		Role:         domain.RoleUser,
 	}
 
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
@@ -407,7 +407,7 @@ func TestService_GetUserByToken_UserNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
@@ -432,7 +432,7 @@ func TestService_GetUserFromToken_Alias(t *testing.T) {
 		Role:     domain.RoleUser,
 	}
 
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
@@ -899,7 +899,7 @@ func TestService_Logout_WithBothTokens(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
@@ -1015,7 +1015,7 @@ func TestService_Logout_AccessBlacklistError(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser")
+	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Blacklist add fails for access token
@@ -1061,7 +1061,7 @@ func TestService_Logout_TokenTTLZero(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	accessToken, err := jwtManager.GenerateAccessToken(userID, "testuser")
+	accessToken, err := jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Wait for the token to expire (TTL becomes 0 or negative)

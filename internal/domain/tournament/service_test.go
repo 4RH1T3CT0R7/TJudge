@@ -1422,10 +1422,10 @@ func TestService_RetryFailedMatches(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// TestService_generateRoundRobinMatches
+// TestService_generateRoundRobinMatchesForGame
 // -----------------------------------------------------------------------------
 
-func TestService_generateRoundRobinMatches(t *testing.T) {
+func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	t.Run("two_participants", func(t *testing.T) {
 		service, _, _, _, _, _ := newTestService(t)
 
@@ -1444,7 +1444,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p2},
 		}
 
-		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
 		require.NoError(t, err)
 		// 2 participants: AB, BA = 2 matches
 		assert.Len(t, matches, 2)
@@ -1481,7 +1481,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New()},
 		}
 
-		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
 		require.NoError(t, err)
 		// 3 participants: AB, AC, BA, BC, CA, CB = 6 matches (n*(n-1))
 		assert.Len(t, matches, 6)
@@ -1510,7 +1510,7 @@ func TestService_generateRoundRobinMatches(t *testing.T) {
 
 		var participants []*domain.TournamentParticipant
 
-		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
 		require.NoError(t, err)
 		assert.Len(t, matches, 0)
 	})
@@ -1944,7 +1944,7 @@ func TestConcurrentStart(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// TestService_generateRoundRobinMatches_EdgeCases
+// TestService_generateRoundRobinMatchesForGame_EdgeCases
 // -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
@@ -2085,7 +2085,7 @@ func TestService_Delete_ActiveTournament(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot delete active tournament")
 }
 
-func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
+func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 	t.Run("one_participant_generates_zero_matches", func(t *testing.T) {
 		service, _, _, _, _, _ := newTestService(t)
 
@@ -2101,7 +2101,7 @@ func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New(), Rating: 1500},
 		}
 
-		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium)
 		require.NoError(t, err)
 		assert.Len(t, matches, 0, "1 participant cannot play against anyone, expected 0 matches")
 	})
@@ -2128,7 +2128,7 @@ func TestService_generateRoundRobinMatches_EdgeCases(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p4, Rating: 1500},
 		}
 
-		matches, err := service.generateRoundRobinMatches(tournament, participants, 1)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium)
 		require.NoError(t, err)
 		// Bidirectional round-robin: n*(n-1) = 4*3 = 12 matches
 		// Each pair plays in both directions (AB and BA)

@@ -29,14 +29,6 @@ func (m *MockAuthService) ValidateToken(tokenString string) (*auth.Claims, error
 	return args.Get(0).(*auth.Claims), args.Error(1)
 }
 
-func (m *MockAuthService) GetUserByToken(ctx context.Context, tokenString string) (*domain.User, error) {
-	args := m.Called(ctx, tokenString)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.User), args.Error(1)
-}
-
 func (m *MockAuthService) GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) {
 	args := m.Called(ctx, tokenString)
 	if args.Get(0) == nil {
@@ -60,12 +52,10 @@ func TestAuth_ValidToken(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
 
 	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "valid-token").Return(user, nil)
 
 	var capturedUserID uuid.UUID
 	var capturedRole domain.Role
@@ -170,12 +160,10 @@ func TestAuth_TokenFromWebSocketProtocol(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
 
 	mockAuth.On("ValidateToken", "ws-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "ws-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "ws-token").Return(user, nil)
 
 	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -197,12 +185,10 @@ func TestAuth_AdminRole(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleAdmin}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleAdmin}
 
 	mockAuth.On("ValidateToken", "admin-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "admin-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "admin-token").Return(user, nil)
 
 	var capturedRole domain.Role
 	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -244,12 +230,10 @@ func TestOptionalAuth_ValidToken(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-	user := &domain.User{ID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
 
 	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "valid-token").Return(user, nil)
 
 	var capturedUserID uuid.UUID
 	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -370,32 +354,29 @@ func TestOptionalAuth_BlacklistedToken(t *testing.T) {
 	mockAuth.AssertExpectations(t)
 }
 
-func TestOptionalAuth_GetUserFromTokenError(t *testing.T) {
+func TestOptionalAuth_BlacklistCheckError(t *testing.T) {
 	mockAuth := new(MockAuthService)
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
+	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
 
-	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
-	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "valid-token").Return(nil, errors.ErrNotFound)
+	mockAuth.On("ValidateToken", "some-token").Return(claims, nil)
+	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, assert.AnError)
 
 	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// UserID should be set from claims
-		gotID, ok := middleware.GetUserID(r.Context())
-		assert.True(t, ok, "User ID should be in context from claims")
-		assert.Equal(t, userID, gotID)
+		// Should proceed as anonymous — no user ID in context
+		_, ok := middleware.GetUserID(r.Context())
+		assert.False(t, ok, "User ID should not be in context when blacklist check fails")
 
-		// Role should NOT be set
-		roleVal := r.Context().Value(middleware.RoleKey)
-		assert.Nil(t, roleVal, "Role should not be in context when GetUserFromToken fails")
+		_, roleOk := r.Context().Value(middleware.RoleKey).(domain.Role)
+		assert.False(t, roleOk, "Role should not be in context when blacklist check fails")
 
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Authorization", "Bearer some-token")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -431,34 +412,6 @@ func TestAuth_BlacklistCheckError(t *testing.T) {
 	mockAuth.AssertExpectations(t)
 }
 
-func TestAuth_GetUserFromTokenError(t *testing.T) {
-	mockAuth := new(MockAuthService)
-	log := newTestLogger()
-
-	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID}
-
-	mockAuth.On("ValidateToken", "some-token").Return(claims, nil)
-	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "some-token").Return(nil, errors.ErrNotFound)
-
-	handlerCalled := false
-	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlerCalled = true
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer some-token")
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	assert.False(t, handlerCalled, "Handler should not be called when GetUserFromToken fails")
-	mockAuth.AssertExpectations(t)
-}
-
 func TestExtractToken_ValidBearer(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer my-token")
@@ -487,13 +440,11 @@ func TestAuth_WebSocket_MultipleProtocols(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Username: "wsuser"}
-	user := &domain.User{ID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Username: "wsuser", Role: domain.RoleUser}
 
 	// The middleware splits comma-separated protocols and finds "access_token.validtoken123"
 	mockAuth.On("ValidateToken", "validtoken123").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "validtoken123").Return(false, nil)
-	mockAuth.On("GetUserFromToken", mock.Anything, "validtoken123").Return(user, nil)
 
 	var capturedUserID uuid.UUID
 	handlerCalled := false

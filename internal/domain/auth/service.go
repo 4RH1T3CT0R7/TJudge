@@ -123,7 +123,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 	)
 
 	// Генерируем токены
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username)
+	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -186,7 +186,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	)
 
 	// Генерируем токены
-	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username)
+	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -248,7 +248,7 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	)
 
 	// Генерируем новые токены
-	newAccessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username)
+	newAccessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}

@@ -29,8 +29,7 @@ const (
 // AuthService интерфейс для работы с аутентификацией
 type AuthService interface {
 	ValidateToken(tokenString string) (*auth.Claims, error)
-	GetUserByToken(ctx context.Context, tokenString string) (*domain.User, error)
-	GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error)
+	GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) // used by SetUserRole, handlers
 	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 
@@ -90,17 +89,9 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// Получаем пользователя для получения роли
-			user, err := authService.GetUserFromToken(r.Context(), token)
-			if err != nil {
-				log.LogError("Failed to get user from token", err)
-				httputil.WriteError(w, errors.ErrUnauthorized.WithError(err))
-				return
-			}
-
-			// Добавляем user ID и роль в контекст
+			// Добавляем user ID и роль из JWT claims в контекст (без DB hit)
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
-			ctx = context.WithValue(ctx, RoleKey, user.Role)
+			ctx = context.WithValue(ctx, RoleKey, claims.Role)
 
 			// Передаём управление следующему обработчику
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -132,32 +123,25 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
-			// Проверяем чёрный список
+			// Проверяем чёрный список. При ошибке Redis — не доверяем токену,
+			// продолжаем без аутентификации (пользователь становится анонимным).
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
-				log.Warn("Blacklist check failed, proceeding with validated token",
+				log.Warn("Blacklist check failed, proceeding without authentication",
 					zap.Error(err),
 					zap.String("user_id", claims.UserID.String()),
 				)
-				// JWT уже валидирован — продолжаем с установкой контекста
-			} else if blacklisted {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if blacklisted {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Получаем пользователя для получения роли (важно для проверки админ-прав)
-			user, err := authService.GetUserFromToken(r.Context(), token)
-			if err != nil {
-				// Если не удалось получить пользователя, всё равно пропускаем запрос
-				// но без установки роли в контекст
-				ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			// Добавляем user ID и роль в контекст
+			// Добавляем user ID и роль из JWT claims в контекст (без DB hit)
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
-			ctx = context.WithValue(ctx, RoleKey, user.Role)
+			ctx = context.WithValue(ctx, RoleKey, claims.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

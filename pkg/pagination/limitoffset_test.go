@@ -71,18 +71,18 @@ func TestParseLimitOffset_NonNumericOffset(t *testing.T) {
 }
 
 func TestParseLimitOffset_ZeroMaxLimit_UsesDefault(t *testing.T) {
-	r := newRequest("limit=500")
+	r := newRequest("limit=50")
 	lo := ParseLimitOffset(r, 20, 0)
 
-	// maxLimit=0 -> DefaultMaxLimit=1000, so 500 is accepted
-	assert.Equal(t, 500, lo.Limit)
+	// maxLimit=0 -> DefaultMaxLimit=100, so 50 is accepted
+	assert.Equal(t, 50, lo.Limit)
 }
 
 func TestParseLimitOffset_NegativeMaxLimit_UsesDefault(t *testing.T) {
-	r := newRequest("limit=500")
+	r := newRequest("limit=50")
 	lo := ParseLimitOffset(r, 20, -1)
 
-	assert.Equal(t, 500, lo.Limit)
+	assert.Equal(t, 50, lo.Limit)
 }
 
 func TestParseLimitOffset_LimitEqualsMax(t *testing.T) {

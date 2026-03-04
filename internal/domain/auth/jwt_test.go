@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestJWTManager_GenerateAccessToken(t *testing.T) {
 	userID := uuid.New()
 	username := "testuser"
 
-	token, err := manager.GenerateAccessToken(userID, username)
+	token, err := manager.GenerateAccessToken(userID, username, domain.RoleUser)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
@@ -60,7 +61,7 @@ func TestJWTManager_ValidateToken_Valid(t *testing.T) {
 	userID := uuid.New()
 	username := "testuser"
 
-	token, err := manager.GenerateAccessToken(userID, username)
+	token, err := manager.GenerateAccessToken(userID, username, domain.RoleUser)
 	require.NoError(t, err)
 
 	claims, err := manager.ValidateToken(token)
@@ -69,13 +70,27 @@ func TestJWTManager_ValidateToken_Valid(t *testing.T) {
 	assert.NotNil(t, claims)
 	assert.Equal(t, userID, claims.UserID)
 	assert.Equal(t, username, claims.Username)
+	assert.Equal(t, domain.RoleUser, claims.Role)
+}
+
+func TestJWTManager_ValidateToken_AdminRole(t *testing.T) {
+	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
+	userID := uuid.New()
+
+	token, err := manager.GenerateAccessToken(userID, "admin", domain.RoleAdmin)
+	require.NoError(t, err)
+
+	claims, err := manager.ValidateToken(token)
+
+	require.NoError(t, err)
+	assert.Equal(t, domain.RoleAdmin, claims.Role)
 }
 
 func TestJWTManager_ValidateToken_InvalidSignature(t *testing.T) {
 	manager1 := NewJWTManager("secret-1", 15*time.Minute, 7*24*time.Hour)
 	manager2 := NewJWTManager("secret-2", 15*time.Minute, 7*24*time.Hour)
 
-	token, err := manager1.GenerateAccessToken(uuid.New(), "testuser")
+	token, err := manager1.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Try to validate with different secret
@@ -89,7 +104,7 @@ func TestJWTManager_ValidateToken_Expired(t *testing.T) {
 	manager := NewJWTManager("test-secret", 1*time.Millisecond, 7*24*time.Hour)
 	userID := uuid.New()
 
-	token, err := manager.GenerateAccessToken(userID, "testuser")
+	token, err := manager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Wait for token to expire
@@ -172,10 +187,10 @@ func TestJWTManager_TokensAreUnique_DifferentUsers(t *testing.T) {
 	user1ID := uuid.New()
 	user2ID := uuid.New()
 
-	token1, err := manager.GenerateAccessToken(user1ID, "user1")
+	token1, err := manager.GenerateAccessToken(user1ID, "user1", domain.RoleUser)
 	require.NoError(t, err)
 
-	token2, err := manager.GenerateAccessToken(user2ID, "user2")
+	token2, err := manager.GenerateAccessToken(user2ID, "user2", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Tokens for different users should be different
@@ -186,10 +201,10 @@ func TestJWTManager_TokensSameUserSameSecond(t *testing.T) {
 	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
 	userID := uuid.New()
 
-	token1, err := manager.GenerateAccessToken(userID, "testuser")
+	token1, err := manager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
-	token2, err := manager.GenerateAccessToken(userID, "testuser")
+	token2, err := manager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 	require.NoError(t, err)
 
 	// Tokens generated in the same second with same user data will be identical
@@ -218,10 +233,10 @@ func TestJWTManager_DifferentUsers(t *testing.T) {
 	user1ID := uuid.New()
 	user2ID := uuid.New()
 
-	token1, err := manager.GenerateAccessToken(user1ID, "user1")
+	token1, err := manager.GenerateAccessToken(user1ID, "user1", domain.RoleUser)
 	require.NoError(t, err)
 
-	token2, err := manager.GenerateAccessToken(user2ID, "user2")
+	token2, err := manager.GenerateAccessToken(user2ID, "user2", domain.RoleUser)
 	require.NoError(t, err)
 
 	claims1, err := manager.ValidateToken(token1)

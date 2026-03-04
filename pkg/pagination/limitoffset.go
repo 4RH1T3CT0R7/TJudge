@@ -6,7 +6,7 @@ import (
 )
 
 // DefaultMaxLimit максимальный лимит по умолчанию
-const DefaultMaxLimit = 1000
+const DefaultMaxLimit = 100
 
 // LimitOffset содержит распарсенные параметры пагинации
 type LimitOffset struct {

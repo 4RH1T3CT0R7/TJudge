@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
 // Claims - JWT claims с дополнительными полями
 type Claims struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Username string    `json:"username"`
+	UserID   uuid.UUID   `json:"user_id"`
+	Username string      `json:"username"`
+	Role     domain.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -32,11 +34,12 @@ func NewJWTManager(secretKey string, accessTTL, refreshTTL time.Duration) *JWTMa
 }
 
 // GenerateAccessToken генерирует access token
-func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string) (string, error) {
+func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, role domain.Role) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(jm.accessTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -81,6 +84,12 @@ func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	// Backward compatibility: tokens issued before the Role field was added
+	// will have an empty Role. Default to RoleUser to avoid silent access loss.
+	if claims.Role == "" {
+		claims.Role = domain.RoleUser
 	}
 
 	return claims, nil
