@@ -30,14 +30,6 @@ services:
       retries: 5
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 4G
-        reservations:
-          cpus: '1.0'
-          memory: 1G
     restart: always
     logging:
       driver: "json-file"
@@ -66,14 +58,6 @@ services:
       retries: 5
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     restart: always
     logging:
       driver: "json-file"
@@ -158,13 +142,6 @@ services:
     tmpfs:
       - /tmp:size=100M
     deploy:
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 2G
-        reservations:
-          cpus: '1.0'
-          memory: 512M
       replicas: 2
     restart: always
     logging:
@@ -216,13 +193,6 @@ services:
     security_opt:
       - no-new-privileges:true
     deploy:
-      resources:
-        limits:
-          cpus: '8.0'
-          memory: 4G
-        reservations:
-          cpus: '2.0'
-          memory: 1G
       replicas: 2
     restart: always
     logging:
@@ -252,11 +222,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     restart: always
 
   # Prometheus
@@ -281,14 +246,6 @@ services:
         condition: service_healthy
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
     restart: always
 
   # Grafana
@@ -317,11 +274,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
     restart: always
 
   # Loki
@@ -341,11 +293,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
     restart: always
 
   # Promtail
@@ -362,11 +309,6 @@ services:
         condition: service_healthy
     networks:
       - tjudge-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
     restart: always
 
 volumes:

@@ -35,12 +35,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
-    deploy:
-      resources:
-        limits:
-          memory: ${POSTGRES_MEMORY_LIMIT:-1G}
-        reservations:
-          memory: ${POSTGRES_MEMORY_RESERVATION:-256M}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tjudge}"]
       interval: 10s
@@ -101,8 +95,9 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     container_name: tjudge-api
+    expose:
+      - "8080"
     ports:
-      - "8080:8080"
       - "9090:9090"
     environment:
       - DB_HOST=postgres
@@ -124,13 +119,6 @@ services:
       - BASE_URL=${BASE_URL:-http://localhost:8080}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-false}
       - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-100}
-    deploy:
-      resources:
-        limits:
-          cpus: '${API_CPU_LIMIT:-2.0}'
-          memory: ${API_MEMORY_LIMIT:-1G}
-        reservations:
-          memory: ${API_MEMORY_RESERVATION:-512M}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -188,13 +176,6 @@ services:
       - PROGRAMS_PATH=/data/programs
       - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-}
       - EXECUTOR_DOCKER_IMAGE=${EXECUTOR_DOCKER_IMAGE:-tjudge-cli:latest}
-    deploy:
-      resources:
-        limits:
-          cpus: '${WORKER_CPU_LIMIT:-3.0}'
-          memory: ${WORKER_MEMORY_LIMIT:-2G}
-        reservations:
-          memory: ${WORKER_MEMORY_RESERVATION:-1G}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -205,6 +186,38 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data/programs:/data/programs
+    networks:
+      - tjudge-network
+    restart: unless-stopped
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: tjudge-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployments/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - certbot_webroot:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - tjudge-network
+    restart: unless-stopped
+
+
+  certbot:
+    image: certbot/certbot
+    container_name: tjudge-certbot
+    volumes:
+      - certbot_webroot:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
       - tjudge-network
     restart: unless-stopped
@@ -254,6 +267,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  certbot_webroot:
+  certbot_certs:
   prometheus_data:
   grafana_data:
 
