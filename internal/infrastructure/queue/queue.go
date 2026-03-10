@@ -126,18 +126,36 @@ func (qm *QueueManager) weightedQueueKeys() []string {
 	}
 }
 
-// EnqueueBatch добавляет несколько матчей в очереди одним Redis pipeline-запросом.
-// Значительно быстрее, чем вызов Enqueue в цикле (один round-trip вместо N).
+// EnqueueBatch добавляет несколько матчей в очереди.
+// Каждый матч проверяется через dedup set индивидуально, чтобы не добавлять
+// дубликаты (в отличие от batch SADD, который не сообщает КАКИЕ элементы новые).
+// Финальный LPUSH выполняется одним pipeline-запросом.
+// При ошибке BatchLPush записи в dedup set откатываются.
 func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
 
-	// Группируем сериализованные матчи по ключам очередей
+	// Проверяем каждый матч через dedup set и собираем только новые
 	grouped := make(map[string][]interface{})
-	dedupMembers := make([]interface{}, 0, len(matches))
+	var addedToDedup []string // ID матчей, добавленных в dedup set (для rollback)
+	var skipped int
 
 	for _, match := range matches {
+		// Индивидуальная проверка дедупликации
+		added, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, match.ID.String())
+		if err != nil {
+			qm.log.LogError("Failed to check dedup set", err,
+				zap.String("match_id", match.ID.String()),
+			)
+			// Продолжаем — лучше дублировать, чем потерять
+		} else if added == 0 {
+			skipped++
+			continue
+		} else {
+			addedToDedup = append(addedToDedup, match.ID.String())
+		}
+
 		data, err := json.Marshal(match)
 		if err != nil {
 			return fmt.Errorf("failed to marshal match %s: %w", match.ID, err)
@@ -145,25 +163,36 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 
 		queueKey := qm.getQueueKey(match.Priority)
 		grouped[queueKey] = append(grouped[queueKey], data)
-		dedupMembers = append(dedupMembers, match.ID.String())
 	}
 
-	// Атомарно batch SADD + EXPIRE для дедупликации
-	if _, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, dedupMembers...); err != nil {
-		qm.log.LogError("Failed to batch add to dedup set", err)
-		// Продолжаем — лучше дублировать, чем потерять
+	if len(grouped) == 0 {
+		qm.log.Info("All matches already enqueued, skipping batch",
+			zap.Int("skipped", skipped),
+		)
+		return nil
 	}
 
 	// Batch LPUSH через pipeline
 	if err := qm.cache.BatchLPush(ctx, grouped); err != nil {
+		// Откатываем записи в dedup set, иначе матчи будут считаться
+		// "уже в очереди" хотя реально туда не попали
+		for _, matchID := range addedToDedup {
+			if sremErr := qm.cache.SRem(ctx, dedupKey, matchID); sremErr != nil {
+				qm.log.LogError("Failed to rollback dedup entry on batch enqueue failure", sremErr,
+					zap.String("match_id", matchID),
+				)
+			}
+		}
 		return fmt.Errorf("failed to batch enqueue matches: %w", err)
 	}
 
 	// Обновляем метрики
 	qm.updateQueueSizeMetrics(ctx)
 
+	enqueued := len(matches) - skipped
 	qm.log.Info("Matches batch enqueued",
-		zap.Int("count", len(matches)),
+		zap.Int("enqueued", enqueued),
+		zap.Int("skipped_duplicates", skipped),
 	)
 
 	return nil

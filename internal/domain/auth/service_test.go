@@ -75,6 +75,11 @@ func (m *MockTokenBlacklist) IsBlacklisted(ctx context.Context, token string) (b
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockTokenBlacklist) AddIfNotExists(ctx context.Context, token string, ttl time.Duration) (bool, error) {
+	args := m.Called(ctx, token, ttl)
+	return args.Bool(0), args.Error(1)
+}
+
 func newTestService(t *testing.T) (*Service, *MockUserRepository, *MockTokenBlacklist) {
 	userRepo := new(MockUserRepository)
 	blacklist := new(MockTokenBlacklist)
@@ -245,9 +250,8 @@ func TestService_RefreshTokens_Success(t *testing.T) {
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
-	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, nil)
+	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(true, nil)
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(nil)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
 
@@ -262,13 +266,17 @@ func TestService_RefreshTokens_Success(t *testing.T) {
 }
 
 func TestService_RefreshTokens_BlacklistedToken(t *testing.T) {
-	service, _, blacklist := newTestService(t)
+	service, userRepo, blacklist := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
+	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
-	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(true, nil)
+	// GetByID succeeds (called before AddIfNotExists now)
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	// AddIfNotExists returns false → token already consumed
+	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, nil)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
 
@@ -277,14 +285,14 @@ func TestService_RefreshTokens_BlacklistedToken(t *testing.T) {
 	assert.Contains(t, err.Error(), "revoked")
 
 	blacklist.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
 }
 
 func TestService_RefreshTokens_InvalidToken(t *testing.T) {
-	service, _, blacklist := newTestService(t)
+	service, _, _ := newTestService(t)
 	ctx := context.Background()
 
-	blacklist.On("IsBlacklisted", ctx, "invalid-token").Return(false, nil)
-
+	// Invalid token fails JWT validation before reaching blacklist
 	resp, err := service.RefreshTokens(ctx, "invalid-token")
 
 	assert.Error(t, err)
@@ -855,36 +863,38 @@ func TestService_Register_ExistsError(t *testing.T) {
 // --- RefreshTokens edge cases ---
 
 func TestService_RefreshTokens_GetUserError(t *testing.T) {
-	service, userRepo, blacklist := newTestService(t)
+	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
-	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, nil)
+	// GetByID fails BEFORE AddIfNotExists — token is NOT consumed (no lockout)
 	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-	blacklist.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 }
 
 // --- Additional edge cases ---
 
-func TestService_RefreshTokens_BlacklistCheckError(t *testing.T) {
-	service, _, blacklist := newTestService(t)
+func TestService_RefreshTokens_BlacklistAtomicError(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
+	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
+	// GetByID succeeds (called before AddIfNotExists now)
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 	// Simulate Redis down — fail-closed should reject the request
-	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, errors.ErrInternal)
+	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, errors.ErrInternal)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
 
@@ -892,6 +902,7 @@ func TestService_RefreshTokens_BlacklistCheckError(t *testing.T) {
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "blacklist")
 	blacklist.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
 }
 
 func TestService_Logout_WithBothTokens(t *testing.T) {
@@ -913,34 +924,10 @@ func TestService_Logout_WithBothTokens(t *testing.T) {
 	blacklist.AssertExpectations(t)
 }
 
-func TestService_RefreshTokens_BlacklistAddError(t *testing.T) {
-	service, userRepo, blacklist := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	user := &domain.User{
-		ID:       userID,
-		Username: "testuser",
-		Email:    "test@example.com",
-		Role:     domain.RoleUser,
-	}
-
-	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
-	require.NoError(t, err)
-
-	blacklist.On("IsBlacklisted", ctx, refreshToken).Return(false, nil)
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// Old token blacklist fails — should abort rotation (fail-closed)
-	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
-
-	resp, err := service.RefreshTokens(ctx, refreshToken)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "blacklist")
-	blacklist.AssertExpectations(t)
-	userRepo.AssertExpectations(t)
-}
+// TestService_RefreshTokens_BlacklistAddError removed — RefreshTokens now uses
+// atomic AddIfNotExists instead of separate IsBlacklisted + Add,
+// so the "Add fails after check" scenario no longer exists.
+// The equivalent failure is covered by TestService_RefreshTokens_BlacklistAtomicError.
 
 func TestService_Register_InvalidEmail(t *testing.T) {
 	service, userRepo, _ := newTestService(t)

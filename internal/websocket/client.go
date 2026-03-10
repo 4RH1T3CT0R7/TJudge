@@ -107,7 +107,12 @@ func (c *Client) WritePump() {
 			// Отправляем queued сообщения как отдельные WebSocket фреймы
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				if err := c.conn.WriteMessage(websocket.TextMessage, <-c.send); err != nil {
+				queued, ok := <-c.send
+				if !ok {
+					// Hub закрыл канал во время drain
+					return
+				}
+				if err := c.conn.WriteMessage(websocket.TextMessage, queued); err != nil {
 					return
 				}
 			}

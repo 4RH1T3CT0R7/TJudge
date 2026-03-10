@@ -358,10 +358,13 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	var query string
 
 	if status == domain.MatchRunning {
+		// Только pending матчи могут перейти в running.
+		// Это предотвращает повторную обработку матча, если он оказался
+		// в очереди дважды (например, при retry).
 		query = `
 			UPDATE matches
 			SET status = $2, started_at = NOW()
-			WHERE id = $1
+			WHERE id = $1 AND status = 'pending'
 		`
 	} else {
 		query = `
@@ -382,6 +385,9 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	}
 
 	if rows == 0 {
+		if status == domain.MatchRunning {
+			return domain.ErrMatchAlreadyProcessed
+		}
 		return errors.ErrNotFound.WithMessage("match not found")
 	}
 
@@ -737,10 +743,11 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 
 	var query string
 	if status == domain.MatchRunning {
+		// Только pending матчи могут перейти в running (защита от дублирования)
 		query = `
 			UPDATE matches
 			SET status = $1, started_at = NOW()
-			WHERE id = ANY($2)
+			WHERE id = ANY($2) AND status = 'pending'
 		`
 	} else {
 		query = `

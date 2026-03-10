@@ -104,6 +104,24 @@ func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProc
 	return p, matchRepo, ratingRepo, programRepo, ratingService, executor
 }
 
+func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
+	p, matchRepo, _, _, _, _ := newTestProcessor(t)
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+	}
+
+	// UpdateStatus returns ErrMatchAlreadyProcessed — duplicate from queue
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).
+		Return(domain.ErrMatchAlreadyProcessed)
+
+	err := p.Process(context.Background(), match)
+	assert.NoError(t, err) // should be silently skipped, not an error
+	matchRepo.AssertExpectations(t)
+}
+
 func TestProcessor_Process_UpdateStatusNotFound(t *testing.T) {
 	p, matchRepo, _, _, _, _ := newTestProcessor(t)
 	match := &domain.Match{

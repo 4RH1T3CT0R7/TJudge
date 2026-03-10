@@ -27,6 +27,9 @@ type UserRepository interface {
 type TokenBlacklist interface {
 	Add(ctx context.Context, token string, ttl time.Duration) error
 	IsBlacklisted(ctx context.Context, token string) (bool, error)
+	// AddIfNotExists атомарно добавляет токен, возвращает true если новый.
+	// Предотвращает TOCTOU race condition при token rotation.
+	AddIfNotExists(ctx context.Context, token string, ttl time.Duration) (bool, error)
 }
 
 // Service - сервис аутентификации
@@ -209,38 +212,32 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 // RefreshTokens обновляет access token используя refresh token
 // Реализует token rotation: старый refresh token инвалидируется
 func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*AuthResponse, error) {
-	// Проверяем, не в blacklist ли токен (token rotation protection).
-	// Fail-closed: if the blacklist check fails (e.g. Redis is down), we reject
-	// the request rather than allowing a potentially revoked token through.
-	isBlacklisted, err := s.tokenBlacklist.IsBlacklisted(ctx, refreshToken)
-	if err != nil {
-		s.log.LogError("Failed to check token blacklist", err)
-		return nil, fmt.Errorf("failed to verify token blacklist: %w", err)
-	}
-	if isBlacklisted {
-		s.log.Warn("Attempt to reuse blacklisted refresh token")
-		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
-	}
-
-	// Валидируем refresh token
+	// Валидируем refresh token (дешёвая операция, без побочных эффектов)
 	userID, err := s.jwtManager.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		return nil, errors.ErrInvalidToken.WithError(err)
 	}
 
-	// Получаем пользователя
+	// Проверяем существование пользователя ДО потребления токена.
+	// Если GetByID упадёт после AddIfNotExists, пользователь потеряет
+	// refresh token без получения нового (lockout).
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Token Rotation: добавляем старый refresh token в blacklist.
-	// Это предотвращает повторное использование токена.
-	// Fail-closed: if we cannot blacklist the old token, abort the rotation to
-	// prevent the old token from remaining valid and being reused.
-	if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
-		s.log.LogError("Failed to blacklist old refresh token", err)
-		return nil, fmt.Errorf("failed to blacklist old refresh token: %w", err)
+	// Token Rotation: атомарно проверяем и добавляем в blacklist (SETNX).
+	// Это предотвращает TOCTOU race condition — только один из конкурентных
+	// запросов с тем же refresh token сможет пройти.
+	// Fail-closed: при ошибке Redis отклоняем запрос.
+	wasNew, err := s.tokenBlacklist.AddIfNotExists(ctx, refreshToken, s.jwtManager.RefreshTokenTTL())
+	if err != nil {
+		s.log.LogError("Failed to atomically blacklist refresh token", err)
+		return nil, fmt.Errorf("failed to blacklist refresh token: %w", err)
+	}
+	if !wasNew {
+		s.log.Warn("Attempt to reuse already-consumed refresh token")
+		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
 	}
 
 	s.log.Info("Tokens refreshed with rotation",

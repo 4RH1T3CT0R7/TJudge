@@ -558,6 +558,51 @@ func TestQueueManager_EnqueueBatch(t *testing.T) {
 	assert.Equal(t, int64(1), low)
 }
 
+func TestQueueManager_EnqueueBatch_DedupSkipsDuplicates(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	match1 := testMatch(domain.PriorityHigh)
+	match2 := testMatch(domain.PriorityHigh)
+
+	// Enqueue match1 individually first
+	require.NoError(t, qm.Enqueue(ctx, match1))
+
+	// Now batch-enqueue both match1 (duplicate) and match2 (new)
+	err := qm.EnqueueBatch(ctx, []*domain.Match{match1, match2})
+	require.NoError(t, err)
+
+	// Queue should have 2 (original match1 + new match2), not 3
+	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), size)
+}
+
+func TestQueueManager_EnqueueBatch_AllDuplicates(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	match1 := testMatch(domain.PriorityHigh)
+	match2 := testMatch(domain.PriorityMedium)
+
+	// Enqueue both individually
+	require.NoError(t, qm.Enqueue(ctx, match1))
+	require.NoError(t, qm.Enqueue(ctx, match2))
+
+	// Batch-enqueue same matches — all should be skipped
+	err := qm.EnqueueBatch(ctx, []*domain.Match{match1, match2})
+	require.NoError(t, err)
+
+	// Queue sizes should remain the same
+	highSize, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), highSize)
+
+	medSize, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), medSize)
+}
+
 func TestQueueManager_EnqueueBatch_Empty(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()

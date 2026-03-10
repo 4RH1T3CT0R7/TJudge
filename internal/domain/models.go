@@ -1,10 +1,15 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// ErrMatchAlreadyProcessed означает, что матч уже не в статусе pending
+// и не может быть взят в обработку (защита от дублирования)
+var ErrMatchAlreadyProcessed = errors.New("match already processed or in progress")
 
 // Role - роль пользователя в системе
 type Role string
