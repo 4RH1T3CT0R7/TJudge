@@ -136,8 +136,6 @@ export function Layout() {
             {/* Partner logos */}
             <div className="flex items-center gap-4">
               {[
-                { src: '/bmstu-logo.png', alt: 'МГТУ им. Баумана', h: 'h-9' },
-                { src: '/studsovet-logo.png', alt: 'Студсовет МГТУ', h: 'h-8' },
                 { src: '/iu-logo.png', alt: 'Студ ИУ', h: 'h-7' },
                 { src: '/its-bmstu-logo.png', alt: 'ITS BMSTU', h: 'h-7' },
                 { src: '/bcg-logo.png', alt: 'BCG', h: 'h-7' },
