@@ -26,6 +26,7 @@ const EYE_BG_COLOR = '#2e1065';
 
 // --- Size map ---
 const SIZE_MAP: Record<string, string> = { sm: '5px', md: '8px', lg: '12px' };
+const MAX_POSE_ROWS = 30; // salute pose is tallest (6+3+2+3+1 source lines × 2)
 
 
 // --- ASCII art helpers ---
@@ -1171,6 +1172,7 @@ export function SpaceInvader({
               whiteSpace: 'pre',
               userSelect: 'none',
               cursor: interactive ? 'pointer' : 'default',
+              minHeight: `${MAX_POSE_ROWS * parseFloat(SIZE_MAP[size] || SIZE_MAP.md)}px`,
             }}
           >
             {renderPose()}
