@@ -658,7 +658,7 @@ export function SpaceInvader({
   // Phase: 'idle' | 'spinning' | 'decelerating'
   const spinPhaseRef = useRef<'idle' | 'spinning' | 'decelerating'>('idle');
   const spinDecelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const spinGenRef = useRef(0); // generation counter to invalidate stale callbacks
+  const spinGenRef = useRef(0);
 
   const clearSpinStyles = useCallback(() => {
     const el = spinContainerRef.current;
@@ -669,7 +669,16 @@ export function SpaceInvader({
     }
   }, []);
 
-  const stopSpin = useCallback(() => {
+  const startSpin = useCallback(() => {
+    clearTimeout(spinDecelTimerRef.current);
+    clearSpinStyles();
+    spinPhaseRef.current = 'spinning';
+    ++spinGenRef.current;
+    setPose('spin');
+  }, [clearSpinStyles]);
+
+  // Smooth deceleration: read current angle, ease-out to next full turn
+  const decelSpin = useCallback((extraTurns = 0) => {
     if (spinPhaseRef.current !== 'spinning') return;
     spinPhaseRef.current = 'decelerating';
     const gen = ++spinGenRef.current;
@@ -688,16 +697,16 @@ export function SpaceInvader({
       }
       el.style.animation = 'none';
       el.style.transform = `rotate(${angle}deg)`;
-      let target = (Math.floor(angle / 360) + 1) * 360;
+      let target = (Math.floor(angle / 360) + 1) * 360 + extraTurns * 360;
       let remaining = target - angle;
       if (remaining < 60) { target += 360; remaining += 360; }
-      const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
+      const dur = Math.min(1.5, Math.max(0.3, remaining / 500));
       requestAnimationFrame(() => {
-        if (spinGenRef.current !== gen) return; // stale
+        if (spinGenRef.current !== gen) return;
         el.style.transition = `transform ${dur}s ease-out`;
         el.style.transform = `rotate(${target}deg)`;
         spinDecelTimerRef.current = setTimeout(() => {
-          if (spinGenRef.current !== gen) return; // stale
+          if (spinGenRef.current !== gen) return;
           clearSpinStyles();
           spinPhaseRef.current = 'idle';
           setPose('idle');
@@ -709,7 +718,20 @@ export function SpaceInvader({
     setPose('spinStop');
   }, [clearSpinStyles]);
 
-  // Ref to remove global listeners added per-press
+  // Auto-spin: triggered by quick swipe (flick gesture) — spin + auto-decelerate
+  const flickSpin = useCallback((velocity: number) => {
+    clearTimeout(spinDecelTimerRef.current);
+    clearSpinStyles();
+    spinPhaseRef.current = 'spinning';
+    ++spinGenRef.current;
+    setPose('spin');
+    // Extra turns proportional to swipe velocity
+    const extraTurns = Math.min(3, Math.floor(velocity / 400));
+    // Spin briefly then decelerate
+    const spinTime = Math.min(800, Math.max(200, velocity * 0.5));
+    setTimeout(() => decelSpin(extraTurns), spinTime);
+  }, [clearSpinStyles, decelSpin]);
+
   const pressCleanupRef = useRef<(() => void) | null>(null);
 
   const cleanupPressListeners = useCallback(() => {
@@ -721,36 +743,62 @@ export function SpaceInvader({
     if (!interactive) return;
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
 
+    // Long press: 300ms threshold (reduced from 500ms)
     longPressTimerRef.current = setTimeout(() => {
-      clearTimeout(spinDecelTimerRef.current);
-      clearSpinStyles();
-      spinPhaseRef.current = 'spinning';
-      ++spinGenRef.current; // invalidate any stale decel callbacks
-      setPose('spin');
-    }, 500);
+      startSpin();
+    }, 300);
 
-    // Clean up any leftover listeners from a previous press
+    // Per-press global listeners
     cleanupPressListeners();
-    const onRelease = () => {
+    const onRelease = (upEvent: Event) => {
       cleanupPressListeners();
       clearTimeout(longPressTimerRef.current);
-      stopSpin();
+
+      // If spinning or already decelerating (handled by element handler), skip
+      if (spinPhaseRef.current === 'spinning') {
+        decelSpin();
+        return;
+      }
+      if (spinPhaseRef.current === 'decelerating') return;
+
+      // Quick swipe detection: use pointerup position vs pointerdown position
+      const down = pointerDownPos.current;
+      const upE = upEvent as PointerEvent;
+      if (down && upE.clientX !== undefined) {
+        const dt = Date.now() - down.time;
+        if (dt < 400 && dt > 50) {
+          const dx = upE.clientX - down.x;
+          const dy = upE.clientY - down.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const velocity = (dist / dt) * 1000; // px/s
+          if (velocity > 200 && dist > 10) {
+            flickSpin(velocity);
+          }
+        }
+      }
     };
     window.addEventListener('pointerup', onRelease);
     window.addEventListener('pointercancel', onRelease);
-    window.addEventListener('contextmenu', onRelease); // right-click menu
     pressCleanupRef.current = () => {
       window.removeEventListener('pointerup', onRelease);
       window.removeEventListener('pointercancel', onRelease);
-      window.removeEventListener('contextmenu', onRelease);
     };
-  }, [interactive, stopSpin, clearSpinStyles, cleanupPressListeners]);
+  }, [interactive, startSpin, decelSpin, flickSpin, cleanupPressListeners]);
 
+  // Stop spin if context menu appears while already spinning (don't clear timer — allow right-click spin)
+  useEffect(() => {
+    const onCtx = () => {
+      if (spinPhaseRef.current === 'spinning') decelSpin();
+    };
+    window.addEventListener('contextmenu', onCtx);
+    return () => window.removeEventListener('contextmenu', onCtx);
+  }, [decelSpin]);
+
+  // Element-level pointerup — only handles active spin; cleanup + swipe done in onRelease (window)
   const handlePointerUp = useCallback(() => {
-    cleanupPressListeners();
     clearTimeout(longPressTimerRef.current);
-    stopSpin();
-  }, [stopSpin, cleanupPressListeners]);
+    if (spinPhaseRef.current === 'spinning') decelSpin();
+  }, [decelSpin]);
 
   // --- Hover (use ref + minimal re-render) ---
   const handleMouseEnter = useCallback(() => {

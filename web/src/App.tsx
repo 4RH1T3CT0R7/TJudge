@@ -34,9 +34,9 @@ const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.A
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
 
 function prefetchAllPages() {
-  const idle = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 200));
-  idle(() => {
-    Object.values(pageImports).forEach(load => load());
+  // Stagger imports slightly to avoid blocking the main thread
+  Object.values(pageImports).forEach((load, i) => {
+    setTimeout(load, i * 30);
   });
 }
 
@@ -88,8 +88,8 @@ function AppContent() {
   }, [initialize]);
 
   useEffect(() => {
-    if (isInitialized) prefetchAllPages();
-  }, [isInitialized]);
+    prefetchAllPages();
+  }, []);
 
   // Show loading while initializing auth
   if (!isInitialized && isLoading) {
