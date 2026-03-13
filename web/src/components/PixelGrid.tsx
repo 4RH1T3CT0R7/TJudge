@@ -19,6 +19,8 @@ const fragmentShader = `
   uniform int clickCount;
   uniform vec2 invaderCenter;
   uniform float invaderRadius;
+  uniform vec2 mousePos;
+  uniform float mouseActive;
 
   // --- Simplex 3D noise ---
   vec4 permute(vec4 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
@@ -125,6 +127,56 @@ const fragmentShader = `
     // Smooth fade near invader center
     float invaderFade = smoothstep(radiusUV * 0.35, radiusUV * 1.1, invDist);
 
+    // --- Cursor cluster ---
+    vec2 mouseUV = mousePos / iResolution.xy;
+    vec2 toMouse = pUV - mouseUV;
+    vec2 toMouseAspect = toMouse * vec2(aspect, 1.0);
+    float mouseDist = length(toMouseAspect);
+
+    // Irregular circle edge via angular noise (two octaves for organic wobble)
+    float mouseAngle = atan(toMouseAspect.y, toMouseAspect.x);
+    float edgeWobble = snoise(vec3(mouseAngle * 3.0, iTime * 1.5, 7.0)) * 0.012
+                     + snoise(vec3(mouseAngle * 7.0, iTime * 0.8, 13.0)) * 0.006;
+    float cursorR = 0.055 + edgeWobble;
+
+    // --- Click explosion: scatter pixels outward from click, then reassemble ---
+    vec2 scatterOffset = vec2(0.0);
+    float scatterIntensity = 0.0;
+    for (int i = 0; i < ${MAX_CLICKS}; i++) {
+      if (i >= clickCount) break;
+      float elapsed = iTime - clickTimes[i];
+      if (elapsed < 0.0 || elapsed > 2.5) continue;
+
+      vec2 clickUV = clickPositions[i] / iResolution.xy;
+      vec2 toClick = pUV - clickUV;
+      vec2 toClickAspect = toClick * vec2(aspect, 1.0);
+      float clickDist = length(toClickAspect);
+
+      // Only scatter pixels that were in the cursor cluster area
+      float inCluster = smoothstep(cursorR * 3.5, 0.0, clickDist);
+      if (inCluster > 0.01) {
+        // Fast burst out (0–0.2s), slow drift back (0.2–2.5s)
+        float phase;
+        if (elapsed < 0.2) {
+          phase = elapsed / 0.2;
+        } else {
+          phase = 1.0 - (elapsed - 0.2) / 2.3;
+        }
+        phase = clamp(phase, 0.0, 1.0);
+        float eased = 1.0 - pow(1.0 - phase, 3.0);
+
+        float scatter = eased * inCluster;
+
+        // Radial push direction from click center
+        vec2 dir = normalize(toClick + vec2(0.0001));
+        scatterOffset += dir * scatter * 0.12;
+        scatterIntensity = max(scatterIntensity, scatter);
+      }
+    }
+
+    // Apply scatter displacement to noise sampling (pixels visually fly outward)
+    noisePUV += scatterOffset;
+
     // Noise coordinates with turbulent flow
     float flowX = sin(t * 0.2) * 3.0 + cos(t * 0.15) * 2.0;
     float flowY = cos(t * 0.18) * 2.5 + sin(t * 0.12) * 1.5;
@@ -136,7 +188,7 @@ const fragmentShader = `
     // Second noise for color selection (purple vs green)
     float colorNoise = snoise(vec3(noisePUV * 3.0 + vec2(t * 0.1), t * 0.05 + 100.0));
 
-    // Click wave accumulation
+    // Click wave accumulation (global ripple across entire grid)
     float waveEffect = 0.0;
     for (int i = 0; i < ${MAX_CLICKS}; i++) {
       if (i >= clickCount) break;
@@ -152,8 +204,14 @@ const fragmentShader = `
       waveEffect += wave;
     }
 
-    // Combine noise + waves
-    float value = n + waveEffect;
+    // --- Cursor gather: boost pixel brightness near mouse ---
+    float gatherFade = smoothstep(cursorR, cursorR * 0.1, mouseDist);
+    // Suppress gather during explosion (center empties), keep scattered pixels visible
+    float gather = gatherFade * mouseActive * (1.0 - scatterIntensity * 0.9);
+    float scatterGlow = scatterIntensity * mouseActive * 0.35;
+
+    // Combine noise + waves + cursor effects
+    float value = n + waveEffect + gather * 0.55 + scatterGlow;
 
     // Brightness & contrast — darker = fewer visible pixels
     value = (value - 0.75) * 1.4 + 0.5;
@@ -189,6 +247,7 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
   } | null>(null);
   const clicksRef = useRef<{ x: number; y: number; time: number }[]>([]);
   const startTimeRef = useRef(0);
+  const mouseRef = useRef({ x: 0, y: 0, smoothX: 0, smoothY: 0, active: 0, smoothActive: 0 });
 
   // Initialize start time lazily in effect to avoid impure call during render
   useEffect(() => {
@@ -223,6 +282,8 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
         clickCount: { value: 0 },
         invaderCenter: { value: new THREE.Vector2() },
         invaderRadius: { value: 0 },
+        mousePos: { value: new THREE.Vector2() },
+        mouseActive: { value: 0 },
       },
     });
 
@@ -260,9 +321,18 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     const ref = { renderer, scene, camera, material, animId: 0 };
     sceneRef.current = ref;
 
+    const mouse = mouseRef.current;
+
     const animate = () => {
       const now = performance.now() / 1000 - startTimeRef.current;
       material.uniforms.iTime.value = now;
+
+      // Smooth mouse position and active state (lerp each frame)
+      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.15;
+      mouse.smoothY += (mouse.y - mouse.smoothY) * 0.15;
+      mouse.smoothActive += (mouse.active - mouse.smoothActive) * 0.08;
+      material.uniforms.mousePos.value.set(mouse.smoothX, mouse.smoothY);
+      material.uniforms.mouseActive.value = mouse.smoothActive;
 
       // Update click uniforms
       const clicks = clicksRef.current;
@@ -299,10 +369,25 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     };
     clickTarget.addEventListener('click', onClick);
 
+    // Mouse tracking for cursor cluster
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      mouse.x = (e.clientX - rect.left) * currentDpr;
+      mouse.y = (rect.height - (e.clientY - rect.top)) * currentDpr;
+      mouse.active = 1;
+    };
+    const onMouseLeave = () => {
+      mouse.active = 0;
+    };
+    clickTarget.addEventListener('mousemove', onMouseMove);
+    clickTarget.addEventListener('mouseleave', onMouseLeave);
+
     return () => {
       cancelAnimationFrame(ref.animId);
       ro.disconnect();
       clickTarget.removeEventListener('click', onClick);
+      clickTarget.removeEventListener('mousemove', onMouseMove);
+      clickTarget.removeEventListener('mouseleave', onMouseLeave);
       renderer.dispose();
       geometry.dispose();
       material.dispose();

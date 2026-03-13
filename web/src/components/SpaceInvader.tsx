@@ -657,6 +657,8 @@ export function SpaceInvader({
   // --- Long press ---
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
+    // Capture pointer so pointerup fires on this element even if cursor leaves
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
     longPressTimerRef.current = setTimeout(() => { setPose('spin'); }, 500);
   }, [interactive]);
