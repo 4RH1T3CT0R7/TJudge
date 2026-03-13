@@ -135,9 +135,9 @@ const fragmentShader = `
 
     // Irregular circle edge via angular noise (two octaves for organic wobble)
     float mouseAngle = atan(toMouseAspect.y, toMouseAspect.x);
-    float edgeWobble = snoise(vec3(mouseAngle * 3.0, iTime * 1.5, 7.0)) * 0.012
-                     + snoise(vec3(mouseAngle * 7.0, iTime * 0.8, 13.0)) * 0.006;
-    float cursorR = 0.055 + edgeWobble;
+    float edgeWobble = snoise(vec3(mouseAngle * 3.0, iTime * 1.5, 7.0)) * 0.025
+                     + snoise(vec3(mouseAngle * 7.0, iTime * 0.8, 13.0)) * 0.012;
+    float cursorR = 0.12 + edgeWobble;
 
     // --- Click explosion: scatter pixels outward from click, then reassemble ---
     vec2 scatterOffset = vec2(0.0);
