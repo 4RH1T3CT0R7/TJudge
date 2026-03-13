@@ -203,20 +203,28 @@ export function SpaceInvader({
   const [impactEyes, setImpactEyes] = useState<'crossed' | null>(null);
   const [impactSpeech, setImpactSpeech] = useState<string | null>(null);
 
-  // Speech bubble fade-out: keep last text visible during opacity transition
+  // Speech bubble fade-out: keep last text visible during opacity transition, then remove from DOM
   const lastSpeechRef = useRef<string | null>(null);
   const lastSpeechIsImpactRef = useRef(false);
   const [speechOpacity, setSpeechOpacity] = useState(0);
+  const speechFadeTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [, forceSpeechUpdate] = useState(0);
 
   useEffect(() => {
     const text = impactSpeech || speechBubble;
     if (text) {
+      clearTimeout(speechFadeTimerRef.current);
       lastSpeechRef.current = text;
       lastSpeechIsImpactRef.current = !!impactSpeech;
       setSpeechOpacity(1);
     } else {
       setSpeechOpacity(0);
+      speechFadeTimerRef.current = setTimeout(() => {
+        lastSpeechRef.current = null;
+        forceSpeechUpdate(c => c + 1);
+      }, 350);
     }
+    return () => clearTimeout(speechFadeTimerRef.current);
   }, [impactSpeech, speechBubble]);
 
   // Use refs for state that only affects eye rendering to avoid re-render cascades

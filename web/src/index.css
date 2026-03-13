@@ -141,6 +141,7 @@
     background-color: #0a0a0b;
     font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
     letter-spacing: -0.01em;
+    overflow-x: hidden;
   }
 
   html {
