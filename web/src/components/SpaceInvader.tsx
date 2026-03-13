@@ -655,11 +655,23 @@ export function SpaceInvader({
   }, [interactive]);
 
   // --- Long press / spin ---
-  const isSpinningRef = useRef(false);
+  // Phase: 'idle' | 'spinning' | 'decelerating'
+  const spinPhaseRef = useRef<'idle' | 'spinning' | 'decelerating'>('idle');
+  const spinDecelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const globalUpCleanupRef = useRef<(() => void) | null>(null);
+
+  const clearSpinStyles = useCallback(() => {
+    const el = spinContainerRef.current;
+    if (el) {
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.animation = '';
+    }
+  }, []);
 
   const stopSpin = useCallback(() => {
-    if (!isSpinningRef.current) return;
-    isSpinningRef.current = false;
+    if (spinPhaseRef.current !== 'spinning') return;
+    spinPhaseRef.current = 'decelerating';
 
     const el = spinContainerRef.current;
     if (el) {
@@ -679,40 +691,53 @@ export function SpaceInvader({
       el.style.transform = `rotate(${angle}deg)`;
       let target = (Math.floor(angle / 360) + 1) * 360;
       let remaining = target - angle;
-      // If too little left (<60°), add another full turn to avoid a jerky micro-rotation
       if (remaining < 60) { target += 360; remaining += 360; }
-      // Duration proportional to remaining angle (spin speed = 720°/s → ease-out ~half)
       const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
       requestAnimationFrame(() => {
+        if (spinPhaseRef.current !== 'decelerating') return; // cancelled
         el.style.transition = `transform ${dur}s ease-out`;
         el.style.transform = `rotate(${target}deg)`;
-        setTimeout(() => {
-          el.style.transition = '';
-          el.style.transform = '';
-          el.style.animation = '';
+        spinDecelTimerRef.current = setTimeout(() => {
+          clearSpinStyles();
+          spinPhaseRef.current = 'idle';
           setPose('idle');
         }, dur * 1000 + 20);
       });
+    } else {
+      spinPhaseRef.current = 'idle';
     }
     setPose('spinStop');
-  }, []);
+  }, [clearSpinStyles]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
+
     longPressTimerRef.current = setTimeout(() => {
-      isSpinningRef.current = true;
+      // Cancel any pending deceleration from a previous spin
+      clearTimeout(spinDecelTimerRef.current);
+      clearSpinStyles();
+      spinPhaseRef.current = 'spinning';
       setPose('spin');
     }, 500);
+
     // Per-press global listener — catches release even when cursor leaves the invader
+    // Clean up any leftover listener from a previous press (shouldn't happen, but defensive)
+    globalUpCleanupRef.current?.();
     const onUp = () => {
+      globalUpCleanupRef.current = null;
+      window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       clearTimeout(longPressTimerRef.current);
       stopSpin();
     };
-    window.addEventListener('pointerup', onUp, { once: true });
-    window.addEventListener('pointercancel', onUp, { once: true });
-  }, [interactive, stopSpin]);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    globalUpCleanupRef.current = () => {
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [interactive, stopSpin, clearSpinStyles]);
 
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
