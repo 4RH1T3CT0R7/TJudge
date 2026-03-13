@@ -658,7 +658,7 @@ export function SpaceInvader({
   // Phase: 'idle' | 'spinning' | 'decelerating'
   const spinPhaseRef = useRef<'idle' | 'spinning' | 'decelerating'>('idle');
   const spinDecelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const globalUpCleanupRef = useRef<(() => void) | null>(null);
+  const spinGenRef = useRef(0); // generation counter to invalidate stale callbacks
 
   const clearSpinStyles = useCallback(() => {
     const el = spinContainerRef.current;
@@ -672,10 +672,10 @@ export function SpaceInvader({
   const stopSpin = useCallback(() => {
     if (spinPhaseRef.current !== 'spinning') return;
     spinPhaseRef.current = 'decelerating';
+    const gen = ++spinGenRef.current;
 
     const el = spinContainerRef.current;
     if (el) {
-      // Read current rotation from the running animation
       const cs = getComputedStyle(el);
       const mx = cs.transform;
       let angle = 0;
@@ -686,7 +686,6 @@ export function SpaceInvader({
           angle = Math.atan2(b, a) * (180 / Math.PI);
         }
       }
-      // Freeze at current angle, smoothly finish to next full turn
       el.style.animation = 'none';
       el.style.transform = `rotate(${angle}deg)`;
       let target = (Math.floor(angle / 360) + 1) * 360;
@@ -694,10 +693,11 @@ export function SpaceInvader({
       if (remaining < 60) { target += 360; remaining += 360; }
       const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
       requestAnimationFrame(() => {
-        if (spinPhaseRef.current !== 'decelerating') return; // cancelled
+        if (spinGenRef.current !== gen) return; // stale
         el.style.transition = `transform ${dur}s ease-out`;
         el.style.transform = `rotate(${target}deg)`;
         spinDecelTimerRef.current = setTimeout(() => {
+          if (spinGenRef.current !== gen) return; // stale
           clearSpinStyles();
           spinPhaseRef.current = 'idle';
           setPose('idle');
@@ -709,40 +709,48 @@ export function SpaceInvader({
     setPose('spinStop');
   }, [clearSpinStyles]);
 
+  // Ref to remove global listeners added per-press
+  const pressCleanupRef = useRef<(() => void) | null>(null);
+
+  const cleanupPressListeners = useCallback(() => {
+    pressCleanupRef.current?.();
+    pressCleanupRef.current = null;
+  }, []);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
 
     longPressTimerRef.current = setTimeout(() => {
-      // Cancel any pending deceleration from a previous spin
       clearTimeout(spinDecelTimerRef.current);
       clearSpinStyles();
       spinPhaseRef.current = 'spinning';
+      ++spinGenRef.current; // invalidate any stale decel callbacks
       setPose('spin');
     }, 500);
 
-    // Per-press global listener — catches release even when cursor leaves the invader
-    // Clean up any leftover listener from a previous press (shouldn't happen, but defensive)
-    globalUpCleanupRef.current?.();
-    const onUp = () => {
-      globalUpCleanupRef.current = null;
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+    // Clean up any leftover listeners from a previous press
+    cleanupPressListeners();
+    const onRelease = () => {
+      cleanupPressListeners();
       clearTimeout(longPressTimerRef.current);
       stopSpin();
     };
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    globalUpCleanupRef.current = () => {
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
+    window.addEventListener('pointerup', onRelease);
+    window.addEventListener('pointercancel', onRelease);
+    window.addEventListener('contextmenu', onRelease); // right-click menu
+    pressCleanupRef.current = () => {
+      window.removeEventListener('pointerup', onRelease);
+      window.removeEventListener('pointercancel', onRelease);
+      window.removeEventListener('contextmenu', onRelease);
     };
-  }, [interactive, stopSpin, clearSpinStyles]);
+  }, [interactive, stopSpin, clearSpinStyles, cleanupPressListeners]);
 
   const handlePointerUp = useCallback(() => {
+    cleanupPressListeners();
     clearTimeout(longPressTimerRef.current);
     stopSpin();
-  }, [stopSpin]);
+  }, [stopSpin, cleanupPressListeners]);
 
   // --- Hover (use ref + minimal re-render) ---
   const handleMouseEnter = useCallback(() => {
@@ -1141,7 +1149,8 @@ export function SpaceInvader({
       className={`${className} ${animClass}`}
       role="img"
       aria-label="Интерактивный space invader"
-      style={{ display: 'inline-block', position: 'relative' }}
+      style={{ display: 'inline-block', position: 'relative', userSelect: 'none', touchAction: 'none', WebkitUserSelect: 'none' }}
+      draggable={false}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onPointerDown={handlePointerDown}
