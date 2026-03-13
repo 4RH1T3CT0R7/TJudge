@@ -7,17 +7,38 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuthStore } from './store/authStore';
 import { InvaderProvider } from './context/InvaderContext';
 
-const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const Tournaments = lazy(() => import('./pages/Tournaments').then(m => ({ default: m.Tournaments })));
-const TournamentDetail = lazy(() => import('./pages/TournamentDetail').then(m => ({ default: m.TournamentDetail })));
-const GameDetail = lazy(() => import('./pages/GameDetail').then(m => ({ default: m.GameDetail })));
-const GameView = lazy(() => import('./pages/GameView').then(m => ({ default: m.GameView })));
-const Games = lazy(() => import('./pages/Games').then(m => ({ default: m.Games })));
-const TeamManagement = lazy(() => import('./pages/TeamManagement').then(m => ({ default: m.TeamManagement })));
-const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
-const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const pageImports = {
+  Home: () => import('./pages/Home'),
+  Login: () => import('./pages/Login'),
+  Profile: () => import('./pages/Profile'),
+  Tournaments: () => import('./pages/Tournaments'),
+  TournamentDetail: () => import('./pages/TournamentDetail'),
+  GameDetail: () => import('./pages/GameDetail'),
+  GameView: () => import('./pages/GameView'),
+  Games: () => import('./pages/Games'),
+  TeamManagement: () => import('./pages/TeamManagement'),
+  AdminPanel: () => import('./pages/AdminPanel'),
+  NotFound: () => import('./pages/NotFound'),
+};
+
+const Home = lazy(() => pageImports.Home().then(m => ({ default: m.Home })));
+const Login = lazy(() => pageImports.Login().then(m => ({ default: m.Login })));
+const Profile = lazy(() => pageImports.Profile().then(m => ({ default: m.Profile })));
+const Tournaments = lazy(() => pageImports.Tournaments().then(m => ({ default: m.Tournaments })));
+const TournamentDetail = lazy(() => pageImports.TournamentDetail().then(m => ({ default: m.TournamentDetail })));
+const GameDetail = lazy(() => pageImports.GameDetail().then(m => ({ default: m.GameDetail })));
+const GameView = lazy(() => pageImports.GameView().then(m => ({ default: m.GameView })));
+const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
+const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
+const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
+const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
+
+function prefetchAllPages() {
+  const idle = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 200));
+  idle(() => {
+    Object.values(pageImports).forEach(load => load());
+  });
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, isInitialized } = useAuthStore();
@@ -63,9 +84,12 @@ function AppContent() {
   const { initialize, isInitialized, isLoading } = useAuthStore();
 
   useEffect(() => {
-    // Initialize auth state on app load
     initialize();
   }, [initialize]);
+
+  useEffect(() => {
+    if (isInitialized) prefetchAllPages();
+  }, [isInitialized]);
 
   // Show loading while initializing auth
   if (!isInitialized && isLoading) {
