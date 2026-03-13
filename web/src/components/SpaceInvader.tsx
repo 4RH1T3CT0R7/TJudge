@@ -316,6 +316,14 @@ export function SpaceInvader({
     const onLeave = () => {
       cursorGoneRef.current = true;
       forceEyeUpdate(c => c + 1);
+      // If spinning, stop immediately (user left the window)
+      if (spinPhaseRef.current === 'spinning') {
+        clearTimeout(flickTimerRef.current);
+        clearTimeout(spinDecelTimerRef.current);
+        clearSpinStyles();
+        spinPhaseRef.current = 'idle';
+        ++spinGenRef.current; // invalidate stale callbacks
+      }
       poseTimerRef.current = setTimeout(() => {
         setPose('handsUp');
       }, 3000);
@@ -324,7 +332,9 @@ export function SpaceInvader({
       if (cursorGoneRef.current) {
         cursorGoneRef.current = false;
         clearTimeout(poseTimerRef.current);
-        setPose('idle');
+        if (spinPhaseRef.current !== 'decelerating') {
+          setPose('idle');
+        }
         setAnimClass('animate-bounce-in');
         setTimeout(() => setAnimClass(''), 600);
         forceEyeUpdate(c => c + 1);
@@ -719,17 +729,17 @@ export function SpaceInvader({
   }, [clearSpinStyles]);
 
   // Auto-spin: triggered by quick swipe (flick gesture) — spin + auto-decelerate
+  const flickTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const flickSpin = useCallback((velocity: number) => {
     clearTimeout(spinDecelTimerRef.current);
+    clearTimeout(flickTimerRef.current);
     clearSpinStyles();
     spinPhaseRef.current = 'spinning';
     ++spinGenRef.current;
     setPose('spin');
-    // Extra turns proportional to swipe velocity
     const extraTurns = Math.min(3, Math.floor(velocity / 400));
-    // Spin briefly then decelerate
     const spinTime = Math.min(800, Math.max(200, velocity * 0.5));
-    setTimeout(() => decelSpin(extraTurns), spinTime);
+    flickTimerRef.current = setTimeout(() => decelSpin(extraTurns), spinTime);
   }, [clearSpinStyles, decelSpin]);
 
   const pressCleanupRef = useRef<(() => void) | null>(null);
