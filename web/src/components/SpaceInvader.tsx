@@ -704,21 +704,19 @@ export function SpaceInvader({
       isSpinningRef.current = true;
       setPose('spin');
     }, 500);
-  }, [interactive]);
+    // Per-press global listener — catches release even when cursor leaves the invader
+    const onUp = () => {
+      window.removeEventListener('pointercancel', onUp);
+      clearTimeout(longPressTimerRef.current);
+      stopSpin();
+    };
+    window.addEventListener('pointerup', onUp, { once: true });
+    window.addEventListener('pointercancel', onUp, { once: true });
+  }, [interactive, stopSpin]);
 
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
     stopSpin();
-  }, [stopSpin]);
-
-  // Global pointerup — catches release even when cursor is outside the invader
-  useEffect(() => {
-    const onGlobalUp = () => {
-      clearTimeout(longPressTimerRef.current);
-      stopSpin();
-    };
-    document.addEventListener('pointerup', onGlobalUp);
-    return () => document.removeEventListener('pointerup', onGlobalUp);
   }, [stopSpin]);
 
   // --- Hover (use ref + minimal re-render) ---
