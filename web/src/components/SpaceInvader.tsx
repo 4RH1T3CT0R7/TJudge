@@ -654,61 +654,72 @@ export function SpaceInvader({
     setTimeout(() => setPose('idle'), 2500);
   }, [interactive]);
 
-  // --- Long press ---
-  const pointerIdRef = useRef<number | null>(null);
+  // --- Long press / spin ---
+  const isSpinningRef = useRef(false);
+
+  const stopSpin = useCallback(() => {
+    if (!isSpinningRef.current) return;
+    isSpinningRef.current = false;
+
+    const el = spinContainerRef.current;
+    if (el) {
+      // Read current rotation from the running animation
+      const cs = getComputedStyle(el);
+      const mx = cs.transform;
+      let angle = 0;
+      if (mx && mx !== 'none') {
+        const vals = mx.match(/matrix\(([^)]+)\)/);
+        if (vals) {
+          const [a, b] = vals[1].split(',').map(Number);
+          angle = Math.atan2(b, a) * (180 / Math.PI);
+        }
+      }
+      // Freeze at current angle, smoothly finish to next full turn
+      el.style.animation = 'none';
+      el.style.transform = `rotate(${angle}deg)`;
+      let target = (Math.floor(angle / 360) + 1) * 360;
+      let remaining = target - angle;
+      // If too little left (<60°), add another full turn to avoid a jerky micro-rotation
+      if (remaining < 60) { target += 360; remaining += 360; }
+      // Duration proportional to remaining angle (spin speed = 720°/s → ease-out ~half)
+      const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${dur}s ease-out`;
+        el.style.transform = `rotate(${target}deg)`;
+        setTimeout(() => {
+          el.style.transition = '';
+          el.style.transform = '';
+          el.style.animation = '';
+          setPose('idle');
+        }, dur * 1000 + 20);
+      });
+    }
+    setPose('spinStop');
+  }, []);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (!interactive) return;
-    pointerIdRef.current = e.pointerId;
     pointerDownPos.current = { x: e.clientX, y: e.clientY, time: Date.now() };
-    const el = containerRef.current;
     longPressTimerRef.current = setTimeout(() => {
+      isSpinningRef.current = true;
       setPose('spin');
-      // Capture pointer once spin starts — ensures pointerup reaches us even if cursor leaves
-      if (el && pointerIdRef.current != null) {
-        try { el.setPointerCapture(pointerIdRef.current); } catch {}
-      }
     }, 500);
   }, [interactive]);
 
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
-    if (pose === 'spin') {
-      const el = spinContainerRef.current;
-      if (el) {
-        // Read current rotation from the running animation
-        const cs = getComputedStyle(el);
-        const mx = cs.transform;
-        let angle = 0;
-        if (mx && mx !== 'none') {
-          const vals = mx.match(/matrix\(([^)]+)\)/);
-          if (vals) {
-            const [a, b] = vals[1].split(',').map(Number);
-            angle = Math.atan2(b, a) * (180 / Math.PI);
-          }
-        }
-        // Freeze at current angle, smoothly finish to next full turn
-        el.style.animation = 'none';
-        el.style.transform = `rotate(${angle}deg)`;
-        let target = (Math.floor(angle / 360) + 1) * 360;
-        let remaining = target - angle;
-        // If too little left (<60°), add another full turn to avoid a jerky micro-rotation
-        if (remaining < 60) { target += 360; remaining += 360; }
-        // Duration proportional to remaining angle (spin speed = 720°/s → ease-out ~half)
-        const dur = Math.min(0.7, Math.max(0.2, remaining / 500));
-        requestAnimationFrame(() => {
-          el.style.transition = `transform ${dur}s ease-out`;
-          el.style.transform = `rotate(${target}deg)`;
-          setTimeout(() => {
-            el.style.transition = '';
-            el.style.transform = '';
-            el.style.animation = '';
-            setPose('idle');
-          }, dur * 1000 + 20);
-        });
-      }
-      setPose('spinStop');
-    }
-  }, [pose]);
+    stopSpin();
+  }, [stopSpin]);
+
+  // Global pointerup — catches release even when cursor is outside the invader
+  useEffect(() => {
+    const onGlobalUp = () => {
+      clearTimeout(longPressTimerRef.current);
+      stopSpin();
+    };
+    document.addEventListener('pointerup', onGlobalUp);
+    return () => document.removeEventListener('pointerup', onGlobalUp);
+  }, [stopSpin]);
 
   // --- Hover (use ref + minimal re-render) ---
   const handleMouseEnter = useCallback(() => {

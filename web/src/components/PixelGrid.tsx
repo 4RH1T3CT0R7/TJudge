@@ -328,9 +328,9 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
       material.uniforms.iTime.value = now;
 
       // Smooth mouse position and active state (lerp each frame)
-      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.15;
-      mouse.smoothY += (mouse.y - mouse.smoothY) * 0.15;
-      mouse.smoothActive += (mouse.active - mouse.smoothActive) * 0.08;
+      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.4;
+      mouse.smoothY += (mouse.y - mouse.smoothY) * 0.4;
+      mouse.smoothActive += (mouse.active - mouse.smoothActive) * 0.12;
       material.uniforms.mousePos.value.set(mouse.smoothX, mouse.smoothY);
       material.uniforms.mouseActive.value = mouse.smoothActive;
 
