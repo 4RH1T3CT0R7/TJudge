@@ -687,7 +687,9 @@ export function SpaceInvader({
     setPose('spin');
   }, [clearSpinStyles]);
 
-  // Smooth deceleration: read current angle, ease-out to next full turn
+  // Smooth deceleration: continue at current speed, ease-out to stop
+  // Spin animation = 0.5s/turn = 720°/s. Decel arc = speed * time / 2 (for ease-out).
+  const SPIN_DEGS_PER_SEC = 720;
   const decelSpin = useCallback((extraTurns = 0) => {
     if (spinPhaseRef.current !== 'spinning') return;
     spinPhaseRef.current = 'decelerating';
@@ -707,10 +709,11 @@ export function SpaceInvader({
       }
       el.style.animation = 'none';
       el.style.transform = `rotate(${angle}deg)`;
-      let target = (Math.floor(angle / 360) + 1) * 360 + extraTurns * 360;
-      let remaining = target - angle;
-      if (remaining < 60) { target += 360; remaining += 360; }
-      const dur = Math.min(1.5, Math.max(0.3, remaining / 500));
+      // Fixed decel: 0.5s ease-out covering ~180° (matches spin speed continuity)
+      // + extra turns for flick gestures
+      const decelArc = (SPIN_DEGS_PER_SEC * 0.5) / 2 + extraTurns * 360;
+      const target = angle + decelArc;
+      const dur = 0.5 + extraTurns * 0.4;
       requestAnimationFrame(() => {
         if (spinGenRef.current !== gen) return;
         el.style.transition = `transform ${dur}s ease-out`;
