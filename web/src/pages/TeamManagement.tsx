@@ -4,7 +4,6 @@ import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { TeamWithMembers } from '../types';
 import { SpaceInvader } from '../components/SpaceInvader';
-import { InvaderPresence } from '../components/motion/InvaderPresence';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
@@ -246,28 +245,30 @@ export function TeamManagement() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
-              <InvaderPresence
-                size="sm"
-                controlledPose={invaderPose}
-                speechBubble={invaderSpeech}
-              />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-100">{teamData.name}</h1>
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <div className="shrink-0" style={{ width: 80, height: 80 }}>
+                <SpaceInvader
+                  size="sm"
+                  controlledPose={invaderPose}
+                  speechBubble={invaderSpeech}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-gray-100 truncate">{teamData.name}</h1>
                 {isLeader && (
                   <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
                     Вы капитан
                   </span>
                 )}
               </div>
+              {isLeader && (
+                <button onClick={() => setIsEditing(true)} className="btn btn-secondary shrink-0">
+                  Изменить название
+                </button>
+              )}
             </div>
           )}
 
-          {isLeader && !isEditing && (
-            <button onClick={() => setIsEditing(true)} className="btn btn-secondary">
-              Изменить название
-            </button>
-          )}
         </div>
 
         <div className="text-sm text-gray-400 space-y-1">
