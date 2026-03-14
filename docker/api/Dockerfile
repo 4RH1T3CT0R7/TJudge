@@ -52,7 +52,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM alpine:3.20
 
 # Install ca-certificates, compilers and interpreters for program validation/compilation
-RUN apk --no-cache add ca-certificates wget gcc g++ musl-dev python3 go openjdk17-jdk rustc
+RUN apk --no-cache add ca-certificates wget gcc g++ musl-dev python3 go openjdk17-jdk rust
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
