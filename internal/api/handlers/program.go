@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -329,26 +330,27 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 	defer dst.Close()
 
+	// Читаем всё содержимое файла в память (ограничено maxFileSize)
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		h.log.Error("Failed to read uploaded file", zap.Error(err))
+		os.Remove(filePath)
+		writeError(w, errors.ErrInternal.WithMessage("не удалось прочитать файл"))
+		return
+	}
+
 	// Добавляем shebang для интерпретируемых языков (если его нет)
 	shebang := getShebang(language)
-	if shebang != "" {
-		// Читаем первые байты чтобы проверить наличие shebang
-		firstBytes := make([]byte, 2)
-		n, _ := file.Read(firstBytes)
-		_, _ = file.Seek(0, 0) // Возвращаемся в начало
-
-		// Если файл не начинается с #!, добавляем shebang
-		if n < 2 || string(firstBytes) != "#!" {
-			if _, err := dst.WriteString(shebang); err != nil {
-				h.log.Error("Failed to write shebang", zap.Error(err))
-				os.Remove(filePath)
-				writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
-				return
-			}
+	if shebang != "" && !bytes.HasPrefix(fileContent, []byte("#!")) {
+		if _, err := dst.WriteString(shebang); err != nil {
+			h.log.Error("Failed to write shebang", zap.Error(err))
+			os.Remove(filePath)
+			writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл"))
+			return
 		}
 	}
 
-	if _, err := io.Copy(dst, file); err != nil {
+	if _, err := dst.Write(fileContent); err != nil {
 		h.log.Error("Failed to write file", zap.Error(err))
 		// Удаляем частично записанный файл
 		os.Remove(filePath)
