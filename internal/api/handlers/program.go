@@ -313,11 +313,18 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	fileName := fmt.Sprintf("%s_%s_%s%s", teamID.String()[:8], gameID.String()[:8], programID.String()[:8], ext)
 	filePath := filepath.Join(h.uploadDir, fileName)
 
+	// Убеждаемся что директория существует (safety net для Docker volumes)
+	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
+		h.log.Error("Failed to ensure upload directory", zap.Error(err), zap.String("dir", h.uploadDir))
+		writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл: директория загрузок недоступна"))
+		return
+	}
+
 	// Сохраняем файл
 	dst, err := os.Create(filePath)
 	if err != nil {
 		h.log.Error("Failed to create file", zap.Error(err), zap.String("path", filePath))
-		writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
+		writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл"))
 		return
 	}
 	defer dst.Close()
