@@ -277,8 +277,8 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrFile("JWT_SECRET", "change-this-secret-in-production"), // Поддержка Docker secrets
-			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 1*time.Hour),                  // 1 час активной сессии
-			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 72*time.Hour),                // 3 дня неактивности
+			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),                 // 24 часа активной сессии
+			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour),              // 7 дней неактивности
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
