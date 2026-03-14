@@ -1611,28 +1611,24 @@ function GamesTab({
                 {index + 1}
               </div>
 
-              <div className="flex items-start justify-between mb-3 pr-10">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-gray-100 group-hover:text-primary-400 transition-colors">
-                      {game.display_name}
-                    </h3>
-                    {isActive && (
-                      <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
-                        Активна
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <code className="text-sm bg-gray-800 px-2 py-0.5 rounded text-gray-400">
-                      {game.name}
-                    </code>
-                    {currentRound > 0 && (
-                      <span className="text-xs text-gray-400">
-                        • Раунд {currentRound}
-                      </span>
-                    )}
-                  </div>
+              <div className="mb-3 pr-10">
+                <h3 className="text-lg font-bold text-gray-100 group-hover:text-primary-400 transition-colors">
+                  {game.display_name}
+                </h3>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <code className="text-sm bg-gray-800 px-2 py-0.5 rounded text-gray-400">
+                    {game.name}
+                  </code>
+                  {currentRound > 0 && (
+                    <span className="text-xs text-gray-400">
+                      • Раунд {currentRound}
+                    </span>
+                  )}
+                  {isActive && (
+                    <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
+                      Активна
+                    </span>
+                  )}
                 </div>
               </div>
 
