@@ -895,6 +895,7 @@ export function TournamentDetail() {
           <TeamsTab
             teams={teams}
             isAuthenticated={isAuthenticated}
+            isAdmin={isAdmin}
             myTeam={myTeam}
             tournamentStatus={tournament.status}
             onJoinByCode={handleJoinTeam}
@@ -1715,6 +1716,7 @@ function GamesTab({
 function TeamsTab({
   teams,
   isAuthenticated,
+  isAdmin,
   myTeam,
   tournamentStatus,
   onJoinByCode,
@@ -1726,6 +1728,7 @@ function TeamsTab({
 }: {
   teams: Team[];
   isAuthenticated: boolean;
+  isAdmin: boolean;
   myTeam: Team | null;
   tournamentStatus: TournamentStatus;
   onJoinByCode: () => void;
@@ -1736,6 +1739,28 @@ function TeamsTab({
   setJoinError: (e: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
+  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<Record<string, { username: string; email: string }[]>>({});
+  const [loadingMembers, setLoadingMembers] = useState<string | null>(null);
+
+  const toggleTeamMembers = async (teamId: string) => {
+    if (expandedTeam === teamId) {
+      setExpandedTeam(null);
+      return;
+    }
+    setExpandedTeam(teamId);
+    if (!teamMembers[teamId]) {
+      setLoadingMembers(teamId);
+      try {
+        const data = await api.getTeam(teamId);
+        setTeamMembers(prev => ({ ...prev, [teamId]: data.members.map(m => ({ username: m.username, email: m.email })) }));
+      } catch {
+        setTeamMembers(prev => ({ ...prev, [teamId]: [] }));
+      } finally {
+        setLoadingMembers(null);
+      }
+    }
+  };
 
   return (
     <div>
@@ -1806,7 +1831,41 @@ function TeamsTab({
                     {new Date(team.created_at).toLocaleDateString('ru-RU')}
                   </p>
                 </div>
+                {isAdmin && (
+                  <button
+                    onClick={() => toggleTeamMembers(team.id)}
+                    className="text-gray-400 hover:text-gray-200 transition-colors p-1"
+                    title="Состав команды"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 transition-transform ${expandedTeam === team.id ? 'rotate-180' : ''}`}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+                )}
               </div>
+
+              {/* Admin: team members */}
+              {isAdmin && expandedTeam === team.id && (
+                <div className="mt-3 pt-3 border-t border-gray-700">
+                  {loadingMembers === team.id ? (
+                    <p className="text-xs text-gray-500">Загрузка...</p>
+                  ) : (teamMembers[team.id] || []).length === 0 ? (
+                    <p className="text-xs text-gray-500">Нет участников</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {teamMembers[team.id].map((member, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <span className="w-5 h-5 rounded-full bg-gray-600 flex items-center justify-center text-xs text-gray-300">
+                            {member.username[0]?.toUpperCase()}
+                          </span>
+                          <span className="text-gray-200">{member.username}</span>
+                          <span className="text-gray-500 text-xs truncate">{member.email}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {myTeam?.id === team.id && (
                 <Link

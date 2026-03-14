@@ -47,6 +47,7 @@ type TournamentRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
+	GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
 	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error)
@@ -324,13 +325,13 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrConflict.WithMessage("tournament already started or completed")
 		}
 
-		// Проверяем что есть минимум 2 участника
-		participantCount, err := s.tournamentRepo.GetParticipantsCount(ctx, tournamentID)
+		// Проверяем что есть минимум 2 команды
+		teamsCount, err := s.tournamentRepo.GetTeamsCount(ctx, tournamentID)
 		if err != nil {
-			return fmt.Errorf("failed to get participants count: %w", err)
+			return fmt.Errorf("failed to get teams count: %w", err)
 		}
-		if participantCount < 2 {
-			return errors.ErrValidation.WithMessage("tournament requires at least 2 participants to start")
+		if teamsCount < 2 {
+			return errors.ErrValidation.WithMessage("для старта турнира нужно минимум 2 команды")
 		}
 
 		// Обновляем статус турнира

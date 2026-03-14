@@ -293,6 +293,20 @@ func (r *TournamentRepository) GetParticipantsCount(ctx context.Context, tournam
 	return count, nil
 }
 
+// GetTeamsCount получает количество команд в турнире
+func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	var count int
+
+	query := `SELECT COUNT(*) FROM teams WHERE tournament_id = $1`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID).Scan(&count)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get teams count")
+	}
+
+	return count, nil
+}
+
 // AddParticipant добавляет участника в турнир
 func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error {
 	query := `
