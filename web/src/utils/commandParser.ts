@@ -212,7 +212,7 @@ export function executeCommand(input: string): CommandResult {
         };
       case 'attack':
         return {
-          output: ['> Инвейдер атакует! >>>----->'],
+          output: ['> Инвейдер атакует! [01101001]~>'],
           color: 'text-red-400',
           action: { type: 'invader', pose: 'attack', mood: 'angry' },
           sound: 'success',

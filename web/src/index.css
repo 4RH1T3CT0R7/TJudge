@@ -771,6 +771,50 @@
   100% { opacity: 0; }
 }
 
+/* Digital wave attack: binary digits fly outward */
+@keyframes digital-wave {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(60px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+/* Code debris: scattered code chars on attack */
+@keyframes code-debris {
+  0% {
+    transform: translate(0, 0) scale(0);
+    opacity: 0;
+  }
+  30% {
+    transform: translate(10px, -8px) scale(1.3);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(25px, 15px) scale(0.2);
+    opacity: 0;
+  }
+}
+
+/* Quest environment attack glitch */
+@keyframes env-attack-glitch {
+  0%, 100% { transform: translateX(0); filter: none; }
+  20% { transform: translateX(-2px); filter: hue-rotate(90deg); }
+  40% { transform: translateX(3px); filter: brightness(1.5); }
+  60% { transform: translateX(-1px); filter: hue-rotate(-60deg); }
+  80% { transform: translateX(2px); filter: brightness(0.8); }
+}
+
+.animate-env-attack-glitch {
+  animation: env-attack-glitch 0.5s ease-out;
+}
+
 .animate-rainbow-hue {
   animation: rainbow-hue 3s linear infinite;
 }

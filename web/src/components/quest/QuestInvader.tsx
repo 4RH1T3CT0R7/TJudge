@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SpaceInvader } from '../SpaceInvader';
+import { QuestEnvironment } from './QuestEnvironment';
 import type { QuestState } from '../../hooks/useQuestState';
 
 // Color transform CSS filters
@@ -57,13 +58,15 @@ export function QuestInvader({ state }: QuestInvaderProps) {
   const colorFilter = invaderTransform ? COLOR_FILTERS[invaderTransform] : undefined;
   const isRainbow = invaderTransform === 'rainbow';
 
+  const inQuest = state.level > 0;
+
   return (
     <div
       ref={containerRef}
       className={`flex items-center justify-center ${isRainbow ? 'animate-rainbow-hue' : ''}`}
       style={{
-        minWidth: '200px',
-        minHeight: '220px',
+        minWidth: inQuest ? '280px' : '200px',
+        minHeight: inQuest ? '300px' : '220px',
         position: escaping ? 'fixed' : 'relative',
         zIndex: escaping ? 100 : 1,
         transition: 'all 0.5s ease-out',
@@ -77,15 +80,17 @@ export function QuestInvader({ state }: QuestInvaderProps) {
           : {}),
       }}
     >
-      <SpaceInvader
-        size="md"
-        controlledPose={invaderPose}
-        eyeOverride={eyeOverride}
-        shake={shakeTrigger}
-        jump={jumpTrigger}
-        speechBubble={invaderSpeech}
-        colorFilter={colorFilter}
-      />
+      <QuestEnvironment level={state.level} invaderPose={invaderPose}>
+        <SpaceInvader
+          size="md"
+          controlledPose={invaderPose}
+          eyeOverride={eyeOverride}
+          shake={shakeTrigger}
+          jump={jumpTrigger}
+          speechBubble={invaderSpeech}
+          colorFilter={colorFilter}
+        />
+      </QuestEnvironment>
     </div>
   );
 }

@@ -1009,27 +1009,61 @@ export function SpaceInvader({
     </div>
   );
 
-  const renderAttackPose = () => (
-    <div style={{ position: 'relative' }}>
-      {renderIdlePose()}
-      {/* Flash effect */}
-      <div
-        style={{
-          position: 'absolute',
-          right: '-20px',
-          top: '45%',
-          color: '#ef4444',
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          fontWeight: 'bold',
-          animation: animate('fade-in 0.2s ease-out'),
-          whiteSpace: 'pre',
-        }}
-      >
-        {'>>>--->'}
+  const renderAttackPose = () => {
+    const waveChars = ['0', '1', '0', '1', '1', '0', '1', '0'];
+    const codeDebris = ['<', '/', '>', '{', '}', ';', '=', '('];
+    const efs = parseFloat(SIZE_MAP[size] || SIZE_MAP.md) * 1.8;
+
+    return (
+      <div style={{ position: 'relative' }}>
+        {renderIdlePose()}
+        {/* Digital wave: binary digits flying outward */}
+        {waveChars.map((ch, i) => (
+          <span
+            key={`wave-${i}`}
+            style={{
+              position: 'absolute',
+              right: '-12px',
+              top: `${15 + i * 9}%`,
+              color: i % 2 === 0 ? '#00ff41' : '#22d3ee',
+              fontFamily: "'Courier New', Consolas, monospace",
+              fontSize: `${efs}px`,
+              fontWeight: 'bold',
+              lineHeight: 1,
+              textShadow: `0 0 8px ${i % 2 === 0 ? 'rgba(0,255,65,0.7)' : 'rgba(34,211,238,0.7)'}`,
+              opacity: 0,
+              animation: animate(`digital-wave 0.8s ease-out forwards`),
+              animationDelay: `${i * 0.06}s`,
+              pointerEvents: 'none',
+            }}
+          >
+            {ch}
+          </span>
+        ))}
+        {/* Code debris particles */}
+        {codeDebris.map((ch, i) => (
+          <span
+            key={`debris-${i}`}
+            style={{
+              position: 'absolute',
+              left: `${10 + i * 11}%`,
+              top: `${25 + (i % 3) * 20}%`,
+              color: '#00ff41',
+              fontFamily: "'Courier New', Consolas, monospace",
+              fontSize: `${efs * 0.7}px`,
+              fontWeight: 'bold',
+              opacity: 0,
+              animation: animate(`code-debris 1s ease-out forwards`),
+              animationDelay: `${0.15 + i * 0.05}s`,
+              pointerEvents: 'none',
+            }}
+          >
+            {ch}
+          </span>
+        ))}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderShieldPose = () => (
     <div style={{

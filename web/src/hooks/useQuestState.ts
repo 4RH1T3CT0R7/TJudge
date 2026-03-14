@@ -264,6 +264,8 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
           level: 1,
           phase: 'story',
           objectives: LEVEL_OBJECTIVES[1].map((o) => ({ ...o })),
+          invaderPose: 'cry',
+          invaderMood: 'scared',
           terminalLines: [...state.terminalLines, ...newLines, ...introLines],
           commandHistory: [...state.commandHistory, cmd],
           historyIndex: -1,
@@ -389,6 +391,8 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
         ...state,
         level: next,
         objectives: (LEVEL_OBJECTIVES[next] || []).map((o) => ({ ...o })),
+        invaderPose: next < 5 ? 'cry' : 'idle',
+        invaderMood: next < 5 ? 'scared' : 'happy',
       };
     }
 
@@ -480,8 +484,8 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
     case 'RESET_INVADER':
       return {
         ...state,
-        invaderPose: 'idle',
-        invaderMood: 'neutral',
+        invaderPose: (state.level >= 1 && state.level < 5) ? 'cry' : 'idle',
+        invaderMood: (state.level >= 1 && state.level < 5) ? 'scared' : 'neutral',
         invaderSpeech: null,
         invaderTransform: null,
       };

@@ -162,11 +162,11 @@ const CODE_LINES = [
 function TypingRace({ onEnd }: TypingRaceProps) {
   const [lines] = useState(() => {
     const shuffled = [...CODE_LINES].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 5);
+    return shuffled.slice(0, 3);
   });
   const [currentLine, setCurrentLine] = useState(0);
   const [typed, setTyped] = useState('');
-  const [timeLeft, setTimeLeft] = useState(45);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [completed, setCompleted] = useState(0);
   const [done, setDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +189,7 @@ function TypingRace({ onEnd }: TypingRaceProps) {
   // Check win when done
   useEffect(() => {
     if (done) {
-      if (completed >= 3) {
+      if (completed >= 2) {
         sound.levelUp();
         onEnd('win');
       } else {
@@ -235,7 +235,7 @@ function TypingRace({ onEnd }: TypingRaceProps) {
       <div className="flex justify-between text-xs text-gray-500">
         <span>Строка {currentLine + 1}/{lines.length}</span>
         <span className={timeLeft <= 5 ? 'text-red-400' : ''}>{timeLeft}s</span>
-        <span>Готово: {completed}/5</span>
+        <span>Готово: {completed}/3</span>
       </div>
       <div className="bg-gray-800 rounded p-2 font-mono text-sm">
         {renderTarget()}
@@ -252,8 +252,8 @@ function TypingRace({ onEnd }: TypingRaceProps) {
         />
       )}
       {done && (
-        <div className={`text-sm font-bold ${completed >= 3 ? 'text-green-400' : 'text-red-400'}`}>
-          {completed >= 3 ? `Код исправлен! (${completed}/5)` : `Не успели. (${completed}/5)`}
+        <div className={`text-sm font-bold ${completed >= 2 ? 'text-green-400' : 'text-red-400'}`}>
+          {completed >= 2 ? `Код исправлен! (${completed}/3)` : `Не успели. (${completed}/3)`}
         </div>
       )}
     </div>
