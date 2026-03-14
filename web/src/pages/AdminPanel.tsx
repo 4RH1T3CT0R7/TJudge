@@ -107,36 +107,31 @@ export function AdminPanel() {
   const [deleteTournamentId, setDeleteTournamentId] = useState<string | null>(null);
 
   // Admin invader state
-  const [adminPose, setAdminPose] = useState<InvaderPose>('salute');
+  const [adminPose] = useState<InvaderPose>('idle');
   const [adminSpeech, setAdminSpeech] = useState<string | null>('// приветствую, admin');
   const [speechVisible, setSpeechVisible] = useState(true);
   const adminTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Helper: set invader reaction with auto-reset to idle
-  const setAdminReaction = useCallback((pose: InvaderPose, speech: string | null, duration = 3000) => {
+  // Helper: set invader reaction (speech only, no pose change to avoid layout shift)
+  const setAdminReaction = useCallback((_pose: InvaderPose, speech: string | null, duration = 3000) => {
     clearTimeout(adminTimerRef.current);
     clearTimeout(idleTimerRef.current);
-    setAdminPose(pose);
     setAdminSpeech(speech);
     setSpeechVisible(true);
     idleTimerRef.current = setTimeout(() => {
       setSpeechVisible(false);
       setTimeout(() => {
-        setAdminPose('idle');
         setAdminSpeech(null);
       }, 300);
     }, duration);
   }, []);
 
-  // Salute on mount, then idle after 2.5s (NO sleep)
+  // Hide initial speech after 2.5s
   useEffect(() => {
     adminTimerRef.current = setTimeout(() => {
       setSpeechVisible(false);
-      setTimeout(() => {
-        setAdminPose('idle');
-        setAdminSpeech(null);
-      }, 300);
+      setTimeout(() => setAdminSpeech(null), 300);
     }, 2500);
     return () => {
       clearTimeout(adminTimerRef.current);
