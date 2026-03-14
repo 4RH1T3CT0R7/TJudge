@@ -1332,56 +1332,54 @@ export function AdminPanel() {
                               : 'border-gray-700'
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl">{getGameIcon(game.name)}</span>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-gray-100">
-                                    {game.display_name}
-                                  </p>
-                                  {isActive && (
-                                    <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
-                                      Активна
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-400">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-2xl">{getGameIcon(game.name)}</span>
+                            <div>
+                              <p className="font-medium text-gray-100">
+                                {game.display_name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-gray-400">
                                   {game.name}
                                   {gameStatus && ` • Раунд ${gameStatus.current_round}`}
-                                </p>
+                                </span>
+                                {isActive && (
+                                  <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
+                                    Активна
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {!isActive && (
+                          </div>
+                          <div className="flex gap-2">
+                            {!isActive && (
+                              <button
+                                onClick={() => handleSetActiveGame(game.id)}
+                                disabled={settingActiveGame === game.id}
+                                className="btn btn-secondary text-sm disabled:opacity-50"
+                              >
+                                {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
+                              </button>
+                            )}
+                            {isActive && (
+                              <>
                                 <button
-                                  onClick={() => handleSetActiveGame(game.id)}
-                                  disabled={settingActiveGame === game.id}
-                                  className="btn btn-secondary text-sm disabled:opacity-50"
+                                  onClick={() => handleRunGameMatches(game.name, game.display_name)}
+                                  disabled={runningGameMatches === game.name}
+                                  className="btn btn-primary text-sm disabled:opacity-50 flex-1"
                                 >
-                                  {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
+                                  {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
                                 </button>
-                              )}
-                              {isActive && (
-                                <>
-                                  <button
-                                    onClick={() => handleRunGameMatches(game.name, game.display_name)}
-                                    disabled={runningGameMatches === game.name}
-                                    className="btn btn-primary text-sm disabled:opacity-50"
-                                  >
-                                    {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleResetGameRound(game.id, game.display_name)}
-                                    disabled={resettingGame === game.id}
-                                    className="btn text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-                                    title="Сбросить раунд (удалить все матчи и рейтинги)"
-                                  >
-                                    {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                                <button
+                                  onClick={() => handleResetGameRound(game.id, game.display_name)}
+                                  disabled={resettingGame === game.id}
+                                  className="btn text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                                  title="Сбросить раунд (удалить все матчи и рейтинги)"
+                                >
+                                  {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
