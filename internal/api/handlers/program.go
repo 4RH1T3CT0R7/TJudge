@@ -374,6 +374,25 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		)
 	}
 
+	// Компилируем программу для компилируемых языков
+	execPath := filePath // Путь к исполняемому файлу (может измениться после компиляции)
+	if syntaxError == nil {
+		if compiled, compileErr := compileIfNeeded(language, filePath, h.log); compileErr != "" {
+			syntaxError = &compileErr
+			h.log.Info("Compilation failed",
+				zap.String("file", filePath),
+				zap.String("language", language),
+				zap.String("error", compileErr),
+			)
+		} else if compiled != "" {
+			execPath = compiled
+			h.log.Info("Program compiled",
+				zap.String("source", filePath),
+				zap.String("binary", compiled),
+			)
+		}
+	}
+
 	// Создаём запись в БД с атомарным назначением версии
 	program := &domain.Program{
 		ID:           programID,
@@ -382,8 +401,8 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		TournamentID: &tournamentID,
 		GameID:       &gameID,
 		Name:         name,
-		GameType:     "", // Заполнится из game
-		CodePath:     filePath,
+		GameType:     "",       // Заполнится из game
+		CodePath:     execPath, // Путь к исполняемому файлу (бинарник или скрипт)
 		FilePath:     &filePath,
 		Language:     language,
 		ErrorMessage: syntaxError,
@@ -951,7 +970,52 @@ func validateSyntax(language, filePath string) string {
 		return runSyntaxCheck("php", []string{"-l", filePath}, "Синтаксическая ошибка в PHP коде")
 	case "lua":
 		return runSyntaxCheck("luac", []string{"-p", filePath}, "Синтаксическая ошибка в Lua коде")
+	case "c":
+		return runSyntaxCheck("gcc", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C")
+	case "cpp":
+		return runSyntaxCheck("g++", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C++")
 	default:
 		return ""
 	}
+}
+
+// compileIfNeeded компилирует исходный код для компилируемых языков.
+// Возвращает (путь к бинарнику, "") при успехе или ("", сообщение об ошибке) при ошибке.
+// Для интерпретируемых языков возвращает ("", "").
+func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, string) {
+	outputPath := strings.TrimSuffix(sourcePath, filepath.Ext(sourcePath))
+
+	var cmd *exec.Cmd
+	switch language {
+	case "c":
+		if _, err := exec.LookPath("gcc"); err != nil {
+			log.Warn("gcc not found, skipping compilation")
+			return "", ""
+		}
+		cmd = exec.Command("gcc", "-O2", "-o", outputPath, sourcePath, "-lm")
+	case "cpp":
+		if _, err := exec.LookPath("g++"); err != nil {
+			log.Warn("g++ not found, skipping compilation")
+			return "", ""
+		}
+		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath)
+	default:
+		return "", ""
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		return "", fmt.Sprintf("Ошибка компиляции: %s", errMsg)
+	}
+
+	// Делаем бинарник исполняемым
+	_ = os.Chmod(outputPath, 0755)
+
+	return outputPath, ""
 }
