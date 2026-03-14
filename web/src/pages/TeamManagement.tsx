@@ -245,13 +245,16 @@ export function TeamManagement() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <div className="shrink-0" style={{ width: 80, height: 80 }}>
-                <SpaceInvader
-                  size="sm"
-                  controlledPose={invaderPose}
-                  speechBubble={invaderSpeech}
-                />
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Invader scaled to fit header — fixed wrapper prevents layout shift */}
+              <div className="shrink-0 overflow-hidden" style={{ width: 48, height: 48 }}>
+                <div style={{ transform: 'scale(0.32)', transformOrigin: 'top left' }}>
+                  <SpaceInvader
+                    size="sm"
+                    controlledPose={invaderPose}
+                    speechBubble={invaderSpeech}
+                  />
+                </div>
               </div>
               <div className="flex-1 min-w-0">
                 <h1 className="text-2xl font-bold text-gray-100 truncate">{teamData.name}</h1>
