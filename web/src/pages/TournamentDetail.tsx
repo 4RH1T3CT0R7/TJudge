@@ -870,6 +870,7 @@ export function TournamentDetail() {
             rounds={matchRounds}
             onRefresh={refreshMatches}
             isRefreshing={isRefreshingMatches}
+            isAdmin={isAdmin}
           />
         )}
 
@@ -1651,7 +1652,7 @@ function GamesTab({
 
                 {/* Admin controls */}
                 {isAdmin && tournamentStatus === 'active' && (
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex flex-col gap-2 w-full">
                     {!isActive ? (
                       <button
                         onClick={(e) => handleSetActive(e, game.id)}
@@ -1668,11 +1669,11 @@ function GamesTab({
                         )}
                       </button>
                     ) : (
-                      <>
+                      <div className="flex gap-2">
                         <button
                           onClick={(e) => handleRunMatches(e, game)}
                           disabled={runningGameId === game.id || isRoundRunning}
-                          className="btn btn-primary text-xs py-1.5 px-3"
+                          className="btn btn-primary text-xs py-1.5 px-3 flex-1"
                         >
                           {runningGameId === game.id ? (
                             <>
@@ -1682,7 +1683,7 @@ function GamesTab({
                           ) : isRoundRunning ? (
                             <>
                               <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Раунд выполняется...
+                              Выполняется...
                             </>
                           ) : (
                             <>
@@ -1699,7 +1700,7 @@ function GamesTab({
                         >
                           {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1898,14 +1899,27 @@ function TeamsTab({
 function MatchesTab({
   rounds,
   onRefresh,
-  isRefreshing
+  isRefreshing,
+  isAdmin
 }: {
   rounds: MatchRound[];
   onRefresh: () => void;
   isRefreshing: boolean;
+  isAdmin: boolean;
 }) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [hiddenRounds, setHiddenRounds] = useState<Set<string>>(new Set());
+
+  const hideRound = (roundKey: string) => {
+    setHiddenRounds(prev => {
+      const next = new Set(prev);
+      next.add(roundKey);
+      return next;
+    });
+  };
+
+  const showAllRounds = () => setHiddenRounds(new Set());
 
   // Проверяем, есть ли активные матчи (pending или running)
   const hasActiveMatches = rounds.some(
@@ -2094,16 +2108,33 @@ function MatchesTab({
         </div>
       )}
 
+      {/* Hidden rounds notice */}
+      {hiddenRounds.size > 0 && (
+        <div className="mb-4 flex items-center gap-3 text-sm text-gray-400">
+          <span>Скрыто раундов: {hiddenRounds.size}</span>
+          <button onClick={showAllRounds} className="text-primary-400 hover:text-primary-300 underline">
+            Показать все
+          </button>
+        </div>
+      )}
+
       {/* Rounds list */}
       <div className="space-y-3">
-        {rounds.map((round) => (
-          <RoundCard
-            key={`${round.round_number}-${round.game_type}`}
-            round={round}
-            isExpanded={expandedRounds.has(`${round.round_number}-${round.game_type}`)}
-            onToggle={() => toggleRound(`${round.round_number}-${round.game_type}`)}
-          />
-        ))}
+        {rounds
+          .filter(r => !hiddenRounds.has(`${r.round_number}-${r.game_type}`))
+          .map((round) => {
+            const roundKey = `${round.round_number}-${round.game_type}`;
+            return (
+              <RoundCard
+                key={roundKey}
+                round={round}
+                isExpanded={expandedRounds.has(roundKey)}
+                onToggle={() => toggleRound(roundKey)}
+                isAdmin={isAdmin}
+                onHide={() => hideRound(roundKey)}
+              />
+            );
+          })}
       </div>
     </div>
   );
@@ -2122,10 +2153,14 @@ function RoundCard({
   round,
   isExpanded,
   onToggle,
+  isAdmin,
+  onHide,
 }: {
   round: MatchRound;
   isExpanded: boolean;
   onToggle: () => void;
+  isAdmin: boolean;
+  onHide: () => void;
 }) {
   const getStatusColor = () => {
     if (round.failed_count > 0) return 'border-l-red-500';
@@ -2213,6 +2248,15 @@ function RoundCard({
           <span className="text-sm font-mono text-gray-300 w-12 text-right">
             {getProgressPercent()}%
           </span>
+          {isAdmin && round.failed_count > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onHide(); }}
+              className="ml-2 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
+              title="Скрыть этот раунд"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </button>
 

@@ -974,6 +974,8 @@ func validateSyntax(language, filePath string) string {
 		return runSyntaxCheck("gcc", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C")
 	case "cpp":
 		return runSyntaxCheck("g++", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C++")
+	case "java":
+		return runSyntaxCheck("javac", []string{"-Xlint:none", "-d", "/tmp", filePath}, "Ошибка компиляции Java")
 	default:
 		return ""
 	}
@@ -999,6 +1001,42 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 			return "", ""
 		}
 		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath)
+	case "go":
+		if _, err := exec.LookPath("go"); err != nil {
+			log.Warn("go not found, skipping compilation")
+			return "", ""
+		}
+		cmd = exec.Command("go", "build", "-o", outputPath, sourcePath)
+	case "rust":
+		if _, err := exec.LookPath("rustc"); err != nil {
+			log.Warn("rustc not found, skipping compilation")
+			return "", ""
+		}
+		cmd = exec.Command("rustc", "-O", "-o", outputPath, sourcePath)
+	case "java":
+		if _, err := exec.LookPath("javac"); err != nil {
+			log.Warn("javac not found, skipping compilation")
+			return "", ""
+		}
+		// Java: компилируем .java → .class, затем создаём wrapper-скрипт
+		javacCmd := exec.Command("javac", sourcePath)
+		var javacStderr bytes.Buffer
+		javacCmd.Stderr = &javacStderr
+		if err := javacCmd.Run(); err != nil {
+			errMsg := strings.TrimSpace(javacStderr.String())
+			if errMsg == "" {
+				errMsg = err.Error()
+			}
+			return "", fmt.Sprintf("Ошибка компиляции Java: %s", errMsg)
+		}
+		// Создаём wrapper-скрипт для запуска java -cp <dir> <ClassName>
+		className := strings.TrimSuffix(filepath.Base(sourcePath), ".java")
+		classDir := filepath.Dir(sourcePath)
+		wrapper := fmt.Sprintf("#!/bin/sh\njava -cp %s %s \"$@\"\n", classDir, className)
+		if err := os.WriteFile(outputPath, []byte(wrapper), 0755); err != nil {
+			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())
+		}
+		return outputPath, ""
 	default:
 		return "", ""
 	}
