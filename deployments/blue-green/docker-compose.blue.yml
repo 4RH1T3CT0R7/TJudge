@@ -24,6 +24,8 @@ services:
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
       - BASE_URL=${BASE_URL:-https://tjudge.example.com}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
+      - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:-*}
     secrets:
       - db_password
       - redis_password
