@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import axios from 'axios';
 import api from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuthStore } from '../store/authStore';
@@ -19,6 +20,13 @@ import type {
   WSMessage,
   TournamentGameWithDetails,
 } from '../types';
+
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.error || err.response?.data?.message || fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 type TabType = 'info' | 'leaderboard' | 'matches' | 'games' | 'teams';
 
@@ -246,7 +254,7 @@ export function TournamentDetail() {
   const { isConnected } = useWebSocket({
     tournamentId: id || '',
     onMessage: handleWebSocketMessage,
-    enabled: true,
+    enabled: isAuthenticated,
   });
 
   const loadTournamentData = useCallback(async () => {
@@ -347,8 +355,7 @@ export function TournamentDetail() {
       await loadTournamentData();
     } catch (err: unknown) {
       console.error('Failed to start tournament:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Не удалось запустить турнир';
-      setActionError(errorMessage);
+      setActionError(extractErrorMessage(err, 'Не удалось запустить турнир'));
     } finally {
       setIsStarting(false);
     }
@@ -364,8 +371,7 @@ export function TournamentDetail() {
       await loadTournamentData();
     } catch (err: unknown) {
       console.error('Failed to complete tournament:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Не удалось завершить турнир';
-      setActionError(errorMessage);
+      setActionError(extractErrorMessage(err, 'Не удалось завершить турнир'));
     } finally {
       setIsCompleting(false);
     }
@@ -383,8 +389,7 @@ export function TournamentDetail() {
       await loadTournamentData();
     } catch (err: unknown) {
       console.error('Failed to retry matches:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Не удалось перезапустить матчи';
-      setActionError(errorMessage);
+      setActionError(extractErrorMessage(err, 'Не удалось перезапустить матчи'));
     } finally {
       setIsRetryingMatches(false);
     }
