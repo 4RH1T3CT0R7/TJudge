@@ -1739,26 +1739,31 @@ function TeamsTab({
   setJoinError: (e: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
-  const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
+  const [membersExpanded, setMembersExpanded] = useState(false);
   const [teamMembers, setTeamMembers] = useState<Record<string, { username: string; email: string }[]>>({});
-  const [loadingMembers, setLoadingMembers] = useState<string | null>(null);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const toggleTeamMembers = async (teamId: string) => {
-    if (expandedTeam === teamId) {
-      setExpandedTeam(null);
+  const toggleAllMembers = async () => {
+    if (membersExpanded) {
+      setMembersExpanded(false);
       return;
     }
-    setExpandedTeam(teamId);
-    if (!teamMembers[teamId]) {
-      setLoadingMembers(teamId);
-      try {
-        const data = await api.getTeam(teamId);
-        setTeamMembers(prev => ({ ...prev, [teamId]: data.members.map(m => ({ username: m.username, email: m.email })) }));
-      } catch {
-        setTeamMembers(prev => ({ ...prev, [teamId]: [] }));
-      } finally {
-        setLoadingMembers(null);
-      }
+    setMembersExpanded(true);
+    const missing = teams.filter(t => !teamMembers[t.id]);
+    if (missing.length > 0) {
+      setLoadingMembers(true);
+      const results = await Promise.allSettled(missing.map(t => api.getTeam(t.id)));
+      setTeamMembers(prev => {
+        const next = { ...prev };
+        missing.forEach((t, i) => {
+          const r = results[i];
+          next[t.id] = r.status === 'fulfilled'
+            ? r.value.members.map(m => ({ username: m.username, email: m.email }))
+            : [];
+        });
+        return next;
+      });
+      setLoadingMembers(false);
     }
   };
 
@@ -1804,82 +1809,85 @@ function TeamsTab({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teams.map((team, index) => (
-            <div
-              key={team.id}
-              className={`card group hover:shadow-lg hover:shadow-gray-900/50 transition-shadow ${
-                myTeam?.id === team.id
-                  ? 'border-2 border-primary-500 bg-primary-900/20'
-                  : ''
-              }`}
+        <div>
+          {isAdmin && (
+            <button
+              onClick={toggleAllMembers}
+              disabled={loadingMembers}
+              className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
-                  myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-500'
-                }`}>
-                  {index + 1}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-4 h-4 transition-transform ${membersExpanded ? 'rotate-180' : ''}`}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+              {loadingMembers ? 'Загрузка...' : membersExpanded ? 'Скрыть составы' : 'Показать составы команд'}
+            </button>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {teams.map((team, index) => (
+              <div
+                key={team.id}
+                className={`card group hover:shadow-lg hover:shadow-gray-900/50 transition-shadow ${
+                  myTeam?.id === team.id
+                    ? 'border-2 border-primary-500 bg-primary-900/20'
+                    : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
+                    myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-500'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
+                      {myTeam?.id === team.id && (
+                        <span className="badge badge-blue text-xs">Ваша</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-400">
+                      {new Date(team.created_at).toLocaleDateString('ru-RU')}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
-                    {myTeam?.id === team.id && (
-                      <span className="badge badge-blue text-xs">Ваша</span>
+
+                {/* Admin: team members */}
+                {isAdmin && membersExpanded && (
+                  <div className="mt-3 pt-3 border-t border-gray-700">
+                    {loadingMembers ? (
+                      <p className="text-xs text-gray-500">Загрузка...</p>
+                    ) : (teamMembers[team.id] || []).length === 0 ? (
+                      <p className="text-xs text-gray-500">Нет участников</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {teamMembers[team.id].map((member, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <span className="w-5 h-5 rounded-full bg-gray-600 flex items-center justify-center text-xs text-gray-300">
+                              {member.username[0]?.toUpperCase()}
+                            </span>
+                            <span className="text-gray-200">{member.username}</span>
+                            <span className="text-gray-500 text-xs truncate">{member.email}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <p className="text-sm text-gray-400">
-                    {new Date(team.created_at).toLocaleDateString('ru-RU')}
-                  </p>
-                </div>
-                {isAdmin && (
-                  <button
-                    onClick={() => toggleTeamMembers(team.id)}
-                    className="text-gray-400 hover:text-gray-200 transition-colors p-1"
-                    title="Состав команды"
+                )}
+
+                {myTeam?.id === team.id && (
+                  <Link
+                    to={`/teams/${team.id}`}
+                    className="mt-3 inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 text-sm font-medium"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-5 h-5 transition-transform ${expandedTeam === team.id ? 'rotate-180' : ''}`}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    Управление командой
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
                     </svg>
-                  </button>
+                  </Link>
                 )}
               </div>
-
-              {/* Admin: team members */}
-              {isAdmin && expandedTeam === team.id && (
-                <div className="mt-3 pt-3 border-t border-gray-700">
-                  {loadingMembers === team.id ? (
-                    <p className="text-xs text-gray-500">Загрузка...</p>
-                  ) : (teamMembers[team.id] || []).length === 0 ? (
-                    <p className="text-xs text-gray-500">Нет участников</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {teamMembers[team.id].map((member, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
-                          <span className="w-5 h-5 rounded-full bg-gray-600 flex items-center justify-center text-xs text-gray-300">
-                            {member.username[0]?.toUpperCase()}
-                          </span>
-                          <span className="text-gray-200">{member.username}</span>
-                          <span className="text-gray-500 text-xs truncate">{member.email}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {myTeam?.id === team.id && (
-                <Link
-                  to={`/teams/${team.id}`}
-                  className="mt-3 inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 text-sm font-medium"
-                >
-                  Управление командой
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                  </svg>
-                </Link>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>

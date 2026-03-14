@@ -21,8 +21,15 @@ var upgrader = ws.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		allowedOrigins := os.Getenv("WEBSOCKET_ALLOWED_ORIGINS")
 		if allowedOrigins == "" {
-			// По умолчанию разрешаем только localhost для разработки
+			allowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
+		}
+		if allowedOrigins == "" {
 			allowedOrigins = "http://localhost:3000,http://localhost:5173"
+		}
+
+		// Wildcard — разрешить все (как CORS)
+		if strings.TrimSpace(allowedOrigins) == "*" {
+			return true
 		}
 
 		origin := r.Header.Get("Origin")

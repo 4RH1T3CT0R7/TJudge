@@ -348,9 +348,9 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 	})
 
 	// ==========================================================================
-	// Step 4: Join tournament with programs
+	// Step 4: Create teams and join tournament with programs
 	// ==========================================================================
-	t.Run("JoinTournament", func(t *testing.T) {
+	t.Run("CreateTeamsAndJoinTournament", func(t *testing.T) {
 		joins := []struct {
 			token     string
 			programID string
@@ -363,6 +363,9 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 		successCount := 0
 		for _, j := range joins {
 			client.SetToken(j.token)
+
+			// Create team in tournament
+			createTeamHelper(t, client, tournamentID)
 
 			joinReq := map[string]string{"program_id": j.programID}
 			resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
@@ -918,13 +921,16 @@ func TestE2E_TournamentLeaderboardAfterStart(t *testing.T) {
 	})
 
 	// =========================================================================
-	// Step 4: Each user creates a program and joins the tournament
+	// Step 4: Each user creates a team, program, and joins the tournament
 	// =========================================================================
-	t.Run("CreateProgramsAndJoin", func(t *testing.T) {
+	t.Run("CreateTeamsProgramsAndJoin", func(t *testing.T) {
 		require.NotEmpty(t, tournamentID, "tournament must be created first")
 
 		for i, u := range users {
 			client.SetToken(u.token)
+
+			// Create team in tournament
+			createTeamHelper(t, client, tournamentID)
 
 			// Create program
 			progReq := CreateProgramRequest{
@@ -1095,13 +1101,16 @@ func TestE2E_CrossGameLeaderboard(t *testing.T) {
 	})
 
 	// =========================================================================
-	// Step 4: Users create programs and join tournament
+	// Step 4: Users create teams, programs, and join tournament
 	// =========================================================================
-	t.Run("CreateProgramsAndJoin", func(t *testing.T) {
+	t.Run("CreateTeamsProgramsAndJoin", func(t *testing.T) {
 		require.NotEmpty(t, tournamentID, "tournament must be created first")
 
 		for i, u := range users {
 			client.SetToken(u.token)
+
+			// Create team in tournament
+			createTeamHelper(t, client, tournamentID)
 
 			progReq := CreateProgramRequest{
 				Name:     fmt.Sprintf("CGL Bot %d", i),

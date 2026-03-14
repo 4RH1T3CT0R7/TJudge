@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import axios from 'axios';
 import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
@@ -218,9 +219,9 @@ export function GameDetail() {
       setUploadInvaderShake(true);
       setTimeout(() => setUploadInvaderShake(false), 100);
       setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
-      // Try to extract error message from API response
-      if (err && typeof err === 'object' && 'message' in err) {
-        setUploadError((err as { message: string }).message);
+      // Extract error message from API response
+      if (axios.isAxiosError(err)) {
+        setUploadError(err.response?.data?.error || err.response?.data?.message || 'Не удалось загрузить программу');
       } else {
         setUploadError('Не удалось загрузить программу');
       }
@@ -562,7 +563,7 @@ export function GameDetail() {
               {/* Upload Form with Drag & Drop */}
               <div className="space-y-3">
                 {/* Upload invader */}
-                <div className="flex justify-center">
+                <div className="flex justify-center pt-6">
                   <SpaceInvader
                     size="sm"
                     speechBubble={uploadInvaderBubble}
