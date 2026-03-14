@@ -4,7 +4,6 @@ import api from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import type { TeamWithMembers } from '../types';
 import { SpaceInvader } from '../components/SpaceInvader';
-import type { InvaderPose } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
@@ -34,7 +33,6 @@ export function TeamManagement() {
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
 
   // Invader state
-  const [invaderPose, setInvaderPose] = useState<InvaderPose>('idle');
   const [invaderSpeech, setInvaderSpeech] = useState<string | null>(null);
 
   const loadTeamData = useCallback(async () => {
@@ -61,29 +59,21 @@ export function TeamManagement() {
     }
   }, [id, loadTeamData]);
 
-  // Set initial invader pose based on role
+  // Set initial invader speech based on role (no pose change to avoid layout shift)
   useEffect(() => {
     if (!teamData || !user) return;
     const isLeaderRole = user.id === teamData.leader_id;
-    let timer: ReturnType<typeof setTimeout>;
-    if (isLeaderRole) {
-      setInvaderPose('salute');
-      setInvaderSpeech('// капитан на мостике');
-      timer = setTimeout(() => { setInvaderPose('idle'); setInvaderSpeech(null); }, 2500);
-    } else {
-      setInvaderSpeech('// в строю');
-      timer = setTimeout(() => setInvaderSpeech(null), 2500);
-    }
+    const speech = isLeaderRole ? '// капитан на мостике' : '// в строю';
+    setInvaderSpeech(speech);
+    const timer = setTimeout(() => setInvaderSpeech(null), 2500);
     return () => clearTimeout(timer);
   }, [teamData, user]);
 
-  // React to confirmLeave
+  // React to confirmLeave (no pose change)
   useEffect(() => {
     if (confirmLeave) {
-      setInvaderPose('cry');
       setInvaderSpeech('// не уходи!');
     } else {
-      setInvaderPose('idle');
       setInvaderSpeech(null);
     }
   }, [confirmLeave]);
@@ -124,9 +114,8 @@ export function TeamManagement() {
     try {
       await navigator.clipboard.writeText(inviteLink);
       setCopied(true);
-      setInvaderPose('handsUp');
       setInvaderSpeech('// скопировано!');
-      setTimeout(() => { setCopied(false); setInvaderPose('idle'); setInvaderSpeech(null); }, 2000);
+      setTimeout(() => { setCopied(false); setInvaderSpeech(null); }, 2000);
     } catch {
       // Fallback for older browsers
       const textarea = document.createElement('textarea');
@@ -198,7 +187,7 @@ export function TeamManagement() {
   const isMember = members.some((m) => m.id === user?.id);
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm">
         <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
@@ -217,62 +206,58 @@ export function TeamManagement() {
 
       {/* Team Header */}
       <div className="card mb-6">
-        <div className="flex justify-between items-start mb-4">
-          {isEditing ? (
-            <div className="flex gap-2 flex-1 max-w-md">
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="input flex-1"
-                placeholder="Название команды"
-              />
-              <button
-                onClick={handleUpdateName}
-                disabled={isSaving || !newName.trim()}
-                className="btn btn-primary"
-              >
-                {isSaving ? 'Сохранение...' : 'Сохранить'}
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setNewName(teamData.name);
-                }}
-                className="btn btn-secondary"
-              >
-                Отмена
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {/* Invader scaled to fit header — fixed wrapper prevents layout shift */}
-              <div className="shrink-0 overflow-hidden" style={{ width: 48, height: 48 }}>
-                <div style={{ transform: 'scale(0.32)', transformOrigin: 'top left' }}>
-                  <SpaceInvader
-                    size="sm"
-                    controlledPose={invaderPose}
-                    speechBubble={invaderSpeech}
-                  />
-                </div>
+        {isEditing ? (
+          <div className="flex gap-2 flex-1 max-w-md mb-4">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="input flex-1"
+              placeholder="Название команды"
+            />
+            <button
+              onClick={handleUpdateName}
+              disabled={isSaving || !newName.trim()}
+              className="btn btn-primary"
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button
+              onClick={() => {
+                setIsEditing(false);
+                setNewName(teamData.name);
+              }}
+              className="btn btn-secondary"
+            >
+              Отмена
+            </button>
+          </div>
+        ) : (
+          <>
+            <h1 className="text-2xl font-bold text-gray-100 text-center">{teamData.name}</h1>
+            {isLeader && (
+              <div className="flex justify-center mt-1 mb-1">
+                <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
+                  Вы капитан
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-bold text-gray-100 truncate">{teamData.name}</h1>
-                {isLeader && (
-                  <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
-                    Вы капитан
-                  </span>
-                )}
-              </div>
-              {isLeader && (
-                <button onClick={() => setIsEditing(true)} className="btn btn-secondary shrink-0">
+            )}
+            {isLeader && (
+              <div className="flex justify-center mt-5 mb-4">
+                <button onClick={() => setIsEditing(true)} className="btn btn-secondary">
                   Изменить название
                 </button>
-              )}
+              </div>
+            )}
+            <div className="flex justify-center pt-10 pb-4">
+              <SpaceInvader
+                size="sm"
+                controlledPose="idle"
+                speechBubble={invaderSpeech}
+              />
             </div>
-          )}
-
-        </div>
+          </>
+        )}
 
         <div className="text-sm text-gray-400 space-y-1">
           <p>
