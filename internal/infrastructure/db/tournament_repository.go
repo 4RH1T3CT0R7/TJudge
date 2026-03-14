@@ -568,7 +568,21 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 						WHEN m.program2_id = p.id THEN COALESCE(m.score2, 0)
 						ELSE 0
 					END
-				), 0) as total_score
+				), 0) as total_score,
+				-- Tiebreak: MIN across games of latest version's created_at per team
+				COALESCE(
+					(SELECT MIN(sub_p.created_at)
+					 FROM (
+						 SELECT DISTINCT ON (p2.game_id) p2.created_at
+						 FROM programs p2
+						 WHERE p2.team_id = p.team_id
+						   AND p2.tournament_id = $1
+						   AND p2.team_id IS NOT NULL
+						 ORDER BY p2.game_id, p2.version DESC
+					 ) sub_p
+					),
+					p.created_at
+				) as earliest_upload
 			FROM tournament_participants tp
 			JOIN programs p ON tp.program_id = p.id
 			LEFT JOIN teams t ON p.team_id = t.id
@@ -579,7 +593,7 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 			GROUP BY p.id, p.name, t.id, t.name
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
+			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC, earliest_upload ASC) as rank,
 			program_id,
 			program_name,
 			team_id,
@@ -590,7 +604,7 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 			draws,
 			total_games
 		FROM program_stats
-		ORDER BY total_score DESC, wins DESC
+		ORDER BY total_score DESC, wins DESC, earliest_upload ASC
 		LIMIT $2
 	`
 
@@ -796,7 +810,8 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				p.team_id,
 				t.name as team_name,
 				p.game_id,
-				g.name as game_name
+				g.name as game_name,
+				p.created_at as program_created_at
 			FROM programs p
 			LEFT JOIN teams t ON p.team_id = t.id
 			LEFT JOIN games g ON p.game_id = g.id
@@ -848,7 +863,8 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				COALESCE(ms.losses, 0) as losses,
 				COALESCE(ms.draws, 0) as draws,
 				COALESCE(ms.total_games, 0) as total_games,
-				COALESCE(ms.total_score, 0) as total_score
+				COALESCE(ms.total_score, 0) as total_score,
+				lp.program_created_at
 			FROM latest_programs lp
 			LEFT JOIN match_stats ms ON lp.team_id = ms.team_id AND lp.game_id = ms.game_id
 		),
@@ -873,12 +889,13 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				SUM(wins) as total_wins,
 				SUM(losses) as total_losses,
 				SUM(total_games) as total_games,
-				SUM(total_score) as total_rating
+				SUM(total_score) as total_rating,
+				MIN(program_created_at) as earliest_upload
 			FROM game_stats
 			GROUP BY team_id
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY total_rating DESC, total_wins DESC) as rank,
+			ROW_NUMBER() OVER (ORDER BY total_rating DESC, total_wins DESC, earliest_upload ASC) as rank,
 			team_id,
 			team_name,
 			program_id,
@@ -889,7 +906,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			total_losses,
 			total_games
 		FROM aggregated
-		ORDER BY total_rating DESC, total_wins DESC
+		ORDER BY total_rating DESC, total_wins DESC, earliest_upload ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -951,7 +968,8 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 				p.id as program_id,
 				p.name as program_name,
 				p.team_id,
-				t.name as team_name
+				t.name as team_name,
+				p.created_at as program_created_at
 			FROM programs p
 			LEFT JOIN teams t ON p.team_id = t.id
 			JOIN games g ON p.game_id = g.id
@@ -999,12 +1017,13 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 				COALESCE(ms.losses, 0) as losses,
 				COALESCE(ms.draws, 0) as draws,
 				COALESCE(ms.total_games, 0) as total_games,
-				COALESCE(ms.total_score, 0) as total_score
+				COALESCE(ms.total_score, 0) as total_score,
+				lp.program_created_at as earliest_upload
 			FROM latest_programs lp
 			LEFT JOIN match_stats ms ON lp.team_id = ms.team_id
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC) as rank,
+			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC, earliest_upload ASC) as rank,
 			program_id,
 			program_name,
 			team_id,
@@ -1015,7 +1034,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			draws,
 			total_games
 		FROM combined
-		ORDER BY total_score DESC, wins DESC
+		ORDER BY total_score DESC, wins DESC, earliest_upload ASC
 		LIMIT $3
 	`
 

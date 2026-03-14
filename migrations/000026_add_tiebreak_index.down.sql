@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_programs_team_tournament_game_version_desc;
