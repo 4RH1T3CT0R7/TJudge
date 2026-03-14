@@ -161,6 +161,7 @@ export function TournamentDetail() {
   const [joinCode, setJoinCode] = useState('');
   useEscapeKey(useCallback(() => setShowJoinModal(false), []), showJoinModal);
   const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
 
   // Action states
   const [isStarting, setIsStarting] = useState(false);
@@ -315,6 +316,7 @@ export function TournamentDetail() {
     if (!joinCode.trim()) return;
 
     setIsJoining(true);
+    setJoinError('');
     try {
       const team = await api.joinTeamByCode(joinCode.trim());
       setMyTeam(team);
@@ -324,8 +326,8 @@ export function TournamentDetail() {
         const teamsData = await api.getTournamentTeams(id);
         setTeams(teamsData || []);
       }
-    } catch (err) {
-      console.error('Failed to join team:', err);
+    } catch {
+      setJoinError('Неверный код');
     } finally {
       setIsJoining(false);
     }
@@ -894,6 +896,8 @@ export function TournamentDetail() {
             joinCode={joinCode}
             setJoinCode={setJoinCode}
             isJoining={isJoining}
+            joinError={joinError}
+            setJoinError={setJoinError}
           />
         )}
       </div>
@@ -953,7 +957,7 @@ export function TournamentDetail() {
                     name="joinCode"
                     autoComplete="off"
                     value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value)}
+                    onChange={(e) => { setJoinCode(e.target.value); setJoinError(''); }}
                     placeholder="Код приглашения"
                     className="input flex-1 font-mono"
                   />
@@ -965,6 +969,7 @@ export function TournamentDetail() {
                     Вступить
                   </button>
                 </div>
+                {joinError && <p className="text-red-400 text-sm mt-1">{joinError}</p>}
               </div>
             </div>
           </div>
@@ -1711,6 +1716,8 @@ function TeamsTab({
   joinCode,
   setJoinCode,
   isJoining,
+  joinError,
+  setJoinError,
 }: {
   teams: Team[];
   isAuthenticated: boolean;
@@ -1720,6 +1727,8 @@ function TeamsTab({
   joinCode: string;
   setJoinCode: (code: string) => void;
   isJoining: boolean;
+  joinError: string;
+  setJoinError: (e: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
 
@@ -1736,7 +1745,7 @@ function TeamsTab({
             <input
               type="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(''); }}
               placeholder="Код приглашения (например: ABC123)"
               className="input flex-1 uppercase tracking-wider"
               maxLength={10}
@@ -1749,6 +1758,7 @@ function TeamsTab({
               {isJoining ? 'Вступление...' : 'Вступить'}
             </button>
           </div>
+          {joinError && <p className="text-red-400 text-sm mt-2">{joinError}</p>}
         </div>
       )}
 
