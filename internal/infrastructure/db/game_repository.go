@@ -218,7 +218,7 @@ func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 		FROM games g
 		INNER JOIN tournament_games tg ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
-		ORDER BY g.display_name ASC
+		ORDER BY tg.created_at ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
