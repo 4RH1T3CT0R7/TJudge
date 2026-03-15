@@ -206,8 +206,8 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
 	programHandler := handlers.NewProgramHandler(
-		programRepo, tournamentRepo, matchScheduler,
-		gameService, matchRepo, gameRepo,
+		programRepo, tournamentRepo, tournamentRepo,
+		matchScheduler, gameService, matchRepo, gameRepo,
 		teamRepo,
 		cfg.Storage.ProgramsPath, log,
 	)

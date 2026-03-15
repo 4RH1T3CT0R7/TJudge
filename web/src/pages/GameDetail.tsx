@@ -170,7 +170,7 @@ export function GameDetail() {
     }
   }, [gameId, tournamentId]);
 
-  const canUpload = tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading;
+  const canUpload = tournament?.status === 'active' && !gameStatus?.round_completed && !isUploading;
 
   const handleFileSelect = () => {
     fileInputRef.current?.click();

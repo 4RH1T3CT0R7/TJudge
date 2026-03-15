@@ -41,6 +41,11 @@ type TournamentParticipantAdder interface {
 	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
 }
 
+// TournamentStatusChecker интерфейс для проверки статуса турнира
+type TournamentStatusChecker interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+}
+
 // MatchScheduler интерфейс для создания матчей
 type MatchScheduler interface {
 	ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error
@@ -70,22 +75,24 @@ type TeamMembershipChecker interface {
 
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
-	programRepo    ProgramRepository
-	tournamentRepo TournamentParticipantAdder
-	matchScheduler MatchScheduler
-	gameLookup     GameLookup
-	matchChecker   MatchExistenceChecker
-	roundChecker   RoundCompletionChecker
-	teamChecker    TeamMembershipChecker
-	uploadDir      string
-	maxFileSize    int64
-	log            *logger.Logger
+	programRepo      ProgramRepository
+	tournamentRepo   TournamentParticipantAdder
+	tournamentStatus TournamentStatusChecker
+	matchScheduler   MatchScheduler
+	gameLookup       GameLookup
+	matchChecker     MatchExistenceChecker
+	roundChecker     RoundCompletionChecker
+	teamChecker      TeamMembershipChecker
+	uploadDir        string
+	maxFileSize      int64
+	log              *logger.Logger
 }
 
 // NewProgramHandler создаёт новый program handler
 func NewProgramHandler(
 	programRepo ProgramRepository,
 	tournamentRepo TournamentParticipantAdder,
+	tournamentStatus TournamentStatusChecker,
 	matchScheduler MatchScheduler,
 	gameLookup GameLookup,
 	matchChecker MatchExistenceChecker,
@@ -103,16 +110,17 @@ func NewProgramHandler(
 	}
 
 	return &ProgramHandler{
-		programRepo:    programRepo,
-		tournamentRepo: tournamentRepo,
-		matchScheduler: matchScheduler,
-		gameLookup:     gameLookup,
-		matchChecker:   matchChecker,
-		roundChecker:   roundChecker,
-		teamChecker:    teamChecker,
-		uploadDir:      uploadDir,
-		maxFileSize:    10 * 1024 * 1024, // 10MB
-		log:            log,
+		programRepo:      programRepo,
+		tournamentRepo:   tournamentRepo,
+		tournamentStatus: tournamentStatus,
+		matchScheduler:   matchScheduler,
+		gameLookup:       gameLookup,
+		matchChecker:     matchChecker,
+		roundChecker:     roundChecker,
+		teamChecker:      teamChecker,
+		uploadDir:        uploadDir,
+		maxFileSize:      10 * 1024 * 1024, // 10MB
+		log:              log,
 	}
 }
 
@@ -252,6 +260,20 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	if !isMember {
 		writeError(w, errors.ErrForbidden.WithMessage("you are not a member of this team"))
 		return
+	}
+
+	// Проверяем, что турнир активен (начат)
+	if h.tournamentStatus != nil {
+		t, err := h.tournamentStatus.GetByID(r.Context(), tournamentID)
+		if err != nil {
+			h.log.LogError("Failed to get tournament status", err)
+			writeError(w, errors.ErrInternal.WithMessage("failed to verify tournament status"))
+			return
+		}
+		if t.Status != domain.TournamentActive {
+			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: турнир ещё не начался"))
+			return
+		}
 	}
 
 	// Проверяем, завершён ли раунд для этой игры (блокировка загрузки после завершения раунда)
