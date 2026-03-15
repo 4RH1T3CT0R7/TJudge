@@ -641,8 +641,8 @@ export function TournamentDetail() {
   if (isFullscreen) {
     return (
       <div className="fixed inset-0 bg-gray-900 text-white z-50 overflow-auto">
-        <div className="p-6 md:p-10">
-          <div className="flex justify-between items-center mb-8">
+        <div className="p-4 md:p-6">
+          <div className="flex justify-between items-center mb-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold mb-2">{tournament.name}</h1>
               <p className="text-gray-400">
@@ -1321,64 +1321,82 @@ function GeneralLeaderboardTable({
   };
 
   return (
-    <div className={`space-y-2 ${isDark ? '' : ''}`}>
+    <div className={isDark
+      ? 'grid grid-cols-2 xl:grid-cols-3 gap-2'
+      : 'space-y-2'
+    }>
       {/* Card-style entries */}
       {entries.map((entry, index) => (
         <div
           key={entry.program_id}
-          className={`p-4 rounded-xl transition-colors ${
+          className={`${isDark ? 'p-2.5' : 'p-4'} rounded-xl transition-colors ${
             isDark
               ? `bg-gray-800/50 border border-gray-700 ${getRowClass(index)}`
               : `bg-gray-800/50 border border-gray-800 ${getRowClass(index)} hover:shadow-md`
           }`}
         >
-          <div className="flex items-center gap-4">
+          <div className={`flex items-center ${isDark ? 'gap-3' : 'gap-4'}`}>
             {/* Rank */}
-            {getRankBadge(entry.rank)}
+            {isDark ? (
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                index === 0 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900' :
+                index === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700' :
+                index === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-orange-900' :
+                'bg-gray-700 text-gray-300'
+              }`}>
+                {entry.rank}
+              </div>
+            ) : getRankBadge(entry.rank)}
 
             {/* Team Info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className={`font-bold text-lg truncate ${isDark ? 'text-white' : 'text-gray-100'}`}>
+                  <h3 className={`font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
                     {entry.team_name || entry.program_name}
                   </h3>
-                  <div className={`flex items-center gap-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
-                    <span>{entry.total_games} игр</span>
-                    <span>•</span>
-                    <span className="text-emerald-400">{entry.total_wins}W</span>
-                    <span className="text-red-400">{entry.total_losses}L</span>
-                  </div>
+                  {!isDark && (
+                    <div className="flex items-center gap-3 text-sm text-gray-400">
+                      <span>{entry.total_games} игр</span>
+                      <span>•</span>
+                      <span className="text-emerald-400">{entry.total_wins}W</span>
+                      <span className="text-red-400">{entry.total_losses}L</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Score */}
                 <div className="text-right shrink-0">
-                  <div className={`text-3xl font-bold tabular-nums ${
+                  <div className={`font-bold tabular-nums ${isDark ? 'text-xl' : 'text-3xl'} ${
                     index === 0 ? 'text-amber-500' :
                     index === 1 ? 'text-gray-400' :
                     index === 2 ? 'text-orange-500' :
-                    isDark ? 'text-primary-400' : 'text-primary-400'
+                    'text-primary-400'
                   }`}>
                     {entry.total_rating.toLocaleString()}
                   </div>
-                  <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    очков
-                  </div>
+                  {!isDark && (
+                    <div className="text-xs text-gray-400">
+                      очков
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Score bar */}
-              <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-[width] duration-500 ${
-                    index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                    index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
-                    index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
-                    'bg-gradient-to-r from-primary-400 to-primary-500'
-                  }`}
-                  style={{ width: `${(entry.total_rating / maxScore) * 100}%` }}
-                />
-              </div>
+              {/* Score bar — only in normal mode */}
+              {!isDark && (
+                <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ${
+                      index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                      index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
+                      index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
+                      'bg-gradient-to-r from-primary-400 to-primary-500'
+                    }`}
+                    style={{ width: `${(entry.total_rating / maxScore) * 100}%` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1392,10 +1410,12 @@ function CrossGameLeaderboardTable({
   entries,
   games,
   isDark = false,
+  isCompact = false,
 }: {
   entries: CrossGameLeaderboardEntry[];
   games: Game[];
   isDark?: boolean;
+  isCompact?: boolean;
 }) {
   if (entries.length === 0) {
     return (
@@ -1425,33 +1445,37 @@ function CrossGameLeaderboardTable({
     return '';
   };
 
+  const cellPx = isCompact ? 'px-3 py-1' : 'px-4 py-3';
+  const headPx = isCompact ? 'px-3 py-1.5' : 'px-4 py-3';
+  const headText = isCompact ? 'text-[10px]' : 'text-sm';
+
   return (
     <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
-      <table className={`w-full ${isDark ? 'text-white' : 'text-gray-100'}`}>
+      <table className={`w-full ${isDark ? 'text-white' : 'text-gray-100'} ${isCompact ? 'text-sm' : ''}`}>
         <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-800/50'}>
           <tr>
-            <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Место</th>
-            <th className="px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">Команда</th>
+            <th className={`${headPx} text-left font-semibold ${headText} uppercase tracking-wide`}>Место</th>
+            <th className={`${headPx} text-left font-semibold ${headText} uppercase tracking-wide`}>Команда</th>
             {games.map((game) => (
-              <th key={game.id} className="px-4 py-3 text-center font-semibold text-sm uppercase tracking-wide">
+              <th key={game.id} className={`${headPx} text-center font-semibold ${headText} uppercase tracking-wide`}>
                 {game.display_name}
               </th>
             ))}
-            <th className="px-4 py-3 text-right font-semibold text-sm uppercase tracking-wide">Сумма</th>
+            <th className={`${headPx} text-right font-semibold ${headText} uppercase tracking-wide`}>Сумма</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((entry, index) => (
             <tr
               key={entry.program_id}
-              className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-700'} ${getRowClass(index)} transition-colors`}
+              className={`border-b ${isDark ? 'border-gray-700/50' : 'border-gray-700'} ${getRowClass(index)} transition-colors`}
             >
-              <td className="px-4 py-3">
+              <td className={cellPx}>
                 <span className={getRankClass(index)}>
                   {entry.rank}
                 </span>
               </td>
-              <td className="px-4 py-3">
+              <td className={cellPx}>
                 <span className="font-semibold">
                   {entry.team_name || entry.program_name}
                 </span>
@@ -1459,17 +1483,19 @@ function CrossGameLeaderboardTable({
               {games.map((game) => {
                 const gameRating = entry.game_ratings[game.id];
                 return (
-                  <td key={game.id} className="px-4 py-3 text-center">
+                  <td key={game.id} className={`${cellPx} text-center`}>
                     {gameRating ? (
                       <div>
                         <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
-                        <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
-                          <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
-                          <span className="mx-0.5">/</span>
-                          <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
-                          <span className="mx-0.5">/</span>
-                          <span title="Ничьих">{gameRating.draws || 0}</span>
-                        </div>
+                        {!isCompact && (
+                          <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
+                            <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
+                            <span className="mx-0.5">/</span>
+                            <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
+                            <span className="mx-0.5">/</span>
+                            <span title="Ничьих">{gameRating.draws || 0}</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <span className="text-gray-400">-</span>
@@ -1477,8 +1503,8 @@ function CrossGameLeaderboardTable({
                   </td>
                 );
               })}
-              <td className="px-4 py-3 text-right">
-                <span className={`font-mono font-bold text-lg ${isDark ? 'text-primary-400' : 'text-primary-400'}`}>
+              <td className={`${cellPx} text-right`}>
+                <span className={`font-mono font-bold ${isCompact ? 'text-base' : 'text-lg'} ${isDark ? 'text-primary-400' : 'text-primary-400'}`}>
                   {entry.total_rating}
                 </span>
               </td>
@@ -1498,7 +1524,7 @@ function CrossGameLeaderboardTableDark({
   entries: CrossGameLeaderboardEntry[];
   games: Game[];
 }) {
-  return <CrossGameLeaderboardTable entries={entries} games={games} isDark />;
+  return <CrossGameLeaderboardTable entries={entries} games={games} isDark isCompact />;
 }
 
 // Games Tab Component

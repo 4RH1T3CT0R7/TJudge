@@ -68,6 +68,7 @@ type MatchRepository interface {
 	GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
+	GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error)
 }
 
 // QueueManager интерфейс для работы с очередями
@@ -796,9 +797,22 @@ func (s *Service) runAllMatchesLocked(ctx context.Context, tournamentID uuid.UUI
 				roundNumber = 1
 			}
 
-			gameMatches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityMedium)
+			// Получаем уже сыгранные пары программ
+			playedPairs, err := s.matchRepo.GetPlayedProgramPairs(ctx, tournamentID, gameType)
+			if err != nil {
+				return 0, fmt.Errorf("failed to get played program pairs for game %s: %w", gameType, err)
+			}
+
+			gameMatches, err := s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityMedium, playedPairs)
 			if err != nil {
 				return 0, fmt.Errorf("failed to generate matches for game %s: %w", gameType, err)
+			}
+
+			if len(gameMatches) == 0 {
+				s.log.Info("No new matches for game, all pairs already played",
+					zap.String("game_type", gameType),
+				)
+				continue
 			}
 
 			if err := s.matchRepo.CreateBatch(ctx, gameMatches); err != nil {
@@ -889,10 +903,20 @@ func (s *Service) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UU
 			roundNumber = 1
 		}
 
+		// Получаем уже сыгранные пары программ, чтобы не дублировать матчи
+		playedPairs, err := s.matchRepo.GetPlayedProgramPairs(ctx, tournamentID, gameType)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get played program pairs: %w", err)
+		}
+
 		// Генерируем матчи для этой игры с высоким приоритетом (ручной запуск)
-		matches, err = s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityHigh)
+		matches, err = s.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityHigh, playedPairs)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate matches: %w", err)
+		}
+
+		if len(matches) == 0 {
+			return 0, errors.ErrValidation.WithMessage("no new matches to generate: all program pairs have already been played")
 		}
 
 		// Сохраняем матчи в БД
@@ -928,8 +952,9 @@ func (s *Service) getLatestParticipantsByGame(ctx context.Context, tournamentID 
 	return s.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)
 }
 
-// generateRoundRobinMatchesForGame генерирует матчи для конкретной игры
-func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int, priority domain.MatchPriority) ([]*domain.Match, error) {
+// generateRoundRobinMatchesForGame генерирует матчи для конкретной игры.
+// playedPairs содержит пары "program1_id|program2_id", которые уже были сыграны — они пропускаются.
+func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int, priority domain.MatchPriority, playedPairs map[string]struct{}) ([]*domain.Match, error) {
 	var matches []*domain.Match
 	now := time.Now()
 
@@ -938,6 +963,12 @@ func (s *Service) generateRoundRobinMatchesForGame(tournament *domain.Tournament
 		for j := 0; j < len(participants); j++ {
 			// Пропускаем матч против себя
 			if i == j {
+				continue
+			}
+
+			// Пропускаем пары, которые уже были сыграны с теми же программами
+			pairKey := participants[i].ProgramID.String() + "|" + participants[j].ProgramID.String()
+			if _, played := playedPairs[pairKey]; played {
 				continue
 			}
 

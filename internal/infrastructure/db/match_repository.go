@@ -273,6 +273,38 @@ func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tourname
 	return nextRound, nil
 }
 
+// GetPlayedProgramPairs возвращает множество пар (program1_id, program2_id),
+// для которых уже существуют матчи (любого статуса) в данном турнире и игре.
+func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
+	query := `
+		SELECT program1_id, program2_id
+		FROM matches
+		WHERE tournament_id = $1 AND game_type = $2
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get played program pairs")
+	}
+	defer rows.Close()
+
+	pairs := make(map[string]struct{})
+	for rows.Next() {
+		var p1, p2 uuid.UUID
+		if err := rows.Scan(&p1, &p2); err != nil {
+			return nil, errors.Wrap(err, "failed to scan program pair")
+		}
+		key := p1.String() + "|" + p2.String()
+		pairs[key] = struct{}{}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return pairs, nil
+}
+
 // ResetFailedMatches сбрасывает все failed матчи турнира в pending
 func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
 	query := `

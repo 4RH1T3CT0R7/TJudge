@@ -195,6 +195,14 @@ func (m *MockMatchRepository) GetPendingByTournamentAndGame(ctx context.Context,
 	return args.Get(0).([]*domain.Match), args.Error(1)
 }
 
+func (m *MockMatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]struct{}), args.Error(1)
+}
+
 type MockQueueManager struct {
 	mock.Mock
 }
@@ -1221,6 +1229,7 @@ func TestService_RunAllMatches(t *testing.T) {
 			"chess": participants,
 		}, nil)
 		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, "chess").Return(1, nil)
+		matchRepo.On("GetPlayedProgramPairs", ctx, tournamentID, "chess").Return(map[string]struct{}{}, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
@@ -1344,6 +1353,7 @@ func TestService_RunGameMatches(t *testing.T) {
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsByGame", ctx, tournamentID, gameType).Return(participants, nil)
 		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, gameType).Return(2, nil)
+		matchRepo.On("GetPlayedProgramPairs", ctx, tournamentID, gameType).Return(map[string]struct{}{}, nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
@@ -1449,7 +1459,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p2},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium, nil)
 		require.NoError(t, err)
 		// 2 participants: AB, BA = 2 matches
 		assert.Len(t, matches, 2)
@@ -1486,7 +1496,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New()},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium, nil)
 		require.NoError(t, err)
 		// 3 participants: AB, AC, BA, BC, CA, CB = 6 matches (n*(n-1))
 		assert.Len(t, matches, 6)
@@ -1515,7 +1525,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 
 		var participants []*domain.TournamentParticipant
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium, nil)
 		require.NoError(t, err)
 		assert.Len(t, matches, 0)
 	})
@@ -2106,7 +2116,7 @@ func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: uuid.New(), Rating: 1500},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium, nil)
 		require.NoError(t, err)
 		assert.Len(t, matches, 0, "1 participant cannot play against anyone, expected 0 matches")
 	})
@@ -2133,7 +2143,7 @@ func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p4, Rating: 1500},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "prisoners_dilemma", 1, domain.PriorityMedium, nil)
 		require.NoError(t, err)
 		// Bidirectional round-robin: n*(n-1) = 4*3 = 12 matches
 		// Each pair plays in both directions (AB and BA)
