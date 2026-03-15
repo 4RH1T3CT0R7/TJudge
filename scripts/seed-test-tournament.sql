@@ -10,11 +10,12 @@ INSERT INTO users (id, username, email, password_hash, role) VALUES
 ON CONFLICT (username) DO NOTHING;
 
 -- Tournament
-INSERT INTO tournaments (id, name, description, status, max_participants, max_team_size, code, creator_id)
+INSERT INTO tournaments (id, name, description, game_type, status, max_participants, max_team_size, code, creator_id)
 VALUES (
   'bbbbbbbb-0000-0000-0000-000000000001',
   'Тестовый турнир',
   'Турнир для тестирования. 3 игры: Дилемма заключённого, Перетягивание каната, Дилемма путешественника.',
+  'dilemma',
   'pending',
   100,
   3,
