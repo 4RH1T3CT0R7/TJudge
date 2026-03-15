@@ -218,7 +218,7 @@ func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 		FROM games g
 		INNER JOIN tournament_games tg ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
-		ORDER BY tg.created_at ASC
+		ORDER BY g.created_at ASC, g.name ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -338,8 +338,9 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 	query := `
 		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0), tg.created_at
 		FROM tournament_games tg
+		INNER JOIN games g ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
-		ORDER BY tg.created_at ASC
+		ORDER BY g.created_at ASC, g.name ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -388,7 +389,7 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 		FROM tournament_games tg
 		INNER JOIN games g ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
-		ORDER BY tg.created_at ASC
+		ORDER BY g.created_at ASC, g.name ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
