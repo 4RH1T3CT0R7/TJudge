@@ -60,6 +60,61 @@ const gameDetails: Record<string, { history: string; facts: string[]; applicatio
       'Спортивные турниры с несколькими раундами',
       'Конкурентная борьба компаний на разных рынках'
     ]
+  },
+  travelers_dilemma: {
+    history: `Дилемма путешественника была предложена экономистом Каушиком Басу в 1994 году в Корнеллском университете. Два путешественника потеряли одинаковые чемоданы, и авиакомпания просит каждого независимо назвать стоимость (от 2 до 100). Если суммы совпадают — оба получают названную сумму. Если разные — оба получают меньшую, но «скромный» получает бонус, а «жадный» — штраф.
+
+Парадокс: равновесие Нэша предписывает обоим назвать минимум (2), но в экспериментах и турнирах люди называют числа в районе 90 и получают гораздо лучшие результаты. Эта задача бросает вызов предположению о совершенной рациональности и показывает, что кооперация может возникать даже без явного сговора.`,
+    facts: [
+      'Каушик Басу предложил эту задачу в 1994 году, бросив вызов классической теории рационального выбора',
+      'В экспериментах большинство людей называют числа в районе 90-100, игнорируя равновесие Нэша',
+      'Это один из главных аргументов против строгой рациональности в экономике',
+      'Задача показывает, что «очевидно правильная» стратегия может быть проигрышной в турнирах'
+    ],
+    applications: [
+      'Ценообразование: как компании выбирают цены на одинаковые товары',
+      'Страховые заявки и оценка ущерба',
+      'Переговоры о зарплате и контрактах',
+      'Теория аукционов и механизм-дизайн'
+    ]
+  },
+  public_goods: {
+    history: `Игра «Общественное благо» берёт начало из исследований 1970-80-х годов. Она основана на классической проблеме безбилетника, описанной Мэнкуром Олсоном в 1965 году в книге «Логика коллективного действия».
+
+Модель показывает, почему люди склонны пользоваться общими ресурсами бесплатно, даже когда всем было бы выгоднее вносить вклад. Эксперименты экономистов, таких как Джон Ледьярд, продемонстрировали, что в повторяющихся играх вклады начинаются примерно с 50% и постепенно снижаются почти до нуля.
+
+Однако механизмы вроде наказания безбилетников или репутационных систем способны поддерживать высокий уровень кооперации.`,
+    facts: [
+      'Мэнкур Олсон описал проблему безбилетника в 1965 году в книге «Логика коллективного действия»',
+      'В экспериментах люди начинают вкладывать ~50% капитала, но с каждым раундом все меньше',
+      'Введение возможности наказывать «безбилетников» резко повышает уровень кооперации',
+      'Эта модель объясняет, почему сложно финансировать общественные блага без налогов'
+    ],
+    applications: [
+      'Финансирование общественных благ: дороги, парки, оборона',
+      'Open-source разработка: кто будет поддерживать общий код?',
+      'Экология: почему страны не сокращают выбросы добровольно',
+      'Командная работа: проблема «халявщиков» в проектах'
+    ]
+  },
+  dollar_auction: {
+    history: `Аукцион доллара был изобретён Мартином Шубиком в Йельском университете в 1971 году. Он выставлял на торги долларовую купюру с необычным правилом: платят оба ведущих участника — и победитель, и проигравший.
+
+Студенты регулярно переплачивали за доллар, иногда доходя до $5-20 за купюру номиналом в $1. Этот эксперимент стал классической демонстрацией ловушки невозвратных затрат (sunk cost fallacy) и эскалации обязательств.
+
+Модель широко используется в поведенческой экономике и теории игр для объяснения иррациональной эскалации конфликтов.`,
+    facts: [
+      'Мартин Шубик изобрёл этот аукцион в 1971 году в Йельском университете',
+      'Студенты регулярно платили $3-5 за долларовую купюру, а рекорд — $20',
+      'Это классическая демонстрация ловушки невозвратных затрат (sunk cost fallacy)',
+      'Модель объясняет эскалацию конфликтов: от торговых войн до военных операций'
+    ],
+    applications: [
+      'Войны на истощение: почему конфликты длятся дольше, чем выгодно обеим сторонам',
+      'Корпоративные поглощения и ценовые войны',
+      'Лоббирование и политические кампании',
+      'Психология азартных игр и ловушка «отыграться»'
+    ]
   }
 };
 
@@ -410,6 +465,384 @@ function TugOfWarVisualization() {
   );
 }
 
+// Traveler's Dilemma Visualization
+function TravelersDilemmaVisualization() {
+  const [claimA, setClaimA] = useState(80);
+  const [claimB, setClaimB] = useState(80);
+  const R = 2;
+
+  const computePayoffs = () => {
+    if (claimA === claimB) {
+      return { payoffA: claimA, payoffB: claimB };
+    }
+    const minClaim = Math.min(claimA, claimB);
+    if (claimA < claimB) {
+      return { payoffA: minClaim + R, payoffB: minClaim - R };
+    }
+    return { payoffA: minClaim - R, payoffB: minClaim + R };
+  };
+
+  const { payoffA, payoffB } = computePayoffs();
+  const isEqual = claimA === claimB;
+  const isNash = claimA === 2 && claimB === 2;
+  const isCooperative = claimA === 100 && claimB === 100;
+
+  const adjustClaim = (player: 'A' | 'B', delta: number) => {
+    if (player === 'A') {
+      setClaimA((prev) => Math.max(2, Math.min(100, prev + delta)));
+    } else {
+      setClaimB((prev) => Math.max(2, Math.min(100, prev + delta)));
+    }
+  };
+
+  return (
+    <div className="flex flex-col justify-center space-y-4">
+      {/* Claims */}
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-blue-400">Игрок A</span>
+            <span className="text-gray-400">Заявка: <span className="font-bold text-blue-400">{claimA}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => adjustClaim('A', -10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">-</button>
+            <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
+              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimA - 2) / 98) * 100}%` }} />
+            </div>
+            <button onClick={() => adjustClaim('A', 10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">+</button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-purple-400">Игрок B</span>
+            <span className="text-gray-400">Заявка: <span className="font-bold text-purple-400">{claimB}</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => adjustClaim('B', -10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">-</button>
+            <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
+              <div className="h-full bg-purple-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimB - 2) / 98) * 100}%` }} />
+            </div>
+            <button onClick={() => adjustClaim('B', 10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">+</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Payoff display */}
+      <div className={`rounded-xl p-3 border transition-colors ${
+        isEqual ? 'bg-green-900/20 border-green-700/50' : 'bg-gray-800 border-gray-700'
+      }`}>
+        <div className="flex justify-around items-center">
+          <div className="text-center">
+            <div className="text-xs text-gray-400 mb-1">Выигрыш A</div>
+            <div className={`text-2xl font-bold ${
+              payoffA > payoffB ? 'text-green-400' : payoffA < payoffB ? 'text-red-400' : 'text-blue-400'
+            }`}>{payoffA}</div>
+          </div>
+          <div className="text-gray-600 text-lg">vs</div>
+          <div className="text-center">
+            <div className="text-xs text-gray-400 mb-1">Выигрыш B</div>
+            <div className={`text-2xl font-bold ${
+              payoffB > payoffA ? 'text-green-400' : payoffB < payoffA ? 'text-red-400' : 'text-purple-400'
+            }`}>{payoffB}</div>
+          </div>
+        </div>
+        {isEqual && (
+          <div className="text-center text-xs text-green-400 mt-2">Одинаковые заявки: оба получают {claimA}</div>
+        )}
+        {!isEqual && (
+          <div className="text-center text-xs text-gray-400 mt-2">
+            Скромный получает +{R}, жадный получает -{R} от минимума ({Math.min(claimA, claimB)})
+          </div>
+        )}
+      </div>
+
+      {/* Status badges */}
+      <div className="flex justify-center gap-2 flex-wrap">
+        {isNash && (
+          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded-full border border-cyan-700/50">
+            Равновесие Нэша (2, 2)
+          </span>
+        )}
+        {isCooperative && (
+          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded-full border border-green-700/50">
+            Кооперативный оптимум (100, 100)
+          </span>
+        )}
+        {!isNash && !isCooperative && (
+          <span className="text-xs text-gray-500">
+            Нэш: (2, 2) = по 2 | Кооперация: (100, 100) = по 100
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Public Goods Visualization
+function PublicGoodsVisualization() {
+  const [contribA, setContribA] = useState(10);
+  const [contribB, setContribB] = useState(10);
+  const ENDOWMENT = 20;
+  const MULTIPLIER = 1.5;
+
+  const pool = (contribA + contribB) * MULTIPLIER;
+  const share = pool / 2;
+  const payoffA = (ENDOWMENT - contribA) + share;
+  const payoffB = (ENDOWMENT - contribB) + share;
+
+  const adjustContrib = (player: 'A' | 'B', delta: number) => {
+    if (player === 'A') {
+      setContribA((prev) => Math.max(0, Math.min(ENDOWMENT, prev + delta)));
+    } else {
+      setContribB((prev) => Math.max(0, Math.min(ENDOWMENT, prev + delta)));
+    }
+  };
+
+  const isFreeRiderA = contribA === 0 && contribB > 0;
+  const isFreeRiderB = contribB === 0 && contribA > 0;
+  const isFullCoop = contribA === ENDOWMENT && contribB === ENDOWMENT;
+  const isNash = contribA === 0 && contribB === 0;
+
+  return (
+    <div className="flex flex-col justify-center space-y-4">
+      {/* Contributions */}
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-blue-400">Игрок A</span>
+            <span className="text-gray-400">
+              Вклад: <span className="font-bold text-blue-400">{contribA}</span> / {ENDOWMENT}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => adjustContrib('A', -2)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">-</button>
+            <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${(contribA / ENDOWMENT) * 100}%` }} />
+            </div>
+            <button onClick={() => adjustContrib('A', 2)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">+</button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-orange-400">Игрок B</span>
+            <span className="text-gray-400">
+              Вклад: <span className="font-bold text-orange-400">{contribB}</span> / {ENDOWMENT}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => adjustContrib('B', -2)} className="w-7 h-7 rounded bg-orange-900/50 text-orange-400 text-sm font-bold hover:bg-orange-900/80 transition-colors">-</button>
+            <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden">
+              <div className="h-full bg-orange-500 rounded-full transition-[width] duration-200" style={{ width: `${(contribB / ENDOWMENT) * 100}%` }} />
+            </div>
+            <button onClick={() => adjustContrib('B', 2)} className="w-7 h-7 rounded bg-orange-900/50 text-orange-400 text-sm font-bold hover:bg-orange-900/80 transition-colors">+</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pool calculation */}
+      <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+        <div className="flex items-center justify-center gap-3 text-sm mb-2">
+          <span className="text-gray-400">Пул:</span>
+          <span className="text-blue-400 font-bold">{contribA}</span>
+          <span className="text-gray-500">+</span>
+          <span className="text-orange-400 font-bold">{contribB}</span>
+          <span className="text-gray-500">=</span>
+          <span className="text-gray-300 font-bold">{contribA + contribB}</span>
+          <span className="text-green-400 font-bold">x{MULTIPLIER}</span>
+          <span className="text-gray-500">=</span>
+          <span className="text-green-400 font-bold text-lg">{pool.toFixed(0)}</span>
+        </div>
+        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-blue-500 via-green-500 to-orange-500 rounded-full transition-[width] duration-200"
+            style={{ width: `${(pool / (ENDOWMENT * 2 * MULTIPLIER)) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Payoffs */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className={`rounded-xl p-3 border text-center ${
+          isFreeRiderA ? 'bg-red-900/20 border-red-700/50' : 'bg-gray-800 border-gray-700'
+        }`}>
+          <div className="text-xs text-gray-400 mb-1">Выигрыш A</div>
+          <div className="text-2xl font-bold text-blue-400">{payoffA.toFixed(1)}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {ENDOWMENT - contribA} + {share.toFixed(1)}
+          </div>
+        </div>
+        <div className={`rounded-xl p-3 border text-center ${
+          isFreeRiderB ? 'bg-red-900/20 border-red-700/50' : 'bg-gray-800 border-gray-700'
+        }`}>
+          <div className="text-xs text-gray-400 mb-1">Выигрыш B</div>
+          <div className="text-2xl font-bold text-orange-400">{payoffB.toFixed(1)}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {ENDOWMENT - contribB} + {share.toFixed(1)}
+          </div>
+        </div>
+      </div>
+
+      {/* Status */}
+      <div className="flex justify-center gap-2 flex-wrap">
+        {isNash && (
+          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded-full border border-cyan-700/50">
+            Равновесие Нэша: оба по 20
+          </span>
+        )}
+        {isFullCoop && (
+          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded-full border border-green-700/50">
+            Полная кооперация: оба по 30!
+          </span>
+        )}
+        {(isFreeRiderA || isFreeRiderB) && (
+          <span className="px-2 py-1 bg-red-900/40 text-red-400 text-xs rounded-full border border-red-700/50">
+            Безбилетник {isFreeRiderA ? 'A' : 'B'} выигрывает больше!
+          </span>
+        )}
+        {!isNash && !isFullCoop && !isFreeRiderA && !isFreeRiderB && (
+          <span className="text-xs text-gray-500">
+            Нэш: (0, 0) = по 20 | Кооперация: (20, 20) = по 30
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Dollar Auction Visualization
+const AUCTION_PRIZE = 100;
+const AUCTION_SCENARIO = [
+  { player: 'A', bid: 10 },
+  { player: 'B', bid: 15 },
+  { player: 'A', bid: 25 },
+  { player: 'B', bid: 40 },
+  { player: 'A', bid: 55 },
+  { player: 'B', bid: 70 },
+  { player: 'A', bid: 85 },
+  { player: 'B', bid: 100 },
+  { player: 'A', bid: 115 },
+  { player: 'B', bid: 130 },
+] as const;
+
+function DollarAuctionVisualization() {
+  const [step, setStep] = useState(0);
+
+  const currentBids = AUCTION_SCENARIO.slice(0, step);
+  const lastBidA = [...currentBids].reverse().find((b) => b.player === 'A');
+  const lastBidB = [...currentBids].reverse().find((b) => b.player === 'B');
+  const bidA = lastBidA?.bid ?? 0;
+  const bidB = lastBidB?.bid ?? 0;
+
+  const winner = bidA >= bidB ? 'A' : 'B';
+  const profitA = winner === 'A' ? AUCTION_PRIZE - bidA : -bidA;
+  const profitB = winner === 'B' ? AUCTION_PRIZE - bidB : -bidB;
+
+  const nextStep = () => setStep((prev) => Math.min(prev + 1, AUCTION_SCENARIO.length));
+  const reset = () => setStep(0);
+
+  return (
+    <div className="flex flex-col justify-center space-y-3">
+      {/* Prize */}
+      <div className="text-center">
+        <span className="text-xs text-gray-400">Приз: </span>
+        <span className="text-lg font-bold text-yellow-400">{AUCTION_PRIZE} очков</span>
+      </div>
+
+      {/* Bid history */}
+      <div className="bg-gray-800 rounded-xl p-3 border border-gray-700 max-h-40 overflow-y-auto">
+        {step === 0 ? (
+          <div className="text-center text-xs text-gray-500 py-2">
+            Нажмите «Следующая ставка» чтобы начать
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {currentBids.map((bid, i) => {
+              const isLatest = i === currentBids.length - 1;
+              const isA = bid.player === 'A';
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 text-xs px-2 py-1 rounded transition-colors ${
+                    isLatest ? (isA ? 'bg-blue-900/30' : 'bg-red-900/30') : ''
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                    isA ? 'bg-blue-500' : 'bg-red-500'
+                  }`}>
+                    {bid.player}
+                  </span>
+                  <span className="text-gray-400">ставит</span>
+                  <span className={`font-bold ${isA ? 'text-blue-400' : 'text-red-400'}`}>{bid.bid}</span>
+                  {bid.bid > AUCTION_PRIZE && (
+                    <span className="text-red-400 ml-1">(&gt; приза!)</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Current standings */}
+      {step > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className={`rounded-xl p-2 border text-center ${
+            profitA >= 0 ? 'bg-green-900/20 border-green-700/50' : 'bg-red-900/20 border-red-700/50'
+          }`}>
+            <div className="text-xs text-gray-400">Игрок A</div>
+            <div className="text-xs text-gray-500">ставка: {bidA}</div>
+            <div className={`text-lg font-bold ${profitA >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {profitA > 0 ? '+' : ''}{profitA}
+            </div>
+          </div>
+          <div className={`rounded-xl p-2 border text-center ${
+            profitB >= 0 ? 'bg-green-900/20 border-green-700/50' : 'bg-red-900/20 border-red-700/50'
+          }`}>
+            <div className="text-xs text-gray-400">Игрок B</div>
+            <div className="text-xs text-gray-500">ставка: {bidB}</div>
+            <div className={`text-lg font-bold ${profitB >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {profitB > 0 ? '+' : ''}{profitB}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Escalation warning */}
+      {step > 0 && bidA + bidB > AUCTION_PRIZE && (
+        <div className="text-center text-xs text-red-400 bg-red-900/20 rounded-lg py-1 border border-red-700/50">
+          Суммарные ставки ({bidA + bidB}) превысили приз ({AUCTION_PRIZE})!
+        </div>
+      )}
+
+      {/* Controls */}
+      <div className="flex justify-center gap-3">
+        {step < AUCTION_SCENARIO.length ? (
+          <button
+            onClick={nextStep}
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-sm font-bold shadow-lg hover:scale-105 transition-transform"
+          >
+            Следующая ставка
+          </button>
+        ) : (
+          <div className="text-center space-y-1">
+            <div className="text-xs text-red-400 font-bold">
+              Оба в убытке! A: {profitA}, B: {profitB}
+            </div>
+          </div>
+        )}
+        {step > 0 && (
+          <button
+            onClick={reset}
+            className="px-4 py-2 rounded-xl bg-gray-700 text-gray-300 text-sm hover:bg-gray-600 transition-colors"
+          >
+            Сначала
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Game Showcase Component with tabs
 function GameShowcase() {
   const [activeGame, setActiveGame] = useState(0);
@@ -444,6 +877,48 @@ function GameShowcase() {
       ],
       insight: 'Ключ к победе — предугадать стратегию противника и оптимально распределить ресурсы.',
       visualization: <TugOfWarVisualization />,
+    },
+    {
+      id: 'travelers_dilemma',
+      name: 'Дилемма путешественника',
+      icon: '🧳',
+      color: 'blue',
+      description: 'Два путешественника называют стоимость потерянных чемоданов. Жадность наказывается, а скромность вознаграждается.',
+      rules: [
+        { text: 'Одинаковые заявки', result: 'оба получают названную сумму', color: 'green' },
+        { text: 'Разные заявки', result: 'оба получают минимум, но скромный получает бонус +R', color: 'blue' },
+        { text: 'Жадный получает штраф', result: '-R от минимальной суммы', color: 'red' },
+      ],
+      insight: 'Равновесие Нэша: оба называют минимум (2) — но в турнирах стратегии с заявкой ~90 побеждают.',
+      visualization: <TravelersDilemmaVisualization />,
+    },
+    {
+      id: 'public_goods',
+      name: 'Общественное благо',
+      icon: '🏛️',
+      color: 'orange',
+      description: 'Каждый решает, сколько вложить в общий пул. Пул умножается и делится поровну — но зачем вкладывать, если можно получить бесплатно?',
+      rules: [
+        { text: 'Каждый начинает с 20 токенов', result: 'и решает, сколько вложить в пул', color: 'blue' },
+        { text: 'Пул умножается на 1.5x', result: 'и делится поровну между игроками', color: 'green' },
+        { text: 'Безбилетник выигрывает', result: 'но если оба так поступят — оба проиграют', color: 'red' },
+      ],
+      insight: 'Равновесие Нэша: не вкладывать ничего (каждый получает 20). Но если оба вложат все — каждый получит 30.',
+      visualization: <PublicGoodsVisualization />,
+    },
+    {
+      id: 'dollar_auction',
+      name: 'Аукцион двойной цены',
+      icon: '💰',
+      color: 'yellow',
+      description: 'Приз выставляется на торги, но проигравший тоже платит свою ставку. Классическая ловушка эскалации.',
+      rules: [
+        { text: 'Приз стоит 100 очков', result: 'ставки делаются поочередно', color: 'blue' },
+        { text: 'Оба игрока платят свои ставки', result: 'но приз получает только победитель', color: 'red' },
+        { text: 'Можно спасовать (0)', result: 'торги заканчиваются', color: 'green' },
+      ],
+      insight: 'Ловушка невозвратных затрат: «выгоднее» повысить ставку, чем потерять уже вложенное. Спираль может привести к ставкам больше приза!',
+      visualization: <DollarAuctionVisualization />,
     },
   ];
 

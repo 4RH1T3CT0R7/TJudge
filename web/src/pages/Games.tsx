@@ -6,8 +6,7 @@ import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import type { Game } from '../types';
 
-// Game-specific icons and colors configuration
-// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
+// Game-specific icons and colors configuration (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameConfig: Record<string, { icon: string; color: string; bgClass: string; textClass: string; borderClass: string }> = {
   dilemma: {
     icon: '🤝',
@@ -22,6 +21,27 @@ const gameConfig: Record<string, { icon: string; color: string; bgClass: string;
     bgClass: 'bg-green-500',
     textClass: 'text-green-400',
     borderClass: 'border-green-800 hover:border-green-600',
+  },
+  travelers_dilemma: {
+    icon: '🧳',
+    color: 'blue',
+    bgClass: 'bg-blue-500',
+    textClass: 'text-blue-400',
+    borderClass: 'border-blue-800 hover:border-blue-600',
+  },
+  public_goods: {
+    icon: '🏛️',
+    color: 'orange',
+    bgClass: 'bg-orange-500',
+    textClass: 'text-orange-400',
+    borderClass: 'border-orange-800 hover:border-orange-600',
+  },
+  dollar_auction: {
+    icon: '💰',
+    color: 'yellow',
+    bgClass: 'bg-yellow-500',
+    textClass: 'text-yellow-400',
+    borderClass: 'border-yellow-800 hover:border-yellow-600',
   },
 };
 

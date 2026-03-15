@@ -254,7 +254,19 @@ func TestParseResult_HighIterationsStillRejectsExtremeScores(t *testing.T) {
 func TestParseResult_NegativeScore(t *testing.T) {
 	e := newTestExecutor(t)
 
-	_, err := e.parseResult(0, "-1 50", "")
+	// Small negative scores are valid (e.g. dollar_auction loser gets -bid)
+	result, err := e.parseResult(0, "-1 50", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, -1, result.Score1)
+	assert.Equal(t, 50, result.Score2)
+}
+
+func TestParseResult_ExtremeNegativeScore(t *testing.T) {
+	e := newTestExecutor(t)
+
+	// Extreme negative scores beyond -maxScore are still rejected
+	_, err := e.parseResult(0, "-999999 50", "")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "scores out of bounds")

@@ -339,8 +339,8 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 	if maxScore < 100_000 {
 		maxScore = 100_000
 	}
-	if score1 < 0 || score1 > maxScore || score2 < 0 || score2 > maxScore {
-		return nil, fmt.Errorf("scores out of bounds [0, %d]: %d, %d", maxScore, score1, score2)
+	if score1 > maxScore || score1 < -maxScore || score2 > maxScore || score2 < -maxScore {
+		return nil, fmt.Errorf("scores out of bounds [-%d, %d]: %d, %d", maxScore, maxScore, score1, score2)
 	}
 
 	result.Score1 = score1
@@ -403,7 +403,7 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 // buildCommand формирует аргументы для запуска tjudge-cli
 // Контейнер уже имеет ENTRYPOINT ["tjudge-cli"], поэтому cmd содержит только аргументы
 // Формат: <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
-// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
+// Поддерживаемые игры: см. https://github.com/bmstu-itstech/tjudge-cli
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
 	// Не включаем TJudgePath так как контейнер имеет ENTRYPOINT
 	cmd := []string{gameType}

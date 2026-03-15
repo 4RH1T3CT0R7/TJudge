@@ -2140,6 +2140,9 @@ function MatchesTab({
 const gameDisplayNames: Record<string, string> = {
   dilemma: 'Дилемма заключённого',
   tug_of_war: 'Перетягивание каната',
+  travelers_dilemma: 'Дилемма путешественника',
+  public_goods: 'Общественное благо',
+  dollar_auction: 'Аукцион двойной цены',
 };
 
 const getGameDisplayName = (gameType: string) => gameDisplayNames[gameType] || gameType;

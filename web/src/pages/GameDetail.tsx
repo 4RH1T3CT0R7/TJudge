@@ -10,8 +10,7 @@ import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, Tourname
 
 const remarkPlugins = [remarkGfm];
 
-// Game-specific icons and colors configuration
-// Поддерживаемые игры: dilemma, tug_of_war (см. https://github.com/bmstu-itstech/tjudge-cli)
+// Game-specific icons and colors configuration (см. https://github.com/bmstu-itstech/tjudge-cli)
 const gameConfig: Record<string, { icon: string; bgClass: string; textClass: string; borderClass: string; gradientClass: string }> = {
   dilemma: {
     icon: '🤝',
@@ -26,6 +25,27 @@ const gameConfig: Record<string, { icon: string; bgClass: string; textClass: str
     textClass: 'text-green-400',
     borderClass: 'border-green-500',
     gradientClass: 'from-green-500 to-green-600',
+  },
+  travelers_dilemma: {
+    icon: '🧳',
+    bgClass: 'bg-blue-500',
+    textClass: 'text-blue-400',
+    borderClass: 'border-blue-500',
+    gradientClass: 'from-blue-500 to-blue-600',
+  },
+  public_goods: {
+    icon: '🏛️',
+    bgClass: 'bg-orange-500',
+    textClass: 'text-orange-400',
+    borderClass: 'border-orange-500',
+    gradientClass: 'from-orange-500 to-orange-600',
+  },
+  dollar_auction: {
+    icon: '💰',
+    bgClass: 'bg-yellow-500',
+    textClass: 'text-yellow-400',
+    borderClass: 'border-yellow-500',
+    gradientClass: 'from-yellow-500 to-yellow-600',
   },
 };
 

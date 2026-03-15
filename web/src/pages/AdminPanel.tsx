@@ -12,11 +12,13 @@ import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, 
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
 
-// Game-specific icons configuration for programs view
-// Supported games: dilemma, tug_of_war (see https://github.com/bmstu-itstech/tjudge-cli)
+// Game-specific icons configuration for programs view (see https://github.com/bmstu-itstech/tjudge-cli)
 const gameIcons: Record<string, string> = {
   dilemma: '🤝',
   tug_of_war: '🪢',
+  travelers_dilemma: '🧳',
+  public_goods: '🏛️',
+  dollar_auction: '💰',
 };
 const getGameIcon = (gameName: string) => gameIcons[gameName] || '🎮';
 
