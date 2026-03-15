@@ -10,7 +10,7 @@ BEGIN;
 
 -- !!! REPLACE THESE !!!
 \set tournament_id '00000000-0000-0000-0000-000000000000'
-\set pwd_hash '$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH'
+\set pwd_hash '$2a$10$teFSAnC9/8PRZyqBbRzVXuij6obeJ7je.b26N5HBjYL5ToWUABwgy'
 
 -- ==========================================
 -- Insert 89 users
