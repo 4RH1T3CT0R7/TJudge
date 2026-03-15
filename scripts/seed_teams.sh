@@ -20,7 +20,7 @@ echo "=== Логин user2 ==="
 TOKEN2=$(curl -s -X POST "$API/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"$USER2_USERNAME\",\"password\":\"$USER2_PASSWORD\"}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
 
 if [ -z "$TOKEN2" ]; then
   echo "ОШИБКА: не удалось залогинить user2"
@@ -33,7 +33,7 @@ echo "=== Логин user3 ==="
 TOKEN3=$(curl -s -X POST "$API/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"$USER3_USERNAME\",\"password\":\"$USER3_PASSWORD\"}" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
 
 if [ -z "$TOKEN3" ]; then
   echo "ОШИБКА: не удалось залогинить user3"
