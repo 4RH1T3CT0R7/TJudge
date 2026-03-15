@@ -24,9 +24,9 @@ BEGIN
 
   -- Games
   INSERT INTO tournament_games (tournament_id, game_id, is_active) VALUES
-    (t_id, '6d60eca1-1a58-4c1c-8c37-60afa39c69d1', true),
-    (t_id, '79d53fba-6490-4dd4-888a-4d28fb7a77ea', false),
-    (t_id, 'c320a53f-8a0a-40c8-9d94-66c9cf55a9d7', false)
+    (t_id, '86ae4727-487f-4677-98e3-6679ea83fc08', true),
+    (t_id, 'bd3ba40c-df6c-4497-b377-6458fc14b6e4', false),
+    (t_id, '72c1e51b-f882-49ec-b193-4bd02d1a8844', false)
   ON CONFLICT DO NOTHING;
 
   -- Team 1
