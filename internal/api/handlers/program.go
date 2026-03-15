@@ -770,7 +770,11 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	filename := filepath.Base(filePath)
 	if program.Name != "" {
 		ext := filepath.Ext(filePath)
-		filename = program.Name + ext
+		if filepath.Ext(program.Name) == ext {
+			filename = program.Name
+		} else {
+			filename = program.Name + ext
+		}
 	}
 
 	// Санитизируем имя файла для безопасного использования в заголовке
