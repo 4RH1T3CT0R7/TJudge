@@ -275,6 +275,8 @@ func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tourname
 
 // GetPlayedProgramPairs возвращает множество пар (program1_id, program2_id),
 // для которых уже существуют матчи (любого статуса) в данном турнире и игре.
+// Ключи формата "uuid1|uuid2" — направленные (AB ≠ BA), что соответствует
+// round-robin генерации, которая создаёт матчи в обоих направлениях.
 func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
 	query := `
 		SELECT program1_id, program2_id
@@ -299,7 +301,7 @@ func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentI
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
+		return nil, errors.Wrap(err, "rows iteration error in played program pairs")
 	}
 
 	return pairs, nil

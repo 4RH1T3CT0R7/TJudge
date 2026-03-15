@@ -1565,6 +1565,19 @@ export function AdminPanel() {
           {/* Programs data */}
           {selectedTournamentId && !isLoadingPrograms && !showLoadingPrograms && (
             <div className="space-y-6">
+              {/* Total programs count */}
+              {tournamentGames.length > 0 && (() => {
+                const total = tournamentGames.reduce((sum, game) => {
+                  const programs = programsData[game.id] || [];
+                  const details = programDetails[game.id] || [];
+                  return sum + (programs.length || details.length);
+                }, 0);
+                return (
+                  <div className="text-sm text-gray-400">
+                    Всего загружено программ: <span className="font-semibold text-gray-200">{total}</span>
+                  </div>
+                );
+              })()}
               {tournamentGames.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
                   В этом турнире нет игр

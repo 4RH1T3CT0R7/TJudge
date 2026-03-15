@@ -693,3 +693,72 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 	})
 	return
 }
+
+// ResetGameByType выполняет полный сброс матчей и рейтингов для игры по её типу (name).
+// Используется при автоматическом перезапуске игры из сервиса турниров.
+func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error {
+	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		// 0. Проверяем наличие выполняющихся матчей
+		var runningCount int
+		if err := tx.GetContext(ctx, &runningCount, `
+			SELECT COUNT(*) FROM matches
+			WHERE tournament_id = $1 AND game_type = $2 AND status = 'running'
+		`, tournamentID, gameType); err != nil {
+			return errors.Wrap(err, "failed to check running matches")
+		}
+		if runningCount > 0 {
+			return errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
+		}
+
+		// 1. Удаляем историю рейтингов для матчей этой игры
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM rating_history
+			WHERE tournament_id = $1
+			AND match_id IN (
+				SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
+			)
+		`, tournamentID, gameType); err != nil {
+			return errors.Wrap(err, "failed to delete rating history")
+		}
+
+		// 2. Удаляем матчи
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM matches
+			WHERE tournament_id = $1 AND game_type = $2
+		`, tournamentID, gameType); err != nil {
+			return errors.Wrap(err, "failed to delete matches")
+		}
+
+		// 3. Сбрасываем рейтинги участников для этой игры
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE tournament_participants tp
+			SET rating = 1500, wins = 0, losses = 0, draws = 0
+			FROM programs p
+			INNER JOIN games g ON g.id = p.game_id
+			WHERE tp.program_id = p.id
+			AND tp.tournament_id = $1
+			AND g.name = $2
+		`, tournamentID, gameType); err != nil {
+			return errors.Wrap(err, "failed to reset participant ratings")
+		}
+
+		// 4. Сбрасываем номер раунда
+		result, txErr := tx.ExecContext(ctx, `
+			UPDATE tournament_games tg
+			SET current_round = 0, round_completed = false, round_completed_at = NULL
+			FROM games g
+			WHERE tg.tournament_id = $1
+			AND tg.game_id = g.id
+			AND g.name = $2
+		`, tournamentID, gameType)
+		if txErr != nil {
+			return errors.Wrap(txErr, "failed to reset game round status")
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament game not found for type: %s", gameType))
+		}
+
+		return nil
+	})
+}

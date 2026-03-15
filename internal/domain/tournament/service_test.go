@@ -248,6 +248,11 @@ func (m *MockGameRepository) SetActiveGame(ctx context.Context, tournamentID, ga
 	return args.Error(0)
 }
 
+func (m *MockGameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Error(0)
+}
+
 // MockProgramRepository mocks ProgramRepository for ScheduleNewProgramMatches tests
 type MockProgramRepository struct {
 	mock.Mock
@@ -1203,7 +1208,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1222,14 +1227,13 @@ func TestService_RunAllMatches(t *testing.T) {
 		}
 
 		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
-		// No pending matches -- trigger new round generation
+		// No pending matches -- trigger reset + new round generation
 		matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{
 			"chess": participants,
 		}, nil)
-		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, "chess").Return(1, nil)
-		matchRepo.On("GetPlayedProgramPairs", ctx, tournamentID, "chess").Return(map[string]struct{}{}, nil)
+		gameRepo.On("ResetGameByType", ctx, tournamentID, "chess").Return(nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
@@ -1238,6 +1242,7 @@ func TestService_RunAllMatches(t *testing.T) {
 		// 2 participants, each plays against the other in both directions = 2 matches
 		assert.Equal(t, 2, count)
 
+		gameRepo.AssertCalled(t, "ResetGameByType", ctx, tournamentID, "chess")
 		matchRepo.AssertCalled(t, "CreateBatch", ctx, mock.MatchedBy(func(matches []*domain.Match) bool {
 			return len(matches) == 2
 		}))
@@ -1327,7 +1332,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1352,8 +1357,7 @@ func TestService_RunGameMatches(t *testing.T) {
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, tournamentID, gameType).Return([]*domain.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsByGame", ctx, tournamentID, gameType).Return(participants, nil)
-		matchRepo.On("GetNextRoundNumberByGame", ctx, tournamentID, gameType).Return(2, nil)
-		matchRepo.On("GetPlayedProgramPairs", ctx, tournamentID, gameType).Return(map[string]struct{}{}, nil)
+		gameRepo.On("ResetGameByType", ctx, tournamentID, gameType).Return(nil)
 		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
@@ -1526,6 +1530,74 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 		var participants []*domain.TournamentParticipant
 
 		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, domain.PriorityMedium, nil)
+		require.NoError(t, err)
+		assert.Len(t, matches, 0)
+	})
+
+	t.Run("skips_played_pairs", func(t *testing.T) {
+		service, _, _, _, _, _ := newTestService(t)
+
+		tournamentID := uuid.New()
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Test",
+			GameType: "chess",
+			Status:   domain.TournamentActive,
+		}
+
+		p1 := uuid.New()
+		p2 := uuid.New()
+		p3 := uuid.New()
+		participants := []*domain.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p1},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p2},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p3},
+		}
+
+		// p1 vs p2 и p2 vs p1 уже были сыграны
+		playedPairs := map[string]struct{}{
+			p1.String() + "|" + p2.String(): {},
+			p2.String() + "|" + p1.String(): {},
+		}
+
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 2, domain.PriorityMedium, playedPairs)
+		require.NoError(t, err)
+		// 3 участника = 6 пар всего, минус 2 сыгранных = 4 новых
+		assert.Len(t, matches, 4)
+
+		// Проверяем что сыгранных пар нет в результате
+		for _, m := range matches {
+			key := m.Program1ID.String() + "|" + m.Program2ID.String()
+			_, isPlayed := playedPairs[key]
+			assert.False(t, isPlayed, "played pair should not be in generated matches: %s", key)
+		}
+	})
+
+	t.Run("all_pairs_played_returns_empty", func(t *testing.T) {
+		service, _, _, _, _, _ := newTestService(t)
+
+		tournamentID := uuid.New()
+		tournament := &domain.Tournament{
+			ID:       tournamentID,
+			Name:     "Test",
+			GameType: "chess",
+			Status:   domain.TournamentActive,
+		}
+
+		p1 := uuid.New()
+		p2 := uuid.New()
+		participants := []*domain.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p1},
+			{ID: uuid.New(), TournamentID: tournamentID, ProgramID: p2},
+		}
+
+		// Все пары уже сыграны
+		playedPairs := map[string]struct{}{
+			p1.String() + "|" + p2.String(): {},
+			p2.String() + "|" + p1.String(): {},
+		}
+
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 2, domain.PriorityMedium, playedPairs)
 		require.NoError(t, err)
 		assert.Len(t, matches, 0)
 	})
@@ -2889,7 +2961,7 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_RunAllMatches_GameWithLessThan2Participants(t *testing.T) {
-	service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestService(t)
+	service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2906,12 +2978,13 @@ func TestService_RunAllMatches_GameWithLessThan2Participants(t *testing.T) {
 	}
 
 	distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
-	// No pending matches -- triggers new round generation.
+	// No pending matches -- triggers reset + new round generation.
 	matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).Return([]*domain.Match{}, nil)
 	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
 	tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).Return(map[string][]*domain.TournamentParticipant{
 		"solo_game": singleParticipant,
 	}, nil)
+	gameRepo.On("ResetGameByType", ctx, tournamentID, "solo_game").Return(nil)
 	// EnqueueBatch is called with an empty slice (no matches generated).
 	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 
