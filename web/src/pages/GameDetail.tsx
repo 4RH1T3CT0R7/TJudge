@@ -515,7 +515,7 @@ export function GameDetail() {
                     <span className="text-sm font-medium">Турнир ещё не начался</span>
                   </div>
                   <p className="text-xs text-yellow-400 mt-1">
-                    Вы можете загружать программы до начала турнира
+                    Загрузка программ будет доступна после начала турнира
                   </p>
                 </div>
               )}
