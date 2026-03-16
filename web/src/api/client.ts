@@ -338,6 +338,29 @@ class ApiClient {
     return data;
   }
 
+  async setAutoRound(
+    tournamentId: string,
+    gameId: string,
+    enabled: boolean,
+    intervalSeconds: number
+  ): Promise<{ enabled: boolean; interval_seconds: number }> {
+    const { data } = await this.client.post(
+      `/tournaments/${tournamentId}/games/${gameId}/auto-round`,
+      { enabled, interval_seconds: intervalSeconds }
+    );
+    return data;
+  }
+
+  async getAutoRound(
+    tournamentId: string,
+    gameId: string
+  ): Promise<{ enabled: boolean; interval_seconds: number; last_run_at: string | null }> {
+    const { data } = await this.client.get(
+      `/tournaments/${tournamentId}/games/${gameId}/auto-round`
+    );
+    return data;
+  }
+
   // Team endpoints
   async createTeam(tournamentId: string, name: string): Promise<Team> {
     const { data } = await this.client.post<Team>('/teams', { tournament_id: tournamentId, name });

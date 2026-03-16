@@ -73,6 +73,11 @@ type TeamMembershipChecker interface {
 	IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error)
 }
 
+// AutoRoundChecker интерфейс для проверки статуса авто-раунда
+type AutoRoundChecker interface {
+	IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
 	programRepo      ProgramRepository
@@ -83,6 +88,7 @@ type ProgramHandler struct {
 	matchChecker     MatchExistenceChecker
 	roundChecker     RoundCompletionChecker
 	teamChecker      TeamMembershipChecker
+	autoRoundChecker AutoRoundChecker
 	uploadDir        string
 	maxFileSize      int64
 	log              *logger.Logger
@@ -98,6 +104,7 @@ func NewProgramHandler(
 	matchChecker MatchExistenceChecker,
 	roundChecker RoundCompletionChecker,
 	teamChecker TeamMembershipChecker,
+	autoRoundChecker AutoRoundChecker,
 	uploadDir string,
 	log *logger.Logger,
 ) *ProgramHandler {
@@ -118,6 +125,7 @@ func NewProgramHandler(
 		matchChecker:     matchChecker,
 		roundChecker:     roundChecker,
 		teamChecker:      teamChecker,
+		autoRoundChecker: autoRoundChecker,
 		uploadDir:        uploadDir,
 		maxFileSize:      10 * 1024 * 1024, // 10MB
 		log:              log,
@@ -276,49 +284,59 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Проверяем, завершён ли раунд для этой игры (блокировка загрузки после завершения раунда)
-	if h.roundChecker != nil {
-		roundCompleted, err := h.roundChecker.IsRoundCompleted(r.Context(), tournamentID, gameID)
-		if err != nil {
-			h.log.LogError("Failed to check round completion", err,
-				zap.String("tournament_id", tournamentID.String()),
-				zap.String("game_id", gameID.String()),
-			)
-			// Продолжаем, если не можем проверить статус раунда
-		} else if roundCompleted {
-			h.log.Info("Upload blocked: round already completed",
-				zap.String("tournament_id", tournamentID.String()),
-				zap.String("game_id", gameID.String()),
-			)
-			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже завершён для этой игры"))
-			return
-		}
+	// Проверяем, включён ли авто-раунд для этой игры
+	autoRoundEnabled := false
+	if h.autoRoundChecker != nil {
+		autoRoundEnabled, _ = h.autoRoundChecker.IsAutoRoundEnabled(r.Context(), tournamentID, gameID)
 	}
 
-	// Проверяем, не выполняются ли матчи для ЛЮБОЙ игры в турнире
-	// Пока идёт раунд одной игры, загрузка программ для всех игр заблокирована
-	if h.matchChecker != nil {
-		hasRunning, err := h.matchChecker.HasAnyRunningMatches(r.Context(), tournamentID)
-		if err != nil {
-			h.log.LogError("Failed to check running matches", err)
-			writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
-			return
+	// В авто-режиме загрузка НЕ блокируется матчами — новая программа будет подхвачена в следующем раунде.
+	// В ручном режиме — сохраняем оригинальную логику блокировки.
+	if !autoRoundEnabled {
+		// Проверяем, завершён ли раунд для этой игры (блокировка загрузки после завершения раунда)
+		if h.roundChecker != nil {
+			roundCompleted, err := h.roundChecker.IsRoundCompleted(r.Context(), tournamentID, gameID)
+			if err != nil {
+				h.log.LogError("Failed to check round completion", err,
+					zap.String("tournament_id", tournamentID.String()),
+					zap.String("game_id", gameID.String()),
+				)
+				// Продолжаем, если не можем проверить статус раунда
+			} else if roundCompleted {
+				h.log.Info("Upload blocked: round already completed",
+					zap.String("tournament_id", tournamentID.String()),
+					zap.String("game_id", gameID.String()),
+				)
+				writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже завершён для этой игры"))
+				return
+			}
 		}
 
-		if hasRunning {
-			// Получаем название активной игры для информативного сообщения
-			activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
-			h.log.Info("Upload blocked: matches running for another game",
-				zap.String("tournament_id", tournamentID.String()),
-				zap.String("game_id", gameID.String()),
-				zap.String("active_game", activeGame),
-			)
-			if activeGame != "" {
-				writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("загрузка программ запрещена: выполняется раунд игры '%s'", activeGame)))
-			} else {
-				writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: выполняется раунд"))
+		// Проверяем, не выполняются ли матчи для ЛЮБОЙ игры в турнире
+		// Пока идёт раунд одной игры, загрузка программ для всех игр заблокирована
+		if h.matchChecker != nil {
+			hasRunning, err := h.matchChecker.HasAnyRunningMatches(r.Context(), tournamentID)
+			if err != nil {
+				h.log.LogError("Failed to check running matches", err)
+				writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
+				return
 			}
-			return
+
+			if hasRunning {
+				// Получаем название активной игры для информативного сообщения
+				activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
+				h.log.Info("Upload blocked: matches running for another game",
+					zap.String("tournament_id", tournamentID.String()),
+					zap.String("game_id", gameID.String()),
+					zap.String("active_game", activeGame),
+				)
+				if activeGame != "" {
+					writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("загрузка программ запрещена: выполняется раунд игры '%s'", activeGame)))
+				} else {
+					writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: выполняется раунд"))
+				}
+				return
+			}
 		}
 	}
 

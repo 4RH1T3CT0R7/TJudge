@@ -124,7 +124,7 @@ func setupTestServer(b *testing.B) {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
-	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, nil, nil, nil, nil, "", log)
+	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, nil, nil, log)
 	gameHandler := handlers.NewGameHandler(gameService, nil, nil, nil, nil, nil, log)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)

@@ -194,6 +194,8 @@ func (s *Server) setupRoutes() {
 					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
 					r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
 					r.Post("/{id}/games/{gameId}/reset-round", s.gameHandler.ResetGameRound)
+					r.Post("/{id}/games/{gameId}/auto-round", s.gameHandler.SetAutoRound)
+					r.Get("/{id}/games/{gameId}/auto-round", s.gameHandler.GetAutoRound)
 					r.Post("/{id}/active-game", s.gameHandler.SetActiveGame)
 					r.Post("/{id}/games/deactivate-all", s.gameHandler.DeactivateAllGames)
 					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)

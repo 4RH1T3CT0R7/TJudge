@@ -192,6 +192,16 @@ func main() {
 	gameService := game.NewService(gameRepo, log)
 	teamService := team.NewService(teamRepo, tournamentRepo, log)
 
+	// Авто-раунд планировщик
+	autoRoundScheduler := tournament.NewAutoRoundScheduler(
+		tournamentService,
+		gameRepo,
+		distributedLock,
+		log,
+		5*time.Second,
+	)
+	autoRoundScheduler.Start(ctx)
+
 	// Создаём адаптеры для репозиториев (для game handler)
 	// tournamentRepo уже реализует GetLeaderboardByGameType
 	// matchRepo уже реализует List
@@ -209,6 +219,7 @@ func main() {
 		programRepo, tournamentRepo, tournamentRepo,
 		matchScheduler, gameService, matchRepo, gameRepo,
 		teamRepo,
+		gameRepo, // autoRoundChecker
 		cfg.Storage.ProgramsPath, log,
 	)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
@@ -301,6 +312,9 @@ func main() {
 			log.Error("Metrics server forced to shutdown", zap.Error(err))
 		}
 	}
+
+	// Останавливаем авто-раунд планировщик
+	autoRoundScheduler.Stop()
 
 	// Останавливаем Redis event subscriber
 	redisEventSub.Stop()

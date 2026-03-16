@@ -72,7 +72,7 @@ cd web && npm run dev
 | `make dev` | API с hot reload (air) |
 | `make run-api` | Запуск API сервера |
 | `make run-worker` | Запуск воркера |
-| `make test` | Unit тесты (~1350 в 25 пакетах) |
+| `make test` | Unit тесты (~970 в internal/ + table-driven subtests) |
 | `make test-race` | Тесты с детектором гонок |
 | `make test-coverage` | Тесты с покрытием |
 | `make lint` | Линтер (golangci-lint) |
@@ -111,47 +111,87 @@ npm run preview    # Предпросмотр сборки
 
 ### Переменные окружения (.env)
 
+> **Примечание:** Конфигурация загружается через `godotenv` + `os.Getenv()` (см. `internal/config/config.go`).
+> Файл `config.example.yaml` существует в корне проекта как справочник по структуре, но загрузка YAML **не реализована** -- используются только переменные окружения.
+> Для секретов в production поддерживается суффикс `_FILE` (Docker secrets) для переменных `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`.
+
 ```bash
-# Окружение
-ENVIRONMENT=development
+# ─── Окружение ────────────────────────────────────────
+ENVIRONMENT=development        # development | production
 
-# API Server
-API_PORT=8080
-BASE_URL=http://localhost:8080
+# ─── API Server ───────────────────────────────────────
+API_PORT=8080                  # Порт HTTP сервера
+BASE_URL=http://localhost:8080 # Базовый URL (для ссылок-приглашений и др.)
+READ_TIMEOUT=30s               # Таймаут чтения запроса
+WRITE_TIMEOUT=30s              # Таймаут записи ответа
+SHUTDOWN_TIMEOUT=10s           # Таймаут graceful shutdown
 
-# PostgreSQL
+# ─── PostgreSQL ───────────────────────────────────────
 DB_HOST=localhost
-DB_PORT=5433          # 5433 чтобы избежать конфликта с локальным PG
+DB_PORT=5432                   # Внутренний порт PostgreSQL (по умолчанию 5432).
+                               # Docker Compose маппит 5432 -> 5433 на хосте,
+                               # поэтому при локальной разработке используйте DB_PORT=5433
 DB_USER=tjudge
-DB_PASSWORD=secret
+DB_PASSWORD=secret             # Поддерживает Docker secrets: DB_PASSWORD_FILE
 DB_NAME=tjudge
-DB_MAX_CONNECTIONS=50
+DB_SSLMODE=disable             # disable | require | verify-full
+DB_MAX_CONNECTIONS=50          # Максимальное количество соединений
+DB_MAX_IDLE=10                 # Максимальное количество idle-соединений
+DB_MAX_LIFETIME=1h             # Максимальное время жизни соединения
 
-# Redis
+# ─── Redis ────────────────────────────────────────────
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_POOL_SIZE=100
+REDIS_PASSWORD=                # Поддерживает Docker secrets: REDIS_PASSWORD_FILE
+REDIS_DB=0                     # Номер базы данных Redis
+REDIS_POOL_SIZE=100            # Размер пула соединений
 
-# Worker Pool
-WORKER_MIN=2
-WORKER_MAX=100
-WORKER_TIMEOUT=60s
+# ─── Worker Pool ──────────────────────────────────────
+WORKER_MIN=10                  # Минимальное количество воркеров (по умолчанию 10)
+WORKER_MAX=1000                # Максимальное количество воркеров (по умолчанию 1000)
+WORKER_QUEUE_SIZE=10000        # Размер внутренней очереди
+WORKER_TIMEOUT=90s             # Таймаут обработки матча
+WORKER_RETRY_ATTEMPTS=3        # Количество повторных попыток
+WORKER_RETRY_DELAY=5s          # Задержка между попытками
 
-# JWT (ОБЯЗАТЕЛЬНО измените в production!)
-JWT_SECRET=your-secret-key-minimum-32-characters
-JWT_ACCESS_TTL=1h
-JWT_REFRESH_TTL=168h
+# ─── Executor (Docker-контейнер для матчей) ───────────
+EXECUTOR_DOCKER_IMAGE=tjudge-cli:latest
+EXECUTOR_TIMEOUT=60s           # Таймаут выполнения матча
+EXECUTOR_CPU_QUOTA=100000      # Лимит CPU (микросекунды на 100ms)
+EXECUTOR_MEMORY_LIMIT=536870912  # Лимит памяти: 512MB
+EXECUTOR_PIDS_LIMIT=100        # Лимит процессов в контейнере
+EXECUTOR_NETWORK_DISABLED=true # Отключить сеть в контейнере
+EXECUTOR_DEFAULT_ITERATIONS=100 # Количество итераций по умолчанию
 
-# Хранилище программ
-PROGRAMS_PATH=/data/programs
+# ─── JWT (ОБЯЗАТЕЛЬНО измените в production!) ─────────
+JWT_SECRET=your-secret-key-minimum-32-characters  # Поддерживает Docker secrets: JWT_SECRET_FILE
+JWT_ACCESS_TTL=24h             # Время жизни access-токена (по умолчанию 24 часа)
+JWT_REFRESH_TTL=168h           # Время жизни refresh-токена (по умолчанию 7 дней)
 
-# Логирование
-LOG_LEVEL=info        # debug, info, warn, error
-LOG_FORMAT=json       # json, console
+# ─── Хранилище программ ──────────────────────────────
+PROGRAMS_PATH=/data/programs   # Путь хранения загруженных программ
+HOST_PROGRAMS_PATH=            # Путь на хосте для Docker-in-Docker (если пусто, используется PROGRAMS_PATH)
+MAX_FILE_SIZE=10485760         # Максимальный размер файла: 10MB
 
-# Метрики
+# ─── CORS ─────────────────────────────────────────────
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+CORS_MAX_AGE=3600              # Время кэширования preflight-запросов (секунды)
+
+# ─── Rate Limiting ────────────────────────────────────
+RATE_LIMIT_ENABLED=false       # Отключён по умолчанию для разработки
+RATE_LIMIT_RPM=100             # Запросов в минуту
+RATE_LIMIT_BURST=200           # Допустимый burst
+
+# ─── Логирование ─────────────────────────────────────
+LOG_LEVEL=info                 # debug, info, warn, error
+LOG_FORMAT=json                # json, console
+LOG_OUTPUT=stdout              # stdout, stderr, путь к файлу
+LOG_ASYNC=true                 # Асинхронное логирование (рекомендуется для production)
+
+# ─── Метрики ─────────────────────────────────────────
 METRICS_ENABLED=true
 METRICS_PORT=9090
+METRICS_PATH=/metrics
 ```
 
 ---
@@ -374,20 +414,5 @@ docker scan tjudge-api:latest
 
 ---
 
-## Kubernetes
-
-Конфигурации для Kubernetes находятся в `deployments/k8s/`.
-
-```bash
-# Применение конфигов
-kubectl apply -f deployments/k8s/
-
-# Проверка статуса
-kubectl get pods -n tjudge
-kubectl get services -n tjudge
-```
-
----
-
-*Версия документации: 3.0*
+*Версия документации: 3.1*
 *Последнее обновление: Март 2026*

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -308,7 +309,8 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	var tg domain.TournamentGame
 
 	query := `
-		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
+		       COALESCE(auto_round_enabled, false), COALESCE(auto_round_interval_seconds, 60), auto_round_last_run_at, created_at
 		FROM tournament_games
 		WHERE tournament_id = $1 AND game_id = $2
 	`
@@ -320,6 +322,9 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 		&tg.RoundCompleted,
 		&tg.RoundCompletedAt,
 		&tg.CurrentRound,
+		&tg.AutoRoundEnabled,
+		&tg.AutoRoundIntervalSecs,
+		&tg.AutoRoundLastRunAt,
 		&tg.CreatedAt,
 	)
 
@@ -336,7 +341,8 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 // GetTournamentGames получает все связи турнира с играми
 func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
 	query := `
-		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0), tg.created_at
+		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0),
+		       COALESCE(tg.auto_round_enabled, false), COALESCE(tg.auto_round_interval_seconds, 60), tg.auto_round_last_run_at, tg.created_at
 		FROM tournament_games tg
 		INNER JOIN games g ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
@@ -360,6 +366,9 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 			&tg.RoundCompleted,
 			&tg.RoundCompletedAt,
 			&tg.CurrentRound,
+			&tg.AutoRoundEnabled,
+			&tg.AutoRoundIntervalSecs,
+			&tg.AutoRoundLastRunAt,
 			&tg.CreatedAt,
 		)
 		if err != nil {
@@ -385,7 +394,10 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 		       COALESCE(tg.is_active, false) AS is_active,
 		       COALESCE(tg.round_completed, false) AS round_completed,
 		       tg.round_completed_at,
-		       COALESCE(tg.current_round, 0) AS current_round
+		       COALESCE(tg.current_round, 0) AS current_round,
+		       COALESCE(tg.auto_round_enabled, false) AS auto_round_enabled,
+		       COALESCE(tg.auto_round_interval_seconds, 60) AS auto_round_interval_seconds,
+		       tg.auto_round_last_run_at
 		FROM tournament_games tg
 		INNER JOIN games g ON g.id = tg.game_id
 		WHERE tg.tournament_id = $1
@@ -410,6 +422,9 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 			&d.RoundCompleted,
 			&d.RoundCompletedAt,
 			&d.CurrentRound,
+			&d.AutoRoundEnabled,
+			&d.AutoRoundIntervalSecs,
+			&d.AutoRoundLastRunAt,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan tournament game with details")
@@ -553,7 +568,8 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 	var tg domain.TournamentGame
 
 	query := `
-		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0), created_at
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
+		       COALESCE(auto_round_enabled, false), COALESCE(auto_round_interval_seconds, 60), auto_round_last_run_at, created_at
 		FROM tournament_games
 		WHERE tournament_id = $1 AND is_active = true
 	`
@@ -565,6 +581,9 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 		&tg.RoundCompleted,
 		&tg.RoundCompletedAt,
 		&tg.CurrentRound,
+		&tg.AutoRoundEnabled,
+		&tg.AutoRoundIntervalSecs,
+		&tg.AutoRoundLastRunAt,
 		&tg.CreatedAt,
 	)
 
@@ -762,4 +781,136 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 
 		return nil
 	})
+}
+
+// ========== Auto-Round методы ==========
+
+// GetAutoRoundEnabledGames возвращает все игры с включённым авто-раундом в активных турнирах
+func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error) {
+	query := `
+		SELECT tg.tournament_id, tg.game_id, g.name AS game_type,
+		       tg.auto_round_interval_seconds, tg.auto_round_last_run_at
+		FROM tournament_games tg
+		JOIN games g ON g.id = tg.game_id
+		JOIN tournaments t ON t.id = tg.tournament_id
+		WHERE tg.auto_round_enabled = true AND t.status = 'active'
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get auto-round enabled games")
+	}
+	defer rows.Close()
+
+	var results []*domain.AutoRoundGameInfo
+	for rows.Next() {
+		var g domain.AutoRoundGameInfo
+		if err := rows.Scan(&g.TournamentID, &g.GameID, &g.GameType, &g.IntervalSeconds, &g.LastRunAt); err != nil {
+			return nil, errors.Wrap(err, "failed to scan auto-round game info")
+		}
+		results = append(results, &g)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error in auto-round games: %w", err)
+	}
+
+	return results, nil
+}
+
+// UpdateAutoRoundLastRun обновляет время последнего запуска авто-раунда
+func (r *GameRepository) UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	query := `
+		UPDATE tournament_games
+		SET auto_round_last_run_at = NOW()
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	_, err := r.db.ExecContext(ctx, query, tournamentID, gameID)
+	if err != nil {
+		return errors.Wrap(err, "failed to update auto-round last run")
+	}
+
+	return nil
+}
+
+// SetAutoRound включает или выключает авто-раунд для игры в турнире
+func (r *GameRepository) SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error {
+	query := `
+		UPDATE tournament_games
+		SET auto_round_enabled = $3, auto_round_interval_seconds = $4
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, tournamentID, gameID, enabled, intervalSecs)
+	if err != nil {
+		return errors.Wrap(err, "failed to set auto-round")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("tournament game not found")
+	}
+
+	return nil
+}
+
+// IsAutoRoundEnabled проверяет, включён ли авто-раунд для игры в турнире
+func (r *GameRepository) IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
+	var enabled bool
+	query := `
+		SELECT COALESCE(auto_round_enabled, false)
+		FROM tournament_games
+		WHERE tournament_id = $1 AND game_id = $2
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&enabled)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check auto-round status")
+	}
+
+	return enabled, nil
+}
+
+// HasNewProgramsSince проверяет, есть ли новые программы для игры после указанного времени
+func (r *GameRepository) HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM programs p
+			JOIN games g ON g.id = p.game_id
+			WHERE p.tournament_id = $1 AND g.name = $2 AND p.created_at > $3
+		)
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType, since).Scan(&exists)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check new programs")
+	}
+
+	return exists, nil
+}
+
+// HasActiveMatchesForGame проверяет, есть ли pending/running матчи для конкретной игры в турнире
+func (r *GameRepository) HasActiveMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM matches
+			WHERE tournament_id = $1 AND game_type = $2 AND status IN ('pending', 'running')
+		)
+	`
+
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType).Scan(&exists)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check active matches for game")
+	}
+
+	return exists, nil
 }

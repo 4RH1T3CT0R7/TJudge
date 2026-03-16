@@ -87,6 +87,11 @@ type GameRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error
+	// Auto-round
+	GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error)
+	UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error
+	HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error)
+	HasActiveMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error)
 }
 
 // Service - сервис управления турнирами

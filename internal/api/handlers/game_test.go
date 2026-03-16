@@ -1104,6 +1104,18 @@ func (m *MockTournamentGameStatusRepository) DeactivateAllGames(ctx context.Cont
 	return m.Called(ctx, tournamentID).Error(0)
 }
 
+func (m *MockTournamentGameStatusRepository) SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error {
+	return m.Called(ctx, tournamentID, gameID, enabled, intervalSecs).Error(0)
+}
+
+func (m *MockTournamentGameStatusRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
+	args := m.Called(ctx, tournamentID, gameID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+}
+
 func newGameHandlerWithAllRepos(t *testing.T) (
 	*GameHandler,
 	*MockGameService,

@@ -8,54 +8,52 @@
 ├─────────────┤       ├──────────────┤       ├─────────────────┤
 │ id (PK)     │◄──────│ leader_id    │       │ id (PK)         │
 │ username    │       │ id (PK)      │◄──┐   │ name            │
-│ email       │       │ tournament_id│───┼──▶│ description     │
+│ email       │       │ tournament_id│───┼──▶│ game_type       │
 │ password    │       │ name         │   │   │ status          │
-│ role        │       │ invite_code  │   │   │ max_team_size   │
+│ role        │       │ invite_code  │   │   │ max_participants│
 │ created_at  │       │ created_at   │   │   │ created_at      │
-│ updated_at  │       └──────────────┘   │   │ started_at      │
-└─────────────┘                          │   │ completed_at    │
-                                         │   └─────────────────┘
-┌─────────────┐                          │
-│    games    │                          │
-├─────────────┤       ┌──────────────────┴────────────────┐
-│ id (PK)     │◄──────│          tournament_games         │
-│ slug        │       ├───────────────────────────────────┤
-│ name        │       │ tournament_id (FK, PK)            │
-│ rules       │       │ game_id (FK, PK)                  │
-│ score_mult  │       │ is_active                         │
-│ created_at  │       │ round_status                      │
-└─────────────┘       │ round_number                      │
-                      └───────────────────────────────────┘
+│ updated_at  │       └──────────────┘   │   │ updated_at      │
+└─────────────┘                          │   └─────────────────┘
+                                         │
+┌────────────────┐                       │
+│     games     │                       │
+├────────────────┤    ┌──────────────────┴────────────────┐
+│ id (PK)        │◄───│       tournament_games            │
+│ name           │    ├───────────────────────────────────┤
+│ display_name   │    │ tournament_id (FK, PK)            │
+│ rules          │    │ game_id (FK, PK)                  │
+│ score_mult     │    │ is_active                         │
+│ created_at     │    │ round_completed                   │
+│ updated_at     │    │ current_round                     │
+└────────────────┘    └───────────────────────────────────┘
 
-┌──────────────┐       ┌───────────────────┐
-│   programs   │       │      matches      │
-├──────────────┤       ├───────────────────┤
-│ id (PK)      │◄──────│ program1_id (FK)  │
-│ team_id (FK) │       │ program2_id (FK)  │
-│ game_id (FK) │       │ id (PK)           │
-│ name         │       │ tournament_id (FK)│
-│ language     │       │ game_id (FK)      │
-│ file_path    │       │ winner_id (FK)    │
-│ status       │       │ status            │
-│ created_at   │       │ score1, score2    │
-│ updated_at   │       │ round_number      │
-└──────────────┘       │ error_code        │
-                       │ error_message     │
-                       │ created_at        │
-                       │ completed_at      │
-                       │ version           │
-                       └───────────────────┘
+┌──────────────────┐       ┌───────────────────┐
+│    programs      │       │      matches      │
+├──────────────────┤       ├───────────────────┤
+│ id (PK)          │◄──────│ program1_id (FK)  │
+│ user_id (FK)     │       │ program2_id (FK)  │
+│ team_id (FK)     │       │ id (PK)           │
+│ tournament_id(FK)│       │ tournament_id (FK)│
+│ game_id (FK)     │       │ game_type         │
+│ name             │       │ status            │
+│ game_type        │       │ priority          │
+│ language         │       │ score1, score2    │
+│ version          │       │ winner            │
+│ created_at       │       │ error_message     │
+│ updated_at       │       │ created_at        │
+└──────────────────┘       │ completed_at      │
+                           └───────────────────┘
 
-┌───────────────────┐
-│   rating_history  │
-├───────────────────┤
-│ id (PK)           │
-│ team_id (FK)      │
-│ game_id (FK)      │
-│ tournament_id (FK)│
-│ rating            │
-│ wins, losses      │
-│ draws             │
+┌───────────────────┐       ┌───────────────────────────┐
+│   rating_history  │       │  tournament_participants  │
+├───────────────────┤       ├───────────────────────────┤
+│ id (PK)           │       │ id (PK)                   │
+│ program_id (FK)   │       │ tournament_id (FK)        │
+│ tournament_id (FK)│       │ program_id (FK)           │
+│ old_rating        │       │ rating                    │
+│ new_rating        │       │ wins, losses, draws       │
+│ change            │       │ created_at                │
+│ match_id (FK)     │       └───────────────────────────┘
 │ created_at        │
 └───────────────────┘
 ```
@@ -81,14 +79,24 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| slug | VARCHAR(100) | UNIQUE, NOT NULL | Идентификатор (snake_case) |
-| name | VARCHAR(200) | NOT NULL | Отображаемое название |
+| name | VARCHAR(50) | UNIQUE, NOT NULL | Идентификатор (snake_case, `^[a-z0-9_]+$`) |
+| display_name | VARCHAR(255) | NOT NULL | Отображаемое название |
 | rules | TEXT | | Правила игры (Markdown) |
-| score_multiplier | DECIMAL(5,2) | DEFAULT 1.0 | Множитель очков |
-| created_at | TIMESTAMPTZ | NOT NULL | Время создания |
-| updated_at | TIMESTAMPTZ | NOT NULL | Время обновления |
+| score_multiplier | DECIMAL(10,2) | DEFAULT 1.0 | Множитель очков для балансировки лидерборда |
+| created_at | TIMESTAMP | NOT NULL | Время создания |
+| updated_at | TIMESTAMP | NOT NULL | Время обновления |
 
-Индексы: `idx_games_slug`
+Индексы: `idx_games_name`
+
+**Доступные игры (5 шт.):**
+
+| name | display_name | score_multiplier | Описание |
+|------|-------------|------------------|----------|
+| `prisoners_dilemma` | Дилемма заключённого | 1.0 | Классическая игра: COOPERATE или DEFECT |
+| `tug_of_war` | Перетягивание каната | 10.0 | Управление энергией, одновременные ставки |
+| `travelers_dilemma` | Дилемма путешественника | 0.05 | Заявки в диапазоне [L, U] с бонусом/штрафом |
+| `public_goods` | Общественное благо | 0.1 | Вклад в общий пул с множителем |
+| `dollar_auction` | Аукцион двойной цены | 1.0 | Поочерёдные ставки, оба платят |
 
 ### tournaments
 
@@ -150,59 +158,82 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| team_id | UUID | FK → teams | Команда-владелец |
-| game_id | UUID | FK → games | Игра |
+| user_id | UUID | FK → users, NOT NULL | Автор программы |
 | name | VARCHAR(100) | NOT NULL | Название программы |
-| language | VARCHAR(20) | NOT NULL | python, go, cpp, java, js, rust |
-| file_path | VARCHAR(500) | NOT NULL | Путь к файлу |
-| status | VARCHAR(20) | DEFAULT 'pending' | pending, compiling, ready, error |
-| error_message | TEXT | | Сообщение об ошибке |
-| created_at | TIMESTAMPTZ | NOT NULL | Время создания |
-| updated_at | TIMESTAMPTZ | NOT NULL | Время обновления |
+| game_type | VARCHAR(50) | NOT NULL | Тип игры (совпадает с `games.name`) |
+| code_path | TEXT | NOT NULL | Путь к исходному коду |
+| language | VARCHAR(50) | NOT NULL | python, go, cpp, java, js, rust |
+| team_id | UUID | FK → teams, NULL | Команда-владелец |
+| tournament_id | UUID | FK → tournaments, NULL | Турнир |
+| game_id | UUID | FK → games, NULL | Ссылка на игру |
+| file_path | VARCHAR(500) | NULL | Путь к скомпилированному файлу |
+| error_message | TEXT | NULL | Сообщение об ошибке |
+| version | INT | NOT NULL | Версия программы |
+| created_at | TIMESTAMP | NOT NULL | Время создания |
+| updated_at | TIMESTAMP | NOT NULL | Время обновления |
 
-Индексы: `idx_programs_team`, `idx_programs_game`
-Уникальность: `(team_id, game_id)` — одна программа на игру от команды
+Индексы: `idx_programs_user_id`, `idx_programs_game_type`, `idx_programs_user_game`
+Уникальность: `(team_id, game_id, version)` — уникальная версия программы на игру от команды
 
 ### matches
 
-Партиционирована по `created_at` (помесячно).
+Партиционирована по `created_at` (помесячно). Партиции создаются автоматически функцией `create_matches_partition_if_needed()`.
 
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
-| id | UUID | PK | Уникальный идентификатор |
-| tournament_id | UUID | FK → tournaments | Турнир |
-| game_id | UUID | FK → games | Игра |
-| program1_id | UUID | FK → programs | Первый игрок |
-| program2_id | UUID | FK → programs | Второй игрок |
-| winner_id | UUID | FK → programs, NULL | Победитель (null = ничья) |
-| status | VARCHAR(20) | NOT NULL | pending, running, completed, failed |
-| score1 | INT | | Очки первого игрока |
-| score2 | INT | | Очки второго игрока |
-| round_number | INT | DEFAULT 0 | Номер раунда |
-| error_code | VARCHAR(50) | | Код ошибки |
-| error_message | TEXT | | Сообщение об ошибке |
-| created_at | TIMESTAMPTZ | NOT NULL | Время создания |
-| started_at | TIMESTAMPTZ | | Время старта |
-| completed_at | TIMESTAMPTZ | | Время завершения |
-| version | INT | DEFAULT 1 | Optimistic lock |
+| id | UUID | PK (совместный с created_at) | Уникальный идентификатор |
+| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
+| program1_id | UUID | FK → programs, NOT NULL | Первый игрок |
+| program2_id | UUID | FK → programs, NOT NULL | Второй игрок |
+| game_type | VARCHAR(50) | NOT NULL | Тип игры (совпадает с `games.name`) |
+| status | VARCHAR(20) | NOT NULL, DEFAULT 'pending' | pending, running, completed, failed |
+| priority | VARCHAR(10) | NOT NULL, DEFAULT 'medium' | high, medium, low |
+| score1 | INT | NULL | Очки первого игрока |
+| score2 | INT | NULL | Очки второго игрока |
+| winner | INT | NULL, CHECK (0, 1, 2) | 0 = ничья, 1 = program1, 2 = program2 |
+| error_message | TEXT | NULL | Сообщение об ошибке |
+| started_at | TIMESTAMP | NULL | Время старта |
+| completed_at | TIMESTAMP | NULL | Время завершения |
+| created_at | TIMESTAMP | NOT NULL | Время создания (ключ партиционирования) |
 
-Индексы: `idx_matches_tournament`, `idx_matches_game`, `idx_matches_status`, `idx_matches_programs`
+Первичный ключ: `(id, created_at)`
+
+Индексы: `idx_matches_tournament`, `idx_matches_status`, `idx_matches_priority_created`, `idx_matches_program1`, `idx_matches_program2`, `idx_matches_game_type`
 
 ### rating_history
 
+Партиционирована по `created_at` (помесячно). Партиции создаются автоматически функцией `create_rating_history_partition_if_needed()`.
+
+| Поле | Тип | Ограничения | Описание |
+|------|-----|-------------|----------|
+| id | UUID | PK (совместный с created_at) | Уникальный идентификатор |
+| program_id | UUID | FK → programs, NOT NULL | Программа |
+| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
+| old_rating | INT | NOT NULL | Рейтинг до матча |
+| new_rating | INT | NOT NULL | Рейтинг после матча |
+| change | INT | NOT NULL | Изменение рейтинга (дельта) |
+| match_id | UUID | NULL | Матч, вызвавший изменение |
+| created_at | TIMESTAMP | NOT NULL | Время записи (ключ партиционирования) |
+
+Первичный ключ: `(id, created_at)`
+
+Индексы: `idx_rating_history_program`, `idx_rating_history_tournament`, `idx_rating_history_match`
+
+### tournament_participants
+
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| team_id | UUID | FK → teams | Команда |
-| game_id | UUID | FK → games | Игра |
-| tournament_id | UUID | FK → tournaments | Турнир |
-| rating | INT | DEFAULT 1500 | Текущий рейтинг ELO |
-| wins | INT | DEFAULT 0 | Победы |
-| losses | INT | DEFAULT 0 | Поражения |
-| draws | INT | DEFAULT 0 | Ничьи |
-| created_at | TIMESTAMPTZ | NOT NULL | Время записи |
+| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
+| program_id | UUID | FK → programs, NOT NULL | Программа участника |
+| rating | INT | NOT NULL, DEFAULT 1500 | Текущий рейтинг ELO |
+| wins | INT | NOT NULL, DEFAULT 0 | Победы |
+| losses | INT | NOT NULL, DEFAULT 0 | Поражения |
+| draws | INT | NOT NULL, DEFAULT 0 | Ничьи |
+| created_at | TIMESTAMP | NOT NULL | Время регистрации |
 
-Индексы: `idx_rating_team_game`, `idx_rating_tournament`
+Уникальность: `(tournament_id, program_id)`
+Индексы: `idx_tournament_participants_tournament`, `idx_tournament_participants_program`, `idx_tournament_participants_rating`
 
 ### refresh_tokens
 
@@ -220,32 +251,48 @@
 
 ### leaderboard_tournament
 
+Обновлено в миграции 000027 с поддержкой тайбрейка по времени загрузки программы.
+
 ```sql
 CREATE MATERIALIZED VIEW leaderboard_tournament AS
 SELECT
-    rh.tournament_id,
-    rh.game_id,
-    rh.team_id,
-    t.name as team_name,
-    rh.rating,
-    rh.wins,
-    rh.losses,
-    rh.draws,
-    RANK() OVER (
-        PARTITION BY rh.tournament_id, rh.game_id
-        ORDER BY rh.rating DESC, rh.wins DESC
-    ) as rank
-FROM rating_history rh
-JOIN teams t ON rh.team_id = t.id
-WHERE rh.id IN (
-    SELECT DISTINCT ON (team_id, game_id, tournament_id)
-           id
-    FROM rating_history
-    ORDER BY team_id, game_id, tournament_id, created_at DESC
-);
-
-CREATE UNIQUE INDEX ON leaderboard_tournament (tournament_id, game_id, team_id);
+    tp.tournament_id,
+    tp.program_id,
+    p.name AS program_name,
+    p.user_id,
+    u.username,
+    COALESCE(stats.total_score, 0) AS rating,
+    COALESCE(stats.total_matches, 0) AS total_matches,
+    COALESCE(stats.wins, 0) AS wins,
+    COALESCE(stats.losses, 0) AS losses,
+    COALESCE(stats.draws, 0) AS draws,
+    tp.created_at AS joined_at,
+    COALESCE(stats.last_match, tp.created_at) AS last_updated
+FROM tournament_participants tp
+INNER JOIN programs p ON tp.program_id = p.id
+INNER JOIN users u ON p.user_id = u.id
+LEFT JOIN LATERAL (
+    -- Агрегация статистики матчей для участника
+    SELECT COUNT(*) AS total_matches,
+           SUM(CASE WHEN ... THEN 1 ELSE 0 END) AS wins,
+           SUM(CASE WHEN ... THEN 1 ELSE 0 END) AS losses,
+           SUM(CASE WHEN m.winner = 0 THEN 1 ELSE 0 END) AS draws,
+           SUM(...) AS total_score,
+           MAX(m.completed_at) AS last_match
+    FROM matches m
+    WHERE (m.program1_id = p.id OR m.program2_id = p.id)
+      AND m.tournament_id = tp.tournament_id
+      AND m.status = 'completed'
+) stats ON true
+ORDER BY tp.tournament_id, rating DESC, wins DESC,
+    -- Тайбрейк: MIN(created_at) последних версий программ
+    COALESCE(
+        (SELECT MIN(sub_p.created_at) FROM (...) sub_p),
+        p.created_at
+    ) ASC;
 ```
+
+Индексы: `idx_leaderboard_tournament_pk (tournament_id, program_id)`, `idx_leaderboard_tournament_id (tournament_id, rating DESC)`
 
 ---
 
@@ -265,7 +312,7 @@ make migrate-create name=add_new_table
 make migrate-status
 ```
 
-Файлы миграций: `migrations/000001_*.sql` до `migrations/000022_*.sql`
+Файлы миграций: `migrations/000001_*.sql` до `migrations/000029_*.sql`
 
 **Структура миграций:**
 ```
@@ -275,9 +322,35 @@ migrations/
 ├── 000002_create_programs.up.sql
 ├── 000002_create_programs.down.sql
 ...
-├── 000022_add_score_multiplier.up.sql
-└── 000022_add_score_multiplier.down.sql
+├── 000022_add_score_multiplier_to_games.up.sql
+├── 000022_add_score_multiplier_to_games.down.sql
+├── 000023_add_unique_program_version.up.sql
+├── 000023_add_unique_program_version.down.sql
+├── 000024_add_auto_partition_function.up.sql
+├── 000024_add_auto_partition_function.down.sql
+├── 000025_add_rating_history_auto_partition.up.sql
+├── 000025_add_rating_history_auto_partition.down.sql
+├── 000026_add_tiebreak_index.up.sql
+├── 000026_add_tiebreak_index.down.sql
+├── 000027_update_leaderboard_views_tiebreak.up.sql
+├── 000027_update_leaderboard_views_tiebreak.down.sql
+├── 000028_seed_new_games.up.sql
+├── 000028_seed_new_games.down.sql
+├── 000029_update_game_rules.up.sql
+└── 000029_update_game_rules.down.sql
 ```
+
+**Миграции 023-029 (подробности):**
+
+| Миграция | Название | Описание |
+|----------|----------|----------|
+| 000023 | `add_unique_program_version` | Уникальное ограничение на версию программы (`team_id` + `game_id` + `version`). Предотвращает гонки при конкурентной загрузке. |
+| 000024 | `add_auto_partition_function` | Функция `create_matches_partition_if_needed()` для автоматического создания помесячных партиций таблицы `matches`. |
+| 000025 | `add_rating_history_auto_partition` | Функция `create_rating_history_partition_if_needed()` для автоматического создания помесячных партиций таблицы `rating_history`. |
+| 000026 | `add_tiebreak_index` | Составной индекс `idx_programs_team_tournament_game_version_desc` для эффективного вычисления тайбрейка в лидерборде. |
+| 000027 | `update_leaderboard_views_tiebreak` | Пересоздание materialized view `leaderboard_tournament` с сортировкой по тайбрейку (при равном рейтинге и числе побед -- приоритет у ранее загрузивших программу). |
+| 000028 | `seed_new_games` | Добавление 3 новых игр: `travelers_dilemma`, `public_goods`, `dollar_auction`. |
+| 000029 | `update_game_rules` | Обновление правил и протоколов взаимодействия для всех 5 игр (исправления форматов, очков, протоколов). |
 
 ---
 
@@ -347,16 +420,43 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_tournament;
 
 ---
 
+## Автопартиционирование
+
+Таблицы `matches` и `rating_history` партиционированы по `created_at` (помесячно, `PARTITION BY RANGE`). Для автоматического создания партиций используются две функции, добавленные в миграциях 000024 и 000025.
+
+### create_matches_partition_if_needed()
+
+Создаёт партиции таблицы `matches` для текущего и следующего месяца. Именование партиций: `matches_YYYY_MM`.
+
+```sql
+-- Вызов вручную (при необходимости)
+SELECT create_matches_partition_if_needed();
+```
+
+### create_rating_history_partition_if_needed()
+
+Аналогичная функция для таблицы `rating_history`. Именование партиций: `rating_history_YYYY_MM`.
+
+```sql
+-- Вызов вручную (при необходимости)
+SELECT create_rating_history_partition_if_needed();
+```
+
+**Принцип работы:** каждая функция проверяет существование партиции для текущего месяца и следующего (опережение на 1 месяц). Если партиция отсутствует, она создаётся динамически через `EXECUTE format(...)`. Это предотвращает ошибки `INSERT` при истечении заранее созданных партиций.
+
+---
+
 ## Оптимизации
 
 - **Connection pooling**: максимум 100 соединений
 - **Prepared statements** для частых запросов
-- **Партиционирование** таблицы matches (помесячно)
+- **Автопартиционирование** таблиц `matches` и `rating_history` (помесячно, с автосозданием партиций)
 - **Составные индексы** для частых фильтров
-- **Optimistic locking** для конкурентных обновлений
-- **Материализованные представления** для лидербордов с автообновлением
+- **Тайбрейк-индекс** для эффективного разрешения одинаковых рейтингов в лидерборде
+- **Уникальное ограничение версий** программ для предотвращения гонок при загрузке
+- **Материализованные представления** для лидербордов с поддержкой `REFRESH CONCURRENTLY`
 
 ---
 
-*Версия документации: 3.0*
+*Версия документации: 4.0*
 *Последнее обновление: Март 2026*

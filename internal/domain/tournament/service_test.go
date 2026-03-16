@@ -253,6 +253,28 @@ func (m *MockGameRepository) ResetGameByType(ctx context.Context, tournamentID u
 	return args.Error(0)
 }
 
+func (m *MockGameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.AutoRoundGameInfo), args.Error(1)
+}
+
+func (m *MockGameRepository) UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error {
+	return m.Called(ctx, tournamentID, gameID).Error(0)
+}
+
+func (m *MockGameRepository) HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error) {
+	args := m.Called(ctx, tournamentID, gameType, since)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockGameRepository) HasActiveMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	return args.Bool(0), args.Error(1)
+}
+
 // MockProgramRepository mocks ProgramRepository for ScheduleNewProgramMatches tests
 type MockProgramRepository struct {
 	mock.Mock

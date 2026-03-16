@@ -54,6 +54,9 @@ type TournamentGameStatusRepository interface {
 	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
+	// Auto-round
+	SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error
+	GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error)
 }
 
 // GameHandler is a facade that embeds three focused sub-handlers:

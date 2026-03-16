@@ -1578,6 +1578,42 @@ function GamesTab({
     await onResetGameRound(game.id, game.display_name);
   };
 
+  const handleToggleAutoRound = async (e: React.MouseEvent, gameId: string, currentStatus: TournamentGameWithDetails | undefined) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!tournamentId) return;
+
+    const isEnabled = currentStatus?.auto_round_enabled ?? false;
+
+    if (!isEnabled) {
+      const intervalStr = window.prompt('Интервал авто-раунда (секунды, 10-3600):', '60');
+      if (!intervalStr) return;
+      const interval = parseInt(intervalStr, 10);
+      if (isNaN(interval) || interval < 10 || interval > 3600) {
+        alert('Интервал должен быть от 10 до 3600 секунд');
+        return;
+      }
+      try {
+        await api.setAutoRound(tournamentId, gameId, true, interval);
+        // Reload status
+        const gamesStatusData = await api.getTournamentGamesStatus(tournamentId);
+        // Parent doesn't expose setter, so we rely on parent's polling or re-render
+        window.location.reload();
+      } catch (err) {
+        console.error('Failed to enable auto-round:', err);
+        alert('Не удалось включить авто-раунд');
+      }
+    } else {
+      try {
+        await api.setAutoRound(tournamentId, gameId, false, currentStatus?.auto_round_interval_seconds ?? 60);
+        window.location.reload();
+      } catch (err) {
+        console.error('Failed to disable auto-round:', err);
+        alert('Не удалось выключить авто-раунд');
+      }
+    }
+  };
+
   if (games.length === 0) {
     return (
       <div className="empty-state">
@@ -1721,6 +1757,22 @@ function GamesTab({
                           title="Сбросить раунд (удалить все матчи и рейтинги)"
                         >
                           {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
+                        </button>
+                        <button
+                          onClick={(e) => handleToggleAutoRound(e, game.id, gameStatus)}
+                          className={`btn text-xs py-1.5 px-3 ${
+                            gameStatus?.auto_round_enabled
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                              : 'bg-gray-600 hover:bg-gray-700 text-gray-200'
+                          }`}
+                          title={gameStatus?.auto_round_enabled
+                            ? `Авто-раунд: каждые ${gameStatus.auto_round_interval_seconds}с`
+                            : 'Включить авто-раунд'
+                          }
+                        >
+                          {gameStatus?.auto_round_enabled
+                            ? `Авто ✓ (${gameStatus.auto_round_interval_seconds}с)`
+                            : 'Авто'}
                         </button>
                       </div>
                     )}

@@ -170,14 +170,17 @@ func (h *GameRoundHandler) GetGamePrograms(w http.ResponseWriter, r *http.Reques
 
 // TournamentGameWithDetails contains tournament-game link info with game details.
 type TournamentGameWithDetails struct {
-	TournamentID     uuid.UUID `json:"tournament_id"`
-	GameID           uuid.UUID `json:"game_id"`
-	GameName         string    `json:"game_name"`
-	GameDisplayName  string    `json:"game_display_name"`
-	IsActive         bool      `json:"is_active"`
-	RoundCompleted   bool      `json:"round_completed"`
-	RoundCompletedAt *string   `json:"round_completed_at,omitempty"`
-	CurrentRound     int       `json:"current_round"`
+	TournamentID          uuid.UUID `json:"tournament_id"`
+	GameID                uuid.UUID `json:"game_id"`
+	GameName              string    `json:"game_name"`
+	GameDisplayName       string    `json:"game_display_name"`
+	IsActive              bool      `json:"is_active"`
+	RoundCompleted        bool      `json:"round_completed"`
+	RoundCompletedAt      *string   `json:"round_completed_at,omitempty"`
+	CurrentRound          int       `json:"current_round"`
+	AutoRoundEnabled      bool      `json:"auto_round_enabled"`
+	AutoRoundIntervalSecs int       `json:"auto_round_interval_seconds"`
+	AutoRoundLastRunAt    *string   `json:"auto_round_last_run_at,omitempty"`
 }
 
 // GetTournamentGamesWithStatus returns games with their round status.
@@ -207,17 +210,23 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 	result := make([]TournamentGameWithDetails, 0, len(details))
 	for _, d := range details {
 		item := TournamentGameWithDetails{
-			TournamentID:    d.TournamentID,
-			GameID:          d.GameID,
-			GameName:        d.GameName,
-			GameDisplayName: d.GameDisplayName,
-			IsActive:        d.IsActive,
-			RoundCompleted:  d.RoundCompleted,
-			CurrentRound:    d.CurrentRound,
+			TournamentID:          d.TournamentID,
+			GameID:                d.GameID,
+			GameName:              d.GameName,
+			GameDisplayName:       d.GameDisplayName,
+			IsActive:              d.IsActive,
+			RoundCompleted:        d.RoundCompleted,
+			CurrentRound:          d.CurrentRound,
+			AutoRoundEnabled:      d.AutoRoundEnabled,
+			AutoRoundIntervalSecs: d.AutoRoundIntervalSecs,
 		}
 		if d.RoundCompletedAt != nil {
 			formatted := d.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
 			item.RoundCompletedAt = &formatted
+		}
+		if d.AutoRoundLastRunAt != nil {
+			formatted := d.AutoRoundLastRunAt.Format("2006-01-02T15:04:05Z07:00")
+			item.AutoRoundLastRunAt = &formatted
 		}
 		result = append(result, item)
 	}
@@ -457,4 +466,84 @@ func (h *GameRoundHandler) parseTournamentGameIDs(w http.ResponseWriter, r *http
 	}
 
 	return tournamentID, gameID, true
+}
+
+// SetAutoRound включает или выключает авто-раунд для игры в турнире
+// POST /api/v1/tournaments/{id}/games/{gameId}/auto-round
+func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) {
+	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Enabled         bool `json:"enabled"`
+		IntervalSeconds int  `json:"interval_seconds"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid request body"))
+		return
+	}
+
+	if req.Enabled && (req.IntervalSeconds < 10 || req.IntervalSeconds > 3600) {
+		writeError(w, errors.ErrValidation.WithMessage("interval_seconds must be between 10 and 3600"))
+		return
+	}
+
+	// Если выключаем, ставим дефолтный интервал
+	if !req.Enabled && req.IntervalSeconds == 0 {
+		req.IntervalSeconds = 60
+	}
+
+	if err := h.tournamentGameStatusRepo.SetAutoRound(r.Context(), tournamentID, gameID, req.Enabled, req.IntervalSeconds); err != nil {
+		h.log.LogError("Failed to set auto-round", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	status := "disabled"
+	if req.Enabled {
+		status = "enabled"
+	}
+
+	h.log.Info("Auto-round updated",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_id", gameID.String()),
+		zap.String("status", status),
+		zap.Int("interval", req.IntervalSeconds),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"enabled":          req.Enabled,
+		"interval_seconds": req.IntervalSeconds,
+	})
+}
+
+// GetAutoRound возвращает статус авто-раунда для игры в турнире
+// GET /api/v1/tournaments/{id}/games/{gameId}/auto-round
+func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) {
+	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
+	if !ok {
+		return
+	}
+
+	tg, err := h.tournamentGameStatusRepo.GetTournamentGame(r.Context(), tournamentID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to get auto-round status", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"enabled":          tg.AutoRoundEnabled,
+		"interval_seconds": tg.AutoRoundIntervalSecs,
+		"last_run_at":      tg.AutoRoundLastRunAt,
+	})
 }

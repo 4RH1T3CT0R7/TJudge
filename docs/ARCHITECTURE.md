@@ -53,6 +53,7 @@ tjudge/
 │   │   ├── middleware/   #   Auth, rate limiting, CORS, CSRF, logging
 │   │   ├── batch/        #   Batch API
 │   │   └── routes.go     #   Определение маршрутов
+│   ├── config/           # Конфигурация приложения (env vars через godotenv)
 │   ├── domain/           # Бизнес-логика (чистый слой)
 │   │   ├── auth/         #   JWT, логин, права доступа
 │   │   ├── rating/       #   Расчёт ELO рейтингов
@@ -82,7 +83,7 @@ tjudge/
 │   ├── pagination/       #   Курсорная пагинация
 │   └── validator/        #   Валидация входных данных
 ├── web/                  # React фронтенд (React 19, TypeScript, Tailwind CSS 4)
-├── migrations/           # SQL миграции (22 шт.)
+├── migrations/           # SQL миграции (29 шт.)
 ├── tests/
 │   ├── e2e/              # End-to-end тесты (18 тестов)
 │   ├── integration/      # Интеграционные тесты (PostgreSQL + Redis)
@@ -295,18 +296,40 @@ ratingService := rating.NewService(repo, eventBus, log)
 Chi роутер со стеком middleware:
 
 ```
-Request → Recovery → Logger → CORS → Compress → RateLimit → Auth → RBAC → Handler
+Request → RequestID → RealIP → Logger → Recoverer → SecureHeaders → Compress
+  → SmartTimeout → RateLimit → CORS → [MaxBodySize] → [Auth/OptionalAuth] → [RBAC] → Handler
 ```
 
-- JWT аутентификация + RBAC (роли: `user`, `admin`)
-- Rate limiting с Redis (основной) + in-memory fallback (2x лимит при падении Redis)
-- CSRF защита, CORS, gzip-сжатие
+**Глобальные middleware** (применяются ко всем запросам):
+
+| Middleware | Файл | Описание |
+|------------|------|----------|
+| RequestID | chi (встроенный) | Генерация уникального ID запроса |
+| RealIP | chi (встроенный) | Определение реального IP за прокси |
+| Logger | chi (встроенный) | Логирование запросов |
+| Recoverer | chi (встроенный) | Восстановление после паник |
+| SecureHeaders | `security.go` | Заголовки безопасности (X-Frame-Options, CSP, HSTS, X-Content-Type-Options и др.) |
+| Compress | `compress.go` | gzip-сжатие ответов |
+| SmartTimeout | `timeout.go` | Адаптивный таймаут по типу операции (5с кэш, 10с обычные, 15с БД, 30с тяжёлые, без таймаута WebSocket) |
+| RateLimit | `ratelimit.go` | Rate limiting с Redis + in-memory fallback (2x лимит при падении Redis) |
+| CORS | go-chi/cors | Cross-origin resource sharing, настройки из конфига |
+
+**Per-route middleware** (применяются к группам маршрутов):
+
+| Middleware | Файл | Описание |
+|------------|------|----------|
+| MaxBodySize | `bodylimit.go` | Ограничение размера тела запроса (1MB для JSON, 10MB для загрузки программ) |
+| Auth | `auth.go` | Обязательная JWT аутентификация (Bearer token или WebSocket subprotocol) |
+| OptionalAuth | `auth.go` | Опциональная аутентификация (показывает больше информации администраторам) |
+| RBAC | `rbac.go` | Проверка ролей (user, admin) |
+
 - Единый формат ответов через `httputil.WriteJSON` (envelope `{"data": ...}`)
 - WebSocket Hub для real-time обновлений
+- CSRF middleware (`csrf.go`) не активирован: JWT через Authorization header, не cookies
 
 ### Worker Pool (`internal/worker`)
 
-- Динамическое масштабирование (мин: 2, макс: 100+)
+- Динамическое масштабирование (мин: 10, макс: 1000 по умолчанию)
 - Приоритетная очередь (HIGH → MEDIUM → LOW)
 - Exponential backoff retry
 - Graceful shutdown + recovery при панике
@@ -347,6 +370,35 @@ Sandbox-ограничения для безопасного исполнени�
 | `distributed_lock.go` | настр. | Mutex для конкурентных операций |
 | `warmer.go` | — | Прогрев кэша при старте |
 
+### Файловое хранилище (`internal/infrastructure/storage`)
+
+Управление файлами загруженных программ:
+
+- Хранение исходного кода программ на файловой системе (`/data/programs` по умолчанию)
+- Ограничение размера файла (10MB по умолчанию, настраивается)
+- Поддержка `HostProgramsPath` для Docker-in-Docker окружений
+- Генерация уникальных путей через UUID
+- Безопасная работа с файлами: проверка путей, атомарная запись
+
+### Batch API (`internal/api/batch`)
+
+Пакетное выполнение нескольких API запросов в одном HTTP вызове:
+
+- Объединение до N запросов в один HTTP запрос (настраивается через `MaxRequests`)
+- Параллельное выполнение с индивидуальными таймаутами (`RequestTimeout`)
+- Фильтрация по разрешённым методам и путям (`AllowedMethods`, `AllowedPaths`)
+- Каждый запрос в пакете содержит `id`, `method`, `path`, `headers`, `body`
+- Ответ содержит массив результатов с сохранением `id` для сопоставления
+
+### Конфигурация (`internal/config`)
+
+Централизованная загрузка конфигурации из переменных окружения:
+
+- Загрузка через `godotenv` (из `.env` файла при наличии)
+- Структуры конфигурации: Server, Database, Redis, Worker, Executor, Storage, JWT, Logging, Metrics, CORS, RateLimit
+- Значения по умолчанию для всех параметров
+- Валидация конфигурации при загрузке
+
 ### База данных (`internal/infrastructure/db`)
 
 - Connection pooling (макс 100 соединений)
@@ -381,7 +433,7 @@ Sandbox-ограничения для безопасного исполнени�
 
 ### Вертикальное
 
-- Worker pool автомасштабируется 2 → 100+ по нагрузке
+- Worker pool автомасштабируется 10 → 1000 по нагрузке (настраивается через `WORKER_MIN`/`WORKER_MAX`)
 - Connection pool БД настраивается через `DB_MAX_CONNECTIONS`
 
 ---
@@ -437,6 +489,16 @@ type Game struct {
     ScoreMultiplier float64
 }
 ```
+
+### Поддерживаемые игры
+
+| Slug | Название | Тип | Описание |
+|------|----------|-----|----------|
+| `prisoners_dilemma` | Дилемма заключённого | Одновременная | Классическая игра: сотрудничать (C) или предать (D). Матрица выплат 0/1/3/5 |
+| `tug_of_war` | Перетягивание каната | Одновременная | Распределение энергии (100 ед.), смещение каната, 50 раундов |
+| `travelers_dilemma` | Дилемма путешественника | Одновременная | Заявки в диапазоне [2, 100], бонус/штраф R=2 за меньшую/большую заявку |
+| `public_goods` | Общественное благо | Одновременная | Вклад в общий пул (20 токенов), множитель m=1.5, дилемма безбилетника |
+| `dollar_auction` | Аукцион двойной цены | Поочерёдная | Торги за приз P=100, оба платят свои ставки, ловушка эскалации |
 
 ---
 
@@ -522,7 +584,7 @@ tjudge_db_connections{state}
 
 | Уровень | Расположение | Количество | Описание |
 |---------|-------------|------------|----------|
-| Unit | `*_test.go` рядом с исходниками | ~1350 | Бизнес-логика, handlers, middleware, cache, worker |
+| Unit | `*_test.go` рядом с исходниками | ~1200 | Бизнес-логика, handlers, middleware, cache, worker |
 | DB Integration | `tests/integration/` | ~60 | PostgreSQL репозитории (RUN_INTEGRATION=true) |
 | E2E | `tests/e2e/` | 18 | HTTP API через запущенный сервер |
 | Benchmark | `tests/benchmark/` | — | Производительность компонентов |
@@ -530,7 +592,7 @@ tjudge_db_connections{state}
 | Chaos | `tests/chaos/` | — | Устойчивость к сбоям |
 
 ```bash
-make test               # Unit тесты (~1350)
+make test               # Unit тесты (~1200)
 make test-race          # С детектором гонок
 make test-integration   # DB интеграционные
 make test-e2e           # End-to-end
@@ -539,5 +601,5 @@ make benchmark          # Бенчмарки
 
 ---
 
-*Версия документации: 3.0*
+*Версия документации: 3.1*
 *Последнее обновление: Март 2026*

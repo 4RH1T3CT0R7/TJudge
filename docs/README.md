@@ -35,7 +35,7 @@ make run-worker       # Worker
 cd web && npm run dev # Фронтенд
 
 # Тестирование
-make test             # Unit тесты (~1350)
+make test             # Unit тесты (~1200)
 make test-race        # С детектором гонок
 make lint             # Линтер
 make benchmark        # Бенчмарки
