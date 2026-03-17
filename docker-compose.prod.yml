@@ -67,10 +67,10 @@ services:
 
   # Database migrations
   migrate:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-api:${VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/migrate/Dockerfile
     container_name: tjudge-migrate-prod
-    entrypoint: ["./api"]
-    command: ["migrate", "up"]
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432

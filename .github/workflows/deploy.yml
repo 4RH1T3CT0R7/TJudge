@@ -96,7 +96,7 @@ jobs:
     if: github.event.inputs.environment == 'staging' || (github.event_name == 'push' && contains(github.ref, '-rc'))
     environment:
       name: staging
-      url: https://staging.tjudge.example.com
+      url: ${{ secrets.STAGING_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -112,9 +112,15 @@ jobs:
             ./scripts/deploy.sh staging ${{ needs.build.outputs.version }}
 
       - name: Health check
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
         run: |
-          for i in {1..30}; do
-            if curl -sf https://staging.tjudge.example.com/health; then
+          if [ -z "$STAGING_URL" ]; then
+            echo "STAGING_URL secret not set, skipping health check"
+            exit 0
+          fi
+          for i in $(seq 1 30); do
+            if curl -sf "$STAGING_URL/health"; then
               echo "Health check passed"
               exit 0
             fi
@@ -131,7 +137,7 @@ jobs:
     if: github.event.inputs.environment == 'production' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-'))
     environment:
       name: production
-      url: https://tjudge.example.com
+      url: ${{ secrets.PRODUCTION_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -177,9 +183,15 @@ jobs:
             ./scripts/switch-traffic.sh
 
       - name: Health check production
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
-          for i in {1..30}; do
-            if curl -sf https://tjudge.example.com/health; then
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "PRODUCTION_URL secret not set, skipping health check"
+            exit 0
+          fi
+          for i in $(seq 1 30); do
+            if curl -sf "$PRODUCTION_URL/health"; then
               echo "Health check passed"
               exit 0
             fi

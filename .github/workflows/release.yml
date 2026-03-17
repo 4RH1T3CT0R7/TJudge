@@ -113,6 +113,8 @@ jobs:
     name: Update Documentation
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -120,14 +122,18 @@ jobs:
           ref: main
 
       - name: Update version in README
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
-          VERSION="${{ github.ref_name }}"
-          sed -i "s/version-v[0-9.]*-blue/version-$VERSION-blue/g" README.md || true
+          # Update Go version badge if needed (no-op if pattern doesn't match)
+          sed -i "s/Go-[0-9.]*+-00ADD8/Go-1.24+-00ADD8/g" README.md || true
 
       - name: Commit changes
+        env:
+          VERSION: ${{ github.ref_name }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "docs: update version to ${{ github.ref_name }}"
+          git diff --quiet && git diff --staged --quiet || git commit -m "docs: update version to $VERSION"
           git push || true

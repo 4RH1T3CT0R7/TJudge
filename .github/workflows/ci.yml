@@ -193,7 +193,7 @@ jobs:
           DB_NAME: tjudge_test
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-        run: go test -race -short ./...
+        run: go test -race -count=1 -timeout=10m ./...
 
       - name: Build with race detector
         run: go build -race ./cmd/api ./cmd/worker
@@ -433,11 +433,18 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           JWT_SECRET: test-jwt-secret-for-ci
-          SERVER_PORT: 8080
+          API_PORT: 8080
         run: |
           go build -o bin/api ./cmd/api
           ./bin/api &
-          sleep 5
+          # Wait for API to be ready (up to 30s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "API server is ready"
+              break
+            fi
+            sleep 1
+          done
           curl -f http://localhost:8080/health || exit 1
 
       - name: Run E2E tests
@@ -528,11 +535,18 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           JWT_SECRET: test-jwt-secret-for-ci
-          SERVER_PORT: 8080
+          API_PORT: 8080
         run: |
           go build -o bin/api ./cmd/api
           ./bin/api &
-          sleep 5
+          # Wait for API to be ready (up to 30s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "API server is ready"
+              break
+            fi
+            sleep 1
+          done
           curl -f http://localhost:8080/health || exit 1
 
       - name: Run Chaos tests
