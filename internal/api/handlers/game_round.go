@@ -376,17 +376,23 @@ func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request)
 	}
 
 	result := TournamentGameWithDetails{
-		TournamentID:    activeGame.TournamentID,
-		GameID:          activeGame.GameID,
-		GameName:        g.Name,
-		GameDisplayName: g.DisplayName,
-		IsActive:        activeGame.IsActive,
-		RoundCompleted:  activeGame.RoundCompleted,
-		CurrentRound:    activeGame.CurrentRound,
+		TournamentID:          activeGame.TournamentID,
+		GameID:                activeGame.GameID,
+		GameName:              g.Name,
+		GameDisplayName:       g.DisplayName,
+		IsActive:              activeGame.IsActive,
+		RoundCompleted:        activeGame.RoundCompleted,
+		CurrentRound:          activeGame.CurrentRound,
+		AutoRoundEnabled:      activeGame.AutoRoundEnabled,
+		AutoRoundIntervalSecs: activeGame.AutoRoundIntervalSecs,
 	}
 	if activeGame.RoundCompletedAt != nil {
 		formatted := activeGame.RoundCompletedAt.Format("2006-01-02T15:04:05Z07:00")
 		result.RoundCompletedAt = &formatted
+	}
+	if activeGame.AutoRoundLastRunAt != nil {
+		formatted := activeGame.AutoRoundLastRunAt.Format("2006-01-02T15:04:05Z07:00")
+		result.AutoRoundLastRunAt = &formatted
 	}
 
 	writeJSON(w, http.StatusOK, result)

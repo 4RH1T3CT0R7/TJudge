@@ -287,7 +287,15 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// Проверяем, включён ли авто-раунд для этой игры
 	autoRoundEnabled := false
 	if h.autoRoundChecker != nil {
-		autoRoundEnabled, _ = h.autoRoundChecker.IsAutoRoundEnabled(r.Context(), tournamentID, gameID)
+		var autoRoundErr error
+		autoRoundEnabled, autoRoundErr = h.autoRoundChecker.IsAutoRoundEnabled(r.Context(), tournamentID, gameID)
+		if autoRoundErr != nil {
+			h.log.Warn("Failed to check auto-round status, defaulting to manual mode",
+				zap.Error(autoRoundErr),
+				zap.String("tournament_id", tournamentID.String()),
+				zap.String("game_id", gameID.String()),
+			)
+		}
 	}
 
 	// В авто-режиме загрузка НЕ блокируется матчами — новая программа будет подхвачена в следующем раунде.
