@@ -1595,9 +1595,6 @@ function GamesTab({
       }
       try {
         await api.setAutoRound(tournamentId, gameId, true, interval);
-        // Reload status
-        const gamesStatusData = await api.getTournamentGamesStatus(tournamentId);
-        // Parent doesn't expose setter, so we rely on parent's polling or re-render
         window.location.reload();
       } catch (err) {
         console.error('Failed to enable auto-round:', err);
