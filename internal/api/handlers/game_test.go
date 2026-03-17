@@ -107,7 +107,7 @@ func newTestGameHandler(t *testing.T) (*GameHandler, *MockGameService) {
 	t.Helper()
 	svc := new(MockGameService)
 	log, _ := logger.New("error", "json")
-	return NewGameHandler(svc, nil, nil, nil, nil, nil, events.NoopBus{}, log), svc
+	return NewGameHandler(svc, nil, nil, nil, nil, nil, events.NoopBus{}, "", log), svc
 }
 
 func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGameService, *MockGameTournamentRepository) {
@@ -115,7 +115,7 @@ func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGame
 	svc := new(MockGameService)
 	tournamentRepo := new(MockGameTournamentRepository)
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, events.NoopBus{}, log)
+	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, events.NoopBus{}, "", log)
 	return handler, svc, tournamentRepo
 }
 
@@ -1132,7 +1132,7 @@ func newGameHandlerWithAllRepos(t *testing.T) (
 	tgsRepo := new(MockTournamentGameStatusRepository)
 
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, events.NoopBus{}, log)
+	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, events.NoopBus{}, "", log)
 
 	return handler, svc, leaderboardRepo, matchRepo, programRepo, tgsRepo
 }

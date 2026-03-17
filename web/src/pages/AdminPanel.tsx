@@ -696,6 +696,26 @@ export function AdminPanel() {
     }
   };
 
+  // Download all programs as ZIP archive
+  const handleDownloadAllPrograms = async () => {
+    if (!selectedTournamentId) return;
+    try {
+      const blob = await api.downloadTournamentPrograms(selectedTournamentId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `programs_${selectedTournamentId.substring(0, 8)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setAdminReaction('handsUp', '// архивирую...', 2500);
+    } catch (err) {
+      console.error('Failed to download programs archive:', err);
+      setActionError('Не удалось скачать архив программ');
+    }
+  };
+
   // Open tournament games management modal
   const openTournamentGamesManagement = async (tournamentId: string) => {
     setManagingTournamentId(tournamentId);
@@ -1573,8 +1593,18 @@ export function AdminPanel() {
                   return sum + (programs.length || details.length);
                 }, 0);
                 return (
-                  <div className="text-sm text-gray-400">
-                    Всего загружено программ: <span className="font-semibold text-gray-200">{total}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-400">
+                      Всего загружено программ: <span className="font-semibold text-gray-200">{total}</span>
+                    </div>
+                    {total > 0 && (
+                      <button
+                        onClick={handleDownloadAllPrograms}
+                        className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Скачать все (.zip)
+                      </button>
+                    )}
                   </div>
                 );
               })()}

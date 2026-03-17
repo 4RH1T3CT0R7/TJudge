@@ -225,7 +225,7 @@ func main() {
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandler(
 		gameService, tournamentRepo, matchRepo, tournamentRepo,
-		programRepo, gameRepo, eventBus, log,
+		programRepo, gameRepo, eventBus, cfg.Storage.ProgramsPath, log,
 	)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)

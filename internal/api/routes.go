@@ -192,6 +192,7 @@ func (s *Server) setupRoutes() {
 					r.Delete("/{id}", s.tournamentHandler.Delete)
 					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
 					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
+					r.Get("/{id}/programs/download-zip", s.gameHandler.DownloadAllPrograms)
 					r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
 					r.Post("/{id}/games/{gameId}/reset-round", s.gameHandler.ResetGameRound)
 					r.Post("/{id}/games/{gameId}/auto-round", s.gameHandler.SetAutoRound)

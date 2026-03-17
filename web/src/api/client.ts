@@ -500,6 +500,14 @@ class ApiClient {
     return data;
   }
 
+  async downloadTournamentPrograms(tournamentId: string): Promise<Blob> {
+    const { data } = await this.client.get<Blob>(
+      `/tournaments/${tournamentId}/programs/download-zip`,
+      { responseType: 'blob' }
+    );
+    return data;
+  }
+
   async getProgramVersions(teamId: string, gameId: string): Promise<Program[]> {
     const { data } = await this.client.get<Program[]>('/programs/versions', {
       params: { team_id: teamId, game_id: gameId },

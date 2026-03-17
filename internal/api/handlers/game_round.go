@@ -1,9 +1,15 @@
 package handlers
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
@@ -28,6 +34,7 @@ type GameRoundHandler struct {
 	programRepo              GameProgramRepository
 	tournamentGameStatusRepo TournamentGameStatusRepository
 	eventBus                 events.Bus
+	uploadDir                string
 	log                      *logger.Logger
 }
 
@@ -39,6 +46,7 @@ func NewGameRoundHandler(
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
 	eventBus events.Bus,
+	uploadDir string,
 	log *logger.Logger,
 ) *GameRoundHandler {
 	return &GameRoundHandler{
@@ -48,6 +56,7 @@ func NewGameRoundHandler(
 		programRepo:              programRepo,
 		tournamentGameStatusRepo: tournamentGameStatusRepo,
 		eventBus:                 eventBus,
+		uploadDir:                uploadDir,
 		log:                      log,
 	}
 }
@@ -552,4 +561,153 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 		"interval_seconds": tg.AutoRoundIntervalSecs,
 		"last_run_at":      tg.AutoRoundLastRunAt,
 	})
+}
+
+// DownloadAllPrograms streams a ZIP archive of all programs for a tournament.
+// GET /api/v1/tournaments/{id}/programs/download-zip
+func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Request) {
+	tournamentIDStr := chi.URLParam(r, "id")
+	tournamentID, err := uuid.Parse(tournamentIDStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+		return
+	}
+
+	if h.tournamentGameStatusRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+		return
+	}
+	if h.programRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("program repository not configured"))
+		return
+	}
+
+	// Get all games in this tournament
+	games, err := h.tournamentGameStatusRepo.GetTournamentGames(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to get tournament games", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	// Resolve upload directory for path validation
+	absUploadDir, err := filepath.Abs(h.uploadDir)
+	if err != nil {
+		h.log.Error("Failed to resolve upload dir", zap.Error(err))
+		writeError(w, errors.ErrInternal.WithMessage("invalid upload directory"))
+		return
+	}
+
+	// Set response headers before writing body
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"programs_%s.zip\"", tournamentID.String()[:8]))
+
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+
+	filesAdded := 0
+
+	for _, tg := range games {
+		// Get game details for display name
+		game, err := h.gameService.GetByID(r.Context(), tg.GameID)
+		if err != nil {
+			h.log.Error("Failed to get game details, skipping",
+				zap.String("game_id", tg.GameID.String()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		gameDirName := sanitizeZipPath(game.DisplayName)
+		if gameDirName == "" {
+			gameDirName = game.Name
+		}
+
+		// Get latest programs for this game
+		programs, err := h.programRepo.GetByTournamentAndGame(r.Context(), tournamentID, tg.GameID)
+		if err != nil {
+			h.log.Error("Failed to get programs for game, skipping",
+				zap.String("game_id", tg.GameID.String()),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		for _, prog := range programs {
+			if prog.FilePath == nil || *prog.FilePath == "" {
+				continue
+			}
+
+			filePath := *prog.FilePath
+
+			// Validate path is within upload directory
+			absFilePath, err := filepath.Abs(filePath)
+			if err != nil || !strings.HasPrefix(absFilePath, absUploadDir+string(os.PathSeparator)) {
+				h.log.Error("Program file path outside upload dir, skipping",
+					zap.String("program_id", prog.ID.String()),
+					zap.String("path", filePath),
+				)
+				continue
+			}
+
+			// Check file exists
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				h.log.Error("Program file not found on disk, skipping",
+					zap.String("program_id", prog.ID.String()),
+					zap.String("path", filePath),
+				)
+				continue
+			}
+
+			// Build ZIP entry path: game_name/program_name_v{version}.ext
+			ext := filepath.Ext(filePath)
+			entryName := fmt.Sprintf("%s/%s_v%d%s", gameDirName, sanitizeZipPath(prog.Name), prog.Version, ext)
+
+			f, err := os.Open(filePath)
+			if err != nil {
+				h.log.Error("Failed to open program file, skipping",
+					zap.String("program_id", prog.ID.String()),
+					zap.Error(err),
+				)
+				continue
+			}
+
+			zf, err := zipWriter.Create(entryName)
+			if err != nil {
+				f.Close()
+				h.log.Error("Failed to create ZIP entry", zap.Error(err))
+				continue
+			}
+
+			if _, err := io.Copy(zf, f); err != nil {
+				f.Close()
+				h.log.Error("Failed to write program to ZIP", zap.Error(err))
+				continue
+			}
+			f.Close()
+			filesAdded++
+		}
+	}
+
+	h.log.Info("Programs archive created",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.Int("files_added", filesAdded),
+	)
+}
+
+// sanitizeZipPath cleans a name for use in ZIP entry paths.
+func sanitizeZipPath(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' || r == '\x00' {
+			return '_'
+		}
+		return r
+	}, name)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "unknown"
+	}
+	return name
 }

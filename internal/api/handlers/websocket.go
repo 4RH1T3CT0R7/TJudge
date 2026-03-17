@@ -23,18 +23,16 @@ var upgrader = ws.Upgrader{
 		if allowedOrigins == "" {
 			allowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
 		}
-		if allowedOrigins == "" {
-			allowedOrigins = "http://localhost:3000,http://localhost:5173"
-		}
 
-		// Wildcard — разрешить все (как CORS)
-		if strings.TrimSpace(allowedOrigins) == "*" {
+		// Wildcard или не задано — разрешить все (фронтенд встроен в API, same-origin)
+		if allowedOrigins == "" || strings.TrimSpace(allowedOrigins) == "*" {
 			return true
 		}
 
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			return false
+			// No Origin header = same-origin request or non-browser client — allow
+			return true
 		}
 
 		for _, allowed := range strings.Split(allowedOrigins, ",") {
@@ -93,9 +91,12 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 	// Upgrade HTTP соединения в WebSocket
 	conn, err := upgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
-		h.log.LogError("Failed to upgrade connection", err,
+		h.log.Warn("Failed to upgrade WebSocket connection",
 			zap.String("tournament_id", tournamentID.String()),
 			zap.String("user_id", userID.String()),
+			zap.String("origin", r.Header.Get("Origin")),
+			zap.String("host", r.Host),
+			zap.Error(err),
 		)
 		return
 	}
