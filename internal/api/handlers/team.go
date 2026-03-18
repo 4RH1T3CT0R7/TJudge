@@ -29,6 +29,8 @@ type TeamService interface {
 	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error)
 	GetInviteLink(ctx context.Context, teamID, leaderID uuid.UUID, baseURL string) (string, error)
 	DeleteTeam(ctx context.Context, teamID uuid.UUID) error
+	DisqualifyTeam(ctx context.Context, teamID uuid.UUID) (*team.DisqualifyResult, error)
+	RestoreTeam(ctx context.Context, teamID uuid.UUID) error
 }
 
 // TeamHandler обрабатывает запросы команд
@@ -392,6 +394,57 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.log.Info("Team deleted by admin", zap.String("team_id", teamID.String()))
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Disqualify дисквалифицирует команду в турнире
+// POST /api/v1/teams/{id}/disqualify
+func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	teamID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+		return
+	}
+
+	result, err := h.teamService.DisqualifyTeam(r.Context(), teamID)
+	if err != nil {
+		h.log.LogError("Failed to disqualify team", err)
+		writeError(w, err)
+		return
+	}
+
+	adminID, _ := middleware.GetUserID(r.Context())
+	h.log.Info("Team disqualified",
+		zap.String("team_id", teamID.String()),
+		zap.String("admin_id", adminID.String()),
+	)
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// Restore снимает дисквалификацию с команды
+// POST /api/v1/teams/{id}/restore
+func (h *TeamHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	teamID, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+		return
+	}
+
+	if err := h.teamService.RestoreTeam(r.Context(), teamID); err != nil {
+		h.log.LogError("Failed to restore team", err)
+		writeError(w, err)
+		return
+	}
+
+	adminID, _ := middleware.GetUserID(r.Context())
+	h.log.Info("Team restored",
+		zap.String("team_id", teamID.String()),
+		zap.String("admin_id", adminID.String()),
+	)
 
 	w.WriteHeader(http.StatusNoContent)
 }

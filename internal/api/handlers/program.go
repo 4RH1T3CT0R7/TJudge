@@ -71,6 +71,7 @@ type RoundCompletionChecker interface {
 // TeamMembershipChecker интерфейс для проверки членства в команде
 type TeamMembershipChecker interface {
 	IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error)
+	IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error)
 }
 
 // AutoRoundChecker интерфейс для проверки статуса авто-раунда
@@ -267,6 +268,18 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 	if !isMember {
 		writeError(w, errors.ErrForbidden.WithMessage("you are not a member of this team"))
+		return
+	}
+
+	// Проверяем, что команда не дисквалифицирована
+	disqualified, err := h.teamChecker.IsTeamDisqualified(r.Context(), teamID)
+	if err != nil {
+		h.log.LogError("Failed to check team disqualification", err)
+		writeError(w, errors.ErrInternal.WithMessage("failed to verify team status"))
+		return
+	}
+	if disqualified {
+		writeError(w, errors.ErrForbidden.WithMessage("команда дисквалифицирована"))
 		return
 	}
 

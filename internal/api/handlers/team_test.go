@@ -105,6 +105,18 @@ func (m *MockTeamService) DeleteTeam(ctx context.Context, teamID uuid.UUID) erro
 	return m.Called(ctx, teamID).Error(0)
 }
 
+func (m *MockTeamService) DisqualifyTeam(ctx context.Context, teamID uuid.UUID) (*team.DisqualifyResult, error) {
+	args := m.Called(ctx, teamID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*team.DisqualifyResult), args.Error(1)
+}
+
+func (m *MockTeamService) RestoreTeam(ctx context.Context, teamID uuid.UUID) error {
+	return m.Called(ctx, teamID).Error(0)
+}
+
 func newTestTeamHandler() (*TeamHandler, *MockTeamService) {
 	svc := new(MockTeamService)
 	log, _ := logger.New("error", "json")

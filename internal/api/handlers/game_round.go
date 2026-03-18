@@ -125,10 +125,10 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := domain.MatchStatus(status)
 		switch s {
-		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed:
+		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed, domain.MatchCancelled:
 			filter.Status = s
 		default:
-			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed"))
+			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed, cancelled"))
 			return
 		}
 	}
@@ -592,8 +592,8 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Resolve upload directory for path validation
-	absUploadDir, err := filepath.Abs(h.uploadDir)
+	// Resolve upload directory for path validation (EvalSymlinks resolves symlinks too)
+	absUploadDir, err := filepath.EvalSymlinks(h.uploadDir)
 	if err != nil {
 		h.log.Error("Failed to resolve upload dir", zap.Error(err))
 		writeError(w, errors.ErrInternal.WithMessage("invalid upload directory"))
@@ -642,8 +642,8 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 
 			filePath := *prog.FilePath
 
-			// Validate path is within upload directory
-			absFilePath, err := filepath.Abs(filePath)
+			// Validate path is within upload directory (EvalSymlinks resolves symlinks too)
+			absFilePath, err := filepath.EvalSymlinks(filePath)
 			if err != nil || !strings.HasPrefix(absFilePath, absUploadDir+string(os.PathSeparator)) {
 				h.log.Error("Program file path outside upload dir, skipping",
 					zap.String("program_id", prog.ID.String()),
@@ -705,6 +705,8 @@ func sanitizeZipPath(name string) string {
 		}
 		return r
 	}, name)
+	// Remove ".." traversal sequences
+	name = strings.ReplaceAll(name, "..", "_")
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "unknown"

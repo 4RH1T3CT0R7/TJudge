@@ -116,6 +116,20 @@ func (m *MockTeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid
 	return args.Get(0).(*domain.TeamWithMembers), args.Error(1)
 }
 
+func (m *MockTeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (int64, int64, int64, error) {
+	args := m.Called(ctx, teamID, tournamentID)
+	return args.Get(0).(int64), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
+}
+
+func (m *MockTeamRepository) RestoreTeam(ctx context.Context, teamID uuid.UUID) error {
+	return m.Called(ctx, teamID).Error(0)
+}
+
+func (m *MockTeamRepository) IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, teamID)
+	return args.Bool(0), args.Error(1)
+}
+
 type MockTournamentRepository struct {
 	mock.Mock
 }

@@ -201,10 +201,10 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := domain.MatchStatus(status)
 		switch s {
-		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed:
+		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed, domain.MatchCancelled:
 			filter.Status = s
 		default:
-			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed"))
+			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed, cancelled"))
 			return
 		}
 	}

@@ -51,7 +51,7 @@ func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tea
 	var team domain.Team
 
 	query := `
-		SELECT id, tournament_id, name, code, leader_id, created_at, updated_at
+		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
 		WHERE id = $1
 	`
@@ -62,6 +62,8 @@ func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tea
 		&team.Name,
 		&team.Code,
 		&team.LeaderID,
+		&team.IsDisqualified,
+		&team.DisqualifiedAt,
 		&team.CreatedAt,
 		&team.UpdatedAt,
 	)
@@ -81,7 +83,7 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 	var team domain.Team
 
 	query := `
-		SELECT id, tournament_id, name, code, leader_id, created_at, updated_at
+		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
 		WHERE code = $1
 	`
@@ -92,6 +94,8 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 		&team.Name,
 		&team.Code,
 		&team.LeaderID,
+		&team.IsDisqualified,
+		&team.DisqualifiedAt,
 		&team.CreatedAt,
 		&team.UpdatedAt,
 	)
@@ -109,7 +113,7 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 // GetByTournamentID получает все команды турнира
 func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
 	query := `
-		SELECT id, tournament_id, name, code, leader_id, created_at, updated_at
+		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
 		WHERE tournament_id = $1
 		ORDER BY created_at ASC
@@ -131,6 +135,8 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 			&team.Name,
 			&team.Code,
 			&team.LeaderID,
+			&team.IsDisqualified,
+			&team.DisqualifiedAt,
 			&team.CreatedAt,
 			&team.UpdatedAt,
 		)
@@ -151,7 +157,7 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 // List получает список команд с фильтрацией
 func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]*domain.Team, error) {
 	query := `
-		SELECT id, tournament_id, name, code, leader_id, created_at, updated_at
+		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
 		WHERE 1=1
 	`
@@ -198,6 +204,8 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 			&team.Name,
 			&team.Code,
 			&team.LeaderID,
+			&team.IsDisqualified,
+			&team.DisqualifiedAt,
 			&team.CreatedAt,
 			&team.UpdatedAt,
 		)
@@ -392,7 +400,7 @@ func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournament
 	var team domain.Team
 
 	query := `
-		SELECT t.id, t.tournament_id, t.name, t.code, t.leader_id, t.created_at, t.updated_at
+		SELECT t.id, t.tournament_id, t.name, t.code, t.leader_id, t.is_disqualified, t.disqualified_at, t.created_at, t.updated_at
 		FROM teams t
 		INNER JOIN team_members tm ON t.id = tm.team_id
 		WHERE t.tournament_id = $1 AND tm.user_id = $2
@@ -404,6 +412,8 @@ func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournament
 		&team.Name,
 		&team.Code,
 		&team.LeaderID,
+		&team.IsDisqualified,
+		&team.DisqualifiedAt,
 		&team.CreatedAt,
 		&team.UpdatedAt,
 	)
@@ -499,4 +509,163 @@ func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUI
 		Team:    *team,
 		Members: members,
 	}, nil
+}
+
+// IsTeamDisqualified проверяет, дисквалифицирована ли команда
+func (r *TeamRepository) IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error) {
+	var disqualified bool
+	query := `SELECT is_disqualified FROM teams WHERE id = $1`
+
+	err := r.db.QueryRowContext(ctx, query, teamID).Scan(&disqualified)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return false, errors.ErrNotFound.WithMessage("team not found")
+	}
+	if err != nil {
+		return false, errors.Wrap(err, "failed to check team disqualification")
+	}
+
+	return disqualified, nil
+}
+
+// RestoreTeam снимает дисквалификацию с команды
+func (r *TeamRepository) RestoreTeam(ctx context.Context, teamID uuid.UUID) error {
+	query := `
+		UPDATE teams
+		SET is_disqualified = false, disqualified_at = NULL, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, teamID)
+	if err != nil {
+		return errors.Wrap(err, "failed to restore team")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage("team not found")
+	}
+
+	return nil
+}
+
+// DisqualifyTeamFull выполняет полную дисквалификацию команды в транзакции:
+// помечает команду, удаляет завершённые матчи, отменяет pending, сбрасывает рейтинги.
+func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (matchesDeleted, matchesCancelled, ratingHistoryDeleted int64, err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to begin transaction")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 1. Пометить команду как дисквалифицированную
+	_, err = tx.ExecContext(ctx, `
+		UPDATE teams SET is_disqualified = true, disqualified_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`, teamID)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to mark team as disqualified")
+	}
+
+	// 2. Получить ID программ этой команды в этом турнире
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id FROM programs WHERE team_id = $1 AND tournament_id = $2
+	`, teamID, tournamentID)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to get team programs")
+	}
+
+	var programIDs []uuid.UUID
+	for rows.Next() {
+		var pid uuid.UUID
+		if err := rows.Scan(&pid); err != nil {
+			rows.Close()
+			return 0, 0, 0, errors.Wrap(err, "failed to scan program id")
+		}
+		programIDs = append(programIDs, pid)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to iterate program ids")
+	}
+
+	if len(programIDs) == 0 {
+		// Нет программ — просто коммитим дисквалификацию
+		if err := tx.Commit(); err != nil {
+			return 0, 0, 0, errors.Wrap(err, "failed to commit transaction")
+		}
+		return 0, 0, 0, nil
+	}
+
+	// Формируем массив для SQL IN
+	pidStrings := make([]interface{}, len(programIDs))
+	placeholders := ""
+	for i, pid := range programIDs {
+		pidStrings[i] = pid
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += fmt.Sprintf("$%d", i+2) // $2, $3, ...
+	}
+
+	// 3. Удалить rating_history для завершённых матчей с участием программ команды
+	args := append([]interface{}{tournamentID}, pidStrings...)
+	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM rating_history
+		WHERE tournament_id = $1
+		AND match_id IN (
+			SELECT id FROM matches
+			WHERE tournament_id = $1
+			AND status = 'completed'
+			AND (program1_id IN (%s) OR program2_id IN (%s))
+		)
+	`, placeholders, placeholders), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to delete rating history")
+	}
+	ratingHistoryDeleted, _ = result.RowsAffected()
+
+	// 4. Удалить завершённые матчи
+	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM matches
+		WHERE tournament_id = $1
+		AND status = 'completed'
+		AND (program1_id IN (%s) OR program2_id IN (%s))
+	`, placeholders, placeholders), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to delete completed matches")
+	}
+	matchesDeleted, _ = result.RowsAffected()
+
+	// 5. Отменить pending и running матчи (running воркер пропустит при финализации)
+	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE matches
+		SET status = 'cancelled', error_message = 'Team disqualified'
+		WHERE tournament_id = $1
+		AND status IN ('pending', 'running')
+		AND (program1_id IN (%s) OR program2_id IN (%s))
+	`, placeholders, placeholders), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to cancel matches")
+	}
+	matchesCancelled, _ = result.RowsAffected()
+
+	// 6. Сбросить статистику только дисквалифицированной команды
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		UPDATE tournament_participants
+		SET rating = 1500, wins = 0, losses = 0, draws = 0
+		WHERE tournament_id = $1
+		AND program_id IN (%s)
+	`, placeholders), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to reset participant stats")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to commit transaction")
+	}
+
+	return matchesDeleted, matchesCancelled, ratingHistoryDeleted, nil
 }

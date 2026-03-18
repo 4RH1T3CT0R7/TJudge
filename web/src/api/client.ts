@@ -515,6 +515,15 @@ class ApiClient {
     return data;
   }
 
+  async disqualifyTeam(teamId: string): Promise<{ matches_deleted: number; matches_cancelled: number; rating_history_reset: number }> {
+    const { data } = await this.client.post(`/teams/${teamId}/disqualify`);
+    return data;
+  }
+
+  async restoreTeam(teamId: string): Promise<void> {
+    await this.client.post(`/teams/${teamId}/restore`);
+  }
+
   async deleteTeam(id: string): Promise<void> {
     await this.client.delete(`/teams/${id}`);
   }

@@ -244,6 +244,8 @@ func (s *Server) setupRoutes() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireAdmin())
 				r.Delete("/{id}", s.teamHandler.Delete)
+				r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
+				r.Post("/{id}/restore", s.teamHandler.Restore)
 			})
 		})
 

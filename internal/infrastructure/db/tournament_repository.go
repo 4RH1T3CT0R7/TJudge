@@ -380,6 +380,7 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
 		FROM tournament_participants tp
 		INNER JOIN programs p ON p.id = tp.program_id
+		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 		WHERE tp.tournament_id = $1
 		  AND p.version = (
 		      SELECT MAX(p2.version)
@@ -437,6 +438,7 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 		FROM tournament_participants tp
 		INNER JOIN programs p ON p.id = tp.program_id
 		INNER JOIN games g ON g.id = p.game_id
+		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 		WHERE tp.tournament_id = $1
 		  AND p.version = (
 		      SELECT MAX(p2.version)
@@ -492,6 +494,7 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 		FROM tournament_participants tp
 		INNER JOIN programs p ON p.id = tp.program_id
 		INNER JOIN games g ON g.id = p.game_id
+		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 		WHERE tp.tournament_id = $1
 		  AND g.name = $2
 		  AND p.version = (
@@ -585,7 +588,7 @@ func (r *TournamentRepository) getLeaderboardFallback(ctx context.Context, tourn
 				) as earliest_upload
 			FROM tournament_participants tp
 			JOIN programs p ON tp.program_id = p.id
-			LEFT JOIN teams t ON p.team_id = t.id
+			INNER JOIN teams t ON p.team_id = t.id AND t.is_disqualified = false
 			LEFT JOIN matches m ON (m.program1_id = p.id OR m.program2_id = p.id)
 				AND m.tournament_id = $1
 				AND m.status = 'completed'
@@ -813,7 +816,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				g.name as game_name,
 				p.created_at as program_created_at
 			FROM programs p
-			LEFT JOIN teams t ON p.team_id = t.id
+			INNER JOIN teams t ON p.team_id = t.id AND t.is_disqualified = false
 			LEFT JOIN games g ON p.game_id = g.id
 			WHERE p.tournament_id = $1 AND p.team_id IS NOT NULL
 			ORDER BY p.team_id, p.game_id, p.version DESC
@@ -971,7 +974,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 				t.name as team_name,
 				p.created_at as program_created_at
 			FROM programs p
-			LEFT JOIN teams t ON p.team_id = t.id
+			INNER JOIN teams t ON p.team_id = t.id AND t.is_disqualified = false
 			JOIN games g ON p.game_id = g.id
 			WHERE p.tournament_id = $1
 			  AND g.name = $2

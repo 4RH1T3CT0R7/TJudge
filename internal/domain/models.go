@@ -60,13 +60,15 @@ type Game struct {
 
 // Team представляет команду в турнире
 type Team struct {
-	ID           uuid.UUID `json:"id" db:"id"`
-	TournamentID uuid.UUID `json:"tournament_id" db:"tournament_id"`
-	Name         string    `json:"name" db:"name"`
-	Code         string    `json:"code" db:"code"` // 6-8 символов уникальный код
-	LeaderID     uuid.UUID `json:"leader_id" db:"leader_id"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	ID             uuid.UUID  `json:"id" db:"id"`
+	TournamentID   uuid.UUID  `json:"tournament_id" db:"tournament_id"`
+	Name           string     `json:"name" db:"name"`
+	Code           string     `json:"code" db:"code"` // 6-8 символов уникальный код
+	LeaderID       uuid.UUID  `json:"leader_id" db:"leader_id"`
+	IsDisqualified bool       `json:"is_disqualified" db:"is_disqualified"`
+	DisqualifiedAt *time.Time `json:"disqualified_at,omitempty" db:"disqualified_at"`
+	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 }
 
 // TeamMember представляет участника команды
@@ -195,6 +197,7 @@ const (
 	MatchRunning   MatchStatus = "running"
 	MatchCompleted MatchStatus = "completed"
 	MatchFailed    MatchStatus = "failed"
+	MatchCancelled MatchStatus = "cancelled"
 )
 
 // MatchPriority - приоритет матча

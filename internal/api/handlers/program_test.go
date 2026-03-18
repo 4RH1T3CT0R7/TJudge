@@ -94,6 +94,11 @@ func (m *MockTeamMembershipChecker) IsUserInTeam(ctx context.Context, teamID, us
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockTeamMembershipChecker) IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error) {
+	args := m.Called(ctx, teamID)
+	return args.Bool(0), args.Error(1)
+}
+
 func TestProgramHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
@@ -1599,6 +1604,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
+		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
 		mockRoundChecker.On("IsRoundCompleted", mock.Anything, tournamentID, gameID).Return(true, nil)
 
 		req := createMultipartRequest(t, map[string]string{
@@ -1637,6 +1643,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
+		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
 		mockMatchChecker.On("HasAnyRunningMatches", mock.Anything, tournamentID).Return(true, nil)
 		mockMatchChecker.On("GetActiveGameType", mock.Anything, tournamentID).Return("prisoners_dilemma", nil)
 
@@ -1674,6 +1681,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
+		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
 		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
 			return p.UserID == userID &&
 				p.Name == "My Strategy" &&

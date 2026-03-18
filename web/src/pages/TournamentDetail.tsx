@@ -905,6 +905,26 @@ export function TournamentDetail() {
             isJoining={isJoining}
             joinError={joinError}
             setJoinError={setJoinError}
+            onDisqualify={async (teamId) => {
+              if (!window.confirm('Дисквалифицировать команду? Все матчи с её участием будут удалены.')) return;
+              try {
+                await api.disqualifyTeam(teamId);
+                await loadTournamentData();
+              } catch (err) {
+                console.error('Failed to disqualify team:', err);
+                window.alert('Не удалось дисквалифицировать команду. Попробуйте снова.');
+              }
+            }}
+            onRestore={async (teamId) => {
+              if (!window.confirm('Восстановить команду? Она снова сможет участвовать в турнире.')) return;
+              try {
+                await api.restoreTeam(teamId);
+                await loadTournamentData();
+              } catch (err) {
+                console.error('Failed to restore team:', err);
+                window.alert('Не удалось восстановить команду. Попробуйте снова.');
+              }
+            }}
           />
         )}
       </div>
@@ -1797,6 +1817,8 @@ function TeamsTab({
   isJoining,
   joinError,
   setJoinError,
+  onDisqualify,
+  onRestore,
 }: {
   teams: Team[];
   isAuthenticated: boolean;
@@ -1809,6 +1831,8 @@ function TeamsTab({
   isJoining: boolean;
   joinError: string;
   setJoinError: (e: string) => void;
+  onDisqualify?: (teamId: string) => void;
+  onRestore?: (teamId: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
   const [membersExpanded, setMembersExpanded] = useState(false);
@@ -1901,18 +1925,23 @@ function TeamsTab({
                 className={`card group hover:shadow-lg hover:shadow-gray-900/50 transition-shadow ${
                   myTeam?.id === team.id
                     ? 'border-2 border-primary-500 bg-primary-900/20'
+                    : team.is_disqualified
+                    ? 'border border-red-800/50 opacity-60'
                     : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
-                    myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-500'
+                    team.is_disqualified ? 'bg-red-700' : myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-500'
                   }`}>
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
+                      {team.is_disqualified && (
+                        <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded-full">Дисквалификация</span>
+                      )}
                       {myTeam?.id === team.id && (
                         <span className="badge badge-blue text-xs">Ваша</span>
                       )}
@@ -1942,6 +1971,26 @@ function TeamsTab({
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {isAdmin && tournamentStatus === 'active' && (
+                  <div className="mt-3 pt-3 border-t border-gray-700">
+                    {team.is_disqualified ? (
+                      <button
+                        onClick={() => onRestore?.(team.id)}
+                        className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded-lg transition-colors"
+                      >
+                        Восстановить
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onDisqualify?.(team.id)}
+                        className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded-lg transition-colors"
+                      >
+                        Дисквалифицировать
+                      </button>
                     )}
                   </div>
                 )}

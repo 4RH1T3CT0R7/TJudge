@@ -29,6 +29,9 @@ type TeamRepository interface {
 	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error)
 	GenerateUniqueCode(ctx context.Context) (string, error)
 	GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error)
+	DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (matchesDeleted, matchesCancelled, ratingHistoryDeleted int64, err error)
+	RestoreTeam(ctx context.Context, teamID uuid.UUID) error
+	IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error)
 }
 
 // TournamentRepository определяет интерфейс репозитория турниров для проверки
@@ -390,5 +393,75 @@ func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
 	}
 
 	s.log.Info("Team deleted by admin", zap.String("team_id", teamID.String()))
+	return nil
+}
+
+// DisqualifyResult — результат дисквалификации команды
+type DisqualifyResult struct {
+	MatchesDeleted     int64 `json:"matches_deleted"`
+	MatchesCancelled   int64 `json:"matches_cancelled"`
+	RatingHistoryReset int64 `json:"rating_history_reset"`
+}
+
+// DisqualifyTeam дисквалифицирует команду в турнире
+func (s *Service) DisqualifyTeam(ctx context.Context, teamID uuid.UUID) (*DisqualifyResult, error) {
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	if team.IsDisqualified {
+		return nil, errors.ErrConflict.WithMessage("team is already disqualified")
+	}
+
+	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if tournament.Status != domain.TournamentActive {
+		return nil, errors.ErrBadRequest.WithMessage("can only disqualify teams in active tournaments")
+	}
+
+	matchesDeleted, matchesCancelled, ratingHistoryDeleted, err := s.teamRepo.DisqualifyTeamFull(ctx, teamID, team.TournamentID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.log.Info("Team disqualified",
+		zap.String("team_id", teamID.String()),
+		zap.String("tournament_id", team.TournamentID.String()),
+		zap.Int64("matches_deleted", matchesDeleted),
+		zap.Int64("matches_cancelled", matchesCancelled),
+		zap.Int64("rating_history_deleted", ratingHistoryDeleted),
+	)
+
+	return &DisqualifyResult{
+		MatchesDeleted:     matchesDeleted,
+		MatchesCancelled:   matchesCancelled,
+		RatingHistoryReset: ratingHistoryDeleted,
+	}, nil
+}
+
+// RestoreTeam снимает дисквалификацию с команды
+func (s *Service) RestoreTeam(ctx context.Context, teamID uuid.UUID) error {
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+
+	if !team.IsDisqualified {
+		return errors.ErrConflict.WithMessage("team is not disqualified")
+	}
+
+	if err := s.teamRepo.RestoreTeam(ctx, teamID); err != nil {
+		return err
+	}
+
+	s.log.Info("Team restored",
+		zap.String("team_id", teamID.String()),
+		zap.String("tournament_id", team.TournamentID.String()),
+	)
+
 	return nil
 }
