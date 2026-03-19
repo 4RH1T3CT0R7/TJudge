@@ -323,6 +323,7 @@ export function SpaceInvader({
         clearSpinStyles();
         spinPhaseRef.current = 'idle';
         ++spinGenRef.current; // invalidate stale callbacks
+        setPose('idle');
       }
       poseTimerRef.current = setTimeout(() => {
         setPose('handsUp');
@@ -681,6 +682,7 @@ export function SpaceInvader({
 
   const startSpin = useCallback(() => {
     clearTimeout(spinDecelTimerRef.current);
+    clearTimeout(flickTimerRef.current);
     clearSpinStyles();
     spinPhaseRef.current = 'spinning';
     ++spinGenRef.current;
@@ -709,11 +711,11 @@ export function SpaceInvader({
       }
       el.style.animation = 'none';
       el.style.transform = `rotate(${angle}deg)`;
-      // Fixed decel: 0.5s ease-out covering ~180° (matches spin speed continuity)
-      // + extra turns for flick gestures
-      const decelArc = (SPIN_DEGS_PER_SEC * 0.5) / 2 + extraTurns * 360;
-      const target = angle + decelArc;
-      const dur = 0.5 + extraTurns * 0.4;
+      // Target must be a multiple of 360° so clearing styles causes no visible snap
+      const minArc = (SPIN_DEGS_PER_SEC * 0.5) / 2 + extraTurns * 360;
+      const target = Math.ceil((angle + minArc) / 360) * 360;
+      const actualArc = target - angle;
+      const dur = Math.max(0.4, actualArc / SPIN_DEGS_PER_SEC + 0.15);
       requestAnimationFrame(() => {
         if (spinGenRef.current !== gen) return;
         el.style.transition = `transform ${dur}s ease-out`;
@@ -740,8 +742,8 @@ export function SpaceInvader({
     spinPhaseRef.current = 'spinning';
     ++spinGenRef.current;
     setPose('spin');
-    const extraTurns = Math.min(3, Math.floor(velocity / 400));
-    const spinTime = Math.min(800, Math.max(200, velocity * 0.5));
+    const extraTurns = Math.min(2, Math.floor(velocity / 600));
+    const spinTime = Math.min(500, Math.max(150, velocity * 0.3));
     flickTimerRef.current = setTimeout(() => decelSpin(extraTurns), spinTime);
   }, [clearSpinStyles, decelSpin]);
 
