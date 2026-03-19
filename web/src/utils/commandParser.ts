@@ -59,7 +59,7 @@ export const ALL_COMMANDS = [
   'invader.status()',
   'help', 'clear', 'whoami', 'ls', 'history',
   'cat readme.txt', 'cat config.sys', 'cat .hidden',
-  'ping bcgx.itsbmstu.ru',
+  'ping tjudge.ru',
   'scan()', 'decrypt("")', 'hack("")', 'debug()', 'patch()', 'escape()',
   'play.pong()', 'play.typing()', 'play.strategy()',
   'inventory()', 'quest.start()', 'start',
@@ -547,7 +547,7 @@ export function executeCommand(input: string): CommandResult {
       case 'ping':
         return {
           output: [
-            '> PING bcgx.itsbmstu.ru (10.0.0.42):',
+            '> PING tjudge.ru (10.0.0.42):',
             '  64 bytes: time=13ms',
             '  64 bytes: time=11ms',
             '  64 bytes: time=12ms',

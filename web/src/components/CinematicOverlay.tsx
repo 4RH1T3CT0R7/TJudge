@@ -82,7 +82,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
 
   // First login cinematic sequence
   const firstLoginLines = [
-    '> Connecting to bcgx.itsbmstu.ru...',
+    '> Connecting to tjudge.ru...',
     '> Authenticating...',
     '> Access granted.',
   ];

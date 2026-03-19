@@ -189,7 +189,7 @@ export function Login() {
           </p>
           <h1 className="text-2xl font-bold text-gray-100">
             <span className="text-primary-400" style={monoFont}>$ ssh </span>
-            <span>bcgx.itsbmstu.ru</span>
+            <span>tjudge.ru</span>
           </h1>
         </div>
 
