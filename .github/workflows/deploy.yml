@@ -60,7 +60,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd ~/Tjudge
+            cd ~/TJudge
             export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
             ./scripts/deploy.sh staging ${{ needs.prepare.outputs.version }}
 
@@ -99,7 +99,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN
           script: |
-            cd ~/Tjudge
+            cd ~/TJudge
             git fetch origin && git pull origin main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
             export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
@@ -144,5 +144,5 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd ~/Tjudge
+            cd ~/TJudge
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
