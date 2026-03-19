@@ -104,9 +104,12 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
             export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
             export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
-            mkdir -p data/programs secrets
+            mkdir -p data/programs
+            ./scripts/init-secrets.sh
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml pull
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+            docker builder prune -f
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
 
