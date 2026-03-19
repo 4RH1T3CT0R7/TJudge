@@ -34,14 +34,22 @@ jobs:
 
       - name: Determine version
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_VERSION" ]; then
+            V="$INPUT_VERSION"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            V="$REF_NAME"
           else
-            echo "version=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+            V="sha-$(echo "$COMMIT_SHA" | cut -c1-7)"
           fi
+          # Strip 'v' prefix — docker tags use semver without it
+          echo "version=${V#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -108,7 +116,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /opt/tjudge
+            cd ~/Tjudge
+            export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
             ./scripts/deploy.sh staging ${{ needs.build.outputs.version }}
 
       - name: Health check
@@ -142,45 +151,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Determine current active environment
-        id: current
+      - name: Deploy to production
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cat /opt/tjudge/current_env || echo "blue"
-
-      - name: Deploy to inactive environment
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd /opt/tjudge
-            ./scripts/blue-green-deploy.sh ${{ needs.build.outputs.version }}
-
-      - name: Run smoke tests on new environment
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd /opt/tjudge
-            ./scripts/smoke-test.sh
-
-      - name: Switch traffic to new environment
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd /opt/tjudge
-            ./scripts/switch-traffic.sh
+            cd ~/Tjudge
+            git fetch origin && git checkout ${{ github.ref_name }} 2>/dev/null || git pull origin main
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
+            export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
+            VERSION=${{ needs.build.outputs.version }} docker compose -f docker-compose.prod.yml pull
+            VERSION=${{ needs.build.outputs.version }} docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
       - name: Health check production
         env:
@@ -236,8 +220,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /opt/tjudge
-            ./scripts/rollback.sh
+            cd ~/Tjudge
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
       - name: Notify on rollback
         uses: slackapi/slack-github-action@v1.24.0

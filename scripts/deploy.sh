@@ -6,7 +6,8 @@ set -euo pipefail
 
 ENVIRONMENT="${1:-staging}"
 VERSION="${2:-latest}"
-DEPLOY_DIR="/opt/tjudge"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Colors for output
 RED='\033[0;31m'

@@ -88,7 +88,7 @@ services:
 
   # API Server
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-api:${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-api:${VERSION:-latest}
     ports:
       - "8080:8080"
       - "9090:9090"
@@ -154,7 +154,7 @@ services:
 
   # Worker Pool
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-worker:${VERSION:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-worker:${VERSION:-latest}
     ports:
       - "9091:9090"
     environment:
@@ -174,7 +174,7 @@ services:
       - LOG_ASYNC=true
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
-      - EXECUTOR_DOCKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER:-bmstu-itstech}/tjudge-executor:${VERSION:-latest}
+      - EXECUTOR_DOCKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-executor:${VERSION:-latest}
       - EXECUTOR_TIMEOUT=60s
       - EXECUTOR_DEFAULT_ITERATIONS=1000
       - PROGRAMS_PATH=/data/programs
