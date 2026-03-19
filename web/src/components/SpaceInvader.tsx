@@ -733,19 +733,53 @@ export function SpaceInvader({
     setPose('spinStop');
   }, [clearSpinStyles]);
 
-  // Auto-spin: triggered by quick swipe (flick gesture) — spin + auto-decelerate
+  // Auto-spin: triggered by quick swipe (flick gesture) — immediate smooth deceleration
+  // No full-speed spin phase: go straight to ease-out rotation proportional to velocity
   const flickTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const flickSpin = useCallback((velocity: number) => {
     clearTimeout(spinDecelTimerRef.current);
     clearTimeout(flickTimerRef.current);
     clearSpinStyles();
-    spinPhaseRef.current = 'spinning';
-    ++spinGenRef.current;
-    setPose('spin');
-    const extraTurns = Math.min(2, Math.floor(velocity / 600));
-    const spinTime = Math.min(500, Math.max(150, velocity * 0.3));
-    flickTimerRef.current = setTimeout(() => decelSpin(extraTurns), spinTime);
-  }, [clearSpinStyles, decelSpin]);
+
+    const gen = ++spinGenRef.current;
+    spinPhaseRef.current = 'decelerating';
+
+    const el = spinContainerRef.current;
+    if (!el) { spinPhaseRef.current = 'idle'; return; }
+
+    // Read current visual angle
+    const cs = getComputedStyle(el);
+    const mx = cs.transform;
+    let angle = 0;
+    if (mx && mx !== 'none') {
+      const vals = mx.match(/matrix\(([^)]+)\)/);
+      if (vals) {
+        const [a, b] = vals[1].split(',').map(Number);
+        angle = Math.atan2(b, a) * (180 / Math.PI);
+      }
+    }
+    el.style.animation = 'none';
+    el.style.transform = `rotate(${angle}deg)`;
+
+    // Arc proportional to velocity: light swipe ~360°, hard swipe ~720°
+    const flickArc = Math.min(720, Math.max(180, velocity * 0.5));
+    const target = Math.ceil((angle + flickArc) / 360) * 360;
+    const actualArc = target - angle;
+    const dur = Math.max(0.5, actualArc / 600 + 0.1);
+
+    setPose('spinStop');
+    requestAnimationFrame(() => {
+      if (spinGenRef.current !== gen) return;
+      el.style.transition = `transform ${dur}s ease-out`;
+      el.style.transform = `rotate(${target}deg)`;
+      spinDecelTimerRef.current = setTimeout(() => {
+        if (spinGenRef.current !== gen) return;
+        clearSpinStyles();
+        spinPhaseRef.current = 'idle';
+        setPose('idle');
+      }, dur * 1000 + 20);
+    });
+  }, [clearSpinStyles]);
 
   const pressCleanupRef = useRef<(() => void) | null>(null);
 
