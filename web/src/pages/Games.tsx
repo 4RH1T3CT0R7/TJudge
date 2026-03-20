@@ -144,8 +144,20 @@ export function Games() {
 
                 {game.rules && (
                   <div className="text-sm text-gray-300 mb-4 line-clamp-3">
-                    {game.rules.substring(0, 150)}
-                    {game.rules.length > 150 && '...'}
+                    {(() => {
+                      const plain = game.rules
+                        .replace(/#{1,6}\s+/g, '')
+                        .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+                        .replace(/`([^`]+)`/g, '$1')
+                        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                        .replace(/^[-*+]\s+/gm, '')
+                        .replace(/^\d+\.\s+/gm, '')
+                        .replace(/^>\s+/gm, '')
+                        .replace(/\n{2,}/g, ' ')
+                        .replace(/\n/g, ' ')
+                        .trim();
+                      return plain.length > 150 ? plain.substring(0, 150) + '...' : plain;
+                    })()}
                   </div>
                 )}
 
