@@ -7,8 +7,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"go.uber.org/zap"
 )
 
 // RequireRole middleware проверяет, что у пользователя есть требуемая роль
@@ -58,30 +56,4 @@ func RequireRoleValue(ctx context.Context) (domain.Role, error) {
 		return "", errors.ErrUnauthorized.WithMessage("role not found in context")
 	}
 	return role, nil
-}
-
-// SetUserRole middleware извлекает роль пользователя из auth service и добавляет в контекст
-func SetUserRole(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Извлекаем токен из заголовка
-			token := ExtractToken(r)
-			if token == "" {
-				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("missing or invalid authorization header"))
-				return
-			}
-
-			// Получаем пользователя по токену
-			user, err := authService.GetUserFromToken(r.Context(), token)
-			if err != nil {
-				log.Info("Failed to get user from token", zap.Error(err))
-				httputil.WriteError(w, errors.ErrUnauthorized.WithError(err))
-				return
-			}
-
-			// Добавляем роль в контекст
-			ctx := WithRole(r.Context(), user.Role)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
 }

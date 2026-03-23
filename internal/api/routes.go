@@ -116,10 +116,8 @@ func (s *Server) setupMiddleware() {
 		MaxAge:           s.corsConfig.MaxAge,
 	}))
 
-	// NOTE: CSRF middleware (middleware/csrf.go) is intentionally NOT enabled.
-	// JWT is stored in localStorage and sent via Authorization header, not cookies.
-	// This makes the application immune to CSRF attacks. Enable CSRF protection
-	// if authentication is migrated to httpOnly cookies in the future.
+	// CSRF protection is not needed: JWT is stored in localStorage and sent
+	// via Authorization header, making the app immune to CSRF attacks.
 }
 
 // setupRoutes настраивает маршруты

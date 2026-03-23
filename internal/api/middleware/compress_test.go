@@ -76,37 +76,3 @@ func TestCompress_ContentLengthRemoved(t *testing.T) {
 	// Content-Length should be removed by gzipResponseWriter
 	assert.Empty(t, rr.Header().Get("Content-Length"))
 }
-
-func TestCompressWithLevel_BestSpeed(t *testing.T) {
-	handler := CompressWithLevel(gzip.BestSpeed)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"data":"test"}`))
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
-
-	reader, err := gzip.NewReader(rr.Body)
-	require.NoError(t, err)
-	defer reader.Close()
-
-	body, err := io.ReadAll(reader)
-	require.NoError(t, err)
-	assert.Equal(t, `{"data":"test"}`, string(body))
-}
-
-func TestCompressWithLevel_NoGzip(t *testing.T) {
-	handler := CompressWithLevel(gzip.BestCompression)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("no gzip"))
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Empty(t, rr.Header().Get("Content-Encoding"))
-	assert.Equal(t, "no gzip", rr.Body.String())
-}

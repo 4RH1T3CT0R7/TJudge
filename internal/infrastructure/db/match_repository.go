@@ -992,11 +992,6 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 	return matches, hasMore, nil
 }
 
-// GetMatchCursor возвращает курсор для матча (для использования с pagination.NewConnection)
-func GetMatchCursor(match *domain.Match) (*pagination.Cursor, error) {
-	return pagination.NewTimestampCursor(match.CreatedAt), nil
-}
-
 // GetStuckRunning получает матчи, застрявшие в статусе running дольше указанного времени
 func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error) {
 	var matches []*domain.Match

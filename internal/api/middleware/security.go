@@ -42,19 +42,6 @@ func DefaultSecurityConfig() SecurityConfig {
 	}
 }
 
-// APISecurityConfig возвращает конфигурацию для API (менее строгая CSP)
-func APISecurityConfig() SecurityConfig {
-	return SecurityConfig{
-		XSSProtection:           true,
-		ContentTypeNosniff:      true,
-		XFrameOptions:           "DENY",
-		ContentSecurityPolicy:   "default-src 'none'; frame-ancestors 'none'",
-		ReferrerPolicy:          "strict-origin-when-cross-origin",
-		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
-		PermissionsPolicy:       "camera=(), microphone=(), geolocation=()",
-	}
-}
-
 // SecurityHeaders добавляет security headers к ответам
 func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

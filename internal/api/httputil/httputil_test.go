@@ -50,36 +50,6 @@ func TestWriteJSON_StatusCode(t *testing.T) {
 	assert.Equal(t, 201, rr.Code)
 }
 
-func TestWriteJSONWithMeta_IncludesMeta(t *testing.T) {
-	rr := httptest.NewRecorder()
-
-	meta := &httputil.Meta{Total: 10, Limit: 5, Offset: 0}
-	httputil.WriteJSONWithMeta(rr, 200, []string{"a", "b"}, meta)
-
-	var body map[string]interface{}
-	err := json.NewDecoder(rr.Body).Decode(&body)
-	require.NoError(t, err)
-
-	metaObj, ok := body["meta"].(map[string]interface{})
-	require.True(t, ok, "meta should be a JSON object")
-	assert.Equal(t, float64(10), metaObj["total"])
-	assert.Equal(t, float64(5), metaObj["limit"])
-}
-
-func TestWriteJSONWithMeta_NilMeta(t *testing.T) {
-	rr := httptest.NewRecorder()
-
-	httputil.WriteJSONWithMeta(rr, 200, []string{"x"}, nil)
-
-	var body map[string]interface{}
-	err := json.NewDecoder(rr.Body).Decode(&body)
-	require.NoError(t, err)
-
-	// Meta is omitempty, so it should be absent from the response when nil.
-	_, exists := body["meta"]
-	assert.False(t, exists, "meta key should be absent when nil meta is passed")
-}
-
 func TestWriteMessage_NoDataField(t *testing.T) {
 	rr := httptest.NewRecorder()
 

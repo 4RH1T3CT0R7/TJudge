@@ -224,48 +224,6 @@ func TestEloCalculator_SetKFactor(t *testing.T) {
 	assert.Equal(t, 16, calc.GetKFactor())
 }
 
-func TestGetAdaptiveKFactor_Beginner(t *testing.T) {
-	kFactor := GetAdaptiveKFactor(1000)
-	assert.Equal(t, 40, kFactor)
-}
-
-func TestGetAdaptiveKFactor_Intermediate(t *testing.T) {
-	kFactor := GetAdaptiveKFactor(1500)
-	assert.Equal(t, 32, kFactor)
-}
-
-func TestGetAdaptiveKFactor_Advanced(t *testing.T) {
-	kFactor := GetAdaptiveKFactor(2000)
-	assert.Equal(t, 24, kFactor)
-}
-
-func TestGetAdaptiveKFactor_Expert(t *testing.T) {
-	kFactor := GetAdaptiveKFactor(2500)
-	assert.Equal(t, 16, kFactor)
-}
-
-func TestGetAdaptiveKFactor_Boundaries(t *testing.T) {
-	tests := []struct {
-		rating   int
-		expected int
-	}{
-		{1199, 40},
-		{1200, 32},
-		{1799, 32},
-		{1800, 24},
-		{2399, 24},
-		{2400, 16},
-		{3000, 16},
-	}
-
-	for _, tc := range tests {
-		t.Run("", func(t *testing.T) {
-			result := GetAdaptiveKFactor(tc.rating)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 func TestEloCalculator_RealisticScenario(t *testing.T) {
 	calc := NewDefaultEloCalculator()
 
@@ -580,28 +538,6 @@ func TestEloCalculator_VeryLargeRatingDifference(t *testing.T) {
 		assert.False(t, math.IsNaN(expected))
 		assert.False(t, math.IsInf(expected, 0))
 	})
-}
-
-func TestGetAdaptiveKFactor_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		rating   int
-		expected int
-	}{
-		{"ZeroRating", 0, 40},
-		{"NegativeRating", -500, 40},
-		{"ExactlyAt1200", 1200, 32},
-		{"ExactlyAt1800", 1800, 24},
-		{"ExactlyAt2400", 2400, 16},
-		{"VeryHighRating", 5000, 16},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := GetAdaptiveKFactor(tc.rating)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
 }
 
 func BenchmarkEloCalculator_CalculateExpectedScore(b *testing.B) {

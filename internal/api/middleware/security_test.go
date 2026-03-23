@@ -28,18 +28,6 @@ func TestDefaultSecurityConfig_Headers(t *testing.T) {
 	assert.Equal(t, "none", rr.Header().Get("X-Permitted-Cross-Domain-Policies"))
 }
 
-func TestAPISecurityConfig_RestrictiveCSP(t *testing.T) {
-	handler := SecurityHeaders(APISecurityConfig())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", rr.Header().Get("Content-Security-Policy"))
-}
-
 func TestSecurityHeaders_CustomConfig(t *testing.T) {
 	config := SecurityConfig{
 		XSSProtection:         false, // disabled

@@ -41,12 +41,6 @@ func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
 	writeRawJSON(w, status, envelope)
 }
 
-// WriteJSONWithMeta wraps the payload with pagination metadata.
-func WriteJSONWithMeta(w http.ResponseWriter, status int, v interface{}, meta *Meta) {
-	envelope := Response{Data: v, Meta: meta}
-	writeRawJSON(w, status, envelope)
-}
-
 // messageResponse is used by WriteMessage to avoid emitting "data":null.
 type messageResponse struct {
 	Message string `json:"message"`

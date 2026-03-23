@@ -72,7 +72,6 @@ web/
 │   │   ├── TerminalQuest.tsx   # Терминальный квест
 │   │   ├── TerminalLoader.tsx  # Терминальный лоадер
 │   │   ├── TerminalTypewriter.tsx  # Эффект печатающегося текста
-│   │   ├── MatrixRain.tsx      # Анимация «Матрицы» (canvas)
 │   │   ├── CinematicOverlay.tsx # Кинематографические переходы
 │   │   ├── PixelGrid.tsx       # Пиксельная сетка
 │   │   ├── ErrorBoundary.tsx   # Обработка ошибок React
@@ -83,12 +82,8 @@ web/
 │   │   ├── useWebSocket.ts     # WebSocket для real-time обновлений
 │   │   ├── useQuestState.ts    # Состояние и логика квеста (5 уровней)
 │   │   ├── useEasterEggs.ts    # Пасхалки (Konami Code, God Mode и др.)
-│   │   ├── useInvaderReactor.ts    # Реакции инвейдера на события
-│   │   ├── useInvaderAnimation.ts  # Управление анимациями инвейдера
-│   │   ├── useScrollInvader.ts # Реакция инвейдера на скролл
 │   │   ├── useDarkMode.ts      # Тёмная тема
 │   │   ├── useDelayedLoading.ts    # Отложенный показ лоадера
-│   │   ├── useIdleDetector.ts  # Обнаружение бездействия пользователя
 │   │   └── useEscapeKey.ts     # Обработка клавиши Escape
 │   ├── pages/                  # Страницы
 │   │   ├── Home.tsx
@@ -187,7 +182,6 @@ Vite дополнительно разделяет бандл на чанки ч
 ### Кинематографические эффекты
 
 - **CinematicOverlay** -- кинематографическая заставка при первом входе.
-- **MatrixRain** -- анимация «Матрицы» на canvas при бездействии пользователя.
 - **TerminalTypewriter** -- эффект последовательной печати текста в стиле терминала.
 
 ## API клиент

@@ -20,8 +20,6 @@ type ContextKey string
 const (
 	// UserIDKey ключ для user ID в контексте
 	UserIDKey ContextKey = "user_id"
-	// UserKey ключ для User в контексте
-	UserKey ContextKey = "user"
 	// RoleKey ключ для роли в контексте
 	RoleKey ContextKey = "user_role"
 )
@@ -29,7 +27,7 @@ const (
 // AuthService интерфейс для работы с аутентификацией
 type AuthService interface {
 	ValidateToken(tokenString string) (*auth.Claims, error)
-	GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) // used by SetUserRole, handlers
+	GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error)
 	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 

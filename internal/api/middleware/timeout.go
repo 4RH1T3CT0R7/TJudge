@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-// OperationType определяет тип операции для настройки таймаута
-type OperationType string
-
-const (
-	OperationDefault   OperationType = "default"
-	OperationDatabase  OperationType = "database"
-	OperationCache     OperationType = "cache"
-	OperationHeavy     OperationType = "heavy" // Тяжёлые операции (leaderboard, stats)
-	OperationWebSocket OperationType = "websocket"
-)
-
 // TimeoutConfig конфигурация таймаутов для разных типов операций
 type TimeoutConfig struct {
 	Default   time.Duration
@@ -93,25 +82,4 @@ func getTimeoutForRequest(r *http.Request, config TimeoutConfig) time.Duration {
 
 	// По умолчанию
 	return config.Default
-}
-
-// WithOperationTimeout создаёт контекст с таймаутом для конкретного типа операции
-// Используется в сервисах для ручного управления таймаутами
-func WithOperationTimeout(ctx context.Context, op OperationType, config TimeoutConfig) (context.Context, context.CancelFunc) {
-	var timeout time.Duration
-
-	switch op {
-	case OperationDatabase:
-		timeout = config.Database
-	case OperationCache:
-		timeout = config.Cache
-	case OperationHeavy:
-		timeout = config.Heavy
-	case OperationWebSocket:
-		return ctx, func() {} // Без таймаута
-	default:
-		timeout = config.Default
-	}
-
-	return context.WithTimeout(ctx, timeout)
 }

@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -91,69 +90,6 @@ func TestSmartTimeout_Default(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
-func TestWithOperationTimeout_Database(t *testing.T) {
-	config := DefaultTimeoutConfig()
-	ctx := context.Background()
-
-	newCtx, cancel := WithOperationTimeout(ctx, OperationDatabase, config)
-	defer cancel()
-
-	deadline, ok := newCtx.Deadline()
-	assert.True(t, ok)
-	remaining := time.Until(deadline)
-	assert.InDelta(t, config.Database.Seconds(), remaining.Seconds(), 1.0)
-}
-
-func TestWithOperationTimeout_Cache(t *testing.T) {
-	config := DefaultTimeoutConfig()
-	ctx := context.Background()
-
-	newCtx, cancel := WithOperationTimeout(ctx, OperationCache, config)
-	defer cancel()
-
-	deadline, ok := newCtx.Deadline()
-	assert.True(t, ok)
-	remaining := time.Until(deadline)
-	assert.InDelta(t, config.Cache.Seconds(), remaining.Seconds(), 1.0)
-}
-
-func TestWithOperationTimeout_Heavy(t *testing.T) {
-	config := DefaultTimeoutConfig()
-	ctx := context.Background()
-
-	newCtx, cancel := WithOperationTimeout(ctx, OperationHeavy, config)
-	defer cancel()
-
-	deadline, ok := newCtx.Deadline()
-	assert.True(t, ok)
-	remaining := time.Until(deadline)
-	assert.InDelta(t, config.Heavy.Seconds(), remaining.Seconds(), 1.0)
-}
-
-func TestWithOperationTimeout_WebSocket_NoTimeout(t *testing.T) {
-	config := DefaultTimeoutConfig()
-	ctx := context.Background()
-
-	newCtx, cancel := WithOperationTimeout(ctx, OperationWebSocket, config)
-	defer cancel()
-
-	_, ok := newCtx.Deadline()
-	assert.False(t, ok, "WebSocket should not have deadline")
-}
-
-func TestWithOperationTimeout_Default(t *testing.T) {
-	config := DefaultTimeoutConfig()
-	ctx := context.Background()
-
-	newCtx, cancel := WithOperationTimeout(ctx, OperationDefault, config)
-	defer cancel()
-
-	deadline, ok := newCtx.Deadline()
-	assert.True(t, ok)
-	remaining := time.Until(deadline)
-	assert.InDelta(t, config.Default.Seconds(), remaining.Seconds(), 1.0)
 }
 
 func TestDefaultTimeoutConfig_Values(t *testing.T) {

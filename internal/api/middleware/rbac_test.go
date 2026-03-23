@@ -161,69 +161,6 @@ func TestRequireRoleValue(t *testing.T) {
 	})
 }
 
-func TestSetUserRole(t *testing.T) {
-	mockAuth := new(MockAuthService)
-	log := newTestLogger()
-
-	userID := uuid.New()
-	user := &domain.User{ID: userID, Role: domain.RoleAdmin}
-
-	mockAuth.On("GetUserFromToken", mock.Anything, "valid-token").Return(user, nil)
-
-	var capturedRole domain.Role
-	handler := middleware.SetUserRole(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedRole, _ = middleware.RequireRoleValue(r.Context())
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, domain.RoleAdmin, capturedRole)
-	mockAuth.AssertExpectations(t)
-}
-
-func TestSetUserRole_MissingToken(t *testing.T) {
-	mockAuth := new(MockAuthService)
-	log := newTestLogger()
-
-	handler := middleware.SetUserRole(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("Handler should not be called")
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	// No Authorization header
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
-func TestSetUserRole_InvalidToken(t *testing.T) {
-	mockAuth := new(MockAuthService)
-	log := newTestLogger()
-
-	mockAuth.On("GetUserFromToken", mock.Anything, "invalid-token").Return(nil, assert.AnError)
-
-	handler := middleware.SetUserRole(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Error("Handler should not be called")
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer invalid-token")
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	mockAuth.AssertExpectations(t)
-}
-
 func TestMiddlewareChain(t *testing.T) {
 	// Test that auth and rbac middleware work together
 	mockAuth := new(MockAuthService)

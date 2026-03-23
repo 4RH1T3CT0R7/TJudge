@@ -794,11 +794,6 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 	return tournaments, hasMore, nil
 }
 
-// GetTournamentCursor возвращает курсор для турнира (для использования с pagination.NewConnection)
-func GetTournamentCursor(tournament *domain.Tournament) (*pagination.Cursor, error) {
-	return pagination.NewTimestampCursor(tournament.CreatedAt), nil
-}
-
 // GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
 // Рейтинг = сумма всех очков из всех матчей
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {

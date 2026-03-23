@@ -85,19 +85,3 @@ func (ec *EloCalculator) GetKFactor() int {
 func (ec *EloCalculator) SetKFactor(kFactor int) {
 	ec.kFactor = kFactor
 }
-
-// GetAdaptiveKFactor возвращает адаптивный K-фактор на основе рейтинга
-// Более высокий K для низких рейтингов (быстрее растут)
-// Более низкий K для высоких рейтингов (стабильнее)
-func GetAdaptiveKFactor(rating int) int {
-	switch {
-	case rating < 1200:
-		return 40 // Новички растут быстро
-	case rating < 1800:
-		return 32 // Обычная скорость
-	case rating < 2400:
-		return 24 // Замедленный рост
-	default:
-		return 16 // Топ игроки - очень стабильно
-	}
-}
