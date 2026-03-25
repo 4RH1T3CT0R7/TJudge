@@ -45,24 +45,33 @@ func (qm *QueueManager) getQueueKey(priority domain.MatchPriority) string {
 	return fmt.Sprintf("queue:%s", priority)
 }
 
-// dedupKey is the Redis SET key used for match deduplication
-const dedupKey = "queue:dedup"
+// dedupPrefix is the key prefix for per-match deduplication keys.
+// Each match gets its own key "queue:dedup:{matchID}" with an independent TTL,
+// preventing the old shared-SET problem where active queues reset the TTL
+// for ALL entries on every SADD, causing unbounded growth.
+const dedupPrefix = "queue:dedup:"
 
-// dedupTTL is the TTL for the deduplication set
+// dedupTTL is the TTL for each individual deduplication key
 const dedupTTL = 24 * time.Hour
+
+// dedupKeyFor returns the per-match deduplication key
+func dedupKeyFor(matchID string) string {
+	return dedupPrefix + matchID
+}
 
 // Enqueue добавляет матч в очередь с учётом приоритета
 func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error {
-	// Атомарно проверяем дедупликацию и устанавливаем TTL
-	added, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, match.ID.String())
+	// Атомарно проверяем дедупликацию: SetNX создаёт ключ только если его нет
+	matchIDStr := match.ID.String()
+	isNew, err := qm.cache.SetNX(ctx, dedupKeyFor(matchIDStr), "1", dedupTTL)
 	if err != nil {
-		qm.log.LogError("Failed to check dedup set", err,
-			zap.String("match_id", match.ID.String()),
+		qm.log.LogError("Failed to check dedup key", err,
+			zap.String("match_id", matchIDStr),
 		)
 		// Продолжаем даже при ошибке дедупликации — лучше дублировать, чем потерять
-	} else if added == 0 {
+	} else if !isNew {
 		qm.log.Info("Match already enqueued, skipping",
-			zap.String("match_id", match.ID.String()),
+			zap.String("match_id", matchIDStr),
 		)
 		return nil
 	}
@@ -76,10 +85,10 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 	// Добавляем в соответствующую очередь
 	queueKey := qm.getQueueKey(match.Priority)
 	if err := qm.cache.LPush(ctx, queueKey, data); err != nil {
-		// Откатываем запись в dedup set, так как матч не был добавлен в очередь
-		if sremErr := qm.cache.SRem(ctx, dedupKey, match.ID.String()); sremErr != nil {
-			qm.log.LogError("Failed to rollback dedup entry on enqueue failure", sremErr,
-				zap.String("match_id", match.ID.String()),
+		// Откатываем запись в dedup, так как матч не был добавлен в очередь
+		if delErr := qm.cache.Del(ctx, dedupKeyFor(matchIDStr)); delErr != nil {
+			qm.log.LogError("Failed to rollback dedup entry on enqueue failure", delErr,
+				zap.String("match_id", matchIDStr),
 			)
 		}
 		return fmt.Errorf("failed to enqueue match: %w", err)
@@ -136,24 +145,25 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 		return nil
 	}
 
-	// Проверяем каждый матч через dedup set и собираем только новые
+	// Проверяем каждый матч через индивидуальный dedup-ключ и собираем только новые
 	grouped := make(map[string][]interface{})
-	var addedToDedup []string // ID матчей, добавленных в dedup set (для rollback)
+	var addedToDedup []string // dedup-ключи для rollback
 	var skipped int
 
 	for _, match := range matches {
+		matchIDStr := match.ID.String()
 		// Индивидуальная проверка дедупликации
-		added, err := qm.cache.SAddWithExpire(ctx, dedupKey, dedupTTL, match.ID.String())
+		isNew, err := qm.cache.SetNX(ctx, dedupKeyFor(matchIDStr), "1", dedupTTL)
 		if err != nil {
-			qm.log.LogError("Failed to check dedup set", err,
-				zap.String("match_id", match.ID.String()),
+			qm.log.LogError("Failed to check dedup key", err,
+				zap.String("match_id", matchIDStr),
 			)
 			// Продолжаем — лучше дублировать, чем потерять
-		} else if added == 0 {
+		} else if !isNew {
 			skipped++
 			continue
 		} else {
-			addedToDedup = append(addedToDedup, match.ID.String())
+			addedToDedup = append(addedToDedup, dedupKeyFor(matchIDStr))
 		}
 
 		data, err := json.Marshal(match)
@@ -174,12 +184,12 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 
 	// Batch LPUSH через pipeline
 	if err := qm.cache.BatchLPush(ctx, grouped); err != nil {
-		// Откатываем записи в dedup set, иначе матчи будут считаться
+		// Откатываем записи в dedup, иначе матчи будут считаться
 		// "уже в очереди" хотя реально туда не попали
-		for _, matchID := range addedToDedup {
-			if sremErr := qm.cache.SRem(ctx, dedupKey, matchID); sremErr != nil {
-				qm.log.LogError("Failed to rollback dedup entry on batch enqueue failure", sremErr,
-					zap.String("match_id", matchID),
+		for _, dedupKey := range addedToDedup {
+			if delErr := qm.cache.Del(ctx, dedupKey); delErr != nil {
+				qm.log.LogError("Failed to rollback dedup entry on batch enqueue failure", delErr,
+					zap.String("dedup_key", dedupKey),
 				)
 			}
 		}
@@ -241,9 +251,9 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
 	}
 
-	// Удаляем из dedup set, чтобы матч мог быть повторно поставлен в очередь в будущем
-	if err := qm.cache.SRem(ctx, dedupKey, match.ID.String()); err != nil {
-		qm.log.LogError("Failed to remove match from dedup set after dequeue", err,
+	// Удаляем dedup-ключ, чтобы матч мог быть повторно поставлен в очередь в будущем
+	if err := qm.cache.Del(ctx, dedupKeyFor(match.ID.String())); err != nil {
+		qm.log.LogError("Failed to remove dedup key after dequeue", err,
 			zap.String("match_id", match.ID.String()),
 		)
 	}
@@ -329,12 +339,33 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 		}
 	}
 
-	// Очищаем dedup set
-	if err := qm.cache.Del(ctx, dedupKey); err != nil {
-		return fmt.Errorf("failed to clear dedup set: %w", err)
+	// Очищаем dedup-ключи по паттерну
+	if err := qm.clearDedupKeys(ctx); err != nil {
+		return fmt.Errorf("failed to clear dedup keys: %w", err)
 	}
 
 	qm.log.Info("All queues cleared")
+	return nil
+}
+
+// clearDedupKeys удаляет все dedup-ключи по паттерну queue:dedup:*
+func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
+	var cursor uint64
+	for {
+		keys, nextCursor, err := qm.cache.Scan(ctx, cursor, dedupPrefix+"*", 100)
+		if err != nil {
+			return fmt.Errorf("failed to scan dedup keys: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := qm.cache.Del(ctx, keys...); err != nil {
+				return fmt.Errorf("failed to delete dedup keys: %w", err)
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 	return nil
 }
 

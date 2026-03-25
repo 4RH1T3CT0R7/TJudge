@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -87,10 +88,8 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 // Get returns a game by ID.
 // GET /api/v1/games/{id}
 func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	if !ok {
 		return
 	}
 
@@ -124,10 +123,8 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 // Update updates a game.
 // PUT /api/v1/games/{id}
 func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	if !ok {
 		return
 	}
 
@@ -153,10 +150,8 @@ func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete deletes a game.
 // DELETE /api/v1/games/{id}
 func (h *GameCRUDHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	if !ok {
 		return
 	}
 

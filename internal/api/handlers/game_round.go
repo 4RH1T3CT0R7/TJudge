@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -195,10 +195,8 @@ type TournamentGameWithDetails struct {
 // GetTournamentGamesWithStatus returns games with their round status.
 // GET /api/v1/tournaments/{id}/games/status
 func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -281,10 +279,8 @@ type SetActiveGameRequest struct {
 // SetActiveGame sets the active game for a tournament.
 // POST /api/v1/tournaments/{id}/active-game
 func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -320,10 +316,8 @@ func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request)
 // DeactivateAllGames deactivates all games in a tournament.
 // POST /api/v1/tournaments/{id}/games/deactivate-all
 func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -350,10 +344,8 @@ func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Req
 // GetActiveGame returns the currently active game for a tournament.
 // GET /api/v1/tournaments/{id}/active-game
 func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -468,15 +460,13 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 
 // parseTournamentGameIDs is a helper to parse tournament and game IDs from URL params.
 func (h *GameRoundHandler) parseTournamentGameIDs(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
-	tournamentID, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return uuid.Nil, uuid.Nil, false
 	}
 
-	gameID, err := uuid.Parse(chi.URLParam(r, "gameId"))
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+	gameID, ok := httputil.ParseUUIDParam(w, r, "gameId", "game")
+	if !ok {
 		return uuid.Nil, uuid.Nil, false
 	}
 
@@ -566,10 +556,8 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 // DownloadAllPrograms streams a ZIP archive of all programs for a tournament.
 // GET /api/v1/tournaments/{id}/programs/download-zip
 func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 

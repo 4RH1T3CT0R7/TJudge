@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -610,10 +610,8 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	if !ok {
 		return
 	}
 
@@ -645,10 +643,8 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	if !ok {
 		return
 	}
 
@@ -732,10 +728,8 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	if !ok {
 		return
 	}
 
@@ -850,10 +844,8 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid program ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	if !ok {
 		return
 	}
 
@@ -907,23 +899,13 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamIDStr := r.URL.Query().Get("team_id")
-	gameIDStr := r.URL.Query().Get("game_id")
-
-	if teamIDStr == "" || gameIDStr == "" {
-		writeError(w, errors.ErrInvalidInput.WithMessage("team_id and game_id are required"))
+	teamID, ok := httputil.ParseQueryUUID(w, r, "team_id")
+	if !ok {
 		return
 	}
 
-	teamID, err := uuid.Parse(teamIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team_id"))
-		return
-	}
-
-	gameID, err := uuid.Parse(gameIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game_id"))
+	gameID, ok := httputil.ParseQueryUUID(w, r, "game_id")
+	if !ok {
 		return
 	}
 
@@ -961,10 +943,8 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 // ClearProgramErrors очищает сообщения об ошибках для всех программ турнира (только для админов)
 // POST /api/v1/tournaments/:id/programs/clear-errors
 func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 

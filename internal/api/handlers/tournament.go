@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -121,10 +121,8 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/tournaments/:id
 func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -145,10 +143,8 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/tournaments/:id/join
 func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -189,10 +185,8 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/tournaments/:id/start
 func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -216,10 +210,8 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/tournaments/:id/complete
 func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -243,10 +235,8 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/tournaments/:id
 func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -270,10 +260,8 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/tournaments/:id/leaderboard
 func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -297,10 +285,8 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 // POST /api/v1/tournaments/:id/matches
 func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -355,10 +341,8 @@ type CrossGameLeaderboardEntry struct {
 // GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
 // GET /api/v1/tournaments/:id/cross-game-leaderboard
 func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -379,10 +363,8 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 // GET /api/v1/tournaments/:id/matches
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -406,10 +388,8 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/tournaments/:id/matches/rounds
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -430,10 +410,8 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 // POST /api/v1/tournaments/:id/run-matches
 func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -461,10 +439,8 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 // RunGameMatches запускает матчи для конкретной игры в турнире
 // POST /api/v1/tournaments/:id/games/:gameId/run-matches
 func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -510,10 +486,8 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 // RetryFailedMatches перезапускает все неудачные матчи турнира
 // POST /api/v1/tournaments/:id/retry-matches
 func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 

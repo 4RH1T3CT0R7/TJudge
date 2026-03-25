@@ -11,6 +11,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api"
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
+	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
@@ -186,7 +187,7 @@ func main() {
 	)
 
 	gameService := game.NewService(gameRepo, log)
-	teamService := team.NewService(teamRepo, tournamentRepo, log)
+	teamService := team.NewService(teamRepo, tournamentRepo, distributedLock, log)
 
 	// Авто-раунд планировщик
 	autoRoundScheduler := tournament.NewAutoRoundScheduler(
@@ -228,6 +229,7 @@ func main() {
 	systemHandler := handlers.NewSystemHandler(log)
 
 	// Создаём API сервер
+	adminChecker := middleware.NewVerifiedAdminChecker(userRepo, 5*time.Minute)
 	apiServer := api.NewServer(
 		authHandler,
 		tournamentHandler,
@@ -242,7 +244,7 @@ func main() {
 		cfg.CORS,
 		cfg.RateLimit,
 		log,
-	)
+	).WithAdminChecker(adminChecker)
 
 	// Создаём HTTP сервер
 	srv := &http.Server{

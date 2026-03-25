@@ -119,7 +119,7 @@ func setupTestServer(b *testing.B) {
 	)
 
 	gameService := game.NewService(gameRepo, log)
-	teamService := team.NewService(teamRepo, tournamentRepo, log)
+	teamService := team.NewService(teamRepo, tournamentRepo, distributedLock, log)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, log)

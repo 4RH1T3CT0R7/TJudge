@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
 	"go.uber.org/zap"
 )
 
@@ -137,10 +138,8 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 // Get получает команду по ID
 // GET /api/v1/teams/{id}
 func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -156,10 +155,8 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // GetMembers получает участников команды
 // GET /api/v1/teams/{id}/members
 func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -186,10 +183,8 @@ func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -224,10 +219,8 @@ func (h *TeamHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -254,17 +247,13 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamIDStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(teamIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
-	memberIDStr := chi.URLParam(r, "userId")
-	memberID, err := uuid.Parse(memberIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid user ID"))
+	memberID, ok := httputil.ParseUUIDParam(w, r, "userId", "user")
+	if !ok {
 		return
 	}
 
@@ -298,10 +287,8 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -329,10 +316,8 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 // GetTournamentTeams получает все команды турнира
 // GET /api/v1/tournaments/{id}/teams
 func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -355,10 +340,8 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -380,10 +363,8 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 // Delete удаляет команду (админ)
 // DELETE /api/v1/teams/{id}
 func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -401,10 +382,8 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Disqualify дисквалифицирует команду в турнире
 // POST /api/v1/teams/{id}/disqualify
 func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 
@@ -427,10 +406,8 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 // Restore снимает дисквалификацию с команды
 // POST /api/v1/teams/{id}/restore
 func (h *TeamHandler) Restore(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	teamID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team ID"))
+	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	if !ok {
 		return
 	}
 

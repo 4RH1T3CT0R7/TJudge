@@ -3,6 +3,7 @@ package team
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -57,18 +58,25 @@ type UpdateTeamRequest struct {
 	Name string `json:"name" validate:"required,min=1,max=255"`
 }
 
+// DistributedLock интерфейс для распределённых блокировок
+type DistributedLock interface {
+	WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error
+}
+
 // Service предоставляет бизнес-логику для работы с командами
 type Service struct {
 	teamRepo       TeamRepository
 	tournamentRepo TournamentRepository
+	lock           DistributedLock
 	log            *logger.Logger
 }
 
 // NewService создаёт новый сервис команд
-func NewService(teamRepo TeamRepository, tournamentRepo TournamentRepository, log *logger.Logger) *Service {
+func NewService(teamRepo TeamRepository, tournamentRepo TournamentRepository, lock DistributedLock, log *logger.Logger) *Service {
 	return &Service{
 		teamRepo:       teamRepo,
 		tournamentRepo: tournamentRepo,
+		lock:           lock,
 		log:            log,
 	}
 }
@@ -129,7 +137,8 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 	return team, nil
 }
 
-// JoinTeamByCode позволяет пользователю присоединиться к команде по коду
+// JoinTeamByCode позволяет пользователю присоединиться к команде по коду.
+// Использует distributed lock для предотвращения race condition при проверке лимита участников.
 func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*domain.Team, error) {
 	team, err := s.teamRepo.GetByCode(ctx, req.Code)
 	if err != nil {
@@ -146,39 +155,53 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 		return nil, errors.ErrBadRequest.WithMessage("cannot join team in active or completed tournament")
 	}
 
-	// Проверяем лимит участников команды
-	memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get member count")
-	}
+	// Distributed lock на команду — предотвращает concurrent joins,
+	// которые могут превысить MaxTeamSize
+	lockKey := fmt.Sprintf("team:join:%s", team.ID.String())
+	var result *domain.Team
 
-	if tournament.MaxTeamSize > 0 && memberCount >= tournament.MaxTeamSize {
-		return nil, errors.ErrBadRequest.WithMessage("team is full")
-	}
+	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+		// Проверяем лимит участников команды (внутри lock — атомарно)
+		memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
+		if err != nil {
+			return errors.Wrap(err, "failed to get member count")
+		}
 
-	// Проверяем что пользователь не состоит в другой команде
-	inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, team.TournamentID, req.UserID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to check user team membership")
-	}
-	if inTeam {
-		return nil, errors.ErrConflict.WithMessage("user already in a team in this tournament")
-	}
+		if tournament.MaxTeamSize > 0 && memberCount >= tournament.MaxTeamSize {
+			return errors.ErrBadRequest.WithMessage("team is full")
+		}
 
-	// Добавляем пользователя в команду
-	member := &domain.TeamMember{
-		ID:     uuid.New(),
-		TeamID: team.ID,
-		UserID: req.UserID,
-	}
+		// Проверяем что пользователь не состоит в другой команде
+		inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, team.TournamentID, req.UserID)
+		if err != nil {
+			return errors.Wrap(err, "failed to check user team membership")
+		}
+		if inTeam {
+			return errors.ErrConflict.WithMessage("user already in a team in this tournament")
+		}
 
-	if err := s.teamRepo.AddMember(ctx, member); err != nil {
-		return nil, errors.Wrap(err, "failed to add team member")
+		// Добавляем пользователя в команду
+		member := &domain.TeamMember{
+			ID:     uuid.New(),
+			TeamID: team.ID,
+			UserID: req.UserID,
+		}
+
+		if err := s.teamRepo.AddMember(ctx, member); err != nil {
+			return errors.Wrap(err, "failed to add team member")
+		}
+
+		result = team
+		return nil
+	})
+
+	if lockErr != nil {
+		return nil, lockErr
 	}
 
 	s.log.Info("User joined team", zap.String("team_id", team.ID.String()), zap.String("user_id", req.UserID.String()))
 
-	return team, nil
+	return result, nil
 }
 
 // LeaveTeam позволяет пользователю покинуть команду

@@ -5,12 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	ws "github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -62,10 +61,8 @@ func NewWebSocketHandler(hub *websocket.Hub, log *logger.Logger) *WebSocketHandl
 // WS /api/v1/ws/tournaments/:id
 func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 

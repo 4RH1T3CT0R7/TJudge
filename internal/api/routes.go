@@ -27,6 +27,7 @@ type Server struct {
 	systemHandler     *handlers.SystemHandler
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
+	adminChecker      *middleware.VerifiedAdminChecker
 	corsConfig        config.CORSConfig
 	rateLimitConfig   config.RateLimitConfig
 	log               *logger.Logger
@@ -68,6 +69,13 @@ func NewServer(
 	s.setupMiddleware()
 	s.setupRoutes()
 
+	return s
+}
+
+// WithAdminChecker устанавливает проверку admin-роли из БД.
+// Если установлен, admin-only роуты будут верифицировать роль из БД (с кешем).
+func (s *Server) WithAdminChecker(checker *middleware.VerifiedAdminChecker) *Server {
+	s.adminChecker = checker
 	return s
 }
 
@@ -118,6 +126,14 @@ func (s *Server) setupMiddleware() {
 
 	// CSRF protection is not needed: JWT is stored in localStorage and sent
 	// via Authorization header, making the app immune to CSRF attacks.
+}
+
+// requireAdmin returns the admin middleware — verified (DB-backed) if configured, JWT-only otherwise.
+func (s *Server) requireAdmin() func(http.Handler) http.Handler {
+	if s.adminChecker != nil {
+		return s.adminChecker.RequireVerifiedAdmin()
+	}
+	return middleware.RequireAdmin()
 }
 
 // setupRoutes настраивает маршруты
@@ -182,7 +198,7 @@ func (s *Server) setupRoutes() {
 
 				// Админские маршруты для турниров
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireAdmin())
+					r.Use(s.requireAdmin())
 					r.Post("/", s.tournamentHandler.Create)
 					r.Post("/{id}/start", s.tournamentHandler.Start)
 					r.Post("/{id}/complete", s.tournamentHandler.Complete)
@@ -216,7 +232,7 @@ func (s *Server) setupRoutes() {
 			// Админские маршруты
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(s.authService, s.log))
-				r.Use(middleware.RequireAdmin())
+				r.Use(s.requireAdmin())
 
 				r.Post("/", s.gameHandler.Create)
 				r.Put("/{id}", s.gameHandler.Update)
@@ -240,7 +256,7 @@ func (s *Server) setupRoutes() {
 
 			// Админские маршруты
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireAdmin())
+				r.Use(s.requireAdmin())
 				r.Delete("/{id}", s.teamHandler.Delete)
 				r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
 				r.Post("/{id}/restore", s.teamHandler.Restore)
@@ -276,7 +292,7 @@ func (s *Server) setupRoutes() {
 			// Админские маршруты для управления очередью матчей
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(s.authService, s.log))
-				r.Use(middleware.RequireAdmin())
+				r.Use(s.requireAdmin())
 
 				r.Get("/queue/stats", s.matchHandler.GetQueueStats)
 				r.Post("/queue/clear", s.matchHandler.ClearQueue)
@@ -296,7 +312,7 @@ func (s *Server) setupRoutes() {
 		r.Route("/system", func(r chi.Router) {
 			r.Use(bodyLimit)
 			r.Use(middleware.Auth(s.authService, s.log))
-			r.Use(middleware.RequireAdmin())
+			r.Use(s.requireAdmin())
 
 			r.Get("/metrics", s.systemHandler.GetMetrics)
 			r.Get("/health", s.systemHandler.GetHealth)

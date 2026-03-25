@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
@@ -11,7 +12,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -130,10 +130,8 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*domai
 // GET /api/v1/matches/:id
 func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid match ID"))
+	id, ok := httputil.ParseUUIDParam(w, r, "id", "match")
+	if !ok {
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -142,11 +143,18 @@ func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 	return args.Get(0).(*domain.Tournament), args.Error(1)
 }
 
+// noopLock executes the function immediately without actual locking (for unit tests)
+type noopLock struct{}
+
+func (n *noopLock) WithLock(_ context.Context, _ string, _ time.Duration, fn func(ctx context.Context) error) error {
+	return fn(context.Background())
+}
+
 func newTestTeamService(t *testing.T) (*Service, *MockTeamRepository, *MockTournamentRepository) {
 	teamRepo := new(MockTeamRepository)
 	tournamentRepo := new(MockTournamentRepository)
 	log, _ := logger.New("error", "json")
-	return NewService(teamRepo, tournamentRepo, log), teamRepo, tournamentRepo
+	return NewService(teamRepo, tournamentRepo, &noopLock{}, log), teamRepo, tournamentRepo
 }
 
 // --- CreateTeam ---

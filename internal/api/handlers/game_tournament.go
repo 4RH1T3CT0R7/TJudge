@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -49,10 +49,8 @@ func NewTournamentGameHandler(
 // GetTournamentGames returns games for a tournament.
 // GET /api/v1/tournaments/{id}/games
 func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -74,10 +72,8 @@ type AddGameToTournamentRequest struct {
 // AddGameToTournament adds a game to a tournament.
 // POST /api/v1/tournaments/{id}/games
 func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
@@ -133,17 +129,13 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 // RemoveGameFromTournament removes a game from a tournament.
 // DELETE /api/v1/tournaments/{id}/games/{gameId}
 func (h *TournamentGameHandler) RemoveGameFromTournament(w http.ResponseWriter, r *http.Request) {
-	tournamentIDStr := chi.URLParam(r, "id")
-	tournamentID, err := uuid.Parse(tournamentIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament ID"))
+	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	if !ok {
 		return
 	}
 
-	gameIDStr := chi.URLParam(r, "gameId")
-	gameID, err := uuid.Parse(gameIDStr)
-	if err != nil {
-		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game ID"))
+	gameID, ok := httputil.ParseUUIDParam(w, r, "gameId", "game")
+	if !ok {
 		return
 	}
 
