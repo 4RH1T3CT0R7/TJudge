@@ -19,30 +19,44 @@ import (
 	"go.uber.org/zap"
 )
 
+// Константы поддерживаемых языков программирования
+const (
+	LangPython     = "python"
+	LangCpp        = "cpp"
+	LangC          = "c"
+	LangGo         = "go"
+	LangRust       = "rust"
+	LangJava       = "java"
+	LangJavaScript = "javascript"
+	LangRuby       = "ruby"
+	LangPHP        = "php"
+	LangLua        = "lua"
+)
+
 // detectLanguage определяет язык программирования по расширению файла
 func detectLanguage(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".py":
-		return "python"
+		return LangPython
 	case ".cpp", ".cc", ".cxx":
-		return "cpp"
+		return LangCpp
 	case ".c":
-		return "c"
+		return LangC
 	case ".go":
-		return "go"
+		return LangGo
 	case ".rs":
-		return "rust"
+		return LangRust
 	case ".java":
-		return "java"
+		return LangJava
 	case ".js":
-		return "javascript"
+		return LangJavaScript
 	case ".rb":
-		return "ruby"
+		return LangRuby
 	case ".php":
-		return "php"
+		return LangPHP
 	case ".lua":
-		return "lua"
+		return LangLua
 	default:
 		return "unknown"
 	}
@@ -51,31 +65,39 @@ func detectLanguage(filename string) string {
 // getShebang возвращает shebang для интерпретируемых языков
 func getShebang(language string) string {
 	switch language {
-	case "python":
+	case LangPython:
 		return "#!/usr/bin/env python3\n"
-	case "javascript":
+	case LangJavaScript:
 		return "#!/usr/bin/env node\n"
-	case "ruby":
+	case LangRuby:
 		return "#!/usr/bin/env ruby\n"
-	case "php":
+	case LangPHP:
 		return "#!/usr/bin/env php\n"
-	case "lua":
+	case LangLua:
 		return "#!/usr/bin/env lua\n"
 	default:
 		return ""
 	}
 }
 
-// handleFileUpload обрабатывает загрузку файла
-func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
-	// Ограничиваем размер файла
-	r.Body = http.MaxBytesReader(w, r.Body, h.maxFileSize)
+// uploadFormData holds the parsed multipart form data for file upload.
+type uploadFormData struct {
+	fileContent  []byte
+	filename     string
+	name         string
+	teamID       uuid.UUID
+	tournamentID uuid.UUID
+	gameID       uuid.UUID
+}
 
+// parseUploadForm parses the multipart form, extracts the file and form fields,
+// and validates required fields. Returns nil on error (response already written).
+func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request) *uploadFormData {
 	// Парсим multipart form
 	if err := r.ParseMultipartForm(h.maxFileSize); err != nil {
 		h.log.Info("Failed to parse multipart form", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithMessage("file too large or invalid form"))
-		return
+		return nil
 	}
 
 	// Получаем файл
@@ -83,7 +105,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		h.log.Info("Failed to get file from form", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithMessage("file is required"))
-		return
+		return nil
 	}
 	defer file.Close()
 
@@ -96,70 +118,108 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// Валидация обязательных полей
 	if teamIDStr == "" || tournamentIDStr == "" || gameIDStr == "" {
 		writeError(w, errors.ErrInvalidInput.WithMessage("team_id, tournament_id and game_id are required"))
-		return
+		return nil
 	}
 
 	teamID, err := uuid.Parse(teamIDStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid team_id"))
-		return
+		return nil
 	}
 
 	tournamentID, err := uuid.Parse(tournamentIDStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid tournament_id"))
-		return
+		return nil
 	}
 
 	gameID, err := uuid.Parse(gameIDStr)
 	if err != nil {
 		writeError(w, errors.ErrInvalidInput.WithMessage("invalid game_id"))
-		return
+		return nil
 	}
 
-	// Проверяем что пользователь является членом команды
+	// Читаем всё содержимое файла в память (ограничено maxFileSize)
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		h.log.Error("Failed to read uploaded file", zap.Error(err))
+		writeError(w, errors.ErrInternal.WithMessage("не удалось прочитать файл"))
+		return nil
+	}
+
+	// Если имя не указано, используем имя файла
+	if name == "" {
+		name = header.Filename
+	}
+
+	return &uploadFormData{
+		fileContent:  fileContent,
+		filename:     header.Filename,
+		name:         name,
+		teamID:       teamID,
+		tournamentID: tournamentID,
+		gameID:       gameID,
+	}
+}
+
+// validateTeamAccess checks that the user is a member of the team and the team is not disqualified.
+// Returns false on error (response already written).
+func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Request, teamID, userID uuid.UUID) bool {
 	if h.teamChecker == nil {
 		h.log.Error("Team membership checker not configured")
 		writeError(w, errors.ErrInternal.WithMessage("authorization service unavailable"))
-		return
+		return false
 	}
+
 	isMember, err := h.teamChecker.IsUserInTeam(r.Context(), teamID, userID)
 	if err != nil {
 		h.log.LogError("Failed to check team membership", err)
 		writeError(w, errors.ErrInternal.WithMessage("failed to verify team membership"))
-		return
+		return false
 	}
 	if !isMember {
 		writeError(w, errors.ErrForbidden.WithMessage("you are not a member of this team"))
-		return
+		return false
 	}
 
-	// Проверяем, что команда не дисквалифицирована
 	disqualified, err := h.teamChecker.IsTeamDisqualified(r.Context(), teamID)
 	if err != nil {
 		h.log.LogError("Failed to check team disqualification", err)
 		writeError(w, errors.ErrInternal.WithMessage("failed to verify team status"))
-		return
+		return false
 	}
 	if disqualified {
 		writeError(w, errors.ErrForbidden.WithMessage("команда дисквалифицирована"))
-		return
+		return false
 	}
 
-	// Проверяем, что турнир активен (начат)
-	if h.tournamentStatus != nil {
-		t, err := h.tournamentStatus.GetByID(r.Context(), tournamentID)
-		if err != nil {
-			h.log.LogError("Failed to get tournament status", err)
-			writeError(w, errors.ErrInternal.WithMessage("failed to verify tournament status"))
-			return
-		}
-		if t.Status != domain.TournamentActive {
-			writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: турнир ещё не начался"))
-			return
-		}
+	return true
+}
+
+// validateTournamentActive checks that the tournament is in active status.
+// Returns false on error (response already written).
+func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http.Request, tournamentID uuid.UUID) bool {
+	if h.tournamentStatus == nil {
+		return true
 	}
 
+	t, err := h.tournamentStatus.GetByID(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to get tournament status", err)
+		writeError(w, errors.ErrInternal.WithMessage("failed to verify tournament status"))
+		return false
+	}
+	if t.Status != domain.TournamentActive {
+		writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: турнир ещё не начался"))
+		return false
+	}
+
+	return true
+}
+
+// validateUploadNotBlocked checks round completion and running matches in manual mode.
+// In auto-round mode, uploads are never blocked. Returns false on error (response already written).
+func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	// Проверяем, включён ли авто-раунд для этой игры
 	autoRoundEnabled := false
 	if h.autoRoundChecker != nil {
@@ -175,74 +235,87 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// В авто-режиме загрузка НЕ блокируется матчами — новая программа будет подхвачена в следующем раунде.
+	if autoRoundEnabled {
+		return true
+	}
+
 	// В ручном режиме — сохраняем оригинальную логику блокировки.
-	if !autoRoundEnabled {
-		// Проверяем, завершён ли раунд для этой игры (блокировка загрузки после завершения раунда)
-		if h.roundChecker != nil {
-			roundCompleted, err := h.roundChecker.IsRoundCompleted(r.Context(), tournamentID, gameID)
-			if err != nil {
-				h.log.LogError("Failed to check round completion", err,
-					zap.String("tournament_id", tournamentID.String()),
-					zap.String("game_id", gameID.String()),
-				)
-				// Продолжаем, если не можем проверить статус раунда
-			} else if roundCompleted {
-				h.log.Info("Upload blocked: round already completed",
-					zap.String("tournament_id", tournamentID.String()),
-					zap.String("game_id", gameID.String()),
-				)
-				writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже завершён для этой игры"))
-				return
-			}
-		}
+	if !h.validateRoundNotCompleted(w, r, tournamentID, gameID) {
+		return false
+	}
+	return h.validateNoRunningMatches(w, r, tournamentID, gameID)
+}
 
-		// Проверяем, не выполняются ли матчи для ЛЮБОЙ игры в турнире
-		// Пока идёт раунд одной игры, загрузка программ для всех игр заблокирована
-		if h.matchChecker != nil {
-			hasRunning, err := h.matchChecker.HasAnyRunningMatches(r.Context(), tournamentID)
-			if err != nil {
-				h.log.LogError("Failed to check running matches", err)
-				writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
-				return
-			}
-
-			if hasRunning {
-				// Получаем название активной игры для информативного сообщения
-				activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
-				h.log.Info("Upload blocked: matches running for another game",
-					zap.String("tournament_id", tournamentID.String()),
-					zap.String("game_id", gameID.String()),
-					zap.String("active_game", activeGame),
-				)
-				if activeGame != "" {
-					writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("загрузка программ запрещена: выполняется раунд игры '%s'", activeGame)))
-				} else {
-					writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: выполняется раунд"))
-				}
-				return
-			}
-		}
+// validateRoundNotCompleted checks that the round for this game has not been completed yet.
+// Returns false if round is completed and upload is blocked (response already written).
+func (h *ProgramHandler) validateRoundNotCompleted(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
+	if h.roundChecker == nil {
+		return true
 	}
 
-	// Если имя не указано, используем имя файла
-	if name == "" {
-		name = header.Filename
+	roundCompleted, err := h.roundChecker.IsRoundCompleted(r.Context(), tournamentID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to check round completion", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		// Продолжаем, если не можем проверить статус раунда
+		return true
 	}
 
-	// Определяем язык по расширению
-	language := detectLanguage(header.Filename)
+	if roundCompleted {
+		h.log.Info("Upload blocked: round already completed",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_id", gameID.String()),
+		)
+		writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: раунд уже завершён для этой игры"))
+		return false
+	}
 
-	// Создаём уникальный путь для файла (version будет назначена атомарно при INSERT)
-	programID := uuid.New()
-	ext := filepath.Ext(header.Filename)
-	fileName := fmt.Sprintf("%s_%s_%s%s", teamID.String()[:8], gameID.String()[:8], programID.String()[:8], ext)
-	filePath := filepath.Join(h.uploadDir, fileName)
+	return true
+}
 
+// validateNoRunningMatches checks that no matches are currently running for the tournament.
+// Returns false if matches are running and upload is blocked (response already written).
+func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
+	if h.matchChecker == nil {
+		return true
+	}
+
+	hasRunning, err := h.matchChecker.HasAnyRunningMatches(r.Context(), tournamentID)
+	if err != nil {
+		h.log.LogError("Failed to check running matches", err)
+		writeError(w, errors.ErrInternal.WithMessage("failed to verify match status"))
+		return false
+	}
+
+	if !hasRunning {
+		return true
+	}
+
+	// Получаем название активной игры для информативного сообщения
+	activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
+	h.log.Info("Upload blocked: matches running for another game",
+		zap.String("tournament_id", tournamentID.String()),
+		zap.String("game_id", gameID.String()),
+		zap.String("active_game", activeGame),
+	)
+	if activeGame != "" {
+		writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("загрузка программ запрещена: выполняется раунд игры '%s'", activeGame)))
+	} else {
+		writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: выполняется раунд"))
+	}
+	return false
+}
+
+// saveUploadedFile writes the file content to disk, prepending a shebang for interpreted languages.
+// Returns true on success, or false on error (response already written).
+func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []byte, language, filePath string) bool {
 	// Убеждаемся что директория существует (safety net для Docker volumes)
 	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
 		h.log.Error("Failed to ensure upload directory", zap.Error(err), zap.String("dir", h.uploadDir))
 		writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл: директория загрузок недоступна"))
-		return
+		return false
 	}
 
 	// Сохраняем файл
@@ -250,18 +323,9 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		h.log.Error("Failed to create file", zap.Error(err), zap.String("path", filePath))
 		writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл"))
-		return
+		return false
 	}
 	defer dst.Close()
-
-	// Читаем всё содержимое файла в память (ограничено maxFileSize)
-	fileContent, err := io.ReadAll(file)
-	if err != nil {
-		h.log.Error("Failed to read uploaded file", zap.Error(err))
-		os.Remove(filePath)
-		writeError(w, errors.ErrInternal.WithMessage("не удалось прочитать файл"))
-		return
-	}
 
 	// Добавляем shebang для интерпретируемых языков (если его нет)
 	shebang := getShebang(language)
@@ -270,7 +334,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 			h.log.Error("Failed to write shebang", zap.Error(err))
 			os.Remove(filePath)
 			writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл"))
-			return
+			return false
 		}
 	}
 
@@ -279,7 +343,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		// Удаляем частично записанный файл
 		os.Remove(filePath)
 		writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
-		return
+		return false
 	}
 
 	// Делаем файл исполняемым
@@ -287,8 +351,15 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
 
+	return true
+}
+
+// validateAndCompileProgram runs syntax checks and compilation for the uploaded program.
+// Returns the executable path and an optional syntax/compilation error message.
+func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (execPath string, syntaxError *string) {
+	execPath = filePath
+
 	// Проверяем синтаксис для всех поддерживаемых языков
-	var syntaxError *string
 	if errMsg := validateSyntax(language, filePath); errMsg != "" {
 		syntaxError = &errMsg
 		h.log.Info("Syntax error detected",
@@ -296,35 +367,109 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 			zap.String("language", language),
 			zap.String("error", errMsg),
 		)
+		return execPath, syntaxError
 	}
 
 	// Компилируем программу для компилируемых языков
-	execPath := filePath // Путь к исполняемому файлу (может измениться после компиляции)
-	if syntaxError == nil {
-		if compiled, compileErr := compileIfNeeded(language, filePath, h.log); compileErr != "" {
-			syntaxError = &compileErr
-			h.log.Info("Compilation failed",
-				zap.String("file", filePath),
-				zap.String("language", language),
-				zap.String("error", compileErr),
-			)
-		} else if compiled != "" {
-			execPath = compiled
-			h.log.Info("Program compiled",
-				zap.String("source", filePath),
-				zap.String("binary", compiled),
-			)
-		}
+	if compiled, compileErr := compileIfNeeded(language, filePath, h.log); compileErr != "" {
+		syntaxError = &compileErr
+		h.log.Info("Compilation failed",
+			zap.String("file", filePath),
+			zap.String("language", language),
+			zap.String("error", compileErr),
+		)
+	} else if compiled != "" {
+		execPath = compiled
+		h.log.Info("Program compiled",
+			zap.String("source", filePath),
+			zap.String("binary", compiled),
+		)
 	}
+
+	return execPath, syntaxError
+}
+
+// registerTournamentParticipant registers the program as a tournament participant.
+// Errors are logged but do not fail the upload.
+func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, program *domain.Program, tournamentID uuid.UUID) {
+	if h.tournamentRepo == nil {
+		return
+	}
+
+	// Use program.ID (not local programID) since CreateWithAtomicVersion may regenerate it on retry
+	participant := &domain.TournamentParticipant{
+		ID:           uuid.New(),
+		TournamentID: tournamentID,
+		ProgramID:    program.ID,
+		Rating:       1500, // Начальный рейтинг ELO
+	}
+
+	if err := h.tournamentRepo.AddParticipant(ctx, participant); err != nil {
+		h.log.Warn("Failed to add program as tournament participant (may already exist)",
+			zap.Error(err),
+			zap.String("program_id", program.ID.String()),
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		// Не возвращаем ошибку - программа уже создана, участие опционально
+	} else {
+		h.log.Info("Program registered as tournament participant",
+			zap.String("program_id", program.ID.String()),
+			zap.String("tournament_id", tournamentID.String()),
+		)
+	}
+}
+
+// handleFileUpload обрабатывает загрузку файла
+func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
+	// Ограничиваем размер файла
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxFileSize)
+
+	// Парсим форму и извлекаем данные
+	form := h.parseUploadForm(w, r)
+	if form == nil {
+		return
+	}
+
+	// Проверяем доступ команды
+	if !h.validateTeamAccess(w, r, form.teamID, userID) {
+		return
+	}
+
+	// Проверяем статус турнира
+	if !h.validateTournamentActive(w, r, form.tournamentID) {
+		return
+	}
+
+	// Проверяем блокировки загрузки (раунды, матчи)
+	if !h.validateUploadNotBlocked(w, r, form.tournamentID, form.gameID) {
+		return
+	}
+
+	// Определяем язык по расширению
+	language := detectLanguage(form.filename)
+
+	// Создаём уникальный путь для файла (version будет назначена атомарно при INSERT)
+	programID := uuid.New()
+	ext := filepath.Ext(form.filename)
+	fileName := fmt.Sprintf("%s_%s_%s%s", form.teamID.String()[:8], form.gameID.String()[:8], programID.String()[:8], ext)
+	filePath := filepath.Join(h.uploadDir, fileName)
+
+	// Сохраняем файл на диск
+	if !h.saveUploadedFile(w, form.fileContent, language, filePath) {
+		return
+	}
+
+	// Проверяем синтаксис и компилируем
+	execPath, syntaxError := h.validateAndCompileProgram(language, filePath)
 
 	// Создаём запись в БД с атомарным назначением версии
 	program := &domain.Program{
 		ID:           programID,
 		UserID:       userID,
-		TeamID:       &teamID,
-		TournamentID: &tournamentID,
-		GameID:       &gameID,
-		Name:         name,
+		TeamID:       &form.teamID,
+		TournamentID: &form.tournamentID,
+		GameID:       &form.gameID,
+		Name:         form.name,
 		GameType:     "",       // Заполнится из game
 		CodePath:     execPath, // Путь к исполняемому файлу (бинарник или скрипт)
 		FilePath:     &filePath,
@@ -341,29 +486,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// Автоматически регистрируем программу как участника турнира
-	// Use program.ID (not local programID) since CreateWithAtomicVersion may regenerate it on retry
-	if h.tournamentRepo != nil {
-		participant := &domain.TournamentParticipant{
-			ID:           uuid.New(),
-			TournamentID: tournamentID,
-			ProgramID:    program.ID,
-			Rating:       1500, // Начальный рейтинг ELO
-		}
-
-		if err := h.tournamentRepo.AddParticipant(r.Context(), participant); err != nil {
-			h.log.Warn("Failed to add program as tournament participant (may already exist)",
-				zap.Error(err),
-				zap.String("program_id", program.ID.String()),
-				zap.String("tournament_id", tournamentID.String()),
-			)
-			// Не возвращаем ошибку - программа уже создана, участие опционально
-		} else {
-			h.log.Info("Program registered as tournament participant",
-				zap.String("program_id", program.ID.String()),
-				zap.String("tournament_id", tournamentID.String()),
-			)
-		}
-	}
+	h.registerTournamentParticipant(r.Context(), program, form.tournamentID)
 
 	// ВАЖНО: Матчи НЕ создаются автоматически при загрузке программы!
 	// Администратор должен вручную запустить матчи через кнопку "Run All Matches"
@@ -372,8 +495,8 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	h.log.Info("Program uploaded",
 		zap.String("program_id", program.ID.String()),
 		zap.String("user_id", userID.String()),
-		zap.String("team_id", teamID.String()),
-		zap.String("file", header.Filename),
+		zap.String("team_id", form.teamID.String()),
+		zap.String("file", form.filename),
 		zap.Int("version", program.Version),
 	)
 
@@ -416,21 +539,21 @@ func runSyntaxCheck(command string, args []string, defaultMsg string) string {
 // Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
 func validateSyntax(language, filePath string) string {
 	switch language {
-	case "python":
+	case LangPython:
 		return runSyntaxCheck("python3", []string{"-m", "py_compile", filePath}, "Синтаксическая ошибка в Python коде")
-	case "javascript":
+	case LangJavaScript:
 		return runSyntaxCheck("node", []string{"--check", filePath}, "Синтаксическая ошибка в JavaScript коде")
-	case "ruby":
+	case LangRuby:
 		return runSyntaxCheck("ruby", []string{"-c", filePath}, "Синтаксическая ошибка в Ruby коде")
-	case "php":
+	case LangPHP:
 		return runSyntaxCheck("php", []string{"-l", filePath}, "Синтаксическая ошибка в PHP коде")
-	case "lua":
+	case LangLua:
 		return runSyntaxCheck("luac", []string{"-p", filePath}, "Синтаксическая ошибка в Lua коде")
-	case "c":
+	case LangC:
 		return runSyntaxCheck("gcc", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C")
-	case "cpp":
+	case LangCpp:
 		return runSyntaxCheck("g++", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C++")
-	case "java":
+	case LangJava:
 		return runSyntaxCheck("javac", []string{"-Xlint:none", "-d", "/tmp", filePath}, "Ошибка компиляции Java")
 	default:
 		return ""
@@ -445,31 +568,31 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 
 	var cmd *exec.Cmd
 	switch language {
-	case "c":
+	case LangC:
 		if _, err := exec.LookPath("gcc"); err != nil {
 			log.Warn("gcc not found, skipping compilation")
 			return "", ""
 		}
 		cmd = exec.Command("gcc", "-O2", "-o", outputPath, sourcePath, "-lm")
-	case "cpp":
+	case LangCpp:
 		if _, err := exec.LookPath("g++"); err != nil {
 			log.Warn("g++ not found, skipping compilation")
 			return "", ""
 		}
 		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath)
-	case "go":
+	case LangGo:
 		if _, err := exec.LookPath("go"); err != nil {
 			log.Warn("go not found, skipping compilation")
 			return "", ""
 		}
 		cmd = exec.Command("go", "build", "-o", outputPath, sourcePath)
-	case "rust":
+	case LangRust:
 		if _, err := exec.LookPath("rustc"); err != nil {
 			log.Warn("rustc not found, skipping compilation")
 			return "", ""
 		}
 		cmd = exec.Command("rustc", "-O", "-o", outputPath, sourcePath)
-	case "java":
+	case LangJava:
 		if _, err := exec.LookPath("javac"); err != nil {
 			log.Warn("javac not found, skipping compilation")
 			return "", ""

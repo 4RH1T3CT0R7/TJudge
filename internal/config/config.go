@@ -9,6 +9,9 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// defaultJWTSecret — секрет JWT по умолчанию (только для разработки)
+const defaultJWTSecret = "change-this-secret-in-production"
+
 // Config содержит всю конфигурацию приложения
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
@@ -190,7 +193,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Валидация JWT
-	if c.JWT.Secret == "" || c.JWT.Secret == "change-this-secret-in-production" {
+	if c.JWT.Secret == "" || c.JWT.Secret == defaultJWTSecret {
 		// В production это должно быть ошибкой
 		env := os.Getenv("ENVIRONMENT")
 		if env == "production" || env == "prod" {
@@ -276,7 +279,7 @@ func Load() (*Config, error) {
 			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
 		},
 		JWT: JWTConfig{
-			Secret:     getEnvOrFile("JWT_SECRET", "change-this-secret-in-production"), // Поддержка Docker secrets
+			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret), // Поддержка Docker secrets
 			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),                 // 24 часа активной сессии
 			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour),              // 7 дней неактивности
 		},

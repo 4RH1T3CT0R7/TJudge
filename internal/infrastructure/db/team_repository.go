@@ -13,6 +13,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// orderByCreatedAtDesc — SQL-фрагмент сортировки по дате создания
+const orderByCreatedAtDesc = " ORDER BY created_at DESC"
+
 // TeamRepository - репозиторий для работы с командами
 type TeamRepository struct {
 	db *DB
@@ -176,7 +179,7 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 		argCount++
 	}
 
-	query += " ORDER BY created_at DESC"
+	query += orderByCreatedAtDesc
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argCount)

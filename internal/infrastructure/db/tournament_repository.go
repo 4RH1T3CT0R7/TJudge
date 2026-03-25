@@ -132,7 +132,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 	}
 
 	// Сортировка
-	query += " ORDER BY created_at DESC"
+	query += orderByCreatedAtDesc
 
 	// Пагинация
 	if filter.Limit > 0 {
@@ -333,7 +333,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 	if pageReq.IsBackward() {
 		query += " ORDER BY created_at ASC" // Обратный порядок для backward pagination
 	} else {
-		query += " ORDER BY created_at DESC"
+		query += orderByCreatedAtDesc
 	}
 
 	// Добавляем +1 к лимиту для определения hasNextPage

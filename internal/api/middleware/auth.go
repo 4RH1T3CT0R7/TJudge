@@ -22,6 +22,9 @@ const (
 	UserIDKey ContextKey = "user_id"
 	// RoleKey ключ для роли в контексте
 	RoleKey ContextKey = "user_role"
+
+	// bearerPrefix — префикс схемы аутентификации Bearer
+	bearerPrefix = "Bearer"
 )
 
 // AuthService интерфейс для работы с аутентификацией
@@ -42,7 +45,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			if authHeader != "" {
 				// Проверяем формат "Bearer <token>"
 				parts := strings.Split(authHeader, " ")
-				if len(parts) == 2 && parts[0] == "Bearer" {
+				if len(parts) == 2 && parts[0] == bearerPrefix {
 					token = parts[1]
 				}
 			}
@@ -109,7 +112,7 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 			}
 
 			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
+			if len(parts) != 2 || parts[0] != bearerPrefix {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -168,7 +171,7 @@ func ExtractToken(r *http.Request) string {
 	}
 
 	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
+	if len(parts) != 2 || parts[0] != bearerPrefix {
 		return ""
 	}
 
