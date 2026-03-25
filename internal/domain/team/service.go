@@ -81,7 +81,9 @@ func NewService(teamRepo TeamRepository, tournamentRepo TournamentRepository, lo
 	}
 }
 
-// CreateTeam создаёт новую команду
+// CreateTeam создаёт новую команду в турнире.
+// Использует distributed lock для предотвращения race condition при проверке
+// "пользователь не состоит в другой команде в этом турнире".
 func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*domain.Team, error) {
 	// Проверяем что турнир существует
 	tournament, err := s.tournamentRepo.GetByID(ctx, req.TournamentID)
@@ -94,47 +96,61 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 		return nil, errors.ErrBadRequest.WithMessage("cannot create team in active or completed tournament")
 	}
 
-	// Проверяем что пользователь не состоит в другой команде в этом турнире
-	inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, req.TournamentID, req.UserID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to check user team membership")
-	}
-	if inTeam {
-		return nil, errors.ErrConflict.WithMessage("user already in a team in this tournament")
+	// Distributed lock на user+tournament — предотвращает создание двух команд
+	// одним пользователем в одном турнире при concurrent requests
+	lockKey := fmt.Sprintf("team:create:%s:%s", req.TournamentID.String(), req.UserID.String())
+	var result *domain.Team
+
+	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+		// Проверяем что пользователь не состоит в другой команде в этом турнире
+		inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, req.TournamentID, req.UserID)
+		if err != nil {
+			return errors.Wrap(err, "failed to check user team membership")
+		}
+		if inTeam {
+			return errors.ErrConflict.WithMessage("user already in a team in this tournament")
+		}
+
+		// Генерируем уникальный код
+		code, err := s.teamRepo.GenerateUniqueCode(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to generate team code")
+		}
+
+		team := &domain.Team{
+			ID:           uuid.New(),
+			TournamentID: req.TournamentID,
+			Name:         req.Name,
+			Code:         code,
+			LeaderID:     req.UserID,
+		}
+
+		if err := s.teamRepo.Create(ctx, team); err != nil {
+			return errors.Wrap(err, "failed to create team")
+		}
+
+		// Добавляем создателя как члена команды
+		member := &domain.TeamMember{
+			ID:     uuid.New(),
+			TeamID: team.ID,
+			UserID: req.UserID,
+		}
+
+		if err := s.teamRepo.AddMember(ctx, member); err != nil {
+			return errors.Wrap(err, "failed to add team leader as member")
+		}
+
+		result = team
+		return nil
+	})
+
+	if lockErr != nil {
+		return nil, lockErr
 	}
 
-	// Генерируем уникальный код
-	code, err := s.teamRepo.GenerateUniqueCode(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate team code")
-	}
+	s.log.Info("Team created", zap.String("team_id", result.ID.String()), zap.String("tournament_id", req.TournamentID.String()), zap.String("leader_id", req.UserID.String()))
 
-	team := &domain.Team{
-		ID:           uuid.New(),
-		TournamentID: req.TournamentID,
-		Name:         req.Name,
-		Code:         code,
-		LeaderID:     req.UserID,
-	}
-
-	if err := s.teamRepo.Create(ctx, team); err != nil {
-		return nil, errors.Wrap(err, "failed to create team")
-	}
-
-	// Добавляем создателя как члена команды
-	member := &domain.TeamMember{
-		ID:     uuid.New(),
-		TeamID: team.ID,
-		UserID: req.UserID,
-	}
-
-	if err := s.teamRepo.AddMember(ctx, member); err != nil {
-		return nil, errors.Wrap(err, "failed to add team leader as member")
-	}
-
-	s.log.Info("Team created", zap.String("team_id", team.ID.String()), zap.String("tournament_id", req.TournamentID.String()), zap.String("leader_id", req.UserID.String()))
-
-	return team, nil
+	return result, nil
 }
 
 // JoinTeamByCode позволяет пользователю присоединиться к команде по коду.

@@ -146,8 +146,8 @@ func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 // noopLock executes the function immediately without actual locking (for unit tests)
 type noopLock struct{}
 
-func (n *noopLock) WithLock(_ context.Context, _ string, _ time.Duration, fn func(ctx context.Context) error) error {
-	return fn(context.Background())
+func (n *noopLock) WithLock(ctx context.Context, _ string, _ time.Duration, fn func(ctx context.Context) error) error {
+	return fn(ctx)
 }
 
 func newTestTeamService(t *testing.T) (*Service, *MockTeamRepository, *MockTournamentRepository) {

@@ -337,6 +337,39 @@ func newTestService(t *testing.T) (
 	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
 }
 
+// newTestSchedulingService creates a SchedulingService with all mocks.
+// Returns the service and all mocks for assertion.
+func newTestSchedulingService(t *testing.T) (
+	*SchedulingService,
+	*MockTournamentRepository,
+	*MockMatchRepository,
+	*MockQueueManager,
+	*MockDistributedLock,
+	*MockGameRepository,
+) {
+	t.Helper()
+
+	tournamentRepo := new(MockTournamentRepository)
+	matchRepo := new(MockMatchRepository)
+	queueManager := new(MockQueueManager)
+	distributedLock := new(MockDistributedLock)
+	gameRepo := new(MockGameRepository)
+
+	log, _ := logger.New("error", "json")
+
+	service := NewSchedulingService(
+		tournamentRepo,
+		matchRepo,
+		queueManager,
+		gameRepo,
+		distributedLock,
+		events.NoopBus{},
+		log,
+	)
+
+	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
+}
+
 // -----------------------------------------------------------------------------
 // TestService_Create
 // -----------------------------------------------------------------------------
@@ -1209,7 +1242,7 @@ func TestService_CreateMatch(t *testing.T) {
 
 func TestService_RunAllMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, distLock, _ := newTestService(t)
+		service, _, matchRepo, queueManager, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1230,7 +1263,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1271,7 +1304,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1297,7 +1330,7 @@ func TestService_RunAllMatches(t *testing.T) {
 	})
 
 	t.Run("no_participants", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1330,7 +1363,7 @@ func TestService_RunAllMatches(t *testing.T) {
 
 func TestService_RunGameMatches(t *testing.T) {
 	t.Run("with_existing_pending", func(t *testing.T) {
-		service, _, matchRepo, queueManager, distLock, _ := newTestService(t)
+		service, _, matchRepo, queueManager, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1354,7 +1387,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("generate_new_round", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1390,7 +1423,7 @@ func TestService_RunGameMatches(t *testing.T) {
 	})
 
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1422,7 +1455,7 @@ func TestService_RunGameMatches(t *testing.T) {
 
 func TestService_RetryFailedMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, _ := newTestService(t)
+		service, _, matchRepo, queueManager, _, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1446,7 +1479,7 @@ func TestService_RetryFailedMatches(t *testing.T) {
 	})
 
 	t.Run("no_failed_matches", func(t *testing.T) {
-		service, _, matchRepo, _, _, _ := newTestService(t)
+		service, _, matchRepo, _, _, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1468,7 +1501,7 @@ func TestService_RetryFailedMatches(t *testing.T) {
 
 func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	t.Run("two_participants", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1506,7 +1539,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	})
 
 	t.Run("three_participants", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1539,7 +1572,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	})
 
 	t.Run("empty_participants", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1557,7 +1590,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	})
 
 	t.Run("skips_played_pairs", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1596,7 +1629,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 	})
 
 	t.Run("all_pairs_played_returns_empty", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -1681,7 +1714,7 @@ func TestService_GetMatchesByRounds(t *testing.T) {
 
 func TestService_ScheduleNewProgramMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1741,7 +1774,7 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 	})
 
 	t.Run("completed_tournament", func(t *testing.T) {
-		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, _, _, distributedLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -1777,7 +1810,7 @@ func TestService_ScheduleNewProgramMatches(t *testing.T) {
 	})
 
 	t.Run("no_other_programs", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -2108,7 +2141,7 @@ func TestService_GetCrossGameLeaderboard_DBError(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_RetryFailedMatches_ResetError(t *testing.T) {
-	service, _, matchRepo, _, _, _ := newTestService(t)
+	service, _, matchRepo, _, _, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
@@ -2121,7 +2154,7 @@ func TestService_RetryFailedMatches_ResetError(t *testing.T) {
 }
 
 func TestService_RetryFailedMatches_EnqueueError(t *testing.T) {
-	service, _, matchRepo, queueMgr, _, _ := newTestService(t)
+	service, _, matchRepo, queueMgr, _, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
@@ -2196,7 +2229,7 @@ func TestService_Delete_ActiveTournament(t *testing.T) {
 
 func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 	t.Run("one_participant_generates_zero_matches", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -2216,7 +2249,7 @@ func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("four_participants_generates_12_matches", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestService(t)
+		service, _, _, _, _, _ := newTestSchedulingService(t)
 
 		tournamentID := uuid.New()
 		tournament := &domain.Tournament{
@@ -2279,7 +2312,7 @@ func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 
 func TestService_ScheduleNewProgramMatches_SkipsSameTeam(t *testing.T) {
 	t.Run("skips_programs_from_same_team", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
+		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		tournamentID := uuid.New()
@@ -2753,7 +2786,7 @@ func TestService_GetLeaderboard_SingleflightDedup(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_ScheduleNewProgramMatches_GetProgramsError(t *testing.T) {
-	service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
+	service, tournamentRepo, _, _, distributedLock, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2792,7 +2825,7 @@ func TestService_ScheduleNewProgramMatches_GetProgramsError(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_ScheduleNewProgramMatches_NoOpponents(t *testing.T) {
-	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2838,7 +2871,7 @@ func TestService_ScheduleNewProgramMatches_NoOpponents(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_ScheduleNewProgramMatches_SameTeamSkipped(t *testing.T) {
-	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2886,7 +2919,7 @@ func TestService_ScheduleNewProgramMatches_SameTeamSkipped(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_ScheduleNewProgramMatches_CreateBatchError(t *testing.T) {
-	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2934,7 +2967,7 @@ func TestService_ScheduleNewProgramMatches_CreateBatchError(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
-	service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestService(t)
+	service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()
@@ -2983,7 +3016,7 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestService_RunAllMatches_GameWithLessThan2Participants(t *testing.T) {
-	service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestService(t)
+	service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
 	ctx := context.Background()
 
 	tournamentID := uuid.New()

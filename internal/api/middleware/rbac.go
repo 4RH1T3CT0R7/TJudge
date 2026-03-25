@@ -125,15 +125,23 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			// Проверяем в БД
 			user, err := v.userRepo.GetByID(r.Context(), userID)
 			if err != nil {
-				httputil.WriteError(w, errors.ErrForbidden.WithMessage("failed to verify admin role"))
+				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
-			// Обновляем кеш
+			// Обновляем кеш с lazy eviction
 			v.mu.Lock()
 			v.cache[userID] = roleCacheEntry{
 				role:      user.Role,
 				expiresAt: time.Now().Add(v.cacheTTL),
+			}
+			if len(v.cache) > 1000 {
+				now := time.Now()
+				for id, e := range v.cache {
+					if now.After(e.expiresAt) {
+						delete(v.cache, id)
+					}
+				}
 			}
 			v.mu.Unlock()
 

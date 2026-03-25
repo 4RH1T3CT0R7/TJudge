@@ -99,16 +99,6 @@ func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tou
 	return args.Get(0).([]*domain.CrossGameLeaderboardEntry), args.Error(1)
 }
 
-func (m *MockTournamentService) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
-	args := m.Called(ctx, tournamentID)
-	return args.Int(0), args.Error(1)
-}
-
-func (m *MockTournamentService) RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
-	args := m.Called(ctx, tournamentID)
-	return args.Int(0), args.Error(1)
-}
-
 func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
@@ -117,7 +107,22 @@ func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tourname
 	return args.Get(0).([]*domain.MatchRound), args.Error(1)
 }
 
-func (m *MockTournamentService) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+// MockSchedulingService mocks the scheduling service
+type MockSchedulingService struct {
+	mock.Mock
+}
+
+func (m *MockSchedulingService) RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockSchedulingService) RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	args := m.Called(ctx, tournamentID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockSchedulingService) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
 	args := m.Called(ctx, tournamentID, gameType)
 	return args.Int(0), args.Error(1)
 }
@@ -127,7 +132,7 @@ func TestTournamentHandler_Create(t *testing.T) {
 
 	t.Run("successfully create tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		maxParticipants := 10
 		reqBody := tournament.CreateRequest{
@@ -165,7 +170,7 @@ func TestTournamentHandler_Create(t *testing.T) {
 
 	t.Run("validation error - empty name", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		reqBody := tournament.CreateRequest{
 			Name:     "", // Invalid
@@ -192,7 +197,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 
 	t.Run("successfully get tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedTournament := &domain.Tournament{
@@ -226,7 +231,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 
 	t.Run("tournament not found", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -249,7 +254,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 
 	t.Run("invalid UUID format", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid", nil)
 
@@ -270,7 +275,7 @@ func TestTournamentHandler_List(t *testing.T) {
 
 	t.Run("successfully list tournaments", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		expectedTournaments := []*domain.Tournament{
 			{
@@ -305,7 +310,7 @@ func TestTournamentHandler_List(t *testing.T) {
 
 	t.Run("list with filters", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		expectedTournaments := []*domain.Tournament{
 			{
@@ -336,7 +341,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 
 	t.Run("successfully join tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		reqBody := tournament.JoinRequest{
@@ -365,7 +370,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 
 	t.Run("tournament already started", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		reqBody := tournament.JoinRequest{
@@ -394,7 +399,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 
 	t.Run("tournament full", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		reqBody := tournament.JoinRequest{
@@ -427,7 +432,7 @@ func TestTournamentHandler_Start(t *testing.T) {
 
 	t.Run("successfully start tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -450,7 +455,7 @@ func TestTournamentHandler_Start(t *testing.T) {
 
 	t.Run("tournament already started", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -473,7 +478,7 @@ func TestTournamentHandler_Start(t *testing.T) {
 
 	t.Run("insufficient participants", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -500,7 +505,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 
 	t.Run("successfully get leaderboard", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedLeaderboard := []*domain.LeaderboardEntry{
@@ -544,7 +549,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 
 	t.Run("get leaderboard with custom limit", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedLeaderboard := []*domain.LeaderboardEntry{
@@ -577,7 +582,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 
 	t.Run("successfully complete tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -604,7 +609,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/complete", nil)
 
@@ -621,7 +626,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 
 	t.Run("tournament not active", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -648,7 +653,7 @@ func TestTournamentHandler_Delete(t *testing.T) {
 
 	t.Run("successfully delete tournament", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -672,7 +677,7 @@ func TestTournamentHandler_Delete(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tournaments/invalid-uuid", nil)
 
@@ -689,7 +694,7 @@ func TestTournamentHandler_Delete(t *testing.T) {
 
 	t.Run("active tournament cannot be deleted", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -716,11 +721,12 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 
 	t.Run("successfully run all matches", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
 
 		tournamentID := uuid.New()
 
-		mockService.On("RunAllMatches", mock.Anything, tournamentID).Return(15, nil)
+		mockScheduling.On("RunAllMatches", mock.Anything, tournamentID).Return(15, nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/run-matches", nil)
 
@@ -739,12 +745,12 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 		assert.Equal(t, "started", response["status"])
 		assert.Equal(t, float64(15), response["enqueued"])
 
-		mockService.AssertExpectations(t)
+		mockScheduling.AssertExpectations(t)
 	})
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/run-matches", nil)
 
@@ -761,11 +767,12 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 
 	t.Run("tournament not active", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
 
 		tournamentID := uuid.New()
 
-		mockService.On("RunAllMatches", mock.Anything, tournamentID).Return(0, errors.ErrConflict.WithMessage("tournament is not active"))
+		mockScheduling.On("RunAllMatches", mock.Anything, tournamentID).Return(0, errors.ErrConflict.WithMessage("tournament is not active"))
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/run-matches", nil)
 
@@ -779,7 +786,7 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusConflict, w.Code)
 
-		mockService.AssertExpectations(t)
+		mockScheduling.AssertExpectations(t)
 	})
 }
 
@@ -788,11 +795,12 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 
 	t.Run("successfully run game matches", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
 
 		tournamentID := uuid.New()
 
-		mockService.On("RunGameMatches", mock.Anything, tournamentID, "prisoners_dilemma").Return(8, nil)
+		mockScheduling.On("RunGameMatches", mock.Anything, tournamentID, "prisoners_dilemma").Return(8, nil)
 
 		body, _ := json.Marshal(map[string]string{"game_type": "prisoners_dilemma"})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer(body))
@@ -814,12 +822,12 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 		assert.Equal(t, "prisoners_dilemma", response["game_type"])
 		assert.Equal(t, float64(8), response["enqueued"])
 
-		mockService.AssertExpectations(t)
+		mockScheduling.AssertExpectations(t)
 	})
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		body, _ := json.Marshal(map[string]string{"game_type": "prisoners_dilemma"})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/games/run-matches", bytes.NewBuffer(body))
@@ -838,7 +846,7 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 
 	t.Run("missing game_type in body", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -858,7 +866,7 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 
 	t.Run("empty game_type", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -883,11 +891,12 @@ func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
 
 	t.Run("successfully retry failed matches", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
 
 		tournamentID := uuid.New()
 
-		mockService.On("RetryFailedMatches", mock.Anything, tournamentID).Return(3, nil)
+		mockScheduling.On("RetryFailedMatches", mock.Anything, tournamentID).Return(3, nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/retry-matches", nil)
 
@@ -906,12 +915,12 @@ func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
 		assert.Equal(t, "retried", response["status"])
 		assert.Equal(t, float64(3), response["enqueued"])
 
-		mockService.AssertExpectations(t)
+		mockScheduling.AssertExpectations(t)
 	})
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/retry-matches", nil)
 
@@ -932,7 +941,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 
 	t.Run("successfully get cross-game leaderboard", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedEntries := []*domain.CrossGameLeaderboardEntry{
@@ -983,7 +992,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/cross-game-leaderboard", nil)
 
@@ -1000,7 +1009,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 
 	t.Run("service error", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -1027,7 +1036,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 	t.Run("successfully get matches with defaults", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedMatches := []*domain.Match{
@@ -1072,7 +1081,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 	t.Run("with pagination parameters", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedMatches := []*domain.Match{
@@ -1109,7 +1118,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/matches", nil)
 
@@ -1130,7 +1139,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 	t.Run("successfully get matches by rounds", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		expectedRounds := []*domain.MatchRound{
@@ -1196,7 +1205,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 	t.Run("invalid UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/matches/rounds", nil)
 
@@ -1217,7 +1226,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 	t.Run("success with explicit priority", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		program1ID := uuid.New()
@@ -1263,7 +1272,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 	t.Run("success with default priority", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		program1ID := uuid.New()
@@ -1306,7 +1315,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 	t.Run("invalid tournament UUID", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"program1_id": uuid.New(),
@@ -1329,7 +1338,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 	t.Run("invalid JSON body", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
@@ -1349,7 +1358,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 	t.Run("service error", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, log)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 		program1ID := uuid.New()

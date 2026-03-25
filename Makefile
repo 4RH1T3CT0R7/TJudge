@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -45,6 +45,18 @@ help:
 	@echo "  make admin         - Make user admin (EMAIL=user@example.com)"
 	@echo ""
 	@echo "  make clean         - Clean build artifacts"
+
+# Install development tools
+tools:
+	@echo "Installing development tools..."
+	go install go.uber.org/mock/mockgen@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Generate mocks and other code
+generate:
+	@echo "Generating code..."
+	go generate ./...
+	@echo "Done."
 
 # Download dependencies
 deps:

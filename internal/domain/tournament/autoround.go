@@ -14,10 +14,10 @@ import (
 // AutoRoundScheduler периодически проверяет игры с включённым авто-раундом
 // и запускает новые раунды матчей после завершения предыдущих.
 type AutoRoundScheduler struct {
-	service         *Service
-	gameRepo        GameRepository
-	distributedLock DistributedLock
-	log             *logger.Logger
+	schedulingService *SchedulingService
+	gameRepo          GameRepository
+	distributedLock   DistributedLock
+	log               *logger.Logger
 
 	pollInterval time.Duration
 	stopCh       chan struct{}
@@ -26,7 +26,7 @@ type AutoRoundScheduler struct {
 
 // NewAutoRoundScheduler создаёт новый планировщик авто-раундов
 func NewAutoRoundScheduler(
-	service *Service,
+	schedulingService *SchedulingService,
 	gameRepo GameRepository,
 	distributedLock DistributedLock,
 	log *logger.Logger,
@@ -36,12 +36,12 @@ func NewAutoRoundScheduler(
 		pollInterval = 5 * time.Second
 	}
 	return &AutoRoundScheduler{
-		service:         service,
-		gameRepo:        gameRepo,
-		distributedLock: distributedLock,
-		log:             log,
-		pollInterval:    pollInterval,
-		stopCh:          make(chan struct{}),
+		schedulingService: schedulingService,
+		gameRepo:          gameRepo,
+		distributedLock:   distributedLock,
+		log:               log,
+		pollInterval:      pollInterval,
+		stopCh:            make(chan struct{}),
 	}
 }
 
@@ -137,7 +137,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 	// 4. Запускаем раунд через существующий RunGameMatches (он сам берёт distributed lock)
 	lockKey := fmt.Sprintf("tournament:autoround:%s:%s", g.TournamentID.String(), g.GameType)
 	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
-		enqueued, err := s.service.RunGameMatches(ctx, g.TournamentID, g.GameType)
+		enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
 		if err != nil {
 			return err
 		}

@@ -30,9 +30,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// matchSchedulerAdapter адаптер для tournament.Service.ScheduleNewProgramMatches
+// matchSchedulerAdapter адаптер для tournament.SchedulingService.ScheduleNewProgramMatches
 type matchSchedulerAdapter struct {
-	tournamentService *tournament.Service
+	schedulingService *tournament.SchedulingService
 	programRepo       *db.ProgramRepository
 }
 
@@ -43,7 +43,7 @@ func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, t
 		NewProgramID: newProgramID,
 		TeamID:       teamID,
 	}
-	return a.tournamentService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
+	return a.schedulingService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
 }
 
 func main() {
@@ -186,12 +186,22 @@ func main() {
 		log,
 	)
 
+	schedulingService := tournament.NewSchedulingService(
+		tournamentRepo,
+		matchRepo,
+		queueManager,
+		gameRepo,
+		distributedLock,
+		eventBus,
+		log,
+	)
+
 	gameService := game.NewService(gameRepo, log)
 	teamService := team.NewService(teamRepo, tournamentRepo, distributedLock, log)
 
 	// Авто-раунд планировщик
 	autoRoundScheduler := tournament.NewAutoRoundScheduler(
-		tournamentService,
+		schedulingService,
 		gameRepo,
 		distributedLock,
 		log,
@@ -205,13 +215,13 @@ func main() {
 
 	// Создаём адаптер для планирования матчей
 	matchScheduler := &matchSchedulerAdapter{
-		tournamentService: tournamentService,
+		schedulingService: schedulingService,
 		programRepo:       programRepo,
 	}
 
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
-	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
+	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
 	programHandler := handlers.NewProgramHandler(
 		programRepo, tournamentRepo, tournamentRepo,
 		matchScheduler, gameService, matchRepo, gameRepo,

@@ -30,6 +30,10 @@ type TournamentService interface {
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
+}
+
+// SchedulingService интерфейс для сервиса планирования матчей
+type SchedulingService interface {
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
@@ -38,13 +42,15 @@ type TournamentService interface {
 // TournamentHandler обрабатывает запросы турниров
 type TournamentHandler struct {
 	tournamentService TournamentService
+	schedulingService SchedulingService
 	log               *logger.Logger
 }
 
 // NewTournamentHandler создаёт новый tournament handler
-func NewTournamentHandler(tournamentService TournamentService, log *logger.Logger) *TournamentHandler {
+func NewTournamentHandler(tournamentService TournamentService, schedulingService SchedulingService, log *logger.Logger) *TournamentHandler {
 	return &TournamentHandler{
 		tournamentService: tournamentService,
+		schedulingService: schedulingService,
 		log:               log,
 	}
 }
@@ -416,7 +422,7 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 	}
 
 	// Запускаем все матчи
-	enqueued, err := h.tournamentService.RunAllMatches(r.Context(), tournamentID)
+	enqueued, err := h.schedulingService.RunAllMatches(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to run all matches", err,
 			zap.String("tournament_id", tournamentID.String()),
@@ -460,7 +466,7 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Запускаем матчи для игры
-	enqueued, err := h.tournamentService.RunGameMatches(r.Context(), tournamentID, req.GameType)
+	enqueued, err := h.schedulingService.RunGameMatches(r.Context(), tournamentID, req.GameType)
 	if err != nil {
 		h.log.LogError("Failed to run game matches", err,
 			zap.String("tournament_id", tournamentID.String()),
@@ -491,7 +497,7 @@ func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	enqueued, err := h.tournamentService.RetryFailedMatches(r.Context(), tournamentID)
+	enqueued, err := h.schedulingService.RetryFailedMatches(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to retry failed matches", err,
 			zap.String("tournament_id", tournamentID.String()),
