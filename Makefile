@@ -166,11 +166,8 @@ fmt:
 	go fmt ./...
 	gofmt -s -w .
 
-# Generate mocks
-mocks:
-	@echo "Generating mocks..."
-	@which mockgen > /dev/null || (echo "Installing mockgen..." && go install github.com/golang/mock/mockgen@latest)
-	go generate ./...
+# Generate mocks (alias for generate)
+mocks: generate
 
 # Run integration tests
 test-integration:

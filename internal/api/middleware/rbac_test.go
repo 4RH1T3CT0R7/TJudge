@@ -2,9 +2,11 @@ package middleware_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
@@ -13,6 +15,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// MockUserRoleChecker for testing VerifiedAdminChecker
+type MockUserRoleChecker struct {
+	mock.Mock
+}
+
+func (m *MockUserRoleChecker) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
 
 func TestRequireRole_HasRole(t *testing.T) {
 	testCases := []struct {
@@ -221,4 +236,269 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	mockAuth.AssertExpectations(t)
+}
+
+// --- VerifiedAdminChecker tests ---
+
+// helper: build request context with role and userID
+func verifiedAdminCtx(role domain.Role, userID uuid.UUID, setRole, setUserID bool) context.Context {
+	ctx := context.Background()
+	if setRole {
+		ctx = context.WithValue(ctx, middleware.RoleKey, role)
+	}
+	if setUserID {
+		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+	}
+	return ctx
+}
+
+func TestVerifiedAdminChecker_AdminVerifiedInDB(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+		ID:   userID,
+		Role: domain.RoleAdmin,
+	}, nil)
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.True(t, handlerCalled, "Handler should be called for verified admin")
+	assert.Equal(t, http.StatusOK, rr.Code)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestVerifiedAdminChecker_AdminRevokedInDB(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+	// JWT says admin, but DB says user (admin revoked)
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+		ID:   userID,
+		Role: domain.RoleUser,
+	}, nil)
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, handlerCalled, "Handler should not be called when admin is revoked")
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "admin privileges have been revoked")
+	mockRepo.AssertExpectations(t)
+}
+
+func TestVerifiedAdminChecker_NonAdminJWT(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	// JWT role is user, not admin
+	req = req.WithContext(verifiedAdminCtx(domain.RoleUser, userID, true, true))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, handlerCalled, "Handler should not be called for non-admin JWT")
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "insufficient permissions")
+	// DB should NOT be called — rejected at JWT level
+	mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
+
+func TestVerifiedAdminChecker_DBError(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+	// DB returns an error — fail-closed behavior
+	mockRepo.On("GetByID", mock.Anything, userID).Return(nil, fmt.Errorf("connection refused"))
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, handlerCalled, "Handler should not be called on DB error (fail-closed)")
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "insufficient permissions")
+	mockRepo.AssertExpectations(t)
+}
+
+func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+		ID:   userID,
+		Role: domain.RoleAdmin,
+	}, nil).Once() // Expect exactly one DB call
+
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request — hits DB, populates cache
+	req1 := httptest.NewRequest("GET", "/admin", nil)
+	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	assert.Equal(t, http.StatusOK, rr1.Code)
+
+	// Second request — should use cache, no DB call
+	req2 := httptest.NewRequest("GET", "/admin", nil)
+	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusOK, rr2.Code)
+
+	// Verify DB was only called once
+	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
+}
+
+func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	cacheTTL := 100 * time.Millisecond
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, cacheTTL)
+
+	userID := uuid.New()
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+		ID:   userID,
+		Role: domain.RoleAdmin,
+	}, nil)
+
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request — hits DB
+	req1 := httptest.NewRequest("GET", "/admin", nil)
+	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	assert.Equal(t, http.StatusOK, rr1.Code)
+	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
+
+	// Wait for cache TTL to expire
+	time.Sleep(150 * time.Millisecond)
+
+	// Second request — cache expired, hits DB again
+	req2 := httptest.NewRequest("GET", "/admin", nil)
+	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusOK, rr2.Code)
+
+	// Verify DB was called twice (once fresh, once after expiry)
+	mockRepo.AssertNumberOfCalls(t, "GetByID", 2)
+}
+
+func TestVerifiedAdminChecker_NoRoleInContext(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	// No role in context at all
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, handlerCalled, "Handler should not be called without role in context")
+	assert.Equal(t, http.StatusForbidden, rr.Code)
+	assert.Contains(t, rr.Body.String(), "insufficient permissions")
+	mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
+
+func TestVerifiedAdminChecker_NoUserIDInContext(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	handlerCalled := false
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	}))
+
+	req := httptest.NewRequest("GET", "/admin", nil)
+	// Role is admin but no UserIDKey
+	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, uuid.UUID{}, true, false))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assert.False(t, handlerCalled, "Handler should not be called without user ID in context")
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
+
+func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	userID := uuid.New()
+	// DB returns user role (admin revoked)
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+		ID:   userID,
+		Role: domain.RoleUser,
+	}, nil).Once()
+
+	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request — hits DB, caches role as "user"
+	req1 := httptest.NewRequest("GET", "/admin", nil)
+	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr1 := httptest.NewRecorder()
+	handler.ServeHTTP(rr1, req1)
+	assert.Equal(t, http.StatusForbidden, rr1.Code)
+	assert.Contains(t, rr1.Body.String(), "admin privileges have been revoked")
+
+	// Second request — uses cached "user" role, still forbidden
+	req2 := httptest.NewRequest("GET", "/admin", nil)
+	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusForbidden, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), "admin privileges have been revoked")
+
+	// DB only called once — second request served from cache
+	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 }
