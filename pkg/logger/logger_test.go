@@ -1,8 +1,10 @@
 package logger
 
 import (
+	"context"
 	"testing"
 
+	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -119,6 +121,28 @@ func TestLogger_WithRequestID(t *testing.T) {
 
 	assert.NotNil(t, enriched)
 	assert.NotSame(t, log, enriched)
+}
+
+func TestLogger_WithContextRequestID(t *testing.T) {
+	log, err := New("info", "json")
+	require.NoError(t, err)
+
+	ctx := requestid.WithContext(context.Background(), "ctx-req-99")
+	enriched := log.WithContextRequestID(ctx)
+
+	assert.NotNil(t, enriched)
+	assert.NotSame(t, log, enriched)
+}
+
+func TestLogger_WithContextRequestID_EmptyContext(t *testing.T) {
+	log, err := New("info", "json")
+	require.NoError(t, err)
+
+	// No request ID in context — should return same logger
+	enriched := log.WithContextRequestID(context.Background())
+
+	assert.NotNil(t, enriched)
+	assert.Same(t, log, enriched)
 }
 
 func TestLogger_WithUserID(t *testing.T) {

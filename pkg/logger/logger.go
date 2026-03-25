@@ -1,8 +1,10 @@
 package logger
 
 import (
+	"context"
 	"os"
 
+	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -95,6 +97,16 @@ func (l *Logger) WithFields(fields ...zap.Field) *Logger {
 // WithRequestID добавляет request_id к логгеру
 func (l *Logger) WithRequestID(requestID string) *Logger {
 	return l.WithFields(zap.String("request_id", requestID))
+}
+
+// WithContextRequestID extracts the request ID from context and returns a logger
+// with the request_id field attached. If the context has no request ID, returns
+// the logger unchanged.
+func (l *Logger) WithContextRequestID(ctx context.Context) *Logger {
+	if id := requestid.FromContext(ctx); id != "" {
+		return l.WithRequestID(id)
+	}
+	return l
 }
 
 // WithUserID добавляет user_id к логгеру

@@ -1,5 +1,7 @@
 package team
 
+//go:generate mockgen -source=service.go -destination=../../mocks/mock_team.go -package=mocks TeamRepository
+
 import (
 	"context"
 	"fmt"

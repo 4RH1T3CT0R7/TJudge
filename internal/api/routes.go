@@ -9,6 +9,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/web"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -85,10 +86,12 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(chiMiddleware.RequestID)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if reqID := chiMiddleware.GetReqID(r.Context()); reqID != "" {
+			reqID := chiMiddleware.GetReqID(r.Context())
+			if reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
 			}
-			next.ServeHTTP(w, r)
+			ctx := requestid.WithContext(r.Context(), reqID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
 	s.router.Use(chiMiddleware.RealIP)

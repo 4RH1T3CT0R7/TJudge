@@ -1,5 +1,7 @@
 package auth
 
+//go:generate mockgen -source=service.go -destination=../../mocks/mock_auth.go -package=mocks UserRepository,TokenBlacklist
+
 import (
 	"context"
 	"fmt"

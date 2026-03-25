@@ -300,6 +300,38 @@ func (c *Cache) SetNX(ctx context.Context, key string, value interface{}, ttl ti
 	return result, nil
 }
 
+// BatchSetNX выполняет несколько SetNX операций через pipeline.
+// Возвращает map[key]bool, где true означает что ключ был создан (новый).
+func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]interface{}, ttl time.Duration) (map[string]bool, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+
+	pipe := c.client.Pipeline()
+	cmds := make(map[string]*redis.BoolCmd, len(keys))
+	for key, value := range keys {
+		cmds[key] = pipe.SetNX(ctx, key, value, ttl)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.log.LogError("Redis BatchSetNX pipeline failed", err)
+		return nil, err
+	}
+
+	results := make(map[string]bool, len(cmds))
+	for key, cmd := range cmds {
+		val, cmdErr := cmd.Result()
+		if cmdErr != nil {
+			c.log.LogError("Redis BatchSetNX cmd failed", cmdErr, zap.String("key", key))
+			continue
+		}
+		results[key] = val
+	}
+
+	return results, nil
+}
+
 // Publish публикует сообщение в канал
 func (c *Cache) Publish(ctx context.Context, channel string, message interface{}) error {
 	err := c.client.Publish(ctx, channel, message).Err()

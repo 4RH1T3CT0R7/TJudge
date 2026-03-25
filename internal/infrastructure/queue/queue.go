@@ -136,34 +136,45 @@ func (qm *QueueManager) weightedQueueKeys() []string {
 }
 
 // EnqueueBatch добавляет несколько матчей в очереди.
-// Каждый матч проверяется через dedup set индивидуально, чтобы не добавлять
-// дубликаты (в отличие от batch SADD, который не сообщает КАКИЕ элементы новые).
-// Финальный LPUSH выполняется одним pipeline-запросом.
-// При ошибке BatchLPush записи в dedup set откатываются.
+// Использует Redis pipeline для batch dedup-проверки (один RTT вместо N).
+// Финальный LPUSH также выполняется pipeline-запросом.
+// При ошибке BatchLPush записи в dedup откатываются.
 func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
 
-	// Проверяем каждый матч через индивидуальный dedup-ключ и собираем только новые
+	// Batch dedup-проверка через pipeline (один RTT вместо N)
+	dedupKeys := make(map[string]interface{}, len(matches))
+	matchByDedup := make(map[string]*domain.Match, len(matches))
+	for _, match := range matches {
+		key := dedupKeyFor(match.ID.String())
+		dedupKeys[key] = "1"
+		matchByDedup[key] = match
+	}
+
+	dedupResults, err := qm.cache.BatchSetNX(ctx, dedupKeys, dedupTTL)
+	if err != nil {
+		qm.log.LogError("Failed batch dedup check, enqueuing all matches", err)
+		// При ошибке pipeline — добавляем все матчи (лучше дублировать, чем потерять)
+		dedupResults = nil
+	}
+
 	grouped := make(map[string][]interface{})
-	var addedToDedup []string // dedup-ключи для rollback
+	var addedToDedup []string
 	var skipped int
 
-	for _, match := range matches {
-		matchIDStr := match.ID.String()
-		// Индивидуальная проверка дедупликации
-		isNew, err := qm.cache.SetNX(ctx, dedupKeyFor(matchIDStr), "1", dedupTTL)
-		if err != nil {
-			qm.log.LogError("Failed to check dedup key", err,
-				zap.String("match_id", matchIDStr),
-			)
-			// Продолжаем — лучше дублировать, чем потерять
-		} else if !isNew {
-			skipped++
-			continue
-		} else {
-			addedToDedup = append(addedToDedup, dedupKeyFor(matchIDStr))
+	for key, match := range matchByDedup {
+		// Если pipeline работал — проверяем результат, иначе пропускаем dedup
+		if dedupResults != nil {
+			isNew, ok := dedupResults[key]
+			if ok && !isNew {
+				skipped++
+				continue
+			}
+			if ok && isNew {
+				addedToDedup = append(addedToDedup, key)
+			}
 		}
 
 		data, err := json.Marshal(match)

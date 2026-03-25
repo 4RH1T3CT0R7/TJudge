@@ -1,5 +1,7 @@
 package game
 
+//go:generate mockgen -source=service.go -destination=../../mocks/mock_game.go -package=mocks GameRepository
+
 import (
 	"context"
 	"regexp"
