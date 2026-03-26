@@ -129,6 +129,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	}
 
 	s.eventBus.Publish(ctx, events.MatchResultProcessed{
+		Version:      1,
 		TournamentID: match.TournamentID,
 		MatchID:      match.ID,
 		Program1ID:   match.Program1ID,

@@ -8,19 +8,10 @@ import { useSequenceTyping } from '../hooks/useEasterEggs';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { getGameConfig } from '../utils/gameConfig';
 import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match, TournamentGameWithDetails } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
-
-// Game-specific icons configuration for programs view (see https://github.com/bmstu-itstech/tjudge-cli)
-const gameIcons: Record<string, string> = {
-  dilemma: '🤝',
-  tug_of_war: '🪢',
-  travelers_dilemma: '🧳',
-  public_goods: '🏛️',
-  dollar_auction: '💰',
-};
-const getGameIcon = (gameName: string) => gameIcons[gameName] || '🎮';
 
 const SUDO_PHRASES = [
   '// I\'m in.',
@@ -1136,7 +1127,7 @@ export function AdminPanel() {
                                       <span className="text-sm font-bold text-primary-400 w-6">
                                         {index + 1}.
                                       </span>
-                                      <span className="text-lg">{getGameIcon(game.name)}</span>
+                                      <span className="text-lg">{getGameConfig(game.name).icon}</span>
                                       <span className="font-medium text-gray-100">
                                         {game.display_name}
                                       </span>
@@ -1355,7 +1346,7 @@ export function AdminPanel() {
                           }`}
                         >
                           <div className="flex items-center gap-3 mb-2">
-                            <span className="text-2xl">{getGameIcon(game.name)}</span>
+                            <span className="text-2xl">{getGameConfig(game.name).icon}</span>
                             <div>
                               <p className="font-medium text-gray-100">
                                 {game.display_name}
@@ -1635,7 +1626,7 @@ export function AdminPanel() {
                     <div key={game.id} className="card">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{getGameIcon(game.name)}</span>
+                          <span className="text-2xl">{getGameConfig(game.name).icon}</span>
                           <div>
                             <h3 className="font-semibold text-gray-100">
                               {game.display_name}

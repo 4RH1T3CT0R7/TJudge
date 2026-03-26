@@ -52,10 +52,11 @@ tools:
 	go install go.uber.org/mock/mockgen@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
-# Generate mocks and other code
+# Generate mocks, swagger, and other code
 generate:
 	@echo "Generating code..."
 	go generate ./...
+	@which swag > /dev/null 2>&1 && swag init -g cmd/api/main.go -o docs/swagger --parseDependency --parseInternal --quiet || true
 	@echo "Done."
 
 # Download dependencies

@@ -4,57 +4,8 @@ import api from '../api/client';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { getGameConfig } from '../utils/gameConfig';
 import type { Game } from '../types';
-
-// Game-specific icons and colors configuration (см. https://github.com/bmstu-itstech/tjudge-cli)
-const gameConfig: Record<string, { icon: string; color: string; bgClass: string; textClass: string; borderClass: string }> = {
-  dilemma: {
-    icon: '🤝',
-    color: 'purple',
-    bgClass: 'bg-primary-500',
-    textClass: 'text-primary-400',
-    borderClass: 'border-primary-800 hover:border-primary-600',
-  },
-  tug_of_war: {
-    icon: '🪢',
-    color: 'green',
-    bgClass: 'bg-green-500',
-    textClass: 'text-green-400',
-    borderClass: 'border-green-800 hover:border-green-600',
-  },
-  travelers_dilemma: {
-    icon: '🧳',
-    color: 'blue',
-    bgClass: 'bg-blue-500',
-    textClass: 'text-blue-400',
-    borderClass: 'border-blue-800 hover:border-blue-600',
-  },
-  public_goods: {
-    icon: '🏛️',
-    color: 'orange',
-    bgClass: 'bg-orange-500',
-    textClass: 'text-orange-400',
-    borderClass: 'border-orange-800 hover:border-orange-600',
-  },
-  dollar_auction: {
-    icon: '💰',
-    color: 'yellow',
-    bgClass: 'bg-yellow-500',
-    textClass: 'text-yellow-400',
-    borderClass: 'border-yellow-800 hover:border-yellow-600',
-  },
-};
-
-// Default config for unknown games
-const defaultGameConfig = {
-  icon: '🎮',
-  color: 'gray',
-  bgClass: 'bg-primary-600',
-  textClass: 'text-primary-400',
-  borderClass: 'border-gray-700 hover:border-gray-600',
-};
-
-const getGameConfig = (gameName: string) => gameConfig[gameName] || defaultGameConfig;
 
 export function Games() {
   const [games, setGames] = useState<Game[]>([]);
@@ -126,7 +77,7 @@ export function Games() {
               <Link
                 key={game.id}
                 to={`/games/${game.id}`}
-                className={`card card-interactive group border-2 ${config.borderClass} transition-[border-color,box-shadow,transform]`}
+                className={`card card-interactive group border-2 ${config.cardBorderClass} transition-[border-color,box-shadow,transform]`}
                 onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.12), 0 4px 20px rgba(0,0,0,0.3)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
               >

@@ -46,6 +46,14 @@ func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, t
 	return a.schedulingService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
 }
 
+// @title TJudge API
+// @version 1.0
+// @description Tournament system for game theory competitions
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT Bearer token (format: "Bearer {token}")
 func main() {
 	// Загружаем конфигурацию
 	cfg, err := config.Load()

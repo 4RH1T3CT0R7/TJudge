@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -197,7 +198,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			// Пытаемся получить логи даже при ошибке
 			_, stderr, logErr := e.getContainerLogs(ctx, containerID)
 			if logErr == nil && stderr != "" {
-				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(stderr))
+				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
 			}
 			return nil, fmt.Errorf("error waiting for container: %w", err)
 		}
@@ -205,11 +206,13 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		return nil, fmt.Errorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
 		// Получаем логи контейнера
-		stdout, stderr, err := e.getContainerLogs(ctx, containerID)
+		stdout, stderrRaw, err := e.getContainerLogs(ctx, containerID)
 		if err != nil {
 			// Если не можем получить логи, возвращаем код выхода
 			return nil, fmt.Errorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
+
+		stderr := sanitizeStderr(stderrRaw)
 
 		e.log.Info("Container finished",
 			zap.String("container_id", containerID),
@@ -261,6 +264,28 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 // sanitizeForDB очищает строку от символов, недопустимых в PostgreSQL (null bytes)
 func sanitizeForDB(s string) string {
 	return strings.ReplaceAll(s, "\x00", "")
+}
+
+// ansiEscapeRe matches ANSI escape codes (e.g. color sequences like \x1b[31m).
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// maxStderrSize is the maximum length of stderr kept after sanitization (4 KB).
+const maxStderrSize = 4096
+
+// sanitizeStderr cleans raw container stderr output:
+//  1. Strips ANSI escape codes
+//  2. Truncates to 4 KB with a "...(truncated)" suffix
+func sanitizeStderr(raw string) string {
+	// Strip ANSI escape codes
+	cleaned := ansiEscapeRe.ReplaceAllString(raw, "")
+
+	// Truncate if necessary
+	if len(cleaned) > maxStderrSize {
+		const suffix = "...(truncated)"
+		cleaned = cleaned[:maxStderrSize-len(suffix)] + suffix
+	}
+
+	return cleaned
 }
 
 // parseResult парсит результат выполнения tjudge-cli

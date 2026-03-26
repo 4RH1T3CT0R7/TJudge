@@ -41,7 +41,18 @@ func NewGameCRUDHandler(gameService GameCRUDService, log *logger.Logger) *GameCR
 }
 
 // Create creates a new game.
-// POST /api/v1/games
+// @Summary Создать игру
+// @Description Создаёт новую игру (только для админов)
+// @Tags games
+// @Accept json
+// @Produce json
+// @Param request body game.CreateRequest true "Данные игры"
+// @Security BearerAuth
+// @Success 201 {object} domain.Game
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /games [post]
 func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req game.CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -66,7 +77,15 @@ func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // List returns a list of games.
-// GET /api/v1/games
+// @Summary Список игр
+// @Description Возвращает список доступных игр с фильтрацией и пагинацией
+// @Tags games
+// @Produce json
+// @Param name query string false "Фильтр по имени"
+// @Param limit query int false "Лимит записей" default(50)
+// @Param offset query int false "Смещение" default(0)
+// @Success 200 {array} domain.Game
+// @Router /games [get]
 func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := domain.GameFilter{}
 	filter.Name = r.URL.Query().Get("name")
@@ -86,7 +105,14 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get returns a game by ID.
-// GET /api/v1/games/{id}
+// @Summary Получить игру
+// @Description Возвращает игру по ID
+// @Tags games
+// @Produce json
+// @Param id path string true "Game ID" format(uuid)
+// @Success 200 {object} domain.Game
+// @Failure 404 {object} object{error=string}
+// @Router /games/{id} [get]
 func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
 	if !ok {
@@ -103,7 +129,15 @@ func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByName returns a game by name.
-// GET /api/v1/games/name/{name}
+// @Summary Получить игру по имени
+// @Description Возвращает игру по системному имени
+// @Tags games
+// @Produce json
+// @Param name path string true "Имя игры"
+// @Success 200 {object} domain.Game
+// @Failure 400 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /games/name/{name} [get]
 func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
@@ -121,7 +155,20 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update updates a game.
-// PUT /api/v1/games/{id}
+// @Summary Обновить игру
+// @Description Обновляет параметры игры (только для админов)
+// @Tags games
+// @Accept json
+// @Produce json
+// @Param id path string true "Game ID" format(uuid)
+// @Param request body game.UpdateRequest true "Данные для обновления"
+// @Security BearerAuth
+// @Success 200 {object} domain.Game
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /games/{id} [put]
 func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
 	if !ok {
@@ -148,7 +195,16 @@ func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete deletes a game.
-// DELETE /api/v1/games/{id}
+// @Summary Удалить игру
+// @Description Удаляет игру по ID (только для админов)
+// @Tags games
+// @Param id path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Игра удалена"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /games/{id} [delete]
 func (h *GameCRUDHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
 	if !ok {

@@ -18,7 +18,22 @@ import (
 )
 
 // Create обрабатывает создание программы (с загрузкой файла)
-// POST /api/v1/programs
+// @Summary Создать программу
+// @Description Создаёт новую программу. Поддерживает загрузку файла (multipart/form-data) и JSON
+// @Tags programs
+// @Accept multipart/form-data,json
+// @Produce json
+// @Param file formData file false "Файл программы"
+// @Param team_id formData string false "Team ID" format(uuid)
+// @Param tournament_id formData string false "Tournament ID" format(uuid)
+// @Param game_id formData string false "Game ID" format(uuid)
+// @Param name formData string false "Название программы"
+// @Security BearerAuth
+// @Success 201 {object} domain.Program
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /programs [post]
 func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Получаем user ID из контекста
 	userID, err := middleware.RequireUserID(r.Context())
@@ -104,7 +119,20 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 }
 
 // Update обрабатывает обновление программы
-// PUT /api/v1/programs/:id
+// @Summary Обновить программу
+// @Description Обновляет метаданные программы (название, путь, язык)
+// @Tags programs
+// @Accept json
+// @Produce json
+// @Param id path string true "Program ID" format(uuid)
+// @Param request body object{name=string,code_path=string,language=string} true "Данные для обновления"
+// @Security BearerAuth
+// @Success 200 {object} domain.Program
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /programs/{id} [put]
 func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -189,7 +217,16 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete обрабатывает удаление программы
-// DELETE /api/v1/programs/:id
+// @Summary Удалить программу
+// @Description Удаляет программу и связанный файл
+// @Tags programs
+// @Param id path string true "Program ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Программа удалена"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /programs/{id} [delete]
 func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -244,7 +281,17 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // ClearProgramErrors очищает сообщения об ошибках для всех программ турнира (только для админов)
-// POST /api/v1/tournaments/:id/programs/clear-errors
+// @Summary Очистить ошибки программ
+// @Description Очищает все сообщения об ошибках для программ в турнире (только для админов)
+// @Tags programs
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{cleared=int,message=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/programs/clear-errors [post]
 func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {

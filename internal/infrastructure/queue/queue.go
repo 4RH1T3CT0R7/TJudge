@@ -146,17 +146,17 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 
 	// Batch dedup-проверка через pipeline (один RTT вместо N)
 	dedupKeys := make(map[string]interface{}, len(matches))
-	matchByDedup := make(map[string]*domain.Match, len(matches))
 	for _, match := range matches {
-		key := dedupKeyFor(match.ID.String())
-		dedupKeys[key] = "1"
-		matchByDedup[key] = match
+		dedupKeys[dedupKeyFor(match.ID.String())] = "1"
 	}
 
 	dedupResults, err := qm.cache.BatchSetNX(ctx, dedupKeys, dedupTTL)
 	if err != nil {
 		qm.log.LogError("Failed batch dedup check, enqueuing all matches", err)
-		// При ошибке pipeline — добавляем все матчи (лучше дублировать, чем потерять)
+		// Cleanup any partially-set dedup keys before falling through
+		for key := range dedupKeys {
+			_ = qm.cache.Del(ctx, key)
+		}
 		dedupResults = nil
 	}
 
@@ -164,7 +164,8 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 	var addedToDedup []string
 	var skipped int
 
-	for key, match := range matchByDedup {
+	for _, match := range matches {
+		key := dedupKeyFor(match.ID.String())
 		// Если pipeline работал — проверяем результат, иначе пропускаем dedup
 		if dedupResults != nil {
 			isNew, ok := dedupResults[key]

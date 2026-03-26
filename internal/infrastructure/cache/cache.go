@@ -313,23 +313,24 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]interface{}, ttl
 		cmds[key] = pipe.SetNX(ctx, key, value, ttl)
 	}
 
-	_, err := pipe.Exec(ctx)
-	if err != nil {
-		c.log.LogError("Redis BatchSetNX pipeline failed", err)
-		return nil, err
-	}
-
+	_, pipeErr := pipe.Exec(ctx)
+	// Even on pipeline error, collect individual results —
+	// some commands may have succeeded.
 	results := make(map[string]bool, len(cmds))
 	for key, cmd := range cmds {
 		val, cmdErr := cmd.Result()
 		if cmdErr != nil {
-			c.log.LogError("Redis BatchSetNX cmd failed", cmdErr, zap.String("key", key))
 			continue
 		}
 		results[key] = val
 	}
 
-	return results, nil
+	if pipeErr != nil && len(results) == 0 {
+		c.log.LogError("Redis BatchSetNX pipeline failed completely", pipeErr)
+		return nil, pipeErr
+	}
+
+	return results, pipeErr
 }
 
 // Publish публикует сообщение в канал

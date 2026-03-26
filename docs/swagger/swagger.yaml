@@ -1,0 +1,3584 @@
+basePath: /api/v1
+definitions:
+  github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry:
+    properties:
+      game_ratings:
+        additionalProperties:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo'
+        description: game_id -> rating info
+        type: object
+      program_id:
+        type: string
+      program_name:
+        type: string
+      rank:
+        type: integer
+      team_id:
+        type: string
+      team_name:
+        type: string
+      total_games:
+        type: integer
+      total_losses:
+        type: integer
+      total_rating:
+        type: integer
+      total_wins:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.Game:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        description: Название для отображения
+        type: string
+      id:
+        type: string
+      name:
+        description: Уникальное название [a-z0-9_]+
+        type: string
+      rules:
+        description: Правила в формате Markdown
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo:
+    properties:
+      draws:
+        type: integer
+      game_id:
+        type: string
+      game_name:
+        type: string
+      losses:
+        type: integer
+      rating:
+        type: integer
+      total_games:
+        type: integer
+      wins:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry:
+    properties:
+      draws:
+        type: integer
+      losses:
+        type: integer
+      program_id:
+        type: string
+      program_name:
+        type: string
+      rank:
+        type: integer
+      rating:
+        type: integer
+      team_id:
+        type: string
+      team_name:
+        type: string
+      total_games:
+        type: integer
+      wins:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.Match:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      error_code:
+        type: integer
+      error_message:
+        type: string
+      game_type:
+        type: string
+      id:
+        type: string
+      priority:
+        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority'
+      program1_id:
+        type: string
+      program2_id:
+        type: string
+      round_number:
+        description: Номер раунда для группировки
+        type: integer
+      score1:
+        type: integer
+      score2:
+        type: integer
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus'
+      tournament_id:
+        type: string
+      winner:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority:
+    enum:
+    - high
+    - medium
+    - low
+    type: string
+    x-enum-varnames:
+    - PriorityHigh
+    - PriorityMedium
+    - PriorityLow
+  github_com_bmstu-itstech_tjudge_internal_domain.MatchRound:
+    properties:
+      completed_count:
+        type: integer
+      created_at:
+        type: string
+      failed_count:
+        type: integer
+      game_type:
+        type: string
+      matches:
+        items:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+        type: array
+      pending_count:
+        type: integer
+      round_number:
+        type: integer
+      running_count:
+        type: integer
+      total_matches:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus:
+    enum:
+    - pending
+    - running
+    - completed
+    - failed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - MatchPending
+    - MatchRunning
+    - MatchCompleted
+    - MatchFailed
+    - MatchCancelled
+  github_com_bmstu-itstech_tjudge_internal_domain.Program:
+    properties:
+      created_at:
+        type: string
+      error_message:
+        type: string
+      game_id:
+        type: string
+      game_type:
+        type: string
+      id:
+        type: string
+      language:
+        type: string
+      name:
+        type: string
+      team_id:
+        type: string
+      tournament_id:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+      version:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.Role:
+    enum:
+    - user
+    - admin
+    type: string
+    x-enum-comments:
+      RoleAdmin: Администратор
+      RoleUser: Обычный пользователь
+    x-enum-descriptions:
+    - Обычный пользователь
+    - Администратор
+    x-enum-varnames:
+    - RoleUser
+    - RoleAdmin
+  github_com_bmstu-itstech_tjudge_internal_domain.Team:
+    properties:
+      code:
+        description: 6-8 символов уникальный код
+        type: string
+      created_at:
+        type: string
+      disqualified_at:
+        type: string
+      id:
+        type: string
+      is_disqualified:
+        type: boolean
+      leader_id:
+        type: string
+      name:
+        type: string
+      tournament_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers:
+    properties:
+      code:
+        description: 6-8 символов уникальный код
+        type: string
+      created_at:
+        type: string
+      disqualified_at:
+        type: string
+      id:
+        type: string
+      is_disqualified:
+        type: boolean
+      leader_id:
+        type: string
+      members:
+        items:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+        type: array
+      name:
+        type: string
+      tournament_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.Tournament:
+    properties:
+      code:
+        description: 6-8 символов уникальный код
+        type: string
+      created_at:
+        type: string
+      creator_id:
+        type: string
+      description:
+        type: string
+      end_time:
+        type: string
+      game_type:
+        type: string
+      id:
+        type: string
+      is_permanent:
+        type: boolean
+      max_participants:
+        type: integer
+      max_team_size:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus'
+      updated_at:
+        type: string
+      version:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus:
+    enum:
+    - pending
+    - active
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - TournamentPending
+    - TournamentActive
+    - TournamentCompleted
+    - TournamentCancelled
+  github_com_bmstu-itstech_tjudge_internal_domain.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      role:
+        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Role'
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest:
+    properties:
+      current_password:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest:
+    properties:
+      display_name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+      rules:
+        type: string
+    required:
+    - display_name
+    - name
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest:
+    properties:
+      display_name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      rules:
+        type: string
+    required:
+    - display_name
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult:
+    properties:
+      matches_cancelled:
+        type: integer
+      matches_deleted:
+        type: integer
+      rating_history_reset:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest:
+    properties:
+      description:
+        type: string
+      game_type:
+        type: string
+      is_permanent:
+        type: boolean
+      max_participants:
+        type: integer
+      max_team_size:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      start_time:
+        type: string
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics:
+    properties:
+      completed:
+        type: integer
+      failed:
+        type: integer
+      pending:
+        type: integer
+      running:
+        type: integer
+      total:
+        type: integer
+    type: object
+  github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats:
+    properties:
+      high:
+        type: integer
+      low:
+        type: integer
+      medium:
+        type: integer
+      total:
+        type: integer
+    type: object
+  internal_api_handlers.AddGameToTournamentRequest:
+    properties:
+      game_id:
+        type: string
+    type: object
+  internal_api_handlers.CPUMetrics:
+    properties:
+      cores:
+        type: integer
+      model_name:
+        type: string
+      per_core:
+        items:
+          type: number
+        type: array
+      usage_percent:
+        type: number
+    type: object
+  internal_api_handlers.CreateTeamRequest:
+    properties:
+      name:
+        type: string
+      tournament_id:
+        type: string
+    type: object
+  internal_api_handlers.DiskMetrics:
+    properties:
+      free:
+        type: integer
+      path:
+        type: string
+      total:
+        type: integer
+      used:
+        type: integer
+      used_percent:
+        type: number
+    type: object
+  internal_api_handlers.GoMetrics:
+    properties:
+      gomaxprocs:
+        type: integer
+      goroutines:
+        type: integer
+      heap_alloc:
+        type: integer
+      heap_sys:
+        type: integer
+      num_gc:
+        type: integer
+      version:
+        type: string
+    type: object
+  internal_api_handlers.HostMetrics:
+    properties:
+      arch:
+        type: string
+      hostname:
+        type: string
+      os:
+        type: string
+      platform:
+        type: string
+      platform_version:
+        type: string
+      uptime:
+        type: integer
+    type: object
+  internal_api_handlers.InviteLinkResponse:
+    properties:
+      code:
+        type: string
+      link:
+        type: string
+    type: object
+  internal_api_handlers.JoinByCodeRequest:
+    properties:
+      code:
+        type: string
+    type: object
+  internal_api_handlers.MemoryMetrics:
+    properties:
+      free:
+        type: integer
+      total:
+        type: integer
+      used:
+        type: integer
+      used_percent:
+        type: number
+    type: object
+  internal_api_handlers.ResetGameRoundResponse:
+    properties:
+      matches_deleted:
+        type: integer
+      participants_reset:
+        type: integer
+      rating_history_reset:
+        type: integer
+    type: object
+  internal_api_handlers.SetActiveGameRequest:
+    properties:
+      game_id:
+        type: string
+    type: object
+  internal_api_handlers.SystemMetrics:
+    properties:
+      cpu:
+        $ref: '#/definitions/internal_api_handlers.CPUMetrics'
+      disk:
+        $ref: '#/definitions/internal_api_handlers.DiskMetrics'
+      go:
+        $ref: '#/definitions/internal_api_handlers.GoMetrics'
+      host:
+        $ref: '#/definitions/internal_api_handlers.HostMetrics'
+      memory:
+        $ref: '#/definitions/internal_api_handlers.MemoryMetrics'
+      temperature:
+        items:
+          $ref: '#/definitions/internal_api_handlers.TemperatureInfo'
+        type: array
+    type: object
+  internal_api_handlers.TemperatureInfo:
+    properties:
+      sensor_key:
+        type: string
+      temperature:
+        type: number
+    type: object
+  internal_api_handlers.TournamentGameWithDetails:
+    properties:
+      auto_round_enabled:
+        type: boolean
+      auto_round_interval_seconds:
+        type: integer
+      auto_round_last_run_at:
+        type: string
+      current_round:
+        type: integer
+      game_display_name:
+        type: string
+      game_id:
+        type: string
+      game_name:
+        type: string
+      is_active:
+        type: boolean
+      round_completed:
+        type: boolean
+      round_completed_at:
+        type: string
+      tournament_id:
+        type: string
+    type: object
+  internal_api_handlers.UpdateNameRequest:
+    properties:
+      name:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Tournament system for game theory competitions
+  title: TJudge API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Аутентификация по username/email и паролю, возвращает JWT токены
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Неверные учётные данные
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Вход в систему
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Инвалидирует access и refresh токены
+      parameters:
+      - description: Refresh token (опционально)
+        in: body
+        name: request
+        schema:
+          properties:
+            refresh_token:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Выход из системы
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Возвращает информацию о текущем аутентифицированном пользователе
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Текущий пользователь
+      tags:
+      - auth
+  /auth/profile:
+    put:
+      consumes:
+      - application/json
+      description: Обновляет профиль текущего пользователя (email, username)
+      parameters:
+      - description: Данные для обновления профиля
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Обновление профиля
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Обновляет access и refresh токены по refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            refresh_token:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+        "401":
+          description: Невалидный refresh token
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Обновление токенов
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт нового пользователя и возвращает JWT токены
+      parameters:
+      - description: Данные регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "409":
+          description: Пользователь уже существует
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Регистрация пользователя
+      tags:
+      - auth
+  /games:
+    get:
+      description: Возвращает список доступных игр с фильтрацией и пагинацией
+      parameters:
+      - description: Фильтр по имени
+        in: query
+        name: name
+        type: string
+      - default: 50
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            type: array
+      summary: Список игр
+      tags:
+      - games
+    post:
+      consumes:
+      - application/json
+      description: Создаёт новую игру (только для админов)
+      parameters:
+      - description: Данные игры
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Создать игру
+      tags:
+      - games
+  /games/{id}:
+    delete:
+      description: Удаляет игру по ID (только для админов)
+      parameters:
+      - description: Game ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Игра удалена
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить игру
+      tags:
+      - games
+    get:
+      description: Возвращает игру по ID
+      parameters:
+      - description: Game ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Получить игру
+      tags:
+      - games
+    put:
+      consumes:
+      - application/json
+      description: Обновляет параметры игры (только для админов)
+      parameters:
+      - description: Game ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Данные для обновления
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Обновить игру
+      tags:
+      - games
+  /games/name/{name}:
+    get:
+      description: Возвращает игру по системному имени
+      parameters:
+      - description: Имя игры
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Получить игру по имени
+      tags:
+      - games
+  /matches:
+    get:
+      description: Возвращает список матчей с фильтрацией и пагинацией
+      parameters:
+      - description: Фильтр по турниру
+        format: uuid
+        in: query
+        name: tournament_id
+        type: string
+      - description: Фильтр по программе
+        format: uuid
+        in: query
+        name: program_id
+        type: string
+      - description: Фильтр по статусу (pending, running, completed, failed, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Фильтр по типу игры
+        in: query
+        name: game_type
+        type: string
+      - default: 50
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Список матчей
+      tags:
+      - matches
+  /matches/{id}:
+    get:
+      description: Возвращает матч по ID с фильтрацией ошибок по правам
+      parameters:
+      - description: Match ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Получить матч
+      tags:
+      - matches
+  /matches/queue/clear:
+    post:
+      description: Очищает все очереди матчей (только для админов)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Очистить очередь матчей
+      tags:
+      - matches
+  /matches/queue/purge:
+    post:
+      description: Удаляет из очереди матчи, которых нет в БД (только для админов)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+              purged_count:
+                type: integer
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Очистить невалидные матчи
+      tags:
+      - matches
+  /matches/queue/stats:
+    get:
+      description: Возвращает статистику очереди матчей (только для админов)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Статистика очереди матчей
+      tags:
+      - matches
+  /matches/statistics:
+    get:
+      description: Возвращает агрегированную статистику матчей (опционально по турниру)
+      parameters:
+      - description: Фильтр по турниру
+        format: uuid
+        in: query
+        name: tournament_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Статистика матчей
+      tags:
+      - matches
+  /programs:
+    get:
+      description: Возвращает список программ текущего пользователя
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Мои программы
+      tags:
+      - programs
+    post:
+      consumes:
+      - multipart/form-data
+      - application/json
+      description: Создаёт новую программу. Поддерживает загрузку файла (multipart/form-data)
+        и JSON
+      parameters:
+      - description: Файл программы
+        in: formData
+        name: file
+        type: file
+      - description: Team ID
+        format: uuid
+        in: formData
+        name: team_id
+        type: string
+      - description: Tournament ID
+        format: uuid
+        in: formData
+        name: tournament_id
+        type: string
+      - description: Game ID
+        format: uuid
+        in: formData
+        name: game_id
+        type: string
+      - description: Название программы
+        in: formData
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Создать программу
+      tags:
+      - programs
+  /programs/{id}:
+    delete:
+      description: Удаляет программу и связанный файл
+      parameters:
+      - description: Program ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Программа удалена
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить программу
+      tags:
+      - programs
+    get:
+      description: Возвращает программу по ID (владелец или админ)
+      parameters:
+      - description: Program ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить программу
+      tags:
+      - programs
+    put:
+      consumes:
+      - application/json
+      description: Обновляет метаданные программы (название, путь, язык)
+      parameters:
+      - description: Program ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Данные для обновления
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            code_path:
+              type: string
+            language:
+              type: string
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Обновить программу
+      tags:
+      - programs
+  /programs/{id}/download:
+    get:
+      description: Скачивает файл программы (владелец или админ)
+      parameters:
+      - description: Program ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Файл программы
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Скачать программу
+      tags:
+      - programs
+  /programs/versions:
+    get:
+      description: Возвращает все версии программ для команды и игры
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: query
+        name: team_id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: query
+        name: game_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Версии программ
+      tags:
+      - programs
+  /system/health:
+    get:
+      description: Возвращает статус здоровья системы (только для админов)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              hostname:
+                type: string
+              pid:
+                type: integer
+              status:
+                type: string
+              timestamp:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Состояние системы
+      tags:
+      - system
+  /system/metrics:
+    get:
+      description: Возвращает метрики CPU, памяти, диска, Go runtime (только для админов)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handlers.SystemMetrics'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Системные метрики
+      tags:
+      - system
+  /teams:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт новую команду в турнире
+      parameters:
+      - description: Данные команды
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.CreateTeamRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Создать команду
+      tags:
+      - teams
+  /teams/{id}:
+    delete:
+      description: Удаляет команду по ID (только для админов)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Команда удалена
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить команду
+      tags:
+      - teams
+    get:
+      description: Возвращает команду с участниками по ID
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers'
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить команду
+      tags:
+      - teams
+    put:
+      consumes:
+      - application/json
+      description: Обновляет название команды (только лидер команды)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Новое название
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.UpdateNameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Обновить название команды
+      tags:
+      - teams
+  /teams/{id}/disqualify:
+    post:
+      description: Дисквалифицирует команду и отменяет её ожидающие матчи (только
+        для админов)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Дисквалифицировать команду
+      tags:
+      - teams
+  /teams/{id}/invite:
+    get:
+      description: Возвращает инвайт-код и ссылку приглашения (только лидер команды)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handlers.InviteLinkResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Получить ссылку приглашения
+      tags:
+      - teams
+  /teams/{id}/leave:
+    post:
+      description: Текущий пользователь покидает команду
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Пользователь покинул команду
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Покинуть команду
+      tags:
+      - teams
+  /teams/{id}/members:
+    get:
+      description: Возвращает список участников команды
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Участники команды
+      tags:
+      - teams
+  /teams/{id}/members/{userId}:
+    delete:
+      description: Удаляет участника из команды (только лидер команды)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User ID участника
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Участник удалён
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить участника
+      tags:
+      - teams
+  /teams/{id}/restore:
+    post:
+      description: Снимает дисквалификацию с команды (только для админов)
+      parameters:
+      - description: Team ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Команда восстановлена
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Восстановить команду
+      tags:
+      - teams
+  /teams/join:
+    post:
+      consumes:
+      - application/json
+      description: Присоединяет текущего пользователя к команде по инвайт-коду
+      parameters:
+      - description: Код приглашения
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.JoinByCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Вступить в команду по коду
+      tags:
+      - teams
+  /tournaments:
+    get:
+      description: Возвращает список турниров с фильтрацией и пагинацией
+      parameters:
+      - description: Фильтр по статусу (pending, active, completed, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Фильтр по типу игры
+        in: query
+        name: game_type
+        type: string
+      - default: 50
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Список турниров
+      tags:
+      - tournaments
+    post:
+      consumes:
+      - application/json
+      description: Создаёт новый турнир (только для админов)
+      parameters:
+      - description: Данные турнира
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Создать турнир
+      tags:
+      - tournaments
+  /tournaments/{id}:
+    delete:
+      description: Удаляет турнир по ID (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Турнир удалён
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить турнир
+      tags:
+      - tournaments
+    get:
+      description: Возвращает турнир по ID
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Получить турнир
+      tags:
+      - tournaments
+  /tournaments/{id}/active-game:
+    get:
+      description: Возвращает текущую активную игру турнира (null если нет)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handlers.TournamentGameWithDetails'
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Активная игра турнира
+      tags:
+      - games
+    post:
+      consumes:
+      - application/json
+      description: Устанавливает активную игру для турнира (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ID игры
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.SetActiveGameRequest'
+      responses:
+        "204":
+          description: Активная игра установлена
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Установить активную игру
+      tags:
+      - games
+  /tournaments/{id}/complete:
+    post:
+      description: Переводит турнир в статус completed (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Завершить турнир
+      tags:
+      - tournaments
+  /tournaments/{id}/cross-game-leaderboard:
+    get:
+      description: Возвращает общий рейтинг по всем играм турнира
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Кросс-игровой рейтинг
+      tags:
+      - tournaments
+  /tournaments/{id}/games:
+    get:
+      description: Возвращает список игр, привязанных к турниру
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Игры турнира
+      tags:
+      - games
+    post:
+      consumes:
+      - application/json
+      description: Привязывает игру к турниру (админ или создатель турнира)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ID игры
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handlers.AddGameToTournamentRequest'
+      responses:
+        "204":
+          description: Игра добавлена
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Добавить игру в турнир
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}:
+    delete:
+      description: Отвязывает игру от турнира (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Игра удалена из турнира
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Удалить игру из турнира
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/auto-round:
+    get:
+      description: Возвращает текущие настройки авто-раунда для игры (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              enabled:
+                type: boolean
+              interval_seconds:
+                type: integer
+              last_run_at:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Статус авто-раунда
+      tags:
+      - games
+    post:
+      consumes:
+      - application/json
+      description: Включает или выключает автоматический запуск раундов для игры (только
+        для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      - description: Настройки авто-раунда
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            enabled:
+              type: boolean
+            interval_seconds:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              enabled:
+                type: boolean
+              interval_seconds:
+                type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Настроить авто-раунд
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/complete-round:
+    post:
+      description: Отмечает текущий раунд игры как завершённый (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Раунд завершён
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Завершить раунд игры
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/leaderboard:
+    get:
+      description: Возвращает таблицу лидеров для конкретной игры в турнире
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      - default: 100
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Рейтинг по игре
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/matches:
+    get:
+      description: Возвращает матчи для конкретной игры в турнире с фильтрацией по
+        статусу
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      - description: Фильтр по статусу (pending, running, completed, failed, cancelled)
+        in: query
+        name: status
+        type: string
+      - default: 50
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Матчи по игре
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/programs:
+    get:
+      description: Возвращает программы для конкретной игры в турнире (только для
+        админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Программы по игре
+      tags:
+      - games
+  /tournaments/{id}/games/{gameId}/reset-round:
+    post:
+      description: 'Полностью сбрасывает раунд: удаляет матчи, обнуляет рейтинги и
+        статистику (только для админов)'
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Game ID
+        format: uuid
+        in: path
+        name: gameId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handlers.ResetGameRoundResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Сбросить раунд игры
+      tags:
+      - games
+  /tournaments/{id}/games/deactivate-all:
+    post:
+      description: Деактивирует все игры в турнире (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Все игры деактивированы
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Деактивировать все игры
+      tags:
+      - games
+  /tournaments/{id}/games/status:
+    get:
+      description: Возвращает игры турнира с информацией о раундах и авто-раунде
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_api_handlers.TournamentGameWithDetails'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Статус игр турнира
+      tags:
+      - games
+  /tournaments/{id}/join:
+    post:
+      consumes:
+      - application/json
+      description: Присоединяет программу к турниру
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: ID программы для участия
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            program_id:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Присоединиться к турниру
+      tags:
+      - tournaments
+  /tournaments/{id}/leaderboard:
+    get:
+      description: Возвращает таблицу лидеров для турнира
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 100
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Таблица лидеров турнира
+      tags:
+      - tournaments
+  /tournaments/{id}/matches:
+    get:
+      description: Возвращает список матчей турнира с пагинацией
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - default: 50
+        description: Лимит записей
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Смещение
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Матчи турнира
+      tags:
+      - tournaments
+    post:
+      consumes:
+      - application/json
+      description: Создаёт матч между двумя программами в турнире (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Данные матча
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            priority:
+              type: string
+            program1_id:
+              type: string
+            program2_id:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Создать матч
+      tags:
+      - tournaments
+  /tournaments/{id}/matches/rounds:
+    get:
+      description: Возвращает матчи турнира, сгруппированные по раундам
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchRound'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Матчи по раундам
+      tags:
+      - tournaments
+  /tournaments/{id}/my-team:
+    get:
+      description: Возвращает команду текущего пользователя в указанном турнире (null
+        если нет)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Моя команда в турнире
+      tags:
+      - teams
+  /tournaments/{id}/programs/clear-errors:
+    post:
+      description: Очищает все сообщения об ошибках для программ в турнире (только
+        для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              cleared:
+                type: integer
+              message:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Очистить ошибки программ
+      tags:
+      - programs
+  /tournaments/{id}/programs/download-zip:
+    get:
+      description: Скачивает ZIP-архив со всеми программами турнира (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: ZIP-архив программ
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Скачать все программы
+      tags:
+      - games
+  /tournaments/{id}/retry-matches:
+    post:
+      description: Повторно добавляет в очередь все матчи со статусом failed (только
+        для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              enqueued:
+                type: integer
+              status:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Перезапустить неудачные матчи
+      tags:
+      - tournaments
+  /tournaments/{id}/run-game-matches:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет матчи конкретной игры в очередь (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Тип игры
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            game_type:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              enqueued:
+                type: integer
+              game_type:
+                type: string
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Запустить матчи для игры
+      tags:
+      - tournaments
+  /tournaments/{id}/run-matches:
+    post:
+      description: Добавляет все ожидающие матчи турнира в очередь (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              enqueued:
+                type: integer
+              status:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Запустить все матчи
+      tags:
+      - tournaments
+  /tournaments/{id}/start:
+    post:
+      description: Переводит турнир в статус active (только для админов)
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Запустить турнир
+      tags:
+      - tournaments
+  /tournaments/{id}/teams:
+    get:
+      description: Возвращает все команды в турнире
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Команды турнира
+      tags:
+      - teams
+  /ws/stats:
+    get:
+      description: Возвращает количество активных WebSocket подключений
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              total_clients:
+                type: integer
+              tournaments:
+                type: integer
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Статистика WebSocket
+      tags:
+      - websocket
+  /ws/tournaments/{id}:
+    get:
+      description: Устанавливает WebSocket соединение для получения real-time обновлений
+        турнира
+      parameters:
+      - description: Tournament ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "101":
+          description: WebSocket соединение установлено
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: WebSocket подключение к турниру
+      tags:
+      - websocket
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token (format: "Bearer {token}")'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

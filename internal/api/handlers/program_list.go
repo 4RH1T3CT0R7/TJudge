@@ -16,7 +16,14 @@ import (
 )
 
 // List обрабатывает получение списка программ текущего пользователя
-// GET /api/v1/programs
+// @Summary Мои программы
+// @Description Возвращает список программ текущего пользователя
+// @Tags programs
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} domain.Program
+// @Failure 401 {object} object{error=string}
+// @Router /programs [get]
 func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -37,7 +44,17 @@ func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get обрабатывает получение программы
-// GET /api/v1/programs/:id
+// @Summary Получить программу
+// @Description Возвращает программу по ID (владелец или админ)
+// @Tags programs
+// @Produce json
+// @Param id path string true "Program ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} domain.Program
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /programs/{id} [get]
 func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -70,7 +87,17 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Download скачивает файл программы
-// GET /api/v1/programs/:id/download
+// @Summary Скачать программу
+// @Description Скачивает файл программы (владелец или админ)
+// @Tags programs
+// @Produce application/octet-stream
+// @Param id path string true "Program ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {file} binary "Файл программы"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /programs/{id}/download [get]
 func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -186,7 +213,18 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetVersions получает все версии программ для команды и игры
-// GET /api/v1/programs/versions?team_id=xxx&game_id=xxx
+// @Summary Версии программ
+// @Description Возвращает все версии программ для команды и игры
+// @Tags programs
+// @Produce json
+// @Param team_id query string true "Team ID" format(uuid)
+// @Param game_id query string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {array} domain.Program
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /programs/versions [get]
 func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {

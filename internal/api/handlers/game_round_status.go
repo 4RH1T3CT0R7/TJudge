@@ -28,7 +28,15 @@ type TournamentGameWithDetails struct {
 }
 
 // GetTournamentGamesWithStatus returns games with their round status.
-// GET /api/v1/tournaments/{id}/games/status
+// @Summary Статус игр турнира
+// @Description Возвращает игры турнира с информацией о раундах и авто-раунде
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {array} TournamentGameWithDetails
+// @Failure 404 {object} object{error=string}
+// @Failure 500 {object} object{error=string}
+// @Router /tournaments/{id}/games/status [get]
 func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -77,7 +85,14 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 }
 
 // GetActiveGame returns the currently active game for a tournament.
-// GET /api/v1/tournaments/{id}/active-game
+// @Summary Активная игра турнира
+// @Description Возвращает текущую активную игру турнира (null если нет)
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {object} TournamentGameWithDetails
+// @Failure 500 {object} object{error=string}
+// @Router /tournaments/{id}/active-game [get]
 func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -140,7 +155,18 @@ type SetActiveGameRequest struct {
 }
 
 // SetActiveGame sets the active game for a tournament.
-// POST /api/v1/tournaments/{id}/active-game
+// @Summary Установить активную игру
+// @Description Устанавливает активную игру для турнира (только для админов)
+// @Tags games
+// @Accept json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param request body SetActiveGameRequest true "ID игры"
+// @Security BearerAuth
+// @Success 204 "Активная игра установлена"
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments/{id}/active-game [post]
 func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -177,7 +203,16 @@ func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request)
 }
 
 // GetGameLeaderboard returns the leaderboard for a specific game in a tournament.
-// GET /api/v1/tournaments/{id}/games/{gameId}/leaderboard
+// @Summary Рейтинг по игре
+// @Description Возвращает таблицу лидеров для конкретной игры в турнире
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Param limit query int false "Лимит записей" default(100)
+// @Success 200 {array} domain.LeaderboardEntry
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/leaderboard [get]
 func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -213,7 +248,19 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 }
 
 // GetGameMatches returns matches for a specific game in a tournament.
-// GET /api/v1/tournaments/{id}/games/{gameId}/matches
+// @Summary Матчи по игре
+// @Description Возвращает матчи для конкретной игры в турнире с фильтрацией по статусу
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Param status query string false "Фильтр по статусу (pending, running, completed, failed, cancelled)"
+// @Param limit query int false "Лимит записей" default(50)
+// @Param offset query int false "Смещение" default(0)
+// @Success 200 {array} domain.Match
+// @Failure 400 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/matches [get]
 func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -267,7 +314,18 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 }
 
 // GetGamePrograms returns programs for a specific game in a tournament.
-// GET /api/v1/tournaments/:id/games/:gameId/programs
+// @Summary Программы по игре
+// @Description Возвращает программы для конкретной игры в турнире (только для админов)
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {array} domain.Program
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/programs [get]
 func (h *GameRoundHandler) GetGamePrograms(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {

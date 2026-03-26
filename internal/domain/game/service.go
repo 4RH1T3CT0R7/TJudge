@@ -1,6 +1,6 @@
 package game
 
-//go:generate mockgen -source=service.go -destination=../../mocks/mock_game.go -package=mocks GameRepository
+//go:generate mockgen -destination=../../mocks/mock_game.go -package=mocks github.com/bmstu-itstech/tjudge/internal/domain/game GameRepository
 
 import (
 	"context"

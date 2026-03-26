@@ -56,7 +56,18 @@ func NewTournamentHandler(tournamentService TournamentService, schedulingService
 }
 
 // Create обрабатывает создание турнира
-// POST /api/v1/tournaments
+// @Summary Создать турнир
+// @Description Создаёт новый турнир (только для админов)
+// @Tags tournaments
+// @Accept json
+// @Produce json
+// @Param request body tournament.CreateRequest true "Данные турнира"
+// @Security BearerAuth
+// @Success 201 {object} domain.Tournament
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments [post]
 func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req tournament.CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -87,7 +98,17 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // List обрабатывает получение списка турниров
-// GET /api/v1/tournaments
+// @Summary Список турниров
+// @Description Возвращает список турниров с фильтрацией и пагинацией
+// @Tags tournaments
+// @Produce json
+// @Param status query string false "Фильтр по статусу (pending, active, completed, cancelled)"
+// @Param game_type query string false "Фильтр по типу игры"
+// @Param limit query int false "Лимит записей" default(50)
+// @Param offset query int false "Смещение" default(0)
+// @Success 200 {array} domain.Tournament
+// @Failure 400 {object} object{error=string}
+// @Router /tournaments [get]
 func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
 	filter := domain.TournamentFilter{}
@@ -124,7 +145,14 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get обрабатывает получение турнира
-// GET /api/v1/tournaments/:id
+// @Summary Получить турнир
+// @Description Возвращает турнир по ID
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {object} domain.Tournament
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id} [get]
 func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -146,7 +174,19 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Join обрабатывает присоединение к турниру
-// POST /api/v1/tournaments/:id/join
+// @Summary Присоединиться к турниру
+// @Description Присоединяет программу к турниру
+// @Tags tournaments
+// @Accept json
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param request body object{program_id=string} true "ID программы для участия"
+// @Security BearerAuth
+// @Success 200 {object} object{status=string}
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/join [post]
 func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -188,7 +228,18 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 }
 
 // Start обрабатывает запуск турнира
-// POST /api/v1/tournaments/:id/start
+// @Summary Запустить турнир
+// @Description Переводит турнир в статус active (только для админов)
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{status=string}
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/start [post]
 func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -213,7 +264,18 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 }
 
 // Complete обрабатывает завершение турнира
-// POST /api/v1/tournaments/:id/complete
+// @Summary Завершить турнир
+// @Description Переводит турнир в статус completed (только для админов)
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{status=string}
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/complete [post]
 func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -238,7 +300,16 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete обрабатывает удаление турнира
-// DELETE /api/v1/tournaments/:id
+// @Summary Удалить турнир
+// @Description Удаляет турнир по ID (только для админов)
+// @Tags tournaments
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Турнир удалён"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id} [delete]
 func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -263,7 +334,15 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetLeaderboard обрабатывает получение таблицы лидеров
-// GET /api/v1/tournaments/:id/leaderboard
+// @Summary Таблица лидеров турнира
+// @Description Возвращает таблицу лидеров для турнира
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param limit query int false "Лимит записей" default(100)
+// @Success 200 {array} domain.LeaderboardEntry
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/leaderboard [get]
 func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -288,7 +367,19 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 }
 
 // CreateMatch обрабатывает создание матча
-// POST /api/v1/tournaments/:id/matches
+// @Summary Создать матч
+// @Description Создаёт матч между двумя программами в турнире (только для админов)
+// @Tags tournaments
+// @Accept json
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param request body object{program1_id=string,program2_id=string,priority=string} true "Данные матча"
+// @Security BearerAuth
+// @Success 201 {object} domain.Match
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments/{id}/matches [post]
 func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -345,7 +436,14 @@ type CrossGameLeaderboardEntry struct {
 }
 
 // GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
-// GET /api/v1/tournaments/:id/cross-game-leaderboard
+// @Summary Кросс-игровой рейтинг
+// @Description Возвращает общий рейтинг по всем играм турнира
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {array} domain.CrossGameLeaderboardEntry
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/cross-game-leaderboard [get]
 func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -366,7 +464,16 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 }
 
 // GetMatches обрабатывает получение списка матчей турнира
-// GET /api/v1/tournaments/:id/matches
+// @Summary Матчи турнира
+// @Description Возвращает список матчей турнира с пагинацией
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param limit query int false "Лимит записей" default(50)
+// @Param offset query int false "Смещение" default(0)
+// @Success 200 {array} domain.Match
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/matches [get]
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -391,7 +498,14 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMatchesByRounds обрабатывает получение матчей турнира сгруппированных по раундам
-// GET /api/v1/tournaments/:id/matches/rounds
+// @Summary Матчи по раундам
+// @Description Возвращает матчи турнира, сгруппированные по раундам
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {array} domain.MatchRound
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/matches/rounds [get]
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -413,7 +527,17 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 }
 
 // RunAllMatches запускает все ожидающие матчи турнира
-// POST /api/v1/tournaments/:id/run-matches
+// @Summary Запустить все матчи
+// @Description Добавляет все ожидающие матчи турнира в очередь (только для админов)
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{status=string,enqueued=int}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/run-matches [post]
 func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
@@ -443,7 +567,19 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 }
 
 // RunGameMatches запускает матчи для конкретной игры в турнире
-// POST /api/v1/tournaments/:id/games/:gameId/run-matches
+// @Summary Запустить матчи для игры
+// @Description Добавляет матчи конкретной игры в очередь (только для админов)
+// @Tags tournaments
+// @Accept json
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param request body object{game_type=string} true "Тип игры"
+// @Security BearerAuth
+// @Success 200 {object} object{status=string,game_type=string,enqueued=int}
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments/{id}/run-game-matches [post]
 func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -490,7 +626,17 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 }
 
 // RetryFailedMatches перезапускает все неудачные матчи турнира
-// POST /api/v1/tournaments/:id/retry-matches
+// @Summary Перезапустить неудачные матчи
+// @Description Повторно добавляет в очередь все матчи со статусом failed (только для админов)
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{status=string,enqueued=int}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/retry-matches [post]
 func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {

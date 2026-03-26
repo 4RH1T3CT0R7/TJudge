@@ -127,7 +127,14 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*domai
 }
 
 // Get обрабатывает получение матча
-// GET /api/v1/matches/:id
+// @Summary Получить матч
+// @Description Возвращает матч по ID с фильтрацией ошибок по правам
+// @Tags matches
+// @Produce json
+// @Param id path string true "Match ID" format(uuid)
+// @Success 200 {object} domain.Match
+// @Failure 404 {object} object{error=string}
+// @Router /matches/{id} [get]
 func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "match")
@@ -170,7 +177,19 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // List обрабатывает получение списка матчей
-// GET /api/v1/matches
+// @Summary Список матчей
+// @Description Возвращает список матчей с фильтрацией и пагинацией
+// @Tags matches
+// @Produce json
+// @Param tournament_id query string false "Фильтр по турниру" format(uuid)
+// @Param program_id query string false "Фильтр по программе" format(uuid)
+// @Param status query string false "Фильтр по статусу (pending, running, completed, failed, cancelled)"
+// @Param game_type query string false "Фильтр по типу игры"
+// @Param limit query int false "Лимит записей" default(50)
+// @Param offset query int false "Смещение" default(0)
+// @Success 200 {array} domain.Match
+// @Failure 400 {object} object{error=string}
+// @Router /matches [get]
 func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
 	filter := domain.MatchFilter{}
@@ -233,7 +252,14 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetStatistics обрабатывает получение статистики матчей
-// GET /api/v1/matches/statistics
+// @Summary Статистика матчей
+// @Description Возвращает агрегированную статистику матчей (опционально по турниру)
+// @Tags matches
+// @Produce json
+// @Param tournament_id query string false "Фильтр по турниру" format(uuid)
+// @Success 200 {object} db.MatchStatistics
+// @Failure 400 {object} object{error=string}
+// @Router /matches/statistics [get]
 func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 	// Получаем tournament_id из query параметров (опционально)
 	var tournamentID *uuid.UUID
@@ -258,7 +284,16 @@ func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetQueueStats возвращает статистику очереди матчей (только для админов)
-// GET /api/v1/matches/queue/stats
+// @Summary Статистика очереди матчей
+// @Description Возвращает статистику очереди матчей (только для админов)
+// @Tags matches
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} queue.QueueStats
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 500 {object} object{error=string}
+// @Router /matches/queue/stats [get]
 func (h *MatchHandler) GetQueueStats(w http.ResponseWriter, r *http.Request) {
 	if h.queueManager == nil {
 		writeError(w, errors.ErrInternal.WithMessage("queue manager not configured"))
@@ -276,7 +311,16 @@ func (h *MatchHandler) GetQueueStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // ClearQueue очищает все очереди матчей (только для админов)
-// POST /api/v1/matches/queue/clear
+// @Summary Очистить очередь матчей
+// @Description Очищает все очереди матчей (только для админов)
+// @Tags matches
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object{message=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 500 {object} object{error=string}
+// @Router /matches/queue/clear [post]
 func (h *MatchHandler) ClearQueue(w http.ResponseWriter, r *http.Request) {
 	if h.queueManager == nil {
 		writeError(w, errors.ErrInternal.WithMessage("queue manager not configured"))
@@ -297,7 +341,16 @@ func (h *MatchHandler) ClearQueue(w http.ResponseWriter, r *http.Request) {
 }
 
 // PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД (только для админов)
-// POST /api/v1/matches/queue/purge
+// @Summary Очистить невалидные матчи
+// @Description Удаляет из очереди матчи, которых нет в БД (только для админов)
+// @Tags matches
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object{message=string,purged_count=int}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 500 {object} object{error=string}
+// @Router /matches/queue/purge [post]
 func (h *MatchHandler) PurgeInvalidMatches(w http.ResponseWriter, r *http.Request) {
 	if h.queueManager == nil {
 		writeError(w, errors.ErrInternal.WithMessage("queue manager not configured"))

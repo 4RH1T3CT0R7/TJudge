@@ -4,6 +4,7 @@ import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { PageLoader } from './components/PageLoader';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastContainer } from './components/ToastContainer';
 import { useAuthStore } from './store/authStore';
 import { InvaderProvider } from './context/InvaderContext';
 
@@ -150,6 +151,7 @@ function App() {
           <BrowserRouter>
             <AppContent />
           </BrowserRouter>
+          <ToastContainer />
         </InvaderProvider>
       </MotionConfig>
     </ErrorBoundary>

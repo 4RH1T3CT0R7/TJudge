@@ -17,7 +17,17 @@ import (
 )
 
 // MarkGameRoundCompleted marks a game round as completed.
-// POST /api/v1/tournaments/{id}/games/{gameId}/complete-round
+// @Summary Завершить раунд игры
+// @Description Отмечает текущий раунд игры как завершённый (только для админов)
+// @Tags games
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Раунд завершён"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/complete-round [post]
 func (h *GameRoundHandler) MarkGameRoundCompleted(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -54,7 +64,18 @@ type ResetGameRoundResponse struct {
 }
 
 // ResetGameRound fully resets a game round: deletes matches, resets ratings and stats.
-// POST /api/v1/tournaments/{id}/games/{gameId}/reset-round
+// @Summary Сбросить раунд игры
+// @Description Полностью сбрасывает раунд: удаляет матчи, обнуляет рейтинги и статистику (только для админов)
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} ResetGameRoundResponse
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/reset-round [post]
 func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -94,6 +115,7 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 	)
 
 	h.eventBus.Publish(r.Context(), events.GameRoundReset{
+		Version:      1,
 		TournamentID: tournamentID,
 		GameID:       gameID,
 	})
@@ -106,7 +128,20 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 }
 
 // SetAutoRound enables or disables auto-round for a game in a tournament.
-// POST /api/v1/tournaments/{id}/games/{gameId}/auto-round
+// @Summary Настроить авто-раунд
+// @Description Включает или выключает автоматический запуск раундов для игры (только для админов)
+// @Tags games
+// @Accept json
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Param request body object{enabled=bool,interval_seconds=int} true "Настройки авто-раунда"
+// @Security BearerAuth
+// @Success 200 {object} object{enabled=bool,interval_seconds=int}
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/auto-round [post]
 func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -161,7 +196,18 @@ func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) 
 }
 
 // GetAutoRound returns the auto-round status for a game in a tournament.
-// GET /api/v1/tournaments/{id}/games/{gameId}/auto-round
+// @Summary Статус авто-раунда
+// @Description Возвращает текущие настройки авто-раунда для игры (только для админов)
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} object{enabled=bool,interval_seconds=int,last_run_at=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/auto-round [get]
 func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -186,7 +232,17 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 }
 
 // DownloadAllPrograms streams a ZIP archive of all programs for a tournament.
-// GET /api/v1/tournaments/{id}/programs/download-zip
+// @Summary Скачать все программы
+// @Description Скачивает ZIP-архив со всеми программами турнира (только для админов)
+// @Tags games
+// @Produce application/zip
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {file} binary "ZIP-архив программ"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/programs/download-zip [get]
 func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -318,7 +374,16 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 }
 
 // DeactivateAllGames deactivates all games in a tournament.
-// POST /api/v1/tournaments/{id}/games/deactivate-all
+// @Summary Деактивировать все игры
+// @Description Деактивирует все игры в турнире (только для админов)
+// @Tags games
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Все игры деактивированы"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/deactivate-all [post]
 func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {

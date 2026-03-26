@@ -17,6 +17,7 @@ import type {
   MatchStatistics,
   SystemMetrics,
 } from '../types';
+import { useToastStore } from '../store/toastStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -102,6 +103,19 @@ class ApiClient {
             }
           }
         }
+
+        // Show global error toast for non-401 errors
+        // (401 errors are handled by the token refresh logic above)
+        if (error.response?.status !== 401) {
+          const responseData = error.response?.data as Record<string, unknown> | undefined;
+          const message =
+            (typeof responseData?.error === 'string' ? responseData.error : null) ||
+            (typeof responseData?.message === 'string' ? responseData.message : null) ||
+            error.message ||
+            'An unexpected error occurred';
+          useToastStore.getState().addToast(message, 'error');
+        }
+
         return Promise.reject(error);
       }
     );

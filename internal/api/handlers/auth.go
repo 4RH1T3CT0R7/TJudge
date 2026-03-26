@@ -39,7 +39,16 @@ func NewAuthHandler(authService AuthService, log *logger.Logger) *AuthHandler {
 }
 
 // Register обрабатывает регистрацию пользователя
-// POST /api/v1/auth/register
+// @Summary Регистрация пользователя
+// @Description Создаёт нового пользователя и возвращает JWT токены
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body auth.RegisterRequest true "Данные регистрации"
+// @Success 201 {object} auth.AuthResponse
+// @Failure 400 {object} object{error=string}
+// @Failure 409 {object} object{error=string} "Пользователь уже существует"
+// @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req auth.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -65,7 +74,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login обрабатывает вход пользователя
-// POST /api/v1/auth/login
+// @Summary Вход в систему
+// @Description Аутентификация по username/email и паролю, возвращает JWT токены
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body auth.LoginRequest true "Данные для входа"
+// @Success 200 {object} auth.AuthResponse
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string} "Неверные учётные данные"
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req auth.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -93,7 +111,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // Refresh обрабатывает обновление токена
-// POST /api/v1/auth/refresh
+// @Summary Обновление токенов
+// @Description Обновляет access и refresh токены по refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body object{refresh_token=string} true "Refresh token"
+// @Success 200 {object} auth.AuthResponse
+// @Failure 401 {object} object{error=string} "Невалидный refresh token"
+// @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -121,7 +147,16 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logout обрабатывает выход пользователя
-// POST /api/v1/auth/logout
+// @Summary Выход из системы
+// @Description Инвалидирует access и refresh токены
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body object{refresh_token=string} false "Refresh token (опционально)"
+// @Security BearerAuth
+// @Success 200 {object} object{message=string}
+// @Failure 401 {object} object{error=string}
+// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем access token из заголовка
 	accessToken := middleware.ExtractToken(r)
@@ -157,7 +192,14 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // Me возвращает информацию о текущем пользователе
-// GET /api/v1/auth/me
+// @Summary Текущий пользователь
+// @Description Возвращает информацию о текущем аутентифицированном пользователе
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} domain.User
+// @Failure 401 {object} object{error=string}
+// @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем токен из заголовка (middleware уже валидировал)
 	token := middleware.ExtractToken(r)
@@ -178,7 +220,17 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateProfile обновляет профиль пользователя
-// PUT /api/v1/auth/profile
+// @Summary Обновление профиля
+// @Description Обновляет профиль текущего пользователя (email, username)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body auth.UpdateProfileRequest true "Данные для обновления профиля"
+// @Security BearerAuth
+// @Success 200 {object} domain.User
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Router /auth/profile [put]
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// Получаем user ID из контекста (установлен auth middleware)
 	userID, err := middleware.RequireUserID(r.Context())

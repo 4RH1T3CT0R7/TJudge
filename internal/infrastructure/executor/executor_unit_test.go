@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
@@ -467,4 +468,68 @@ func TestHostToContainerPath_TrailingSlashInput(t *testing.T) {
 	result, err := e.hostToContainerPath("/data/programs/team1/")
 	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1", result)
+}
+
+// --- sanitizeStderr ---
+
+func TestSanitizeStderr_Empty(t *testing.T) {
+	assert.Equal(t, "", sanitizeStderr(""))
+}
+
+func TestSanitizeStderr_Clean(t *testing.T) {
+	assert.Equal(t, "runtime error: index out of range", sanitizeStderr("runtime error: index out of range"))
+}
+
+func TestSanitizeStderr_StripANSI(t *testing.T) {
+	input := "\x1b[31mERROR\x1b[0m: something failed\x1b[1;33m!"
+	expected := "ERROR: something failed!"
+	assert.Equal(t, expected, sanitizeStderr(input))
+}
+
+func TestSanitizeStderr_TruncateLongOutput(t *testing.T) {
+	// Create a string longer than 4KB
+	long := strings.Repeat("x", 5000)
+	result := sanitizeStderr(long)
+
+	assert.LessOrEqual(t, len(result), maxStderrSize)
+	assert.True(t, strings.HasSuffix(result, "...(truncated)"))
+}
+
+func TestSanitizeStderr_ExactlyAtLimit(t *testing.T) {
+	// A string exactly at 4096 bytes should NOT be truncated
+	exact := strings.Repeat("a", maxStderrSize)
+	result := sanitizeStderr(exact)
+
+	assert.Equal(t, maxStderrSize, len(result))
+	assert.False(t, strings.HasSuffix(result, "...(truncated)"))
+}
+
+func TestSanitizeStderr_OneBeyondLimit(t *testing.T) {
+	// A string one byte beyond limit should be truncated
+	input := strings.Repeat("b", maxStderrSize+1)
+	result := sanitizeStderr(input)
+
+	assert.LessOrEqual(t, len(result), maxStderrSize)
+	assert.True(t, strings.HasSuffix(result, "...(truncated)"))
+}
+
+func TestSanitizeStderr_ANSIStrippedBeforeTruncation(t *testing.T) {
+	// ANSI codes are stripped first, so the effective content should be
+	// measured without them.
+	// Create content that would exceed 4KB with ANSI but fits without.
+	content := strings.Repeat("x", maxStderrSize-10)
+	ansiPadding := strings.Repeat("\x1b[0m", 100) // adds 400 bytes of ANSI
+	input := ansiPadding + content
+
+	result := sanitizeStderr(input)
+
+	// After stripping ANSI, the content is under the limit
+	assert.Equal(t, content, result)
+	assert.False(t, strings.HasSuffix(result, "...(truncated)"))
+}
+
+func TestSanitizeStderr_MultipleANSICodes(t *testing.T) {
+	input := "\x1b[1m\x1b[31mBold Red\x1b[0m \x1b[32mGreen\x1b[0m"
+	expected := "Bold Red Green"
+	assert.Equal(t, expected, sanitizeStderr(input))
 }

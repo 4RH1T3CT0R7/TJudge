@@ -87,7 +87,15 @@ func NewSystemHandler(log *logger.Logger) *SystemHandler {
 }
 
 // GetMetrics returns system metrics
-// GET /api/v1/system/metrics
+// @Summary Системные метрики
+// @Description Возвращает метрики CPU, памяти, диска, Go runtime (только для админов)
+// @Tags system
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} SystemMetrics
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /system/metrics [get]
 func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := SystemMetrics{}
 
@@ -176,7 +184,15 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetHealth returns system health status
-// GET /api/v1/system/health
+// @Summary Состояние системы
+// @Description Возвращает статус здоровья системы (только для админов)
+// @Tags system
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object{status=string,timestamp=string,hostname=string,pid=int}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /system/health [get]
 func (h *SystemHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	health := map[string]interface{}{
 		"status":    "healthy",

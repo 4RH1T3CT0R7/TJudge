@@ -1,6 +1,6 @@
 package team
 
-//go:generate mockgen -source=service.go -destination=../../mocks/mock_team.go -package=mocks TeamRepository
+//go:generate mockgen -destination=../../mocks/mock_team.go -package=mocks github.com/bmstu-itstech/tjudge/internal/domain/team TeamRepository,DistributedLock
 
 import (
 	"context"

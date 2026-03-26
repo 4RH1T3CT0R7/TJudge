@@ -82,11 +82,22 @@ func (db *DB) monitorConnectionPool() {
 	}
 }
 
+// slowQueryThreshold is the duration after which a query is logged at WARN level.
+const slowQueryThreshold = 500 * time.Millisecond
+
 // ExecWithMetrics выполняет запрос с записью метрик
 func (db *DB) ExecWithMetrics(ctx context.Context, queryType string, query string, args ...interface{}) (sql.Result, error) {
 	start := time.Now()
 	result, err := db.ExecContext(ctx, query, args...)
-	db.metrics.RecordDBQuery(queryType, time.Since(start))
+	duration := time.Since(start)
+	db.metrics.RecordDBQuery(queryType, duration)
+
+	if duration > slowQueryThreshold {
+		db.log.Warn("Slow query detected",
+			zap.String("query", queryType),
+			zap.Duration("duration", duration),
+		)
+	}
 
 	if err != nil {
 		db.log.LogError("Database exec failed", err,
@@ -101,7 +112,15 @@ func (db *DB) ExecWithMetrics(ctx context.Context, queryType string, query strin
 func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest interface{}, query string, args ...interface{}) error {
 	start := time.Now()
 	err := db.SelectContext(ctx, dest, query, args...)
-	db.metrics.RecordDBQuery(queryType, time.Since(start))
+	duration := time.Since(start)
+	db.metrics.RecordDBQuery(queryType, duration)
+
+	if duration > slowQueryThreshold {
+		db.log.Warn("Slow query detected",
+			zap.String("query", queryType),
+			zap.Duration("duration", duration),
+		)
+	}
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		db.log.LogError("Database query failed", err,
@@ -116,7 +135,15 @@ func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest inter
 func (db *DB) QueryRowWithMetrics(ctx context.Context, queryType string, dest interface{}, query string, args ...interface{}) error {
 	start := time.Now()
 	err := db.GetContext(ctx, dest, query, args...)
-	db.metrics.RecordDBQuery(queryType, time.Since(start))
+	duration := time.Since(start)
+	db.metrics.RecordDBQuery(queryType, duration)
+
+	if duration > slowQueryThreshold {
+		db.log.Warn("Slow query detected",
+			zap.String("query", queryType),
+			zap.Duration("duration", duration),
+		)
+	}
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		db.log.LogError("Database query row failed", err,

@@ -47,7 +47,14 @@ func NewTournamentGameHandler(
 }
 
 // GetTournamentGames returns games for a tournament.
-// GET /api/v1/tournaments/{id}/games
+// @Summary Игры турнира
+// @Description Возвращает список игр, привязанных к турниру
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {array} domain.Game
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games [get]
 func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -70,7 +77,18 @@ type AddGameToTournamentRequest struct {
 }
 
 // AddGameToTournament adds a game to a tournament.
-// POST /api/v1/tournaments/{id}/games
+// @Summary Добавить игру в турнир
+// @Description Привязывает игру к турниру (админ или создатель турнира)
+// @Tags games
+// @Accept json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param request body AddGameToTournamentRequest true "ID игры"
+// @Security BearerAuth
+// @Success 204 "Игра добавлена"
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /tournaments/{id}/games [post]
 func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -127,7 +145,17 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 }
 
 // RemoveGameFromTournament removes a game from a tournament.
-// DELETE /api/v1/tournaments/{id}/games/{gameId}
+// @Summary Удалить игру из турнира
+// @Description Отвязывает игру от турнира (только для админов)
+// @Tags games
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Игра удалена из турнира"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId} [delete]
 func (h *TournamentGameHandler) RemoveGameFromTournament(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {

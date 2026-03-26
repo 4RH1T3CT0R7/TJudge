@@ -9,11 +9,13 @@ import (
 
 // TournamentCreated is published when a new tournament is created.
 type TournamentCreated struct {
+	Version    int // Event schema version
 	Tournament *domain.Tournament
 }
 
 // TournamentStarted is published when a tournament transitions to active.
 type TournamentStarted struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 	Status       domain.TournamentStatus
 	StartTime    *time.Time
@@ -21,6 +23,7 @@ type TournamentStarted struct {
 
 // TournamentCompleted is published when a tournament finishes.
 type TournamentCompleted struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 	Status       domain.TournamentStatus
 	EndTime      *time.Time
@@ -28,11 +31,13 @@ type TournamentCompleted struct {
 
 // TournamentDeleted is published when a tournament is removed.
 type TournamentDeleted struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 }
 
 // ParticipantJoined is published when a program joins a tournament.
 type ParticipantJoined struct {
+	Version       int // Event schema version
 	TournamentID  uuid.UUID
 	ProgramID     uuid.UUID
 	InitialRating int
@@ -40,6 +45,7 @@ type ParticipantJoined struct {
 
 // MatchesCreated is published when new matches are scheduled.
 type MatchesCreated struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 	ProgramID    uuid.UUID // the program matches were created for (zero if bulk)
 	MatchCount   int
@@ -47,12 +53,14 @@ type MatchesCreated struct {
 
 // GameRoundReset is published when a game round is reset (matches deleted, ratings reverted to 1500).
 type GameRoundReset struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 	GameID       uuid.UUID
 }
 
 // MatchResultProcessed is published after ELO ratings are updated for a match.
 type MatchResultProcessed struct {
+	Version      int // Event schema version
 	TournamentID uuid.UUID
 	MatchID      uuid.UUID
 	Program1ID   uuid.UUID

@@ -57,7 +57,17 @@ type CreateTeamRequest struct {
 }
 
 // Create создаёт новую команду
-// POST /api/v1/teams
+// @Summary Создать команду
+// @Description Создаёт новую команду в турнире
+// @Tags teams
+// @Accept json
+// @Produce json
+// @Param request body CreateTeamRequest true "Данные команды"
+// @Security BearerAuth
+// @Success 201 {object} domain.Team
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Router /teams [post]
 func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -100,7 +110,18 @@ type JoinByCodeRequest struct {
 }
 
 // JoinByCode вступление в команду по коду
-// POST /api/v1/teams/join
+// @Summary Вступить в команду по коду
+// @Description Присоединяет текущего пользователя к команде по инвайт-коду
+// @Tags teams
+// @Accept json
+// @Produce json
+// @Param request body JoinByCodeRequest true "Код приглашения"
+// @Security BearerAuth
+// @Success 200 {object} domain.Team
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/join [post]
 func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -136,7 +157,15 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get получает команду по ID
-// GET /api/v1/teams/{id}
+// @Summary Получить команду
+// @Description Возвращает команду с участниками по ID
+// @Tags teams
+// @Produce json
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} domain.TeamWithMembers
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id} [get]
 func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
 	if !ok {
@@ -153,7 +182,15 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMembers получает участников команды
-// GET /api/v1/teams/{id}/members
+// @Summary Участники команды
+// @Description Возвращает список участников команды
+// @Tags teams
+// @Produce json
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {array} domain.User
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/members [get]
 func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
 	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
 	if !ok {
@@ -175,7 +212,19 @@ type UpdateNameRequest struct {
 }
 
 // UpdateName обновляет название команды
-// PUT /api/v1/teams/{id}
+// @Summary Обновить название команды
+// @Description Обновляет название команды (только лидер команды)
+// @Tags teams
+// @Accept json
+// @Produce json
+// @Param id path string true "Team ID" format(uuid)
+// @Param request body UpdateNameRequest true "Новое название"
+// @Security BearerAuth
+// @Success 200 {object} domain.Team
+// @Failure 400 {object} object{error=string}
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Router /teams/{id} [put]
 func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -211,7 +260,15 @@ func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 }
 
 // Leave покидает команду
-// POST /api/v1/teams/{id}/leave
+// @Summary Покинуть команду
+// @Description Текущий пользователь покидает команду
+// @Tags teams
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Пользователь покинул команду"
+// @Failure 401 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/leave [post]
 func (h *TeamHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -239,7 +296,17 @@ func (h *TeamHandler) Leave(w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveMember удаляет участника из команды
-// DELETE /api/v1/teams/{id}/members/{userId}
+// @Summary Удалить участника
+// @Description Удаляет участника из команды (только лидер команды)
+// @Tags teams
+// @Param id path string true "Team ID" format(uuid)
+// @Param userId path string true "User ID участника" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Участник удалён"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/members/{userId} [delete]
 func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	leaderID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -279,7 +346,17 @@ type InviteLinkResponse struct {
 }
 
 // GetInviteLink получает ссылку приглашения в команду
-// GET /api/v1/teams/{id}/invite
+// @Summary Получить ссылку приглашения
+// @Description Возвращает инвайт-код и ссылку приглашения (только лидер команды)
+// @Tags teams
+// @Produce json
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} InviteLinkResponse
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/invite [get]
 func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -314,7 +391,14 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTournamentTeams получает все команды турнира
-// GET /api/v1/tournaments/{id}/teams
+// @Summary Команды турнира
+// @Description Возвращает все команды в турнире
+// @Tags teams
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Success 200 {array} domain.Team
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/teams [get]
 func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -332,7 +416,15 @@ func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request)
 }
 
 // GetMyTeam получает команду текущего пользователя в турнире
-// GET /api/v1/tournaments/{id}/my-team
+// @Summary Моя команда в турнире
+// @Description Возвращает команду текущего пользователя в указанном турнире (null если нет)
+// @Tags teams
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} domain.Team
+// @Failure 401 {object} object{error=string}
+// @Router /tournaments/{id}/my-team [get]
 func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -361,7 +453,16 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete удаляет команду (админ)
-// DELETE /api/v1/teams/{id}
+// @Summary Удалить команду
+// @Description Удаляет команду по ID (только для админов)
+// @Tags teams
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Команда удалена"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id} [delete]
 func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
 	if !ok {
@@ -380,7 +481,17 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Disqualify дисквалифицирует команду в турнире
-// POST /api/v1/teams/{id}/disqualify
+// @Summary Дисквалифицировать команду
+// @Description Дисквалифицирует команду и отменяет её ожидающие матчи (только для админов)
+// @Tags teams
+// @Produce json
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 200 {object} team.DisqualifyResult
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/disqualify [post]
 func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
 	if !ok {
@@ -404,7 +515,16 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 }
 
 // Restore снимает дисквалификацию с команды
-// POST /api/v1/teams/{id}/restore
+// @Summary Восстановить команду
+// @Description Снимает дисквалификацию с команды (только для админов)
+// @Tags teams
+// @Param id path string true "Team ID" format(uuid)
+// @Security BearerAuth
+// @Success 204 "Команда восстановлена"
+// @Failure 401 {object} object{error=string}
+// @Failure 403 {object} object{error=string}
+// @Failure 404 {object} object{error=string}
+// @Router /teams/{id}/restore [post]
 func (h *TeamHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
 	if !ok {

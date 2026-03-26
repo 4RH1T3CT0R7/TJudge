@@ -168,6 +168,7 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 
 		// Publish event (broadcast handled by event handlers)
 		ss.eventBus.Publish(ctx, events.MatchesCreated{
+			Version:      1,
 			TournamentID: req.TournamentID,
 			ProgramID:    req.NewProgramID,
 			MatchCount:   len(matches),

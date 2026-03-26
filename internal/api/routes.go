@@ -11,8 +11,11 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/bmstu-itstech/tjudge/docs/swagger"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // Server представляет HTTP сервер
@@ -146,6 +149,11 @@ func (s *Server) setupRoutes() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
+
+	// Swagger UI
+	s.router.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// Body size limit for JSON endpoints (1MB). Applied per route group
 	// so that file-upload routes (/programs) can set their own higher limit.

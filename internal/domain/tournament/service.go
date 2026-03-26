@@ -1,6 +1,6 @@
 package tournament
 
-//go:generate mockgen -source=service.go -destination=../../mocks/mock_tournament.go -package=mocks TournamentCacher,LeaderboardCacher,TournamentRepository,MatchRepository,QueueManager
+//go:generate mockgen -destination=../../mocks/mock_tournament.go -package=mocks github.com/bmstu-itstech/tjudge/internal/domain/tournament TournamentCacher,LeaderboardCacher,TournamentRepository,MatchRepository,QueueManager
 
 import (
 	"context"
@@ -205,7 +205,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 	)
 
 	// Publish event (cache side-effects handled by event handlers)
-	s.eventBus.Publish(ctx, events.TournamentCreated{Tournament: tournament})
+	s.eventBus.Publish(ctx, events.TournamentCreated{Version: 1, Tournament: tournament})
 
 	return tournament, nil
 }
@@ -306,6 +306,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 
 		// Publish event (cache invalidation + leaderboard update handled by event handlers)
 		s.eventBus.Publish(ctx, events.ParticipantJoined{
+			Version:       1,
 			TournamentID:  req.TournamentID,
 			ProgramID:     req.ProgramID,
 			InitialRating: 1500,
@@ -377,6 +378,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 
 		// Publish event (cache invalidation + broadcast handled by event handlers)
 		s.eventBus.Publish(ctx, events.TournamentStarted{
+			Version:      1,
 			TournamentID: tournamentID,
 			Status:       tournament.Status,
 			StartTime:    tournament.StartTime,
@@ -426,6 +428,7 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 
 		// Publish event (cache invalidation + broadcast handled by event handlers)
 		s.eventBus.Publish(ctx, events.TournamentCompleted{
+			Version:      1,
 			TournamentID: tournamentID,
 			Status:       tournament.Status,
 			EndTime:      tournament.EndTime,
@@ -468,7 +471,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 	)
 
 	// Publish event (cache cleanup handled by event handlers)
-	s.eventBus.Publish(ctx, events.TournamentDeleted{TournamentID: tournamentID})
+	s.eventBus.Publish(ctx, events.TournamentDeleted{Version: 1, TournamentID: tournamentID})
 
 	return nil
 }
