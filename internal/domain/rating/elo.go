@@ -69,7 +69,7 @@ func (ec *EloCalculator) ProcessMatch(rating1, rating2 int, winner int) (newRati
 	change1 = newRating1 - rating1
 	change2 = newRating2 - rating2
 
-	return
+	return newRating1, newRating2, change1, change2
 }
 
 // GetKFactor возвращает текущий K-фактор

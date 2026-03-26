@@ -160,15 +160,15 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем существование файла
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		h.log.Error("Program file does not exist", zap.String("path", filePath))
+	// Проверяем существование файла (используем absFilePath для defense-in-depth)
+	if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
+		h.log.Error("Program file does not exist", zap.String("path", absFilePath))
 		writeError(w, errors.ErrNotFound.WithMessage("program file not found on disk"))
 		return
 	}
 
 	// Открываем файл
-	file, err := os.Open(filePath)
+	file, err := os.Open(absFilePath)
 	if err != nil {
 		h.log.Error("Failed to open file", zap.Error(err))
 		writeError(w, errors.ErrInternal.WithMessage("failed to read file"))

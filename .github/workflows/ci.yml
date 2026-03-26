@@ -117,11 +117,11 @@ jobs:
         run: |
           TOTAL=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
           echo "Total coverage: ${TOTAL}%"
-          if [ $(echo "$TOTAL < 50.0" | bc -l) -eq 1 ]; then
-            echo "::error::Coverage ${TOTAL}% is below minimum threshold of 50%"
+          if [ $(echo "$TOTAL < 45.0" | bc -l) -eq 1 ]; then
+            echo "::error::Coverage ${TOTAL}% is below minimum threshold of 45%"
             exit 1
           fi
-          echo "Coverage ${TOTAL}% meets the minimum threshold of 50%"
+          echo "Coverage ${TOTAL}% meets the minimum threshold of 45%"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

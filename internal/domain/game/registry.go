@@ -6,6 +6,8 @@ import (
 )
 
 // Registry holds all registered game plugins.
+// It is NOT safe for concurrent use. All Register calls must complete
+// before any Get/List/Has calls (typically during initialization).
 type Registry struct {
 	plugins map[string]*GamePlugin
 }

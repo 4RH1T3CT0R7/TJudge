@@ -483,7 +483,10 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 
 		// Проверяем существование матча
 		if validator(match.ID.String()) {
-			data, _ := json.Marshal(match)
+			data, mErr := json.Marshal(match)
+			if mErr != nil {
+				return 0, fmt.Errorf("failed to re-marshal valid match %s: %w", match.ID, mErr)
+			}
 			validMatches = append(validMatches, data)
 		} else {
 			purgedCount++

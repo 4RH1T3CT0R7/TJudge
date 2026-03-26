@@ -135,6 +135,7 @@ func (m *Match) Validate() error {
 		string(MatchRunning),
 		string(MatchCompleted),
 		string(MatchFailed),
+		string(MatchCancelled),
 	}
 	if err := validator.ValidateEnum("status", string(m.Status), validStatuses); err != nil {
 		if ve, ok := err.(*validator.ValidationError); ok {

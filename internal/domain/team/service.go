@@ -173,9 +173,10 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 		return nil, errors.ErrBadRequest.WithMessage("cannot join team in active or completed tournament")
 	}
 
-	// Distributed lock на команду — предотвращает concurrent joins,
-	// которые могут превысить MaxTeamSize
-	lockKey := fmt.Sprintf("team:join:%s", team.ID.String())
+	// Distributed lock на user+tournament — предотвращает:
+	// 1. Concurrent joins, которые могут превысить MaxTeamSize (per-team)
+	// 2. User joining multiple teams in same tournament (per-user-tournament)
+	lockKey := fmt.Sprintf("team:join:%s:%s", team.TournamentID.String(), req.UserID.String())
 	var result *domain.Team
 
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {

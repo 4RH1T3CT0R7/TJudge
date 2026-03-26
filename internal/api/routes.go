@@ -150,10 +150,14 @@ func (s *Server) setupRoutes() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	// Swagger UI
-	s.router.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-	))
+	// Swagger UI (behind admin auth)
+	s.router.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(s.authService, s.log))
+		r.Use(s.requireAdmin())
+		r.Get("/swagger/*", httpSwagger.Handler(
+			httpSwagger.URL("/swagger/doc.json"),
+		))
+	})
 
 	// Body size limit for JSON endpoints (1MB). Applied per route group
 	// so that file-upload routes (/programs) can set their own higher limit.
