@@ -1,10 +1,59 @@
 basePath: /api/v1
 definitions:
-  github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry:
+  auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/domain.User'
+    type: object
+  auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  auth.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  auth.UpdateProfileRequest:
+    properties:
+      current_password:
+        type: string
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  db.MatchStatistics:
+    properties:
+      completed:
+        type: integer
+      failed:
+        type: integer
+      pending:
+        type: integer
+      running:
+        type: integer
+      total:
+        type: integer
+    type: object
+  domain.CrossGameLeaderboardEntry:
     properties:
       game_ratings:
         additionalProperties:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo'
+          $ref: '#/definitions/domain.GameRatingInfo'
         description: game_id -> rating info
         type: object
       program_id:
@@ -26,7 +75,7 @@ definitions:
       total_wins:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.Game:
+  domain.Game:
     properties:
       created_at:
         type: string
@@ -44,7 +93,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo:
+  domain.GameRatingInfo:
     properties:
       draws:
         type: integer
@@ -61,7 +110,7 @@ definitions:
       wins:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry:
+  domain.LeaderboardEntry:
     properties:
       draws:
         type: integer
@@ -84,7 +133,7 @@ definitions:
       wins:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.Match:
+  domain.Match:
     properties:
       completed_at:
         type: string
@@ -99,7 +148,7 @@ definitions:
       id:
         type: string
       priority:
-        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority'
+        $ref: '#/definitions/domain.MatchPriority'
       program1_id:
         type: string
       program2_id:
@@ -114,13 +163,13 @@ definitions:
       started_at:
         type: string
       status:
-        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus'
+        $ref: '#/definitions/domain.MatchStatus'
       tournament_id:
         type: string
       winner:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority:
+  domain.MatchPriority:
     enum:
     - high
     - medium
@@ -130,7 +179,7 @@ definitions:
     - PriorityHigh
     - PriorityMedium
     - PriorityLow
-  github_com_bmstu-itstech_tjudge_internal_domain.MatchRound:
+  domain.MatchRound:
     properties:
       completed_count:
         type: integer
@@ -142,7 +191,7 @@ definitions:
         type: string
       matches:
         items:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+          $ref: '#/definitions/domain.Match'
         type: array
       pending_count:
         type: integer
@@ -153,7 +202,7 @@ definitions:
       total_matches:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus:
+  domain.MatchStatus:
     enum:
     - pending
     - running
@@ -167,7 +216,7 @@ definitions:
     - MatchCompleted
     - MatchFailed
     - MatchCancelled
-  github_com_bmstu-itstech_tjudge_internal_domain.Program:
+  domain.Program:
     properties:
       created_at:
         type: string
@@ -194,7 +243,7 @@ definitions:
       version:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.Role:
+  domain.Role:
     enum:
     - user
     - admin
@@ -208,7 +257,7 @@ definitions:
     x-enum-varnames:
     - RoleUser
     - RoleAdmin
-  github_com_bmstu-itstech_tjudge_internal_domain.Team:
+  domain.Team:
     properties:
       code:
         description: 6-8 символов уникальный код
@@ -230,7 +279,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers:
+  domain.TeamWithMembers:
     properties:
       code:
         description: 6-8 символов уникальный код
@@ -247,7 +296,7 @@ definitions:
         type: string
       members:
         items:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+          $ref: '#/definitions/domain.User'
         type: array
       name:
         type: string
@@ -256,7 +305,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.Tournament:
+  domain.Tournament:
     properties:
       code:
         description: 6-8 символов уникальный код
@@ -287,13 +336,13 @@ definitions:
       start_time:
         type: string
       status:
-        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus'
+        $ref: '#/definitions/domain.TournamentStatus'
       updated_at:
         type: string
       version:
         type: integer
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus:
+  domain.TournamentStatus:
     enum:
     - pending
     - active
@@ -305,7 +354,7 @@ definitions:
     - TournamentActive
     - TournamentCompleted
     - TournamentCancelled
-  github_com_bmstu-itstech_tjudge_internal_domain.User:
+  domain.User:
     properties:
       created_at:
         type: string
@@ -314,49 +363,13 @@ definitions:
       id:
         type: string
       role:
-        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Role'
+        $ref: '#/definitions/domain.Role'
       updated_at:
         type: string
       username:
         type: string
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse:
-    properties:
-      access_token:
-        type: string
-      refresh_token:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest:
-    properties:
-      email:
-        type: string
-      password:
-        type: string
-      username:
-        type: string
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest:
-    properties:
-      email:
-        type: string
-      password:
-        type: string
-      username:
-        type: string
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest:
-    properties:
-      current_password:
-        type: string
-      email:
-        type: string
-      password:
-        type: string
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest:
+  game.CreateRequest:
     properties:
       display_name:
         maxLength: 255
@@ -372,7 +385,7 @@ definitions:
     - display_name
     - name
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest:
+  game.UpdateRequest:
     properties:
       display_name:
         maxLength: 255
@@ -383,65 +396,12 @@ definitions:
     required:
     - display_name
     type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult:
-    properties:
-      matches_cancelled:
-        type: integer
-      matches_deleted:
-        type: integer
-      rating_history_reset:
-        type: integer
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest:
-    properties:
-      description:
-        type: string
-      game_type:
-        type: string
-      is_permanent:
-        type: boolean
-      max_participants:
-        type: integer
-      max_team_size:
-        type: integer
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      start_time:
-        type: string
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics:
-    properties:
-      completed:
-        type: integer
-      failed:
-        type: integer
-      pending:
-        type: integer
-      running:
-        type: integer
-      total:
-        type: integer
-    type: object
-  github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats:
-    properties:
-      high:
-        type: integer
-      low:
-        type: integer
-      medium:
-        type: integer
-      total:
-        type: integer
-    type: object
-  internal_api_handlers.AddGameToTournamentRequest:
+  handlers.AddGameToTournamentRequest:
     properties:
       game_id:
         type: string
     type: object
-  internal_api_handlers.CPUMetrics:
+  handlers.CPUMetrics:
     properties:
       cores:
         type: integer
@@ -454,14 +414,14 @@ definitions:
       usage_percent:
         type: number
     type: object
-  internal_api_handlers.CreateTeamRequest:
+  handlers.CreateTeamRequest:
     properties:
       name:
         type: string
       tournament_id:
         type: string
     type: object
-  internal_api_handlers.DiskMetrics:
+  handlers.DiskMetrics:
     properties:
       free:
         type: integer
@@ -474,7 +434,7 @@ definitions:
       used_percent:
         type: number
     type: object
-  internal_api_handlers.GoMetrics:
+  handlers.GoMetrics:
     properties:
       gomaxprocs:
         type: integer
@@ -489,7 +449,7 @@ definitions:
       version:
         type: string
     type: object
-  internal_api_handlers.HostMetrics:
+  handlers.HostMetrics:
     properties:
       arch:
         type: string
@@ -504,19 +464,19 @@ definitions:
       uptime:
         type: integer
     type: object
-  internal_api_handlers.InviteLinkResponse:
+  handlers.InviteLinkResponse:
     properties:
       code:
         type: string
       link:
         type: string
     type: object
-  internal_api_handlers.JoinByCodeRequest:
+  handlers.JoinByCodeRequest:
     properties:
       code:
         type: string
     type: object
-  internal_api_handlers.MemoryMetrics:
+  handlers.MemoryMetrics:
     properties:
       free:
         type: integer
@@ -527,7 +487,7 @@ definitions:
       used_percent:
         type: number
     type: object
-  internal_api_handlers.ResetGameRoundResponse:
+  handlers.ResetGameRoundResponse:
     properties:
       matches_deleted:
         type: integer
@@ -536,36 +496,36 @@ definitions:
       rating_history_reset:
         type: integer
     type: object
-  internal_api_handlers.SetActiveGameRequest:
+  handlers.SetActiveGameRequest:
     properties:
       game_id:
         type: string
     type: object
-  internal_api_handlers.SystemMetrics:
+  handlers.SystemMetrics:
     properties:
       cpu:
-        $ref: '#/definitions/internal_api_handlers.CPUMetrics'
+        $ref: '#/definitions/handlers.CPUMetrics'
       disk:
-        $ref: '#/definitions/internal_api_handlers.DiskMetrics'
+        $ref: '#/definitions/handlers.DiskMetrics'
       go:
-        $ref: '#/definitions/internal_api_handlers.GoMetrics'
+        $ref: '#/definitions/handlers.GoMetrics'
       host:
-        $ref: '#/definitions/internal_api_handlers.HostMetrics'
+        $ref: '#/definitions/handlers.HostMetrics'
       memory:
-        $ref: '#/definitions/internal_api_handlers.MemoryMetrics'
+        $ref: '#/definitions/handlers.MemoryMetrics'
       temperature:
         items:
-          $ref: '#/definitions/internal_api_handlers.TemperatureInfo'
+          $ref: '#/definitions/handlers.TemperatureInfo'
         type: array
     type: object
-  internal_api_handlers.TemperatureInfo:
+  handlers.TemperatureInfo:
     properties:
       sensor_key:
         type: string
       temperature:
         type: number
     type: object
-  internal_api_handlers.TournamentGameWithDetails:
+  handlers.TournamentGameWithDetails:
     properties:
       auto_round_enabled:
         type: boolean
@@ -590,9 +550,49 @@ definitions:
       tournament_id:
         type: string
     type: object
-  internal_api_handlers.UpdateNameRequest:
+  handlers.UpdateNameRequest:
     properties:
       name:
+        type: string
+    type: object
+  queue.QueueStats:
+    properties:
+      high:
+        type: integer
+      low:
+        type: integer
+      medium:
+        type: integer
+      total:
+        type: integer
+    type: object
+  team.DisqualifyResult:
+    properties:
+      matches_cancelled:
+        type: integer
+      matches_deleted:
+        type: integer
+      rating_history_reset:
+        type: integer
+    type: object
+  tournament.CreateRequest:
+    properties:
+      description:
+        type: string
+      game_type:
+        type: string
+      is_permanent:
+        type: boolean
+      max_participants:
+        type: integer
+      max_team_size:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      start_time:
         type: string
     type: object
 info:
@@ -612,14 +612,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest'
+          $ref: '#/definitions/auth.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+            $ref: '#/definitions/auth.AuthResponse'
         "400":
           description: Bad Request
           schema:
@@ -682,7 +682,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+            $ref: '#/definitions/domain.User'
         "401":
           description: Unauthorized
           schema:
@@ -706,14 +706,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest'
+          $ref: '#/definitions/auth.UpdateProfileRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+            $ref: '#/definitions/domain.User'
         "400":
           description: Bad Request
           schema:
@@ -754,7 +754,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+            $ref: '#/definitions/auth.AuthResponse'
         "401":
           description: Невалидный refresh token
           schema:
@@ -776,14 +776,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest'
+          $ref: '#/definitions/auth.RegisterRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse'
+            $ref: '#/definitions/auth.AuthResponse'
         "400":
           description: Bad Request
           schema:
@@ -826,7 +826,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+              $ref: '#/definitions/domain.Game'
             type: array
       summary: Список игр
       tags:
@@ -841,14 +841,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest'
+          $ref: '#/definitions/game.CreateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            $ref: '#/definitions/domain.Game'
         "400":
           description: Bad Request
           schema:
@@ -929,7 +929,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            $ref: '#/definitions/domain.Game'
         "404":
           description: Not Found
           schema:
@@ -956,14 +956,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest'
+          $ref: '#/definitions/game.UpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            $ref: '#/definitions/domain.Game'
         "400":
           description: Bad Request
           schema:
@@ -1012,7 +1012,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+            $ref: '#/definitions/domain.Game'
         "400":
           description: Bad Request
           schema:
@@ -1069,7 +1069,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+              $ref: '#/definitions/domain.Match'
             type: array
         "400":
           description: Bad Request
@@ -1097,7 +1097,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+            $ref: '#/definitions/domain.Match'
         "404":
           description: Not Found
           schema:
@@ -1197,7 +1197,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats'
+            $ref: '#/definitions/queue.QueueStats'
         "401":
           description: Unauthorized
           schema:
@@ -1239,7 +1239,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics'
+            $ref: '#/definitions/db.MatchStatistics'
         "400":
           description: Bad Request
           schema:
@@ -1260,7 +1260,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+              $ref: '#/definitions/domain.Program'
             type: array
         "401":
           description: Unauthorized
@@ -1310,7 +1310,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            $ref: '#/definitions/domain.Program'
         "400":
           description: Bad Request
           schema:
@@ -1391,7 +1391,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            $ref: '#/definitions/domain.Program'
         "401":
           description: Unauthorized
           schema:
@@ -1448,7 +1448,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+            $ref: '#/definitions/domain.Program'
         "400":
           description: Bad Request
           schema:
@@ -1548,7 +1548,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+              $ref: '#/definitions/domain.Program'
             type: array
         "400":
           description: Bad Request
@@ -1623,7 +1623,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_api_handlers.SystemMetrics'
+            $ref: '#/definitions/handlers.SystemMetrics'
         "401":
           description: Unauthorized
           schema:
@@ -1654,14 +1654,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handlers.CreateTeamRequest'
+          $ref: '#/definitions/handlers.CreateTeamRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+            $ref: '#/definitions/domain.Team'
         "400":
           description: Bad Request
           schema:
@@ -1735,7 +1735,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers'
+            $ref: '#/definitions/domain.TeamWithMembers'
         "404":
           description: Not Found
           schema:
@@ -1764,14 +1764,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handlers.UpdateNameRequest'
+          $ref: '#/definitions/handlers.UpdateNameRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+            $ref: '#/definitions/domain.Team'
         "400":
           description: Bad Request
           schema:
@@ -1815,7 +1815,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult'
+            $ref: '#/definitions/team.DisqualifyResult'
         "401":
           description: Unauthorized
           schema:
@@ -1858,7 +1858,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_api_handlers.InviteLinkResponse'
+            $ref: '#/definitions/handlers.InviteLinkResponse'
         "401":
           description: Unauthorized
           schema:
@@ -1934,7 +1934,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User'
+              $ref: '#/definitions/domain.User'
             type: array
         "404":
           description: Not Found
@@ -2043,14 +2043,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handlers.JoinByCodeRequest'
+          $ref: '#/definitions/handlers.JoinByCodeRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+            $ref: '#/definitions/domain.Team'
         "400":
           description: Bad Request
           schema:
@@ -2106,7 +2106,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+              $ref: '#/definitions/domain.Tournament'
             type: array
         "400":
           description: Bad Request
@@ -2128,14 +2128,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest'
+          $ref: '#/definitions/tournament.CreateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+            $ref: '#/definitions/domain.Tournament'
         "400":
           description: Bad Request
           schema:
@@ -2216,7 +2216,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament'
+            $ref: '#/definitions/domain.Tournament'
         "404":
           description: Not Found
           schema:
@@ -2243,7 +2243,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_api_handlers.TournamentGameWithDetails'
+            $ref: '#/definitions/handlers.TournamentGameWithDetails'
         "500":
           description: Internal Server Error
           schema:
@@ -2270,7 +2270,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handlers.SetActiveGameRequest'
+          $ref: '#/definitions/handlers.SetActiveGameRequest'
       responses:
         "204":
           description: Активная игра установлена
@@ -2370,7 +2370,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry'
+              $ref: '#/definitions/domain.CrossGameLeaderboardEntry'
             type: array
         "404":
           description: Not Found
@@ -2399,7 +2399,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game'
+              $ref: '#/definitions/domain.Game'
             type: array
         "404":
           description: Not Found
@@ -2427,7 +2427,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handlers.AddGameToTournamentRequest'
+          $ref: '#/definitions/handlers.AddGameToTournamentRequest'
       responses:
         "204":
           description: Игра добавлена
@@ -2698,7 +2698,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry'
+              $ref: '#/definitions/domain.LeaderboardEntry'
             type: array
         "404":
           description: Not Found
@@ -2748,7 +2748,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+              $ref: '#/definitions/domain.Match'
             type: array
         "400":
           description: Bad Request
@@ -2791,7 +2791,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program'
+              $ref: '#/definitions/domain.Program'
             type: array
         "401":
           description: Unauthorized
@@ -2842,7 +2842,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_api_handlers.ResetGameRoundResponse'
+            $ref: '#/definitions/handlers.ResetGameRoundResponse'
         "401":
           description: Unauthorized
           schema:
@@ -2925,7 +2925,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/internal_api_handlers.TournamentGameWithDetails'
+              $ref: '#/definitions/handlers.TournamentGameWithDetails'
             type: array
         "404":
           description: Not Found
@@ -3023,7 +3023,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry'
+              $ref: '#/definitions/domain.LeaderboardEntry'
             type: array
         "404":
           description: Not Found
@@ -3062,7 +3062,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+              $ref: '#/definitions/domain.Match'
             type: array
         "404":
           description: Not Found
@@ -3104,7 +3104,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match'
+            $ref: '#/definitions/domain.Match'
         "400":
           description: Bad Request
           schema:
@@ -3148,7 +3148,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchRound'
+              $ref: '#/definitions/domain.MatchRound'
             type: array
         "404":
           description: Not Found
@@ -3177,7 +3177,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+            $ref: '#/definitions/domain.Team'
         "401":
           description: Unauthorized
           schema:
@@ -3510,7 +3510,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team'
+              $ref: '#/definitions/domain.Team'
             type: array
         "404":
           description: Not Found

@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest"
+                            "$ref": "#/definitions/auth.LoginRequest"
                         }
                     }
                 ],
@@ -43,7 +43,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse"
+                            "$ref": "#/definitions/auth.AuthResponse"
                         }
                     },
                     "400": {
@@ -149,7 +149,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "401": {
@@ -191,7 +191,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest"
+                            "$ref": "#/definitions/auth.UpdateProfileRequest"
                         }
                     }
                 ],
@@ -199,7 +199,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User"
+                            "$ref": "#/definitions/domain.User"
                         }
                     },
                     "400": {
@@ -260,7 +260,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse"
+                            "$ref": "#/definitions/auth.AuthResponse"
                         }
                     },
                     "401": {
@@ -297,7 +297,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest"
+                            "$ref": "#/definitions/auth.RegisterRequest"
                         }
                     }
                 ],
@@ -305,7 +305,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse"
+                            "$ref": "#/definitions/auth.AuthResponse"
                         }
                     },
                     "400": {
@@ -371,7 +371,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                                "$ref": "#/definitions/domain.Game"
                             }
                         }
                     }
@@ -401,7 +401,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest"
+                            "$ref": "#/definitions/game.CreateRequest"
                         }
                     }
                 ],
@@ -409,7 +409,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                            "$ref": "#/definitions/domain.Game"
                         }
                     },
                     "400": {
@@ -471,7 +471,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                            "$ref": "#/definitions/domain.Game"
                         }
                     },
                     "400": {
@@ -523,7 +523,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                            "$ref": "#/definitions/domain.Game"
                         }
                     },
                     "404": {
@@ -571,7 +571,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest"
+                            "$ref": "#/definitions/game.UpdateRequest"
                         }
                     }
                 ],
@@ -579,7 +579,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                            "$ref": "#/definitions/domain.Game"
                         }
                     },
                     "400": {
@@ -747,7 +747,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                                "$ref": "#/definitions/domain.Match"
                             }
                         }
                     },
@@ -913,7 +913,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats"
+                            "$ref": "#/definitions/queue.QueueStats"
                         }
                     },
                     "401": {
@@ -975,7 +975,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics"
+                            "$ref": "#/definitions/db.MatchStatistics"
                         }
                     },
                     "400": {
@@ -1016,7 +1016,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                            "$ref": "#/definitions/domain.Match"
                         }
                     },
                     "404": {
@@ -1054,7 +1054,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                                "$ref": "#/definitions/domain.Program"
                             }
                         }
                     },
@@ -1128,7 +1128,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                            "$ref": "#/definitions/domain.Program"
                         }
                     },
                     "400": {
@@ -1206,7 +1206,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                                "$ref": "#/definitions/domain.Program"
                             }
                         }
                     },
@@ -1275,7 +1275,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                            "$ref": "#/definitions/domain.Program"
                         }
                     },
                     "401": {
@@ -1364,7 +1364,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                            "$ref": "#/definitions/domain.Program"
                         }
                     },
                     "400": {
@@ -1622,7 +1622,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.SystemMetrics"
+                            "$ref": "#/definitions/handlers.SystemMetrics"
                         }
                     },
                     "401": {
@@ -1675,7 +1675,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.CreateTeamRequest"
+                            "$ref": "#/definitions/handlers.CreateTeamRequest"
                         }
                     }
                 ],
@@ -1683,7 +1683,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team"
+                            "$ref": "#/definitions/domain.Team"
                         }
                     },
                     "400": {
@@ -1736,7 +1736,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.JoinByCodeRequest"
+                            "$ref": "#/definitions/handlers.JoinByCodeRequest"
                         }
                     }
                 ],
@@ -1744,7 +1744,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team"
+                            "$ref": "#/definitions/domain.Team"
                         }
                     },
                     "400": {
@@ -1812,7 +1812,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers"
+                            "$ref": "#/definitions/domain.TeamWithMembers"
                         }
                     },
                     "404": {
@@ -1860,7 +1860,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.UpdateNameRequest"
+                            "$ref": "#/definitions/handlers.UpdateNameRequest"
                         }
                     }
                 ],
@@ -1868,7 +1868,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team"
+                            "$ref": "#/definitions/domain.Team"
                         }
                     },
                     "400": {
@@ -1996,7 +1996,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult"
+                            "$ref": "#/definitions/team.DisqualifyResult"
                         }
                     },
                     "401": {
@@ -2064,7 +2064,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.InviteLinkResponse"
+                            "$ref": "#/definitions/handlers.InviteLinkResponse"
                         }
                     },
                     "401": {
@@ -2185,7 +2185,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User"
+                                "$ref": "#/definitions/domain.User"
                             }
                         }
                     },
@@ -2379,7 +2379,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament"
+                                "$ref": "#/definitions/domain.Tournament"
                             }
                         }
                     },
@@ -2420,7 +2420,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest"
+                            "$ref": "#/definitions/tournament.CreateRequest"
                         }
                     }
                 ],
@@ -2428,7 +2428,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament"
+                            "$ref": "#/definitions/domain.Tournament"
                         }
                     },
                     "400": {
@@ -2491,7 +2491,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Tournament"
+                            "$ref": "#/definitions/domain.Tournament"
                         }
                     },
                     "404": {
@@ -2592,7 +2592,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.TournamentGameWithDetails"
+                            "$ref": "#/definitions/handlers.TournamentGameWithDetails"
                         }
                     },
                     "500": {
@@ -2637,7 +2637,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.SetActiveGameRequest"
+                            "$ref": "#/definitions/handlers.SetActiveGameRequest"
                         }
                     }
                 ],
@@ -2791,7 +2791,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry"
+                                "$ref": "#/definitions/domain.CrossGameLeaderboardEntry"
                             }
                         }
                     },
@@ -2835,7 +2835,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Game"
+                                "$ref": "#/definitions/domain.Game"
                             }
                         }
                     },
@@ -2881,7 +2881,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.AddGameToTournamentRequest"
+                            "$ref": "#/definitions/handlers.AddGameToTournamentRequest"
                         }
                     }
                 ],
@@ -3013,7 +3013,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/internal_api_handlers.TournamentGameWithDetails"
+                                "$ref": "#/definitions/handlers.TournamentGameWithDetails"
                             }
                         }
                     },
@@ -3412,7 +3412,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry"
+                                "$ref": "#/definitions/domain.LeaderboardEntry"
                             }
                         }
                     },
@@ -3484,7 +3484,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                                "$ref": "#/definitions/domain.Match"
                             }
                         }
                     },
@@ -3552,7 +3552,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Program"
+                                "$ref": "#/definitions/domain.Program"
                             }
                         }
                     },
@@ -3629,7 +3629,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handlers.ResetGameRoundResponse"
+                            "$ref": "#/definitions/handlers.ResetGameRoundResponse"
                         }
                     },
                     "401": {
@@ -3791,7 +3791,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry"
+                                "$ref": "#/definitions/domain.LeaderboardEntry"
                             }
                         }
                     },
@@ -3849,7 +3849,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                                "$ref": "#/definitions/domain.Match"
                             }
                         }
                     },
@@ -3917,7 +3917,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                            "$ref": "#/definitions/domain.Match"
                         }
                     },
                     "400": {
@@ -3982,7 +3982,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchRound"
+                                "$ref": "#/definitions/domain.MatchRound"
                             }
                         }
                     },
@@ -4029,7 +4029,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team"
+                            "$ref": "#/definitions/domain.Team"
                         }
                     },
                     "401": {
@@ -4548,7 +4548,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Team"
+                                "$ref": "#/definitions/domain.Team"
                             }
                         }
                     },
@@ -4652,14 +4652,90 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_bmstu-itstech_tjudge_internal_domain.CrossGameLeaderboardEntry": {
+        "auth.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/domain.User"
+                }
+            }
+        },
+        "auth.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "current_password": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "db.MatchStatistics": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "integer"
+                },
+                "running": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.CrossGameLeaderboardEntry": {
             "type": "object",
             "properties": {
                 "game_ratings": {
                     "description": "game_id -\u003e rating info",
                     "type": "object",
                     "additionalProperties": {
-                        "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo"
+                        "$ref": "#/definitions/domain.GameRatingInfo"
                     }
                 },
                 "program_id": {
@@ -4691,7 +4767,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Game": {
+        "domain.Game": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -4717,7 +4793,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.GameRatingInfo": {
+        "domain.GameRatingInfo": {
             "type": "object",
             "properties": {
                 "draws": {
@@ -4743,7 +4819,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.LeaderboardEntry": {
+        "domain.LeaderboardEntry": {
             "type": "object",
             "properties": {
                 "draws": {
@@ -4778,7 +4854,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Match": {
+        "domain.Match": {
             "type": "object",
             "properties": {
                 "completed_at": {
@@ -4800,7 +4876,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "priority": {
-                    "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority"
+                    "$ref": "#/definitions/domain.MatchPriority"
                 },
                 "program1_id": {
                     "type": "string"
@@ -4822,7 +4898,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus"
+                    "$ref": "#/definitions/domain.MatchStatus"
                 },
                 "tournament_id": {
                     "type": "string"
@@ -4832,7 +4908,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.MatchPriority": {
+        "domain.MatchPriority": {
             "type": "string",
             "enum": [
                 "high",
@@ -4845,7 +4921,7 @@ const docTemplate = `{
                 "PriorityLow"
             ]
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.MatchRound": {
+        "domain.MatchRound": {
             "type": "object",
             "properties": {
                 "completed_count": {
@@ -4863,7 +4939,7 @@ const docTemplate = `{
                 "matches": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Match"
+                        "$ref": "#/definitions/domain.Match"
                     }
                 },
                 "pending_count": {
@@ -4880,7 +4956,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.MatchStatus": {
+        "domain.MatchStatus": {
             "type": "string",
             "enum": [
                 "pending",
@@ -4897,7 +4973,7 @@ const docTemplate = `{
                 "MatchCancelled"
             ]
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Program": {
+        "domain.Program": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -4938,7 +5014,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Role": {
+        "domain.Role": {
             "type": "string",
             "enum": [
                 "user",
@@ -4957,7 +5033,7 @@ const docTemplate = `{
                 "RoleAdmin"
             ]
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Team": {
+        "domain.Team": {
             "type": "object",
             "properties": {
                 "code": {
@@ -4990,7 +5066,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.TeamWithMembers": {
+        "domain.TeamWithMembers": {
             "type": "object",
             "properties": {
                 "code": {
@@ -5015,7 +5091,7 @@ const docTemplate = `{
                 "members": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User"
+                        "$ref": "#/definitions/domain.User"
                     }
                 },
                 "name": {
@@ -5029,7 +5105,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.Tournament": {
+        "domain.Tournament": {
             "type": "object",
             "properties": {
                 "code": {
@@ -5074,7 +5150,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus"
+                    "$ref": "#/definitions/domain.TournamentStatus"
                 },
                 "updated_at": {
                     "type": "string"
@@ -5084,7 +5160,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.TournamentStatus": {
+        "domain.TournamentStatus": {
             "type": "string",
             "enum": [
                 "pending",
@@ -5099,7 +5175,7 @@ const docTemplate = `{
                 "TournamentCancelled"
             ]
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain.User": {
+        "domain.User": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -5112,7 +5188,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "role": {
-                    "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.Role"
+                    "$ref": "#/definitions/domain.Role"
                 },
                 "updated_at": {
                     "type": "string"
@@ -5122,63 +5198,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain_auth.AuthResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_bmstu-itstech_tjudge_internal_domain.User"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_domain_auth.LoginRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_domain_auth.RegisterRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_domain_auth.UpdateProfileRequest": {
-            "type": "object",
-            "properties": {
-                "current_password": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_domain_game.CreateRequest": {
+        "game.CreateRequest": {
             "type": "object",
             "required": [
                 "display_name",
@@ -5200,7 +5220,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain_game.UpdateRequest": {
+        "game.UpdateRequest": {
             "type": "object",
             "required": [
                 "display_name"
@@ -5216,88 +5236,7 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_bmstu-itstech_tjudge_internal_domain_team.DisqualifyResult": {
-            "type": "object",
-            "properties": {
-                "matches_cancelled": {
-                    "type": "integer"
-                },
-                "matches_deleted": {
-                    "type": "integer"
-                },
-                "rating_history_reset": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_domain_tournament.CreateRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "game_type": {
-                    "type": "string"
-                },
-                "is_permanent": {
-                    "type": "boolean"
-                },
-                "max_participants": {
-                    "type": "integer"
-                },
-                "max_team_size": {
-                    "type": "integer"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_infrastructure_db.MatchStatistics": {
-            "type": "object",
-            "properties": {
-                "completed": {
-                    "type": "integer"
-                },
-                "failed": {
-                    "type": "integer"
-                },
-                "pending": {
-                    "type": "integer"
-                },
-                "running": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_bmstu-itstech_tjudge_internal_infrastructure_queue.QueueStats": {
-            "type": "object",
-            "properties": {
-                "high": {
-                    "type": "integer"
-                },
-                "low": {
-                    "type": "integer"
-                },
-                "medium": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_api_handlers.AddGameToTournamentRequest": {
+        "handlers.AddGameToTournamentRequest": {
             "type": "object",
             "properties": {
                 "game_id": {
@@ -5305,7 +5244,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.CPUMetrics": {
+        "handlers.CPUMetrics": {
             "type": "object",
             "properties": {
                 "cores": {
@@ -5325,7 +5264,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.CreateTeamRequest": {
+        "handlers.CreateTeamRequest": {
             "type": "object",
             "properties": {
                 "name": {
@@ -5336,7 +5275,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.DiskMetrics": {
+        "handlers.DiskMetrics": {
             "type": "object",
             "properties": {
                 "free": {
@@ -5356,7 +5295,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.GoMetrics": {
+        "handlers.GoMetrics": {
             "type": "object",
             "properties": {
                 "gomaxprocs": {
@@ -5379,7 +5318,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.HostMetrics": {
+        "handlers.HostMetrics": {
             "type": "object",
             "properties": {
                 "arch": {
@@ -5402,7 +5341,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.InviteLinkResponse": {
+        "handlers.InviteLinkResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -5413,7 +5352,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.JoinByCodeRequest": {
+        "handlers.JoinByCodeRequest": {
             "type": "object",
             "properties": {
                 "code": {
@@ -5421,7 +5360,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.MemoryMetrics": {
+        "handlers.MemoryMetrics": {
             "type": "object",
             "properties": {
                 "free": {
@@ -5438,7 +5377,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.ResetGameRoundResponse": {
+        "handlers.ResetGameRoundResponse": {
             "type": "object",
             "properties": {
                 "matches_deleted": {
@@ -5452,7 +5391,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.SetActiveGameRequest": {
+        "handlers.SetActiveGameRequest": {
             "type": "object",
             "properties": {
                 "game_id": {
@@ -5460,33 +5399,33 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.SystemMetrics": {
+        "handlers.SystemMetrics": {
             "type": "object",
             "properties": {
                 "cpu": {
-                    "$ref": "#/definitions/internal_api_handlers.CPUMetrics"
+                    "$ref": "#/definitions/handlers.CPUMetrics"
                 },
                 "disk": {
-                    "$ref": "#/definitions/internal_api_handlers.DiskMetrics"
+                    "$ref": "#/definitions/handlers.DiskMetrics"
                 },
                 "go": {
-                    "$ref": "#/definitions/internal_api_handlers.GoMetrics"
+                    "$ref": "#/definitions/handlers.GoMetrics"
                 },
                 "host": {
-                    "$ref": "#/definitions/internal_api_handlers.HostMetrics"
+                    "$ref": "#/definitions/handlers.HostMetrics"
                 },
                 "memory": {
-                    "$ref": "#/definitions/internal_api_handlers.MemoryMetrics"
+                    "$ref": "#/definitions/handlers.MemoryMetrics"
                 },
                 "temperature": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_api_handlers.TemperatureInfo"
+                        "$ref": "#/definitions/handlers.TemperatureInfo"
                     }
                 }
             }
         },
-        "internal_api_handlers.TemperatureInfo": {
+        "handlers.TemperatureInfo": {
             "type": "object",
             "properties": {
                 "sensor_key": {
@@ -5497,7 +5436,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.TournamentGameWithDetails": {
+        "handlers.TournamentGameWithDetails": {
             "type": "object",
             "properties": {
                 "auto_round_enabled": {
@@ -5535,10 +5474,71 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handlers.UpdateNameRequest": {
+        "handlers.UpdateNameRequest": {
             "type": "object",
             "properties": {
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "queue.QueueStats": {
+            "type": "object",
+            "properties": {
+                "high": {
+                    "type": "integer"
+                },
+                "low": {
+                    "type": "integer"
+                },
+                "medium": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "team.DisqualifyResult": {
+            "type": "object",
+            "properties": {
+                "matches_cancelled": {
+                    "type": "integer"
+                },
+                "matches_deleted": {
+                    "type": "integer"
+                },
+                "rating_history_reset": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tournament.CreateRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "game_type": {
+                    "type": "string"
+                },
+                "is_permanent": {
+                    "type": "boolean"
+                },
+                "max_participants": {
+                    "type": "integer"
+                },
+                "max_team_size": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "start_time": {
                     "type": "string"
                 }
             }

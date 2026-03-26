@@ -56,7 +56,7 @@ tools:
 generate:
 	@echo "Generating code..."
 	go generate ./...
-	@which swag > /dev/null 2>&1 && swag init -g cmd/api/main.go -o docs/swagger --parseDependency --parseInternal --quiet || true
+	@which swag > /dev/null 2>&1 && swag init -g cmd/api/main.go -o docs/swagger --parseInternal --quiet || true
 	@echo "Done."
 
 # Download dependencies
