@@ -1,0 +1,36 @@
+with-expecter: true
+dir: "tests/contract/mocks"
+outpkg: "contractmocks"
+packages:
+  github.com/bmstu-itstech/tjudge/internal/api/handlers:
+    interfaces:
+      AuthService:
+      TournamentService:
+      SchedulingService:
+      GameService:
+      GameLeaderboardRepository:
+      GameMatchRepository:
+      GameTournamentRepository:
+      GameProgramRepository:
+      TournamentGameStatusRepository:
+      TeamService:
+      ProgramRepository:
+      TournamentParticipantAdder:
+      TournamentStatusChecker:
+      MatchScheduler:
+      GameLookup:
+      MatchExistenceChecker:
+      RoundCompletionChecker:
+      TeamMembershipChecker:
+      AutoRoundChecker:
+      MatchRepository:
+      MatchCache:
+      MatchProgramLookup:
+      MatchQueueManager:
+  github.com/bmstu-itstech/tjudge/internal/api/middleware:
+    interfaces:
+      AuthService:
+        config:
+          mockname: MockMiddlewareAuthService
+          filename: mock_MiddlewareAuthService.go
+      RateLimiter:

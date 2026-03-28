@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -30,6 +30,7 @@ help:
 	@echo "  make test          - Run all tests"
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
+	@echo "  make test-contract - Run contract/API tests (no external services)"
 	@echo "  make test-e2e      - Run end-to-end tests"
 	@echo "  make benchmark     - Run performance benchmarks"
 	@echo "  make test-load     - Run load tests"
@@ -169,6 +170,18 @@ fmt:
 
 # Generate mocks (alias for generate)
 mocks: generate
+
+# Generate mocks for contract tests
+generate-contract-mocks:
+	@echo "Generating contract test mocks..."
+	@which mockery > /dev/null 2>&1 || (echo "Installing mockery..." && go install github.com/vektra/mockery/v2@latest)
+	mockery
+	@echo "Done."
+
+# Run contract/API tests (no external services needed)
+test-contract:
+	@echo "Running contract tests..."
+	go test -tags=contract -count=1 -parallel=8 -timeout=5m ./tests/contract/...
 
 # Run integration tests
 test-integration:

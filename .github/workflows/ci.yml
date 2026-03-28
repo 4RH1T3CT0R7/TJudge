@@ -303,6 +303,38 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
+  contract:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run contract tests
+        run: go test -v -tags=contract -count=1 -timeout=5m ./tests/contract/...
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest

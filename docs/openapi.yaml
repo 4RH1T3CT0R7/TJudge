@@ -2,17 +2,41 @@ openapi: 3.0.3
 info:
   title: TJudge API
   description: |
-    API турнирной системы TJudge для соревнований программных ботов.
+    REST API for TJudge -- a high-performance tournament system for competitive game-theory
+    programming. Strategy programs (bots) compete against each other in games such as
+    Prisoner's Dilemma, Tug of War, Traveler's Dilemma, Public Goods, and Double Price Auction.
 
-    ## Аутентификация
-    Все защищённые эндпоинты требуют JWT токен в заголовке:
+    ## Authentication
+    Protected endpoints require a JWT Bearer token in the `Authorization` header:
     ```
-    Authorization: Bearer <token>
+    Authorization: Bearer <access_token>
     ```
 
-    ## Лимиты
-    - 100 запросов/минуту на IP
-    - WebSocket: 1 соединение на турнир на пользователя
+    ## Response Format
+    All successful responses (except 204 and file downloads) use the standard envelope:
+    ```json
+    {
+      "data": <payload>,
+      "message": "optional message",
+      "meta": { "total": 100, "limit": 50, "offset": 0 }
+    }
+    ```
+    `message` and `meta` are omitted when empty.
+
+    All error responses use:
+    ```json
+    {
+      "error": "Human-readable error message"
+    }
+    ```
+
+    ## Rate Limiting
+    - 100 requests per minute per IP address.
+    - Rate limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+    ## WebSocket
+    WebSocket connections require JWT authentication via the `Sec-WebSocket-Protocol` subprotocol
+    header: `access_token.<jwt>`.
   version: 1.0.0
   contact:
     name: BMSTU ITS Tech
@@ -28,22 +52,36 @@ servers:
 
 tags:
   - name: auth
-    description: Аутентификация и авторизация
-  - name: programs
-    description: Управление программами (ботами)
+    description: Authentication and authorization
   - name: tournaments
-    description: Управление турнирами
+    description: Tournament management and lifecycle
+  - name: games
+    description: Game definitions and tournament-game links
+  - name: teams
+    description: Team management
+  - name: programs
+    description: Program (bot) management and file upload
   - name: matches
-    description: Информация о матчах
+    description: Match information, statistics, and queue management
   - name: websocket
-    description: Real-time обновления
+    description: Real-time updates via WebSocket
+  - name: system
+    description: System health, metrics, and administration
 
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
 paths:
+
+  # ==========================================================================
+  # Auth
+  # ==========================================================================
+
   /auth/register:
     post:
-      tags:
-        - auth
-      summary: Регистрация пользователя
+      tags: [auth]
+      summary: Register a new user
+      operationId: authRegister
       requestBody:
         required: true
         content:
@@ -52,21 +90,22 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Успешная регистрация
+          description: User registered successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                $ref: '#/components/schemas/AuthResponseEnvelope'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/BadRequest'
         '409':
-          $ref: '#/components/responses/ConflictError'
+          $ref: '#/components/responses/Conflict'
 
   /auth/login:
     post:
-      tags:
-        - auth
-      summary: Вход в систему
+      tags: [auth]
+      summary: Log in
+      description: Authenticate with username or email and password. Returns JWT tokens.
+      operationId: authLogin
       requestBody:
         required: true
         content:
@@ -75,19 +114,21 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Успешный вход
+          description: Login successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                $ref: '#/components/schemas/AuthResponseEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          $ref: '#/components/responses/Unauthorized'
 
   /auth/refresh:
     post:
-      tags:
-        - auth
-      summary: Обновление токена
+      tags: [auth]
+      summary: Refresh tokens
+      operationId: authRefresh
       requestBody:
         required: true
         content:
@@ -96,178 +137,116 @@ paths:
               $ref: '#/components/schemas/RefreshRequest'
       responses:
         '200':
-          description: Токены обновлены
+          description: Tokens refreshed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
+                $ref: '#/components/schemas/AuthResponseEnvelope'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          $ref: '#/components/responses/Unauthorized'
 
   /auth/logout:
     post:
-      tags:
-        - auth
-      summary: Выход из системы
+      tags: [auth]
+      summary: Log out
+      description: Blacklists the current access token and optionally the refresh token.
+      operationId: authLogout
       security:
-        - bearerAuth: []
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: Optional refresh token to invalidate
       responses:
         '204':
-          description: Успешный выход
+          description: Logged out successfully
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          $ref: '#/components/responses/Unauthorized'
 
   /auth/me:
     get:
-      tags:
-        - auth
-      summary: Информация о текущем пользователе
+      tags: [auth]
+      summary: Get current user
+      operationId: authMe
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         '200':
-          description: Данные пользователя
+          description: Current user data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/UserEnvelope'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          $ref: '#/components/responses/Unauthorized'
 
-  /programs:
-    get:
-      tags:
-        - programs
-      summary: Список программ пользователя
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Список программ
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Program'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-    post:
-      tags:
-        - programs
-      summary: Создание программы
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateProgramRequest'
-      responses:
-        '201':
-          description: Программа создана
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Program'
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-
-  /programs/{id}:
-    parameters:
-      - $ref: '#/components/parameters/ID'
-    get:
-      tags:
-        - programs
-      summary: Получение программы
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Данные программы
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Program'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
+  /auth/profile:
     put:
-      tags:
-        - programs
-      summary: Обновление программы
+      tags: [auth]
+      summary: Update profile
+      description: Update email or password for the current user. Requires current_password for password changes.
+      operationId: authUpdateProfile
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateProgramRequest'
+              $ref: '#/components/schemas/UpdateProfileRequest'
       responses:
         '200':
-          description: Программа обновлена
+          description: Profile updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Program'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-    delete:
-      tags:
-        - programs
-      summary: Удаление программы
-      security:
-        - bearerAuth: []
-      responses:
-        '204':
-          description: Программа удалена
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
+                $ref: '#/components/schemas/UserEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # Tournaments
+  # ==========================================================================
 
   /tournaments:
     get:
-      tags:
-        - tournaments
-      summary: Список турниров
+      tags: [tournaments]
+      summary: List tournaments
+      operationId: tournamentsList
       parameters:
         - name: status
           in: query
           schema:
             type: string
-            enum: [pending, active, completed]
+            enum: [pending, active, completed, cancelled]
         - name: game_type
           in: query
           schema:
             type: string
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 20
-        - name: cursor
-          in: query
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
-          description: Список турниров
+          description: Tournament list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TournamentListResponse'
+                $ref: '#/components/schemas/TournamentListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
-      tags:
-        - tournaments
-      summary: Создание турнира
+      tags: [tournaments]
+      summary: Create tournament (admin)
+      operationId: tournamentsCreate
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -276,205 +255,1882 @@ paths:
               $ref: '#/components/schemas/CreateTournamentRequest'
       responses:
         '201':
-          description: Турнир создан
+          description: Tournament created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tournament'
+                $ref: '#/components/schemas/TournamentEnvelope'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /tournaments/{id}:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/TournamentID'
     get:
-      tags:
-        - tournaments
-      summary: Получение турнира
+      tags: [tournaments]
+      summary: Get tournament
+      operationId: tournamentsGet
       responses:
         '200':
-          description: Данные турнира
+          description: Tournament data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tournament'
+                $ref: '#/components/schemas/TournamentEnvelope'
         '404':
-          $ref: '#/components/responses/NotFoundError'
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [tournaments]
+      summary: Delete tournament (admin)
+      operationId: tournamentsDelete
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Tournament deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Start tournament (admin)
+      description: Transitions the tournament to active status.
+      operationId: tournamentsStart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tournament started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tournaments/{id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Complete tournament (admin)
+      description: Transitions the tournament to completed status.
+      operationId: tournamentsComplete
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tournament completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /tournaments/{id}/join:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/TournamentID'
     post:
-      tags:
-        - tournaments
-      summary: Присоединение к турниру
+      tags: [tournaments]
+      summary: Join tournament
+      operationId: tournamentsJoin
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JoinTournamentRequest'
+              type: object
+              required: [program_id]
+              properties:
+                program_id:
+                  type: string
+                  format: uuid
       responses:
         '200':
-          description: Успешное присоединение
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '409':
-          $ref: '#/components/responses/ConflictError'
-
-  /tournaments/{id}/start:
-    parameters:
-      - $ref: '#/components/parameters/ID'
-    post:
-      tags:
-        - tournaments
-      summary: Старт турнира
-      description: Генерирует round-robin расписание матчей
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Турнир запущен
+          description: Joined successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tournament'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
+                $ref: '#/components/schemas/StatusEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/ConflictError'
+          $ref: '#/components/responses/Conflict'
 
   /tournaments/{id}/leaderboard:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/TournamentID'
     get:
-      tags:
-        - tournaments
-      summary: Таблица лидеров
+      tags: [tournaments]
+      summary: Tournament leaderboard
+      operationId: tournamentsGetLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
       responses:
         '200':
-          description: Таблица лидеров
+          description: Leaderboard entries
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Leaderboard'
+                $ref: '#/components/schemas/LeaderboardListEnvelope'
         '404':
-          $ref: '#/components/responses/NotFoundError'
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/cross-game-leaderboard:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [tournaments]
+      summary: Cross-game leaderboard
+      description: Aggregated ratings across all games in the tournament.
+      operationId: tournamentsGetCrossGameLeaderboard
+      responses:
+        '200':
+          description: Cross-game leaderboard entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrossGameLeaderboardListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /tournaments/{id}/matches:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/TournamentID'
     get:
-      tags:
-        - tournaments
-      summary: Матчи турнира
+      tags: [tournaments]
+      summary: Tournament matches
+      operationId: tournamentsGetMatches
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Match list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [tournaments]
+      summary: Create match (admin)
+      operationId: tournamentsCreateMatch
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMatchRequest'
+      responses:
+        '201':
+          description: Match created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tournaments/{id}/matches/rounds:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [tournaments]
+      summary: Matches grouped by rounds
+      operationId: tournamentsGetMatchesByRounds
+      responses:
+        '200':
+          description: Match rounds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchRoundListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/run-matches:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Run all pending matches (admin)
+      description: Enqueues all pending matches for the tournament.
+      operationId: tournamentsRunAllMatches
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Matches enqueued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: started
+                          enqueued:
+                            type: integer
+                            example: 45
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/run-game-matches:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Run matches for a specific game (admin)
+      operationId: tournamentsRunGameMatches
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_type]
+              properties:
+                game_type:
+                  type: string
+                  description: The system name of the game
+      responses:
+        '200':
+          description: Game matches enqueued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: started
+                          game_type:
+                            type: string
+                            example: prisoners_dilemma
+                          enqueued:
+                            type: integer
+                            example: 10
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tournaments/{id}/retry-matches:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Retry failed matches (admin)
+      description: Re-enqueues all failed matches for the tournament.
+      operationId: tournamentsRetryFailedMatches
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Failed matches re-enqueued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: retried
+                          enqueued:
+                            type: integer
+                            example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/my-team:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [teams]
+      summary: Get my team in tournament
+      description: Returns the current user's team in the specified tournament, or null if none.
+      operationId: tournamentsGetMyTeam
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User's team (or null)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamNullableEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tournaments/{id}/teams:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [teams]
+      summary: List tournament teams
+      operationId: tournamentsGetTeams
+      responses:
+        '200':
+          description: Team list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================================
+  # Games -- CRUD
+  # ==========================================================================
+
+  /games:
+    get:
+      tags: [games]
+      summary: List games
+      operationId: gamesList
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Game list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameListEnvelope'
+    post:
+      tags: [games]
+      summary: Create game (admin)
+      operationId: gamesCreate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGameRequest'
+      responses:
+        '201':
+          description: Game created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /games/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GameID'
+    get:
+      tags: [games]
+      summary: Get game by ID
+      operationId: gamesGet
+      responses:
+        '200':
+          description: Game data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [games]
+      summary: Update game (admin)
+      operationId: gamesUpdate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGameRequest'
+      responses:
+        '200':
+          description: Game updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [games]
+      summary: Delete game (admin)
+      operationId: gamesDelete
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Game deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/name/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: System name of the game
+    get:
+      tags: [games]
+      summary: Get game by system name
+      operationId: gamesGetByName
+      responses:
+        '200':
+          description: Game data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================================
+  # Games -- Tournament links, rounds, status
+  # ==========================================================================
+
+  /tournaments/{id}/games:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [games]
+      summary: List games in tournament
+      operationId: tournamentGamesList
+      responses:
+        '200':
+          description: Games linked to the tournament
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [games]
+      summary: Add game to tournament (creator/admin)
+      operationId: tournamentGamesAdd
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_id]
+              properties:
+                game_id:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: Game added to tournament
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tournaments/{id}/games/{gameId}:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    delete:
+      tags: [games]
+      summary: Remove game from tournament (admin)
+      operationId: tournamentGamesRemove
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Game removed from tournament
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/status:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [games]
+      summary: Tournament games with round status
+      operationId: tournamentGamesStatus
+      responses:
+        '200':
+          description: Games with round/auto-round status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentGameWithDetailsListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/active-game:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [games]
+      summary: Get active game
+      description: Returns the currently active game for the tournament, or null.
+      operationId: tournamentActiveGameGet
+      responses:
+        '200':
+          description: Active game (or null)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentGameWithDetailsNullableEnvelope'
+    post:
+      tags: [games]
+      summary: Set active game (admin)
+      operationId: tournamentActiveGameSet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_id]
+              properties:
+                game_id:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: Active game set
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tournaments/{id}/games/deactivate-all:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [games]
+      summary: Deactivate all games (admin)
+      operationId: tournamentGamesDeactivateAll
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: All games deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/leaderboard:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Game leaderboard
+      operationId: tournamentGameLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Leaderboard for the game
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/matches:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Game matches
+      operationId: tournamentGameMatches
       parameters:
         - name: status
           in: query
           schema:
             type: string
-            enum: [pending, running, completed, failed]
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 50
+            enum: [pending, running, completed, failed, cancelled]
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
-          description: Список матчей
+          description: Matches for the game
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Match'
+                $ref: '#/components/schemas/MatchListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/programs:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Game programs (admin)
+      operationId: tournamentGamePrograms
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Programs for the game
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/complete-round:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    post:
+      tags: [games]
+      summary: Complete game round (admin)
+      operationId: tournamentGameCompleteRound
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Round completed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/reset-round:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    post:
+      tags: [games]
+      summary: Reset game round (admin)
+      description: Fully resets the round -- deletes matches, resets ratings and stats.
+      operationId: tournamentGameResetRound
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Round reset results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ResetGameRoundResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/games/{gameId}/auto-round:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Get auto-round settings (admin)
+      operationId: tournamentGameAutoRoundGet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Auto-round settings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AutoRoundSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [games]
+      summary: Configure auto-round (admin)
+      operationId: tournamentGameAutoRoundSet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+                interval_seconds:
+                  type: integer
+                  minimum: 10
+                  maximum: 3600
+                  description: Interval in seconds (required when enabled=true)
+      responses:
+        '200':
+          description: Auto-round settings updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                          interval_seconds:
+                            type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tournaments/{id}/programs/download-zip:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [games]
+      summary: Download all programs as ZIP (admin)
+      operationId: tournamentProgramsDownloadZip
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: ZIP archive of all programs
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tournaments/{id}/programs/clear-errors:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [programs]
+      summary: Clear program errors (admin)
+      description: Clears error messages for all programs in the tournament.
+      operationId: tournamentProgramsClearErrors
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Errors cleared
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          cleared:
+                            type: integer
+                          message:
+                            type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================================
+  # Teams
+  # ==========================================================================
+
+  /teams:
+    post:
+      tags: [teams]
+      summary: Create team
+      operationId: teamsCreate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeamRequest'
+      responses:
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /teams/join:
+    post:
+      tags: [teams]
+      summary: Join team by invite code
+      operationId: teamsJoinByCode
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: Team invite code
+      responses:
+        '200':
+          description: Joined team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    get:
+      tags: [teams]
+      summary: Get team with members
+      operationId: teamsGet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Team with members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamWithMembersEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [teams]
+      summary: Update team name
+      description: Only the team leader can rename the team.
+      operationId: teamsUpdateName
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Team updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [teams]
+      summary: Delete team (admin)
+      operationId: teamsDelete
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Team deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}/members:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    get:
+      tags: [teams]
+      summary: List team members
+      operationId: teamsGetMembers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Team members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the member to remove
+    delete:
+      tags: [teams]
+      summary: Remove team member
+      description: Only the team leader can remove members.
+      operationId: teamsRemoveMember
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Member removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}/leave:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    post:
+      tags: [teams]
+      summary: Leave team
+      operationId: teamsLeave
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Left team
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}/invite:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    get:
+      tags: [teams]
+      summary: Get invite link
+      description: Only the team leader can retrieve the invite link.
+      operationId: teamsGetInviteLink
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Invite code and link
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/InviteLinkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{id}/disqualify:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    post:
+      tags: [teams]
+      summary: Disqualify team (admin)
+      description: Disqualifies the team and cancels its pending matches.
+      operationId: teamsDisqualify
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Disqualification result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DisqualifyResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /teams/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    post:
+      tags: [teams]
+      summary: Restore team (admin)
+      description: Removes the disqualification from a team.
+      operationId: teamsRestore
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Team restored
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================================
+  # Programs
+  # ==========================================================================
+
+  /programs:
+    get:
+      tags: [programs]
+      summary: List my programs
+      operationId: programsList
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Program list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [programs]
+      summary: Create / upload program
+      description: |
+        Supports two content types:
+        - `multipart/form-data` -- file upload with form fields (team_id, tournament_id, game_id, name, file).
+        - `application/json` -- JSON body with code_path, name, game_type, language.
+
+        Maximum file size: 10 MB.
+      operationId: programsCreate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, team_id, tournament_id, game_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Program source file
+                team_id:
+                  type: string
+                  format: uuid
+                tournament_id:
+                  type: string
+                  format: uuid
+                game_id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  description: Display name (defaults to filename)
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                game_type:
+                  type: string
+                code_path:
+                  type: string
+                language:
+                  type: string
+      responses:
+        '201':
+          description: Program created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /programs/versions:
+    get:
+      tags: [programs]
+      summary: Get program versions
+      description: Returns all versions of programs for a specific team and game.
+      operationId: programsGetVersions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: team_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: game_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Program versions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /programs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ProgramID'
+    get:
+      tags: [programs]
+      summary: Get program
+      operationId: programsGet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Program data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [programs]
+      summary: Update program
+      operationId: programsUpdate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProgramRequest'
+      responses:
+        '200':
+          description: Program updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [programs]
+      summary: Delete program
+      operationId: programsDelete
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Program deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /programs/{id}/download:
+    parameters:
+      - $ref: '#/components/parameters/ProgramID'
+    get:
+      tags: [programs]
+      summary: Download program file
+      operationId: programsDownload
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Program source file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================================================
+  # Matches
+  # ==========================================================================
+
+  /matches:
+    get:
+      tags: [matches]
+      summary: List matches
+      description: Returns matches with optional filters. Authenticated admins see full error messages.
+      operationId: matchesList
+      parameters:
+        - name: tournament_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: program_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed, cancelled]
+        - name: game_type
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Match list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /matches/{id}:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/MatchID'
     get:
-      tags:
-        - matches
-      summary: Получение матча
+      tags: [matches]
+      summary: Get match
+      operationId: matchesGet
       responses:
         '200':
-          description: Данные матча
+          description: Match data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Match'
+                $ref: '#/components/schemas/MatchEnvelope'
         '404':
-          $ref: '#/components/responses/NotFoundError'
+          $ref: '#/components/responses/NotFound'
 
   /matches/statistics:
     get:
-      tags:
-        - matches
-      summary: Статистика матчей
+      tags: [matches]
+      summary: Match statistics
+      operationId: matchesGetStatistics
+      parameters:
+        - name: tournament_id
+          in: query
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
-          description: Статистика
+          description: Aggregated match statistics
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MatchStatistics'
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MatchStatistics'
+
+  /matches/queue/stats:
+    get:
+      tags: [matches]
+      summary: Queue statistics (admin)
+      operationId: matchesQueueStats
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Queue statistics by priority
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/QueueStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /matches/queue/clear:
+    post:
+      tags: [matches]
+      summary: Clear match queue (admin)
+      operationId: matchesQueueClear
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Queue cleared
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: All queues cleared successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /matches/queue/purge:
+    post:
+      tags: [matches]
+      summary: Purge invalid matches from queue (admin)
+      description: Removes queue entries whose match no longer exists in the database.
+      operationId: matchesQueuePurge
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Invalid matches purged
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                          purged_count:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==========================================================================
+  # WebSocket
+  # ==========================================================================
 
   /ws/tournaments/{id}:
     parameters:
-      - $ref: '#/components/parameters/ID'
+      - $ref: '#/components/parameters/TournamentID'
     get:
-      tags:
-        - websocket
-      summary: WebSocket подписка на турнир
+      tags: [websocket]
+      summary: Tournament WebSocket
       description: |
-        Подключение через WebSocket для real-time обновлений.
-        Авторизация через query параметр: `?token=<jwt>`
+        Upgrades to a WebSocket connection for real-time tournament updates.
+        Authentication via subprotocol header: `Sec-WebSocket-Protocol: access_token.<jwt>`.
 
-        Получаемые сообщения:
-        - `tournament_started` — турнир начат
-        - `match_completed` — матч завершён
-        - `tournament_completed` — турнир завершён
+        **Server-sent message types:**
+        - `match_completed` -- a match has finished
+        - `leaderboard_updated` -- leaderboard changed
+        - `tournament_started` -- tournament transitioned to active
+        - `tournament_completed` -- tournament finished
+        - `round_completed` -- a game round was completed
+        - `round_reset` -- a game round was reset
+      operationId: wsTournament
+      security:
+        - BearerAuth: []
       responses:
         '101':
-          description: Switching Protocols
+          description: WebSocket connection established
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
-  /health:
+  /ws/stats:
     get:
-      summary: Health check
+      tags: [websocket]
+      summary: WebSocket connection stats
+      operationId: wsStats
+      security:
+        - BearerAuth: []
       responses:
         '200':
-          description: Сервис работает
+          description: WebSocket hub statistics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          total_clients:
+                            type: integer
+                          tournaments:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
-  /metrics:
+  # ==========================================================================
+  # System
+  # ==========================================================================
+
+  /system/metrics:
     get:
-      summary: Prometheus метрики
+      tags: [system]
+      summary: System metrics (admin)
+      description: Returns CPU, memory, disk, host, and Go runtime metrics.
+      operationId: systemMetrics
+      security:
+        - BearerAuth: []
       responses:
         '200':
-          description: Метрики в формате Prometheus
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
+  /system/health:
+    get:
+      tags: [system]
+      summary: System health (admin)
+      operationId: systemHealth
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HealthStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
 components:
+
+  # ========== Security Schemes ==========
+
   securitySchemes:
-    bearerAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT access token obtained from /auth/login or /auth/register
+
+  # ========== Parameters ==========
 
   parameters:
-    ID:
+    TournamentID:
       name: id
       in: path
       required: true
+      description: Tournament UUID
       schema:
         type: string
         format: uuid
 
+    TeamID:
+      name: id
+      in: path
+      required: true
+      description: Team UUID
+      schema:
+        type: string
+        format: uuid
+
+    GameID:
+      name: id
+      in: path
+      required: true
+      description: Game UUID
+      schema:
+        type: string
+        format: uuid
+
+    GameIDPath:
+      name: gameId
+      in: path
+      required: true
+      description: Game UUID (in tournament context)
+      schema:
+        type: string
+        format: uuid
+
+    ProgramID:
+      name: id
+      in: path
+      required: true
+      description: Program UUID
+      schema:
+        type: string
+        format: uuid
+
+    MatchID:
+      name: id
+      in: path
+      required: true
+      description: Match UUID
+      schema:
+        type: string
+        format: uuid
+
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of records to return
+      schema:
+        type: integer
+        default: 50
+        minimum: 1
+        maximum: 1000
+
+    Offset:
+      name: offset
+      in: query
+      description: Number of records to skip
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+
+  # ========== Schemas ==========
+
   schemas:
+
+    # ---------- Envelope wrappers ----------
+
+    SuccessEnvelope:
+      type: object
+      description: Standard success response envelope
+      properties:
+        data: {}
+        message:
+          type: string
+        meta:
+          $ref: '#/components/schemas/Meta'
+
+    Meta:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+
+    # ---------- Auth ----------
+
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: player42
+        email:
+          type: string
+          format: email
+          example: player42@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          format: password
+
+    LoginRequest:
+      type: object
+      required: [password]
+      description: Login with username OR email plus password.
+      properties:
+        username:
+          type: string
+          example: player42
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+        current_password:
+          type: string
+          format: password
+          description: Required when changing password
+
+    AuthResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    AuthResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AuthResponse'
+
+    # ---------- User ----------
+
     User:
       type: object
       properties:
@@ -492,47 +2148,387 @@ components:
         created_at:
           type: string
           format: date-time
-
-    RegisterRequest:
-      type: object
-      required: [username, email, password]
-      properties:
-        username:
+        updated_at:
           type: string
-          minLength: 3
+          format: date-time
+
+    UserEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+
+    UserListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+
+    # ---------- Tournament ----------
+
+    Tournament:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+          description: Unique 6-character tournament code
+        description:
+          type: string
+        game_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, completed, cancelled]
+        max_participants:
+          type: integer
+          nullable: true
+        max_team_size:
+          type: integer
+        is_permanent:
+          type: boolean
+        creator_id:
+          type: string
+          format: uuid
+          nullable: true
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTournamentRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        game_type:
+          type: string
+        max_participants:
+          type: integer
+          nullable: true
+        max_team_size:
+          type: integer
+        is_permanent:
+          type: boolean
+        start_time:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TournamentEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Tournament'
+
+    TournamentListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Tournament'
+
+    StatusEnvelope:
+      description: Generic status response wrapped in envelope
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+
+    # ---------- Game ----------
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Unique system name (lowercase, a-z0-9_)
+        display_name:
+          type: string
+        rules:
+          type: string
+          description: Rules in Markdown format
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateGameRequest:
+      type: object
+      required: [name, display_name]
+      properties:
+        name:
+          type: string
+          minLength: 1
           maxLength: 50
-        email:
+          description: Unique system name (lowercase, a-z0-9_)
+        display_name:
           type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-
-    LoginRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-        password:
+          minLength: 1
+          maxLength: 255
+        rules:
           type: string
 
-    RefreshRequest:
+    UpdateGameRequest:
       type: object
-      required: [refresh_token]
+      required: [display_name]
       properties:
-        refresh_token:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        rules:
           type: string
 
-    AuthResponse:
+    GameEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Game'
+
+    GameListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Game'
+
+    TournamentGameWithDetails:
       type: object
       properties:
-        user:
-          $ref: '#/components/schemas/User'
-        access_token:
+        tournament_id:
           type: string
-        refresh_token:
+          format: uuid
+        game_id:
           type: string
+          format: uuid
+        game_name:
+          type: string
+        game_display_name:
+          type: string
+        is_active:
+          type: boolean
+        round_completed:
+          type: boolean
+        round_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        current_round:
+          type: integer
+        auto_round_enabled:
+          type: boolean
+        auto_round_interval_seconds:
+          type: integer
+        auto_round_last_run_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TournamentGameWithDetailsListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/TournamentGameWithDetails'
+
+    TournamentGameWithDetailsNullableEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/TournamentGameWithDetails'
+
+    AutoRoundSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        interval_seconds:
+          type: integer
+        last_run_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResetGameRoundResponse:
+      type: object
+      properties:
+        matches_deleted:
+          type: integer
+        participants_reset:
+          type: integer
+        rating_history_reset:
+          type: integer
+
+    # ---------- Team ----------
+
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tournament_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+          description: Unique 6-8 character invite code
+        leader_id:
+          type: string
+          format: uuid
+        is_disqualified:
+          type: boolean
+        disqualified_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TeamWithMembers:
+      allOf:
+        - $ref: '#/components/schemas/Team'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+
+    CreateTeamRequest:
+      type: object
+      required: [tournament_id, name]
+      properties:
+        tournament_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    InviteLinkResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        link:
+          type: string
+          format: uri
+
+    DisqualifyResult:
+      type: object
+      properties:
+        matches_deleted:
+          type: integer
+          format: int64
+        matches_cancelled:
+          type: integer
+          format: int64
+        rating_history_reset:
+          type: integer
+          format: int64
+
+    TeamEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Team'
+
+    TeamNullableEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/Team'
+
+    TeamListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Team'
+
+    TeamWithMembersEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TeamWithMembers'
+
+    # ---------- Program ----------
 
     Program:
       type: object
@@ -545,131 +2541,65 @@ components:
           format: uuid
         name:
           type: string
-        language:
-          type: string
-          enum: [python, go, cpp, java]
         game_type:
           type: string
-        is_active:
-          type: boolean
+        language:
+          type: string
+          description: Detected or specified language (python, cpp, c, go, rust, java, javascript, ruby, php, lua)
+        team_id:
+          type: string
+          format: uuid
+          nullable: true
+        tournament_id:
+          type: string
+          format: uuid
+          nullable: true
+        game_id:
+          type: string
+          format: uuid
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+          description: Syntax or compilation error, if any
+        version:
+          type: integer
         created_at:
           type: string
           format: date-time
-
-    CreateProgramRequest:
-      type: object
-      required: [name, language, source_code, game_type]
-      properties:
-        name:
+        updated_at:
           type: string
-          maxLength: 100
-        language:
-          type: string
-          enum: [python, go, cpp, java]
-        source_code:
-          type: string
-        game_type:
-          type: string
+          format: date-time
 
     UpdateProgramRequest:
       type: object
       properties:
         name:
           type: string
-        source_code:
+        code_path:
           type: string
-        is_active:
-          type: boolean
+        language:
+          type: string
 
-    Tournament:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        creator_id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        game_type:
-          type: string
-        status:
-          type: string
-          enum: [pending, active, completed]
-        max_participants:
-          type: integer
-        iterations_per_match:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-        started_at:
-          type: string
-          format: date-time
-        completed_at:
-          type: string
-          format: date-time
+    ProgramEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Program'
 
-    CreateTournamentRequest:
-      type: object
-      required: [name, game_type]
-      properties:
-        name:
-          type: string
-          maxLength: 200
-        game_type:
-          type: string
-        max_participants:
-          type: integer
-          default: 16
-        iterations_per_match:
-          type: integer
-          default: 1000
+    ProgramListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Program'
 
-    JoinTournamentRequest:
-      type: object
-      required: [program_id]
-      properties:
-        program_id:
-          type: string
-          format: uuid
-
-    TournamentListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Tournament'
-        next_cursor:
-          type: string
-        has_more:
-          type: boolean
-
-    Leaderboard:
-      type: object
-      properties:
-        entries:
-          type: array
-          items:
-            type: object
-            properties:
-              rank:
-                type: integer
-              program_id:
-                type: string
-                format: uuid
-              program_name:
-                type: string
-              rating:
-                type: integer
-              wins:
-                type: integer
-              losses:
-                type: integer
-              draws:
-                type: integer
+    # ---------- Match ----------
 
     Match:
       type: object
@@ -686,20 +2616,84 @@ components:
         program2_id:
           type: string
           format: uuid
-        winner_id:
+        game_type:
           type: string
-          format: uuid
         status:
           type: string
-          enum: [pending, running, completed, failed]
-        iterations:
+          enum: [pending, running, completed, failed, cancelled]
+        priority:
+          type: string
+          enum: [high, medium, low]
+        round_number:
           type: integer
-        created_at:
+        score1:
+          type: integer
+          nullable: true
+        score2:
+          type: integer
+          nullable: true
+        winner:
+          type: integer
+          nullable: true
+          description: "0 = draw, 1 = program1 won, 2 = program2 won"
+        error_code:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+          description: Filtered based on user permissions
+        started_at:
           type: string
           format: date-time
+          nullable: true
         completed_at:
           type: string
           format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    MatchRound:
+      type: object
+      properties:
+        round_number:
+          type: integer
+        game_type:
+          type: string
+        total_matches:
+          type: integer
+        completed_count:
+          type: integer
+        pending_count:
+          type: integer
+        running_count:
+          type: integer
+        failed_count:
+          type: integer
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/Match'
+        created_at:
+          type: string
+          format: date-time
+
+    CreateMatchRequest:
+      type: object
+      required: [program1_id, program2_id]
+      properties:
+        program1_id:
+          type: string
+          format: uuid
+        program2_id:
+          type: string
+          format: uuid
+        priority:
+          type: string
+          enum: [high, medium, low]
+          default: medium
 
     MatchStatistics:
       type: object
@@ -715,74 +2709,309 @@ components:
         failed:
           type: integer
 
-    Error:
+    QueueStats:
       type: object
       properties:
-        error:
+        high:
+          type: integer
+          format: int64
+          description: Matches in high-priority queue
+        medium:
+          type: integer
+          format: int64
+          description: Matches in medium-priority queue
+        low:
+          type: integer
+          format: int64
+          description: Matches in low-priority queue
+        total:
+          type: integer
+          format: int64
+
+    MatchEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Match'
+
+    MatchListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Match'
+
+    MatchRoundListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/MatchRound'
+
+    # ---------- Leaderboard ----------
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        program_id:
+          type: string
+          format: uuid
+        program_name:
+          type: string
+        team_id:
+          type: string
+          format: uuid
+          nullable: true
+        team_name:
+          type: string
+          nullable: true
+        rating:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        draws:
+          type: integer
+        total_games:
+          type: integer
+
+    CrossGameLeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        team_id:
+          type: string
+          format: uuid
+          nullable: true
+        team_name:
+          type: string
+        program_id:
+          type: string
+          format: uuid
+        program_name:
+          type: string
+        game_ratings:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/GameRatingInfo'
+          description: Map of game_id to rating info
+        total_rating:
+          type: integer
+        total_wins:
+          type: integer
+        total_losses:
+          type: integer
+        total_games:
+          type: integer
+
+    GameRatingInfo:
+      type: object
+      properties:
+        game_id:
+          type: string
+          format: uuid
+        game_name:
+          type: string
+        rating:
+          type: integer
+        wins:
+          type: integer
+        losses:
+          type: integer
+        draws:
+          type: integer
+        total_games:
+          type: integer
+
+    LeaderboardListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/LeaderboardEntry'
+
+    CrossGameLeaderboardListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/CrossGameLeaderboardEntry'
+
+    # ---------- System ----------
+
+    SystemMetrics:
+      type: object
+      properties:
+        cpu:
           type: object
           properties:
-            code:
+            usage_percent:
+              type: number
+              format: double
+            cores:
+              type: integer
+            model_name:
               type: string
-            message:
+            per_core:
+              type: array
+              items:
+                type: number
+                format: double
+        memory:
+          type: object
+          properties:
+            total:
+              type: integer
+              format: int64
+            used:
+              type: integer
+              format: int64
+            free:
+              type: integer
+              format: int64
+            used_percent:
+              type: number
+              format: double
+        disk:
+          type: object
+          properties:
+            total:
+              type: integer
+              format: int64
+            used:
+              type: integer
+              format: int64
+            free:
+              type: integer
+              format: int64
+            used_percent:
+              type: number
+              format: double
+            path:
               type: string
-            details:
-              type: object
+        host:
+          type: object
+          properties:
+            hostname:
+              type: string
+            platform:
+              type: string
+            platform_version:
+              type: string
+            os:
+              type: string
+            arch:
+              type: string
+            uptime:
+              type: integer
+              format: int64
+        go:
+          type: object
+          properties:
+            version:
+              type: string
+            goroutines:
+              type: integer
+            heap_alloc:
+              type: integer
+              format: int64
+            heap_sys:
+              type: integer
+              format: int64
+            num_gc:
+              type: integer
+            gomaxprocs:
+              type: integer
+        temperature:
+          type: array
+          items:
+            type: object
+            properties:
+              sensor_key:
+                type: string
+              temperature:
+                type: number
+                format: double
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, warning]
+        timestamp:
+          type: string
+          format: date-time
+        hostname:
+          type: string
+        pid:
+          type: integer
+        warning:
+          type: string
+          description: Present only when status is warning
+
+  # ========== Responses ==========
 
   responses:
-    ValidationError:
-      description: Ошибка валидации
+    BadRequest:
+      description: Bad request (validation error or invalid input)
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            error:
-              code: VALIDATION_ERROR
-              message: Неверные данные
-              details:
-                field: email
-                reason: неверный формат
+            error: "invalid input: email is required"
 
-    UnauthorizedError:
-      description: Не авторизован
+    Unauthorized:
+      description: Authentication required or token invalid
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            error:
-              code: UNAUTHORIZED
-              message: Требуется аутентификация
+            error: "unauthorized"
 
-    ForbiddenError:
-      description: Доступ запрещён
+    Forbidden:
+      description: Insufficient permissions
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            error:
-              code: FORBIDDEN
-              message: Недостаточно прав
+            error: "forbidden"
 
-    NotFoundError:
-      description: Ресурс не найден
+    NotFound:
+      description: Resource not found
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            error:
-              code: NOT_FOUND
-              message: Ресурс не найден
+            error: "not found"
 
-    ConflictError:
-      description: Конфликт ресурсов
+    Conflict:
+      description: Resource conflict (already exists, already started, etc.)
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/ErrorResponse'
           example:
-            error:
-              code: CONFLICT
-              message: Ресурс уже существует
+            error: "resource already exists"
