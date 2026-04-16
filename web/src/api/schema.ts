@@ -17,9 +17,16 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 
 /** Error, выбрасываемая schema-валидатором. */
 export class SchemaError extends Error {
-  constructor(public readonly path: string, public readonly received: unknown) {
+  readonly path: string;
+  readonly received: unknown;
+
+  // CI fix: `erasableSyntaxOnly` (tsconfig.app.json) запрещает parameter-properties
+  // в конструкторе — объявляем поля явно и присваиваем внутри.
+  constructor(path: string, received: unknown) {
     super(`schema mismatch at ${path} (received: ${typeof received})`);
     this.name = 'SchemaError';
+    this.path = path;
+    this.received = received;
   }
 }
 
