@@ -358,11 +358,45 @@ jobs:
           category: gosec
         continue-on-error: true
 
-      # P1.9: govulncheck блокирующий — известные CVE ломают сборку.
+      # P1.9: govulncheck блокирующий для обычных CVE.
+      #
+      # Два accepted-risk advisories в docker/docker (Moby daemon AuthZ):
+      #   GO-2026-4887, GO-2026-4883 — daemon-side (Moby plugin authorization),
+      #   fix N/A upstream. Наш код использует docker-client-library только для
+      #   Container{Create,Start,Logs,Kill}; AuthZ-plugins не задействованы.
+      # Если govulncheck возвращает только эти две — step проходит; любая
+      # новая vulnerability ломает build.
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          set +e
+          output=$(govulncheck -format=text ./... 2>&1)
+          code=$?
+          echo "$output"
+
+          if [ "$code" -eq 0 ]; then
+            exit 0
+          fi
+
+          # Извлекаем ID каждой найденной vulnerability (строки "Vulnerability #N: GO-YYYY-NNNN").
+          # Затем вычитаем accepted-list; остаток должен быть пустым.
+          ids=$(echo "$output" | grep -Eo 'GO-[0-9]{4}-[0-9]+' | sort -u)
+          accepted="GO-2026-4887 GO-2026-4883"
+          unknown=""
+          for id in $ids; do
+            case " $accepted " in
+              *" $id "*) ;;
+              *) unknown="$unknown $id" ;;
+            esac
+          done
+
+          if [ -n "$unknown" ]; then
+            echo "::error::Found new CVE(s) not in accepted list:${unknown}"
+            exit 1
+          fi
+          echo "Only accepted Moby daemon-side advisories present; treating as PASS."
 
       # P1.9: npm audit для frontend-зависимостей (блокирует high+).
       - name: Run npm audit
