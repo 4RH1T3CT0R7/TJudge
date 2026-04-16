@@ -43,14 +43,15 @@ RUN apk --no-cache add docker-cli ca-certificates
 #   user: "${WORKER_UID:-1000}:${DOCKER_GID:-999}".
 #
 # UR bug_021: DOCKER_GID=0 (macOS Docker Desktop часто использует root group)
-# конфликтует с уже существующей root-группой alpine. Спец-кейс: если GID=0,
-# просто добавляем appuser в существующий root; иначе создаём новую docker-группу.
+# конфликтует с уже существующей root-группой alpine. В Alpine 3.20 GID 999
+# занят группой `ping`. Логика: если группа с нужным GID уже существует —
+# переиспользуем её; иначе создаём docker-группу.
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser && \
-    if [ "${DOCKER_GID}" = "0" ]; then \
-        adduser appuser root; \
+    existing_group=$(awk -F: -v gid="${DOCKER_GID}" '$3==gid {print $1; exit}' /etc/group) && \
+    if [ -n "$existing_group" ]; then \
+        adduser appuser "$existing_group"; \
     else \
-        (delgroup docker 2>/dev/null || true) && \
         addgroup -g ${DOCKER_GID} docker && \
         adduser appuser docker; \
     fi
