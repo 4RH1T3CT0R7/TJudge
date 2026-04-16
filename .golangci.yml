@@ -27,6 +27,8 @@ issues:
   exclude-dirs:
     - internal/mocks
     - vendor
+    - web/node_modules
+    - node_modules
   exclude-generated: strict
   exclude-rules:
     - path: _test\.go
