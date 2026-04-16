@@ -119,8 +119,14 @@ services:
     build:
       context: .
       dockerfile: docker/worker/Dockerfile
+      args:
+        DOCKER_GID: ${DOCKER_GID:-999}
     container_name: tjudge-worker
-    user: root  # Required for Docker socket access on macOS
+    # DEV-compose: на macOS/Docker Desktop host docker.sock owned by root:daemon (GID 1),
+    # поэтому для локалки допустим root. В проде используйте docker-compose.selfhosted.yml
+    # (или prod), где worker запускается от non-root appuser в docker-группе.
+    # Чтобы переопределить на Linux: WORKER_USER=1000:999 docker compose up.
+    user: "${WORKER_USER:-root}"
     ports:
       - "9091:9090"  # Metrics port
     environment:
@@ -190,7 +196,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.time=90d'
       - '--web.enable-lifecycle'
     depends_on:
       alertmanager:

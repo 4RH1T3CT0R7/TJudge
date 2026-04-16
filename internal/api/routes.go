@@ -7,6 +7,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/web"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/requestid"
@@ -29,12 +30,47 @@ type Server struct {
 	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
 	systemHandler     *handlers.SystemHandler
+	auditHandler      *handlers.AuditHandler         // P1.12 (optional)
+	auditLogger       *middleware.AuditLogger        // P1.12 (optional)
+	pwResetHandler    *handlers.PasswordResetHandler // P1.11 (optional)
+	idempStore        middleware.IdempotencyStore    // P2.19 (optional)
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
 	adminChecker      *middleware.VerifiedAdminChecker
 	corsConfig        config.CORSConfig
 	rateLimitConfig   config.RateLimitConfig
 	log               *logger.Logger
+
+	// rateLimitStopCh закрывается при Close(), завершая cleanup-горутины
+	// fallback-лимитеров. Без него каждый rebuild через WithXxx() раньше
+	// создавал "вечную" горутину на nil-канале (см. ratelimit.go:96).
+	rateLimitStopCh chan struct{}
+}
+
+// Close останавливает фоновые горутины, созданные Server (например, cleanup-
+// горутину fallback-rate-limiter'а). Вызывать после graceful shutdown HTTP.
+func (s *Server) Close() {
+	if s.rateLimitStopCh != nil {
+		select {
+		case <-s.rateLimitStopCh:
+			// already closed
+		default:
+			close(s.rateLimitStopCh)
+		}
+	}
+}
+
+// rebuildRouter пересобирает chi-роутер с актуальным набором middleware/routes.
+// Используется всеми WithXxx-опциями для переустановки маршрутов с учётом
+// установленного состояния (handlers/stores). Перед rebuild останавливает
+// горутины предыдущего набора middleware, чтобы избежать goroutine-leak.
+func (s *Server) rebuildRouter() {
+	// Останавливаем cleanup-горутину предыдущей инстанции rate-limiter.
+	s.Close()
+	s.rateLimitStopCh = make(chan struct{})
+	s.router = chi.NewRouter()
+	s.setupMiddleware()
+	s.setupRoutes()
 }
 
 // NewServer создаёт новый HTTP сервер
@@ -68,6 +104,7 @@ func NewServer(
 		corsConfig:        corsConfig,
 		rateLimitConfig:   rateLimitConfig,
 		log:               log,
+		rateLimitStopCh:   make(chan struct{}),
 	}
 
 	s.setupMiddleware()
@@ -78,14 +115,59 @@ func NewServer(
 
 // WithAdminChecker устанавливает проверку admin-роли из БД.
 // Если установлен, admin-only роуты будут верифицировать роль из БД (с кешем).
+//
+// UR bug_010: раньше WithAdminChecker не пересобирал router и оставался no-op,
+// если после него не вызывался другой With*. Теперь rebuildRouter симметрично
+// остальным опциям.
 func (s *Server) WithAdminChecker(checker *middleware.VerifiedAdminChecker) *Server {
 	s.adminChecker = checker
+	s.rebuildRouter()
+	return s
+}
+
+// WithIdempotency подключает Idempotency-Key middleware (P2.19) к mutation-эндпоинтам.
+// store — обычно *cache.Cache. При nil middleware не применяется.
+func (s *Server) WithIdempotency(store middleware.IdempotencyStore) *Server {
+	s.idempStore = store
+	s.rebuildRouter()
+	return s
+}
+
+// idempotency возвращает Idempotency middleware или passthrough.
+func (s *Server) idempotency() func(http.Handler) http.Handler {
+	if s.idempStore == nil {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return middleware.Idempotency(s.idempStore, s.log)
+}
+
+// WithPasswordReset подключает password reset endpoints (P1.11).
+// Должен вызываться до WithAuditLog (иначе audit перестроит router и этот
+// handler потеряется). Оба With… idempotent-сбрасывают и пересобирают router,
+// но не очищают предыдущие handlers, поэтому порядок: auth → audit.
+func (s *Server) WithPasswordReset(handler *handlers.PasswordResetHandler) *Server {
+	s.pwResetHandler = handler
+	s.rebuildRouter()
+	return s
+}
+
+// WithAuditLog подключает admin audit log (P1.12).
+// Должен быть вызван до setupRoutes (в main.go). Передаёт опциональные
+// компоненты, т.к. без handler'а не будет endpoint'а /admin/audit,
+// а без logger'а — не будет middleware записи.
+func (s *Server) WithAuditLog(logger *middleware.AuditLogger, handler *handlers.AuditHandler) *Server {
+	s.auditLogger = logger
+	s.auditHandler = handler
+	// Перестраиваем маршруты, чтобы подключить audit middleware к admin-группам.
+	s.rebuildRouter()
 	return s
 }
 
 // setupMiddleware настраивает middleware
 func (s *Server) setupMiddleware() {
 	// Базовые middleware
+	// P2.6: OTel tracing middleware — no-op если OTEL_* env не заданы.
+	s.router.Use(observability.HTTPMiddleware("tjudge-api"))
 	s.router.Use(chiMiddleware.RequestID)
 	s.router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,13 +192,20 @@ func (s *Server) setupMiddleware() {
 	// Smart timeout с контекст cancellation для разных типов операций
 	s.router.Use(middleware.SmartTimeout(middleware.DefaultTimeoutConfig()))
 
-	// Rate limiting (если включено в конфиге)
+	// Rate limiting (если включено в конфиге).
+	// UR bug_015: передаём stopCh чтобы cleanup-горутина fallback-лимитера
+	// могла быть остановлена при rebuild / shutdown, иначе она виснет
+	// на nil-канале навсегда.
 	if s.rateLimitConfig.Enabled {
+		if s.rateLimitStopCh == nil {
+			s.rateLimitStopCh = make(chan struct{})
+		}
 		s.router.Use(middleware.RateLimit(
 			s.rateLimiter,
 			s.rateLimitConfig.RequestsPerMinute,
 			time.Minute,
 			s.log,
+			s.rateLimitStopCh,
 		))
 	}
 
@@ -140,6 +229,15 @@ func (s *Server) requireAdmin() func(http.Handler) http.Handler {
 		return s.adminChecker.RequireVerifiedAdmin()
 	}
 	return middleware.RequireAdmin()
+}
+
+// auditMiddleware возвращает middleware для записи admin-действий в audit log.
+// Если auditLogger не сконфигурирован — возвращает passthrough (no-op).
+func (s *Server) auditMiddleware() func(http.Handler) http.Handler {
+	if s.auditLogger == nil {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return middleware.Audit(s.auditLogger)
 }
 
 // setupRoutes настраивает маршруты
@@ -172,6 +270,12 @@ func (s *Server) setupRoutes() {
 			r.Post("/register", s.authHandler.Register)
 			r.Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
+
+			// P1.11: password reset (опционально, если handler зарегистрирован).
+			if s.pwResetHandler != nil {
+				r.Post("/password-reset/request", s.pwResetHandler.Request)
+				r.Post("/password-reset/confirm", s.pwResetHandler.Confirm)
+			}
 
 			// Protected auth endpoints (require valid JWT)
 			r.Group(func(r chi.Router) {
@@ -214,7 +318,10 @@ func (s *Server) setupRoutes() {
 				// Админские маршруты для турниров
 				r.Group(func(r chi.Router) {
 					r.Use(s.requireAdmin())
-					r.Post("/", s.tournamentHandler.Create)
+					r.Use(s.auditMiddleware())
+					// P2.19: Idempotency-Key на create-endpoint'ах — защищает от
+					// двойного создания при retry.
+					r.With(s.idempotency()).Post("/", s.tournamentHandler.Create)
 					r.Post("/{id}/start", s.tournamentHandler.Start)
 					r.Post("/{id}/complete", s.tournamentHandler.Complete)
 					r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
@@ -239,15 +346,16 @@ func (s *Server) setupRoutes() {
 		// Game routes
 		r.Route("/games", func(r chi.Router) {
 			r.Use(bodyLimit)
-			// Публичные маршруты
-			r.Get("/", s.gameHandler.List)
-			r.Get("/{id}", s.gameHandler.Get)
-			r.Get("/name/{name}", s.gameHandler.GetByName)
+			// Публичные маршруты. P2.2: read-only кэшируются 60с + ETag.
+			r.With(middleware.CacheControl(60)).Get("/", s.gameHandler.List)
+			r.With(middleware.CacheControl(60)).Get("/{id}", s.gameHandler.Get)
+			r.With(middleware.CacheControl(60)).Get("/name/{name}", s.gameHandler.GetByName)
 
 			// Админские маршруты
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(s.authService, s.log))
 				r.Use(s.requireAdmin())
+				r.Use(s.auditMiddleware())
 
 				r.Post("/", s.gameHandler.Create)
 				r.Put("/{id}", s.gameHandler.Update)
@@ -272,6 +380,7 @@ func (s *Server) setupRoutes() {
 			// Админские маршруты
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin())
+				r.Use(s.auditMiddleware())
 				r.Delete("/{id}", s.teamHandler.Delete)
 				r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
 				r.Post("/{id}/restore", s.teamHandler.Restore)
@@ -283,7 +392,8 @@ func (s *Server) setupRoutes() {
 			r.Use(middleware.Auth(s.authService, s.log))
 			r.Use(middleware.MaxBodySize(10 << 20)) // 10MB for file uploads
 
-			r.Post("/", s.programHandler.Create)
+			// P2.19: Idempotency-Key на upload — клиент с флейки-сетью не создаст дубль.
+			r.With(s.idempotency()).Post("/", s.programHandler.Create)
 			r.Get("/", s.programHandler.List)
 			r.Get("/versions", s.programHandler.GetVersions) // Список версий программ команды
 			r.Get("/{id}", s.programHandler.Get)
@@ -308,6 +418,7 @@ func (s *Server) setupRoutes() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(s.authService, s.log))
 				r.Use(s.requireAdmin())
+				r.Use(s.auditMiddleware())
 
 				r.Get("/queue/stats", s.matchHandler.GetQueueStats)
 				r.Post("/queue/clear", s.matchHandler.ClearQueue)
@@ -332,6 +443,18 @@ func (s *Server) setupRoutes() {
 			r.Get("/metrics", s.systemHandler.GetMetrics)
 			r.Get("/health", s.systemHandler.GetHealth)
 		})
+
+		// Admin-only audit log (P1.12).
+		// Endpoint подключается только если в сервере зарегистрирован auditHandler.
+		if s.auditHandler != nil {
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(bodyLimit)
+				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.requireAdmin())
+
+				r.Get("/audit", s.auditHandler.List)
+			})
+		}
 	})
 
 	// Serve frontend static files (SPA with fallback to index.html)

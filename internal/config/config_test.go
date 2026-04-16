@@ -127,7 +127,7 @@ func TestConfig_Validate_JWTSecretInProduction(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
 	err := cfg.Validate()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "JWT secret")
+	assert.Contains(t, err.Error(), "JWT_SECRET")
 }
 
 func TestConfig_Validate_JWTSecretInDev(t *testing.T) {
@@ -135,6 +135,59 @@ func TestConfig_Validate_JWTSecretInDev(t *testing.T) {
 	cfg.JWT.Secret = "change-this-secret-in-production"
 	t.Setenv("ENVIRONMENT", "development")
 	// Should NOT error in non-production
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestConfig_Validate_JWTSecretPlaceholderBlacklist(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "production")
+	placeholders := []string{
+		"CHANGE_ME_TO_STRONG_RANDOM_SECRET_IN_PRODUCTION",
+		"changeme",
+		"CHANGE-ME",
+		"secret",
+		"your-secret-key-change-in-production",
+	}
+	for _, ph := range placeholders {
+		t.Run(ph, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.JWT.Secret = ph
+			err := cfg.Validate()
+			assert.Error(t, err, "placeholder %q must be rejected", ph)
+			assert.Contains(t, err.Error(), "JWT_SECRET")
+		})
+	}
+}
+
+func TestConfig_Validate_JWTSecretTooShortInProd(t *testing.T) {
+	cfg := validConfig()
+	cfg.JWT.Secret = "short-secret"
+	t.Setenv("ENVIRONMENT", "production")
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at least")
+}
+
+func TestConfig_Validate_JWTSecretEmptyInProd(t *testing.T) {
+	cfg := validConfig()
+	cfg.JWT.Secret = ""
+	t.Setenv("ENVIRONMENT", "production")
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "JWT_SECRET")
+}
+
+func TestConfig_Validate_JWTSecretValidInProd(t *testing.T) {
+	cfg := validConfig()
+	cfg.JWT.Secret = "a-real-random-secret-at-least-32-bytes-long-1234"
+	t.Setenv("ENVIRONMENT", "production")
+	assert.NoError(t, cfg.Validate())
+}
+
+func TestConfig_Validate_JWTSecretPlaceholderInDevOK(t *testing.T) {
+	// Placeholders acceptable in dev (with warning in practice)
+	cfg := validConfig()
+	cfg.JWT.Secret = "CHANGE_ME"
+	t.Setenv("ENVIRONMENT", "development")
 	assert.NoError(t, cfg.Validate())
 }
 
@@ -317,4 +370,56 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, 20, cfg.Worker.MaxWorkers)
 	assert.Equal(t, 500, cfg.Worker.QueueSize)
 	assert.Equal(t, 30*time.Minute, cfg.JWT.AccessTTL)
+}
+
+// TestRecommendedDBPoolSize — P2.3 формула.
+func TestRecommendedDBPoolSize(t *testing.T) {
+	cases := []struct {
+		workerMax int
+		want      int
+		label     string
+	}{
+		{0, 20, "min clamp когда worker=0"},
+		{10, 35, "10 workers * 1.5 + 20 = 35"},
+		{50, 95, "50 workers * 1.5 + 20 = 95"},
+		{100, 100, "ceiling=100"},
+		{1000, 100, "ceiling=100 даже при большом WORKER_MAX"},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			got := recommendedDBPoolSize(c.workerMax)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+// TestLoad_DBPoolAutoSized — по умолчанию DB_MAX_CONNECTIONS подстраивается
+// под WORKER_MAX.
+func TestLoad_DBPoolAutoSized(t *testing.T) {
+	clearEnvKeys(t)
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "tjudge")
+	t.Setenv("DB_NAME", "tjudge")
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("WORKER_MAX", "30")
+	// DB_MAX_CONNECTIONS НЕ задан — должно быть 30*1.5+20 = 65
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 65, cfg.Database.MaxConnections)
+	assert.Equal(t, 13, cfg.Database.MaxIdle, "idle = 20% от max")
+}
+
+// clearEnvKeys — вспомогательная очистка всех env, которые подхватывает Load().
+func clearEnvKeys(t *testing.T) {
+	t.Helper()
+	keys := []string{
+		"API_PORT", "DB_PORT", "DB_HOST", "DB_USER", "DB_NAME",
+		"DB_MAX_CONNECTIONS", "DB_MAX_IDLE",
+		"REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",
+		"WORKER_MIN", "WORKER_MAX", "WORKER_QUEUE_SIZE",
+		"JWT_SECRET", "JWT_ACCESS_TTL", "LOG_LEVEL", "ENVIRONMENT",
+	}
+	for _, k := range keys {
+		t.Setenv(k, "")
+	}
 }

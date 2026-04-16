@@ -95,7 +95,7 @@ func (h *Hub) registerClient(client *Client) {
 
 	// If the client was already closed (unregister arrived before register
 	// due to buffered channels), skip adding a dead client to the map.
-	if client.closed {
+	if client.IsClosed() {
 		h.log.Info("Client already closed, skipping registration",
 			zap.String("tournament_id", client.tournamentID.String()),
 			zap.String("user_id", client.userID.String()),
@@ -139,10 +139,8 @@ func (h *Hub) unregisterClient(client *Client) {
 	// Always mark client as closed and close the send channel, even if
 	// the client wasn't in the map yet (register still queued in the
 	// buffered channel). This lets registerClient detect the late arrival.
-	if !client.closed {
-		client.closed = true
-		close(client.send)
-	}
+	// CloseSend is idempotent via sync.Once.
+	client.CloseSend()
 }
 
 // broadcastMessage отправляет сообщение всем клиентам турнира
@@ -164,6 +162,11 @@ func (h *Hub) broadcastMessage(message *Message) {
 
 	// Отправляем всем клиентам
 	for client := range clients {
+		// Skip already-closed clients (idempotency vs buffered register/unregister).
+		if client.IsClosed() {
+			delete(clients, client)
+			continue
+		}
 		select {
 		case client.send <- data:
 		default:
@@ -172,10 +175,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 				zap.String("tournament_id", client.tournamentID.String()),
 				zap.String("user_id", client.userID.String()),
 			)
-			if !client.closed {
-				client.closed = true
-				close(client.send)
-			}
+			client.CloseSend()
 			delete(clients, client)
 		}
 	}
@@ -217,13 +217,10 @@ func (h *Hub) shutdown() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Закрываем все подключения
+	// Закрываем все подключения (idempotent через sync.Once)
 	for tournamentID, clients := range h.tournaments {
 		for client := range clients {
-			if !client.closed {
-				client.closed = true
-				close(client.send)
-			}
+			client.CloseSend()
 			delete(clients, client)
 		}
 		delete(h.tournaments, tournamentID)

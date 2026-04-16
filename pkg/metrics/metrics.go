@@ -21,12 +21,17 @@ type Metrics struct {
 	MatchesInProgress prometheus.Gauge
 
 	// Queue метрики
-	QueueSize     *prometheus.GaugeVec
-	QueueWaitTime *prometheus.HistogramVec
+	QueueSize           *prometheus.GaugeVec
+	QueueWaitTime       *prometheus.HistogramVec
+	QueueDeadLetterSize prometheus.Gauge
+	QueueDeadLetterPush *prometheus.CounterVec
 
 	// Worker метрики
-	ActiveWorkers  prometheus.Gauge
-	WorkerPoolSize prometheus.Gauge
+	ActiveWorkers        prometheus.Gauge
+	WorkerPoolSize       prometheus.Gauge
+	WorkerDraining       prometheus.Gauge
+	WorkerDrainDuration  prometheus.Histogram
+	WorkerInFlightOnStop prometheus.Gauge
 
 	// HTTP метрики
 	HTTPRequestsTotal    *prometheus.CounterVec
@@ -92,6 +97,19 @@ func newMetrics() *Metrics {
 			},
 			[]string{"priority"},
 		),
+		QueueDeadLetterSize: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "tjudge_queue_deadletter_size",
+				Help: "Current number of entries in the dead-letter queue (poison messages)",
+			},
+		),
+		QueueDeadLetterPush: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "tjudge_queue_deadletter_push_total",
+				Help: "Total number of items pushed to the dead-letter queue, labelled by reason",
+			},
+			[]string{"reason"},
+		),
 
 		// Worker метрики
 		ActiveWorkers: promauto.NewGauge(
@@ -104,6 +122,25 @@ func newMetrics() *Metrics {
 			prometheus.GaugeOpts{
 				Name: "tjudge_worker_pool_size",
 				Help: "Total size of worker pool",
+			},
+		),
+		WorkerDraining: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "tjudge_worker_draining",
+				Help: "1 when worker pool is in graceful shutdown (draining), 0 otherwise",
+			},
+		),
+		WorkerDrainDuration: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Name:    "tjudge_worker_drain_duration_seconds",
+				Help:    "Duration of worker pool graceful drain (from Stop() to all workers exited)",
+				Buckets: prometheus.ExponentialBuckets(0.1, 2, 12), // 0.1s ... ~400s
+			},
+		),
+		WorkerInFlightOnStop: promauto.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "tjudge_worker_in_flight_on_stop",
+				Help: "Number of in-flight matches observed at the moment Stop() was called",
 			},
 		),
 
@@ -203,6 +240,18 @@ func (m *Metrics) SetQueueSize(priority string, size int) {
 	m.QueueSize.WithLabelValues(priority).Set(float64(size))
 }
 
+// SetQueueDeadLetterSize устанавливает текущий размер dead-letter очереди.
+// Вызывается из background-поллера или при каждом push.
+func (m *Metrics) SetQueueDeadLetterSize(size int64) {
+	m.QueueDeadLetterSize.Set(float64(size))
+}
+
+// RecordQueueDeadLetterPush инкрементирует счётчик push-ов в dead-letter.
+// reason — короткая метка причины (напр. "unmarshal_error", "poison_message").
+func (m *Metrics) RecordQueueDeadLetterPush(reason string) {
+	m.QueueDeadLetterPush.WithLabelValues(reason).Inc()
+}
+
 // SetActiveWorkers устанавливает количество активных воркеров
 func (m *Metrics) SetActiveWorkers(count int) {
 	m.ActiveWorkers.Set(float64(count))
@@ -211,6 +260,25 @@ func (m *Metrics) SetActiveWorkers(count int) {
 // SetWorkerPoolSize устанавливает размер пула воркеров
 func (m *Metrics) SetWorkerPoolSize(size int) {
 	m.WorkerPoolSize.Set(float64(size))
+}
+
+// SetWorkerDraining выставляет флаг graceful drain (1=draining, 0=running).
+func (m *Metrics) SetWorkerDraining(draining bool) {
+	if draining {
+		m.WorkerDraining.Set(1)
+	} else {
+		m.WorkerDraining.Set(0)
+	}
+}
+
+// RecordWorkerDrainDuration фиксирует длительность graceful drain.
+func (m *Metrics) RecordWorkerDrainDuration(duration time.Duration) {
+	m.WorkerDrainDuration.Observe(duration.Seconds())
+}
+
+// SetWorkerInFlightOnStop фиксирует число in-flight матчей на момент Stop().
+func (m *Metrics) SetWorkerInFlightOnStop(n int) {
+	m.WorkerInFlightOnStop.Set(float64(n))
 }
 
 // SetDBConnections устанавливает количество соединений с БД

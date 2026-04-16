@@ -12,6 +12,56 @@ import (
 // defaultJWTSecret — секрет JWT по умолчанию (только для разработки)
 const defaultJWTSecret = "change-this-secret-in-production"
 
+// minJWTSecretLength — минимальная длина JWT secret для production.
+// Менее 32 байт уязвимо к brute-force на современном железе.
+const minJWTSecretLength = 32
+
+// jwtSecretPlaceholders — список placeholder-значений, которые не должны
+// попасть в prod ни под каким предлогом. Совпадение (case-insensitive) → fail.
+var jwtSecretPlaceholders = []string{
+	defaultJWTSecret,
+	"your-secret-key-change-in-production",
+	"change_me",
+	"change-me",
+	"change_me_to_strong_random_secret_in_production",
+	"changeme",
+	"secret",
+	"password",
+	"test",
+}
+
+// isProductionEnv возвращает true если ENVIRONMENT=production|prod.
+func isProductionEnv() bool {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
+	return env == "production" || env == "prod"
+}
+
+// validateJWTSecret проверяет, что secret безопасен для production.
+// В dev-режиме допускаются короткие/placeholder значения (с предупреждением).
+func validateJWTSecret(secret string, isProd bool) error {
+	if !isProd {
+		return nil
+	}
+
+	if secret == "" {
+		return fmt.Errorf("JWT_SECRET must be set in production")
+	}
+
+	if len(secret) < minJWTSecretLength {
+		return fmt.Errorf("JWT_SECRET must be at least %d bytes in production (got %d)",
+			minJWTSecretLength, len(secret))
+	}
+
+	lower := strings.ToLower(secret)
+	for _, placeholder := range jwtSecretPlaceholders {
+		if lower == strings.ToLower(placeholder) {
+			return fmt.Errorf("JWT_SECRET looks like a placeholder value; set a real random secret in production")
+		}
+	}
+
+	return nil
+}
+
 // Config содержит всю конфигурацию приложения
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
@@ -25,6 +75,18 @@ type Config struct {
 	Metrics   MetricsConfig   `yaml:"metrics"`
 	CORS      CORSConfig      `yaml:"cors"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	SMTP      SMTPConfig      `yaml:"smtp"`
+}
+
+// SMTPConfig — настройки исходящей почты (P1.11: password reset).
+// Если Host пуст, password-reset работает в режиме LogMailer (ссылка пишется в лог).
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	From     string `yaml:"from"`
+	UseTLS   bool   `yaml:"use_tls"`
 }
 
 // StorageConfig - конфигурация хранения файлов
@@ -192,13 +254,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("worker queue_size must be positive")
 	}
 
-	// Валидация JWT
-	if c.JWT.Secret == "" || c.JWT.Secret == defaultJWTSecret {
-		// В production это должно быть ошибкой
-		env := os.Getenv("ENVIRONMENT")
-		if env == "production" || env == "prod" {
-			return fmt.Errorf("JWT secret must be changed in production")
-		}
+	// Валидация JWT — в prod требуем минимум 32 байта и не placeholder
+	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
+		return err
 	}
 	if c.JWT.AccessTTL < 1*time.Minute {
 		return fmt.Errorf("JWT access_ttl is too short")
@@ -220,10 +278,35 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// recommendedDBPoolSize вычисляет sensible max_connections для БД (P2.3).
+//
+// Формула: min(dbCeiling, workerMax * 1.5 + apiOverhead).
+//   - workerMax * 1.5 — запас на retry/long-running matches.
+//   - apiOverhead = 20 — HTTP-обработчики, миграции, backup-утилиты.
+//   - dbCeiling = 100 — не выходим за default-лимит PostgreSQL (max_connections=100).
+//
+// Если пользователь задал DB_MAX_CONNECTIONS явно — используется его значение.
+func recommendedDBPoolSize(workerMax int) int {
+	const apiOverhead = 20
+	const dbCeiling = 100
+	val := int(float64(workerMax)*1.5) + apiOverhead
+	if val > dbCeiling {
+		val = dbCeiling
+	}
+	if val < 10 {
+		val = 10
+	}
+	return val
+}
+
 // Load загружает конфигурацию из переменных окружения
 func Load() (*Config, error) {
 	// Загружаем .env файл если существует (игнорируем ошибку если файла нет)
 	_ = godotenv.Load()
+
+	// P2.3: если DB_MAX_CONNECTIONS не задан, подбираем по WORKER_MAX.
+	workerMax := getEnvInt("WORKER_MAX", 1000)
+	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
 	cfg := &Config{
 		Server: ServerConfig{
@@ -240,8 +323,8 @@ func Load() (*Config, error) {
 			Password:       getEnvOrFile("DB_PASSWORD", "secret"), // Поддержка Docker secrets
 			Name:           getEnv("DB_NAME", "tjudge"),
 			SSLMode:        getEnv("DB_SSLMODE", "disable"),
-			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", 50),
-			MaxIdle:        getEnvInt("DB_MAX_IDLE", 10),
+			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", defaultPoolSize),
+			MaxIdle:        getEnvInt("DB_MAX_IDLE", defaultPoolSize/5), // 20% от max
 			MaxLifetime:    getEnvDuration("DB_MAX_LIFETIME", 1*time.Hour),
 		},
 		Redis: RedisConfig{
@@ -279,9 +362,9 @@ func Load() (*Config, error) {
 			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
 		},
 		JWT: JWTConfig{
-			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret), // Поддержка Docker secrets
-			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),                 // 24 часа активной сессии
-			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour),              // 7 дней неактивности
+			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret),      // Поддержка Docker secrets
+			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),    // 24 часа активной сессии
+			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour), // 7 дней неактивности
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
@@ -304,6 +387,14 @@ func Load() (*Config, error) {
 			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // Disabled by default for development
 			RequestsPerMinute: getEnvInt("RATE_LIMIT_RPM", 100),
 			Burst:             getEnvInt("RATE_LIMIT_BURST", 200),
+		},
+		SMTP: SMTPConfig{
+			Host:     getEnv("SMTP_HOST", ""),
+			Port:     getEnvInt("SMTP_PORT", 587),
+			User:     getEnv("SMTP_USER", ""),
+			Password: getEnvOrFile("SMTP_PASSWORD", ""),
+			From:     getEnv("SMTP_FROM", ""),
+			UseTLS:   getEnvBool("SMTP_USE_TLS", false),
 		},
 	}
 

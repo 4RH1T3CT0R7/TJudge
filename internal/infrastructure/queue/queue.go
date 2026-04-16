@@ -246,9 +246,24 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
 			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
 		} else {
-			// Cap dead-letter queue to 1000 entries and set 7-day TTL
-			_ = qm.cache.LTrim(ctx, deadLetterKey, 0, 999)
-			_ = qm.cache.Expire(ctx, deadLetterKey, 7*24*time.Hour)
+			qm.metrics.RecordQueueDeadLetterPush("unmarshal_error")
+			// Cap dead-letter queue to 1000 entries and set 7-day TTL.
+			// P1.1: логируем ошибки вместо тихого игнора + обновляем gauge-метрику.
+			if trimErr := qm.cache.LTrim(ctx, deadLetterKey, 0, 999); trimErr != nil {
+				qm.log.Error("Failed to LTRIM dead-letter queue",
+					zap.Error(trimErr),
+					zap.String("key", deadLetterKey),
+				)
+			}
+			if expErr := qm.cache.Expire(ctx, deadLetterKey, 7*24*time.Hour); expErr != nil {
+				qm.log.Error("Failed to set EXPIRE on dead-letter queue",
+					zap.Error(expErr),
+					zap.String("key", deadLetterKey),
+				)
+			}
+			if size, llErr := qm.cache.LLen(ctx, deadLetterKey); llErr == nil {
+				qm.metrics.SetQueueDeadLetterSize(size)
+			}
 		}
 		// Truncate raw data for logging to prevent log injection
 		rawData := result[1]
@@ -334,6 +349,12 @@ func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 		}
 		qm.metrics.SetQueueSize(string(priority), int(size))
 	}
+
+	// P1.1: обновляем метрику размера dead-letter очереди.
+	// Ошибка здесь не критична — просто не обновим gauge.
+	if dlSize, err := qm.cache.LLen(ctx, "queue:dead_letter"); err == nil {
+		qm.metrics.SetQueueDeadLetterSize(dlSize)
+	}
 }
 
 // Clear очищает все очереди
@@ -360,10 +381,19 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 	return nil
 }
 
-// clearDedupKeys удаляет все dedup-ключи по паттерну queue:dedup:*
+// clearDedupKeys удаляет все dedup-ключи по паттерну queue:dedup:*.
+//
+// P2.4: нормальная жизнь dedup-ключей — независимый TTL (24h) через SetNX,
+// так что фоновой очистки не требуется. Этот метод вызывается ТОЛЬКО из
+// admin-action `Clear()`, который форс-очищает все очереди.
+//
+// Ограничение: max 10000 итераций SCAN (1M ключей при COUNT=100) —
+// защита от бесконечного цикла при corrupted cursor или очень больших сетах.
+// В нормальной ситуации ключей будет ≤ размера очередей × 2.
 func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
+	const maxIterations = 10000
 	var cursor uint64
-	for {
+	for i := 0; i < maxIterations; i++ {
 		keys, nextCursor, err := qm.cache.Scan(ctx, cursor, dedupPrefix+"*", 100)
 		if err != nil {
 			return fmt.Errorf("failed to scan dedup keys: %w", err)
@@ -375,9 +405,14 @@ func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 		}
 		cursor = nextCursor
 		if cursor == 0 {
-			break
+			return nil
 		}
 	}
+	// Hit the safety cap — логируем чтобы оператор заметил, но не возвращаем error:
+	// уже удалённые ключи останутся удалёнными, оставшиеся сами expire через TTL.
+	qm.log.Warn("clearDedupKeys hit max iterations, остановлено для безопасности",
+		zap.Int("max_iterations", maxIterations),
+	)
 	return nil
 }
 

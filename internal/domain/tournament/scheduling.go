@@ -38,6 +38,15 @@ type SchedulingService struct {
 	log             *logger.Logger
 }
 
+// matchIDs извлекает ID из списка матчей — используется для rollback/компенсации.
+func matchIDs(matches []*domain.Match) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(matches))
+	for _, m := range matches {
+		ids = append(ids, m.ID)
+	}
+	return ids
+}
+
 // NewSchedulingService создаёт новый сервис планирования матчей
 func NewSchedulingService(
 	tournamentRepo TournamentRepository,
@@ -155,8 +164,18 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 			return fmt.Errorf("failed to create matches: %w", err)
 		}
 
-		// Добавляем матчи в очередь (batch — один Redis pipeline)
+		// Добавляем матчи в очередь (batch — один Redis pipeline).
+		// P0.5: при ошибке Enqueue откатываем матчи из БД, иначе они останутся
+		// как "pending" навсегда, не попав в очередь обработки.
 		if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
+			ids := matchIDs(matches)
+			if delErr := ss.matchRepo.DeleteBatch(ctx, ids); delErr != nil {
+				ss.log.Error("Failed to rollback matches after enqueue error",
+					zap.Error(delErr),
+					zap.Int("orphaned_matches", len(ids)),
+					zap.String("tournament_id", req.TournamentID.String()),
+				)
+			}
 			return fmt.Errorf("failed to enqueue matches: %w", err)
 		}
 
@@ -200,6 +219,10 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
+
+	// IDs матчей, созданных именно в этом вызове (для rollback при ошибке Enqueue).
+	// Существующие pending-матчи из БД мы не удаляем — recovery-worker их подберёт.
+	var createdIDs []uuid.UUID
 
 	// Если нет pending матчей, создаём новый раунд
 	if len(matches) == 0 {
@@ -258,9 +281,19 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			}
 
 			if err := ss.matchRepo.CreateBatch(ctx, gameMatches); err != nil {
+				// Откатываем уже созданные в этом вызове матчи
+				if len(createdIDs) > 0 {
+					if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
+						ss.log.Error("Failed to rollback partially-created matches",
+							zap.Error(delErr),
+							zap.Int("orphaned_matches", len(createdIDs)),
+						)
+					}
+				}
 				return 0, fmt.Errorf("failed to create matches for game %s: %w", gameType, err)
 			}
 
+			createdIDs = append(createdIDs, matchIDs(gameMatches)...)
 			matches = append(matches, gameMatches...)
 
 			ss.log.Info("Generated new round of matches for game",
@@ -272,8 +305,19 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 		}
 	}
 
-	// Добавляем все матчи в очередь (batch — один Redis pipeline)
+	// Добавляем все матчи в очередь (batch — один Redis pipeline).
+	// P0.5: при ошибке Enqueue откатываем только свежесозданные матчи;
+	// существующие pending оставляем — recovery-worker их подберёт.
 	if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
+		if len(createdIDs) > 0 {
+			if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
+				ss.log.Error("Failed to rollback matches after enqueue error",
+					zap.Error(delErr),
+					zap.Int("orphaned_matches", len(createdIDs)),
+					zap.String("tournament_id", tournamentID.String()),
+				)
+			}
+		}
 		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 
@@ -307,6 +351,9 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
+
+	// createdIDs — IDs матчей, созданных именно в этом вызове (для rollback).
+	var createdIDs []uuid.UUID
 
 	// Если нет pending матчей, сбрасываем предыдущие результаты и генерируем заново
 	if len(matches) == 0 {
@@ -359,6 +406,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		if err := ss.matchRepo.CreateBatch(ctx, matches); err != nil {
 			return 0, fmt.Errorf("failed to create matches: %w", err)
 		}
+		createdIDs = matchIDs(matches)
 
 		ss.log.Info("Generated new round of matches for game",
 			zap.String("tournament_id", tournamentID.String()),
@@ -368,8 +416,20 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		)
 	}
 
-	// Добавляем все матчи в очередь (batch — один Redis pipeline)
+	// Добавляем все матчи в очередь (batch — один Redis pipeline).
+	// P0.5: при ошибке Enqueue откатываем только свежесозданные матчи;
+	// существующие pending оставляем — recovery-worker их подберёт.
 	if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
+		if len(createdIDs) > 0 {
+			if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
+				ss.log.Error("Failed to rollback matches after enqueue error",
+					zap.Error(delErr),
+					zap.Int("orphaned_matches", len(createdIDs)),
+					zap.String("tournament_id", tournamentID.String()),
+					zap.String("game_type", gameType),
+				)
+			}
+		}
 		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 

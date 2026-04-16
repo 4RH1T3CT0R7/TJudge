@@ -1717,6 +1717,95 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 	})
 }
 
+func TestCanonicalExtension(t *testing.T) {
+	// Каноническое расширение для известных языков
+	cases := map[string]string{
+		LangPython:     ".py",
+		LangCpp:        ".cpp",
+		LangC:          ".c",
+		LangGo:         ".go",
+		LangRust:       ".rs",
+		LangJava:       ".java",
+		LangJavaScript: ".js",
+		LangRuby:       ".rb",
+		LangPHP:        ".php",
+		LangLua:        ".lua",
+		"unknown":      "",
+		"":             "",
+	}
+	for lang, want := range cases {
+		assert.Equal(t, want, canonicalExtension(lang), "language=%q", lang)
+	}
+}
+
+// TestJavaClassNameRegex блокирует shell-метасимволы в Java class name
+// (P0.1: shell injection в Java wrapper).
+func TestJavaClassNameRegex(t *testing.T) {
+	// OK
+	okNames := []string{"Main", "Solution1", "_Hidden", "$Dollar", "A1_b2"}
+	for _, n := range okNames {
+		assert.True(t, javaClassNameRe.MatchString(n), "valid identifier rejected: %q", n)
+	}
+	// FAIL — всё что содержит shell-метасимволы или недопустимые символы
+	badNames := []string{
+		"Main;rm -rf /",
+		"A|B",
+		"A&B",
+		"A`cmd`",
+		"A$(cmd)",
+		"A B",
+		"A\nB",
+		"1Leading",
+		"",
+		"../etc",
+	}
+	for _, n := range badNames {
+		assert.False(t, javaClassNameRe.MatchString(n), "unsafe name accepted: %q", n)
+	}
+}
+
+// TestExtractJavaClassName — UR bug_008: извлечение declared class name
+// из Java-source для корректного переименования файла перед javac.
+func TestExtractJavaClassName(t *testing.T) {
+	cases := []struct {
+		name, src, want string
+	}{
+		{"simple public class", `public class Main { }`, "Main"},
+		{"with package", "package foo;\npublic class Solution {}", "Solution"},
+		{"non-public class", "class Helper { }", "Helper"},
+		{"with line comment above", "// my file\nclass Foo {}", "Foo"},
+		{"with block comment", "/* hdr */\npublic class Bar {}", "Bar"},
+		{"final class", "final class Fin {}", "Fin"},
+		{"abstract class", "abstract class Abs {}", "Abs"},
+		{"class keyword in comment does not match", "// class Ghost\npublic class Real {}", "Real"},
+		{"no class declaration", "public interface I {}", ""},
+		{"empty", "", ""},
+		{"multi-class: takes first", "class A {}\nclass B {}", "A"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := extractJavaClassName(c.src)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+// TestShellSingleQuote защищает от escape-side эффектов в wrapper-скрипте.
+func TestShellSingleQuote(t *testing.T) {
+	cases := map[string]string{
+		"/data/programs": "'/data/programs'",
+		"with space":     "'with space'",
+		"it's":           `'it'\''s'`,
+		`";rm -rf /`:     `'";rm -rf /'`,
+		`$(evil)`:        `'$(evil)'`,
+		"back`tick":      "'back`tick'",
+		"semi;colon":     "'semi;colon'",
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, shellSingleQuote(in), "input=%q", in)
+	}
+}
+
 func TestDetectLanguage(t *testing.T) {
 	tests := []struct {
 		name     string

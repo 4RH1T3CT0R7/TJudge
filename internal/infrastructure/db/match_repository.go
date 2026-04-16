@@ -8,6 +8,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // MatchRepository - репозиторий для работы с матчами
@@ -90,6 +91,25 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
+	return nil
+}
+
+// DeleteBatch удаляет матчи по списку ID одним запросом.
+// Используется для компенсации (rollback) при ошибке EnqueueBatch (P0.5).
+// Идемпотентен: отсутствующие ID просто пропускаются без ошибки.
+func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	strs := make([]string, len(ids))
+	for i, id := range ids {
+		strs[i] = id.String()
+	}
+	query := `DELETE FROM matches WHERE id = ANY($1)`
+	if _, err := r.db.ExecContext(ctx, query, pq.Array(strs)); err != nil {
+		return errors.Wrap(err, "failed to delete matches batch")
+	}
 	return nil
 }
 

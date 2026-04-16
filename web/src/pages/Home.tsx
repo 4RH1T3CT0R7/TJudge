@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 import { TerminalQuest } from '../components/TerminalQuest';
-import { PixelGrid } from '../components/PixelGrid';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+
+// P2.1: three.js-зависимый PixelGrid отложен — ~160KB gzipped, не нужен для
+// TTI. Появляется под hero после mount основного контента.
+const PixelGrid = lazy(() =>
+  import('../components/PixelGrid').then((m) => ({ default: m.PixelGrid }))
+);
 
 const TrophyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
@@ -1108,8 +1113,10 @@ export function Home() {
             style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
           />
 
-          {/* Pixel grid dots */}
-          <PixelGrid heroRef={heroRef} />
+          {/* Pixel grid dots (P2.1: lazy — three.js загружается отдельно) */}
+          <Suspense fallback={null}>
+            <PixelGrid heroRef={heroRef} />
+          </Suspense>
 
           {/* Grid pattern */}
           <svg className="absolute inset-0 w-full h-full opacity-5">

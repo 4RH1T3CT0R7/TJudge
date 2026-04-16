@@ -373,9 +373,8 @@ func TestHub_RegisterClosedClient_Skips(t *testing.T) {
 	tournamentID := uuid.New()
 	client := newTestClient(hub, tournamentID, uuid.New())
 
-	// Pre-close the client before registration
-	client.closed = true
-	close(client.send)
+	// Pre-close the client before registration (idempotent via sync.Once)
+	client.CloseSend()
 
 	hub.register <- client
 	// Give time for the register to be processed
@@ -451,9 +450,9 @@ func TestHub_ShutdownMultipleClients(t *testing.T) {
 	assert.Equal(t, 0, stats["total_clients"])
 
 	// All clients should be closed
-	assert.True(t, c1.closed)
-	assert.True(t, c2.closed)
-	assert.True(t, c3.closed)
+	assert.True(t, c1.IsClosed())
+	assert.True(t, c2.IsClosed())
+	assert.True(t, c3.IsClosed())
 }
 
 func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {

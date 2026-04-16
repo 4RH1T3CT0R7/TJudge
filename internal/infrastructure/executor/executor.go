@@ -249,16 +249,45 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	defer logs.Close()
 
 	// Читаем логи используя stdcopy для демультиплексирования.
-	// maxLogSize (1MB) — лимит на каждый поток; LimitReader получает
-	// maxLogSize*2 (2MB) как суммарный потолок для stdout + stderr.
+	// P1.4: раньше общий LimitReader на 2 MB → при большом stdout stderr
+	// усекался до пустого, теряя сообщение об ошибке. Теперь каждый поток
+	// имеет независимый лимит 1 MB через limitWriter.
 	const maxLogSize = 1 << 20
-	var stdout, stderr bytes.Buffer
-	_, err = stdcopy.StdCopy(&stdout, &stderr, io.LimitReader(logs, maxLogSize*2))
-	if err != nil {
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdoutW := &limitWriter{w: &stdoutBuf, n: maxLogSize}
+	stderrW := &limitWriter{w: &stderrBuf, n: maxLogSize}
+	if _, err := stdcopy.StdCopy(stdoutW, stderrW, logs); err != nil {
 		return "", "", fmt.Errorf("failed to read container logs: %w", err)
 	}
 
-	return stdout.String(), stderr.String(), nil
+	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
+// limitWriter оборачивает io.Writer и ограничивает общее число записанных байт.
+// Когда лимит исчерпан, последующие Write просто возвращают len(p) без ошибки,
+// чтобы не прерывать чтение из docker-логов (партнёрский поток может
+// продолжать писать — его лимит независим).
+type limitWriter struct {
+	w io.Writer
+	n int // оставшийся бюджет в байтах
+}
+
+func (lw *limitWriter) Write(p []byte) (int, error) {
+	if lw.n <= 0 {
+		return len(p), nil // silently drop
+	}
+	if len(p) > lw.n {
+		// Записываем только то, что влезает в бюджет.
+		written, err := lw.w.Write(p[:lw.n])
+		lw.n -= written
+		if err != nil {
+			return written, err
+		}
+		return len(p), nil
+	}
+	written, err := lw.w.Write(p)
+	lw.n -= written
+	return written, err
 }
 
 // sanitizeForDB очищает строку от символов, недопустимых в PostgreSQL (null bytes)

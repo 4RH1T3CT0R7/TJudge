@@ -313,6 +313,37 @@ services:
       - tjudge-network
     restart: always
 
+  # P1.14: автоматический pg_dump (prod). Включается профилем "backup":
+  #   docker compose --profile backup up -d backup
+  # Для внешнего storage'а (S3/R2) смонтируйте /backups через external volume
+  # или добавьте rclone-sync в entrypoint.
+  backup:
+    build:
+      context: docker/backup
+      dockerfile: Dockerfile
+    container_name: tjudge-backup
+    environment:
+      - PGHOST=postgres
+      - PGUSER=tjudge
+      - PGPASSWORD_FILE=/run/secrets/db_password
+      - PGDATABASE=tjudge
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    secrets:
+      - db_password
+    volumes:
+      - backups_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tjudge-network
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - backup
+
 volumes:
   postgres_data:
   redis_data:
@@ -321,6 +352,7 @@ volumes:
   grafana_data:
   loki_data:
   alertmanager_data:
+  backups_data:
 
 networks:
   tjudge-network:

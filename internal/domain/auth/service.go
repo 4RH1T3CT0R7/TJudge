@@ -176,9 +176,9 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 
 	// Проверяем пароль
 	if err := s.comparePassword(user.PasswordHash, req.Password); err != nil {
+		// PII (username/email) намеренно не логируем — только user_id.
+		// Это предотвращает enumeration через анализ логов.
 		s.log.Info("Invalid password attempt",
-			zap.String("username", req.Username),
-			zap.String("email", req.Email),
 			zap.String("user_id", user.ID.String()),
 		)
 		return nil, errors.ErrInvalidCredentials
@@ -187,7 +187,6 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	s.log.Info("User logged in",
 		zap.String("user_id", user.ID.String()),
 		zap.String("username", user.Username),
-		zap.String("email", user.Email),
 	)
 
 	// Генерируем токены

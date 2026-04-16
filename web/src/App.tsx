@@ -20,6 +20,8 @@ const pageImports = {
   TeamManagement: () => import('./pages/TeamManagement'),
   AdminPanel: () => import('./pages/AdminPanel'),
   NotFound: () => import('./pages/NotFound'),
+  ForgotPassword: () => import('./pages/ForgotPassword'),
+  ResetPassword: () => import('./pages/ResetPassword'),
 };
 
 const Home = lazy(() => pageImports.Home().then(m => ({ default: m.Home })));
@@ -33,11 +35,40 @@ const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
 const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
 const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
+const ForgotPassword = lazy(() => pageImports.ForgotPassword().then(m => ({ default: m.ForgotPassword })));
+const ResetPassword = lazy(() => pageImports.ResetPassword().then(m => ({ default: m.ResetPassword })));
 
-function prefetchAllPages() {
-  // Stagger imports slightly to avoid blocking the main thread
-  Object.values(pageImports).forEach((load, i) => {
-    setTimeout(load, i * 30);
+// P2.1: prefetch только критичных страниц (Navigation targets) через
+// requestIdleCallback, чтобы не тормозить LCP на медленных сетях и
+// не грузить three.js chunk заранее. three.js прогрузится лениво при
+// заходе на главную (через lazy(Home) в существующем коде).
+function prefetchCriticalPages() {
+  const critical: Array<keyof typeof pageImports> = [
+    'Tournaments',
+    'Games',
+    'Login',
+  ];
+
+  const schedule = (cb: () => void) => {
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+    }).requestIdleCallback;
+    if (typeof ric === 'function') {
+      ric(cb, { timeout: 2000 });
+    } else {
+      setTimeout(cb, 1500);
+    }
+  };
+
+  // Не prefetch'им в slow-connection сетях.
+  const conn = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  if (conn?.saveData) return;
+  if (conn?.effectiveType === 'slow-2g' || conn?.effectiveType === '2g') return;
+
+  schedule(() => {
+    critical.forEach((key, i) => {
+      setTimeout(() => pageImports[key](), i * 100);
+    });
   });
 }
 
@@ -89,7 +120,7 @@ function AppContent() {
   }, [initialize]);
 
   useEffect(() => {
-    prefetchAllPages();
+    prefetchCriticalPages();
   }, []);
 
   // Show loading while initializing auth
@@ -107,6 +138,8 @@ function AppContent() {
         <Route path="/" element={<Layout />}>
           <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="login" element={<Login />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password" element={<ResetPassword />} />
           <Route path="tournaments" element={<Tournaments />} />
           <Route path="tournaments/:id" element={<TournamentDetail />} />
           <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />

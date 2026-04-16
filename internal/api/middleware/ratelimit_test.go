@@ -149,26 +149,27 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// When limiter returns error, should fall back to in-memory limiter (2x limit)
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 5, time.Minute).Return(false, assert.AnError)
+	// P1.5: при ошибке Redis fallback СТРОЖЕ основного (0.5x), а не 2x.
+	// Это предотвращает обход rate limit через DoS на Redis.
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 10, time.Minute).Return(false, assert.AnError)
 
 	handlerCalled := 0
-	handler := middleware.RateLimit(mockLimiter, 5, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, 10, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled++
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Fallback limit = 5 * 2 = 10 (burst). First 10 requests should pass.
-	for i := 0; i < 10; i++ {
+	// Fallback limit = max(1, int(10 * 0.5)) = 5 (burst). First 5 requests pass.
+	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code, "request %d should pass", i+1)
 	}
-	assert.Equal(t, 10, handlerCalled)
+	assert.Equal(t, 5, handlerCalled)
 
-	// Next request should be rate-limited by fallback
+	// Next request должен быть rate-limited fallback'ом (строже основного).
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
@@ -187,8 +188,9 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Exhaust fallback for IP1 (burst = 2)
-	for i := 0; i < 2; i++ {
+	// P1.5: Exhaust fallback for IP1. limit=1, fallback multiplier=0.5 →
+	// int(1*0.5)=0, clamped к минимуму 1 → burst=1.
+	for i := 0; i < 1; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()

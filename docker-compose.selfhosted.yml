@@ -149,8 +149,17 @@ services:
     build:
       context: .
       dockerfile: docker/worker/Dockerfile
+      args:
+        # GID группы docker на хосте. Подставьте реальное значение через .env:
+        #   DOCKER_GID=$(getent group docker | cut -d: -f3)
+        DOCKER_GID: ${DOCKER_GID:-999}
     container_name: tjudge-worker
-    user: root
+    # SECURITY (P0.8): запускаем от non-root appuser в docker-группе.
+    # WORKER_UID/DOCKER_GID должны совпадать с UID/GID на хосте для корректного
+    # доступа к /var/run/docker.sock без root-прав.
+    user: "${WORKER_UID:-1000}:${DOCKER_GID:-999}"
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "9091:9090"
     environment:
@@ -186,7 +195,14 @@ services:
       tjudge-cli:
         condition: service_completed_successfully
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # SECURITY (UR bug_016): :ro ограничивает только filesystem-операции на
+      # inode socket'а (chmod/unlink/rename); само Docker HTTP API (POST
+      # /containers/create с privileged+bind /, exec, attach) НЕ ограничено
+      # и даёт root-эквивалентный доступ к хосту. :ro — косметика.
+      # Для реального ограничения API поставьте tecnativa/docker-socket-proxy
+      # перед worker'ом и укажите ему DOCKER_HOST=tcp://socket-proxy:2375
+      # с разрешением только нужных endpoint'ов (CONTAINERS=1, POST=1).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data/programs:/data/programs
     networks:
       - tjudge-network
@@ -212,6 +228,33 @@ services:
       - tjudge-network
     restart: unless-stopped
 
+
+  # P1.14: периодический pg_dump в /backups. Runs every BACKUP_INTERVAL_SECONDS.
+  # Запускается с profile=backup: `docker compose --profile backup up -d backup`
+  backup:
+    build:
+      context: docker/backup
+      dockerfile: Dockerfile
+    container_name: tjudge-backup
+    environment:
+      - PGHOST=postgres
+      - PGUSER=${DB_USER:-tjudge}
+      - PGPASSWORD=${DB_PASSWORD:-secret}
+      - PGDATABASE=${DB_NAME:-tjudge}
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tjudge-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    profiles:
+      - backup
 
   certbot:
     image: certbot/certbot

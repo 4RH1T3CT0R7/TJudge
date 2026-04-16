@@ -20,6 +20,10 @@ export function useWebSocket({
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  // P2.12: online/offline awareness для UI + быстрый reconnect при возврате сети.
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
@@ -150,6 +154,44 @@ export function useWebSocket({
     connect();
   }, [connect, disconnect]);
 
+  // P2.12: слушаем online/offline события браузера.
+  // При offline — закрываем WS и выставляем флаг, при online — быстрый reconnect
+  // без exponential-backoff (не ждём 16s, пользователь уже вернул сеть).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      if (wsRef.current) {
+        // UR bug_001: WebSocket.close() требует code=1000 ИЛИ 3000-4999 (WHATWG spec).
+        // 1001 ("going away") — это status code от сервера, не валидный аргумент
+        // клиентского close(); передача 1001 бросает InvalidAccessError.
+        // Используем 1000 (normal closure) как в disconnect() ниже.
+        try {
+          wsRef.current.close(1000);
+        } catch (err) {
+          // Defensive: даже если какой-то агент нарушит spec — не ломаем UI.
+          console.warn('ws.close on offline failed', err);
+        }
+      }
+    };
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (enabled && tournamentIdRef.current) {
+        reconnectAttempts.current = 0;
+        // Небольшая задержка, чтобы не биться в ещё не готовый network stack.
+        setTimeout(() => connectRef.current(), 250);
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [enabled]);
+
   // Connect when tournamentId changes (with debounce)
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -189,5 +231,5 @@ export function useWebSocket({
   }, [tournamentId, enabled, connect, disconnect]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  return { isConnected, disconnect, reconnect };
+  return { isConnected, isOnline, disconnect, reconnect };
 }

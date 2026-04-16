@@ -18,8 +18,64 @@ import type {
   SystemMetrics,
 } from '../types';
 import { useToastStore } from '../store/toastStore';
+import {
+  validateAuthResponse,
+  validateUser,
+  validateTournament,
+  validateTournamentList,
+  validateGame,
+  SchemaError,
+} from './schema';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+// P1.10: retry/backoff parameters для transient-ошибок (5xx, network).
+const MAX_RETRY_ATTEMPTS = 3;
+const BASE_RETRY_DELAY_MS = 300;
+
+// Маппинг HTTP-статусов в user-friendly русские сообщения.
+// Используется в response interceptor для toast-уведомлений.
+function humanErrorMessage(
+  status: number | undefined,
+  raw: string | null | undefined
+): string {
+  if (raw && typeof raw === 'string' && raw.length > 0) {
+    return raw;
+  }
+  switch (status) {
+    case 400:
+      return 'Некорректный запрос. Проверьте введённые данные.';
+    case 403:
+      return 'Доступ запрещён — недостаточно прав.';
+    case 404:
+      return 'Запрашиваемый ресурс не найден.';
+    case 409:
+      return 'Конфликт — данные изменены в другом месте.';
+    case 413:
+      return 'Файл слишком большой.';
+    case 422:
+      return 'Некорректные данные.';
+    case 429:
+      return 'Слишком много запросов, попробуйте позже.';
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return 'Ошибка сервера. Попробуйте повторить через несколько секунд.';
+    default:
+      if (!status) return 'Сеть недоступна. Проверьте соединение.';
+      return `Произошла ошибка (код ${status}).`;
+  }
+}
+
+// isRetryableError возвращает true для transient-ошибок, где retry имеет смысл.
+function isRetryableError(error: AxiosError): boolean {
+  // Network / timeout без response — retry полезен.
+  if (!error.response) return true;
+  const status = error.response.status;
+  // 5xx и 429 — сервер перегружен/временно недоступен.
+  return status >= 500 || status === 429;
+}
 
 class ApiClient {
   private client: AxiosInstance;
@@ -78,7 +134,10 @@ class ApiClient {
         // - /auth/login: user is authenticating, no token to refresh
         // - /auth/register: new user registration, no token exists
         // Also skip if request was already retried or no config exists
-        const requestWithRetry = originalRequest as unknown as { _retry?: boolean };
+        const requestWithRetry = originalRequest as unknown as {
+          _retry?: boolean;
+          _retryCount?: number;
+        };
         const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
         if (
           error.response?.status === 401 &&
@@ -104,15 +163,35 @@ class ApiClient {
           }
         }
 
+        // P1.10: exponential backoff retry для transient-ошибок (5xx, 429, network).
+        // Идемпотентность: повторяем только GET/HEAD/OPTIONS, иначе можно создать дубль.
+        const method = originalRequest?.method?.toUpperCase() || 'GET';
+        const safeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+        if (
+          originalRequest &&
+          safeMethod &&
+          isRetryableError(error) &&
+          !isAuthEndpoint
+        ) {
+          const attempt = (requestWithRetry._retryCount || 0) + 1;
+          if (attempt <= MAX_RETRY_ATTEMPTS) {
+            requestWithRetry._retryCount = attempt;
+            const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            return this.client.request(originalRequest);
+          }
+        }
+
         // Show global error toast for non-401 errors
         // (401 errors are handled by the token refresh logic above)
         if (error.response?.status !== 401) {
-          const responseData = error.response?.data as Record<string, unknown> | undefined;
-          const message =
+          const responseData = error.response?.data as
+            | Record<string, unknown>
+            | undefined;
+          const rawMessage =
             (typeof responseData?.error === 'string' ? responseData.error : null) ||
-            (typeof responseData?.message === 'string' ? responseData.message : null) ||
-            error.message ||
-            'An unexpected error occurred';
+            (typeof responseData?.message === 'string' ? responseData.message : null);
+          const message = humanErrorMessage(error.response?.status, rawMessage);
           useToastStore.getState().addToast(message, 'error');
         }
 
@@ -173,9 +252,26 @@ class ApiClient {
       username,
       password,
     });
+    // P2.13: runtime-валидация — ранний сигнал при несовпадении схемы.
+    this.validateOrWarn(() => validateAuthResponse(data), 'POST /auth/login');
     this.setAccessToken(data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
     return data;
+  }
+
+  /**
+   * validateOrWarn запускает schema-валидатор и логирует SchemaError как warning.
+   * Не кидает наружу, чтобы не ломать UX — большинство мелких несоответствий
+   * проявят себя в UI-ошибках ("undefined field"), но лог сразу покажет корень.
+   */
+  private validateOrWarn(fn: () => void, ctx: string) {
+    try {
+      fn();
+    } catch (e) {
+      if (e instanceof SchemaError) {
+        console.warn(`[schema] ${ctx}: ${e.message}`);
+      }
+    }
   }
 
   async refreshToken(): Promise<void> {
@@ -201,6 +297,7 @@ class ApiClient {
 
   async getMe(): Promise<User> {
     const { data } = await this.client.get<User>('/auth/me');
+    this.validateOrWarn(() => validateUser(data), 'GET /auth/me');
     return data;
   }
 
@@ -213,11 +310,13 @@ class ApiClient {
   async getTournaments(status?: string): Promise<Tournament[]> {
     const params = status ? { status } : {};
     const { data } = await this.client.get<Tournament[]>('/tournaments', { params });
+    this.validateOrWarn(() => validateTournamentList(data), 'GET /tournaments');
     return data;
   }
 
   async getTournament(id: string): Promise<Tournament> {
     const { data } = await this.client.get<Tournament>(`/tournaments/${id}`);
+    this.validateOrWarn(() => validateTournament(data), 'GET /tournaments/{id}');
     return data;
   }
 
@@ -419,6 +518,7 @@ class ApiClient {
 
   async getGame(id: string): Promise<Game> {
     const { data } = await this.client.get<Game>(`/games/${id}`);
+    this.validateOrWarn(() => validateGame(data), 'GET /games/{id}');
     return data;
   }
 

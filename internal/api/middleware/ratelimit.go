@@ -23,7 +23,8 @@ type RateLimiter interface {
 }
 
 // fallbackLimiter обеспечивает in-memory rate limiting при недоступности Redis.
-// Использует token bucket per-IP с более мягкими порогами (2x от основного лимита).
+// Использует token bucket per-IP. Порог строже основного (см. P1.5):
+// когда Redis падает, злоумышленник не должен получать более мягкий лимит.
 type fallbackLimiter struct {
 	mu       sync.Mutex
 	limiters map[string]*fallbackEntry
@@ -36,9 +37,19 @@ type fallbackEntry struct {
 	lastSeen time.Time
 }
 
+// fallbackLimitMultiplier определяет насколько строже fallback-лимит
+// относительно основного. 0.5 = вдвое строже. Было 2.0 — P1.5 исправляет
+// эту ошибку: fallback не должен расширять бюджет при падении Redis,
+// иначе DDoS на Redis превращается в способ обойти основной лимит.
+const fallbackLimitMultiplier = 0.5
+
 func newFallbackLimiter(limit int, window time.Duration) *fallbackLimiter {
-	// Fallback использует 2x лимит — более мягкий порог для легитимного трафика
-	fallbackLimit := limit * 2
+	// P1.5: используем коэффициент 0.5 (строже основного) вместо 2.0.
+	// Минимум burst = 1, чтобы limit=1 не превратился в 0.
+	fallbackLimit := int(float64(limit) * fallbackLimitMultiplier)
+	if fallbackLimit < 1 {
+		fallbackLimit = 1
+	}
 	r := rate.Limit(float64(fallbackLimit) / window.Seconds())
 
 	return &fallbackLimiter{

@@ -1,0 +1,17 @@
+{{/* P2.10: шаблоны уведомлений для Slack/Email. */}}
+
+{{ define "slack.default.title" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+{{ end }}
+
+{{ define "slack.default.text" }}
+{{- range .Alerts -}}
+*Severity:* {{ .Labels.severity }}
+*Service:* {{ .Labels.service | default "unknown" }}
+*Summary:* {{ .Annotations.summary }}
+{{ if .Annotations.description }}*Details:* {{ .Annotations.description }}{{ end }}
+*Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+{{ if ne .Status "firing" }}*Resolved:* {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}{{ end }}
+---
+{{ end -}}
+{{ end }}

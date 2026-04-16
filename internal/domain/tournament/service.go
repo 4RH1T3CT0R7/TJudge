@@ -63,6 +63,7 @@ type TournamentRepository interface {
 type MatchRepository interface {
 	Create(ctx context.Context, match *domain.Match) error
 	CreateBatch(ctx context.Context, matches []*domain.Match) error
+	DeleteBatch(ctx context.Context, ids []uuid.UUID) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error)

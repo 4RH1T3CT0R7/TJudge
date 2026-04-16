@@ -139,8 +139,11 @@ export function Profile() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
                 placeholder="user@example.com"
+                required
+                aria-required="true"
+                aria-describedby="email-help"
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p id="email-help" className="mt-1 text-sm text-gray-500">
                 Email используется для уведомлений и восстановления доступа
               </p>
             </div>

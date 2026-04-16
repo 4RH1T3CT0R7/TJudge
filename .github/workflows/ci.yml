@@ -32,6 +32,44 @@ jobs:
         run: npm run build
         working-directory: web
 
+      # P2.1: bundlesize check. Фейлим pipeline, если main-bundle вырос > 1 MB gzipped,
+      # или любой chunk > 1.5 MB gzipped. Пороги консервативные; уточнить после baseline.
+      # UR bug_022: fail-fast если build не произвёл dist/assets (иначе safety-net
+      # беззвучно проходит при сломанном build/rename outDir).
+      - name: Frontend bundle size check
+        run: |
+          if [ ! -d ../internal/web/dist/assets ]; then
+            echo "::error::Frontend build output not found at ../internal/web/dist/assets"
+            exit 1
+          fi
+          found=$(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \) | wc -l)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No bundle assets found (expected .js/.css in dist/assets)"
+            exit 1
+          fi
+          total_gz=0
+          oversized=0
+          while IFS= read -r f; do
+            size=$(gzip -c "$f" | wc -c)
+            total_gz=$((total_gz + size))
+            kb=$((size / 1024))
+            echo "  ${f#../internal/web/dist/}  ${kb}KB (gzipped)"
+            if [ "$size" -gt 1572864 ]; then
+              echo "::error file=${f}::Chunk $(basename "$f") = ${kb}KB gzipped > 1.5MB budget"
+              oversized=$((oversized + 1))
+            fi
+          done < <(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \))
+          total_mb=$((total_gz / 1024 / 1024))
+          echo "Total bundle (gzipped): ${total_mb}MB across ${found} files"
+          if [ "$oversized" -gt 0 ]; then
+            exit 1
+          fi
+          if [ "$total_gz" -gt 5242880 ]; then
+            echo "::error::Total bundle ${total_mb}MB > 5MB hard limit"
+            exit 1
+          fi
+        working-directory: web
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -113,6 +151,11 @@ jobs:
           REDIS_PORT: 6379
         run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
 
+      # P2.21 roadmap: текущий минимальный threshold — 45%. Целевой — 70% к Q3.
+      # Поднимать threshold нужно одновременно с добавлением тестов на новые
+      # packages (audit, password-reset, idempotency, mailer, cache_control).
+      # Чтобы не ломать CI на старых PR, делаем step-by-step ratchet:
+      # 45 → 50 → 55 → 60 → 65 → 70.
       - name: Check coverage threshold
         run: |
           grep -v '/tests/contract/mocks/' coverage.out > coverage-filtered.out || cp coverage.out coverage-filtered.out
@@ -283,11 +326,11 @@ jobs:
         run: npm run build
         working-directory: web
 
+      # P1.9: gosec теперь блокирует pipeline. -no-fail убран.
       - name: Run gosec
         uses: securego/gosec@v2.22.0
         with:
-          args: '-no-fail -fmt sarif -out results.sarif ./...'
-        continue-on-error: true
+          args: '-severity medium -confidence medium -fmt sarif -out results.sarif ./...'
 
       - name: Upload SARIF file
         # Requires Code Scanning to be enabled: Settings → Code security → Code scanning
@@ -298,11 +341,27 @@ jobs:
           category: gosec
         continue-on-error: true
 
+      # P1.9: govulncheck блокирующий — известные CVE ломают сборку.
       - name: Run govulncheck
-        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
+
+      # P1.9: npm audit для frontend-зависимостей (блокирует high+).
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        working-directory: web
+
+      # P1.9: Trivy filesystem scan на high/critical CVE.
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'table'
 
   contract:
     name: Contract Tests

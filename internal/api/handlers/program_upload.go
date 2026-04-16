@@ -9,10 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/domain/codescan"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -60,6 +62,82 @@ func detectLanguage(filename string) string {
 	default:
 		return "unknown"
 	}
+}
+
+// canonicalExtension возвращает безопасное (hardcoded) расширение для языка.
+// Используется для генерации имён файлов на диске вместо небезопасного
+// filepath.Ext(form.filename), которое может содержать shell-метасимволы.
+func canonicalExtension(language string) string {
+	switch language {
+	case LangPython:
+		return ".py"
+	case LangCpp:
+		return ".cpp"
+	case LangC:
+		return ".c"
+	case LangGo:
+		return ".go"
+	case LangRust:
+		return ".rs"
+	case LangJava:
+		return ".java"
+	case LangJavaScript:
+		return ".js"
+	case LangRuby:
+		return ".rb"
+	case LangPHP:
+		return ".php"
+	case LangLua:
+		return ".lua"
+	default:
+		return ""
+	}
+}
+
+// javaClassNameRe допускает только валидные Java identifier-ы.
+// Строгое allowlist-регулярное выражение используется в compileIfNeeded для
+// предотвращения shell-injection при сборке wrapper-скрипта.
+var javaClassNameRe = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
+
+// javaClassDeclRe выделяет имя первого top-level класса Java из исходника.
+// Используется для UR bug_008: filename на диске (<hex>_<hex>_<hex>.java) не
+// совпадает с declared class, поэтому javac отвергает `public class Main`,
+// а wrapper пытается запустить несуществующий класс с hex-именем. Теперь
+// Java-файл копируется в <ClassName>.java перед javac.
+//
+// Поддерживает `public class X`, `class X`, с модификаторами `final/abstract`.
+// Не обрабатывает вложенные классы и edge-cases (multi-class в одном файле —
+// тогда берётся первый).
+var javaClassDeclRe = regexp.MustCompile(`(?m)^\s*(?:public\s+|final\s+|abstract\s+|static\s+)*class\s+([A-Za-z_$][A-Za-z0-9_$]*)`)
+
+// extractJavaClassName возвращает имя первого top-level класса в Java-source,
+// либо пустую строку если не найдено. Используется до вызова javac для
+// переименования файла.
+func extractJavaClassName(source string) string {
+	// Игнорируем содержимое внутри /* */ и // комментариев.
+	// Простой stripper: не обрабатывает nested-строковые литералы с "//" —
+	// приемлемо для идентификации class declaration.
+	cleaned := stripJavaComments(source)
+	m := javaClassDeclRe.FindStringSubmatch(cleaned)
+	if len(m) < 2 {
+		return ""
+	}
+	return m[1]
+}
+
+func stripJavaComments(s string) string {
+	// Удаляем /* ... */ блоки
+	blockRe := regexp.MustCompile(`/\*[\s\S]*?\*/`)
+	s = blockRe.ReplaceAllString(s, "")
+	// Удаляем // до конца строки
+	lineRe := regexp.MustCompile(`//[^\n]*`)
+	return lineRe.ReplaceAllString(s, "")
+}
+
+// shellSingleQuote квотирует строку для безопасного встраивания в /bin/sh.
+// Заменяет каждую одинарную кавычку на '\” и оборачивает результат в '…'.
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // getShebang возвращает shebang для интерпретируемых языков
@@ -359,6 +437,31 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (execPath string, syntaxError *string) {
 	execPath = filePath
 
+	// P2.18: defense-in-depth — сканируем исходник на подозрительные API-вызовы.
+	// По-умолчанию только warn-лог; при CODESCAN_STRICT=true отказываем upload'у.
+	if scanner := codescan.ScannerFor(language); scanner != nil {
+		if src, err := os.ReadFile(filePath); err == nil {
+			findings := scanner.Scan(string(src))
+			if len(findings) > 0 {
+				for _, f := range findings {
+					h.log.Warn("Code scan finding",
+						zap.String("file", filePath),
+						zap.String("language", language),
+						zap.Int("line", f.Line),
+						zap.String("level", string(f.Level)),
+						zap.String("pattern", f.Pattern),
+						zap.String("message", f.Message),
+					)
+				}
+				if os.Getenv("CODESCAN_STRICT") == "true" && codescan.HasForbidden(findings) {
+					msg := "Обнаружены запрещённые API-вызовы; загрузка отклонена (CODESCAN_STRICT)"
+					syntaxError = &msg
+					return execPath, syntaxError
+				}
+			}
+		}
+	}
+
 	// Проверяем синтаксис для всех поддерживаемых языков
 	if errMsg := validateSyntax(language, filePath); errMsg != "" {
 		syntaxError = &errMsg
@@ -447,10 +550,20 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 
 	// Определяем язык по расширению
 	language := detectLanguage(form.filename)
+	if language == "unknown" {
+		writeError(w, errors.ErrInvalidInput.WithMessage("unsupported file extension"))
+		return
+	}
 
-	// Создаём уникальный путь для файла (version будет назначена атомарно при INSERT)
+	// Создаём уникальный путь для файла. Используем канонический (hardcoded)
+	// extension из language, а не raw из form.filename — это предотвращает
+	// внедрение shell-метасимволов в имя файла (e.g. "Test.java;rm -rf /").
 	programID := uuid.New()
-	ext := filepath.Ext(form.filename)
+	ext := canonicalExtension(language)
+	if ext == "" {
+		writeError(w, errors.ErrInvalidInput.WithMessage("unsupported file extension"))
+		return
+	}
 	fileName := fmt.Sprintf("%s_%s_%s%s", form.teamID.String()[:8], form.gameID.String()[:8], programID.String()[:8], ext)
 	filePath := filepath.Join(h.uploadDir, fileName)
 
@@ -597,8 +710,32 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 			log.Warn("javac not found, skipping compilation")
 			return "", ""
 		}
+		// UR bug_008: имя файла на диске — <hex>_<hex>_<hex>.java (из UUID-ов),
+		// но javac требует, чтобы `public class Foo` лежал в `Foo.java`,
+		// а java-runtime ищет класс по declared name. Поэтому:
+		// 1) Парсим declared class name из source.
+		// 2) Переименовываем файл в <ClassName>.java в том же dir.
+		// 3) Запускаем javac, wrapper использует declared name.
+		srcBytes, readErr := os.ReadFile(sourcePath)
+		if readErr != nil {
+			return "", fmt.Sprintf("Не удалось прочитать Java-исходник: %s", readErr.Error())
+		}
+		className := extractJavaClassName(string(srcBytes))
+		if className == "" {
+			return "", "В Java-файле не найден объявление class X"
+		}
+		if !javaClassNameRe.MatchString(className) {
+			return "", fmt.Sprintf("Недопустимое имя Java-класса: %q", className)
+		}
+		classDir := filepath.Dir(sourcePath)
+		properPath := filepath.Join(classDir, className+".java")
+		if properPath != sourcePath {
+			if err := os.Rename(sourcePath, properPath); err != nil {
+				return "", fmt.Sprintf("Не удалось переименовать Java-файл: %s", err.Error())
+			}
+		}
 		// Java: компилируем .java → .class, затем создаём wrapper-скрипт
-		javacCmd := exec.Command("javac", sourcePath)
+		javacCmd := exec.Command("javac", properPath)
 		var javacStderr bytes.Buffer
 		javacCmd.Stderr = &javacStderr
 		if err := javacCmd.Run(); err != nil {
@@ -608,14 +745,15 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 			}
 			return "", fmt.Sprintf("Ошибка компиляции Java: %s", errMsg)
 		}
-		// Создаём wrapper-скрипт для запуска java -cp <dir> <ClassName>
-		className := strings.TrimSuffix(filepath.Base(sourcePath), ".java")
-		classDir := filepath.Dir(sourcePath)
-		wrapper := fmt.Sprintf("#!/bin/sh\njava -cp %s %s \"$@\"\n", classDir, className)
-		if err := os.WriteFile(outputPath, []byte(wrapper), 0755); err != nil {
+		// Создаём wrapper-скрипт для запуска java -cp <dir> <ClassName>.
+		// SECURITY: className уже прошёл regex-валидацию выше; classDir
+		// квотируется через shellSingleQuote.
+		wrapperPath := strings.TrimSuffix(properPath, ".java")
+		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp %s %s \"$@\"\n", shellSingleQuote(classDir), className)
+		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0755); err != nil {
 			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())
 		}
-		return outputPath, ""
+		return wrapperPath, ""
 	default:
 		return "", ""
 	}

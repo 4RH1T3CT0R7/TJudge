@@ -29,13 +29,23 @@ type SecurityConfig struct {
 	PermissionsPolicy string
 }
 
-// DefaultSecurityConfig возвращает конфигурацию по умолчанию
+// DefaultSecurityConfig возвращает конфигурацию по умолчанию.
+//
+// CSP ужесточён (P0.3 этап 1):
+//   - object-src 'none'              — блокирует Flash/Java-аплеты (XSS vector)
+//   - base-uri 'self'                — защита от base-tag injection
+//   - form-action 'self'             — отправка форм только на свой origin
+//   - frame-ancestors 'none'         — clickjacking защита
+//
+// 'unsafe-inline' временно остаётся в script-src до выноса inline-скрипта
+// из web/index.html (P0.3 этап 2 — перейти на nonce или hash-based CSP).
+// 'unsafe-inline' в style-src нужен для Tailwind style-injection; риск ниже.
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
 		XSSProtection:           true,
 		ContentTypeNosniff:      true,
 		XFrameOptions:           "DENY",
-		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
 		ReferrerPolicy:          "strict-origin-when-cross-origin",
 		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
 		PermissionsPolicy:       "camera=(), microphone=(), geolocation=()",

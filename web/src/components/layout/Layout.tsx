@@ -144,6 +144,10 @@ export function Layout() {
                   key={logo.src}
                   src={logo.src}
                   alt={logo.alt}
+                  loading="lazy"
+                  decoding="async"
+                  width={40}
+                  height={28}
                   className={`${logo.h} w-auto opacity-50 hover:opacity-90 transition-opacity duration-300`}
                 />
               ))}

@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +11,64 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestClient_CloseSendIdempotent гарантирует, что повторные close()
+// безопасны (P0.4: ранее двойной close вызывал panic).
+func TestClient_CloseSendIdempotent(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	hub := NewHub(log)
+	client := NewClient(hub, nil, uuid.New(), uuid.New(), log)
+
+	assert.False(t, client.IsClosed())
+
+	// Первый close закрывает канал
+	client.CloseSend()
+	assert.True(t, client.IsClosed())
+	// Канал должен быть закрыт — чтение возвращает ok=false
+	_, ok := <-client.send
+	assert.False(t, ok)
+
+	// Повторные close() должны быть no-op без panic
+	client.CloseSend()
+	client.CloseSend()
+	assert.True(t, client.IsClosed())
+}
+
+// TestClient_ReadLimiterInitialized защищает от регрессии: при NewClient
+// readLimiter должен быть создан и разрешать первые burst-сообщений.
+func TestClient_ReadLimiterInitialized(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	hub := NewHub(log)
+	client := NewClient(hub, nil, uuid.New(), uuid.New(), log)
+
+	// burst allowed — все первые clientMessageBurst Allow() должны пройти.
+	for i := 0; i < clientMessageBurst; i++ {
+		assert.True(t, client.readLimiter.Allow(), "burst msg %d must be allowed", i)
+	}
+	// Следующий Allow после burst должен быть false (rate limit).
+	assert.False(t, client.readLimiter.Allow(), "after burst, next message must be limited")
+}
+
+// TestClient_CloseSendConcurrent — регрессия на race condition.
+// Много горутин одновременно вызывают CloseSend(); только одна должна
+// реально закрыть канал, остальные — no-op. Запускается с -race.
+func TestClient_CloseSendConcurrent(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	hub := NewHub(log)
+	client := NewClient(hub, nil, uuid.New(), uuid.New(), log)
+
+	const n = 100
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			client.CloseSend()
+		}()
+	}
+	wg.Wait()
+	assert.True(t, client.IsClosed())
+}
 
 func TestNewClient_Fields(t *testing.T) {
 	log, _ := logger.New("error", "json")

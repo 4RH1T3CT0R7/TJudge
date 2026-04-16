@@ -533,3 +533,57 @@ func TestSanitizeStderr_MultipleANSICodes(t *testing.T) {
 	expected := "Bold Red Green"
 	assert.Equal(t, expected, sanitizeStderr(input))
 }
+
+// --- limitWriter (P1.4) ---
+
+// TestLimitWriter_UnderLimit_WritesFully проверяет, что запись меньше лимита
+// проходит без усечения и возвращает правильный счётчик.
+func TestLimitWriter_UnderLimit_WritesFully(t *testing.T) {
+	var buf strings.Builder
+	lw := &limitWriter{w: &buf, n: 100}
+	n, err := lw.Write([]byte("hello world"))
+	assert.NoError(t, err)
+	assert.Equal(t, 11, n)
+	assert.Equal(t, "hello world", buf.String())
+	assert.Equal(t, 89, lw.n)
+}
+
+// TestLimitWriter_OverLimit_TruncatesButReportsFullWrite — важное для stdcopy
+// поведение: даже когда лимит достигнут, Write должен вернуть len(p),
+// иначе stdcopy интерпретирует это как short-write error и прервёт чтение
+// второго потока.
+func TestLimitWriter_OverLimit_TruncatesButReportsFullWrite(t *testing.T) {
+	var buf strings.Builder
+	lw := &limitWriter{w: &buf, n: 5}
+	n, err := lw.Write([]byte("hello world"))
+	assert.NoError(t, err)
+	assert.Equal(t, 11, n, "must report full length for stdcopy compatibility")
+	assert.Equal(t, "hello", buf.String())
+	assert.Equal(t, 0, lw.n)
+}
+
+// TestLimitWriter_AfterLimit_DropsSilently — после исчерпания бюджета
+// последующие записи тихо отбрасываются, буфер не растёт.
+func TestLimitWriter_AfterLimit_DropsSilently(t *testing.T) {
+	var buf strings.Builder
+	lw := &limitWriter{w: &buf, n: 3}
+	_, _ = lw.Write([]byte("abc"))
+	n, err := lw.Write([]byte("def"))
+	assert.NoError(t, err)
+	assert.Equal(t, 3, n)
+	assert.Equal(t, "abc", buf.String())
+}
+
+// TestLimitWriter_IndependentBudgets — суть фикса P1.4: два writer'а
+// имеют независимые лимиты; большой stdout не ворует бюджет stderr.
+func TestLimitWriter_IndependentBudgets(t *testing.T) {
+	var outBuf, errBuf strings.Builder
+	out := &limitWriter{w: &outBuf, n: 5}
+	errW := &limitWriter{w: &errBuf, n: 5}
+
+	_, _ = out.Write([]byte("very long stdout spam"))
+	_, _ = errW.Write([]byte("ERR!"))
+
+	assert.Equal(t, "very ", outBuf.String())
+	assert.Equal(t, "ERR!", errBuf.String(), "stderr не должен пострадать от большого stdout")
+}

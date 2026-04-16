@@ -22,7 +22,10 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* P2.14: JSON-модули для i18n словарей. */
+    "resolveJsonModule": true
   },
   "include": ["src"]
 }

@@ -95,9 +95,23 @@ func (p *Pool) Start() {
 	)
 }
 
-// Stop останавливает пул воркеров
+// Stop останавливает пул воркеров.
+// P1.7: graceful drain с observability — фиксируем число in-flight матчей
+// на момент Stop и длительность drain. При превышении grace period
+// отменяем оставшиеся in-flight матчи через shutdownCtx.
 func (p *Pool) Stop() {
-	p.log.Info("Stopping worker pool...")
+	inFlight := int(p.activeWorkers.Load())
+	p.log.Info("Stopping worker pool (draining)",
+		zap.Int("in_flight_matches", inFlight),
+	)
+	p.metrics.SetWorkerInFlightOnStop(inFlight)
+	p.metrics.SetWorkerDraining(true)
+	defer p.metrics.SetWorkerDraining(false)
+
+	drainStart := time.Now()
+	defer func() {
+		p.metrics.RecordWorkerDrainDuration(time.Since(drainStart))
+	}()
 
 	// Cancel the dequeue loop so workers stop picking up new matches.
 	p.cancel()
@@ -120,8 +134,10 @@ func (p *Pool) Stop() {
 	case <-done:
 		// All workers finished within grace period
 	case <-time.After(grace):
+		remaining := int(p.activeWorkers.Load())
 		p.log.Warn("Grace period expired, cancelling in-flight matches",
 			zap.Duration("grace_period", grace),
+			zap.Int("remaining_in_flight", remaining),
 		)
 		p.shutdownCancel()
 		<-done // Wait for workers to react to cancellation
@@ -133,6 +149,7 @@ func (p *Pool) Stop() {
 	p.log.Info("Worker pool stopped",
 		zap.Int64("matches_processed", p.matchesProcessed.Load()),
 		zap.Int64("matches_failed", p.matchesFailed.Load()),
+		zap.Duration("drain_duration", time.Since(drainStart)),
 	)
 }
 

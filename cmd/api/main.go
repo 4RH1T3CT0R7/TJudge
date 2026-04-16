@@ -21,7 +21,9 @@ import (
 	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/mailer"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
+	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/metrics"
@@ -78,6 +80,17 @@ func main() {
 		zap.Int("port", cfg.Server.Port),
 		zap.String("env", "production"),
 	)
+
+	// P2.6: OpenTelemetry tracing (опционально, если задан OTEL_EXPORTER_OTLP_ENDPOINT).
+	otelShutdown, err := observability.InitTracerProvider(context.Background(), "tjudge-api", "dev", log)
+	if err != nil {
+		log.Warn("Failed to init OTel tracing (continuing without)", zap.Error(err))
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = otelShutdown(shutdownCtx)
+	}()
 
 	// Инициализируем метрики
 	m := metrics.New()
@@ -182,6 +195,27 @@ func main() {
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
 
+	// P1.11: password reset service.
+	passwordResetRepo := db.NewPasswordResetRepository(database)
+	var pwMailer auth.Mailer
+	if cfg.SMTP.Host != "" && cfg.SMTP.From != "" {
+		pwMailer = mailer.NewSMTPMailer(mailer.SMTPConfig{
+			Host:     cfg.SMTP.Host,
+			Port:     cfg.SMTP.Port,
+			User:     cfg.SMTP.User,
+			Password: cfg.SMTP.Password,
+			From:     cfg.SMTP.From,
+			UseTLS:   cfg.SMTP.UseTLS,
+		}, log)
+		log.Info("Password reset: SMTP mailer configured", zap.String("smtp_host", cfg.SMTP.Host))
+	} else {
+		pwMailer = mailer.NewLogMailer(log)
+		log.Warn("Password reset: no SMTP configured, using LogMailer (reset links in logs)")
+	}
+	passwordResetService := auth.NewPasswordResetService(
+		userRepo, passwordResetRepo, pwMailer, cfg.Server.BaseURL, authService, log,
+	)
+
 	tournamentService := tournament.NewService(
 		tournamentRepo,
 		matchRepo,
@@ -248,6 +282,17 @@ func main() {
 
 	// Создаём API сервер
 	adminChecker := middleware.NewVerifiedAdminChecker(userRepo, 5*time.Minute)
+
+	// P1.12: audit log (async). Буфер 2048 — при нагрузке 10 admin-запросов/сек
+	// даёт ~200 сек запаса перед drop'ом.
+	auditRepo := db.NewAuditLogRepository(database)
+	auditLogger := middleware.NewAuditLogger(auditRepo, 2048, log)
+	auditCtx, cancelAudit := context.WithCancel(context.Background())
+	defer cancelAudit()
+	go auditLogger.Run(auditCtx)
+	defer auditLogger.Close()
+	auditHandler := handlers.NewAuditHandler(auditRepo, log)
+
 	apiServer := api.NewServer(
 		authHandler,
 		tournamentHandler,
@@ -262,7 +307,10 @@ func main() {
 		cfg.CORS,
 		cfg.RateLimit,
 		log,
-	).WithAdminChecker(adminChecker)
+	).WithAdminChecker(adminChecker).
+		WithPasswordReset(handlers.NewPasswordResetHandler(passwordResetService, log)).
+		WithIdempotency(redisCache).
+		WithAuditLog(auditLogger, auditHandler)
 
 	// Создаём HTTP сервер
 	srv := &http.Server{
@@ -321,6 +369,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("API server forced to shutdown", zap.Error(err))
 	}
+	// UR bug_015: останавливаем background-горутины (rate-limiter cleanup).
+	apiServer.Close()
 
 	// Останавливаем metrics сервер
 	if metricsSrv != nil {

@@ -2,26 +2,40 @@ package websocket
 
 import (
 	"encoding/json"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 const (
 	// Время ожидания записи в WebSocket
 	writeWait = 10 * time.Second
 
-	// Время ожидания pong от клиента
-	pongWait = 60 * time.Second
+	// Время ожидания pong от клиента (P2.8: 60s → 35s для более быстрого
+	// обнаружения зависших соединений).
+	pongWait = 35 * time.Second
 
-	// Интервал отправки ping клиенту
-	pingPeriod = (pongWait * 9) / 10
+	// Интервал отправки ping клиенту (P2.8: 30s — достаточно агрессивно,
+	// чтобы обнаружить disconnect за pongWait после сетевого сбоя).
+	pingPeriod = 30 * time.Second
 
 	// Максимальный размер сообщения от клиента
 	maxMessageSize = 512
+
+	// P1.6: per-client rate limit на входящие сообщения.
+	// 10 msg/sec с burst=20 — достаточно для ping-pong и UI-событий,
+	// блокирует flood из скомпрометированного/злонамеренного клиента.
+	clientMessageRate  = 10
+	clientMessageBurst = 20
+
+	// closePolicyViolation — код close-frame по RFC 6455 §7.4 (1008).
+	closePolicyViolation = 1008
 )
 
 // Client представляет WebSocket клиента
@@ -32,7 +46,33 @@ type Client struct {
 	tournamentID uuid.UUID
 	userID       uuid.UUID
 	log          *logger.Logger
-	closed       bool // tracks whether send channel has been closed
+
+	// closed — атомарный флаг, отражающий закрытие send-канала.
+	// Читается без mutex из sendPong/WritePump чтобы избежать write-on-closed.
+	// Писаться может только через CloseSend() (sync.Once гарантирует идемпотентность).
+	closed    atomic.Bool
+	closeOnce sync.Once
+
+	// readLimiter — per-client token bucket для входящих сообщений (P1.6).
+	// Защищает от message flooding со стороны клиента.
+	readLimiter *rate.Limiter
+}
+
+// IsClosed возвращает true если send-канал клиента уже закрыт.
+// Безопасно для concurrent-чтения.
+func (c *Client) IsClosed() bool {
+	return c.closed.Load()
+}
+
+// CloseSend идемпотентно закрывает send-канал клиента. Безопасно вызывать
+// из любого goroutine и многократно — sync.Once гарантирует ровно одно close().
+// Это закрывает race, при котором прежний bool-флаг мог быть гонкой между
+// unregisterClient/broadcastMessage/shutdown → panic "close of closed channel".
+func (c *Client) CloseSend() {
+	c.closeOnce.Do(func() {
+		c.closed.Store(true)
+		close(c.send)
+	})
 }
 
 // NewClient создаёт нового WebSocket клиента
@@ -44,6 +84,8 @@ func NewClient(hub *Hub, conn *websocket.Conn, tournamentID, userID uuid.UUID, l
 		tournamentID: tournamentID,
 		userID:       userID,
 		log:          log,
+		// P1.6: token bucket для rate-limit входящих сообщений.
+		readLimiter: rate.NewLimiter(rate.Limit(clientMessageRate), clientMessageBurst),
 	}
 }
 
@@ -74,6 +116,20 @@ func (c *Client) ReadPump() {
 					zap.String("user_id", c.userID.String()),
 				)
 			}
+			break
+		}
+
+		// P1.6: rate-limit per-client. При превышении — close 1008 (policy violation).
+		if !c.readLimiter.Allow() {
+			c.log.Info("WebSocket client exceeded message rate limit, disconnecting",
+				zap.String("tournament_id", c.tournamentID.String()),
+				zap.String("user_id", c.userID.String()),
+			)
+			_ = c.conn.WriteControl(
+				websocket.CloseMessage,
+				websocket.FormatCloseMessage(closePolicyViolation, "rate limit exceeded"),
+				time.Now().Add(writeWait),
+			)
 			break
 		}
 
@@ -165,7 +221,14 @@ func (c *Client) sendPong() {
 		return
 	}
 
-	// Recover from send on closed channel — hub may close c.send concurrently
+	// Fast-path: skip send если канал уже закрыт другой горутиной.
+	// Атомарный флаг избавляет от recover()-шаблона.
+	if c.IsClosed() {
+		return
+	}
+
+	// Defensive recover на случай гонки между IsClosed() и select.
+	// sync.Once делает такой race крайне маловероятным, но panic-safe сохраняем.
 	defer func() {
 		if r := recover(); r != nil {
 			c.log.Info("sendPong: channel closed, client disconnecting")

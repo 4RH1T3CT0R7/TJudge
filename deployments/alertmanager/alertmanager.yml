@@ -1,71 +1,78 @@
+# P2.10: Alertmanager с опциональным Slack/Email.
+# Значения configurable через env-substitution в Alertmanager v0.27+ не поддерживается
+# напрямую, поэтому реальные секреты подставляются через envsubst в CI/deploy
+# скрипте либо через docker secrets (mount template + entrypoint).
+#
+# В текущей конфигурации webhook в internal API остаётся по умолчанию,
+# Slack/Email — опциональные routes (закомментированы; раскомментируйте и замените
+# URL/credentials перед выкатом в прод).
+
 global:
-  # Интервал разрешения алертов
   resolve_timeout: 5m
 
-  # SMTP настройки (настроить для production)
+  # SMTP (раскомментируйте и заполните для email-уведомлений):
   # smtp_smarthost: 'smtp.example.com:587'
-  # smtp_from: 'alertmanager@tjudge.local'
-  # smtp_auth_username: 'alertmanager'
-  # smtp_auth_password: 'password'
+  # smtp_from: 'alertmanager@tjudge.example.com'
+  # smtp_auth_username: 'alertmanager@tjudge.example.com'
+  # smtp_auth_password_file: '/etc/alertmanager/smtp_password'
+  # smtp_require_tls: true
 
-  # Slack webhook (настроить для production)
-  # slack_api_url: 'https://hooks.slack.com/services/xxx/yyy/zzz'
+  # Slack (раскомментируйте и заполните webhook URL):
+  # slack_api_url_file: '/etc/alertmanager/slack_url'
 
-# Маршрутизация алертов
 route:
-  # Поле для группировки алертов
   group_by: ['alertname', 'severity', 'service']
-
-  # Время ожидания перед отправкой первого уведомления
   group_wait: 30s
-
-  # Интервал между уведомлениями о новых алертах в группе
   group_interval: 5m
-
-  # Интервал повторной отправки уведомлений
   repeat_interval: 4h
-
-  # Получатель по умолчанию
   receiver: 'default-receiver'
 
-  # Дочерние маршруты
   routes:
-    # Критические алерты
+    # Критические алерты — немедленный page.
     - match:
         severity: critical
       receiver: 'critical-receiver'
       group_wait: 10s
       repeat_interval: 1h
+      continue: true   # Также отправить default-receiver'ам.
 
-    # Алерты о базе данных
     - match:
         service: database
       receiver: 'database-receiver'
 
-    # Алерты о высокой нагрузке
     - match:
         alertname: HighLoad
       receiver: 'ops-receiver'
 
-# Получатели уведомлений
-# ВАЖНО: Настройте URL-адреса webhook'ов для production!
-# По умолчанию используется api:8080 (внутренний адрес в Docker сети)
 receivers:
   - name: 'default-receiver'
-    # Webhook для интеграций (Telegram, Discord и т.д.)
-    # Настройте URL на свой сервис уведомлений
     webhook_configs:
       - url: 'http://api:8080/internal/webhook/alerts'
         send_resolved: true
+    # Slack для прод (раскомментируйте после настройки global.slack_api_url_file):
+    # slack_configs:
+    #   - channel: '#tjudge-alerts'
+    #     send_resolved: true
+    #     title: '{{ template "slack.default.title" . }}'
+    #     text:  '{{ template "slack.default.text" . }}'
 
   - name: 'critical-receiver'
     webhook_configs:
       - url: 'http://api:8080/internal/webhook/critical'
         send_resolved: true
-    # Email для критических алертов (настроить для production)
+    # Email для on-call (раскомментируйте после настройки global.smtp_smarthost):
     # email_configs:
-    #   - to: 'oncall@tjudge.local'
+    #   - to: 'oncall@tjudge.example.com'
     #     send_resolved: true
+    #     headers:
+    #       Subject: '[TJudge CRIT] {{ .CommonAnnotations.summary }}'
+    # Slack для критов (отдельный канал):
+    # slack_configs:
+    #   - channel: '#tjudge-oncall'
+    #     send_resolved: true
+    #     color: 'danger'
+    #     title: '{{ template "slack.default.title" . }}'
+    #     text:  '{{ template "slack.default.text" . }}'
 
   - name: 'database-receiver'
     webhook_configs:
@@ -77,22 +84,14 @@ receivers:
       - url: 'http://api:8080/internal/webhook/ops'
         send_resolved: true
 
-# Правила подавления алертов
 inhibit_rules:
-  # Подавляем warning если есть critical для того же сервиса
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
+  - source_match: { severity: 'critical' }
+    target_match: { severity: 'warning' }
     equal: ['alertname', 'service']
 
-  # Подавляем алерты если кластер недоступен
-  - source_match:
-      alertname: 'ClusterDown'
-    target_match_re:
-      alertname: '.+'
+  - source_match: { alertname: 'ClusterDown' }
+    target_match_re: { alertname: '.+' }
     equal: ['cluster']
 
-# Шаблоны (опционально)
 templates:
   - '/etc/alertmanager/templates/*.tmpl'

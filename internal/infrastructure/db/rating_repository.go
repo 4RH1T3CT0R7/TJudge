@@ -88,7 +88,22 @@ func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID u
 	return history, nil
 }
 
-// UpdateParticipantRating обновляет рейтинг участника турнира (delta-based)
+// UpdateParticipantRating обновляет рейтинг участника турнира (delta-based).
+//
+// Invariant (P1.13): UPDATE вычисляет `rating + $3` В САМОЙ БД, под row-level
+// lock'ом PostgreSQL. Это значит concurrent UPDATE-ы НЕ теряют deltas: БД
+// сериализует их через MVCC и суммирует корректно.
+//
+// Известное ограничение: вычисление delta (в `rating.Service.ProcessMatchResult`)
+// использует rating, прочитанный ДО transaction. Для параллельных матчей
+// одного участника это даёт snapshot-based delta, а не "тотально синхронное"
+// ELO. В массовых RR-турнирах эффект размывается и приемлем. Строгая
+// сериализация потребует advisory lock на (tournament_id, program_id) —
+// отложено до P2 (см. план).
+//
+// Все вызовы этого метода должны идти через ProcessMatchResultAtomic, который
+// обрабатывает обоих участников матча в одной транзакции (гарантирует
+// нулевую сумму delta per match).
 func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
 	query := `
 		UPDATE tournament_participants

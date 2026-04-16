@@ -4,6 +4,7 @@ package db_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -678,4 +679,40 @@ func (s *RatingRepositorySuite) TestResetParticipantsForGame_Empty() {
 	affected, err := s.repo.ResetParticipantsForGame(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(0), affected)
+}
+
+// TestUpdateParticipantRating_ConcurrentDeltas — регрессия на P1.13.
+// Запускает N goroutine, каждая делает +1 к рейтингу через delta-based UPDATE.
+// Правильный результат: rating = baseline + N (никаких потерянных обновлений).
+func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
+	tournament, program := s.setupRatingPrerequisites("crace")
+	baseline := 1500
+	s.addParticipant(tournament.ID, program.ID, baseline)
+
+	ctx := context.Background()
+	const n = 100
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, n)
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			if err := s.repo.UpdateParticipantRating(ctx, tournament.ID, program.ID, 1); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(s.T(), err)
+	}
+
+	final, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
+	require.NoError(s.T(), err)
+	// Корректность: каждый из N concurrent UPDATE добавил +1, итого +N.
+	// Если БД не сериализует correctly — final < baseline+N (lost update).
+	assert.Equal(s.T(), baseline+n, final,
+		"concurrent delta-based UPDATE must not lose updates (MVCC row-lock invariant)")
 }

@@ -95,9 +95,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Выполняем вход
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
-		h.log.LogError("Failed to login", err,
-			zap.String("username", req.Username),
-		)
+		// PII намеренно не логируется — предотвращаем user enumeration.
+		h.log.LogError("Failed to login", err)
 		writeError(w, err)
 		return
 	}

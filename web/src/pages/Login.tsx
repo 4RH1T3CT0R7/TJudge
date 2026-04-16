@@ -182,6 +182,10 @@ export function Login() {
         {/* Header — terminal style */}
         <div className="text-center mb-5">
           <p
+            id="login-error"
+            role={error || validationError ? 'alert' : undefined}
+            aria-live="assertive"
+            aria-atomic="true"
             className={`text-sm mb-1 transition-colors duration-300 ${error ? 'text-red-400' : validationError ? 'text-primary-400' : 'text-gray-500'}`}
             style={monoFont}
           >
@@ -221,6 +225,10 @@ export function Login() {
                 style={{ border: 'none', boxShadow: 'none', ...monoFont }}
                 autoComplete="username"
                 placeholder="username"
+                required
+                aria-required="true"
+                aria-invalid={!!validationError && validationError.includes('имя')}
+                aria-describedby={validationError ? 'login-error' : undefined}
               />
             </div>
           </div>
@@ -264,6 +272,10 @@ export function Login() {
                 className="flex-1 text-gray-100 placeholder:text-gray-600 bg-transparent"
                 style={{ border: 'none', boxShadow: 'none', ...monoFont }}
                 placeholder="********"
+                aria-label="Пароль"
+                aria-required="true"
+                aria-invalid={!!validationError && validationError.includes('пароль')}
+                aria-describedby={validationError ? 'login-error' : undefined}
               />
             </div>
           </div>
@@ -278,6 +290,14 @@ export function Login() {
           </button>
         </form>
 
+        <p className="text-center text-sm text-gray-500 mt-4" style={monoFont}>
+          <a
+            href="/forgot-password"
+            className="underline hover:text-gray-300 transition-colors"
+          >
+            // забыли пароль?
+          </a>
+        </p>
       </div>
     </div>
   );

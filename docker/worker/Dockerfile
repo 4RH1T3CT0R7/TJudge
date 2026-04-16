@@ -30,14 +30,30 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # Final stage
 FROM alpine:3.20
 
+# DOCKER_GID должен совпадать с GID группы docker на ХОСТЕ (часто 999 на Ubuntu,
+# 0 при Docker Desktop на macOS). Передавайте через --build-arg DOCKER_GID=$(getent group docker | cut -d: -f3).
+ARG DOCKER_GID=999
+
 # Install Docker CLI for running tjudge-cli in containers
 RUN apk --no-cache add docker-cli ca-certificates
 
-# Create non-root user and docker group
+# Create non-root user and docker group (aligned with host GID).
+# SECURITY (P0.8): раньше worker запускался от root для доступа к docker.sock;
+# теперь appuser член docker-группы с matching GID. См. docker-compose:
+#   user: "${WORKER_UID:-1000}:${DOCKER_GID:-999}".
+#
+# UR bug_021: DOCKER_GID=0 (macOS Docker Desktop часто использует root group)
+# конфликтует с уже существующей root-группой alpine. Спец-кейс: если GID=0,
+# просто добавляем appuser в существующий root; иначе создаём новую docker-группу.
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser && \
-    (addgroup docker || true) && \
-    adduser appuser docker
+    if [ "${DOCKER_GID}" = "0" ]; then \
+        adduser appuser root; \
+    else \
+        (delgroup docker 2>/dev/null || true) && \
+        addgroup -g ${DOCKER_GID} docker && \
+        adduser appuser docker; \
+    fi
 
 WORKDIR /app
 

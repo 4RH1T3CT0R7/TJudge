@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_rating_history_program_tournament_date;

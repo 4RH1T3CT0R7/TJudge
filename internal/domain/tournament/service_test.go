@@ -140,6 +140,11 @@ func (m *MockMatchRepository) CreateBatch(ctx context.Context, matches []*domain
 	return args.Error(0)
 }
 
+func (m *MockMatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
+	args := m.Called(ctx, ids)
+	return args.Error(0)
+}
+
 func (m *MockMatchRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
 	args := m.Called(ctx, tournamentID, limit, offset)
 	if args.Get(0) == nil {
@@ -2997,6 +3002,8 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 	matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).
 		Return(fmt.Errorf("redis pipeline error"))
+	// P0.5: при ошибке EnqueueBatch должен произойти DeleteBatch для отката.
+	matchRepo.On("DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
 
 	req := &ScheduleNewProgramMatchesRequest{
 		TournamentID: tournamentID,
@@ -3009,6 +3016,54 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to enqueue matches")
 	assert.Contains(t, err.Error(), "redis pipeline error")
+	// Проверяем что rollback был вызван
+	matchRepo.AssertCalled(t, "DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID"))
+}
+
+// -----------------------------------------------------------------------------
+// TestService_RunAllMatches_EnqueueError_RollbackCreated (P0.5)
+// -----------------------------------------------------------------------------
+
+// Проверяем что при ошибке Enqueue свежесозданные матчи откатываются.
+// Сценарий: нет pending, генерируем новый раунд, CreateBatch OK, Enqueue fail.
+func TestService_RunAllMatches_EnqueueError_RollbackCreated(t *testing.T) {
+	service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+	ctx := context.Background()
+
+	distLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.AnythingOfType("func(context.Context) error")).
+		Return(nil)
+
+	tournamentID := uuid.New()
+	tournament := &domain.Tournament{
+		ID:       tournamentID,
+		Name:     "T",
+		GameType: "chess",
+		Status:   domain.TournamentActive,
+	}
+
+	participants := map[string][]*domain.TournamentParticipant{
+		"chess": {
+			{ID: uuid.New(), ProgramID: uuid.New(), TournamentID: tournamentID},
+			{ID: uuid.New(), ProgramID: uuid.New(), TournamentID: tournamentID},
+		},
+	}
+
+	matchRepo.On("GetPendingByTournamentID", ctx, tournamentID).
+		Return([]*domain.Match{}, nil)
+	tournamentRepo.On("GetByID", ctx, tournamentID).Return(tournament, nil)
+	tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, tournamentID).
+		Return(participants, nil)
+	gameRepo.On("ResetGameByType", ctx, tournamentID, "chess").Return(nil)
+	matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
+	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).
+		Return(fmt.Errorf("redis pipeline error"))
+	// Rollback обязателен.
+	matchRepo.On("DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
+
+	count, err := service.RunAllMatches(ctx, tournamentID)
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+	matchRepo.AssertCalled(t, "DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID"))
 }
 
 // -----------------------------------------------------------------------------

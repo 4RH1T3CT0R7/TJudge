@@ -1,0 +1,36 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "close": "Close",
+    "back": "Back",
+    "error_generic": "Something went wrong",
+    "try_again": "Try again",
+    "go_home": "Go home"
+  },
+  "auth": {
+    "login_title": "Sign in",
+    "forgot_password": "Forgot password?",
+    "email": "Email",
+    "password": "Password",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "reset_send": "Send reset link",
+    "reset_submitted": "If this email is registered, a reset link was sent. Check your inbox and spam folder.",
+    "reset_title": "Set new password",
+    "reset_done": "Password updated. Redirecting to sign-in…",
+    "reset_invalid_token": "Link is invalid or expired. Request a new one.",
+    "password_too_short": "Password must be at least 8 characters.",
+    "passwords_mismatch": "Passwords do not match."
+  },
+  "errors": {
+    "network": "Network unavailable. Check your connection.",
+    "server_500": "Server error. Please retry in a few seconds.",
+    "forbidden": "Access denied — insufficient permissions.",
+    "not_found": "The requested resource was not found.",
+    "rate_limit": "Too many requests, please try again later.",
+    "file_too_large": "File is too large."
+  }
+}
