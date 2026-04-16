@@ -37,10 +37,13 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 				buf:            &bytes.Buffer{},
 				status:         http.StatusOK,
 			}
+			// Копируем headers установленные handler'ом в наш recorder'ы.
 			next.ServeHTTP(rec, r)
 
-			// ETag считаем только для 200/successfully-rendered ответов.
+			// ETag и Cache-Control — только для 2xx (иначе кэшируем ошибку).
+			// Для не-2xx пробрасываем status и body без добавления заголовков.
 			if rec.status < 200 || rec.status >= 300 {
+				w.WriteHeader(rec.status)
 				_, _ = w.Write(rec.buf.Bytes())
 				return
 			}
@@ -58,11 +61,7 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 			}
 
 			// Записываем реальный статус и тело.
-			if rec.headerWritten {
-				// Если наш recorder уже писал WriteHeader, оригинальный w ещё не
-				// получил заголовок; проставим его сейчас.
-				w.WriteHeader(rec.status)
-			}
+			w.WriteHeader(rec.status)
 			_, _ = w.Write(rec.buf.Bytes())
 		})
 	}

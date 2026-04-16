@@ -99,4 +99,31 @@ func TestCacheControl_SkipsErrorResponses(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	// 5xx не должен получать ETag (чтобы клиент не кешировал ошибку).
 	assert.Empty(t, rec.Header().Get("ETag"))
+	// Регрессия: status должен пробрасываться, а не заменяться на 200.
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+// Регрессия (CI E2E fail): для 404 middleware ранее не вызывал WriteHeader,
+// и клиент получал default 200 + body ошибки вместо 404.
+func TestCacheControl_PreservesNotFoundStatus(t *testing.T) {
+	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"not found"}`))
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/games/missing", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Empty(t, rec.Header().Get("ETag"), "ошибка не должна кэшироваться")
+}
+
+func TestCacheControl_PreservesBadRequestStatus(t *testing.T) {
+	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad uuid"}`))
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/games/invalid-uuid", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
