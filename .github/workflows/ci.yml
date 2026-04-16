@@ -419,6 +419,9 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           format: 'table'
+          # Accepted CVEs (нет доступного исправления в Go module registry):
+          # CVE-2026-34040 — Moby authz bypass, fix v29.3.1 но в registry только v28.5.2.
+          trivyignores: .trivyignore
 
   contract:
     name: Contract Tests

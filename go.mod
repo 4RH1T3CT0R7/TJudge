@@ -1,8 +1,6 @@
 module github.com/bmstu-itstech/tjudge
 
-go 1.25.0
-
-toolchain go1.25.9
+go 1.25.9
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
