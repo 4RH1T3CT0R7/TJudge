@@ -422,7 +422,7 @@ func sanitizeZipPath(name string) string {
 	name = strings.ReplaceAll(name, "..", "_")
 	name = strings.TrimSpace(name)
 	if name == "" {
-		name = "unknown"
+		name = LangUnknown
 	}
 	return name
 }

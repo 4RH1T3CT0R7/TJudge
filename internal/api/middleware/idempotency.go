@@ -18,7 +18,7 @@ import (
 // SetNX (SET if Not eXists) критичен: гарантирует что параллельные запросы
 // с одним ключом не создадут дублирующиеся ресурсы — только один "выиграет"
 // и пойдёт к handler'у, остальные получат 409 или кэшированный ответ
-// предыдущего (succesful) вызова.
+// предыдущего (successful) вызова.
 type IdempotencyStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error)
@@ -37,7 +37,6 @@ type idempotencyRecorder struct {
 	http.ResponseWriter
 	buf    *bytes.Buffer
 	status int
-	header http.Header
 }
 
 func (r *idempotencyRecorder) WriteHeader(code int) {

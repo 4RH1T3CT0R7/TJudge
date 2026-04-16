@@ -33,6 +33,9 @@ const (
 	LangRuby       = "ruby"
 	LangPHP        = "php"
 	LangLua        = "lua"
+	// LangUnknown — sentinel для нераспознанного расширения файла.
+	// Выделен в const по требованию goconst (используется в 3+ местах).
+	LangUnknown = "unknown"
 )
 
 // detectLanguage определяет язык программирования по расширению файла
@@ -60,7 +63,7 @@ func detectLanguage(filename string) string {
 	case ".lua":
 		return LangLua
 	default:
-		return "unknown"
+		return LangUnknown
 	}
 }
 
@@ -550,7 +553,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 
 	// Определяем язык по расширению
 	language := detectLanguage(form.filename)
-	if language == "unknown" {
+	if language == LangUnknown {
 		writeError(w, errors.ErrInvalidInput.WithMessage("unsupported file extension"))
 		return
 	}
