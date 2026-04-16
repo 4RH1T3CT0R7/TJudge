@@ -328,7 +328,9 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 				continue
 			}
 
-			// Check file exists
+			// Check file exists.
+			// #nosec G703 G304 -- filePath провалидирован через EvalSymlinks +
+			// HasPrefix(absUploadDir) чуть выше; path-traversal невозможен.
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				h.log.Error("Program file not found on disk, skipping",
 					zap.String("program_id", prog.ID.String()),
@@ -341,6 +343,8 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 			ext := filepath.Ext(filePath)
 			entryName := fmt.Sprintf("%s/%s_v%d%s", gameDirName, sanitizeZipPath(prog.Name), prog.Version, ext)
 
+			// #nosec G703 G304 -- filePath провалидирован выше (EvalSymlinks +
+			// HasPrefix(absUploadDir)).
 			f, err := os.Open(filePath)
 			if err != nil {
 				h.log.Error("Failed to open program file, skipping",

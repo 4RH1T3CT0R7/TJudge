@@ -300,6 +300,8 @@ func checkTJudgeCLIImage(log *logger.Logger) {
 
 // imageExists проверяет существование Docker образа
 func imageExists(imageName string, log *logger.Logger) bool {
+	// #nosec G204 -- "docker" и "images -q" hardcoded; imageName приходит
+	// из config/env (EXECUTOR_DOCKER_IMAGE), не от внешнего input.
 	cmd := exec.Command("docker", "images", "-q", imageName)
 	output, err := cmd.Output()
 	if err != nil {

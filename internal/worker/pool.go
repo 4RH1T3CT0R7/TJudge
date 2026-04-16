@@ -158,6 +158,9 @@ func (p *Pool) spawnWorker() {
 	// Create a per-worker context derived from the pool context.
 	// This allows individual workers to be cancelled during scale-down
 	// without stopping the entire pool.
+	// #nosec G118 -- workerCancel сохраняется в p.workerCancels и вызывается
+	// при scale-down (scale(): workerCancels[N:]) или Stop() (shutdownCancel);
+	// не leak, lifecycle привязан к worker-goroutine.
 	workerCtx, workerCancel := context.WithCancel(p.ctx)
 
 	p.workerMu.Lock()

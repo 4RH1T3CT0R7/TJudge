@@ -160,7 +160,8 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем существование файла (используем absFilePath для defense-in-depth)
+	// Проверяем существование файла (используем absFilePath для defense-in-depth).
+	// #nosec G703 -- absFilePath провалидирован через HasPrefix(absUploadDir) выше.
 	if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
 		h.log.Error("Program file does not exist", zap.String("path", absFilePath))
 		writeError(w, errors.ErrNotFound.WithMessage("program file not found on disk"))
@@ -168,7 +169,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Открываем файл.
-	// #nosec G304 -- absFilePath провалидирован через HasPrefix(absUploadDir)
+	// #nosec G304 G703 -- absFilePath провалидирован через HasPrefix(absUploadDir)
 	// выше; path-traversal невозможен.
 	file, err := os.Open(absFilePath)
 	if err != nil {

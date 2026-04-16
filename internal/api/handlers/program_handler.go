@@ -265,7 +265,9 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Удаляем файл (если есть)
+	// Удаляем файл (если есть).
+	// #nosec G703 -- program.FilePath установлен сервером при upload
+	// (generateProgramPath из UUID + controlled uploadDir), не пользователем.
 	if program.FilePath != nil && *program.FilePath != "" {
 		if err := os.Remove(*program.FilePath); err != nil {
 			h.log.Warn("Failed to delete program file", zap.Error(err), zap.String("path", *program.FilePath))

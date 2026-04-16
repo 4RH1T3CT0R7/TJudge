@@ -174,7 +174,9 @@ type uploadFormData struct {
 // parseUploadForm parses the multipart form, extracts the file and form fields,
 // and validates required fields. Returns nil on error (response already written).
 func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request) *uploadFormData {
-	// Парсим multipart form
+	// Парсим multipart form.
+	// #nosec G120 -- h.maxFileSize ограничивает размер form, плюс routes.go
+	// применяет middleware.MaxBodySize(10 << 20) на /programs роуте. Double-bound.
 	if err := r.ParseMultipartForm(h.maxFileSize); err != nil {
 		h.log.Info("Failed to parse multipart form", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithMessage("file too large or invalid form"))
@@ -641,6 +643,9 @@ func runSyntaxCheck(command string, args []string, defaultMsg string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
 	defer cancel()
 
+	// #nosec G204 -- `command` — hardcoded имя из runSyntaxCheck-callers
+	// ("python3", "node", "ruby", "php", "luac", "gcc", "g++", "javac");
+	// args[last] — наш UUID-based filePath, не user-controlled.
 	cmd := exec.CommandContext(ctx, command, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -745,6 +750,8 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		classDir := filepath.Dir(sourcePath)
 		properPath := filepath.Join(classDir, className+".java")
 		if properPath != sourcePath {
+			// #nosec G703 -- sourcePath/properPath собраны из UUID-prefixes +
+			// className (regex-allowlist); path-traversal невозможен.
 			if err := os.Rename(sourcePath, properPath); err != nil {
 				return "", fmt.Sprintf("Не удалось переименовать Java-файл: %s", err.Error())
 			}
@@ -767,8 +774,9 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		// квотируется через shellSingleQuote.
 		wrapperPath := strings.TrimSuffix(properPath, ".java")
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp %s %s \"$@\"\n", shellSingleQuote(classDir), className)
-		// #nosec G306 -- wrapper должен быть executable shell-скриптом; 0o750
-		// ограничивает до appuser+docker, other — 0.
+		// #nosec G306 G703 -- wrapper должен быть executable shell-скриптом; 0o750
+		// ограничивает до appuser+docker, other — 0. wrapperPath — UUID-based,
+		// не user-controlled.
 		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o750); err != nil {
 			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())
 		}

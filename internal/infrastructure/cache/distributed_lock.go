@@ -118,9 +118,11 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
-	// Start lock renewal goroutine
+	// Start lock renewal goroutine.
 	renewCtx, renewCancel := context.WithCancel(ctx)
 	renewDone := make(chan struct{})
+	// #nosec G118 -- renewCtx derived from caller ctx, не Background. gosec
+	// false-positive (видит goroutine, но ctx реально request-scoped).
 	go dl.renewLoop(renewCtx, key, token, ttl, renewDone)
 
 	// Гарантируем освобождение блокировки
