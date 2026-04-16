@@ -466,6 +466,9 @@ func getEnvOrFile(key, defaultValue string) string {
 	// Затем проверяем переменную с суффиксом _FILE
 	fileKey := key + "_FILE"
 	if filePath := os.Getenv(fileKey); filePath != "" {
+		// #nosec G304 -- filePath приходит из env-var контролируемой оператором
+		// (Docker secrets / systemd unit), не от внешнего input. Это
+		// стандартный Docker-secrets pattern.
 		content, err := os.ReadFile(filePath)
 		if err == nil {
 			// Убираем trailing newline

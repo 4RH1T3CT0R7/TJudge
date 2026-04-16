@@ -167,7 +167,9 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Открываем файл
+	// Открываем файл.
+	// #nosec G304 -- absFilePath провалидирован через HasPrefix(absUploadDir)
+	// выше; path-traversal невозможен.
 	file, err := os.Open(absFilePath)
 	if err != nil {
 		h.log.Error("Failed to open file", zap.Error(err))

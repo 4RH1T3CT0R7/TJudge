@@ -392,14 +392,19 @@ func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http
 // saveUploadedFile writes the file content to disk, prepending a shebang for interpreted languages.
 // Returns true on success, or false on error (response already written).
 func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []byte, language, filePath string) bool {
-	// Убеждаемся что директория существует (safety net для Docker volumes)
-	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
+	// Убеждаемся что директория существует (safety net для Docker volumes).
+	// 0750 — group read/execute, other — нет. appuser внутри worker'а —
+	// единственный потребитель этой директории.
+	if err := os.MkdirAll(h.uploadDir, 0o750); err != nil {
 		h.log.Error("Failed to ensure upload directory", zap.Error(err), zap.String("dir", h.uploadDir))
 		writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл: директория загрузок недоступна"))
 		return false
 	}
 
-	// Сохраняем файл
+	// Сохраняем файл.
+	// #nosec G304 -- filePath формируется из h.uploadDir + {teamID/gameID/programID}[:8] +
+	// canonicalExtension(language); ни один компонент не контролируется пользователем
+	// напрямую (UUID-prefixes, hardcoded ext). Path-traversal невозможен.
 	dst, err := os.Create(filePath)
 	if err != nil {
 		h.log.Error("Failed to create file", zap.Error(err), zap.String("path", filePath))
@@ -427,8 +432,10 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 		return false
 	}
 
-	// Делаем файл исполняемым
-	if err := os.Chmod(filePath, 0755); err != nil {
+	// Делаем файл исполняемым.
+	// #nosec G302 -- бот-программа должна быть executable внутри Docker-sandbox'а;
+	// 0o750 даёт rwx только owner+group (appuser + docker), other — 0.
+	if err := os.Chmod(filePath, 0o750); err != nil {
 		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
 
@@ -443,6 +450,7 @@ func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (e
 	// P2.18: defense-in-depth — сканируем исходник на подозрительные API-вызовы.
 	// По-умолчанию только warn-лог; при CODESCAN_STRICT=true отказываем upload'у.
 	if scanner := codescan.ScannerFor(language); scanner != nil {
+		// #nosec G304 -- filePath тот же, что мы сами создали выше (UUID-based).
 		if src, err := os.ReadFile(filePath); err == nil {
 			findings := scanner.Scan(string(src))
 			if len(findings) > 0 {
@@ -682,6 +690,9 @@ func validateSyntax(language, filePath string) string {
 func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, string) {
 	outputPath := strings.TrimSuffix(sourcePath, filepath.Ext(sourcePath))
 
+	// #nosec G204 -- compiler-вызовы ниже: первый arg — hardcoded имя
+	// ("gcc", "g++", "go", "rustc", "javac"); outputPath/sourcePath формируются
+	// из UUID и не контролируются пользователем. Shell-injection невозможен.
 	var cmd *exec.Cmd
 	switch language {
 	case LangC:
@@ -689,25 +700,25 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 			log.Warn("gcc not found, skipping compilation")
 			return "", ""
 		}
-		cmd = exec.Command("gcc", "-O2", "-o", outputPath, sourcePath, "-lm")
+		cmd = exec.Command("gcc", "-O2", "-o", outputPath, sourcePath, "-lm") // #nosec G204
 	case LangCpp:
 		if _, err := exec.LookPath("g++"); err != nil {
 			log.Warn("g++ not found, skipping compilation")
 			return "", ""
 		}
-		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath)
+		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath) // #nosec G204
 	case LangGo:
 		if _, err := exec.LookPath("go"); err != nil {
 			log.Warn("go not found, skipping compilation")
 			return "", ""
 		}
-		cmd = exec.Command("go", "build", "-o", outputPath, sourcePath)
+		cmd = exec.Command("go", "build", "-o", outputPath, sourcePath) // #nosec G204
 	case LangRust:
 		if _, err := exec.LookPath("rustc"); err != nil {
 			log.Warn("rustc not found, skipping compilation")
 			return "", ""
 		}
-		cmd = exec.Command("rustc", "-O", "-o", outputPath, sourcePath)
+		cmd = exec.Command("rustc", "-O", "-o", outputPath, sourcePath) // #nosec G204
 	case LangJava:
 		if _, err := exec.LookPath("javac"); err != nil {
 			log.Warn("javac not found, skipping compilation")
@@ -719,6 +730,7 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		// 1) Парсим declared class name из source.
 		// 2) Переименовываем файл в <ClassName>.java в том же dir.
 		// 3) Запускаем javac, wrapper использует declared name.
+		// #nosec G304 -- sourcePath — наш собственный UUID-based path.
 		srcBytes, readErr := os.ReadFile(sourcePath)
 		if readErr != nil {
 			return "", fmt.Sprintf("Не удалось прочитать Java-исходник: %s", readErr.Error())
@@ -737,7 +749,9 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 				return "", fmt.Sprintf("Не удалось переименовать Java-файл: %s", err.Error())
 			}
 		}
-		// Java: компилируем .java → .class, затем создаём wrapper-скрипт
+		// Java: компилируем .java → .class, затем создаём wrapper-скрипт.
+		// #nosec G204 -- "javac" hardcoded; properPath собран из classDir (наш
+		// upload-dir) + className (прошёл javaClassNameRe regex-allowlist).
 		javacCmd := exec.Command("javac", properPath)
 		var javacStderr bytes.Buffer
 		javacCmd.Stderr = &javacStderr
@@ -753,7 +767,9 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		// квотируется через shellSingleQuote.
 		wrapperPath := strings.TrimSuffix(properPath, ".java")
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp %s %s \"$@\"\n", shellSingleQuote(classDir), className)
-		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0755); err != nil {
+		// #nosec G306 -- wrapper должен быть executable shell-скриптом; 0o750
+		// ограничивает до appuser+docker, other — 0.
+		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o750); err != nil {
 			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())
 		}
 		return wrapperPath, ""
@@ -772,8 +788,10 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		return "", fmt.Sprintf("Ошибка компиляции: %s", errMsg)
 	}
 
-	// Делаем бинарник исполняемым
-	_ = os.Chmod(outputPath, 0755)
+	// Делаем бинарник исполняемым.
+	// #nosec G302 -- скомпилированный бинарник боту требуется исполнять; 0o750
+	// ограничивает до appuser+docker.
+	_ = os.Chmod(outputPath, 0o750)
 
 	return outputPath, ""
 }

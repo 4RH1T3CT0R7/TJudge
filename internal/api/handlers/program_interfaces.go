@@ -101,7 +101,7 @@ func NewProgramHandler(
 		uploadDir = "/data/programs"
 	}
 
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o750); err != nil {
 		log.Error("Failed to create upload directory", zap.Error(err))
 	}
 

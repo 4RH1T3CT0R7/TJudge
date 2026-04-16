@@ -322,6 +322,8 @@ func main() {
 			args = append(args, "-v")
 		}
 
+		// #nosec G204 -- "go" hardcoded; args — hardcoded benchmark flags
+		// (bench regex, timeout, test path). CLI-utility, не server-endpoint.
 		cmd := exec.Command("go", args...)
 		cmd.Dir = findProjectRoot()
 

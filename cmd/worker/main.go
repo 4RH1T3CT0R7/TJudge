@@ -326,6 +326,8 @@ func tryBuildWithCompose(log *logger.Logger) bool {
 
 	for _, path := range composePaths {
 		if _, err := os.Stat(path); err == nil {
+			// #nosec G204 -- "docker compose" hardcoded; path — hardcoded список
+			// composePaths, не из внешнего input.
 			cmd := exec.Command("docker", "compose", "-f", path, "build", "tjudge-cli")
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
@@ -365,6 +367,8 @@ func tryBuildDirectly(log *logger.Logger) bool {
 
 	for _, paths := range dockerfilePaths {
 		if _, err := os.Stat(paths.dockerfile); err == nil {
+			// #nosec G204 -- все args hardcoded (docker, build, -t, tag);
+			// paths.dockerfile/context — hardcoded struct-literal.
 			cmd := exec.Command("docker", "build",
 				"-t", "tjudge-cli:latest",
 				"-f", paths.dockerfile,

@@ -326,20 +326,24 @@ jobs:
         run: npm run build
         working-directory: web
 
-      # P1.9: gosec блокирует pipeline на HIGH-severity.
-      # MEDIUM-findings (в основном legacy G301/G302/G304/G306 file permissions
-      # и path-inclusion с UUID-controlled paths) — отдельным step'ом как report
-      # без блока. TODO: постепенно добивать их, затем вернуть -severity medium.
-      - name: Run gosec (HIGH severity — blocks)
-        uses: securego/gosec@v2.22.0
-        with:
-          args: '-severity high -confidence medium -fmt sarif -out results.sarif ./...'
+      # P1.9: gosec блокирует pipeline на MEDIUM-severity findings (и выше).
+      # Все legacy-issues разобраны:
+      #   G301 (dir perms)    → 0o750.
+      #   G302/G306 (exec bit)→ 0o750 + #nosec с обоснованием (bot/wrapper
+      #                         требуют execute).
+      #   G304 (os.Open var)  → #nosec (paths UUID-controlled или
+      #                         absUploadDir-validated).
+      #   G204 (exec var)     → #nosec (hardcoded binary names, args без
+      #                         user-input).
+      #
+      # Используем go-install latest вместо securego/gosec-action, т.к. старый
+      # docker-образ (2.21.4) ставит exit-code по ВСЕМ findings независимо от
+      # -severity фильтра → false-positive fail на legacy-коде.
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
 
-      - name: Run gosec (MEDIUM severity — report-only)
-        uses: securego/gosec@v2.22.0
-        continue-on-error: true
-        with:
-          args: '-severity medium -confidence medium -fmt text ./...'
+      - name: Run gosec
+        run: gosec -severity medium -confidence medium -fmt sarif -out results.sarif ./...
 
       - name: Upload SARIF file
         # Requires Code Scanning to be enabled: Settings → Code security → Code scanning
