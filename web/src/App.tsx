@@ -20,8 +20,6 @@ const pageImports = {
   TeamManagement: () => import('./pages/TeamManagement'),
   AdminPanel: () => import('./pages/AdminPanel'),
   NotFound: () => import('./pages/NotFound'),
-  ForgotPassword: () => import('./pages/ForgotPassword'),
-  ResetPassword: () => import('./pages/ResetPassword'),
 };
 
 const Home = lazy(() => pageImports.Home().then(m => ({ default: m.Home })));
@@ -35,8 +33,6 @@ const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
 const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
 const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
-const ForgotPassword = lazy(() => pageImports.ForgotPassword().then(m => ({ default: m.ForgotPassword })));
-const ResetPassword = lazy(() => pageImports.ResetPassword().then(m => ({ default: m.ResetPassword })));
 
 // P2.1: prefetch только критичных страниц (Navigation targets) через
 // requestIdleCallback, чтобы не тормозить LCP на медленных сетях и
@@ -138,8 +134,6 @@ function AppContent() {
         <Route path="/" element={<Layout />}>
           <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="login" element={<Login />} />
-          <Route path="forgot-password" element={<ForgotPassword />} />
-          <Route path="reset-password" element={<ResetPassword />} />
           <Route path="tournaments" element={<Tournaments />} />
           <Route path="tournaments/:id" element={<TournamentDetail />} />
           <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />

@@ -43,55 +43,7 @@ func (c *TestClient) doRequestWithHeaders(method, path string, body interface{},
 	return c.client.Do(req)
 }
 
-// P2.23: E2E для новых фич (P1.11 password reset, P1.12 audit log, P2.19 idempotency).
-
-// =============================================================================
-// Password reset flow (P1.11)
-// =============================================================================
-
-func TestE2E_PasswordResetRequest_UnknownEmail_ReturnsOK(t *testing.T) {
-	client := NewTestClient()
-
-	// Неизвестный email — API возвращает OK (anti-enumeration).
-	resp, err := client.doRequest("POST", "/api/v1/auth/password-reset/request",
-		map[string]string{"email": "nonexistent@example.com"})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-func TestE2E_PasswordResetRequest_MissingEmail_400(t *testing.T) {
-	client := NewTestClient()
-	resp, err := client.doRequest("POST", "/api/v1/auth/password-reset/request",
-		map[string]string{"email": ""})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-}
-
-func TestE2E_PasswordResetConfirm_InvalidToken_401(t *testing.T) {
-	client := NewTestClient()
-	resp, err := client.doRequest("POST", "/api/v1/auth/password-reset/confirm",
-		map[string]string{
-			"token":        "definitely-not-a-real-token",
-			"new_password": "newsecretpassword123",
-		})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-}
-
-func TestE2E_PasswordResetConfirm_ShortPassword_400(t *testing.T) {
-	client := NewTestClient()
-	resp, err := client.doRequest("POST", "/api/v1/auth/password-reset/confirm",
-		map[string]string{
-			"token":        "anyhex",
-			"new_password": "short",
-		})
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-}
+// P2.23: E2E для новых фич (P1.12 audit log, P2.19 idempotency).
 
 // =============================================================================
 // Admin audit log (P1.12)

@@ -148,4 +148,3 @@ UPDATE users SET password_hash = '$2a$12$...' WHERE email = 'foo@bar.com';
 
 - ELO rating update — delta-based (P1.13), параллельные матчи одного участника могут давать snapshot-based deltas; для строгой сериализации нужен advisory lock (в P2 backlog).
 - Docker-in-Docker worker монтирует `docker.sock` read-only с non-root user'ом (P0.8); на хосте должна существовать docker-group с совпадающим GID.
-- Password reset использует LogMailer по-умолчанию — reset-ссылки пишутся в лог. Настройте SMTP_HOST/USER/PASSWORD/FROM/USE_TLS env для реальной отправки.

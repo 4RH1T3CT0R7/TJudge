@@ -75,18 +75,6 @@ type Config struct {
 	Metrics   MetricsConfig   `yaml:"metrics"`
 	CORS      CORSConfig      `yaml:"cors"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
-	SMTP      SMTPConfig      `yaml:"smtp"`
-}
-
-// SMTPConfig — настройки исходящей почты (P1.11: password reset).
-// Если Host пуст, password-reset работает в режиме LogMailer (ссылка пишется в лог).
-type SMTPConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	From     string `yaml:"from"`
-	UseTLS   bool   `yaml:"use_tls"`
 }
 
 // StorageConfig - конфигурация хранения файлов
@@ -387,14 +375,6 @@ func Load() (*Config, error) {
 			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // Disabled by default for development
 			RequestsPerMinute: getEnvInt("RATE_LIMIT_RPM", 100),
 			Burst:             getEnvInt("RATE_LIMIT_BURST", 200),
-		},
-		SMTP: SMTPConfig{
-			Host:     getEnv("SMTP_HOST", ""),
-			Port:     getEnvInt("SMTP_PORT", 587),
-			User:     getEnv("SMTP_USER", ""),
-			Password: getEnvOrFile("SMTP_PASSWORD", ""),
-			From:     getEnv("SMTP_FROM", ""),
-			UseTLS:   getEnvBool("SMTP_USE_TLS", false),
 		},
 	}
 

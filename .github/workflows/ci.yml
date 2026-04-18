@@ -157,7 +157,7 @@ jobs:
 
       # P2.21 roadmap: текущий минимальный threshold — 45%. Целевой — 70% к Q3.
       # Поднимать threshold нужно одновременно с добавлением тестов на новые
-      # packages (audit, password-reset, idempotency, mailer, cache_control).
+      # packages (audit, idempotency, cache_control).
       # Чтобы не ломать CI на старых PR, делаем step-by-step ratchet:
       # 45 → 50 → 55 → 60 → 65 → 70.
       - name: Check coverage threshold

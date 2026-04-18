@@ -33,12 +33,6 @@ DB_PASSWORD=<crypto-random>
 REDIS_PASSWORD=<crypto-random>
 CORS_ALLOWED_ORIGINS=https://tjudge.example.com
 WEBSOCKET_ALLOWED_ORIGINS=https://tjudge.example.com
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=noreply@example.com
-SMTP_PASSWORD=<smtp-password-or-app-key>
-SMTP_FROM="TJudge <noreply@example.com>"
-SMTP_USE_TLS=false    # true для implicit TLS (порт 465)
 RATE_LIMIT_ENABLED=true
 ```
 
@@ -93,7 +87,6 @@ GF_ADMIN_PASSWORD=<replace>
 - [ ] Worker запускается **не** от root (`docker compose ps worker → user=1000`, P0.8).
 - [ ] `RATE_LIMIT_ENABLED=true`.
 - [ ] Backup-service запущен (`docker ps | grep tjudge-backup`).
-- [ ] SMTP настроен ИЛИ LogMailer разрешён (понимая что пользователи не смогут получить reset-letter'ы).
 - [ ] `gosec`, `npm audit`, `Trivy` в CI — все HIGH blocker'ы исправлены (P1.9).
 - [ ] Первый admin назначен и у него надёжный пароль.
 

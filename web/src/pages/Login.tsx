@@ -289,15 +289,6 @@ export function Login() {
             {isLoading ? '// загрузка...' : 'auth.login()'}
           </button>
         </form>
-
-        <p className="text-center text-sm text-gray-500 mt-4" style={monoFont}>
-          <a
-            href="/forgot-password"
-            className="underline hover:text-gray-300 transition-colors"
-          >
-            // забыли пароль?
-          </a>
-        </p>
       </div>
     </div>
   );

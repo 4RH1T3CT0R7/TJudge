@@ -30,10 +30,9 @@ type Server struct {
 	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
 	systemHandler     *handlers.SystemHandler
-	auditHandler      *handlers.AuditHandler         // P1.12 (optional)
-	auditLogger       *middleware.AuditLogger        // P1.12 (optional)
-	pwResetHandler    *handlers.PasswordResetHandler // P1.11 (optional)
-	idempStore        middleware.IdempotencyStore    // P2.19 (optional)
+	auditHandler      *handlers.AuditHandler      // P1.12 (optional)
+	auditLogger       *middleware.AuditLogger     // P1.12 (optional)
+	idempStore        middleware.IdempotencyStore // P2.19 (optional)
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
 	adminChecker      *middleware.VerifiedAdminChecker
@@ -139,16 +138,6 @@ func (s *Server) idempotency() func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler { return next }
 	}
 	return middleware.Idempotency(s.idempStore, s.log)
-}
-
-// WithPasswordReset подключает password reset endpoints (P1.11).
-// Должен вызываться до WithAuditLog (иначе audit перестроит router и этот
-// handler потеряется). Оба With… idempotent-сбрасывают и пересобирают router,
-// но не очищают предыдущие handlers, поэтому порядок: auth → audit.
-func (s *Server) WithPasswordReset(handler *handlers.PasswordResetHandler) *Server {
-	s.pwResetHandler = handler
-	s.rebuildRouter()
-	return s
 }
 
 // WithAuditLog подключает admin audit log (P1.12).
@@ -270,12 +259,6 @@ func (s *Server) setupRoutes() {
 			r.Post("/register", s.authHandler.Register)
 			r.Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
-
-			// P1.11: password reset (опционально, если handler зарегистрирован).
-			if s.pwResetHandler != nil {
-				r.Post("/password-reset/request", s.pwResetHandler.Request)
-				r.Post("/password-reset/confirm", s.pwResetHandler.Confirm)
-			}
 
 			// Protected auth endpoints (require valid JWT)
 			r.Group(func(r chi.Router) {

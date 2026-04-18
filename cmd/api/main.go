@@ -21,7 +21,6 @@ import (
 	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/mailer"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
@@ -195,27 +194,6 @@ func main() {
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
 
-	// P1.11: password reset service.
-	passwordResetRepo := db.NewPasswordResetRepository(database)
-	var pwMailer auth.Mailer
-	if cfg.SMTP.Host != "" && cfg.SMTP.From != "" {
-		pwMailer = mailer.NewSMTPMailer(mailer.SMTPConfig{
-			Host:     cfg.SMTP.Host,
-			Port:     cfg.SMTP.Port,
-			User:     cfg.SMTP.User,
-			Password: cfg.SMTP.Password,
-			From:     cfg.SMTP.From,
-			UseTLS:   cfg.SMTP.UseTLS,
-		}, log)
-		log.Info("Password reset: SMTP mailer configured", zap.String("smtp_host", cfg.SMTP.Host))
-	} else {
-		pwMailer = mailer.NewLogMailer(log)
-		log.Warn("Password reset: no SMTP configured, using LogMailer (reset links in logs)")
-	}
-	passwordResetService := auth.NewPasswordResetService(
-		userRepo, passwordResetRepo, pwMailer, cfg.Server.BaseURL, authService, log,
-	)
-
 	tournamentService := tournament.NewService(
 		tournamentRepo,
 		matchRepo,
@@ -308,7 +286,6 @@ func main() {
 		cfg.RateLimit,
 		log,
 	).WithAdminChecker(adminChecker).
-		WithPasswordReset(handlers.NewPasswordResetHandler(passwordResetService, log)).
 		WithIdempotency(redisCache).
 		WithAuditLog(auditLogger, auditHandler)
 
