@@ -144,7 +144,7 @@ export function Profile() {
                 aria-describedby="email-help"
               />
               <p id="email-help" className="mt-1 text-sm text-gray-500">
-                Email используется для уведомлений и восстановления доступа
+                Email используется для уведомлений
               </p>
             </div>
 
