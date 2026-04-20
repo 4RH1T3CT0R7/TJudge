@@ -20,6 +20,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
@@ -37,7 +38,6 @@ var (
 	setupErr    error
 )
 
-// setupTestServer initializes the test server with all dependencies
 func setupTestServer(b *testing.B) {
 	if setupErr != nil {
 		b.Skipf("Setup failed previously: %v", setupErr)
@@ -64,7 +64,6 @@ func setupTestServer(b *testing.B) {
 
 	m := metrics.New()
 
-	// Connect to database
 	database, err := db.New(&cfg.Database, log, m)
 	if err != nil {
 		setupErr = err
@@ -72,7 +71,6 @@ func setupTestServer(b *testing.B) {
 		return
 	}
 
-	// Connect to Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {
 		setupErr = err
@@ -80,7 +78,6 @@ func setupTestServer(b *testing.B) {
 		return
 	}
 
-	// Initialize repositories
 	userRepo := db.NewUserRepository(database)
 	programRepo := db.NewProgramRepository(database)
 	tournamentRepo := db.NewTournamentRepository(database)
@@ -88,7 +85,6 @@ func setupTestServer(b *testing.B) {
 	gameRepo := db.NewGameRepository(database)
 	teamRepo := db.NewTeamRepository(database)
 
-	// Initialize caches
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
 	leaderboardCache := cache.NewLeaderboardCache(redisCache).WithMetrics(m)
 	tournamentCache := cache.NewTournamentCache(redisCache)
@@ -96,61 +92,55 @@ func setupTestServer(b *testing.B) {
 	rateLimiter := cache.NewRateLimiter(redisCache)
 	distributedLock := cache.NewDistributedLock(redisCache)
 
-	// Initialize queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
-	// Initialize WebSocket hub
 	wsHub := websocket.NewHub(log)
+	eventBus := events.NewSyncBus(log)
 
-	// Initialize services
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
 
 	tournamentService := tournament.NewService(
-		tournamentRepo,
-		matchRepo,
-		queueManager,
-		gameRepo,
-		tournamentCache,
-		leaderboardCache,
-		wsHub,
-		distributedLock,
-		log,
+		tournamentRepo, matchRepo, queueManager, gameRepo,
+		tournamentCache, leaderboardCache, eventBus,
+		distributedLock, log,
+	)
+
+	schedulingService := tournament.NewSchedulingService(
+		tournamentRepo, matchRepo, queueManager, gameRepo,
+		distributedLock, eventBus, log,
 	)
 
 	gameService := game.NewService(gameRepo, log)
 	teamService := team.NewService(teamRepo, tournamentRepo, distributedLock, log)
 
-	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
-	tournamentHandler := handlers.NewTournamentHandler(tournamentService, log)
-	programHandler := handlers.NewProgramHandler(programRepo, tournamentRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
-	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, nil, nil, log)
-	gameHandler := handlers.NewGameHandler(gameService, nil, nil, nil, nil, nil, log)
+	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
+	programHandler := handlers.NewProgramHandler(
+		programRepo, tournamentRepo, tournamentRepo,
+		nil, gameService, matchRepo, gameRepo,
+		teamRepo, gameRepo, cfg.Storage.ProgramsPath, log,
+	)
+	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
+	gameHandler := handlers.NewGameHandler(
+		gameService, tournamentRepo, matchRepo, tournamentRepo,
+		programRepo, gameRepo, eventBus, cfg.Storage.ProgramsPath, log,
+	)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
+	systemHandler := handlers.NewSystemHandler(log)
 
-	// Create API server
 	apiServer := api.NewServer(
-		authHandler,
-		tournamentHandler,
-		programHandler,
-		matchHandler,
-		gameHandler,
-		teamHandler,
-		wsHandler,
-		authService,
-		rateLimiter,
-		cfg.CORS,
-		cfg.RateLimit,
-		log,
+		authHandler, tournamentHandler, programHandler, matchHandler,
+		gameHandler, teamHandler, wsHandler, systemHandler,
+		authService, rateLimiter,
+		cfg.CORS, cfg.RateLimit, log,
 	)
 
 	testHandler = apiServer.Handler()
 	testServer = httptest.NewServer(testHandler)
 	setupOnce = true
 
-	// Create test user and get token
 	timestamp := time.Now().UnixNano()
 	registerReq := map[string]string{
 		"username": fmt.Sprintf("bench_user_%d", timestamp),
@@ -168,12 +158,11 @@ func setupTestServer(b *testing.B) {
 		var resp struct {
 			AccessToken string `json:"access_token"`
 		}
-		json.NewDecoder(rec.Body).Decode(&resp)
+		_ = json.NewDecoder(rec.Body).Decode(&resp)
 		testToken = resp.AccessToken
 	}
 }
 
-// BenchmarkHealthEndpoint measures the health endpoint performance
 func BenchmarkHealthEndpoint(b *testing.B) {
 	setupTestServer(b)
 
@@ -187,7 +176,6 @@ func BenchmarkHealthEndpoint(b *testing.B) {
 	})
 }
 
-// BenchmarkAuthLogin measures login endpoint performance
 func BenchmarkAuthLogin(b *testing.B) {
 	setupTestServer(b)
 
@@ -206,7 +194,6 @@ func BenchmarkAuthLogin(b *testing.B) {
 	}
 }
 
-// BenchmarkTournamentsList measures tournament listing performance
 func BenchmarkTournamentsList(b *testing.B) {
 	setupTestServer(b)
 
@@ -223,7 +210,6 @@ func BenchmarkTournamentsList(b *testing.B) {
 	})
 }
 
-// BenchmarkTournamentGet measures single tournament fetch performance
 func BenchmarkTournamentGet(b *testing.B) {
 	setupTestServer(b)
 
@@ -240,7 +226,6 @@ func BenchmarkTournamentGet(b *testing.B) {
 	}
 }
 
-// BenchmarkLeaderboard measures leaderboard endpoint performance
 func BenchmarkLeaderboard(b *testing.B) {
 	setupTestServer(b)
 
@@ -259,7 +244,6 @@ func BenchmarkLeaderboard(b *testing.B) {
 	})
 }
 
-// BenchmarkProgramsList measures program listing performance
 func BenchmarkProgramsList(b *testing.B) {
 	setupTestServer(b)
 
@@ -274,7 +258,6 @@ func BenchmarkProgramsList(b *testing.B) {
 	}
 }
 
-// BenchmarkMatchesList measures match listing performance
 func BenchmarkMatchesList(b *testing.B) {
 	setupTestServer(b)
 
@@ -293,7 +276,6 @@ func BenchmarkMatchesList(b *testing.B) {
 	})
 }
 
-// BenchmarkJSONParsing measures JSON serialization/deserialization
 func BenchmarkJSONParsing(b *testing.B) {
 	tournament := domain.Tournament{
 		ID:              uuid.New(),
@@ -313,11 +295,10 @@ func BenchmarkJSONParsing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		data, _ := json.Marshal(tournament)
 		var result domain.Tournament
-		json.Unmarshal(data, &result)
+		_ = json.Unmarshal(data, &result)
 	}
 }
 
-// BenchmarkAuthMiddleware measures auth middleware overhead
 func BenchmarkAuthMiddleware(b *testing.B) {
 	setupTestServer(b)
 
@@ -330,7 +311,6 @@ func BenchmarkAuthMiddleware(b *testing.B) {
 	}
 }
 
-// BenchmarkConcurrentRequests measures performance under concurrent load
 func BenchmarkConcurrentRequests(b *testing.B) {
 	setupTestServer(b)
 

@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// GameCRUDService is the minimal interface needed for CRUD operations on games.
+// GameCRUDService - минимальный интерфейс для CRUD-операций над играми.
 type GameCRUDService interface {
 	Create(ctx context.Context, req *game.CreateRequest) (*domain.Game, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
@@ -26,13 +26,13 @@ type GameCRUDService interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-// GameCRUDHandler handles Create/List/Get/Update/Delete for games.
+// GameCRUDHandler обрабатывает Create/List/Get/Update/Delete для игр.
 type GameCRUDHandler struct {
 	gameService GameCRUDService
 	log         *logger.Logger
 }
 
-// NewGameCRUDHandler creates a new CRUD handler for games.
+// NewGameCRUDHandler создаёт новый CRUD handler для игр.
 func NewGameCRUDHandler(gameService GameCRUDService, log *logger.Logger) *GameCRUDHandler {
 	return &GameCRUDHandler{
 		gameService: gameService,
@@ -40,7 +40,7 @@ func NewGameCRUDHandler(gameService GameCRUDService, log *logger.Logger) *GameCR
 	}
 }
 
-// Create creates a new game.
+// Create создаёт новую игру.
 // @Summary Создать игру
 // @Description Создаёт новую игру (только для админов)
 // @Tags games
@@ -76,7 +76,7 @@ func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, g)
 }
 
-// List returns a list of games.
+// List возвращает список игр.
 // @Summary Список игр
 // @Description Возвращает список доступных игр с фильтрацией и пагинацией
 // @Tags games
@@ -104,7 +104,7 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, games)
 }
 
-// Get returns a game by ID.
+// Get возвращает игру по ID.
 // @Summary Получить игру
 // @Description Возвращает игру по ID
 // @Tags games
@@ -128,7 +128,7 @@ func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// GetByName returns a game by name.
+// GetByName возвращает игру по имени.
 // @Summary Получить игру по имени
 // @Description Возвращает игру по системному имени
 // @Tags games
@@ -154,7 +154,7 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// Update updates a game.
+// Update обновляет игру.
 // @Summary Обновить игру
 // @Description Обновляет параметры игры (только для админов)
 // @Tags games
@@ -194,7 +194,7 @@ func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// Delete deletes a game.
+// Delete удаляет игру.
 // @Summary Удалить игру
 // @Description Удаляет игру по ID (только для админов)
 // @Tags games

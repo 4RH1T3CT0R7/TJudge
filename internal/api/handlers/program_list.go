@@ -76,7 +76,7 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admins can view any program; others must own it
+	// Админы могут просматривать любую программу; остальные только свои
 	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
 	if userRole != domain.RoleAdmin && program.UserID != userID {
 		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
@@ -110,7 +110,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admins can download any program
+	// Админы могут скачивать любую программу
 	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
 	if userRole != domain.RoleAdmin {
 		// Проверяем владение программой
@@ -141,7 +141,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	filePath := *program.FilePath
 
-	// Validate file path is within upload directory
+	// Проверяем, что путь файла находится внутри upload-директории
 	absFilePath, err := filepath.Abs(filePath)
 	if err != nil {
 		h.log.Error("Failed to resolve absolute file path", zap.Error(err), zap.String("path", filePath))

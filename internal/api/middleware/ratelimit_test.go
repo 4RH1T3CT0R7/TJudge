@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRateLimiter implements middleware.RateLimiter for testing
+// MockRateLimiter реализует middleware.RateLimiter для тестов
 type MockRateLimiter struct {
 	mock.Mock
 }
@@ -69,7 +69,7 @@ func TestRateLimit_LocalhostBypass(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// Localhost should bypass rate limiting - no mock calls expected
+	// Localhost должен обходить rate limiting - вызовов мока не ожидается
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -95,7 +95,7 @@ func TestRateLimit_LocalhostBypass(t *testing.T) {
 		})
 	}
 
-	// Verify limiter was never called (localhost bypass)
+	// Проверяем, что limiter не вызывался (localhost bypass)
 	mockLimiter.AssertNotCalled(t, "Allow", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
@@ -103,8 +103,8 @@ func TestRateLimit_XForwardedFor_Ignored(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// X-Forwarded-For should NOT be used directly; getClientIP uses only
-	// r.RemoteAddr (which chi's RealIP middleware sets from trusted proxies).
+	// X-Forwarded-For НЕ должен использоваться напрямую; getClientIP использует только
+	// r.RemoteAddr (который chi RealIP middleware ставит из доверенных прокси).
 	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,8 +126,8 @@ func TestRateLimit_XRealIP_Ignored(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// X-Real-IP should NOT be used directly; getClientIP uses only
-	// r.RemoteAddr (which chi's RealIP middleware sets from trusted proxies).
+	// X-Real-IP НЕ должен использоваться напрямую; getClientIP использует только
+	// r.RemoteAddr (который chi RealIP middleware ставит из доверенных прокси).
 	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +149,7 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// P1.5: при ошибке Redis fallback СТРОЖЕ основного (0.5x), а не 2x.
+	// При ошибке Redis fallback СТРОЖЕ основного (0.5x), а не 2x.
 	// Это предотвращает обход rate limit через DoS на Redis.
 	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 10, time.Minute).Return(false, assert.AnError)
 
@@ -159,7 +159,7 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Fallback limit = max(1, int(10 * 0.5)) = 5 (burst). First 5 requests pass.
+	// Fallback limit = max(1, int(10 * 0.5)) = 5 (burst). Первые 5 запросов проходят.
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
@@ -181,15 +181,15 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// Both IPs will fail Redis
+	// Оба IP получат ошибку Redis
 	mockLimiter.On("Allow", mock.Anything, mock.Anything, 1, time.Minute).Return(false, assert.AnError)
 
 	handler := middleware.RateLimit(mockLimiter, 1, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// P1.5: Exhaust fallback for IP1. limit=1, fallback multiplier=0.5 →
-	// int(1*0.5)=0, clamped к минимуму 1 → burst=1.
+	// Исчерпываем fallback для IP1. limit=1, fallback multiplier=0.5,
+	// int(1*0.5)=0, clamped к минимуму 1, поэтому burst=1.
 	for i := 0; i < 1; i++ {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
@@ -198,14 +198,14 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	}
 
-	// IP1 should now be blocked
+	// IP1 теперь должен быть заблокирован
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
 
-	// IP2 should still pass (separate bucket)
+	// IP2 по-прежнему должен проходить (отдельный bucket)
 	req = httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "10.0.0.1:12345"
 	rr = httptest.NewRecorder()

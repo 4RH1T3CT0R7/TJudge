@@ -589,7 +589,7 @@ func TestQueueManager_EnqueueBatch_AllDuplicates(t *testing.T) {
 	require.NoError(t, qm.Enqueue(ctx, match1))
 	require.NoError(t, qm.Enqueue(ctx, match2))
 
-	// Batch-enqueue same matches — all should be skipped
+	// Batch-enqueue тех же матчей: все должны быть пропущены
 	err := qm.EnqueueBatch(ctx, []*domain.Match{match1, match2})
 	require.NoError(t, err)
 
@@ -868,7 +868,7 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	require.NotNil(t, dequeued)
 	assert.Equal(t, match.ID, dequeued.ID)
 
-	// Now re-enqueue the same match — should be allowed since dedup was cleared
+	// Повторный enqueue того же матча: должен быть разрешён, так как dedup очищен
 	require.NoError(t, qm.Enqueue(ctx, match))
 
 	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)

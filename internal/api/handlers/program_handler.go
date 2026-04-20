@@ -70,14 +70,14 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Reject path traversal and enforce upload directory boundary for absolute paths.
+	// Отбрасываем path-traversal и требуем, чтобы абсолютные пути были внутри upload-директории.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
 		if strings.Contains(cleaned, "..") {
 			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
 			return
 		}
-		// Absolute paths must be within the upload directory
+		// Абсолютные пути должны быть внутри upload-директории
 		if filepath.IsAbs(cleaned) {
 			uploadDir := filepath.Clean(h.uploadDir)
 			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
@@ -168,14 +168,14 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject path traversal and enforce upload directory boundary for absolute paths.
+	// Отбрасываем path-traversal и требуем, чтобы абсолютные пути были внутри upload-директории.
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
 		if strings.Contains(cleaned, "..") {
 			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
 			return
 		}
-		// Absolute paths must be within the upload directory
+		// Абсолютные пути должны быть внутри upload-директории
 		if filepath.IsAbs(cleaned) {
 			uploadDir := filepath.Clean(h.uploadDir)
 			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {

@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// MarkGameRoundCompleted marks a game round as completed.
+// MarkGameRoundCompleted помечает раунд игры как завершённый.
 // @Summary Завершить раунд игры
 // @Description Отмечает текущий раунд игры как завершённый (только для админов)
 // @Tags games
@@ -56,14 +56,14 @@ func (h *GameRoundHandler) MarkGameRoundCompleted(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ResetGameRoundResponse is the response for a round reset.
+// ResetGameRoundResponse - ответ на сброс раунда.
 type ResetGameRoundResponse struct {
 	MatchesDeleted     int64 `json:"matches_deleted"`
 	ParticipantsReset  int64 `json:"participants_reset"`
 	RatingHistoryReset int64 `json:"rating_history_reset"`
 }
 
-// ResetGameRound fully resets a game round: deletes matches, resets ratings and stats.
+// ResetGameRound полностью сбрасывает раунд игры: удаляет матчи, обнуляет рейтинги и статистику.
 // @Summary Сбросить раунд игры
 // @Description Полностью сбрасывает раунд: удаляет матчи, обнуляет рейтинги и статистику (только для админов)
 // @Tags games
@@ -127,7 +127,7 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// SetAutoRound enables or disables auto-round for a game in a tournament.
+// SetAutoRound включает или выключает авто-раунд для игры в турнире.
 // @Summary Настроить авто-раунд
 // @Description Включает или выключает автоматический запуск раундов для игры (только для админов)
 // @Tags games
@@ -195,7 +195,7 @@ func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// GetAutoRound returns the auto-round status for a game in a tournament.
+// GetAutoRound возвращает статус авто-раунда для игры в турнире.
 // @Summary Статус авто-раунда
 // @Description Возвращает текущие настройки авто-раунда для игры (только для админов)
 // @Tags games
@@ -231,7 +231,7 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// DownloadAllPrograms streams a ZIP archive of all programs for a tournament.
+// DownloadAllPrograms стримит ZIP-архив со всеми программами турнира.
 // @Summary Скачать все программы
 // @Description Скачивает ZIP-архив со всеми программами турнира (только для админов)
 // @Tags games
@@ -258,7 +258,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get all games in this tournament
+	// Получаем все игры этого турнира
 	games, err := h.tournamentGameStatusRepo.GetTournamentGames(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get tournament games", err,
@@ -268,7 +268,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Resolve upload directory for path validation (EvalSymlinks resolves symlinks too)
+	// Резолвим upload-директорию для валидации путей (EvalSymlinks раскрывает симлинки)
 	absUploadDir, err := filepath.EvalSymlinks(h.uploadDir)
 	if err != nil {
 		h.log.Error("Failed to resolve upload dir", zap.Error(err))
@@ -276,7 +276,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Set response headers before writing body
+	// Выставляем заголовки ответа до записи тела
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"programs_%s.zip\"", tournamentID.String()[:8]))
 
@@ -286,7 +286,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 	filesAdded := 0
 
 	for _, tg := range games {
-		// Get game details for display name
+		// Получаем данные игры для display-имени
 		game, err := h.gameService.GetByID(r.Context(), tg.GameID)
 		if err != nil {
 			h.log.Error("Failed to get game details, skipping",
@@ -301,7 +301,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 			gameDirName = game.Name
 		}
 
-		// Get latest programs for this game
+		// Получаем последние программы для этой игры
 		programs, err := h.programRepo.GetByTournamentAndGame(r.Context(), tournamentID, tg.GameID)
 		if err != nil {
 			h.log.Error("Failed to get programs for game, skipping",
@@ -318,7 +318,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 
 			filePath := *prog.FilePath
 
-			// Validate path is within upload directory (EvalSymlinks resolves symlinks too)
+			// Проверяем, что путь внутри upload-директории (EvalSymlinks раскрывает симлинки)
 			absFilePath, err := filepath.EvalSymlinks(filePath)
 			if err != nil || !strings.HasPrefix(absFilePath, absUploadDir+string(os.PathSeparator)) {
 				h.log.Error("Program file path outside upload dir, skipping",
@@ -328,7 +328,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 				continue
 			}
 
-			// Check file exists.
+			// Проверяем, что файл существует.
 			// #nosec G703 G304 -- filePath провалидирован через EvalSymlinks +
 			// HasPrefix(absUploadDir) чуть выше; path-traversal невозможен.
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -339,7 +339,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 				continue
 			}
 
-			// Build ZIP entry path: game_name/program_name_v{version}.ext
+			// Формируем путь ZIP-записи: game_name/program_name_v{version}.ext
 			ext := filepath.Ext(filePath)
 			entryName := fmt.Sprintf("%s/%s_v%d%s", gameDirName, sanitizeZipPath(prog.Name), prog.Version, ext)
 
@@ -377,7 +377,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 	)
 }
 
-// DeactivateAllGames deactivates all games in a tournament.
+// DeactivateAllGames деактивирует все игры в турнире.
 // @Summary Деактивировать все игры
 // @Description Деактивирует все игры в турнире (только для админов)
 // @Tags games
@@ -414,7 +414,7 @@ func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// sanitizeZipPath cleans a name for use in ZIP entry paths.
+// sanitizeZipPath очищает имя для использования в путях ZIP-записей.
 func sanitizeZipPath(name string) string {
 	name = strings.Map(func(r rune) rune {
 		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' || r == '\x00' {
@@ -422,7 +422,7 @@ func sanitizeZipPath(name string) string {
 		}
 		return r
 	}, name)
-	// Remove ".." traversal sequences
+	// Удаляем последовательности ".." path-traversal
 	name = strings.ReplaceAll(name, "..", "_")
 	name = strings.TrimSpace(name)
 	if name == "" {

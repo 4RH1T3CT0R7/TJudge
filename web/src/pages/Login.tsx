@@ -121,7 +121,7 @@ export function Login() {
     return null;
   }, [focusedField]);
 
-  // Password masking — type="text" showing * characters
+  // Маскирование пароля - type="text" показывает символы *
   const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace') {
       e.preventDefault();
@@ -167,7 +167,7 @@ export function Login() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center pb-12">
       <div className="w-full max-w-sm mx-auto py-2">
-        {/* Invader — z-index above fixed header (z-50) so speech bubble isn't clipped */}
+        {/* Invader - z-index выше фиксированного header (z-50), чтобы speech bubble не обрезался */}
         <div className={`flex justify-center mb-3 relative z-[60] ${loginSuccess ? 'animate-login-success' : ''}`}>
           <SpaceInvader
             size="md"
@@ -179,7 +179,7 @@ export function Login() {
           />
         </div>
 
-        {/* Header — terminal style */}
+        {/* Header - terminal style */}
         <div className="text-center mb-5">
           <p
             id="login-error"
@@ -233,7 +233,7 @@ export function Login() {
             </div>
           </div>
 
-          {/* Password — custom asterisk masking */}
+          {/* Password - кастомное маскирование астерисками */}
           <div>
             <label htmlFor="password" className="block text-sm text-gray-500 mb-1" style={monoFont}>
               {'// пароль'}

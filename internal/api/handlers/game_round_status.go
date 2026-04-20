@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// TournamentGameWithDetails contains tournament-game link info with game details.
+// TournamentGameWithDetails содержит данные связи турнир-игра с детализацией игры.
 type TournamentGameWithDetails struct {
 	TournamentID          uuid.UUID `json:"tournament_id"`
 	GameID                uuid.UUID `json:"game_id"`
@@ -27,7 +27,7 @@ type TournamentGameWithDetails struct {
 	AutoRoundLastRunAt    *string   `json:"auto_round_last_run_at,omitempty"`
 }
 
-// GetTournamentGamesWithStatus returns games with their round status.
+// GetTournamentGamesWithStatus возвращает игры с их round-статусом.
 // @Summary Статус игр турнира
 // @Description Возвращает игры турнира с информацией о раундах и авто-раунде
 // @Tags games
@@ -84,7 +84,7 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 	writeJSON(w, http.StatusOK, result)
 }
 
-// GetActiveGame returns the currently active game for a tournament.
+// GetActiveGame возвращает текущую активную игру турнира.
 // @Summary Активная игра турнира
 // @Description Возвращает текущую активную игру турнира (null если нет)
 // @Tags games
@@ -149,12 +149,12 @@ func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, result)
 }
 
-// SetActiveGameRequest is the request for setting the active game.
+// SetActiveGameRequest - запрос на установку активной игры.
 type SetActiveGameRequest struct {
 	GameID uuid.UUID `json:"game_id"`
 }
 
-// SetActiveGame sets the active game for a tournament.
+// SetActiveGame устанавливает активную игру турнира.
 // @Summary Установить активную игру
 // @Description Устанавливает активную игру для турнира (только для админов)
 // @Tags games
@@ -202,7 +202,7 @@ func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetGameLeaderboard returns the leaderboard for a specific game in a tournament.
+// GetGameLeaderboard возвращает leaderboard для конкретной игры в турнире.
 // @Summary Рейтинг по игре
 // @Description Возвращает таблицу лидеров для конкретной игры в турнире
 // @Tags games
@@ -247,7 +247,7 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, leaderboard)
 }
 
-// GetGameMatches returns matches for a specific game in a tournament.
+// GetGameMatches возвращает матчи для конкретной игры в турнире.
 // @Summary Матчи по игре
 // @Description Возвращает матчи для конкретной игры в турнире с фильтрацией по статусу
 // @Tags games
@@ -313,7 +313,7 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, matches)
 }
 
-// GetGamePrograms returns programs for a specific game in a tournament.
+// GetGamePrograms возвращает программы для конкретной игры в турнире.
 // @Summary Программы по игре
 // @Description Возвращает программы для конкретной игры в турнире (только для админов)
 // @Tags games

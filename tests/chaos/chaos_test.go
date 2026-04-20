@@ -575,17 +575,12 @@ func TestChaos_GracefulDegradation(t *testing.T) {
 }
 
 // =============================================================================
-// Chaos Test: Idempotency-Key под конкурентными retry (P2.19)
+// Chaos Test: Idempotency-Key под конкурентными retry.
 // =============================================================================
 
-// UR bug_014: раньше тест бил по /auth/login, но к нему НЕ подключён
-// Idempotency-middleware (wire-up только на POST /tournaments и POST /programs).
-// Из-за этого тест был false-positive: все 20 запросов возвращали 401 Unauthorized,
-// тест считал их "ok" и всегда проходил независимо от работы middleware.
-//
-// Теперь тест идёт через endpoint, куда middleware реально подключён
+// Тест идёт через endpoint, к которому Idempotency-middleware реально подключён
 // (POST /api/v1/tournaments). Эндпоинт требует admin-авторизации, поэтому без
-// токена вернёт 401 — но ключевой инвариант (middleware вмешивается до auth
+// токена вернёт 401, но ключевой инвариант (middleware вмешивается до auth
 // и возвращает 409 или replayed-ответ) проверяется корректно.
 
 func TestChaos_IdempotencyUnderConcurrentRetries(t *testing.T) {
@@ -597,8 +592,8 @@ func TestChaos_IdempotencyUnderConcurrentRetries(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	t.Run("MiddlewareInterceptsConcurrent_OnRealEndpoint", func(t *testing.T) {
-		// Идемпотентный endpoint ДОЛЖЕН быть таким, где ачрктнально подключён
-		// s.idempotency() — см. routes.go. Tournament Create подходит.
+		// Идемпотентный endpoint ДОЛЖЕН быть таким, где актуально подключён
+		// s.idempotency() - см. routes.go. Tournament Create подходит.
 		key := fmt.Sprintf("chaos-idemp-%d", time.Now().UnixNano())
 		body := `{"name":"ChaosIdemp","description":"t","game_type":"chess"}`
 
@@ -624,8 +619,8 @@ func TestChaos_IdempotencyUnderConcurrentRetries(t *testing.T) {
 					replay.Add(1)
 					return
 				}
-				// 409 Conflict — конкурентный запрос с тем же ключом ещё in-flight.
-				// 401/403 — auth не пройдена (ожидаемо без admin-токена), но это
+				// 409 Conflict - конкурентный запрос с тем же ключом ещё in-flight.
+				// 401/403 - auth не пройдена (ожидаемо без admin-токена), но это
 				// наш контрольный ответ при первом прохождении.
 				switch resp.StatusCode {
 				case http.StatusConflict:
@@ -641,7 +636,7 @@ func TestChaos_IdempotencyUnderConcurrentRetries(t *testing.T) {
 			firstResp.Load(), replay.Load(), other.Load())
 
 		// Real invariant: ровно один запрос прошёл как "первый", остальные задедуплицированы.
-		// (Может быть 0 if endpoint не существует или >1 при высокой latency — но сервер
+		// (Может быть 0 если endpoint не существует или >1 при высокой latency, но сервер
 		// не должен упасть и все 20 должны получить ответ.)
 		assert.Equal(t, int64(20), firstResp.Load()+replay.Load()+other.Load(),
 			"сервер должен ответить всем 20 запросам")
@@ -649,7 +644,7 @@ func TestChaos_IdempotencyUnderConcurrentRetries(t *testing.T) {
 }
 
 // =============================================================================
-// Chaos Test: Rate-limiter fallback при падении Redis (P1.5)
+// Chaos Test: Rate-limiter fallback при падении Redis.
 // =============================================================================
 
 // Этот тест требует возможности "дропнуть" Redis вручную. В CI ожидается что
@@ -684,7 +679,7 @@ func TestChaos_RateLimiterSurvivesRedisPartition(t *testing.T) {
 		resp.Body.Close()
 	}
 	t.Logf("Redis-down: 200=%d 429=%d other=%d", ok200, ok429, other)
-	// Fallback-лимитер (P1.5) должен вмешаться — 429 возможны.
+	// Fallback-лимитер должен вмешаться - 429 возможны.
 	// Главный инвариант: API не крашится (other != 100).
 	assert.Less(t, other, 100, "API must stay responsive under Redis partition")
 }

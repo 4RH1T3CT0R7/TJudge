@@ -25,14 +25,14 @@ type TournamentCacher interface {
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// LeaderboardCacher — full interface for leaderboard cache used by the tournament service.
-// Used for cache-aside reads in GetLeaderboard/GetCrossGameLeaderboard.
+// LeaderboardCacher - полный интерфейс кэша лидерборда, используемый сервисом турниров.
+// Применяется для cache-aside чтения в GetLeaderboard/GetCrossGameLeaderboard.
 type LeaderboardCacher interface {
 	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
 	Clear(ctx context.Context, tournamentID uuid.UUID) error
 
-	// Full JSON leaderboard cache (short TTL, complete data for API responses)
+	// Полный JSON-кэш лидерборда (короткий TTL, полные данные для API-ответов)
 	GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
 	SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error
 	GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
@@ -90,7 +90,7 @@ type GameRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error
-	// Auto-round
+	// Авто-раунд
 	GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error)
 	UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error)
@@ -158,7 +158,7 @@ func generateCode() string {
 	for i := range code {
 		n, err := rand.Int(rand.Reader, max)
 		if err != nil {
-			// crypto/rand failure indicates broken OS entropy — panic rather than silently degrade
+			// Отказ crypto/rand означает сломанную энтропию ОС - паникуем, а не деградируем молча
 			panic("crypto/rand.Int failed: " + err.Error())
 		}
 		code[i] = charset[n.Int64()]
@@ -205,7 +205,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 		zap.String("game_type", tournament.GameType),
 	)
 
-	// Publish event (cache side-effects handled by event handlers)
+	// Публикуем событие (побочные эффекты кэша обрабатываются в обработчиках событий)
 	s.eventBus.Publish(ctx, events.TournamentCreated{Version: 1, Tournament: tournament})
 
 	return tournament, nil
@@ -305,7 +305,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 			zap.String("program_id", req.ProgramID.String()),
 		)
 
-		// Publish event (cache invalidation + leaderboard update handled by event handlers)
+		// Публикуем событие (инвалидация кэша и обновление лидерборда - в обработчиках событий)
 		s.eventBus.Publish(ctx, events.ParticipantJoined{
 			Version:       1,
 			TournamentID:  req.TournamentID,
@@ -377,7 +377,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			}
 		}
 
-		// Publish event (cache invalidation + broadcast handled by event handlers)
+		// Публикуем событие (инвалидация кэша и broadcast - в обработчиках событий)
 		s.eventBus.Publish(ctx, events.TournamentStarted{
 			Version:      1,
 			TournamentID: tournamentID,
@@ -427,7 +427,7 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 			zap.String("tournament_id", tournamentID.String()),
 		)
 
-		// Publish event (cache invalidation + broadcast handled by event handlers)
+		// Публикуем событие (инвалидация кэша и broadcast - в обработчиках событий)
 		s.eventBus.Publish(ctx, events.TournamentCompleted{
 			Version:      1,
 			TournamentID: tournamentID,
@@ -471,7 +471,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 		zap.String("tournament_id", tournamentID.String()),
 	)
 
-	// Publish event (cache cleanup handled by event handlers)
+	// Публикуем событие (очистка кэша - в обработчиках событий)
 	s.eventBus.Publish(ctx, events.TournamentDeleted{Version: 1, TournamentID: tournamentID})
 
 	return nil
@@ -479,7 +479,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 
 // GetLeaderboard получает таблицу лидеров турнира
 func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
-	// Try full JSON cache first (short TTL, complete data)
+	// Сначала пробуем полный JSON-кэш (короткий TTL, полные данные)
 	cached, err := s.leaderboardCache.GetFullLeaderboard(ctx, tournamentID, limit)
 	if err != nil {
 		s.log.Error("Failed to get full leaderboard cache", zap.Error(err))
@@ -488,7 +488,7 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 		return cached, nil
 	}
 
-	// Cache miss — use singleflight to prevent thundering herd
+	// Cache miss - используем singleflight для предотвращения thundering herd
 	sfKey := fmt.Sprintf("leaderboard:%s:%d", tournamentID, limit)
 	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
 		leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
@@ -496,12 +496,12 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 			return nil, err
 		}
 
-		// Populate full JSON cache
+		// Заполняем полный JSON-кэш
 		if err := s.leaderboardCache.SetFullLeaderboard(ctx, tournamentID, limit, leaderboard); err != nil {
 			s.log.Error("Failed to set full leaderboard cache", zap.Error(err))
 		}
 
-		// Update sorted set cache for rating lookups
+		// Обновляем sorted set кэш для поиска по рейтингу
 		for _, entry := range leaderboard {
 			if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
 				s.log.Error("Failed to update leaderboard cache", zap.Error(err))
@@ -576,9 +576,9 @@ func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID
 }
 
 // GetCrossGameLeaderboard возвращает кросс-игровой рейтинг турнира
-// (команда — рейтинг игры 1 — … — рейтинг игры N — позиция в турнире)
+// (команда - рейтинг игры 1 - ... - рейтинг игры N - позиция в турнире)
 func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
-	// Try full JSON cache first
+	// Сначала пробуем полный JSON-кэш
 	cached, err := s.leaderboardCache.GetFullCrossGameLeaderboard(ctx, tournamentID)
 	if err != nil {
 		s.log.Error("Failed to get cross-game leaderboard cache", zap.Error(err))
@@ -587,7 +587,7 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 		return cached, nil
 	}
 
-	// Cache miss — use singleflight to prevent thundering herd
+	// Cache miss - используем singleflight для предотвращения thundering herd
 	sfKey := fmt.Sprintf("crossgame:%s", tournamentID)
 	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
 		entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
@@ -595,7 +595,7 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 			return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)
 		}
 
-		// Populate cache
+		// Заполняем кэш
 		if err := s.leaderboardCache.SetFullCrossGameLeaderboard(ctx, tournamentID, entries); err != nil {
 			s.log.Error("Failed to set cross-game leaderboard cache", zap.Error(err))
 		}

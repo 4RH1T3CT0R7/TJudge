@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// BenchmarkResult holds parsed benchmark result
+// BenchmarkResult хранит распарсенный результат бенчмарка.
 type BenchmarkResult struct {
 	Name       string
 	NsOp       int64
@@ -22,7 +22,7 @@ type BenchmarkResult struct {
 	Iterations int64
 }
 
-// BenchmarkStandard defines expected performance standards
+// BenchmarkStandard описывает ожидаемые стандарты производительности.
 type BenchmarkStandard struct {
 	Name         string
 	Description  string
@@ -30,7 +30,7 @@ type BenchmarkStandard struct {
 	Category     string
 }
 
-// Rating represents performance rating
+// Rating представляет оценку производительности.
 type Rating string
 
 const (
@@ -41,7 +41,7 @@ const (
 	RatingCritical   Rating = "CRITICAL"
 )
 
-// Color codes for terminal output
+// Цветовые коды для вывода в терминал.
 const (
 	colorReset  = "\033[0m"
 	colorRed    = "\033[31m"
@@ -53,9 +53,9 @@ const (
 	colorBold   = "\033[1m"
 )
 
-// Standards defines expected performance for each benchmark
+// Standards описывает ожидаемую производительность для каждого бенчмарка.
 var Standards = map[string]BenchmarkStandard{
-	// API Benchmarks
+	// Бенчмарки API
 	"BenchmarkHealthEndpoint": {
 		Name:         "Health Endpoint",
 		Description:  "Basic health check endpoint",
@@ -117,7 +117,7 @@ var Standards = map[string]BenchmarkStandard{
 		Category:     "API",
 	},
 
-	// Worker Benchmarks
+	// Бенчмарки Worker
 	"BenchmarkWorkerPool_ThroughputSmall": {
 		Name:         "Worker Pool Small",
 		Description:  "2-4 workers, 100 matches",
@@ -161,7 +161,7 @@ var Standards = map[string]BenchmarkStandard{
 		Category:     "Worker",
 	},
 
-	// Queue Benchmarks
+	// Бенчмарки Queue
 	"BenchmarkQueueEnqueue": {
 		Name:         "Queue Enqueue",
 		Description:  "Add match to Redis queue",
@@ -199,7 +199,7 @@ var Standards = map[string]BenchmarkStandard{
 		Category:     "Queue",
 	},
 
-	// Database Benchmarks
+	// Бенчмарки БД
 	"BenchmarkDBHealth": {
 		Name:         "DB Health",
 		Description:  "Database health check",
@@ -305,9 +305,9 @@ func main() {
 		fmt.Println("Note: Only standalone benchmarks (no DB/Redis required)")
 		fmt.Println()
 
-		// Run only benchmarks that don't require external services
-		// Exclude: API (needs full server), Queue (needs Redis), DB (needs Postgres)
-		// Include: Worker pool mocks, JSON parsing, UUID generation, Match creation
+		// Запускаем только бенчмарки, которым не нужны внешние сервисы.
+		// Исключаем: API (нужен полноценный сервер), Queue (нужен Redis), DB (нужен Postgres).
+		// Включаем: моки Worker pool, JSON parsing, UUID generation, Match creation.
 		args := []string{
 			"test",
 			"-tags=benchmark",
@@ -315,15 +315,15 @@ func main() {
 			"-benchmem",
 			"-benchtime=500ms",
 			"-timeout=30s",
-			"-run=^$", // Don't run regular tests
+			"-run=^$", // Не запускать обычные тесты.
 			"./tests/benchmark/...",
 		}
 		if *verbose {
 			args = append(args, "-v")
 		}
 
-		// #nosec G204 -- "go" hardcoded; args — hardcoded benchmark flags
-		// (bench regex, timeout, test path). CLI-utility, не server-endpoint.
+		// #nosec G204 -- "go" hardcoded; args - hardcoded benchmark flags
+		// (bench regex, timeout, test path). CLI-утилита, а не серверный эндпоинт.
 		cmd := exec.Command("go", args...)
 		cmd.Dir = findProjectRoot()
 
@@ -334,7 +334,7 @@ func main() {
 		err = cmd.Run()
 		output = stdout.Bytes()
 
-		// Print output in real-time for debugging
+		// Печатаем вывод для отладки.
 		if *verbose {
 			fmt.Println(string(output))
 		}
@@ -346,7 +346,7 @@ func main() {
 			}
 		}
 	} else {
-		// Read from stdin
+		// Читаем из stdin.
 		fmt.Println(colorCyan + "Reading benchmark results from stdin..." + colorReset)
 		fmt.Println("(Run with -run flag to execute benchmarks automatically)")
 		fmt.Println()
@@ -375,12 +375,12 @@ func main() {
 }
 
 func disableColors() {
-	// Can't reassign constants, so we'd need to use variables
-	// For simplicity, we'll skip this feature
+	// Константы нельзя переопределить, потребовались бы переменные.
+	// Для простоты эту фичу пропускаем.
 }
 
 func findProjectRoot() string {
-	// Try to find go.mod
+	// Пытаемся найти go.mod.
 	dir, _ := os.Getwd()
 	return dir
 }
@@ -388,7 +388,7 @@ func findProjectRoot() string {
 func parseBenchmarkOutput(output string) []BenchmarkResult {
 	var results []BenchmarkResult
 
-	// Pattern: BenchmarkName-N    iterations    ns/op    B/op    allocs/op
+	// Шаблон: BenchmarkName-N    iterations    ns/op    B/op    allocs/op.
 	re := regexp.MustCompile(`(Benchmark\w+)(?:-\d+)?\s+(\d+)\s+([\d.]+)\s+ns/op(?:\s+([\d.]+)\s+B/op)?(?:\s+(\d+)\s+allocs/op)?`)
 
 	for _, line := range strings.Split(output, "\n") {
@@ -476,7 +476,7 @@ func printResults(results []BenchmarkResult) {
 	fmt.Println(colorBold + "================================================================================" + colorReset)
 	fmt.Println()
 
-	// Group by category
+	// Группируем по категориям.
 	categories := map[string][]BenchmarkResult{
 		"API":    {},
 		"Worker": {},
@@ -537,7 +537,7 @@ func printResults(results []BenchmarkResult) {
 		}
 	}
 
-	// Summary
+	// Итоги.
 	fmt.Println(colorBold + "================================================================================" + colorReset)
 	fmt.Println(colorBold + "                              SUMMARY" + colorReset)
 	fmt.Println(colorBold + "================================================================================" + colorReset)
@@ -553,7 +553,7 @@ func printResults(results []BenchmarkResult) {
 	fmt.Printf("  %s---%s Critical  (> 5.0x):          %d\n", colorRed, colorReset, ratings[RatingCritical])
 	fmt.Println()
 
-	// Recommendations
+	// Рекомендации.
 	if ratings[RatingCritical] > 0 {
 		fmt.Printf("  %s!!! CRITICAL:%s Some benchmarks are >5x slower than expected.\n", colorRed, colorReset)
 		fmt.Println("      Immediate investigation required!")

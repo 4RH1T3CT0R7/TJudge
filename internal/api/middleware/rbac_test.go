@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockUserRoleChecker for testing VerifiedAdminChecker
+// MockUserRoleChecker - мок для тестирования VerifiedAdminChecker
 type MockUserRoleChecker struct {
 	mock.Mock
 }
@@ -94,7 +94,7 @@ func TestRequireRole_NoRoleInContext(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	// No role in context
+	// Без роли в контексте
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -177,7 +177,7 @@ func TestRequireRoleValue(t *testing.T) {
 }
 
 func TestMiddlewareChain(t *testing.T) {
-	// Test that auth and rbac middleware work together
+	// Проверяем, что auth и rbac middleware работают вместе
 	mockAuth := new(MockAuthService)
 	log := newTestLogger()
 
@@ -187,7 +187,7 @@ func TestMiddlewareChain(t *testing.T) {
 	mockAuth.On("ValidateToken", "admin-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "admin-token").Return(false, nil)
 
-	// Chain: Auth -> RequireAdmin -> Handler
+	// Цепочка: Auth -> RequireAdmin -> Handler
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, _ := middleware.RequireRoleValue(r.Context())
 		userID, _ := middleware.GetUserID(r.Context())
@@ -284,7 +284,7 @@ func TestVerifiedAdminChecker_AdminRevokedInDB(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
 
 	userID := uuid.New()
-	// JWT says admin, but DB says user (admin revoked)
+	// JWT говорит admin, но БД говорит user (admin отозван)
 	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
 		ID:   userID,
 		Role: domain.RoleUser,
@@ -319,7 +319,7 @@ func TestVerifiedAdminChecker_NonAdminJWT(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	// JWT role is user, not admin
+	// JWT role - user, не admin
 	req = req.WithContext(verifiedAdminCtx(domain.RoleUser, userID, true, true))
 	rr := httptest.NewRecorder()
 
@@ -328,7 +328,7 @@ func TestVerifiedAdminChecker_NonAdminJWT(t *testing.T) {
 	assert.False(t, handlerCalled, "Handler should not be called for non-admin JWT")
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "insufficient permissions")
-	// DB should NOT be called — rejected at JWT level
+	// БД НЕ должна вызываться - отклонено на уровне JWT
 	mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 }
 
@@ -337,7 +337,7 @@ func TestVerifiedAdminChecker_DBError(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
 
 	userID := uuid.New()
-	// DB returns an error — fail-closed behavior
+	// БД возвращает ошибку - fail-closed поведение
 	mockRepo.On("GetByID", mock.Anything, userID).Return(nil, fmt.Errorf("connection refused"))
 
 	handlerCalled := false
@@ -365,27 +365,27 @@ func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
 	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
 		ID:   userID,
 		Role: domain.RoleAdmin,
-	}, nil).Once() // Expect exactly one DB call
+	}, nil).Once() // Ожидаем ровно один вызов БД
 
 	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// First request — hits DB, populates cache
+	// Первый запрос - идёт в БД, наполняет кэш
 	req1 := httptest.NewRequest("GET", "/admin", nil)
 	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 	assert.Equal(t, http.StatusOK, rr1.Code)
 
-	// Second request — should use cache, no DB call
+	// Второй запрос - должен использовать кэш, без вызова БД
 	req2 := httptest.NewRequest("GET", "/admin", nil)
 	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
 
-	// Verify DB was only called once
+	// Проверяем, что БД была вызвана только один раз
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 }
 
@@ -404,7 +404,7 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// First request — hits DB
+	// Первый запрос - идёт в БД
 	req1 := httptest.NewRequest("GET", "/admin", nil)
 	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
@@ -412,17 +412,17 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr1.Code)
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 
-	// Wait for cache TTL to expire
+	// Ждём истечения TTL кэша
 	time.Sleep(150 * time.Millisecond)
 
-	// Second request — cache expired, hits DB again
+	// Второй запрос - кэш истёк, снова идёт в БД
 	req2 := httptest.NewRequest("GET", "/admin", nil)
 	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
 
-	// Verify DB was called twice (once fresh, once after expiry)
+	// Проверяем, что БД была вызвана дважды (один раз fresh, один раз после expiry)
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 2)
 }
 
@@ -436,7 +436,7 @@ func TestVerifiedAdminChecker_NoRoleInContext(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	// No role in context at all
+	// Роли в контексте совсем нет
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -457,7 +457,7 @@ func TestVerifiedAdminChecker_NoUserIDInContext(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	// Role is admin but no UserIDKey
+	// Роль admin, но нет UserIDKey
 	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, uuid.UUID{}, true, false))
 	rr := httptest.NewRecorder()
 
@@ -473,7 +473,7 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
 
 	userID := uuid.New()
-	// DB returns user role (admin revoked)
+	// БД возвращает роль user (admin отозван)
 	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
 		ID:   userID,
 		Role: domain.RoleUser,
@@ -483,7 +483,7 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// First request — hits DB, caches role as "user"
+	// Первый запрос - идёт в БД, кэширует роль как "user"
 	req1 := httptest.NewRequest("GET", "/admin", nil)
 	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
@@ -491,7 +491,7 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rr1.Code)
 	assert.Contains(t, rr1.Body.String(), "admin privileges have been revoked")
 
-	// Second request — uses cached "user" role, still forbidden
+	// Второй запрос - использует закэшированную "user" роль, всё ещё forbidden
 	req2 := httptest.NewRequest("GET", "/admin", nil)
 	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
@@ -499,6 +499,6 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rr2.Code)
 	assert.Contains(t, rr2.Body.String(), "admin privileges have been revoked")
 
-	// DB only called once — second request served from cache
+	// БД вызывается только один раз - второй запрос обслуживается из кэша
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 }

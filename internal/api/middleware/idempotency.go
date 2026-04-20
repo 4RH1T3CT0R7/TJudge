@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// IdempotencyStore хранит ответы по Idempotency-Key — реализуется Redis-cache'ом.
+// IdempotencyStore хранит ответы по Idempotency-Key; реализуется Redis-cache'ом.
 //
-// SetNX (SET if Not eXists) критичен: гарантирует что параллельные запросы
-// с одним ключом не создадут дублирующиеся ресурсы — только один "выиграет"
+// SetNX (SET if Not eXists) критичен: гарантирует, что параллельные запросы
+// с одним ключом не создадут дублирующиеся ресурсы - только один "выиграет"
 // и пойдёт к handler'у, остальные получат 409 или кэшированный ответ
 // предыдущего (successful) вызова.
 type IdempotencyStore interface {
@@ -25,14 +25,14 @@ type IdempotencyStore interface {
 	Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
 }
 
-// idempotencyEntry — сохраняемый снапшот ответа.
+// idempotencyEntry - сохраняемый снапшот ответа.
 type idempotencyEntry struct {
 	Status int                 `json:"status"`
 	Header map[string][]string `json:"header"`
 	Body   string              `json:"body"`
 }
 
-// idempotencyRecorder — wrapper ResponseWriter для захвата ответа.
+// idempotencyRecorder - wrapper ResponseWriter для захвата ответа.
 type idempotencyRecorder struct {
 	http.ResponseWriter
 	buf    *bytes.Buffer
@@ -49,16 +49,16 @@ func (r *idempotencyRecorder) Write(p []byte) (int, error) {
 	return r.ResponseWriter.Write(p)
 }
 
-// Idempotency middleware реализует RFC-draft Idempotency-Key (P2.19).
+// Idempotency middleware реализует RFC-draft Idempotency-Key.
 //
 // Правила:
 //   - Применяется к POST/PATCH (не к GET/PUT/DELETE, где семантика уже идемпотентна).
-//   - Клиент посылает заголовок Idempotency-Key (≤ 128 байт).
+//   - Клиент посылает заголовок Idempotency-Key (не более 128 байт).
 //   - Для первого запроса handler исполняется обычно, ответ сохраняется в store
 //     под ключом на idempotencyTTL (24ч по умолчанию).
 //   - Повторный запрос с тем же ключом возвращает сохранённый ответ без
 //     пере-исполнения handler'а.
-//   - Концурентный запрос с тем же ключом получает 409 Conflict — защита от
+//   - Конкурентный запрос с тем же ключом получает 409 Conflict - защита от
 //     двойного создания при параллельных ретраях.
 const idempotencyTTL = 24 * time.Hour
 const idempotencyKeyMax = 128
@@ -114,13 +114,13 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 			if !ok {
-				// Чужой запрос захватил ключ — второй не должен пытаться создать.
+				// Чужой запрос захватил ключ - второй не должен пытаться создать.
 				// 409 Conflict сообщает клиенту: повторите попытку позже.
 				http.Error(w, `{"error":"duplicate request with same Idempotency-Key in progress"}`, http.StatusConflict)
 				return
 			}
 
-			// 3. Первый запрос — исполняем handler и сохраняем snapshot.
+			// 3. Первый запрос - исполняем handler и сохраняем snapshot.
 			rec := &idempotencyRecorder{
 				ResponseWriter: w,
 				buf:            &bytes.Buffer{},
@@ -128,11 +128,11 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 			}
 			next.ServeHTTP(rec, r)
 
-			// Сохраняем только успешные ответы (2xx) — ошибки клиент может фикснуть и повторить.
+			// Сохраняем только успешные ответы (2xx); ошибки клиент может фикснуть и повторить.
 			if rec.status >= 200 && rec.status < 300 {
 				headerSnapshot := map[string][]string{}
 				for k, v := range w.Header() {
-					// Skip hop-by-hop / чувствительные.
+					// Пропускаем hop-by-hop / чувствительные заголовки.
 					if strings.EqualFold(k, "Set-Cookie") || strings.EqualFold(k, "Authorization") {
 						continue
 					}

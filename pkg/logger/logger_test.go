@@ -33,7 +33,7 @@ func TestNew_ErrorLevel(t *testing.T) {
 }
 
 func TestNew_InvalidLevel(t *testing.T) {
-	// Invalid level should default to info
+	// Некорректный уровень должен откатиться к info
 	log, err := New("invalid", "json")
 
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestLogger_WithContextRequestID_EmptyContext(t *testing.T) {
 	log, err := New("info", "json")
 	require.NoError(t, err)
 
-	// No request ID in context — should return same logger
+	// Нет request ID в контексте - должен вернуться тот же логгер
 	enriched := log.WithContextRequestID(context.Background())
 
 	assert.NotNil(t, enriched)
@@ -193,9 +193,9 @@ func TestLogger_Sync(t *testing.T) {
 	log, err := New("info", "json")
 	require.NoError(t, err)
 
-	// Sync should not panic
+	// Sync не должен паниковать
 	err = log.Sync()
-	// Sync to stdout may return error on some systems
+	// Sync в stdout может возвращать ошибку на некоторых системах
 	_ = err
 }
 
@@ -203,7 +203,7 @@ func TestLogger_LogError(t *testing.T) {
 	log, err := New("debug", "json")
 	require.NoError(t, err)
 
-	// Should not panic
+	// Не должен паниковать
 	log.LogError("test error", assert.AnError, zap.String("context", "test"))
 }
 
@@ -211,7 +211,7 @@ func TestLogger_BasicLogging(t *testing.T) {
 	log, err := New("debug", "json")
 	require.NoError(t, err)
 
-	// These should not panic
+	// Не должны паниковать
 	log.Debug("debug message")
 	log.Info("info message")
 	log.Warn("warn message")
@@ -235,9 +235,9 @@ func TestLogger_AsyncFlush(t *testing.T) {
 	log.Info("async message 1")
 	log.Info("async message 2")
 
-	// Should flush buffered messages
+	// Должен сбросить буферизированные сообщения
 	err = log.Sync()
-	_ = err // ignore sync errors
+	_ = err // игнорируем ошибки sync
 }
 
 func BenchmarkLogger_Info(b *testing.B) {

@@ -32,8 +32,8 @@ export function TerminalLoader() {
         charIndexRef.current++;
         return 30 + Math.random() * 50;
       }
-      // Finished typing current line — pause then start next
-      setLines((prev) => [...prev.slice(-2), msg]); // keep max 3 completed lines
+      // Закончили печатать текущую строку - пауза, затем начинаем следующую
+      setLines((prev) => [...prev.slice(-2), msg]); // храним максимум 3 завершённых строки
       setCurrentText('');
       charIndexRef.current = 0;
       msgIndexRef.current++;

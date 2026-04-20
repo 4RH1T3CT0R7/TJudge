@@ -294,11 +294,14 @@ TJudge/
 | Документ | Описание |
 |----------|----------|
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Руководство пользователя и администратора |
-| [docs/SETUP.md](docs/SETUP.md) | Настройка окружения, разработка, деплой |
+| [docs/SETUP.md](docs/SETUP.md) | Настройка окружения и локальная разработка |
 | [docs/SELF_HOSTED.md](docs/SELF_HOSTED.md) | Развёртывание на собственном сервере |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Production деплой, runbook, бэкапы, мониторинг |
+| [docs/SLO.md](docs/SLO.md) | Service Level Objectives и алерты |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Детальная архитектура системы |
 | [docs/API_GUIDE.md](docs/API_GUIDE.md) | REST API и WebSocket эндпоинты |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
+| [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md) | Добавление новых игр |
 | [docs/PERFORMANCE_TESTING.md](docs/PERFORMANCE_TESTING.md) | Тестирование производительности |
 
 ---

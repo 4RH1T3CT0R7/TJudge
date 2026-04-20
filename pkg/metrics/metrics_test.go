@@ -13,7 +13,7 @@ func TestNew_Singleton(t *testing.T) {
 	m2 := New()
 
 	require.NotNil(t, m1)
-	assert.Same(t, m1, m2) // Same instance
+	assert.Same(t, m1, m2) // Тот же экземпляр
 }
 
 func TestNew_AllFieldsNotNil(t *testing.T) {

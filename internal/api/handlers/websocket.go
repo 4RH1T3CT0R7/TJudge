@@ -31,7 +31,7 @@ func isProductionEnvLookup() bool {
 //     Пустой Origin разрешается только для не-браузерных клиентов (без Sec-Fetch-Site).
 //   - В development wildcard/пустой origin-list разрешает любой origin.
 //
-// Это закрывает CSWSH (Cross-Site WebSocket Hijacking) — когда чужой сайт,
+// Это закрывает CSWSH (Cross-Site WebSocket Hijacking), когда чужой сайт,
 // открытый в браузере авторизованного пользователя, подключается к WS.
 func checkWebSocketOrigin(r *http.Request) bool {
 	allowedOrigins := os.Getenv("WEBSOCKET_ALLOWED_ORIGINS")
@@ -43,7 +43,7 @@ func checkWebSocketOrigin(r *http.Request) bool {
 	prod := isProductionEnvLookup()
 
 	// В dev wildcard и пустой список разрешают всё (legacy-поведение для локалки).
-	// В prod оба режима — fail-closed.
+	// В prod оба режима - fail-closed.
 	if trimmed == "" || trimmed == "*" {
 		return !prod
 	}
@@ -52,7 +52,7 @@ func checkWebSocketOrigin(r *http.Request) bool {
 	if origin == "" {
 		// Пустой Origin в браузерах не бывает при cross-origin; это либо same-origin,
 		// либо не-браузерный клиент (curl, bot). В prod пропускаем только если это
-		// явно не-браузерный клиент (нет Sec-Fetch-Site) — иначе fail-closed.
+		// явно не-браузерный клиент (нет Sec-Fetch-Site), иначе fail-closed.
 		if prod && r.Header.Get("Sec-Fetch-Site") != "" {
 			return false
 		}
@@ -110,7 +110,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Echo the exact offered subprotocol per RFC 6455 Section 4.2.2
+	// Отражаем предложенный клиентом subprotocol дословно (RFC 6455, секция 4.2.2).
 	responseHeader := http.Header{}
 	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
 		for _, p := range strings.Split(proto, ",") {
@@ -135,7 +135,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// P2.8: включаем TCP keepalive для ранней детекции "мертвых" клиентов,
+	// Включаем TCP keepalive для ранней детекции "мертвых" клиентов,
 	// которые не отвечают на WebSocket ping (например, замороженный laptop).
 	// OS-level probes отправляются чаще, чем WS ping, что уменьшает latency
 	// обнаружения разрыва с ~35s до ~10s.

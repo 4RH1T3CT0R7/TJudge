@@ -107,7 +107,7 @@ func (pr *PageRequest) GetLimit() int {
 	if pr.Last != nil {
 		return *pr.Last
 	}
-	return 20 // Default limit
+	return 20 // Лимит по умолчанию
 }
 
 // IsForward проверяет, является ли запрос forward pagination

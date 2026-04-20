@@ -275,7 +275,7 @@ func TestService_RefreshTokens_BlacklistedToken(t *testing.T) {
 
 	// GetByID succeeds (called before AddIfNotExists now)
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// AddIfNotExists returns false → token already consumed
+	// AddIfNotExists returns false -> token already consumed
 	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, nil)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -870,7 +870,7 @@ func TestService_RefreshTokens_GetUserError(t *testing.T) {
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
-	// GetByID fails BEFORE AddIfNotExists — token is NOT consumed (no lockout)
+	// GetByID fails BEFORE AddIfNotExists - token is NOT consumed (no lockout)
 	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -893,7 +893,7 @@ func TestService_RefreshTokens_BlacklistAtomicError(t *testing.T) {
 
 	// GetByID succeeds (called before AddIfNotExists now)
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// Simulate Redis down — fail-closed should reject the request
+	// Simulate Redis down - fail-closed should reject the request
 	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, errors.ErrInternal)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -924,7 +924,7 @@ func TestService_Logout_WithBothTokens(t *testing.T) {
 	blacklist.AssertExpectations(t)
 }
 
-// TestService_RefreshTokens_BlacklistAddError removed — RefreshTokens now uses
+// TestService_RefreshTokens_BlacklistAddError removed - RefreshTokens now uses
 // atomic AddIfNotExists instead of separate IsBlacklisted + Add,
 // so the "Add fails after check" scenario no longer exists.
 // The equivalent failure is covered by TestService_RefreshTokens_BlacklistAtomicError.
@@ -1023,7 +1023,7 @@ func TestService_Logout_RefreshBlacklistError(t *testing.T) {
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
-	// Access token is invalid — that's OK for logout, it just logs
+	// Access token is invalid - that's OK for logout, it just logs
 	// Refresh token blacklist fails
 	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
 

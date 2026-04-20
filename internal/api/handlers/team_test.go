@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockTeamService implements TeamService
+// MockTeamService реализует TeamService
 type MockTeamService struct {
 	mock.Mock
 }
@@ -161,7 +161,7 @@ func TestTeamHandler_Create_MissingUserID(t *testing.T) {
 
 	body, _ := json.Marshal(CreateTeamRequest{Name: "Test"})
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
-	// No user ID in context
+	// Без user ID в контексте
 
 	rr := httptest.NewRecorder()
 	h.Create(rr, req)

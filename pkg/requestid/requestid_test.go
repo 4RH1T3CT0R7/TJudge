@@ -35,8 +35,8 @@ func TestFromContext_EmptyString(t *testing.T) {
 type otherKey struct{}
 
 func TestFromContext_WrongType(t *testing.T) {
-	// If someone stores a non-string value with a different key type,
-	// FromContext should return empty string.
+	// Если кто-то сохраняет нестроковое значение с другим типом ключа,
+	// FromContext должен вернуть пустую строку.
 	ctx := context.WithValue(context.Background(), otherKey{}, 12345)
 	assert.Equal(t, "", FromContext(ctx))
 }

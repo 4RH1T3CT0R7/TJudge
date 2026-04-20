@@ -223,7 +223,7 @@ func TestParseResult_LargeScores(t *testing.T) {
 func TestParseResult_ScoresOutOfBounds(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Default config (0 iterations) → floor of 100_000
+	// Конфигурация по умолчанию (0 итераций) даёт нижний порог 100_000
 	_, err := e.parseResult(0, "999999 888888", "")
 
 	require.Error(t, err)
@@ -534,7 +534,7 @@ func TestSanitizeStderr_MultipleANSICodes(t *testing.T) {
 	assert.Equal(t, expected, sanitizeStderr(input))
 }
 
-// --- limitWriter (P1.4) ---
+// --- limitWriter ---
 
 // TestLimitWriter_UnderLimit_WritesFully проверяет, что запись меньше лимита
 // проходит без усечения и возвращает правильный счётчик.
@@ -548,10 +548,10 @@ func TestLimitWriter_UnderLimit_WritesFully(t *testing.T) {
 	assert.Equal(t, 89, lw.n)
 }
 
-// TestLimitWriter_OverLimit_TruncatesButReportsFullWrite — важное для stdcopy
-// поведение: даже когда лимит достигнут, Write должен вернуть len(p),
-// иначе stdcopy интерпретирует это как short-write error и прервёт чтение
-// второго потока.
+// TestLimitWriter_OverLimit_TruncatesButReportsFullWrite проверяет важное
+// для stdcopy поведение: даже когда лимит достигнут, Write должен вернуть
+// len(p), иначе stdcopy интерпретирует это как short-write error и прервёт
+// чтение второго потока.
 func TestLimitWriter_OverLimit_TruncatesButReportsFullWrite(t *testing.T) {
 	var buf strings.Builder
 	lw := &limitWriter{w: &buf, n: 5}
@@ -562,7 +562,7 @@ func TestLimitWriter_OverLimit_TruncatesButReportsFullWrite(t *testing.T) {
 	assert.Equal(t, 0, lw.n)
 }
 
-// TestLimitWriter_AfterLimit_DropsSilently — после исчерпания бюджета
+// TestLimitWriter_AfterLimit_DropsSilently: после исчерпания бюджета
 // последующие записи тихо отбрасываются, буфер не растёт.
 func TestLimitWriter_AfterLimit_DropsSilently(t *testing.T) {
 	var buf strings.Builder
@@ -574,8 +574,8 @@ func TestLimitWriter_AfterLimit_DropsSilently(t *testing.T) {
 	assert.Equal(t, "abc", buf.String())
 }
 
-// TestLimitWriter_IndependentBudgets — суть фикса P1.4: два writer'а
-// имеют независимые лимиты; большой stdout не ворует бюджет stderr.
+// TestLimitWriter_IndependentBudgets: два writer'а имеют независимые лимиты,
+// большой stdout не ворует бюджет stderr.
 func TestLimitWriter_IndependentBudgets(t *testing.T) {
 	var outBuf, errBuf strings.Builder
 	out := &limitWriter{w: &outBuf, n: 5}

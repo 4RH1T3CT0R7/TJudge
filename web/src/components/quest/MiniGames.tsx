@@ -38,7 +38,7 @@ function AsciiPong({ onEnd }: PongProps) {
     return () => clearInterval(frameRef.current);
   }, [running, ballDx, ballDy]);
 
-  // Collision detection — game loop requires synchronous state updates
+  // Детектор столкновений - игровой цикл требует синхронных обновлений state
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // Player paddle (left side, x=1)
@@ -83,7 +83,7 @@ function AsciiPong({ onEnd }: PongProps) {
     return () => clearInterval(t);
   }, [running, ballY]);
 
-  // Check win/lose — game loop state transitions
+  // Проверка win/lose - переходы состояний игрового цикла
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (playerScore >= 3) {

@@ -24,7 +24,7 @@ func TestContract_Program_Create_201_JSON(t *testing.T) {
 	programID := uuid.New()
 
 	// The JSON create path (handleJSONCreate) calls:
-	//   1. program.Validate() — requires name, game_type, code_path, language
+	//   1. program.Validate() - requires name, game_type, code_path, language
 	//   2. programRepo.Create(ctx, program)
 	h.ProgramRepo.EXPECT().
 		Create(mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {

@@ -95,7 +95,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Выполняем вход
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
-		// PII намеренно не логируется — предотвращаем user enumeration.
+		// PII намеренно не логируется: предотвращаем user enumeration.
 		h.log.LogError("Failed to login", err)
 		writeError(w, err)
 		return
@@ -168,7 +168,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	// Ignore decode errors - refresh token is optional
+	// Игнорируем ошибки декодирования - refresh token опционален
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	// Выполняем выход (blacklist обоих токенов)

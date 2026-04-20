@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// --- Mock Broadcaster ---
+// --- Мок Broadcaster ---
 
 type mockBroadcaster struct {
 	mock.Mock
@@ -22,7 +22,7 @@ func (m *mockBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, 
 	m.Called(tournamentID, messageType, payload)
 }
 
-// --- BroadcastHandler tests ---
+// --- Тесты BroadcastHandler ---
 
 func TestBroadcastHandler_TournamentStarted(t *testing.T) {
 	bc := &mockBroadcaster{}

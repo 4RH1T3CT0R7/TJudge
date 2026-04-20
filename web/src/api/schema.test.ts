@@ -1,5 +1,5 @@
-// P2.13: тесты schema-валидатора (vitest-совместимые).
-// Исполняются при наличии `npm test` — нет runner'а в проекте сейчас, но файл
+// Тесты schema-валидатора (vitest-совместимые).
+// Исполняются при наличии `npm test` - нет runner'а в проекте сейчас, но файл
 // готов для активации. Паттерн: проверка happy-path + каждой выбрасываемой ошибки.
 
 import {
@@ -23,15 +23,15 @@ function expectThrows(fn: () => void, pathContains: string) {
   }
 }
 
-// Smoke tests — экспортируются чтобы runner'у было что подхватить.
+// Smoke tests - экспортируются чтобы runner'у было что подхватить.
 export function runAllTests() {
-  // user
+  // User
   validateUser({ id: '1', username: 'u', email: 'e', role: 'user' });
   expectThrows(() => validateUser(null), 'user');
   expectThrows(() => validateUser({ id: 1, username: 'u', email: 'e', role: 'user' }), 'user.id');
   expectThrows(() => validateUser({ id: '1', username: 'u', email: 'e' }), 'user.role');
 
-  // authResponse
+  // AuthResponse
   validateAuthResponse({
     access_token: 'a',
     refresh_token: 'r',
@@ -39,11 +39,11 @@ export function runAllTests() {
   });
   expectThrows(() => validateAuthResponse({ access_token: 'a' }), 'authResponse');
 
-  // tournament
+  // Tournament
   validateTournament({ id: '1', name: 'T', status: 'pending' });
   expectThrows(() => validateTournament({ id: '1', name: 'T' }), 'tournament.status');
 
-  // tournamentList
+  // TournamentList
   validateTournamentList([
     { id: '1', name: 'A', status: 'pending' },
     { id: '2', name: 'B', status: 'active' },

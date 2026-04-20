@@ -32,7 +32,7 @@ func TestParseLimitOffset_LimitExceedsMax(t *testing.T) {
 	r := newRequest("limit=200")
 	lo := ParseLimitOffset(r, 20, 100)
 
-	assert.Equal(t, 20, lo.Limit) // falls back to default
+	assert.Equal(t, 20, lo.Limit) // откатывается к значению по умолчанию
 }
 
 func TestParseLimitOffset_NegativeLimit(t *testing.T) {
@@ -46,7 +46,7 @@ func TestParseLimitOffset_ZeroLimit(t *testing.T) {
 	r := newRequest("limit=0")
 	lo := ParseLimitOffset(r, 20, 100)
 
-	assert.Equal(t, 20, lo.Limit) // 0 is not > 0
+	assert.Equal(t, 20, lo.Limit) // 0 не > 0
 }
 
 func TestParseLimitOffset_NonNumericLimit(t *testing.T) {
@@ -60,7 +60,7 @@ func TestParseLimitOffset_NegativeOffset(t *testing.T) {
 	r := newRequest("offset=-1")
 	lo := ParseLimitOffset(r, 20, 100)
 
-	assert.Equal(t, 0, lo.Offset) // negative ignored
+	assert.Equal(t, 0, lo.Offset) // отрицательные игнорируются
 }
 
 func TestParseLimitOffset_NonNumericOffset(t *testing.T) {
@@ -74,7 +74,7 @@ func TestParseLimitOffset_ZeroMaxLimit_UsesDefault(t *testing.T) {
 	r := newRequest("limit=50")
 	lo := ParseLimitOffset(r, 20, 0)
 
-	// maxLimit=0 -> DefaultMaxLimit=100, so 50 is accepted
+	// maxLimit=0 означает DefaultMaxLimit=100, поэтому 50 принимается
 	assert.Equal(t, 50, lo.Limit)
 }
 

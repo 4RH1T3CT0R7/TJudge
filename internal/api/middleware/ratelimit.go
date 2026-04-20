@@ -23,7 +23,7 @@ type RateLimiter interface {
 }
 
 // fallbackLimiter обеспечивает in-memory rate limiting при недоступности Redis.
-// Использует token bucket per-IP. Порог строже основного (см. P1.5):
+// Использует token bucket per-IP. Порог строже основного:
 // когда Redis падает, злоумышленник не должен получать более мягкий лимит.
 type fallbackLimiter struct {
 	mu       sync.Mutex
@@ -37,14 +37,14 @@ type fallbackEntry struct {
 	lastSeen time.Time
 }
 
-// fallbackLimitMultiplier определяет насколько строже fallback-лимит
-// относительно основного. 0.5 = вдвое строже. Было 2.0 — P1.5 исправляет
-// эту ошибку: fallback не должен расширять бюджет при падении Redis,
-// иначе DDoS на Redis превращается в способ обойти основной лимит.
+// fallbackLimitMultiplier определяет, насколько строже fallback-лимит
+// относительно основного. 0.5 = вдвое строже. Fallback не должен расширять
+// бюджет при падении Redis, иначе DDoS на Redis превращается в способ обойти
+// основной лимит.
 const fallbackLimitMultiplier = 0.5
 
 func newFallbackLimiter(limit int, window time.Duration) *fallbackLimiter {
-	// P1.5: используем коэффициент 0.5 (строже основного) вместо 2.0.
+	// Используем коэффициент 0.5 (строже основного) вместо 2.0.
 	// Минимум burst = 1, чтобы limit=1 не превратился в 0.
 	fallbackLimit := int(float64(limit) * fallbackLimitMultiplier)
 	if fallbackLimit < 1 {
@@ -89,7 +89,8 @@ func (f *fallbackLimiter) cleanup(maxAge time.Duration) {
 
 // RateLimit middleware для ограничения количества запросов.
 // При ошибке основного лимитера (Redis) переключается на in-memory fallback
-// с более мягкими порогами (2x), вместо полного fail-open.
+// с порогом fallbackLimitMultiplier*limit (по умолчанию 0.5, то есть в два раза
+// строже основного), вместо полного fail-open.
 func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
 	fallback := newFallbackLimiter(limit, window)
 
@@ -104,7 +105,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 		defer ticker.Stop()
 		for {
 			select {
-			case <-stop: // receiving from nil channel blocks forever, so cleanup runs indefinitely when no stop channel is provided
+			case <-stop: // чтение из nil-канала блокирует навсегда, поэтому cleanup работает бесконечно, если stop-канал не передан
 				return
 			case <-ticker.C:
 				fallback.cleanup(10 * time.Minute)
@@ -117,8 +118,8 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 			// Получаем IP адрес клиента
 			ip := getClientIP(r)
 
-			// Bypass rate limiting for localhost only in non-production environments
-			// (useful for local development and tests).
+			// Обходим rate limiting для localhost только вне production
+			// (удобно для локальной разработки и тестов).
 			if os.Getenv("ENVIRONMENT") != "production" && isLocalhost(ip) {
 				next.ServeHTTP(w, r)
 				return
@@ -134,7 +135,8 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 					zap.Error(err),
 				)
 
-				// Fallback: in-memory rate limiter с более мягкими порогами (2x).
+				// Fallback: in-memory rate limiter с порогом fallbackLimitMultiplier*limit
+				// (по умолчанию 0.5, то есть в два раза строже основного).
 				// Защищает от DDoS при падении Redis, не блокируя легитимный трафик.
 				if !fallback.allow(ip) {
 					log.Info("Rate limit exceeded (fallback)",
@@ -173,17 +175,17 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 	}
 }
 
-// isLocalhost checks if the IP is localhost
+// isLocalhost проверяет, является ли IP localhost
 func isLocalhost(ip string) bool {
-	// Handle IPv4 localhost
+	// Обрабатываем IPv4 localhost
 	if ip == "127.0.0.1" || ip == "localhost" {
 		return true
 	}
-	// Handle IPv6 localhost
+	// Обрабатываем IPv6 localhost
 	if ip == "::1" || ip == "[::1]" {
 		return true
 	}
-	// Handle localhost with port (e.g., "127.0.0.1:xxxxx" or "[::1]:xxxxx")
+	// Обрабатываем localhost с портом (например, "127.0.0.1:xxxxx" или "[::1]:xxxxx")
 	if len(ip) > 9 && ip[:9] == "127.0.0.1" {
 		return true
 	}
@@ -194,9 +196,9 @@ func isLocalhost(ip string) bool {
 }
 
 // getClientIP извлекает IP адрес клиента из запроса.
-// Uses RemoteAddr which is already set by chi's RealIP middleware
-// from trusted proxy headers. Don't re-read raw headers to avoid
-// spoofing bypass.
+// Использует RemoteAddr, который уже выставлен chi RealIP middleware
+// из доверенных proxy-заголовков. Не перечитываем сырые заголовки,
+// чтобы избежать spoofing-обхода.
 func getClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

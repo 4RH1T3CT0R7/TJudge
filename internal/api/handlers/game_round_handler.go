@@ -11,12 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// GameRoundLookupService provides game lookup needed by round-related handlers.
+// GameRoundLookupService предоставляет lookup игр для round-related handler'ов.
 type GameRoundLookupService interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
 }
 
-// GameRoundHandler handles game leaderboard, matches, programs, status, and round management.
+// GameRoundHandler обрабатывает leaderboard, матчи, программы, статус и управление раундами игр.
 type GameRoundHandler struct {
 	gameService              GameRoundLookupService
 	leaderboardRepo          GameLeaderboardRepository
@@ -28,7 +28,7 @@ type GameRoundHandler struct {
 	log                      *logger.Logger
 }
 
-// NewGameRoundHandler creates a handler for game round and status operations.
+// NewGameRoundHandler создаёт handler для операций round/status игр.
 func NewGameRoundHandler(
 	gameService GameRoundLookupService,
 	leaderboardRepo GameLeaderboardRepository,
@@ -51,7 +51,7 @@ func NewGameRoundHandler(
 	}
 }
 
-// parseTournamentGameIDs is a helper to parse tournament and game IDs from URL params.
+// parseTournamentGameIDs - хелпер для парсинга ID турнира и игры из URL-параметров.
 func (h *GameRoundHandler) parseTournamentGameIDs(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
 	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
 	if !ok {

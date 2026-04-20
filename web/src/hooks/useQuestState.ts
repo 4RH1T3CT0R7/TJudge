@@ -326,7 +326,7 @@ function questReducer(state: QuestState, action: QuestAction): QuestState {
         newLines.push({ text: `  [x] Цель выполнена!`, color: 'text-green-400' });
       }
 
-      // Check if all objectives completed → advance level
+      // Если все цели выполнены - переход на следующий уровень
       const allDone = objectives.length > 0 && objectives.every((o) => o.completed);
       let nextLevel = state.level;
       if (allDone && state.level > 0 && state.level < 5) {

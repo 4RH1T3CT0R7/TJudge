@@ -179,7 +179,7 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 
 // GetPlayedProgramPairs возвращает множество пар (program1_id, program2_id),
 // для которых уже существуют матчи (любого статуса) в данном турнире и игре.
-// Ключи формата "uuid1|uuid2" — направленные (AB ≠ BA), что соответствует
+// Ключи формата "uuid1|uuid2" направленные (AB не равно BA), что соответствует
 // round-robin генерации, которая создаёт матчи в обоих направлениях.
 func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
 	query := `

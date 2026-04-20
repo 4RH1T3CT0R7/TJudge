@@ -61,7 +61,7 @@ func TestWrap_WithError(t *testing.T) {
 	assert.Contains(t, wrapped.Error(), "wrapped")
 	assert.Contains(t, wrapped.Error(), "original error")
 
-	// Should be unwrappable
+	// Должна быть разворачиваемой
 	assert.True(t, errors.Is(wrapped, innerErr))
 }
 
@@ -118,7 +118,7 @@ func TestAppError_WithMessage(t *testing.T) {
 	assert.Equal(t, "User not found", custom.Message)
 	assert.Equal(t, original.Code, custom.Code)
 
-	// Original should be unchanged
+	// Оригинал не должен измениться
 	assert.Equal(t, "Resource not found", original.Message)
 }
 
@@ -131,7 +131,7 @@ func TestAppError_WithError(t *testing.T) {
 	assert.Equal(t, original.Code, custom.Code)
 	assert.Equal(t, original.Message, custom.Message)
 
-	// Original should be unchanged
+	// Оригинал не должен измениться
 	assert.Nil(t, original.Err)
 }
 
@@ -237,28 +237,28 @@ func TestToAppError_Nil(t *testing.T) {
 }
 
 func TestAppError_ErrorChaining(t *testing.T) {
-	// Create a chain of errors
+	// Создаём цепочку ошибок
 	original := fmt.Errorf("original error")
 	appErr := ErrValidation.WithError(original)
 	wrapped := fmt.Errorf("context: %w", appErr)
 
-	// errors.Is should work through the chain
+	// errors.Is должен работать по всей цепочке
 	assert.True(t, errors.Is(wrapped, original))
 
-	// GetAppError should find the AppError
+	// GetAppError должен найти AppError
 	result := GetAppError(wrapped)
 	require.NotNil(t, result)
 	assert.Equal(t, http.StatusBadRequest, result.Code)
 }
 
 func TestAppError_Immutability(t *testing.T) {
-	// Verify that With* methods don't modify the original
+	// Проверяем, что методы With* не изменяют оригинал
 	original := ErrNotFound
 
 	_ = original.WithMessage("custom")
 	_ = original.WithError(fmt.Errorf("inner"))
 
-	// Original should be unchanged
+	// Оригинал не должен измениться
 	assert.Equal(t, "Resource not found", original.Message)
 	assert.Nil(t, original.Err)
 }
@@ -287,7 +287,7 @@ func TestIsNotFound_RegularError(t *testing.T) {
 }
 
 func TestIsNotFound_ProgramNotFound(t *testing.T) {
-	// ErrProgramNotFound also has code 404, so IsNotFound should return true
+	// ErrProgramNotFound тоже имеет код 404, поэтому IsNotFound должен вернуть true
 	assert.True(t, IsNotFound(ErrProgramNotFound))
 }
 
@@ -309,7 +309,7 @@ func TestWrap_PreservesIs(t *testing.T) {
 	require.NotNil(t, wrapped)
 	assert.True(t, errors.Is(wrapped, sentinel))
 
-	// Double wrap
+	// Двойное оборачивание
 	doubleWrapped := Wrap(wrapped, "layer2")
 	assert.True(t, errors.Is(doubleWrapped, sentinel))
 }

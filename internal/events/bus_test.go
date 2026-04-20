@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testEvent is a simple event for testing.
+// testEvent - простое событие для тестов.
 type testEvent struct {
 	Value string
 }
 
-// otherEvent is an unrelated event type.
+// otherEvent - несвязанный тип события.
 type otherEvent struct{}
 
-// capturingHandler records all events it receives.
+// capturingHandler записывает все события, которые получает.
 type capturingHandler struct {
 	events []any
 }
@@ -30,7 +30,7 @@ func (h *capturingHandler) Handle(_ context.Context, event any) error {
 	return nil
 }
 
-// failingHandler always returns an error.
+// failingHandler всегда возвращает ошибку.
 type failingHandler struct {
 	called int32
 }
@@ -63,7 +63,7 @@ func TestSyncBus_UnsubscribedHandlerNotCalled(t *testing.T) {
 	bus := NewSyncBus(newTestLogger(t))
 
 	h := &capturingHandler{}
-	bus.Subscribe(h, testEvent{}) // subscribed to testEvent only
+	bus.Subscribe(h, testEvent{}) // подписан только на testEvent
 
 	bus.Publish(context.Background(), otherEvent{})
 
@@ -93,7 +93,7 @@ func TestSyncBus_HandlerErrorLoggedNotPropagated(t *testing.T) {
 	bus.Subscribe(failing, testEvent{})
 	bus.Subscribe(after, testEvent{})
 
-	// Should not panic; after-handler should still be called
+	// Не должно паниковать; after-handler всё равно должен быть вызван
 	bus.Publish(context.Background(), testEvent{Value: "ok"})
 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&failing.called))
@@ -115,7 +115,7 @@ func TestSyncBus_HandlerSubscribedToMultipleEvents(t *testing.T) {
 func TestSyncBus_NoSubscribers(t *testing.T) {
 	bus := NewSyncBus(newTestLogger(t))
 
-	// Should not panic when no one is subscribed
+	// Не должно паниковать, когда никто не подписан
 	bus.Publish(context.Background(), testEvent{Value: "nobody listening"})
 }
 

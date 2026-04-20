@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockAuthService mocks the auth service
+// MockAuthService - мок auth-сервиса
 type MockAuthService struct {
 	mock.Mock
 }
@@ -419,7 +419,7 @@ func TestAuthHandler_Logout(t *testing.T) {
 
 		handler.Logout(w, req)
 
-		// Should still return success for idempotency
+		// Всё равно должен вернуть success ради idempotency
 		assert.Equal(t, http.StatusNoContent, w.Code)
 
 		mockService.AssertExpectations(t)
@@ -518,7 +518,7 @@ func TestAuthHandler_UpdateProfile(t *testing.T) {
 		body, _ := json.Marshal(updateReq)
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-		// Set userID in context as auth middleware would
+		// Ставим userID в контекст, как это делает auth middleware
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()

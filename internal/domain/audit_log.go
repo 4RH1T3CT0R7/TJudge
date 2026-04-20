@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// AuditLogEntry описывает одну запись audit-лога (P1.12).
+// AuditLogEntry описывает одну запись audit-лога.
 // Хранит admin-действия для последующего расследования инцидентов.
 type AuditLogEntry struct {
 	ID         uuid.UUID `db:"id"          json:"id"`

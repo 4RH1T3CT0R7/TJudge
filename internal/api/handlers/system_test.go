@@ -30,7 +30,7 @@ func TestSystemHandler_GetMetrics_Success(t *testing.T) {
 	var result map[string]interface{}
 	decodeJSONData(t, rr.Body, &result)
 
-	// Verify top-level keys exist
+	// Проверяем, что top-level ключи присутствуют
 	assert.Contains(t, result, "cpu")
 	assert.Contains(t, result, "memory")
 	assert.Contains(t, result, "go")
@@ -85,7 +85,7 @@ func TestSystemHandler_GetHealth_StatusHealthy(t *testing.T) {
 	var result map[string]interface{}
 	decodeJSONData(t, rr.Body, &result)
 
-	// Status should be "healthy" or "warning" depending on system state
+	// Статус должен быть "healthy" или "warning" в зависимости от состояния системы
 	status, ok := result["status"].(string)
 	require.True(t, ok)
 	assert.Contains(t, []string{"healthy", "warning"}, status)

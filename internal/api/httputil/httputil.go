@@ -16,14 +16,14 @@ var bufferPool = sync.Pool{
 	},
 }
 
-// Response is the standard API envelope for all successful responses.
+// Response - стандартный API-конверт для всех успешных ответов.
 type Response struct {
 	Data    interface{} `json:"data"`
 	Message string      `json:"message,omitempty"`
 	Meta    *Meta       `json:"meta,omitempty"`
 }
 
-// Meta contains pagination metadata for list endpoints.
+// Meta содержит pagination-метаданные для list-эндпоинтов.
 type Meta struct {
 	Total  int `json:"total,omitempty"`
 	Limit  int `json:"limit,omitempty"`
@@ -35,23 +35,23 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// WriteJSON wraps the payload in a standard Response envelope and writes it.
+// WriteJSON оборачивает payload в стандартный Response-конверт и пишет его.
 func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
 	envelope := Response{Data: v}
 	writeRawJSON(w, status, envelope)
 }
 
-// messageResponse is used by WriteMessage to avoid emitting "data":null.
+// messageResponse используется WriteMessage, чтобы не отдавать "data":null.
 type messageResponse struct {
 	Message string `json:"message"`
 }
 
-// WriteMessage writes a message-only response (no data payload).
+// WriteMessage пишет ответ только с сообщением (без payload в data).
 func WriteMessage(w http.ResponseWriter, status int, message string) {
 	writeRawJSON(w, status, messageResponse{Message: message})
 }
 
-// writeRawJSON encodes any value to JSON and writes it to the response.
+// writeRawJSON кодирует любое значение в JSON и пишет его в ответ.
 func writeRawJSON(w http.ResponseWriter, status int, v interface{}) {
 	buf := bufferPool.Get().(*bytes.Buffer)
 	defer func() {

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// doRequestWithHeaders — helper для E2E-тестов, которые должны передавать
+// doRequestWithHeaders - helper для E2E-тестов, которые должны передавать
 // кастомные заголовки (например, Idempotency-Key). Зеркалит doRequest.
 func (c *TestClient) doRequestWithHeaders(method, path string, body interface{}, extra map[string]string) (*http.Response, error) {
 	var reqBody io.Reader
@@ -43,10 +43,10 @@ func (c *TestClient) doRequestWithHeaders(method, path string, body interface{},
 	return c.client.Do(req)
 }
 
-// P2.23: E2E для новых фич (P1.12 audit log, P2.19 idempotency).
+// E2E для фич audit log и idempotency.
 
 // =============================================================================
-// Admin audit log (P1.12)
+// Admin audit log.
 // =============================================================================
 
 func TestE2E_AuditLog_NonAdmin_Forbidden(t *testing.T) {
@@ -74,13 +74,13 @@ func TestE2E_AuditLog_NonAdmin_Forbidden(t *testing.T) {
 }
 
 // =============================================================================
-// Idempotency-Key (P2.19)
+// Idempotency-Key.
 // =============================================================================
 
 func TestE2E_Idempotency_SameKeyReplaysResponse(t *testing.T) {
 	client := NewTestClient()
 
-	// Login без accounts — API вернёт 401 (или 200 если есть accounts);
+	// Login без accounts - API вернёт 401 (или 200 если есть accounts);
 	// важно поведение middleware: второй запрос должен получить replay-flag.
 	key := fmt.Sprintf("e2e-idemp-%d", time.Now().UnixNano())
 	body := map[string]string{
@@ -91,7 +91,7 @@ func TestE2E_Idempotency_SameKeyReplaysResponse(t *testing.T) {
 	req1ResponseCode := doRequestWithIdempotencyKey(t, client, key, body)
 	req2ResponseCode := doRequestWithIdempotencyKey(t, client, key, body)
 
-	// Оба request'а получают одинаковый код (первый настоящий, второй — replay).
+	// Оба request'а получают одинаковый код (первый настоящий, второй - replay).
 	assert.Equal(t, req1ResponseCode, req2ResponseCode,
 		"повторный request с той же Idempotency-Key должен вернуть тот же статус")
 }
@@ -138,7 +138,7 @@ func TestE2E_Idempotency_ConcurrentReturnsConflict(t *testing.T) {
 	}
 	wg.Wait()
 
-	// Минимум один запрос должен увидеть conflict или все replayed — главное
+	// Минимум один запрос должен увидеть conflict или все replayed - главное
 	// что сервер не упал и ответил всем.
 	t.Logf("conflict=%d nonConflict=%d", conflict.Load(), nonConflict.Load())
 	assert.Equal(t, int32(10), conflict.Load()+nonConflict.Load())

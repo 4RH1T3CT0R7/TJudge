@@ -131,6 +131,31 @@ func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member stri
 	return nil
 }
 
+// ZAddBatchMember - один элемент для BatchZAdd.
+type ZAddBatchMember struct {
+	Key    string
+	Score  float64
+	Member string
+}
+
+// BatchZAdd добавляет N элементов через Redis-пайплайн за один RTT.
+// Используется для rating-апдейтов после матча (две ZADD за раз),
+// а также для массовых инвалидаций/перекачек.
+func (c *Cache) BatchZAdd(ctx context.Context, members []ZAddBatchMember) error {
+	if len(members) == 0 {
+		return nil
+	}
+	pipe := c.client.Pipeline()
+	for _, item := range members {
+		pipe.ZAdd(ctx, item.Key, redis.Z{Score: item.Score, Member: item.Member})
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		c.log.LogError("Redis pipelined ZADD failed", err, zap.Int("batch_size", len(members)))
+		return err
+	}
+	return nil
+}
+
 // ZRevRangeWithScores получает элементы из sorted set в обратном порядке
 func (c *Cache) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) ([]redis.Z, error) {
 	result, err := c.client.ZRevRangeWithScores(ctx, key, start, stop).Result()
@@ -314,8 +339,8 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]interface{}, ttl
 	}
 
 	_, pipeErr := pipe.Exec(ctx)
-	// Even on pipeline error, collect individual results —
-	// some commands may have succeeded.
+	// Даже при ошибке pipeline собираем индивидуальные результаты:
+	// часть команд могла успешно выполниться.
 	results := make(map[string]bool, len(cmds))
 	for key, cmd := range cmds {
 		val, cmdErr := cmd.Result()
@@ -369,7 +394,7 @@ func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) er
 }
 
 // BatchLPush добавляет несколько элементов в разные списки одним pipeline-запросом.
-// items — map[key][]value, каждый value добавляется в список с ключом key.
+// items - map[key][]value, каждый value добавляется в список с ключом key.
 func (c *Cache) BatchLPush(ctx context.Context, items map[string][]interface{}) error {
 	if len(items) == 0 {
 		return nil

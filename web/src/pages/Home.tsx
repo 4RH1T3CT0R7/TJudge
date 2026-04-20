@@ -6,7 +6,7 @@ import { TerminalQuest } from '../components/TerminalQuest';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 
-// P2.1: three.js-зависимый PixelGrid отложен — ~160KB gzipped, не нужен для
+// three.js-зависимый PixelGrid отложен - ~160KB gzipped, не нужен для
 // TTI. Появляется под hero после mount основного контента.
 const PixelGrid = lazy(() =>
   import('../components/PixelGrid').then((m) => ({ default: m.PixelGrid }))
@@ -1099,7 +1099,7 @@ export function Home() {
 
   return (
     <div className="space-y-16">
-      {/* Hero Section — Dark with glow orbs, no border */}
+      {/* Hero Section - тёмный с glow-шарами, без border */}
       <div ref={heroRef} className="relative overflow-visible rounded-3xl p-8 md:p-12" style={{ background: 'rgba(17,24,39,0.4)' }}>
         {/* Clip wrapper for glow orbs and grid (prevents bleed) */}
         <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
@@ -1113,7 +1113,7 @@ export function Home() {
             style={{ background: 'radial-gradient(circle, rgba(34,197,94,0.4), transparent 70%)' }}
           />
 
-          {/* Pixel grid dots (P2.1: lazy — three.js загружается отдельно) */}
+          {/* Pixel grid dots (lazy - three.js загружается отдельно) */}
           <Suspense fallback={null}>
             <PixelGrid heroRef={heroRef} />
           </Suspense>
@@ -1129,7 +1129,7 @@ export function Home() {
           </svg>
         </div>
 
-        {/* SpaceInvader mascot — bright, interactive, overflow-visible for jump */}
+        {/* SpaceInvader mascot - яркий, интерактивный, overflow-visible для прыжка */}
         <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2" style={{ zIndex: 60 }}>
           <SpaceInvader size="md" interactive />
         </div>

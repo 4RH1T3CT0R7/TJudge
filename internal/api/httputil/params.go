@@ -9,8 +9,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
-// ParseUUIDParam extracts a URL parameter by name and parses it as UUID.
-// On failure, writes a 400 error response with the given resource name and returns false.
+// ParseUUIDParam извлекает URL-параметр по имени и парсит его как UUID.
+// При ошибке пишет 400 с указанным resourceName и возвращает false.
 func ParseUUIDParam(w http.ResponseWriter, r *http.Request, paramName, resourceName string) (uuid.UUID, bool) {
 	raw := chi.URLParam(r, paramName)
 	id, err := uuid.Parse(raw)
@@ -21,8 +21,8 @@ func ParseUUIDParam(w http.ResponseWriter, r *http.Request, paramName, resourceN
 	return id, true
 }
 
-// ParseQueryUUID parses a UUID from a query parameter.
-// On failure, writes a 400 error response and returns false.
+// ParseQueryUUID парсит UUID из query-параметра.
+// При ошибке пишет 400 и возвращает false.
 func ParseQueryUUID(w http.ResponseWriter, r *http.Request, paramName string) (uuid.UUID, bool) {
 	raw := r.URL.Query().Get(paramName)
 	if raw == "" {

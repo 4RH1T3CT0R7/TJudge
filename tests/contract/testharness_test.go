@@ -178,7 +178,7 @@ func NewTestHarness(t *testing.T) *TestHarness {
 	wsHandler := handlers.NewWebSocketHandler(websocket.NewHub(log), log)
 	systemHandler := handlers.NewSystemHandler(log)
 
-	// CORS config — permissive for tests.
+	// CORS config - permissive for tests.
 	corsConfig := config.CORSConfig{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -200,7 +200,7 @@ func NewTestHarness(t *testing.T) *TestHarness {
 		wsHandler,
 		systemHandler,
 		h.MiddlewareAuth,
-		nil, // rateLimiter — nil is safe when Enabled=false
+		nil, // rateLimiter - nil is safe when Enabled=false
 		corsConfig,
 		rateLimitConfig,
 		log,

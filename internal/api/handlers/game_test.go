@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockGameService is a mock for GameService interface
+// MockGameService - мок для интерфейса GameService
 type MockGameService struct {
 	mock.Mock
 }
@@ -90,7 +90,7 @@ func (m *MockGameService) RemoveFromTournament(ctx context.Context, tournamentID
 	return args.Error(0)
 }
 
-// MockGameTournamentRepository is a mock for GameTournamentRepository
+// MockGameTournamentRepository - мок для GameTournamentRepository
 type MockGameTournamentRepository struct {
 	mock.Mock
 }
@@ -1014,10 +1014,10 @@ func TestGameHandler_ResetGameRound_InvalidGameUUID(t *testing.T) {
 }
 
 // =============================================================================
-// Phase 2: Happy-path tests for game handler methods with repos
+// Фаза 2: happy-path тесты методов game handler с repos
 // =============================================================================
 
-// Mock types for game handler repos
+// Типы моков для repos game handler'а
 
 type MockGameLeaderboardRepository struct {
 	mock.Mock
@@ -1471,7 +1471,7 @@ func TestGameHandler_GetActiveGame_NotFound(t *testing.T) {
 
 	handler.GetActiveGame(rr, req)
 
-	// Returns 200 with null
+	// Возвращает 200 с null
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 

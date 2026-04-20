@@ -178,7 +178,7 @@ export function SpaceInvader({
   const animate = (value: string): string =>
     prefersReducedMotion.current ? 'none' : value;
 
-  // Derived colors — override purple with custom color when provided
+  // Производные цвета - переопределяем фиолетовый переданным цветом, если указан
   const bodyColor = colorOverride || BODY_COLOR;
   const accentColor = colorOverride || '#a78bfa';
   const bodyStyle = colorOverride ? { color: colorOverride } as const : BODY_STYLE;
@@ -309,7 +309,7 @@ export function SpaceInvader({
     };
   }, []);
 
-  // --- Cursor leave/enter detection (stable — no state in deps) ---
+  // --- Детектор leave/enter курсора (стабильно - без state в deps) ---
   useEffect(() => {
     if (!interactive) return;
 
@@ -351,7 +351,7 @@ export function SpaceInvader({
     };
   }, [interactive]);
 
-  // --- Idle boredom timer (debounced — only resets every 2s max) ---
+  // --- Таймер "скуки" в простое (debounced - сбрасывается максимум раз в 2s) ---
   useEffect(() => {
     if (!interactive) return;
 
@@ -440,7 +440,7 @@ export function SpaceInvader({
         if (dist < innerR) {
           include = true; // core: always
         } else if (dist < outerR) {
-          // edge: probabilistic → jagged boundary
+          // край: вероятностно - рваная граница
           const prob = 1 - (dist - innerR) / (outerR - innerR);
           include = Math.random() < prob * 0.8 + 0.15;
         }
@@ -533,12 +533,12 @@ export function SpaceInvader({
       const els = Array.from(particles.children) as HTMLElement[];
 
       if (healMode === 0) {
-        // ═══ T-1000: particles fly BACK smoothly, hole fills edges→center ═══
+        // T-1000: частицы плавно возвращаются, дыра затягивается от краёв к центру
         els.forEach(p => { p.style.animation = 'char-return 0.4s cubic-bezier(0.22,1,0.36,1) both'; });
         const sorted = [...extracted].sort((a, b) => {
           const da = Math.hypot(a.x - relX, a.y + fontSizePx / 2 - relY);
           const db = Math.hypot(b.x - relX, b.y + fontSizePx / 2 - relY);
-          return db - da; // farthest first → heals first
+          return db - da; // дальние первыми - заживают первыми
         });
         const steps = 6;
         const perStep = Math.ceil(sorted.length / steps);
@@ -551,11 +551,11 @@ export function SpaceInvader({
         }
 
       } else if (healMode === 1) {
-        // ═══ REGENERATION: particles fall with gravity + NEW chars grow in hole ═══
-        // Burst particles fall under gravity
+        // REGENERATION: частицы падают под гравитацией + новые символы растут в дыре
+        // Burst-частицы падают под гравитацией
         els.forEach(p => { p.style.animation = 'char-gravity 0.6s ease-in both'; });
 
-        // Spawn regen particles at each hole position (staggered, random order)
+        // Спавним regen-частицы в каждой позиции дыры (с задержками, случайный порядок)
         const regenOrder = [...extracted].sort(() => Math.random() - 0.5);
         const stagger = Math.max(12, 400 / regenOrder.length);
         const remaining = [...extracted];
@@ -563,7 +563,7 @@ export function SpaceInvader({
         regenOrder.forEach((ec, i) => {
           const delay = i * stagger + Math.random() * 15;
           setTimeout(() => {
-            // New character pops into existence at hole position
+            // Новый символ появляется в позиции дыры
             const regen = document.createElement('span');
             const startColor = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
             regen.textContent = ec.char;
@@ -578,7 +578,7 @@ export function SpaceInvader({
             ].join(';');
             particles.appendChild(regen);
 
-            // Transition neon → invader color (wound heals)
+            // Переход неонового цвета к цвету захватчика (рана заживает)
             setTimeout(() => {
               regen.style.color = bodyColor;
               regen.style.textShadow = `0 0 4px ${bodyColor}50`;
@@ -636,8 +636,8 @@ export function SpaceInvader({
     if (down) {
       const dx = e.clientX - down.x;
       const dy = e.clientY - down.y;
-      if (dx * dx + dy * dy > 25) return; // >5px movement → not a tap
-      if (Date.now() - down.time > 300) return; // held >300ms → not a tap
+      if (dx * dx + dy * dy > 25) return; // движение >5px - не тап
+      if (Date.now() - down.time > 300) return; // удержание >300ms - не тап
     }
 
     clickCountRef.current++;
@@ -733,8 +733,8 @@ export function SpaceInvader({
     setPose('spinStop');
   }, [clearSpinStyles]);
 
-  // Auto-spin: triggered by quick swipe (flick gesture) — immediate smooth deceleration
-  // No full-speed spin phase: go straight to ease-out rotation proportional to velocity
+  // Auto-spin: запускается быстрым свайпом (flick-жест) - мгновенное плавное замедление.
+  // Без фазы full-speed: сразу в ease-out вращение, пропорциональное скорости.
   const flickTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const flickSpin = useCallback((velocity: number) => {
     clearTimeout(spinDecelTimerRef.current);
@@ -834,7 +834,7 @@ export function SpaceInvader({
     };
   }, [interactive, startSpin, decelSpin, flickSpin, cleanupPressListeners]);
 
-  // Stop spin if context menu appears while already spinning (don't clear timer — allow right-click spin)
+  // Останавливаем spin, если появилось контекстное меню во время вращения (таймер не чистим - оставляем right-click spin)
   useEffect(() => {
     const onCtx = () => {
       if (spinPhaseRef.current === 'spinning') decelSpin();
@@ -843,7 +843,7 @@ export function SpaceInvader({
     return () => window.removeEventListener('contextmenu', onCtx);
   }, [decelSpin]);
 
-  // Element-level pointerup — only handles active spin; cleanup + swipe done in onRelease (window)
+  // pointerup на уровне элемента - обрабатывает только активный spin; cleanup + swipe делаются в onRelease (window)
   const handlePointerUp = useCallback(() => {
     clearTimeout(longPressTimerRef.current);
     if (spinPhaseRef.current === 'spinning') decelSpin();
@@ -956,7 +956,7 @@ export function SpaceInvader({
     <div>
       {IDLE_TOP.flatMap((line, i) => [bodyLine(line, `ct${i}a`), bodyLine(line, `ct${i}b`)])}
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `ce${r}a`), eyeRow(r, `ce${r}b`)])}
-      {/* Zero-height anchor right below eye rows — tears fall from here */}
+      {/* Нулевой якорь сразу под строками глаз - слёзы падают отсюда */}
       <div style={{ position: 'relative', height: 0, overflow: 'visible', zIndex: 10 }}>
         {[
           { left: '35%', delay: '0s', ch: ';' },
@@ -1329,7 +1329,7 @@ export function SpaceInvader({
         </div>
       )}
 
-      {/* Single float animation container — glow via filter on container, NOT text-shadow per char */}
+      {/* Единый контейнер float-анимации - свечение через filter на контейнере, а НЕ text-shadow для каждого символа */}
       <div ref={spinContainerRef} style={{
         animation: pose === 'spin'
           ? 'spin-invader 0.5s linear infinite'

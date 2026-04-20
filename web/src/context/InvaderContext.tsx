@@ -40,7 +40,7 @@ interface InvaderContextValue {
 
 const InvaderCtx = createContext<InvaderContextValue | null>(null);
 
-// Priority map for events — higher priority interrupts lower
+// Карта приоритетов событий - более высокий приоритет прерывает более низкий
 const EVENT_PRIORITY: Record<string, number> = {
   tournament_started: 8,
   tournament_completed: 8,

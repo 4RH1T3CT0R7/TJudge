@@ -10,7 +10,7 @@
 | Docker Compose | 2+ | Оркестрация |
 | Go | 1.24+ | Локальная разработка |
 | Node.js | 20+ | Фронтенд разработка |
-| Make | — | Команды сборки |
+| Make | - | Команды сборки |
 
 ### Запуск (Docker Compose)
 
@@ -111,9 +111,9 @@ npm run preview    # Предпросмотр сборки
 
 ### Переменные окружения (.env)
 
-> **Примечание:** Конфигурация загружается через `godotenv` + `os.Getenv()` (см. `internal/config/config.go`).
-> Файл `config.example.yaml` существует в корне проекта как справочник по структуре, но загрузка YAML **не реализована** -- используются только переменные окружения.
-> Для секретов в production поддерживается суффикс `_FILE` (Docker secrets) для переменных `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`.
+Конфигурация загружается через `godotenv` + `os.Getenv()` (см. `internal/config/config.go`).
+Файл `config.example.yaml` существует в корне проекта как справочник по структуре, но загрузка YAML не реализована - используются только переменные окружения.
+Для секретов в production поддерживается суффикс `_FILE` (Docker secrets) для переменных `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`.
 
 ```bash
 # ─── Окружение ────────────────────────────────────────
@@ -129,7 +129,7 @@ SHUTDOWN_TIMEOUT=10s           # Таймаут graceful shutdown
 # ─── PostgreSQL ───────────────────────────────────────
 DB_HOST=localhost
 DB_PORT=5432                   # Внутренний порт PostgreSQL (по умолчанию 5432).
-                               # Docker Compose маппит 5432 -> 5433 на хосте,
+                               # Docker Compose пробрасывает 5432 на 5433 на хосте,
                                # поэтому при локальной разработке используйте DB_PORT=5433
 DB_USER=tjudge
 DB_PASSWORD=secret             # Поддерживает Docker secrets: DB_PASSWORD_FILE
@@ -279,10 +279,10 @@ curl http://localhost:8080/health
 
 http://localhost:3000 (admin/admin)
 
-- **TJudge Overview** — общая статистика
-- **Workers** — очередь, воркеры, время обработки
-- **API** — запросы, латентность
-- **Database** — соединения, длительность запросов
+- **TJudge Overview** - общая статистика
+- **Workers** - очередь, воркеры, время обработки
+- **API** - запросы, латентность
+- **Database** - соединения, длительность запросов
 
 ### Prometheus метрики
 
@@ -416,3 +416,4 @@ docker scan tjudge-api:latest
 
 *Версия документации: 3.1*
 *Последнее обновление: Март 2026*
+

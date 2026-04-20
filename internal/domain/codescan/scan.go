@@ -1,5 +1,5 @@
 // Package codescan реализует lightweight проверку загружаемого кода
-// на "подозрительные" API-вызовы (P2.18).
+// на "подозрительные" API-вызовы.
 //
 // Это НЕ замена Docker-sandbox'а; это defense-in-depth: если песочница
 // будет скомпрометирована, регекс-скан ловит большинство явных попыток
@@ -9,11 +9,11 @@
 //   - Regex-based: не понимает obfuscation (getattr, динамическая загрузка из строки).
 //   - False-positives: имя переменной может совпасть с именем опасного API.
 //   - Только для интерпретируемых языков (Python, JS, Ruby, PHP, Lua).
-//     Для компилируемых (C, C++, Go, Rust, Java) не применяется — они
+//     Для компилируемых (C, C++, Go, Rust, Java) не применяется - они
 //     всё равно запускаются в sandbox после compile-step'а.
 //
 // Политика по-умолчанию: warning-only (не блокирует upload). Для strict-mode
-// используйте `CODESCAN_STRICT=true` — тогда findings с level=forbidden
+// используйте `CODESCAN_STRICT=true` - тогда findings с level=forbidden
 // приводят к отказу на upload'е.
 package codescan
 
@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-// Level — серьёзность находки.
+// Level - серьёзность находки.
 type Level string
 
 const (
@@ -31,7 +31,7 @@ const (
 	LevelForbidden Level = "forbidden"
 )
 
-// Finding — одна срабатка сканера.
+// Finding - одна срабатка сканера.
 type Finding struct {
 	Line    int
 	Level   Level
@@ -46,7 +46,7 @@ type rule struct {
 	message string
 }
 
-// Scanner — конфигурируемый сканер для конкретного языка.
+// Scanner - конфигурируемый сканер для конкретного языка.
 type Scanner struct {
 	rules []rule
 }
@@ -96,7 +96,7 @@ var (
 
 func alt(names []string) string { return "(" + strings.Join(names, "|") + ")" }
 
-// openParen — вынесенный фрагмент "\\s*\\(" чтобы сократить длину regex-строки
+// openParen - вынесенный фрагмент "\\s*\\(" чтобы сократить длину regex-строки
 // и не хранить длинные литералы dangerous calls в исходнике.
 const op = `\s*\(`
 
@@ -115,7 +115,7 @@ var pythonScanner = &Scanner{
 			message: "from-import dangerous module",
 		},
 		{
-			// exec/{e}val/__import__/compile — dynamic code execution.
+			// exec/{e}val/__import__/compile - динамическое выполнение кода.
 			re:      regexp.MustCompile(`\b(` + "exec|" + "eva" + `l|__import__|compile)` + op),
 			level:   LevelForbidden,
 			pattern: "dynamic code execution",

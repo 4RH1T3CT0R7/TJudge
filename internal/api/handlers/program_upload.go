@@ -33,7 +33,7 @@ const (
 	LangRuby       = "ruby"
 	LangPHP        = "php"
 	LangLua        = "lua"
-	// LangUnknown — sentinel для нераспознанного расширения файла.
+	// LangUnknown - sentinel для нераспознанного расширения файла.
 	// Выделен в const по требованию goconst (используется в 3+ местах).
 	LangUnknown = "unknown"
 )
@@ -103,13 +103,13 @@ func canonicalExtension(language string) string {
 var javaClassNameRe = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
 
 // javaClassDeclRe выделяет имя первого top-level класса Java из исходника.
-// Используется для UR bug_008: filename на диске (<hex>_<hex>_<hex>.java) не
-// совпадает с declared class, поэтому javac отвергает `public class Main`,
-// а wrapper пытается запустить несуществующий класс с hex-именем. Теперь
-// Java-файл копируется в <ClassName>.java перед javac.
+// Нужен, потому что имя файла на диске (<hex>_<hex>_<hex>.java) не совпадает
+// с declared class: javac отвергает `public class Main`, а wrapper пытается
+// запустить несуществующий класс с hex-именем. Java-файл копируется
+// в <ClassName>.java перед javac.
 //
 // Поддерживает `public class X`, `class X`, с модификаторами `final/abstract`.
-// Не обрабатывает вложенные классы и edge-cases (multi-class в одном файле —
+// Не обрабатывает вложенные классы и edge-cases (multi-class в одном файле -
 // тогда берётся первый).
 var javaClassDeclRe = regexp.MustCompile(`(?m)^\s*(?:public\s+|final\s+|abstract\s+|static\s+)*class\s+([A-Za-z_$][A-Za-z0-9_$]*)`)
 
@@ -118,8 +118,8 @@ var javaClassDeclRe = regexp.MustCompile(`(?m)^\s*(?:public\s+|final\s+|abstract
 // переименования файла.
 func extractJavaClassName(source string) string {
 	// Игнорируем содержимое внутри /* */ и // комментариев.
-	// Простой stripper: не обрабатывает nested-строковые литералы с "//" —
-	// приемлемо для идентификации class declaration.
+	// Простой stripper: не обрабатывает nested-строковые литералы с "//",
+	// что приемлемо для идентификации class declaration.
 	cleaned := stripJavaComments(source)
 	m := javaClassDeclRe.FindStringSubmatch(cleaned)
 	if len(m) < 2 {
@@ -138,7 +138,7 @@ func stripJavaComments(s string) string {
 }
 
 // shellSingleQuote квотирует строку для безопасного встраивания в /bin/sh.
-// Заменяет каждую одинарную кавычку на '\” и оборачивает результат в '…'.
+// Заменяет каждую одинарную кавычку на '\” и оборачивает результат в '...'.
 func shellSingleQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
@@ -161,7 +161,7 @@ func getShebang(language string) string {
 	}
 }
 
-// uploadFormData holds the parsed multipart form data for file upload.
+// uploadFormData содержит разобранные данные multipart-формы для загрузки файла.
 type uploadFormData struct {
 	fileContent  []byte
 	filename     string
@@ -171,8 +171,8 @@ type uploadFormData struct {
 	gameID       uuid.UUID
 }
 
-// parseUploadForm parses the multipart form, extracts the file and form fields,
-// and validates required fields. Returns nil on error (response already written).
+// parseUploadForm разбирает multipart-форму, извлекает файл и поля формы,
+// валидирует обязательные поля. Возвращает nil при ошибке (ответ уже записан).
 func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request) *uploadFormData {
 	// Парсим multipart form.
 	// #nosec G120 -- h.maxFileSize ограничивает размер form, плюс routes.go
@@ -245,8 +245,8 @@ func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// validateTeamAccess checks that the user is a member of the team and the team is not disqualified.
-// Returns false on error (response already written).
+// validateTeamAccess проверяет, что пользователь состоит в команде и команда не дисквалифицирована.
+// Возвращает false при ошибке (ответ уже записан).
 func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Request, teamID, userID uuid.UUID) bool {
 	if h.teamChecker == nil {
 		h.log.Error("Team membership checker not configured")
@@ -279,8 +279,8 @@ func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Reque
 	return true
 }
 
-// validateTournamentActive checks that the tournament is in active status.
-// Returns false on error (response already written).
+// validateTournamentActive проверяет, что турнир в активном статусе.
+// Возвращает false при ошибке (ответ уже записан).
 func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http.Request, tournamentID uuid.UUID) bool {
 	if h.tournamentStatus == nil {
 		return true
@@ -300,8 +300,8 @@ func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http
 	return true
 }
 
-// validateUploadNotBlocked checks round completion and running matches in manual mode.
-// In auto-round mode, uploads are never blocked. Returns false on error (response already written).
+// validateUploadNotBlocked проверяет завершение раунда и выполняющиеся матчи в ручном режиме.
+// В авто-режиме загрузки не блокируются. Возвращает false при ошибке (ответ уже записан).
 func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	// Проверяем, включён ли авто-раунд для этой игры
 	autoRoundEnabled := false
@@ -317,20 +317,20 @@ func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http
 		}
 	}
 
-	// В авто-режиме загрузка НЕ блокируется матчами — новая программа будет подхвачена в следующем раунде.
+	// В авто-режиме загрузка НЕ блокируется матчами - новая программа будет подхвачена в следующем раунде.
 	if autoRoundEnabled {
 		return true
 	}
 
-	// В ручном режиме — сохраняем оригинальную логику блокировки.
+	// В ручном режиме сохраняем оригинальную логику блокировки.
 	if !h.validateRoundNotCompleted(w, r, tournamentID, gameID) {
 		return false
 	}
 	return h.validateNoRunningMatches(w, r, tournamentID, gameID)
 }
 
-// validateRoundNotCompleted checks that the round for this game has not been completed yet.
-// Returns false if round is completed and upload is blocked (response already written).
+// validateRoundNotCompleted проверяет, что раунд для этой игры ещё не завершён.
+// Возвращает false, если раунд завершён и загрузка заблокирована (ответ уже записан).
 func (h *ProgramHandler) validateRoundNotCompleted(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	if h.roundChecker == nil {
 		return true
@@ -358,8 +358,8 @@ func (h *ProgramHandler) validateRoundNotCompleted(w http.ResponseWriter, r *htt
 	return true
 }
 
-// validateNoRunningMatches checks that no matches are currently running for the tournament.
-// Returns false if matches are running and upload is blocked (response already written).
+// validateNoRunningMatches проверяет, что в турнире сейчас нет выполняющихся матчей.
+// Возвращает false, если матчи выполняются и загрузка заблокирована (ответ уже записан).
 func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	if h.matchChecker == nil {
 		return true
@@ -391,11 +391,11 @@ func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http
 	return false
 }
 
-// saveUploadedFile writes the file content to disk, prepending a shebang for interpreted languages.
-// Returns true on success, or false on error (response already written).
+// saveUploadedFile записывает содержимое файла на диск, добавляя shebang для интерпретируемых языков.
+// Возвращает true при успехе или false при ошибке (ответ уже записан).
 func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []byte, language, filePath string) bool {
-	// Убеждаемся что директория существует (safety net для Docker volumes).
-	// 0750 — group read/execute, other — нет. appuser внутри worker'а —
+	// Убеждаемся, что директория существует (safety net для Docker volumes).
+	// 0750 - group read/execute, other - нет; appuser внутри worker'а
 	// единственный потребитель этой директории.
 	if err := os.MkdirAll(h.uploadDir, 0o750); err != nil {
 		h.log.Error("Failed to ensure upload directory", zap.Error(err), zap.String("dir", h.uploadDir))
@@ -436,7 +436,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 
 	// Делаем файл исполняемым.
 	// #nosec G302 -- бот-программа должна быть executable внутри Docker-sandbox'а;
-	// 0o750 даёт rwx только owner+group (appuser + docker), other — 0.
+	// 0o750 даёт rwx только owner+group (appuser + docker), other - 0.
 	if err := os.Chmod(filePath, 0o750); err != nil {
 		h.log.Warn("Failed to make file executable", zap.Error(err), zap.String("path", filePath))
 	}
@@ -444,12 +444,12 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	return true
 }
 
-// validateAndCompileProgram runs syntax checks and compilation for the uploaded program.
-// Returns the executable path and an optional syntax/compilation error message.
+// validateAndCompileProgram запускает проверку синтаксиса и компиляцию загруженной программы.
+// Возвращает путь к исполняемому файлу и опциональное сообщение об ошибке синтаксиса/компиляции.
 func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (execPath string, syntaxError *string) {
 	execPath = filePath
 
-	// P2.18: defense-in-depth — сканируем исходник на подозрительные API-вызовы.
+	// Defense-in-depth: сканируем исходник на подозрительные API-вызовы.
 	// По-умолчанию только warn-лог; при CODESCAN_STRICT=true отказываем upload'у.
 	if scanner := codescan.ScannerFor(language); scanner != nil {
 		// #nosec G304 -- filePath тот же, что мы сами создали выше (UUID-based).
@@ -505,14 +505,14 @@ func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (e
 	return execPath, syntaxError
 }
 
-// registerTournamentParticipant registers the program as a tournament participant.
-// Errors are logged but do not fail the upload.
+// registerTournamentParticipant регистрирует программу как участника турнира.
+// Ошибки логируются, но не проваливают upload.
 func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, program *domain.Program, tournamentID uuid.UUID) {
 	if h.tournamentRepo == nil {
 		return
 	}
 
-	// Use program.ID (not local programID) since CreateWithAtomicVersion may regenerate it on retry
+	// Используем program.ID (а не локальный programID), т.к. CreateWithAtomicVersion может перегенерировать его при retry.
 	participant := &domain.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
@@ -569,7 +569,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	}
 
 	// Создаём уникальный путь для файла. Используем канонический (hardcoded)
-	// extension из language, а не raw из form.filename — это предотвращает
+	// extension из language, а не raw из form.filename; это предотвращает
 	// внедрение shell-метасимволов в имя файла (e.g. "Test.java;rm -rf /").
 	programID := uuid.New()
 	ext := canonicalExtension(language)
@@ -616,7 +616,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 
 	// ВАЖНО: Матчи НЕ создаются автоматически при загрузке программы!
 	// Администратор должен вручную запустить матчи через кнопку "Run All Matches"
-	// POST /api/v1/tournaments/{id}/run-matches
+	// POST /api/v1/tournaments/{id}/run-matches.
 
 	h.log.Info("Program uploaded",
 		zap.String("program_id", program.ID.String()),
@@ -629,7 +629,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, program)
 }
 
-// syntaxCheckTimeout is the maximum time allowed for a syntax check command.
+// syntaxCheckTimeout - максимальное время, отводимое на команду проверки синтаксиса.
 const syntaxCheckTimeout = 10 * time.Second
 
 // runSyntaxCheck выполняет проверку синтаксиса с помощью внешней команды.
@@ -643,9 +643,9 @@ func runSyntaxCheck(command string, args []string, defaultMsg string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
 	defer cancel()
 
-	// #nosec G204 -- `command` — hardcoded имя из runSyntaxCheck-callers
+	// #nosec G204 -- `command` - hardcoded имя из runSyntaxCheck-callers
 	// ("python3", "node", "ruby", "php", "luac", "gcc", "g++", "javac");
-	// args[last] — наш UUID-based filePath, не user-controlled.
+	// args[last] - наш UUID-based filePath, не user-controlled.
 	cmd := exec.CommandContext(ctx, command, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -695,7 +695,7 @@ func validateSyntax(language, filePath string) string {
 func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, string) {
 	outputPath := strings.TrimSuffix(sourcePath, filepath.Ext(sourcePath))
 
-	// #nosec G204 -- compiler-вызовы ниже: первый arg — hardcoded имя
+	// #nosec G204 -- compiler-вызовы ниже: первый arg - hardcoded имя
 	// ("gcc", "g++", "go", "rustc", "javac"); outputPath/sourcePath формируются
 	// из UUID и не контролируются пользователем. Shell-injection невозможен.
 	var cmd *exec.Cmd
@@ -729,13 +729,13 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 			log.Warn("javac not found, skipping compilation")
 			return "", ""
 		}
-		// UR bug_008: имя файла на диске — <hex>_<hex>_<hex>.java (из UUID-ов),
+		// Имя файла на диске - <hex>_<hex>_<hex>.java (из UUID-ов),
 		// но javac требует, чтобы `public class Foo` лежал в `Foo.java`,
 		// а java-runtime ищет класс по declared name. Поэтому:
 		// 1) Парсим declared class name из source.
 		// 2) Переименовываем файл в <ClassName>.java в том же dir.
 		// 3) Запускаем javac, wrapper использует declared name.
-		// #nosec G304 -- sourcePath — наш собственный UUID-based path.
+		// #nosec G304 -- sourcePath - наш собственный UUID-based path.
 		srcBytes, readErr := os.ReadFile(sourcePath)
 		if readErr != nil {
 			return "", fmt.Sprintf("Не удалось прочитать Java-исходник: %s", readErr.Error())
@@ -756,7 +756,7 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 				return "", fmt.Sprintf("Не удалось переименовать Java-файл: %s", err.Error())
 			}
 		}
-		// Java: компилируем .java → .class, затем создаём wrapper-скрипт.
+		// Java: компилируем .java в .class, затем создаём wrapper-скрипт.
 		// #nosec G204 -- "javac" hardcoded; properPath собран из classDir (наш
 		// upload-dir) + className (прошёл javaClassNameRe regex-allowlist).
 		javacCmd := exec.Command("javac", properPath)
@@ -775,7 +775,7 @@ func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, s
 		wrapperPath := strings.TrimSuffix(properPath, ".java")
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp %s %s \"$@\"\n", shellSingleQuote(classDir), className)
 		// #nosec G306 G703 -- wrapper должен быть executable shell-скриптом; 0o750
-		// ограничивает до appuser+docker, other — 0. wrapperPath — UUID-based,
+		// ограничивает до appuser+docker, other - 0. wrapperPath - UUID-based,
 		// не user-controlled.
 		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o750); err != nil {
 			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())

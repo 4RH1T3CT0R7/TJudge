@@ -6,7 +6,7 @@ import (
 )
 
 func FuzzValidateUsername(f *testing.F) {
-	// Seed corpus: valid, empty, boundary, special chars
+	// Начальный корпус: корректные, пустые, граничные, спецсимволы
 	f.Add("validuser")
 	f.Add("")
 	f.Add("a")
@@ -30,13 +30,13 @@ func FuzzValidateUsername(f *testing.F) {
 	f.Add("\xff\xfe\xfd")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Should never panic, only return nil or error
+		// Не должен паниковать, только вернуть nil или ошибку
 		_ = ValidateUsername(input)
 	})
 }
 
 func FuzzValidateEmail(f *testing.F) {
-	// Seed corpus: valid emails, invalid formats, edge cases
+	// Начальный корпус: корректные email, некорректные форматы, граничные случаи
 	f.Add("user@example.com")
 	f.Add("test.user@domain.org")
 	f.Add("a+b@c.de")
@@ -63,13 +63,13 @@ func FuzzValidateEmail(f *testing.F) {
 	f.Add("user@юникод.com")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Should never panic, only return nil or error
+		// Не должен паниковать, только вернуть nil или ошибку
 		_ = ValidateEmail(input)
 	})
 }
 
 func FuzzValidatePassword(f *testing.F) {
-	// Seed corpus: valid, too short, too long, missing character classes
+	// Начальный корпус: корректные, слишком короткие, слишком длинные, отсутствующие классы символов
 	f.Add("ValidPass1")
 	f.Add("Str0ngP@ss!")
 	f.Add("")
@@ -93,13 +93,13 @@ func FuzzValidatePassword(f *testing.F) {
 	f.Add("Aa1!@#$%^&*()")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Should never panic, only return nil or error
+		// Не должен паниковать, только вернуть nil или ошибку
 		_ = ValidatePassword(input)
 	})
 }
 
 func FuzzValidateLength(f *testing.F) {
-	// Seed corpus: various strings tested against fixed min=1, max=255
+	// Начальный корпус: различные строки, проверяемые с фиксированными min=1, max=255
 	f.Add("")
 	f.Add("a")
 	f.Add("hello world")
@@ -112,11 +112,11 @@ func FuzzValidateLength(f *testing.F) {
 	f.Add("\xff\xfe\xfd")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Test with fixed min/max boundaries
+		// Проверка с фиксированными границами min/max
 		_ = ValidateLength("field", input, 1, 255)
-		// Also test with zero max (no upper limit)
+		// Также с нулевым max (без верхнего ограничения)
 		_ = ValidateLength("field", input, 0, 0)
-		// Test with min=0 (always passes min check)
+		// С min=0 (всегда проходит проверку min)
 		_ = ValidateLength("field", input, 0, 100)
 	})
 }
@@ -132,7 +132,7 @@ func FuzzValidateRequired(f *testing.F) {
 	f.Add("юникод")
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Should never panic, only return nil or error
+		// Не должен паниковать, только вернуть nil или ошибку
 		_ = ValidateRequired("field", input)
 	})
 }
@@ -150,11 +150,11 @@ func FuzzValidateEnum(f *testing.F) {
 	allowed := []string{"active", "inactive", "pending"}
 
 	f.Fuzz(func(t *testing.T, input string) {
-		// Should never panic, only return nil or error
+		// Не должен паниковать, только вернуть nil или ошибку
 		_ = ValidateEnum("status", input, allowed)
-		// Also test with empty allowed list
+		// Также с пустым списком допустимых значений
 		_ = ValidateEnum("status", input, []string{})
-		// Test with nil allowed list
+		// С nil в качестве списка допустимых значений
 		_ = ValidateEnum("status", input, nil)
 	})
 }
@@ -169,11 +169,11 @@ func FuzzValidateRange(f *testing.F) {
 	f.Add(-2147483648) // MinInt32
 
 	f.Fuzz(func(t *testing.T, input int) {
-		// Test with fixed min/max boundaries
+		// Проверка с фиксированными границами min/max
 		_ = ValidateRange("field", input, 1, 100)
-		// Test with zero max (no upper limit)
+		// С нулевым max (без верхнего ограничения)
 		_ = ValidateRange("field", input, 0, 0)
-		// Test with negative min
+		// С отрицательным min
 		_ = ValidateRange("field", input, -10, 10)
 	})
 }

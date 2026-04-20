@@ -1,5 +1,5 @@
-// Minimal procedural sound effects via Web Audio API — no external files needed.
-// Respects prefers-reduced-motion by silencing all audio.
+// Минимальные процедурные звуки через Web Audio API - внешние файлы не нужны.
+// Уважает prefers-reduced-motion, заглушая весь звук.
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -90,7 +90,7 @@ class SoundManager {
     });
   }
 
-  /** Swoosh — white noise fade for escape/teleport */
+  /** Swoosh - затухание белого шума для escape/teleport */
   escape() {
     const ctx = this.getCtx();
     if (!ctx) return;

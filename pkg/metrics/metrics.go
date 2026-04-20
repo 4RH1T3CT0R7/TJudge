@@ -70,7 +70,7 @@ func newMetrics() *Metrics {
 			prometheus.HistogramOpts{
 				Name:    "tjudge_match_duration_seconds",
 				Help:    "Match execution duration in seconds",
-				Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // 0.1s to ~100s
+				Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // от 0.1s до ~100s
 			},
 			[]string{"game_type"},
 		),
@@ -134,7 +134,7 @@ func newMetrics() *Metrics {
 			prometheus.HistogramOpts{
 				Name:    "tjudge_worker_drain_duration_seconds",
 				Help:    "Duration of worker pool graceful drain (from Stop() to all workers exited)",
-				Buckets: prometheus.ExponentialBuckets(0.1, 2, 12), // 0.1s ... ~400s
+				Buckets: prometheus.ExponentialBuckets(0.1, 2, 12), // от 0.1s до ~400s
 			},
 		),
 		WorkerInFlightOnStop: promauto.NewGauge(
@@ -247,7 +247,7 @@ func (m *Metrics) SetQueueDeadLetterSize(size int64) {
 }
 
 // RecordQueueDeadLetterPush инкрементирует счётчик push-ов в dead-letter.
-// reason — короткая метка причины (напр. "unmarshal_error", "poison_message").
+// reason - короткая метка причины (напр. "unmarshal_error", "poison_message").
 func (m *Metrics) RecordQueueDeadLetterPush(reason string) {
 	m.QueueDeadLetterPush.WithLabelValues(reason).Inc()
 }

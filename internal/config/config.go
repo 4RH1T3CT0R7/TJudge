@@ -9,15 +9,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// defaultJWTSecret — секрет JWT по умолчанию (только для разработки)
+// defaultJWTSecret - секрет JWT по умолчанию (только для разработки).
 const defaultJWTSecret = "change-this-secret-in-production"
 
-// minJWTSecretLength — минимальная длина JWT secret для production.
+// minJWTSecretLength - минимальная длина JWT secret для production.
 // Менее 32 байт уязвимо к brute-force на современном железе.
 const minJWTSecretLength = 32
 
-// jwtSecretPlaceholders — список placeholder-значений, которые не должны
-// попасть в prod ни под каким предлогом. Совпадение (case-insensitive) → fail.
+// jwtSecretPlaceholders - список placeholder-значений, которые не должны
+// попасть в prod ни под каким предлогом. Совпадение (case-insensitive) приводит к fail.
 var jwtSecretPlaceholders = []string{
 	defaultJWTSecret,
 	"your-secret-key-change-in-production",
@@ -138,12 +138,13 @@ func (c RedisConfig) Address() string {
 
 // WorkerConfig - конфигурация worker pool
 type WorkerConfig struct {
-	MinWorkers    int           `yaml:"min_workers"`
-	MaxWorkers    int           `yaml:"max_workers"`
-	QueueSize     int           `yaml:"queue_size"`
-	Timeout       time.Duration `yaml:"timeout"`
-	RetryAttempts int           `yaml:"retry_attempts"`
-	RetryDelay    time.Duration `yaml:"retry_delay"`
+	MinWorkers        int           `yaml:"min_workers"`
+	MaxWorkers        int           `yaml:"max_workers"`
+	QueueSize         int           `yaml:"queue_size"`
+	Timeout           time.Duration `yaml:"timeout"`
+	RetryAttempts     int           `yaml:"retry_attempts"`
+	RetryDelay        time.Duration `yaml:"retry_delay"`
+	AutoScaleInterval time.Duration `yaml:"auto_scale_interval"` // интервал проверки пула, 0 = 2s
 }
 
 // ExecutorConfig - конфигурация исполнителя матчей
@@ -242,7 +243,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("worker queue_size must be positive")
 	}
 
-	// Валидация JWT — в prod требуем минимум 32 байта и не placeholder
+	// Валидация JWT: в prod требуем минимум 32 байта и не placeholder.
 	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
 		return err
 	}
@@ -266,14 +267,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// recommendedDBPoolSize вычисляет sensible max_connections для БД (P2.3).
+// recommendedDBPoolSize вычисляет sensible max_connections для БД.
 //
 // Формула: min(dbCeiling, workerMax * 1.5 + apiOverhead).
-//   - workerMax * 1.5 — запас на retry/long-running matches.
-//   - apiOverhead = 20 — HTTP-обработчики, миграции, backup-утилиты.
-//   - dbCeiling = 100 — не выходим за default-лимит PostgreSQL (max_connections=100).
+//   - workerMax * 1.5 - запас на retry и долгие матчи.
+//   - apiOverhead = 20 - HTTP-обработчики, миграции, backup-утилиты.
+//   - dbCeiling = 100 - не выходим за default-лимит PostgreSQL (max_connections=100).
 //
-// Если пользователь задал DB_MAX_CONNECTIONS явно — используется его значение.
+// Если пользователь задал DB_MAX_CONNECTIONS явно, используется его значение.
 func recommendedDBPoolSize(workerMax int) int {
 	const apiOverhead = 20
 	const dbCeiling = 100
@@ -292,7 +293,7 @@ func Load() (*Config, error) {
 	// Загружаем .env файл если существует (игнорируем ошибку если файла нет)
 	_ = godotenv.Load()
 
-	// P2.3: если DB_MAX_CONNECTIONS не задан, подбираем по WORKER_MAX.
+	// Если DB_MAX_CONNECTIONS не задан, подбираем по WORKER_MAX.
 	workerMax := getEnvInt("WORKER_MAX", 1000)
 	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
@@ -323,12 +324,13 @@ func Load() (*Config, error) {
 			PoolSize: getEnvInt("REDIS_POOL_SIZE", 100),
 		},
 		Worker: WorkerConfig{
-			MinWorkers:    getEnvInt("WORKER_MIN", 10),
-			MaxWorkers:    getEnvInt("WORKER_MAX", 1000),
-			QueueSize:     getEnvInt("WORKER_QUEUE_SIZE", 10000),
-			Timeout:       getEnvDuration("WORKER_TIMEOUT", 90*time.Second),
-			RetryAttempts: getEnvInt("WORKER_RETRY_ATTEMPTS", 3),
-			RetryDelay:    getEnvDuration("WORKER_RETRY_DELAY", 5*time.Second),
+			MinWorkers:        getEnvInt("WORKER_MIN", 10),
+			MaxWorkers:        getEnvInt("WORKER_MAX", 1000),
+			QueueSize:         getEnvInt("WORKER_QUEUE_SIZE", 10000),
+			Timeout:           getEnvDuration("WORKER_TIMEOUT", 90*time.Second),
+			RetryAttempts:     getEnvInt("WORKER_RETRY_ATTEMPTS", 3),
+			RetryDelay:        getEnvDuration("WORKER_RETRY_DELAY", 5*time.Second),
+			AutoScaleInterval: getEnvDuration("WORKER_AUTOSCALE_INTERVAL", 2*time.Second),
 		},
 		Executor: ExecutorConfig{
 			TJudgePath:        getEnv("TJUDGE_PATH", "tjudge-cli"),

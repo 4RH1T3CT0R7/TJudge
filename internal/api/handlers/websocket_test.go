@@ -57,7 +57,7 @@ func TestWebSocketHandler_HandleTournament_MissingAuth(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/ws/tournaments/"+tournamentID.String(), nil)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", tournamentID.String())
-	// No middleware.UserIDKey in context
+	// Без middleware.UserIDKey в контексте
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rr := httptest.NewRecorder()
 
@@ -66,12 +66,12 @@ func TestWebSocketHandler_HandleTournament_MissingAuth(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-// Note: HandleTournament with valid auth + WebSocket upgrade cannot be tested
-// with httptest.NewRecorder since gorilla/websocket requires a real HTTP connection.
-// The test would need httptest.NewServer + a real WebSocket dialer.
+// Замечание: HandleTournament с валидной аутентификацией + WebSocket upgrade нельзя
+// протестировать через httptest.NewRecorder, т.к. gorilla/websocket требует настоящего
+// HTTP-соединения. Для такого теста потребуется httptest.NewServer + реальный WebSocket dialer.
 
 // TestCheckWebSocketOrigin_ProdFailClosed защищает от CSWSH: в prod
-// wildcard и пустой origin-list ДОЛЖНЫ отклоняться (P0.2).
+// wildcard и пустой origin-list ДОЛЖНЫ отклоняться.
 func TestCheckWebSocketOrigin_ProdFailClosed(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "")
@@ -107,7 +107,7 @@ func TestCheckWebSocketOrigin_ProdExplicitReject(t *testing.T) {
 }
 
 func TestCheckWebSocketOrigin_ProdEmptyOriginBrowser(t *testing.T) {
-	// Browser-initiated request всегда шлёт Sec-Fetch-Site → rejected при пустом Origin.
+	// Browser-initiated request всегда шлёт Sec-Fetch-Site, что приводит к rejected при пустом Origin.
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "https://tjudge.example")
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
@@ -117,7 +117,7 @@ func TestCheckWebSocketOrigin_ProdEmptyOriginBrowser(t *testing.T) {
 }
 
 func TestCheckWebSocketOrigin_ProdEmptyOriginNonBrowser(t *testing.T) {
-	// curl/bot не шлёт Sec-Fetch-Site → разрешаем.
+	// curl/bot не шлёт Sec-Fetch-Site - разрешаем.
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "https://tjudge.example")
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)

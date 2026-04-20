@@ -7,11 +7,11 @@ import (
 )
 
 var (
-	// More permissive email regex that supports:
-	// - Standard local parts with letters, numbers, dots, underscores, percent, plus, hyphen
-	// - Domain parts with letters, numbers, hyphens
-	// - TLDs with 2+ characters (letters only for TLD)
-	// - Subdomains
+	// Более мягкий email regex, поддерживает:
+	// - Стандартные локальные части с буквами, цифрами, точками, подчёркиваниями, процентами, плюсами, дефисами
+	// - Доменные части с буквами, цифрами, дефисами
+	// - TLD из 2+ символов (только буквы)
+	// - Поддомены
 	emailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`)
 	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,50}$`)
 )

@@ -31,14 +31,14 @@ type SecurityConfig struct {
 
 // DefaultSecurityConfig возвращает конфигурацию по умолчанию.
 //
-// CSP ужесточён (P0.3 этап 1):
-//   - object-src 'none'              — блокирует Flash/Java-аплеты (XSS vector)
-//   - base-uri 'self'                — защита от base-tag injection
-//   - form-action 'self'             — отправка форм только на свой origin
-//   - frame-ancestors 'none'         — clickjacking защита
+// Ужесточения CSP:
+//   - object-src 'none'              - блокирует Flash/Java-аплеты (XSS vector)
+//   - base-uri 'self'                - защита от base-tag injection
+//   - form-action 'self'             - отправка форм только на свой origin
+//   - frame-ancestors 'none'         - clickjacking защита
 //
 // 'unsafe-inline' временно остаётся в script-src до выноса inline-скрипта
-// из web/index.html (P0.3 этап 2 — перейти на nonce или hash-based CSP).
+// из web/index.html; потом нужно перейти на nonce- или hash-based CSP.
 // 'unsafe-inline' в style-src нужен для Tailwind style-injection; риск ниже.
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
@@ -56,39 +56,39 @@ func DefaultSecurityConfig() SecurityConfig {
 func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// X-XSS-Protection
+			// Заголовок X-XSS-Protection
 			if config.XSSProtection {
 				w.Header().Set("X-XSS-Protection", "1; mode=block")
 			}
 
-			// X-Content-Type-Options
+			// Заголовок X-Content-Type-Options
 			if config.ContentTypeNosniff {
 				w.Header().Set("X-Content-Type-Options", "nosniff")
 			}
 
-			// X-Frame-Options
+			// Заголовок X-Frame-Options
 			if config.XFrameOptions != "" {
 				w.Header().Set("X-Frame-Options", config.XFrameOptions)
 			}
 
-			// Content-Security-Policy
+			// Заголовок Content-Security-Policy
 			if config.ContentSecurityPolicy != "" {
 				w.Header().Set("Content-Security-Policy", config.ContentSecurityPolicy)
 			}
 
-			// Referrer-Policy
+			// Заголовок Referrer-Policy
 			if config.ReferrerPolicy != "" {
 				w.Header().Set("Referrer-Policy", config.ReferrerPolicy)
 			}
 
-			// Strict-Transport-Security (только для HTTPS)
-			// Also set HSTS when behind a reverse proxy that terminates TLS and
-			// forwards the protocol via X-Forwarded-Proto.
+			// Strict-Transport-Security (только для HTTPS).
+			// Также выставляем HSTS, когда за реверс-прокси, который терминирует TLS
+			// и передаёт протокол через X-Forwarded-Proto.
 			if config.StrictTransportSecurity != "" && (r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https") {
 				w.Header().Set("Strict-Transport-Security", config.StrictTransportSecurity)
 			}
 
-			// Permissions-Policy
+			// Заголовок Permissions-Policy
 			if config.PermissionsPolicy != "" {
 				w.Header().Set("Permissions-Policy", config.PermissionsPolicy)
 			}

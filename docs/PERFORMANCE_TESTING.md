@@ -91,7 +91,7 @@ LOAD_API_URL=http://localhost:8080 go test -tags=load -v ./tests/load/...
 | Mixed Endpoints | 40 | 15s | Комбинированная нагрузка |
 | Rate Limiting | 100 | 5s | Проверка rate limiter |
 | Sustained Load | 25 | 30s | Длительная нагрузка |
-| Burst Traffic | 5x200 | — | Всплески трафика |
+| Burst Traffic | 5x200 | - | Всплески трафика |
 
 #### Пример вывода
 
@@ -369,4 +369,3 @@ benchmark:
 ---
 
 *Версия документации: 3.0*
-*Последнее обновление: Март 2026*

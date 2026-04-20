@@ -67,11 +67,11 @@ func NewWithOptions(opts Options) (*Logger, error) {
 	// Создаём WriteSyncer
 	var writeSyncer zapcore.WriteSyncer
 	if opts.Async {
-		// Асинхронное логирование с буферизацией (8KB buffer, flush каждые 30 секунд)
+		// Асинхронное логирование с буферизацией (8KB буфер, flush каждые 30 секунд)
 		writeSyncer = &zapcore.BufferedWriteSyncer{
 			WS:            zapcore.AddSync(os.Stdout),
-			Size:          8 * 1024, // 8KB buffer
-			FlushInterval: 0,        // Flush только при заполнении буфера или Sync()
+			Size:          8 * 1024, // 8KB буфер
+			FlushInterval: 0,        // Сброс только при заполнении буфера или Sync()
 		}
 	} else {
 		// Синхронное логирование
@@ -99,9 +99,9 @@ func (l *Logger) WithRequestID(requestID string) *Logger {
 	return l.WithFields(zap.String("request_id", requestID))
 }
 
-// WithContextRequestID extracts the request ID from context and returns a logger
-// with the request_id field attached. If the context has no request ID, returns
-// the logger unchanged.
+// WithContextRequestID извлекает request ID из контекста и возвращает логгер
+// с присоединённым полем request_id. Если в контексте нет request ID, возвращает
+// логгер без изменений.
 func (l *Logger) WithContextRequestID(ctx context.Context) *Logger {
 	if id := requestid.FromContext(ctx); id != "" {
 		return l.WithRequestID(id)

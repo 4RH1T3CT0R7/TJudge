@@ -293,7 +293,7 @@ func TestTournamentCache_IncrementParticipantsCount_NoExpiryReset(t *testing.T) 
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	// First increment — creates the key with value 1 and sets TTL.
+	// Первый инкремент: создаёт ключ со значением 1 и выставляет TTL.
 	err := tc.IncrementParticipantsCount(ctx, tournamentID)
 	require.NoError(t, err)
 
@@ -305,7 +305,7 @@ func TestTournamentCache_IncrementParticipantsCount_NoExpiryReset(t *testing.T) 
 	mr.FastForward(10 * time.Second)
 	ttlBeforeSecond := mr.TTL(key)
 
-	// Second increment — value should become 2, TTL should NOT be reset.
+	// Второй инкремент: значение должно стать 2, TTL НЕ должен сбрасываться.
 	err = tc.IncrementParticipantsCount(ctx, tournamentID)
 	require.NoError(t, err)
 

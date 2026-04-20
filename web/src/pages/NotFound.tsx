@@ -49,7 +49,7 @@ export function NotFound() {
     }, 2000);
   }, []));
 
-  // Double-click on 404 — slot machine
+  // Двойной клик по 404 - слот-машина
   const handleDoubleClick404 = useDoubleClickText(useCallback(() => {
     if (slotRolling) return;
     setSlotRolling(true);

@@ -176,7 +176,7 @@
 }
 
 @layer components {
-  /* Buttons — ghost/outline style (moshi-like) */
+  /* Buttons - ghost/outline style (moshi-like) */
   .btn {
     @apply px-4 py-2 rounded-lg font-medium inline-flex items-center justify-center gap-2;
     @apply focus:outline-none focus:ring-2 focus:ring-offset-1;
@@ -276,7 +276,7 @@
     @apply ring-amber-400;
   }
 
-  /* Inputs — transparent moshi-style */
+  /* Inputs - transparent moshi-style */
   .input {
     @apply w-full px-3 py-2 rounded-lg text-gray-100;
     @apply placeholder:text-gray-500;
@@ -295,7 +295,7 @@
     background: rgba(17,24,39,0.5);
   }
 
-  /* Cards — no border, subtle glow on hover */
+  /* Cards - no border, subtle glow on hover */
   .card {
     @apply rounded-lg shadow-sm p-5;
     background: rgba(17,24,39,0.8);
@@ -409,7 +409,7 @@
     animation: pulse-ring 1.5s infinite ease-out;
   }
 
-  /* Nav link styles — neon glow on hover */
+  /* Nav link styles - neon glow on hover */
   .nav-link {
     @apply px-3 py-2 rounded-md text-sm font-medium transition-[color,text-shadow] duration-200;
     @apply text-gray-400;

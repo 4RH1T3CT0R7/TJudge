@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockTournamentService mocks the tournament service
+// MockTournamentService - мок tournament-сервиса
 type MockTournamentService struct {
 	mock.Mock
 }
@@ -107,7 +107,7 @@ func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tourname
 	return args.Get(0).([]*domain.MatchRound), args.Error(1)
 }
 
-// MockSchedulingService mocks the scheduling service
+// MockSchedulingService - мок scheduling-сервиса
 type MockSchedulingService struct {
 	mock.Mock
 }
@@ -211,7 +211,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String(), nil)
 
-		// Set up Chi URL params
+		// Настраиваем Chi URL params
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", tournamentID.String())
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))

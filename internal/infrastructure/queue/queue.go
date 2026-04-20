@@ -68,7 +68,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 		qm.log.LogError("Failed to check dedup key", err,
 			zap.String("match_id", matchIDStr),
 		)
-		// Продолжаем даже при ошибке дедупликации — лучше дублировать, чем потерять
+		// Продолжаем даже при ошибке дедупликации: лучше дублировать, чем потерять
 	} else if !isNew {
 		qm.log.Info("Match already enqueued, skipping",
 			zap.String("match_id", matchIDStr),
@@ -109,9 +109,9 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 // с учётом weighted fair queueing для предотвращения starvation.
 //
 // Цикл из 9 итераций (5+3+1):
-//   - Итерации 0-4: HIGH первый  → H, M, L
-//   - Итерации 5-7: MEDIUM первый → M, H, L
-//   - Итерация 8:   LOW первый   → L, H, M
+//   - Итерации 0-4: HIGH первый, порядок H, M, L
+//   - Итерации 5-7: MEDIUM первый, порядок M, H, L
+//   - Итерация 8:   LOW первый, порядок L, H, M
 //
 // Это гарантирует, что MEDIUM/LOW очереди проверяются первыми
 // как минимум 4/9 ≈ 44% времени, предотвращая starvation.
@@ -166,7 +166,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 
 	for _, match := range matches {
 		key := dedupKeyFor(match.ID.String())
-		// Если pipeline работал — проверяем результат, иначе пропускаем dedup
+		// Если pipeline работал, проверяем результат, иначе пропускаем dedup
 		if dedupResults != nil {
 			isNew, ok := dedupResults[key]
 			if ok && !isNew {
@@ -227,8 +227,12 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 	// Используем multi-key BRPOP с ротируемым порядком ключей
 	queueKeys := qm.weightedQueueKeys()
 
-	// Блокирующее чтение с таймаутом 1 секунда на все очереди сразу
-	result, err := qm.cache.BRPop(ctx, time.Second, queueKeys...)
+	// Блокирующее чтение с таймаутом 2 секунды на все очереди сразу.
+	// BRPOP блокируется на стороне Redis, поэтому не тратит CPU воркера;
+	// увеличение таймаута с 1с до 2с уменьшает частоту idle-RTT при пустой
+	// очереди без ущерба для отзывчивости (BRPOP прерывается ctx-cancel
+	// и любым LPUSH в один из ключей).
+	result, err := qm.cache.BRPop(ctx, 2*time.Second, queueKeys...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dequeue match: %w", err)
 	}
@@ -248,7 +252,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 		} else {
 			qm.metrics.RecordQueueDeadLetterPush("unmarshal_error")
 			// Cap dead-letter queue to 1000 entries and set 7-day TTL.
-			// P1.1: логируем ошибки вместо тихого игнора + обновляем gauge-метрику.
+			// Логируем ошибки вместо тихого игнора и обновляем gauge-метрику.
 			if trimErr := qm.cache.LTrim(ctx, deadLetterKey, 0, 999); trimErr != nil {
 				qm.log.Error("Failed to LTRIM dead-letter queue",
 					zap.Error(trimErr),
@@ -350,8 +354,8 @@ func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 		qm.metrics.SetQueueSize(string(priority), int(size))
 	}
 
-	// P1.1: обновляем метрику размера dead-letter очереди.
-	// Ошибка здесь не критична — просто не обновим gauge.
+	// Обновляем метрику размера dead-letter очереди.
+	// Ошибка здесь не критична: просто не обновим gauge.
 	if dlSize, err := qm.cache.LLen(ctx, "queue:dead_letter"); err == nil {
 		qm.metrics.SetQueueDeadLetterSize(dlSize)
 	}
@@ -383,13 +387,13 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 
 // clearDedupKeys удаляет все dedup-ключи по паттерну queue:dedup:*.
 //
-// P2.4: нормальная жизнь dedup-ключей — независимый TTL (24h) через SetNX,
+// В нормальном режиме dedup-ключи имеют независимый TTL (24h) через SetNX,
 // так что фоновой очистки не требуется. Этот метод вызывается ТОЛЬКО из
 // admin-action `Clear()`, который форс-очищает все очереди.
 //
-// Ограничение: max 10000 итераций SCAN (1M ключей при COUNT=100) —
+// Ограничение: максимум 10000 итераций SCAN (1M ключей при COUNT=100),
 // защита от бесконечного цикла при corrupted cursor или очень больших сетах.
-// В нормальной ситуации ключей будет ≤ размера очередей × 2.
+// В нормальной ситуации ключей будет не больше размера очередей * 2.
 func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 	const maxIterations = 10000
 	var cursor uint64
@@ -408,8 +412,8 @@ func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 			return nil
 		}
 	}
-	// Hit the safety cap — логируем чтобы оператор заметил, но не возвращаем error:
-	// уже удалённые ключи останутся удалёнными, оставшиеся сами expire через TTL.
+	// Достигли safety cap: логируем, чтобы оператор заметил, но не возвращаем error.
+	// Уже удалённые ключи останутся удалёнными, оставшиеся сами expire через TTL.
 	qm.log.Warn("clearDedupKeys hit max iterations, остановлено для безопасности",
 		zap.Int("max_iterations", maxIterations),
 	)
@@ -488,9 +492,10 @@ func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(
 }
 
 // purgeQueueInvalidMatches очищает одну очередь от невалидных матчей.
-// NOTE: There is a small window between LRange and ReplaceList where
-// newly enqueued items could be lost. This is acceptable because purge
-// is an admin-only operation that should not run during active match processing.
+// Существует небольшое окно между LRange и ReplaceList, в котором новые
+// добавленные элементы могут быть потеряны. Это допустимо, так как purge
+// является admin-only операцией и не должен выполняться во время активной
+// обработки матчей.
 func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority domain.MatchPriority, validator func(matchID string) bool) (int64, error) {
 	queueKey := qm.getQueueKey(priority)
 

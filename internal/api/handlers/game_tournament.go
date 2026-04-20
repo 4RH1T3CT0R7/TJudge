@@ -14,26 +14,26 @@ import (
 	"go.uber.org/zap"
 )
 
-// TournamentGameService is the interface for linking games to tournaments.
+// TournamentGameService - интерфейс для связывания игр с турнирами.
 type TournamentGameService interface {
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error)
 	AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 }
 
-// TournamentGameOwnerRepo checks tournament ownership for authorization.
+// TournamentGameOwnerRepo проверяет владельца турнира для авторизации.
 type TournamentGameOwnerRepo interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
 }
 
-// TournamentGameHandler handles linking/unlinking games with tournaments.
+// TournamentGameHandler обрабатывает привязку/отвязку игр к турнирам.
 type TournamentGameHandler struct {
 	gameService    TournamentGameService
 	tournamentRepo TournamentGameOwnerRepo
 	log            *logger.Logger
 }
 
-// NewTournamentGameHandler creates a new handler for tournament-game operations.
+// NewTournamentGameHandler создаёт новый handler для операций турнир-игра.
 func NewTournamentGameHandler(
 	gameService TournamentGameService,
 	tournamentRepo TournamentGameOwnerRepo,
@@ -46,7 +46,7 @@ func NewTournamentGameHandler(
 	}
 }
 
-// GetTournamentGames returns games for a tournament.
+// GetTournamentGames возвращает игры турнира.
 // @Summary Игры турнира
 // @Description Возвращает список игр, привязанных к турниру
 // @Tags games
@@ -71,12 +71,12 @@ func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, games)
 }
 
-// AddGameToTournamentRequest is the request body for adding a game to a tournament.
+// AddGameToTournamentRequest - тело запроса на добавление игры в турнир.
 type AddGameToTournamentRequest struct {
 	GameID uuid.UUID `json:"game_id"`
 }
 
-// AddGameToTournament adds a game to a tournament.
+// AddGameToTournament добавляет игру в турнир.
 // @Summary Добавить игру в турнир
 // @Description Привязывает игру к турниру (админ или создатель турнира)
 // @Tags games
@@ -144,7 +144,7 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// RemoveGameFromTournament removes a game from a tournament.
+// RemoveGameFromTournament удаляет игру из турнира.
 // @Summary Удалить игру из турнира
 // @Description Отвязывает игру от турнира (только для админов)
 // @Tags games

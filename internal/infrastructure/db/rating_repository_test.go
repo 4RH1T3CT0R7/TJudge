@@ -681,7 +681,7 @@ func (s *RatingRepositorySuite) TestResetParticipantsForGame_Empty() {
 	assert.Equal(s.T(), int64(0), affected)
 }
 
-// TestUpdateParticipantRating_ConcurrentDeltas — регрессия на P1.13.
+// TestUpdateParticipantRating_ConcurrentDeltas - регрессия на concurrent-deltas.
 // Запускает N goroutine, каждая делает +1 к рейтингу через delta-based UPDATE.
 // Правильный результат: rating = baseline + N (никаких потерянных обновлений).
 func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
@@ -712,7 +712,7 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
 	final, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
 	require.NoError(s.T(), err)
 	// Корректность: каждый из N concurrent UPDATE добавил +1, итого +N.
-	// Если БД не сериализует correctly — final < baseline+N (lost update).
+	// Если БД не сериализует корректно, получим final меньше baseline+N (lost update).
 	assert.Equal(s.T(), baseline+n, final,
 		"concurrent delta-based UPDATE must not lose updates (MVCC row-lock invariant)")
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // TestClient_CloseSendIdempotent гарантирует, что повторные close()
-// безопасны (P0.4: ранее двойной close вызывал panic).
+// безопасны.
 func TestClient_CloseSendIdempotent(t *testing.T) {
 	log, _ := logger.New("error", "json")
 	hub := NewHub(log)
@@ -24,7 +24,7 @@ func TestClient_CloseSendIdempotent(t *testing.T) {
 	// Первый close закрывает канал
 	client.CloseSend()
 	assert.True(t, client.IsClosed())
-	// Канал должен быть закрыт — чтение возвращает ok=false
+	// Канал должен быть закрыт, чтение возвращает ok=false
 	_, ok := <-client.send
 	assert.False(t, ok)
 
@@ -41,7 +41,7 @@ func TestClient_ReadLimiterInitialized(t *testing.T) {
 	hub := NewHub(log)
 	client := NewClient(hub, nil, uuid.New(), uuid.New(), log)
 
-	// burst allowed — все первые clientMessageBurst Allow() должны пройти.
+	// Все первые clientMessageBurst Allow() должны пройти.
 	for i := 0; i < clientMessageBurst; i++ {
 		assert.True(t, client.readLimiter.Allow(), "burst msg %d must be allowed", i)
 	}
@@ -49,9 +49,9 @@ func TestClient_ReadLimiterInitialized(t *testing.T) {
 	assert.False(t, client.readLimiter.Allow(), "after burst, next message must be limited")
 }
 
-// TestClient_CloseSendConcurrent — регрессия на race condition.
+// TestClient_CloseSendConcurrent - регрессия на race condition.
 // Много горутин одновременно вызывают CloseSend(); только одна должна
-// реально закрыть канал, остальные — no-op. Запускается с -race.
+// реально закрыть канал, остальные - no-op. Запускается с -race.
 func TestClient_CloseSendConcurrent(t *testing.T) {
 	log, _ := logger.New("error", "json")
 	hub := NewHub(log)
@@ -131,14 +131,14 @@ func TestClient_handleMessage_InvalidJSON(t *testing.T) {
 	hub := newTestHub(t)
 	client := newTestClient(hub, uuid.New(), uuid.New())
 
-	// Should not panic
+	// Не должно паниковать
 	client.handleMessage([]byte("not valid json"))
 
 	select {
 	case <-client.send:
 		t.Fatal("should not receive anything on invalid JSON")
 	default:
-		// OK
+		// Ок
 	}
 }
 
@@ -160,7 +160,7 @@ func TestClient_handleMessage_UnknownType(t *testing.T) {
 	case <-client.send:
 		t.Fatal("should not receive anything on unknown type")
 	default:
-		// OK
+		// Ок
 	}
 }
 
@@ -187,7 +187,7 @@ func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
 	tournamentID := uuid.New()
 	log, _ := logger.New("error", "json")
 
-	// Create a client with a send buffer of size 1
+	// Создаём клиент с send-буфером размера 1
 	client := &Client{
 		hub:          hub,
 		conn:         nil,
@@ -197,15 +197,15 @@ func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
 		log:          log,
 	}
 
-	// Fill the send buffer
+	// Заполняем send-буфер
 	client.send <- []byte("filler")
 
-	// sendPong should not panic when the buffer is full
+	// sendPong не должен паниковать при полном буфере
 	assert.NotPanics(t, func() {
 		client.sendPong()
 	})
 
-	// The buffer should still contain only the filler message
+	// В буфере должно остаться только filler-сообщение
 	require.Len(t, client.send, 1)
 	data := <-client.send
 	assert.Equal(t, []byte("filler"), data)
@@ -225,7 +225,7 @@ func TestClient_sendPong_ClosedChannel_NoPanic(t *testing.T) {
 		log:          log,
 	}
 
-	// Close the channel to trigger the recover path
+	// Закрываем канал, чтобы сработала ветка recover
 	close(client.send)
 
 	assert.NotPanics(t, func() {
@@ -238,7 +238,7 @@ func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 	tournamentID := uuid.New()
 	client := newTestClient(hub, tournamentID, uuid.New())
 
-	// Valid JSON message with no payload field
+	// Валидное JSON-сообщение без поля payload
 	msg := Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypePing,
@@ -246,12 +246,12 @@ func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 	data, err := json.Marshal(msg)
 	require.NoError(t, err)
 
-	// Should handle gracefully and send a pong response
+	// Должен корректно обработать и отправить pong в ответ
 	assert.NotPanics(t, func() {
 		client.handleMessage(data)
 	})
 
-	// Since the type is ping, we should still get a pong back
+	// Поскольку тип ping, pong всё равно должен прийти
 	select {
 	case pongData := <-client.send:
 		var pong Message
@@ -262,7 +262,7 @@ func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 		t.Fatal("timed out waiting for pong response")
 	}
 
-	// Also test with an unknown type and nil payload -- should not panic, no message sent
+	// Также проверяем с неизвестным типом и nil payload - не должно паниковать, сообщение не отправляется
 	unknownMsg := Message{
 		TournamentID: tournamentID,
 		Type:         MessageType("some_type"),
@@ -278,6 +278,6 @@ func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 	case <-client.send:
 		t.Fatal("should not receive anything for unknown type with empty payload")
 	default:
-		// OK
+		// Ок
 	}
 }

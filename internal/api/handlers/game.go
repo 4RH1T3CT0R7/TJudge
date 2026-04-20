@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// GameService is the full interface for the game domain service.
-// It satisfies GameCRUDService, TournamentGameService, and GameRoundLookupService.
+// GameService - полный интерфейс domain-сервиса игр.
+// Удовлетворяет GameCRUDService, TournamentGameService и GameRoundLookupService.
 type GameService interface {
 	Create(ctx context.Context, req *game.CreateRequest) (*domain.Game, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
@@ -24,27 +24,27 @@ type GameService interface {
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 }
 
-// GameLeaderboardRepository is the interface for game-specific leaderboards.
+// GameLeaderboardRepository - интерфейс для leaderboard конкретной игры.
 type GameLeaderboardRepository interface {
 	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error)
 }
 
-// GameMatchRepository is the interface for listing game matches.
+// GameMatchRepository - интерфейс для листинга матчей игры.
 type GameMatchRepository interface {
 	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
 }
 
-// GameTournamentRepository is the interface for tournament ownership checks.
+// GameTournamentRepository - интерфейс для проверки владения турниром.
 type GameTournamentRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
 }
 
-// GameProgramRepository is the interface for getting programs by tournament and game.
+// GameProgramRepository - интерфейс для получения программ по турниру и игре.
 type GameProgramRepository interface {
 	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error)
 }
 
-// TournamentGameStatusRepository is the interface for game status and round management.
+// TournamentGameStatusRepository - интерфейс управления статусом игр и раундами.
 type TournamentGameStatusRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
 	GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error)
@@ -54,24 +54,24 @@ type TournamentGameStatusRepository interface {
 	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
-	// Auto-round
+	// Авто-раунд
 	SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error
 	GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error)
 }
 
-// GameHandler is a facade that embeds three focused sub-handlers:
-//   - GameCRUDHandler: Create/List/Get/Update/Delete for games
-//   - TournamentGameHandler: linking/unlinking games with tournaments
-//   - GameRoundHandler: leaderboard, matches, programs, status, round management
+// GameHandler - фасад, встраивающий три специализированных sub-handler'а:
+//   - GameCRUDHandler: Create/List/Get/Update/Delete для игр
+//   - TournamentGameHandler: привязка/отвязка игр к турнирам
+//   - GameRoundHandler: leaderboard, матчи, программы, статус, управление раундом
 //
-// All HTTP method names are preserved, so routes.go needs no changes.
+// Все имена HTTP-методов сохранены, поэтому routes.go не требует изменений.
 type GameHandler struct {
 	*GameCRUDHandler
 	*TournamentGameHandler
 	*GameRoundHandler
 }
 
-// NewGameHandler creates a GameHandler facade that delegates to focused sub-handlers.
+// NewGameHandler создаёт фасад GameHandler, делегирующий специализированным sub-handler'ам.
 func NewGameHandler(
 	gameService GameService,
 	leaderboardRepo GameLeaderboardRepository,

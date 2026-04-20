@@ -9,39 +9,39 @@ import (
 	"go.uber.org/zap"
 )
 
-// Handler processes domain events.
+// Handler обрабатывает доменные события.
 type Handler interface {
 	Handle(ctx context.Context, event any) error
 }
 
-// Bus publishes domain events and dispatches them to subscribed handlers.
+// Bus публикует доменные события и рассылает их подписанным обработчикам.
 type Bus interface {
 	Publish(ctx context.Context, event any)
 	Subscribe(handler Handler, eventTypes ...any)
 }
 
-// subscription binds a handler to a set of event types it cares about.
+// subscription связывает обработчик с набором интересующих его типов событий.
 type subscription struct {
 	handler    Handler
 	eventTypes map[reflect.Type]struct{}
 }
 
-// SyncBus is a synchronous, in-process event bus.
-// Publish calls all matching handlers sequentially.
-// Handler errors are logged but never propagated to the publisher.
+// SyncBus - синхронная внутрипроцессная шина событий.
+// Publish последовательно вызывает все подходящие обработчики.
+// Ошибки обработчиков логируются, но никогда не пробрасываются отправителю.
 type SyncBus struct {
 	mu            sync.RWMutex
 	subscriptions []subscription
 	log           *logger.Logger
 }
 
-// NewSyncBus creates a new synchronous event bus.
+// NewSyncBus создаёт новую синхронную шину событий.
 func NewSyncBus(log *logger.Logger) *SyncBus {
 	return &SyncBus{log: log}
 }
 
-// Subscribe registers a handler for the given event types.
-// eventTypes should be zero-value instances of event structs (e.g., TournamentCreated{}).
+// Subscribe регистрирует обработчик для указанных типов событий.
+// eventTypes должны быть нулевыми экземплярами структур событий (например, TournamentCreated{}).
 func (b *SyncBus) Subscribe(handler Handler, eventTypes ...any) {
 	types := make(map[reflect.Type]struct{}, len(eventTypes))
 	for _, et := range eventTypes {
@@ -56,8 +56,8 @@ func (b *SyncBus) Subscribe(handler Handler, eventTypes ...any) {
 	b.mu.Unlock()
 }
 
-// Publish dispatches an event to all handlers subscribed to its type.
-// Handler errors are logged at ERROR level but do not stop other handlers or propagate to the caller.
+// Publish рассылает событие всем обработчикам, подписанным на его тип.
+// Ошибки обработчиков логируются на уровне ERROR, но не останавливают других обработчиков и не возвращаются вызывающему.
 func (b *SyncBus) Publish(ctx context.Context, event any) {
 	eventType := reflect.TypeOf(event)
 
@@ -79,7 +79,7 @@ func (b *SyncBus) Publish(ctx context.Context, event any) {
 	}
 }
 
-// NoopBus is a no-op event bus for tests.
+// NoopBus - заглушка шины событий для тестов.
 type NoopBus struct{}
 
 func (NoopBus) Publish(context.Context, any) {}

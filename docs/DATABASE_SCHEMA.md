@@ -120,8 +120,8 @@
 
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
-| tournament_id | UUID | FK → tournaments, PK | Турнир |
-| game_id | UUID | FK → games, PK | Игра |
+| tournament_id | UUID | FK к tournaments, PK | Турнир |
+| game_id | UUID | FK к games, PK | Игра |
 | is_active | BOOLEAN | DEFAULT true | Активна ли игра |
 | round_status | VARCHAR(20) | DEFAULT 'pending' | pending, running, completed |
 | round_number | INT | DEFAULT 0 | Номер текущего раунда |
@@ -134,10 +134,10 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| tournament_id | UUID | FK → tournaments | Турнир |
+| tournament_id | UUID | FK к tournaments | Турнир |
 | name | VARCHAR(100) | NOT NULL | Название команды |
 | invite_code | VARCHAR(10) | UNIQUE, NOT NULL | Код приглашения |
-| leader_id | UUID | FK → users | Лидер команды |
+| leader_id | UUID | FK к users | Лидер команды |
 | created_at | TIMESTAMPTZ | NOT NULL | Время создания |
 
 Индексы: `idx_teams_tournament`, `idx_teams_invite_code`
@@ -147,8 +147,8 @@
 
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
-| team_id | UUID | FK → teams, PK | Команда |
-| user_id | UUID | FK → users, PK | Пользователь |
+| team_id | UUID | FK к teams, PK | Команда |
+| user_id | UUID | FK к users, PK | Пользователь |
 | joined_at | TIMESTAMPTZ | NOT NULL | Время присоединения |
 
 Первичный ключ: `(team_id, user_id)`
@@ -158,14 +158,14 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| user_id | UUID | FK → users, NOT NULL | Автор программы |
+| user_id | UUID | FK к users, NOT NULL | Автор программы |
 | name | VARCHAR(100) | NOT NULL | Название программы |
 | game_type | VARCHAR(50) | NOT NULL | Тип игры (совпадает с `games.name`) |
 | code_path | TEXT | NOT NULL | Путь к исходному коду |
 | language | VARCHAR(50) | NOT NULL | python, go, cpp, java, js, rust |
-| team_id | UUID | FK → teams, NULL | Команда-владелец |
-| tournament_id | UUID | FK → tournaments, NULL | Турнир |
-| game_id | UUID | FK → games, NULL | Ссылка на игру |
+| team_id | UUID | FK к teams, NULL | Команда-владелец |
+| tournament_id | UUID | FK к tournaments, NULL | Турнир |
+| game_id | UUID | FK к games, NULL | Ссылка на игру |
 | file_path | VARCHAR(500) | NULL | Путь к скомпилированному файлу |
 | error_message | TEXT | NULL | Сообщение об ошибке |
 | version | INT | NOT NULL | Версия программы |
@@ -173,7 +173,7 @@
 | updated_at | TIMESTAMP | NOT NULL | Время обновления |
 
 Индексы: `idx_programs_user_id`, `idx_programs_game_type`, `idx_programs_user_game`
-Уникальность: `(team_id, game_id, version)` — уникальная версия программы на игру от команды
+Уникальность: `(team_id, game_id, version)` - уникальная версия программы на игру от команды
 
 ### matches
 
@@ -182,9 +182,9 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK (совместный с created_at) | Уникальный идентификатор |
-| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
-| program1_id | UUID | FK → programs, NOT NULL | Первый игрок |
-| program2_id | UUID | FK → programs, NOT NULL | Второй игрок |
+| tournament_id | UUID | FK к tournaments, NOT NULL | Турнир |
+| program1_id | UUID | FK к programs, NOT NULL | Первый игрок |
+| program2_id | UUID | FK к programs, NOT NULL | Второй игрок |
 | game_type | VARCHAR(50) | NOT NULL | Тип игры (совпадает с `games.name`) |
 | status | VARCHAR(20) | NOT NULL, DEFAULT 'pending' | pending, running, completed, failed |
 | priority | VARCHAR(10) | NOT NULL, DEFAULT 'medium' | high, medium, low |
@@ -207,8 +207,8 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK (совместный с created_at) | Уникальный идентификатор |
-| program_id | UUID | FK → programs, NOT NULL | Программа |
-| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
+| program_id | UUID | FK к programs, NOT NULL | Программа |
+| tournament_id | UUID | FK к tournaments, NOT NULL | Турнир |
 | old_rating | INT | NOT NULL | Рейтинг до матча |
 | new_rating | INT | NOT NULL | Рейтинг после матча |
 | change | INT | NOT NULL | Изменение рейтинга (дельта) |
@@ -224,8 +224,8 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | Уникальный идентификатор |
-| tournament_id | UUID | FK → tournaments, NOT NULL | Турнир |
-| program_id | UUID | FK → programs, NOT NULL | Программа участника |
+| tournament_id | UUID | FK к tournaments, NOT NULL | Турнир |
+| program_id | UUID | FK к programs, NOT NULL | Программа участника |
 | rating | INT | NOT NULL, DEFAULT 1500 | Текущий рейтинг ELO |
 | wins | INT | NOT NULL, DEFAULT 0 | Победы |
 | losses | INT | NOT NULL, DEFAULT 0 | Поражения |
@@ -240,7 +240,7 @@
 | Поле | Тип | Ограничения | Описание |
 |------|-----|-------------|----------|
 | id | UUID | PK | ID токена |
-| user_id | UUID | FK → users | Владелец |
+| user_id | UUID | FK к users | Владелец |
 | token_hash | VARCHAR(255) | NOT NULL | Хеш токена |
 | expires_at | TIMESTAMPTZ | NOT NULL | Срок действия |
 | created_at | TIMESTAMPTZ | NOT NULL | Время создания |
@@ -312,7 +312,7 @@ make migrate-create name=add_new_table
 make migrate-status
 ```
 
-Файлы миграций: `migrations/000001_*.sql` до `migrations/000029_*.sql`
+Файлы миграций: `migrations/000001_*.sql` до `migrations/000036_*.sql`. Номер 000035 пропущен намеренно и не должен переиспользоваться в новых миграциях.
 
 **Структура миграций:**
 ```
@@ -322,25 +322,25 @@ migrations/
 ├── 000002_create_programs.up.sql
 ├── 000002_create_programs.down.sql
 ...
-├── 000022_add_score_multiplier_to_games.up.sql
-├── 000022_add_score_multiplier_to_games.down.sql
-├── 000023_add_unique_program_version.up.sql
-├── 000023_add_unique_program_version.down.sql
-├── 000024_add_auto_partition_function.up.sql
-├── 000024_add_auto_partition_function.down.sql
-├── 000025_add_rating_history_auto_partition.up.sql
-├── 000025_add_rating_history_auto_partition.down.sql
-├── 000026_add_tiebreak_index.up.sql
-├── 000026_add_tiebreak_index.down.sql
-├── 000027_update_leaderboard_views_tiebreak.up.sql
-├── 000027_update_leaderboard_views_tiebreak.down.sql
 ├── 000028_seed_new_games.up.sql
 ├── 000028_seed_new_games.down.sql
 ├── 000029_update_game_rules.up.sql
-└── 000029_update_game_rules.down.sql
+├── 000029_update_game_rules.down.sql
+├── 000030_add_auto_round.up.sql
+├── 000030_add_auto_round.down.sql
+├── 000031_add_team_disqualification.up.sql
+├── 000031_add_team_disqualification.down.sql
+├── 000032_add_game_config.up.sql
+├── 000032_add_game_config.down.sql
+├── 000033_rating_history_composite_index.up.sql
+├── 000033_rating_history_composite_index.down.sql
+├── 000034_audit_log.up.sql
+├── 000034_audit_log.down.sql
+├── 000036_fk_cascade_audit.up.sql
+└── 000036_fk_cascade_audit.down.sql
 ```
 
-**Миграции 023-029 (подробности):**
+**Миграции 023-036 (подробности):**
 
 | Миграция | Название | Описание |
 |----------|----------|----------|
@@ -348,9 +348,15 @@ migrations/
 | 000024 | `add_auto_partition_function` | Функция `create_matches_partition_if_needed()` для автоматического создания помесячных партиций таблицы `matches`. |
 | 000025 | `add_rating_history_auto_partition` | Функция `create_rating_history_partition_if_needed()` для автоматического создания помесячных партиций таблицы `rating_history`. |
 | 000026 | `add_tiebreak_index` | Составной индекс `idx_programs_team_tournament_game_version_desc` для эффективного вычисления тайбрейка в лидерборде. |
-| 000027 | `update_leaderboard_views_tiebreak` | Пересоздание materialized view `leaderboard_tournament` с сортировкой по тайбрейку (при равном рейтинге и числе побед -- приоритет у ранее загрузивших программу). |
+| 000027 | `update_leaderboard_views_tiebreak` | Пересоздание materialized view `leaderboard_tournament` с сортировкой по тайбрейку (при равном рейтинге и числе побед приоритет у ранее загрузивших программу). |
 | 000028 | `seed_new_games` | Добавление 3 новых игр: `travelers_dilemma`, `public_goods`, `dollar_auction`. |
 | 000029 | `update_game_rules` | Обновление правил и протоколов взаимодействия для всех 5 игр (исправления форматов, очков, протоколов). |
+| 000030 | `add_auto_round` | Колонки в `tournament_games` для режима автоматических раундов (`auto_round_enabled`, `auto_round_interval_seconds`, `auto_round_last_run_at`). |
+| 000031 | `add_team_disqualification` | Поля `is_disqualified`, `disqualified_at` в `teams`; разрешён статус `cancelled` для матчей, отменённых дисквалификацией. |
+| 000032 | `add_game_config` | Колонка `config` (JSONB) в `tournament_games` для хранения параметров игры на уровне турнира (итерации, множитель очков, кастомные параметры). |
+| 000033 | `rating_history_composite_index` | Композитный индекс `(program_id, tournament_id, created_at DESC)` для `rating_history`. Ускоряет выборку последнего рейтинга программы в рамках турнира. |
+| 000034 | `audit_log` | Таблица `audit_log` для записи админских действий: кто, что, над каким ресурсом, когда, с какого IP/UA. Retention 1 год. |
+| 000036 | `fk_cascade_audit` | Явные политики `ON DELETE` для внешних ключей (были неявные `NO ACTION`/`RESTRICT`); нормализует поведение каскадов для `matches`, `teams`, `audit_log`. |
 
 ---
 

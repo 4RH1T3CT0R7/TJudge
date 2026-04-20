@@ -4,11 +4,11 @@
 
 TJudge построен на принципах Clean Architecture с чётким разделением на слои:
 
-1. **API Server** (`cmd/api`) — HTTP/WebSocket эндпоинты, middleware, маршрутизация
-2. **Worker Pool** (`cmd/worker`) — обработка матчей с автомасштабированием
-3. **Domain** (`internal/domain`) — бизнес-логика, не зависящая от инфраструктуры
-4. **Events** (`internal/events`) — синхронная шина событий для декаплинга side-effects
-5. **Infrastructure** (`internal/infrastructure`) — PostgreSQL, Redis, Docker, файловое хранилище
+1. **API Server** (`cmd/api`) - HTTP/WebSocket эндпоинты, middleware, маршрутизация
+2. **Worker Pool** (`cmd/worker`) - обработка матчей с автомасштабированием
+3. **Domain** (`internal/domain`) - бизнес-логика, не зависящая от инфраструктуры
+4. **Events** (`internal/events`) - синхронная шина событий для декаплинга side-effects
+5. **Infrastructure** (`internal/infrastructure`) - PostgreSQL, Redis, Docker, файловое хранилище
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -83,7 +83,7 @@ tjudge/
 │   ├── pagination/       #   Курсорная пагинация
 │   └── validator/        #   Валидация входных данных
 ├── web/                  # React фронтенд (React 19, TypeScript, Tailwind CSS 4)
-├── migrations/           # SQL миграции (29 шт.)
+├── migrations/           # SQL миграции
 ├── tests/
 │   ├── e2e/              # End-to-end тесты (18 тестов)
 │   ├── integration/      # Интеграционные тесты (PostgreSQL + Redis)
@@ -206,9 +206,9 @@ type Bus interface {
 }
 ```
 
-**SyncBus** — основная реализация. `Publish` вызывает подписчиков синхронно. Ошибки обработчиков логируются (ERROR), но не прерывают цепочку — side-effects не блокируют основной flow.
+**SyncBus** - основная реализация. `Publish` вызывает подписчиков синхронно. Ошибки обработчиков логируются (ERROR), но не прерывают цепочку: side-effects не блокируют основной поток.
 
-**NoopBus** — для unit-тестов (ничего не делает).
+**NoopBus** - для unit-тестов (ничего не делает).
 
 ### Типы событий
 
@@ -225,7 +225,7 @@ type Bus interface {
 
 ### Обработчики
 
-**TournamentCacheHandler** — инвалидация кэша турниров:
+**TournamentCacheHandler** - инвалидация кэша турниров:
 
 | Событие | Действие |
 |---------|----------|
@@ -236,7 +236,7 @@ type Bus interface {
 | ParticipantJoined | `tournamentCache.Invalidate(id)` |
 | GameRoundReset | `tournamentCache.Invalidate(id)` + `leaderboardCache.Clear(id)` |
 
-**LeaderboardCacheHandler** — обновление кэша лидерборда:
+**LeaderboardCacheHandler** - обновление кэша лидерборда:
 
 | Событие | Действие |
 |---------|----------|
@@ -244,7 +244,7 @@ type Bus interface {
 | MatchResultProcessed | `leaderboardCache.UpdateRating` x2 + `InvalidateFullLeaderboard(tid)` |
 | GameRoundReset | `leaderboardCache.Clear(tid)` |
 
-**BroadcastHandler** — WebSocket рассылка:
+**BroadcastHandler** - WebSocket рассылка:
 
 | Событие | WebSocket тип |
 |---------|---------------|
@@ -257,8 +257,8 @@ type Bus interface {
 
 | Операция | Причина |
 |----------|---------|
-| Cache-aside чтение (GetByID → cache.Get/Set) | Read-path, не side-effect |
-| Leaderboard чтение (GetLeaderboard → cache.Get/Set + singleflight) | Read-path |
+| Cache-aside чтение (GetByID с обращением в cache.Get/Set) | Read-path, не side-effect |
+| Leaderboard чтение (GetLeaderboard с cache.Get/Set и singleflight) | Read-path |
 | Очередь матчей (EnqueueBatch) | Основная бизнес-логика |
 | Запись в БД | Основная бизнес-логика |
 
@@ -330,7 +330,7 @@ Request → RequestID → RealIP → Logger → Recoverer → SecureHeaders → 
 ### Worker Pool (`internal/worker`)
 
 - Динамическое масштабирование (мин: 10, макс: 1000 по умолчанию)
-- Приоритетная очередь (HIGH → MEDIUM → LOW)
+- Приоритетная очередь (HIGH, MEDIUM, LOW)
 - Exponential backoff retry
 - Graceful shutdown + recovery при панике
 
@@ -368,7 +368,7 @@ Sandbox-ограничения для безопасного исполнени�
 | `ratelimiter.go` | настр. | Rate limiting per-IP |
 | `token_blacklist.go` | TTL токена | Blacklist JWT при logout |
 | `distributed_lock.go` | настр. | Mutex для конкурентных операций |
-| `warmer.go` | — | Прогрев кэша при старте |
+| `warmer.go` | - | Прогрев кэша при старте |
 
 ### Файловое хранилище (`internal/infrastructure/storage`)
 
@@ -433,7 +433,7 @@ Sandbox-ограничения для безопасного исполнени�
 
 ### Вертикальное
 
-- Worker pool автомасштабируется 10 → 1000 по нагрузке (настраивается через `WORKER_MIN`/`WORKER_MAX`)
+- Worker pool автомасштабируется от 10 до 1000 по нагрузке (настраивается через `WORKER_MIN`/`WORKER_MAX`)
 - Connection pool БД настраивается через `DB_MAX_CONNECTIONS`
 
 ---
@@ -587,9 +587,9 @@ tjudge_db_connections{state}
 | Unit | `*_test.go` рядом с исходниками | ~1200 | Бизнес-логика, handlers, middleware, cache, worker |
 | DB Integration | `tests/integration/` | ~60 | PostgreSQL репозитории (RUN_INTEGRATION=true) |
 | E2E | `tests/e2e/` | 18 | HTTP API через запущенный сервер |
-| Benchmark | `tests/benchmark/` | — | Производительность компонентов |
-| Load | `tests/load/` | — | Нагрузочное тестирование API |
-| Chaos | `tests/chaos/` | — | Устойчивость к сбоям |
+| Benchmark | `tests/benchmark/` | - | Производительность компонентов |
+| Load | `tests/load/` | - | Нагрузочное тестирование API |
+| Chaos | `tests/chaos/` | - | Устойчивость к сбоям |
 
 ```bash
 make test               # Unit тесты (~1200)

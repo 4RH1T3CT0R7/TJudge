@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRecoveryMatchRepository is a mock for RecoveryMatchRepository
+// MockRecoveryMatchRepository - мок RecoveryMatchRepository
 type MockRecoveryMatchRepository struct {
 	mock.Mock
 }
@@ -39,7 +39,7 @@ func (m *MockRecoveryMatchRepository) BatchUpdateStatus(ctx context.Context, mat
 	return args.Error(0)
 }
 
-// MockRecoveryQueueManager is a mock for RecoveryQueueManager
+// MockRecoveryQueueManager - мок RecoveryQueueManager
 type MockRecoveryQueueManager struct {
 	mock.Mock
 }
@@ -179,7 +179,7 @@ func TestRecoveryService_RecoverOnStartup_PartialEnqueueFailure(t *testing.T) {
 	queueMgr.On("Enqueue", mock.Anything, m2).Return(nil)
 
 	err := svc.RecoverOnStartup(context.Background())
-	assert.NoError(t, err) // partial failures are logged, not returned
+	assert.NoError(t, err) // частичные ошибки логируются, а не возвращаются
 	queueMgr.AssertExpectations(t)
 }
 
@@ -213,10 +213,10 @@ func TestRecoveryService_StartStop(t *testing.T) {
 
 	svc.Start()
 
-	// Let the goroutine start
+	// Даём горутине запуститься
 	time.Sleep(50 * time.Millisecond)
 
-	// Stop should not block
+	// Stop не должен блокироваться
 	done := make(chan struct{})
 	go func() {
 		svc.Stop()
@@ -225,7 +225,7 @@ func TestRecoveryService_StartStop(t *testing.T) {
 
 	select {
 	case <-done:
-		// success
+		// успех
 	case <-time.After(2 * time.Second):
 		t.Fatal("Stop() did not return in time")
 	}

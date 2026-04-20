@@ -23,7 +23,7 @@ var (
 	sharedMetricsOnce sync.Once
 )
 
-// MockQueueManager mocks the QueueManager interface
+// MockQueueManager - мок интерфейса QueueManager
 type MockQueueManager struct {
 	mock.Mock
 	mu      sync.Mutex
@@ -58,7 +58,7 @@ func (m *MockQueueManager) EnqueueMatch(match *domain.Match) {
 	m.matches = append(m.matches, match)
 }
 
-// MockMatchProcessor mocks the MatchProcessor interface
+// MockMatchProcessor - мок интерфейса MatchProcessor
 type MockMatchProcessor struct {
 	mock.Mock
 	processedMatches atomic.Int32
@@ -87,7 +87,7 @@ func (m *MockMatchProcessor) GetFailCount() int32 {
 	return m.failCount.Load()
 }
 
-// Helper function to create test config
+// testConfig создаёт тестовую конфигурацию
 func testConfig() config.WorkerConfig {
 	return config.WorkerConfig{
 		MinWorkers:    2,
@@ -98,7 +98,7 @@ func testConfig() config.WorkerConfig {
 	}
 }
 
-// Helper function to create test metrics (singleton to avoid duplicate registration)
+// testMetrics создаёт тестовые метрики (singleton, чтобы избежать дублирования регистрации)
 func testMetrics() *metrics.Metrics {
 	sharedMetricsOnce.Do(func() {
 		sharedMetrics = metrics.New()
@@ -106,13 +106,13 @@ func testMetrics() *metrics.Metrics {
 	return sharedMetrics
 }
 
-// Helper function to create test logger
+// testLogger создаёт тестовый логгер
 func testLogger() *logger.Logger {
 	log, _ := logger.New("debug", "json")
 	return log
 }
 
-// Helper function to create a test match
+// testMatch создаёт тестовый матч
 func testMatch() *domain.Match {
 	return &domain.Match{
 		ID:       uuid.New(),
@@ -144,14 +144,14 @@ func TestPool_StartStop(t *testing.T) {
 
 	pool := NewPool(cfg, queue, processor, log, m)
 
-	// Setup queue to return nil (empty)
+	// Настраиваем очередь возвращать nil (пусто)
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Start pool
+	// Запускаем пул
 	pool.Start()
 
-	// Wait for workers to start
+	// Ждём запуска воркеров
 	require.Eventually(t, func() bool {
 		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
 	}, 5*time.Second, 10*time.Millisecond)
@@ -159,10 +159,10 @@ func TestPool_StartStop(t *testing.T) {
 	stats := pool.GetStats()
 	assert.GreaterOrEqual(t, stats.TotalWorkers, cfg.MinWorkers)
 
-	// Stop pool
+	// Останавливаем пул
 	pool.Stop()
 
-	// All workers should be stopped
+	// Все воркеры должны быть остановлены
 	stats = pool.GetStats()
 	assert.Equal(t, 0, stats.TotalWorkers)
 }
@@ -181,24 +181,24 @@ func TestPool_ProcessMatch(t *testing.T) {
 
 	match := testMatch()
 
-	// First call returns match, subsequent calls return nil
+	// Первый вызов возвращает матч, последующие - nil
 	queue.On("Dequeue", mock.Anything).Return(match, nil).Once()
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Processor should successfully process the match
+	// Processor успешно обрабатывает матч
 	processor.On("Process", mock.Anything, match).Return(nil)
 
 	pool.Start()
 
-	// Wait for processing
+	// Ждём обработки
 	require.Eventually(t, func() bool {
 		return processor.GetProcessedCount() >= 1
 	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
-	// Verify match was processed
+	// Проверяем, что матч был обработан
 	assert.Equal(t, int32(1), processor.GetProcessedCount())
 }
 
@@ -218,25 +218,25 @@ func TestPool_RetryOnFailure(t *testing.T) {
 
 	match := testMatch()
 
-	// Return match once then nil
+	// Возвращаем матч один раз, затем nil
 	queue.On("Dequeue", mock.Anything).Return(match, nil).Once()
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Fail first two attempts, succeed on third
+	// Первые две попытки падают, третья успешна
 	processor.On("Process", mock.Anything, match).Return(errors.New("temporary error")).Twice()
 	processor.On("Process", mock.Anything, match).Return(nil).Once()
 
 	pool.Start()
 
-	// Wait for processing with retries
+	// Ждём обработки с retry
 	require.Eventually(t, func() bool {
 		return processor.GetProcessedCount() >= 1
 	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
-	// Final attempt succeeded (3 total calls to Process)
+	// Последняя попытка успешна (всего 3 вызова Process)
 	assert.Equal(t, int32(1), processor.GetProcessedCount())
 }
 
@@ -279,26 +279,26 @@ func TestPool_ConcurrentProcessing(t *testing.T) {
 
 	pool := NewPool(cfg, queue, processor, log, m)
 
-	// Return 10 matches then nil
+	// Возвращаем 10 матчей, затем nil
 	for i := 0; i < 10; i++ {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Processor should process all matches
+	// Processor должен обработать все матчи
 	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Return(nil)
 
 	pool.Start()
 
-	// Wait for all matches to be processed
+	// Ждём обработки всех матчей
 	require.Eventually(t, func() bool {
 		return processor.GetProcessedCount() >= 10
 	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
-	// All matches should be processed
+	// Все матчи должны быть обработаны
 	assert.Equal(t, int32(10), processor.GetProcessedCount())
 }
 
@@ -314,23 +314,23 @@ func TestPool_GracefulShutdown(t *testing.T) {
 
 	pool := NewPool(cfg, queue, processor, log, m)
 
-	// Setup match that takes time to process
+	// Готовим матч, обработка которого занимает время
 	match := testMatch()
 	queue.On("Dequeue", mock.Anything).Return(match, nil).Once()
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Processor takes 200ms to complete
+	// Processor тратит 200мс на завершение
 	processor.On("Process", mock.Anything, match).Run(func(args mock.Arguments) {
 		time.Sleep(200 * time.Millisecond)
 	}).Return(nil)
 
 	pool.Start()
 
-	// Wait for processing to start
+	// Ждём начала обработки
 	time.Sleep(50 * time.Millisecond)
 
-	// Stop pool - should wait for current match to complete
+	// Останавливаем пул - должен дождаться завершения текущего матча
 	done := make(chan struct{})
 	go func() {
 		pool.Stop()
@@ -339,12 +339,12 @@ func TestPool_GracefulShutdown(t *testing.T) {
 
 	select {
 	case <-done:
-		// Pool stopped gracefully
+		// Пул остановился штатно
 	case <-time.After(5 * time.Second):
 		t.Fatal("Pool did not stop in time")
 	}
 
-	// Verify match was processed
+	// Проверяем, что матч был обработан
 	assert.Equal(t, int32(1), processor.GetProcessedCount())
 }
 
@@ -352,7 +352,7 @@ func TestPool_FailedMatchCounting(t *testing.T) {
 	cfg := testConfig()
 	cfg.MinWorkers = 1
 	cfg.MaxWorkers = 1
-	cfg.RetryAttempts = 1 // No retries
+	cfg.RetryAttempts = 1 // Без retry
 
 	queue := NewMockQueueManager()
 	processor := NewMockMatchProcessor()
@@ -363,12 +363,12 @@ func TestPool_FailedMatchCounting(t *testing.T) {
 
 	match := testMatch()
 
-	// Return match once then nil
+	// Возвращаем матч один раз, затем nil
 	queue.On("Dequeue", mock.Anything).Return(match, nil).Once()
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Processing always fails
+	// Обработка всегда падает
 	processor.On("Process", mock.Anything, match).Return(errors.New("processing failed"))
 
 	pool.Start()
@@ -405,10 +405,10 @@ func TestPool_Wait(t *testing.T) {
 		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
 	}, 5*time.Second, 10*time.Millisecond)
 
-	// Cancel context
+	// Отменяем контекст
 	pool.cancel()
 
-	// Wait should return after all workers finish
+	// Wait должен вернуться после завершения всех воркеров
 	done := make(chan struct{})
 	go func() {
 		pool.Wait()
@@ -417,7 +417,7 @@ func TestPool_Wait(t *testing.T) {
 
 	select {
 	case <-done:
-		// Success
+		// Успех
 	case <-time.After(2 * time.Second):
 		t.Fatal("Wait did not return in time")
 	}
@@ -435,7 +435,7 @@ func TestPool_Scale_UpOnLargeQueue(t *testing.T) {
 
 	pool := NewPool(cfg, queue, processor, log, m)
 
-	// Don't call Start() — set up state manually to avoid spawning real workers.
+	// Не вызываем Start(): выставляем состояние вручную, чтобы не плодить настоящих воркеров.
 	pool.totalWorkers.Store(2)
 
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
@@ -443,8 +443,8 @@ func TestPool_Scale_UpOnLargeQueue(t *testing.T) {
 
 	pool.scale()
 
-	// scale() should have spawned extra workers: target = current(2) + 10 = 12
-	// Wait for spawn goroutines to increment totalWorkers.
+	// scale() должен был создать дополнительных воркеров: target = current(2) + 10 = 12
+	// Ждём, когда spawn-горутины увеличат totalWorkers.
 	require.Eventually(t, func() bool {
 		return pool.GetStats().TotalWorkers > 2
 	}, 2*time.Second, 10*time.Millisecond)
@@ -467,11 +467,11 @@ func TestPool_Scale_DownOnEmptyQueue(t *testing.T) {
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Simulate a pool that has 12 workers but an empty queue and 0 active workers.
-	// Manually populate workerCancels with dummy cancel functions so scale-down
-	// has something to cancel.
+	// Моделируем пул с 12 воркерами, пустой очередью и 0 активных воркеров.
+	// Вручную заполняем workerCancels заглушечными cancel-функциями, чтобы
+	// scale-down было что отменять.
 	pool.totalWorkers.Store(12)
-	pool.activeWorkers.Store(0) // 0 < 12/2 → eligible for scale-down
+	pool.activeWorkers.Store(0) // 0 < 12/2, кандидат на scale-down
 
 	dummyCancels := make([]context.CancelFunc, 12)
 	for i := range dummyCancels {
@@ -484,13 +484,12 @@ func TestPool_Scale_DownOnEmptyQueue(t *testing.T) {
 
 	pool.scale()
 
-	// scale() with queueSize < 10 and activeWorkers < currentWorkers/2
-	// → target = current(12) - 5 = 7
-	// Verify that some cancel functions were removed.
+	// scale() при queueSize == 0 и activeWorkers*3 < currentWorkers
+	// даёт target = current(12) - 2 = 10 (медленный scale-down, гистерезис).
 	pool.workerMu.Lock()
 	remaining := len(pool.workerCancels)
 	pool.workerMu.Unlock()
-	assert.Equal(t, 7, remaining)
+	assert.Equal(t, 10, remaining)
 
 	pool.Stop()
 }
@@ -516,7 +515,7 @@ func TestPool_Scale_NeverBelowMin(t *testing.T) {
 		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
 	}, 5*time.Second, 10*time.Millisecond)
 
-	// Even with empty queue, scale should not go below min
+	// Даже при пустой очереди scale не должен опуститься ниже min
 	pool.scale()
 	pool.scale()
 
@@ -546,7 +545,7 @@ func TestPool_Scale_NeverAboveMax(t *testing.T) {
 		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
 	}, 5*time.Second, 10*time.Millisecond)
 
-	// Multiple scale-ups should never exceed max
+	// Несколько scale-up не должны превышать max
 	pool.scale()
 	pool.scale()
 	pool.scale()
@@ -575,22 +574,22 @@ func TestPool_ProcessWithRetry_MatchNotFound(t *testing.T) {
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// Process returns ErrMatchNotFound — should be skipped (not retried), counted as success
+	// Process возвращает ErrMatchNotFound - должен быть пропущен (без retry), зачтён как успех
 	processor.On("Process", mock.Anything, match).Return(ErrMatchNotFound)
 
 	pool.Start()
 
-	// Wait for the match to be dequeued and handled
+	// Ждём, пока матч будет получен и обработан
 	require.Eventually(t, func() bool {
-		// MatchNotFound is treated as success (nil return), so matchesProcessed increments
+		// MatchNotFound трактуется как успех (возврат nil), поэтому matchesProcessed увеличивается
 		return pool.GetStats().MatchesProcessed >= 1
 	}, 5*time.Second, 10*time.Millisecond)
 
 	pool.Stop()
 
-	// Should NOT be counted as failed
+	// НЕ должен считаться как failed
 	assert.Equal(t, int64(0), pool.GetStats().MatchesFailed)
-	// Process should only be called once (no retries)
+	// Process должен быть вызван только один раз (без retry)
 	processor.AssertNumberOfCalls(t, "Process", 1)
 }
 
@@ -604,21 +603,21 @@ func TestPool_PanicRecovery_Respawns(t *testing.T) {
 	log := testLogger()
 	m := testMetrics()
 
-	// Track how many times Process has been called.
+	// Считаем, сколько раз был вызван Process.
 	var callCount atomic.Int32
 
-	// Use a custom processor that panics on the first call but succeeds on subsequent calls.
+	// Используем кастомный processor, который паникует при первом вызове, но успешен на последующих.
 	processor := NewMockMatchProcessor()
 
-	// We need to return matches so workers actually call Process and trigger the panic.
-	// Return enough matches so the respawned worker can pick one up too.
+	// Нужно возвращать матчи, чтобы воркеры реально вызывали Process и ловили панику.
+	// Возвращаем достаточно матчей, чтобы и пересозданный воркер смог что-то взять.
 	for i := 0; i < 20; i++ {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	// First call panics, subsequent calls succeed.
+	// Первый вызов паникует, последующие - успешные.
 	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Run(func(args mock.Arguments) {
 		n := callCount.Add(1)
 		if n == 1 {
@@ -629,14 +628,14 @@ func TestPool_PanicRecovery_Respawns(t *testing.T) {
 	pool := NewPool(cfg, queue, processor, log, m)
 	pool.Start()
 
-	// After the panic, the worker should be respawned (after ~1 second)
-	// and the total worker count should return to at least MinWorkers.
+	// После паники воркер должен быть пересоздан (через ~1 секунду),
+	// и общее число воркеров должно вернуться хотя бы к MinWorkers.
 	assert.Eventually(t, func() bool {
 		return pool.GetStats().TotalWorkers >= cfg.MinWorkers
 	}, 5*time.Second, 100*time.Millisecond)
 
-	// Verify that Process was called more than once (the panic happened and
-	// the respawned worker continued processing).
+	// Проверяем, что Process был вызван более одного раза (паника произошла,
+	// и пересозданный воркер продолжил обработку).
 	assert.Eventually(t, func() bool {
 		return callCount.Load() > 1
 	}, 5*time.Second, 100*time.Millisecond)
@@ -649,7 +648,7 @@ func TestPool_ProcessWithRetry_ContextCancelled(t *testing.T) {
 	cfg.MinWorkers = 1
 	cfg.MaxWorkers = 1
 	cfg.RetryAttempts = 3
-	cfg.RetryDelay = 2 * time.Second // Long delay so we can cancel during it
+	cfg.RetryDelay = 2 * time.Second // Длинная задержка, чтобы можно было отменить во время неё
 
 	queue := NewMockQueueManager()
 	processor := NewMockMatchProcessor()
@@ -660,14 +659,14 @@ func TestPool_ProcessWithRetry_ContextCancelled(t *testing.T) {
 
 	match := testMatch()
 
-	// Processor always fails, triggering retry with backoff
+	// Processor всегда падает, провоцируя retry с backoff
 	processor.On("Process", mock.Anything, match).Return(errors.New("always fails"))
 
-	// Call processWithRetry directly with a cancellable context.
+	// Вызываем processWithRetry напрямую с отменяемым контекстом.
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Cancel the context after a short delay — during the retry backoff
-	// between attempt 1 (immediate) and attempt 2 (after RetryDelay * 2 = 4s).
+	// Отменяем контекст после небольшой задержки - во время retry backoff
+	// между попыткой 1 (сразу) и попыткой 2 (после RetryDelay * 2 = 4s).
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		cancel()
@@ -675,8 +674,8 @@ func TestPool_ProcessWithRetry_ContextCancelled(t *testing.T) {
 
 	err := pool.processWithRetry(ctx, match)
 
-	// The function should return context.Canceled because the context was
-	// cancelled while waiting for the retry delay.
+	// Функция должна вернуть context.Canceled, потому что контекст был
+	// отменён во время ожидания retry delay.
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 }
@@ -693,7 +692,7 @@ func TestPool_GetMatchesProcessed(t *testing.T) {
 
 	pool := NewPool(cfg, queue, processor, log, m)
 
-	// Return 5 matches then nil
+	// Возвращаем 5 матчей, затем nil
 	for i := 0; i < 5; i++ {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}

@@ -113,7 +113,7 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
 	filter := domain.TournamentFilter{}
 
-	// Status filter
+	// Фильтр по статусу
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := domain.TournamentStatus(status)
 		switch s {
@@ -125,10 +125,10 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Game type filter
+	// Фильтр по типу игры
 	filter.GameType = r.URL.Query().Get("game_type")
 
-	// Pagination
+	// Пагинация
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 	filter.Limit = pg.Limit
 	filter.Offset = pg.Offset

@@ -4,7 +4,7 @@ import "context"
 
 type ctxKey struct{}
 
-// FromContext extracts request ID from context. Returns empty string if not set.
+// FromContext извлекает request ID из контекста. Возвращает пустую строку, если не установлен.
 func FromContext(ctx context.Context) string {
 	if id, ok := ctx.Value(ctxKey{}).(string); ok {
 		return id
@@ -12,7 +12,7 @@ func FromContext(ctx context.Context) string {
 	return ""
 }
 
-// WithContext returns a new context with the given request ID.
+// WithContext возвращает новый контекст с заданным request ID.
 func WithContext(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, ctxKey{}, id)
 }

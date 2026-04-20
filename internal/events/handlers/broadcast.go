@@ -9,18 +9,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// Broadcaster sends real-time messages to WebSocket clients.
+// Broadcaster отправляет real-time сообщения WebSocket-клиентам.
 type Broadcaster interface {
 	Broadcast(tournamentID uuid.UUID, messageType string, payload interface{})
 }
 
-// BroadcastHandler sends WebSocket notifications in response to domain events.
+// BroadcastHandler отправляет WebSocket-уведомления в ответ на доменные события.
 type BroadcastHandler struct {
 	broadcaster Broadcaster
 	log         *logger.Logger
 }
 
-// NewBroadcastHandler creates a handler that sends WebSocket broadcasts.
+// NewBroadcastHandler создаёт handler, рассылающий WebSocket-сообщения.
 func NewBroadcastHandler(broadcaster Broadcaster, log *logger.Logger) *BroadcastHandler {
 	return &BroadcastHandler{broadcaster: broadcaster, log: log}
 }

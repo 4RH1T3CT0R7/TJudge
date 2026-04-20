@@ -8,18 +8,18 @@ import (
 	"strconv"
 )
 
-// CacheControl — middleware для идемпотентных GET-эндпоинтов,
+// CacheControl - middleware для идемпотентных GET-эндпоинтов,
 // который выставляет Cache-Control header и генерирует ETag из body.
 //
-// P2.2: снижает нагрузку на backend для редко-меняющихся ресурсов
+// Снижает нагрузку на backend для редко-меняющихся ресурсов
 // (справочники игр, список турниров). Клиент с валидным If-None-Match
-// получает 304 без заново-генерации тела.
+// получает 304 без повторной генерации тела.
 //
 // Использование:
 //
 //	r.With(middleware.CacheControl(60)).Get("/games", handler)
 //
-// maxAgeSeconds — значение `max-age=`, 0 → no-store.
+// maxAgeSeconds - значение `max-age=`, 0 даёт no-store.
 func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 	directive := "no-store"
 	if maxAgeSeconds > 0 {
@@ -37,10 +37,10 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 				buf:            &bytes.Buffer{},
 				status:         http.StatusOK,
 			}
-			// Копируем headers установленные handler'ом в наш recorder'ы.
+			// Копируем headers, установленные handler'ом, в наш recorder.
 			next.ServeHTTP(rec, r)
 
-			// ETag и Cache-Control — только для 2xx (иначе кэшируем ошибку).
+			// ETag и Cache-Control - только для 2xx (иначе кэшируем ошибку).
 			// Для не-2xx пробрасываем status и body без добавления заголовков.
 			if rec.status < 200 || rec.status >= 300 {
 				w.WriteHeader(rec.status)
@@ -49,12 +49,12 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 			}
 
 			sum := sha256.Sum256(rec.buf.Bytes())
-			etag := `"` + hex.EncodeToString(sum[:16]) + `"` // 16 bytes == 128 bits
+			etag := `"` + hex.EncodeToString(sum[:16]) + `"` // 16 байт == 128 бит
 
 			w.Header().Set("ETag", etag)
 			w.Header().Set("Cache-Control", directive)
 
-			// Conditional request: If-None-Match совпал → 304 без тела.
+			// Conditional request: If-None-Match совпал, отдаём 304 без тела.
 			if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 				w.WriteHeader(http.StatusNotModified)
 				return
@@ -67,7 +67,7 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 	}
 }
 
-// etagRecorder захватывает body и status для пост-пост-хэширования.
+// etagRecorder захватывает body и status для пост-хэширования.
 type etagRecorder struct {
 	http.ResponseWriter
 	buf           *bytes.Buffer

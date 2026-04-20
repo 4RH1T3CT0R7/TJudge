@@ -23,7 +23,7 @@ const (
 	// RoleKey ключ для роли в контексте
 	RoleKey ContextKey = "user_role"
 
-	// bearerPrefix — префикс схемы аутентификации Bearer
+	// bearerPrefix - префикс схемы аутентификации Bearer
 	bearerPrefix = "Bearer"
 )
 
@@ -124,8 +124,8 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
-			// Проверяем чёрный список. При ошибке Redis — не доверяем токену,
-			// продолжаем без аутентификации (пользователь становится анонимным).
+			// Проверяем чёрный список. При ошибке Redis не доверяем токену
+			// и продолжаем без аутентификации (пользователь становится анонимным).
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.Warn("Blacklist check failed, proceeding without authentication",

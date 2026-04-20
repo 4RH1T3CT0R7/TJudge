@@ -19,12 +19,12 @@ func newTestHub(t *testing.T) *Hub {
 	return NewHub(log)
 }
 
-// newTestClient creates a synthetic client for testing (no real WebSocket connection)
+// newTestClient создаёт синтетического клиента для тестов (без реального WebSocket-соединения)
 func newTestClient(hub *Hub, tournamentID, userID uuid.UUID) *Client {
 	log, _ := logger.New("error", "json")
 	return &Client{
 		hub:          hub,
-		conn:         nil, // no real connection
+		conn:         nil, // без реального соединения
 		send:         make(chan []byte, 256),
 		tournamentID: tournamentID,
 		userID:       userID,
@@ -36,7 +36,7 @@ func startHub(t *testing.T, hub *Hub) context.CancelFunc {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
-	// Give the hub goroutine time to start
+	// Даём горутине хаба время запуститься
 	time.Sleep(5 * time.Millisecond)
 	return cancel
 }
@@ -146,10 +146,10 @@ func TestHub_UnregisterUnregistered(t *testing.T) {
 
 	client := newTestClient(hub, uuid.New(), uuid.New())
 
-	// Unregistering a client that was never registered should not panic
+	// Отмена регистрации никогда не зарегистрированного клиента не должна паниковать
 	hub.unregister <- client
 
-	// Give time for processing, then verify stats are still zero
+	// Даём время на обработку и проверяем, что статистика по-прежнему нулевая
 	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
@@ -174,12 +174,12 @@ func TestHub_BroadcastToRegisteredClients(t *testing.T) {
 		Payload:      map[string]string{"status": "completed"},
 	}
 
-	// Wait for both clients to receive the message
+	// Ждём, пока оба клиента получат сообщение
 	require.Eventually(t, func() bool {
 		return len(c1.send) == 1 && len(c2.send) == 1
 	}, time.Second, time.Millisecond)
 
-	// Both clients should receive the message
+	// Оба клиента должны получить сообщение
 	require.Len(t, c1.send, 1)
 	require.Len(t, c2.send, 1)
 
@@ -194,14 +194,14 @@ func TestHub_BroadcastNoClients(t *testing.T) {
 	cancel := startHub(t, hub)
 	defer cancel()
 
-	// Broadcasting to a tournament with no clients should not panic
+	// Broadcast в турнир без клиентов не должен паниковать
 	hub.broadcast <- &Message{
 		TournamentID: uuid.New(),
 		Type:         MessageTypeLeaderboardUpdate,
 		Payload:      nil,
 	}
 
-	// Give time for processing
+	// Даём время на обработку
 	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
@@ -259,7 +259,7 @@ func TestHub_Shutdown(t *testing.T) {
 
 	select {
 	case <-done:
-		// Hub shut down properly
+		// Хаб корректно завершился
 	case <-time.After(2 * time.Second):
 		t.Fatal("Hub.Run did not return after context cancellation")
 	}
@@ -276,7 +276,7 @@ func TestHub_BroadcastToSlowClient_DisconnectsClient(t *testing.T) {
 
 	tournamentID := uuid.New()
 
-	// Create a slow client with a send buffer of size 1
+	// Создаём "медленного" клиента с send-буфером размера 1
 	log, _ := logger.New("error", "json")
 	slowClient := &Client{
 		hub:          hub,
@@ -290,17 +290,17 @@ func TestHub_BroadcastToSlowClient_DisconnectsClient(t *testing.T) {
 	hub.register <- slowClient
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Fill the slow client's send buffer
+	// Заполняем send-буфер "медленного" клиента
 	slowClient.send <- []byte("filler")
 
-	// Broadcast a message; the slow client's buffer is full so it should be disconnected
+	// Рассылаем сообщение; буфер "медленного" клиента полон, поэтому он должен быть отключён
 	hub.broadcast <- &Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypeMatchUpdate,
 		Payload:      map[string]string{"status": "completed"},
 	}
 
-	// The slow client should be removed from the hub
+	// "Медленный" клиент должен быть удалён из хаба
 	waitForStats(t, hub, "total_clients", 0)
 
 	stats := hub.GetStats()
@@ -318,14 +318,14 @@ func TestHub_DoubleUnregister_NoPanic(t *testing.T) {
 	hub.register <- client
 	waitForStats(t, hub, "total_clients", 1)
 
-	// First unregister
+	// Первый unregister
 	hub.unregister <- client
 	waitForStats(t, hub, "total_clients", 0)
 
-	// Second unregister should not panic
+	// Повторный unregister не должен паниковать
 	hub.unregister <- client
 
-	// Give time for the second unregister to be processed
+	// Даём время на обработку повторного unregister
 	time.Sleep(10 * time.Millisecond)
 
 	stats := hub.GetStats()
@@ -346,22 +346,22 @@ func TestHub_BroadcastOtherTournament_NotReceived(t *testing.T) {
 	hub.register <- clientA
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Broadcast to tournament B (where clientA is NOT registered)
+	// Рассылаем в турнир B (где clientA НЕ зарегистрирован)
 	hub.broadcast <- &Message{
 		TournamentID: tournamentB,
 		Type:         MessageTypeLeaderboardUpdate,
 		Payload:      map[string]string{"rank": "1"},
 	}
 
-	// Give time for the broadcast to be processed
+	// Даём время на обработку broadcast
 	time.Sleep(10 * time.Millisecond)
 
-	// Client A should NOT have received anything
+	// Клиент A НЕ должен был получить ничего
 	select {
 	case <-clientA.send:
 		t.Fatal("client should not receive a message broadcast to a different tournament")
 	default:
-		// OK - no message received
+		// Ок, сообщение не пришло
 	}
 }
 
@@ -373,11 +373,11 @@ func TestHub_RegisterClosedClient_Skips(t *testing.T) {
 	tournamentID := uuid.New()
 	client := newTestClient(hub, tournamentID, uuid.New())
 
-	// Pre-close the client before registration (idempotent via sync.Once)
+	// Закрываем клиента до регистрации (идемпотентно через sync.Once)
 	client.CloseSend()
 
 	hub.register <- client
-	// Give time for the register to be processed
+	// Даём время на обработку register
 	time.Sleep(10 * time.Millisecond)
 
 	stats := hub.GetStats()
@@ -396,7 +396,7 @@ func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
 	hub.register <- client
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Fill the hub's broadcast channel to capacity (256)
+	// Заполняем broadcast-канал хаба до ёмкости (256)
 	for i := 0; i < 256; i++ {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
@@ -405,11 +405,11 @@ func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
 		}
 	}
 
-	// The next Broadcast via public method should use the timeout path
-	// but still eventually deliver (since the hub is processing)
+	// Следующий Broadcast через публичный метод должен пойти по ветке с таймаутом,
+	// но всё равно в итоге доставить сообщение (поскольку хаб обрабатывает)
 	hub.Broadcast(tournamentID, string(MessageTypeLeaderboardUpdate), nil)
 
-	// Drain client send channel and verify messages were delivered
+	// Сливаем client send-канал и проверяем, что сообщения доставлены
 	require.Eventually(t, func() bool {
 		return len(client.send) > 0
 	}, 2*time.Second, 10*time.Millisecond)
@@ -449,7 +449,7 @@ func TestHub_ShutdownMultipleClients(t *testing.T) {
 	assert.Equal(t, 0, stats["tournaments"])
 	assert.Equal(t, 0, stats["total_clients"])
 
-	// All clients should be closed
+	// Все клиенты должны быть закрыты
 	assert.True(t, c1.IsClosed())
 	assert.True(t, c2.IsClosed())
 	assert.True(t, c3.IsClosed())
@@ -465,13 +465,13 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	// Concurrently register clients
+	// Конкурентно регистрируем клиентов
 	clients := make([]*Client, numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		clients[i] = newTestClient(hub, tournamentID, uuid.New())
 	}
 
-	// Half goroutines register, half broadcast
+	// Половина горутин делает register, половина - broadcast
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(idx int) {
@@ -490,7 +490,7 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 	wg.Wait()
 
-	// Wait for all registrations to complete
+	// Ждём завершения всех регистраций
 	waitForStats(t, hub, "total_clients", numGoroutines)
 
 	stats := hub.GetStats()
@@ -500,11 +500,11 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
 	hub := newTestHub(t)
-	// Do NOT start hub — broadcast channel will never be drained.
+	// Хаб НЕ запускаем - broadcast-канал никогда не будет опустошён.
 
 	tournamentID := uuid.New()
 
-	// Fill the broadcast channel to capacity.
+	// Заполняем broadcast-канал до ёмкости.
 	for i := 0; i < 256; i++ {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
@@ -513,7 +513,7 @@ func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
 		}
 	}
 
-	// This call should hit the timeout path and drop the message after ~1s.
+	// Этот вызов должен пойти по ветке с таймаутом и отбросить сообщение через ~1s.
 	done := make(chan struct{})
 	go func() {
 		hub.Broadcast(tournamentID, string(MessageTypeLeaderboardUpdate), nil)
@@ -522,19 +522,19 @@ func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
 
 	select {
 	case <-done:
-		// Broadcast returned after timeout.
+		// Broadcast вернулся после таймаута.
 	case <-time.After(3 * time.Second):
 		t.Fatal("Broadcast did not return within timeout")
 	}
 
-	// Channel should still have exactly 256 items (dropped message was not added).
+	// В канале всё ещё должно быть ровно 256 элементов (отброшенное сообщение не добавлено).
 	assert.Equal(t, 256, len(hub.broadcast))
 }
 
 func TestNoopBroadcaster(t *testing.T) {
 	b := NewNoopBroadcaster()
 
-	// Should not panic.
+	// Не должно паниковать.
 	assert.NotPanics(t, func() {
 		b.Broadcast(uuid.New(), "test", map[string]string{"key": "value"})
 	})
@@ -551,17 +551,17 @@ func TestHub_BroadcastMessage_MarshalError(t *testing.T) {
 	hub.register <- client
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Send a message with a payload that can't be marshaled.
+	// Отправляем сообщение с payload, который не сериализуется.
 	hub.broadcast <- &Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypeMatchUpdate,
-		Payload:      make(chan int), // channels can't be marshaled
+		Payload:      make(chan int), // каналы не сериализуются
 	}
 
-	// Give the hub time to process.
+	// Даём хабу время на обработку.
 	time.Sleep(50 * time.Millisecond)
 
-	// Client should still be connected (not disconnected due to marshal error).
+	// Клиент должен остаться подключённым (не отключён из-за ошибки marshal).
 	assert.Equal(t, 0, len(client.send), "no message should be sent to client")
 	stats := hub.GetStats()
 	assert.Equal(t, 1, stats["total_clients"])

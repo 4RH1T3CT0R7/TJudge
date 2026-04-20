@@ -45,6 +45,31 @@ func (lc *LeaderboardCache) UpdateRating(ctx context.Context, tournamentID, prog
 	return lc.cache.ZAdd(ctx, key, float64(rating), programID.String())
 }
 
+// RatingUpdate - один рейтинг в пакетной операции.
+type RatingUpdate struct {
+	TournamentID uuid.UUID
+	ProgramID    uuid.UUID
+	Rating       int
+}
+
+// UpdateRatingsBatch обновляет рейтинги пакетом через Redis-пайплайн.
+// Для пары участников одного матча экономит один RTT; при буферизации
+// нескольких матчей экономия линейна по числу апдейтов.
+func (lc *LeaderboardCache) UpdateRatingsBatch(ctx context.Context, updates []RatingUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	members := make([]ZAddBatchMember, 0, len(updates))
+	for _, u := range updates {
+		members = append(members, ZAddBatchMember{
+			Key:    lc.getKey(u.TournamentID),
+			Score:  float64(u.Rating),
+			Member: u.ProgramID.String(),
+		})
+	}
+	return lc.cache.BatchZAdd(ctx, members)
+}
+
 // IncrementRating увеличивает рейтинг программы
 func (lc *LeaderboardCache) IncrementRating(ctx context.Context, tournamentID, programID uuid.UUID, delta int) error {
 	key := lc.getKey(tournamentID)
@@ -52,9 +77,10 @@ func (lc *LeaderboardCache) IncrementRating(ctx context.Context, tournamentID, p
 }
 
 // GetTop получает топ N программ из leaderboard.
-// NOTE: Returns partial data — only Rank, ProgramID, and Rating are populated.
-// Other LeaderboardEntry fields (ProgramName, TeamID, TeamName, Wins, Losses, Draws, TotalGames)
-// are zero-valued. Callers needing complete data should query the DB instead.
+// Возвращает частичные данные: заполнены только Rank, ProgramID и Rating.
+// Остальные поля LeaderboardEntry (ProgramName, TeamID, TeamName, Wins, Losses,
+// Draws, TotalGames) имеют нулевые значения. Если нужны полные данные, вызывающий
+// код должен запросить их напрямую из БД.
 func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	key := lc.getKey(tournamentID)
 	results, err := lc.cache.ZRevRangeWithScores(ctx, key, 0, int64(limit-1))

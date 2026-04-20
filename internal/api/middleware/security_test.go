@@ -23,11 +23,11 @@ func TestDefaultSecurityConfig_Headers(t *testing.T) {
 	assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
 	csp := rr.Header().Get("Content-Security-Policy")
 	assert.Contains(t, csp, "default-src 'self'")
-	// P0.3 этап 1: обязательные защитные директивы CSP.
-	assert.Contains(t, csp, "object-src 'none'", "object-src blocks Flash/Java XSS vectors")
+	// Обязательные защитные директивы CSP.
+	assert.Contains(t, csp, "object-src 'none'", "object-src блокирует Flash/Java XSS-векторы")
 	assert.Contains(t, csp, "base-uri 'self'", "base-uri защищает от base-tag injection")
 	assert.Contains(t, csp, "form-action 'self'", "form-action предотвращает submit на evil origin")
-	assert.Contains(t, csp, "frame-ancestors 'none'", "clickjacking protection")
+	assert.Contains(t, csp, "frame-ancestors 'none'", "защита от clickjacking")
 	assert.Equal(t, "strict-origin-when-cross-origin", rr.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "camera=(), microphone=(), geolocation=()", rr.Header().Get("Permissions-Policy"))
 	assert.Equal(t, "noopen", rr.Header().Get("X-Download-Options"))
@@ -75,7 +75,7 @@ func TestSecurityHeaders_HSTS_WithoutTLS(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	// No TLS
+	// Без TLS
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -91,7 +91,7 @@ func TestSecureHeaders_UsesDefaultConfig(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	// Should have default headers
+	// Должны быть заголовки по умолчанию
 	assert.Equal(t, "1; mode=block", rr.Header().Get("X-XSS-Protection"))
 	assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
 }

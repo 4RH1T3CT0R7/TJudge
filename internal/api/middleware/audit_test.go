@@ -79,7 +79,7 @@ func TestAudit_RecordsAdminMutation(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusCreated, rr.Code)
 
-	// async — wait for drain
+	// async - ждём drain
 	assert.Eventually(t, func() bool { return sink.len() == 1 }, time.Second, 10*time.Millisecond)
 	e := sink.last()
 	assert.Equal(t, adminID, e.ActorID)
@@ -106,7 +106,7 @@ func TestAudit_IgnoresGETRequests(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	time.Sleep(50 * time.Millisecond) // drain interval
+	time.Sleep(50 * time.Millisecond) // интервал drain
 	assert.Equal(t, 0, sink.len(), "GET должен игнорироваться")
 }
 
@@ -132,7 +132,7 @@ func TestAudit_IgnoresNonAdmin(t *testing.T) {
 
 func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	// Small buffer + sink that blocks → должен срабатывать drop, не deadlock.
+	// Маленький буфер + sink, который блокирует, должен приводить к drop, а не к deadlock.
 	blockingSink := &blockingSink{start: make(chan struct{})}
 	al := NewAuditLogger(blockingSink, 2, log)
 	ctx, cancel := context.WithCancel(context.Background())

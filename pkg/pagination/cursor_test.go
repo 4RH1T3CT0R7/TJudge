@@ -97,8 +97,8 @@ func TestDecodeCursor_InvalidBase64(t *testing.T) {
 }
 
 func TestDecodeCursor_InvalidJSON(t *testing.T) {
-	// Valid base64 but invalid JSON
-	_, err := DecodeCursor("bm90LWpzb24=") // "not-json" in base64
+	// Корректный base64, но некорректный JSON
+	_, err := DecodeCursor("bm90LWpzb24=") // "not-json" в base64
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to unmarshal cursor")

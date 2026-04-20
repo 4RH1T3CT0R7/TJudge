@@ -80,7 +80,7 @@ func main() {
 		zap.String("env", "production"),
 	)
 
-	// P2.6: OpenTelemetry tracing (опционально, если задан OTEL_EXPORTER_OTLP_ENDPOINT).
+	// OpenTelemetry tracing (опционально, если задан OTEL_EXPORTER_OTLP_ENDPOINT).
 	otelShutdown, err := observability.InitTracerProvider(context.Background(), "tjudge-api", "dev", log)
 	if err != nil {
 		log.Warn("Failed to init OTel tracing (continuing without)", zap.Error(err))
@@ -179,9 +179,9 @@ func main() {
 		events.MatchesCreated{}, events.MatchResultProcessed{},
 	)
 
-	// Redis Pub/Sub bridge: receive events from worker process for WebSocket broadcast.
-	// Uses a dedicated bus so that worker-originated events only trigger broadcast,
-	// avoiding double cache updates (worker already updated its own cache).
+	// Мост Redis Pub/Sub: принимает события из процесса воркера для рассылки по WebSocket.
+	// Используется отдельная шина, чтобы события от воркера триггерили только рассылку
+	// и не приводили к повторному обновлению кэша (воркер уже обновил свой кэш).
 	wsBus := events.NewSyncBus(log)
 	wsBus.Subscribe(
 		eventhandlers.NewBroadcastHandler(wsHub, log),
@@ -261,7 +261,7 @@ func main() {
 	// Создаём API сервер
 	adminChecker := middleware.NewVerifiedAdminChecker(userRepo, 5*time.Minute)
 
-	// P1.12: audit log (async). Буфер 2048 — при нагрузке 10 admin-запросов/сек
+	// Audit log (async). Буфер 2048: при нагрузке 10 admin-запросов/сек
 	// даёт ~200 сек запаса перед drop'ом.
 	auditRepo := db.NewAuditLogRepository(database)
 	auditLogger := middleware.NewAuditLogger(auditRepo, 2048, log)
@@ -346,7 +346,7 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("API server forced to shutdown", zap.Error(err))
 	}
-	// UR bug_015: останавливаем background-горутины (rate-limiter cleanup).
+	// Останавливаем background-горутины (rate-limiter cleanup).
 	apiServer.Close()
 
 	// Останавливаем metrics сервер

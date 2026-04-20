@@ -164,7 +164,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 
 	if err != nil {
 		if errors.IsAppError(err) && errors.GetAppError(err).Code == 404 {
-			// Dummy bcrypt comparison to prevent timing-based user enumeration
+			// Фиктивное сравнение bcrypt для защиты от timing-based user enumeration
 			_ = bcrypt.CompareHashAndPassword(
 				[]byte("$2a$12$000000000000000000000uGVYlKMFeX7iKOQKZ3d2fXxqFaE6D.e"),
 				[]byte(req.Password),
@@ -176,7 +176,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 
 	// Проверяем пароль
 	if err := s.comparePassword(user.PasswordHash, req.Password); err != nil {
-		// PII (username/email) намеренно не логируем — только user_id.
+		// PII (username/email) намеренно не логируем - только user_id.
 		// Это предотвращает enumeration через анализ логов.
 		s.log.Info("Invalid password attempt",
 			zap.String("user_id", user.ID.String()),
@@ -228,7 +228,7 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	}
 
 	// Token Rotation: атомарно проверяем и добавляем в blacklist (SETNX).
-	// Это предотвращает TOCTOU race condition — только один из конкурентных
+	// Это предотвращает TOCTOU race condition - только один из конкурентных
 	// запросов с тем же refresh token сможет пройти.
 	// Fail-closed: при ошибке Redis отклоняем запрос.
 	wasNew, err := s.tokenBlacklist.AddIfNotExists(ctx, refreshToken, s.jwtManager.RefreshTokenTTL())
@@ -269,8 +269,8 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 // Logout выполняет выход пользователя, добавляя токены в чёрный список
 func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) error {
 	// Добавляем access token в blacklist.
-	// Fail-closed: if we cannot blacklist the tokens, return an error so the
-	// client knows the logout was not fully processed.
+	// Fail-closed: если не удалось занести токены в blacklist, возвращаем
+	// ошибку, чтобы клиент знал, что logout не был полностью завершён.
 	claims, err := s.jwtManager.ValidateToken(accessToken)
 	if err != nil {
 		// Access token может быть уже истёкшим, это OK
@@ -401,7 +401,7 @@ func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*do
 const BcryptCost = 12
 
 // hashPassword хеширует пароль используя bcrypt с повышенной стоимостью.
-// bcrypt silently truncates inputs longer than 72 bytes, so we reject them explicitly.
+// bcrypt молча обрезает ввод длиннее 72 байт, поэтому явно отклоняем такие пароли.
 func (s *Service) hashPassword(password string) (string, error) {
 	if len([]byte(password)) > 72 {
 		return "", errors.ErrValidation.WithMessage("password is too long")
@@ -414,7 +414,7 @@ func (s *Service) hashPassword(password string) (string, error) {
 }
 
 // comparePassword сравнивает пароль с хешом.
-// Rejects passwords > 72 bytes to prevent bcrypt truncation collisions.
+// Отклоняет пароли > 72 байт, чтобы избежать коллизий обрезания bcrypt.
 func (s *Service) comparePassword(hash, password string) error {
 	if len([]byte(password)) > 72 {
 		return errors.ErrInvalidCredentials.WithMessage("invalid credentials")

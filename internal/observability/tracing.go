@@ -1,8 +1,8 @@
-// Package observability предоставляет инициализацию OpenTelemetry tracing (P2.6).
+// Package observability предоставляет инициализацию OpenTelemetry tracing.
 //
 // Если задана переменная окружения OTEL_EXPORTER_OTLP_ENDPOINT (или любая
 // из стандартных OTEL_*), провайдер отправляет spans в OTLP-совместимый
-// collector (Jaeger, Tempo, OTEL Collector). Если не задано — возвращает
+// collector (Jaeger, Tempo, OTEL Collector). Если не задано, возвращает
 // noop-провайдер, и все Tracer-вызовы становятся бесплатными.
 //
 // Интеграция с HTTP:
@@ -63,7 +63,7 @@ func InitTracerProvider(ctx context.Context, serviceName, serviceVersion string,
 
 func noopShutdown(_ context.Context) error { return nil }
 
-// sampleRate читает OTEL_TRACES_SAMPLER_ARG (0..1). По умолчанию — 10%.
+// sampleRate читает OTEL_TRACES_SAMPLER_ARG (0..1). По умолчанию 10%.
 func sampleRate() float64 {
 	v := os.Getenv("OTEL_TRACES_SAMPLER_ARG")
 	switch v {
@@ -74,7 +74,7 @@ func sampleRate() float64 {
 	case "":
 		return 0.1
 	}
-	// Больше не разбираем — Prometheus, kafka, и friends используют ParentBased.
+	// Больше не разбираем: Prometheus, kafka и прочее используют ParentBased.
 	return 0.1
 }
 

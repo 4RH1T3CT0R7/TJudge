@@ -117,7 +117,7 @@ export function GameView() {
               Найти турниры
             </Link>
           </div>
-          {/* Invader — outside card to avoid overflow */}
+          {/* Invader - вне карточки, чтобы избежать overflow */}
           <div className="flex justify-end mt-3 pr-2">
             <InvaderPresence
               size="sm"

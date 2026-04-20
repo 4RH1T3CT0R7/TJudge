@@ -98,7 +98,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 		return nil, errors.ErrBadRequest.WithMessage("cannot create team in active or completed tournament")
 	}
 
-	// Distributed lock на user+tournament — предотвращает создание двух команд
+	// Distributed lock на user+tournament - предотвращает создание двух команд
 	// одним пользователем в одном турнире при concurrent requests
 	lockKey := fmt.Sprintf("team:create:%s:%s", req.TournamentID.String(), req.UserID.String())
 	var result *domain.Team
@@ -173,14 +173,14 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 		return nil, errors.ErrBadRequest.WithMessage("cannot join team in active or completed tournament")
 	}
 
-	// Distributed lock на user+tournament — предотвращает:
+	// Distributed lock на user+tournament - предотвращает:
 	// 1. Concurrent joins, которые могут превысить MaxTeamSize (per-team)
-	// 2. User joining multiple teams in same tournament (per-user-tournament)
+	// 2. Вступление пользователя в несколько команд одного турнира (per-user-tournament)
 	lockKey := fmt.Sprintf("team:join:%s:%s", team.TournamentID.String(), req.UserID.String())
 	var result *domain.Team
 
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// Проверяем лимит участников команды (внутри lock — атомарно)
+		// Проверяем лимит участников команды (внутри lock - атомарно)
 		memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
 		if err != nil {
 			return errors.Wrap(err, "failed to get member count")
@@ -285,7 +285,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 
 		if !transferred {
 			// Гонка: между GetMemberCount и GetMembers остальные участники покинули команду.
-			// Команда фактически пуста — удаляем её.
+			// Команда фактически пуста - удаляем её.
 			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
 			if tErr != nil {
 				return errors.Wrap(tErr, "failed to check tournament status")
@@ -414,13 +414,13 @@ func (s *Service) GetInviteLink(ctx context.Context, teamID, leaderID uuid.UUID,
 
 // DeleteTeam удаляет команду (для админа)
 func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
-	// Get team to check tournament status
+	// Получаем команду чтобы проверить статус турнира
 	team, err := s.teamRepo.GetByID(ctx, teamID)
 	if err != nil {
 		return err
 	}
 
-	// Check tournament is not active
+	// Проверяем что турнир не активен
 	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
 	if err != nil {
 		return err
@@ -438,7 +438,7 @@ func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
 	return nil
 }
 
-// DisqualifyResult — результат дисквалификации команды
+// DisqualifyResult - результат дисквалификации команды
 type DisqualifyResult struct {
 	MatchesDeleted     int64 `json:"matches_deleted"`
 	MatchesCancelled   int64 `json:"matches_cancelled"`

@@ -11,7 +11,7 @@ interface State {
 }
 
 // ErrorBoundary перехватывает непойманные исключения render-tree и отображает
-// fallback-UI вместо белого экрана. P1.10: показываем конкретное сообщение
+// fallback-UI вместо белого экрана. Показываем конкретное сообщение
 // вместо generic "что-то пошло не так", кнопка "попробовать снова"
 // без полного page reload (сохраняет кэш и сессию).
 export class ErrorBoundary extends Component<Props, State> {

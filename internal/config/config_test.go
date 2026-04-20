@@ -372,7 +372,7 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, 30*time.Minute, cfg.JWT.AccessTTL)
 }
 
-// TestRecommendedDBPoolSize — P2.3 формула.
+// TestRecommendedDBPoolSize проверяет формулу recommendedDBPoolSize.
 func TestRecommendedDBPoolSize(t *testing.T) {
 	cases := []struct {
 		workerMax int
@@ -393,8 +393,8 @@ func TestRecommendedDBPoolSize(t *testing.T) {
 	}
 }
 
-// TestLoad_DBPoolAutoSized — по умолчанию DB_MAX_CONNECTIONS подстраивается
-// под WORKER_MAX.
+// TestLoad_DBPoolAutoSized проверяет, что по умолчанию DB_MAX_CONNECTIONS
+// подстраивается под WORKER_MAX.
 func TestLoad_DBPoolAutoSized(t *testing.T) {
 	clearEnvKeys(t)
 	t.Setenv("DB_HOST", "localhost")
@@ -402,14 +402,14 @@ func TestLoad_DBPoolAutoSized(t *testing.T) {
 	t.Setenv("DB_NAME", "tjudge")
 	t.Setenv("REDIS_HOST", "localhost")
 	t.Setenv("WORKER_MAX", "30")
-	// DB_MAX_CONNECTIONS НЕ задан — должно быть 30*1.5+20 = 65
+	// DB_MAX_CONNECTIONS не задан, должно быть 30*1.5+20 = 65.
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, 65, cfg.Database.MaxConnections)
 	assert.Equal(t, 13, cfg.Database.MaxIdle, "idle = 20% от max")
 }
 
-// clearEnvKeys — вспомогательная очистка всех env, которые подхватывает Load().
+// clearEnvKeys - вспомогательная очистка всех env, которые подхватывает Load().
 func clearEnvKeys(t *testing.T) {
 	t.Helper()
 	keys := []string{

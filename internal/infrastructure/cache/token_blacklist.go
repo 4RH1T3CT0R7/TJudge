@@ -44,7 +44,7 @@ func (tbc *TokenBlacklistCache) IsBlacklisted(ctx context.Context, token string)
 
 // AddIfNotExists атомарно добавляет токен в чёрный список только если его там нет.
 // Возвращает true если токен был добавлен (новый), false если уже существовал.
-// Используется для token rotation — предотвращает TOCTOU race condition.
+// Используется для token rotation: предотвращает TOCTOU race condition.
 func (tbc *TokenBlacklistCache) AddIfNotExists(ctx context.Context, token string, ttl time.Duration) (bool, error) {
 	key := fmt.Sprintf("blacklist:token:%s", token)
 

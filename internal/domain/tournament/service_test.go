@@ -2200,7 +2200,7 @@ func TestService_Complete_LockError(t *testing.T) {
 
 	tournamentID := uuid.New()
 
-	// Lock fails with a non-AppError → gets wrapped as ErrConflict
+	// Lock fails with a non-AppError -> gets wrapped as ErrConflict
 	distributedLock.On("WithLock", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(fmt.Errorf("lock unavailable"))
 
@@ -3002,7 +3002,7 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 	matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*domain.Match")).Return(nil)
 	queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*domain.Match")).
 		Return(fmt.Errorf("redis pipeline error"))
-	// P0.5: при ошибке EnqueueBatch должен произойти DeleteBatch для отката.
+	// При ошибке EnqueueBatch должен произойти DeleteBatch для отката.
 	matchRepo.On("DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
 
 	req := &ScheduleNewProgramMatchesRequest{
@@ -3021,7 +3021,7 @@ func TestService_ScheduleNewProgramMatches_EnqueueBatchError(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// TestService_RunAllMatches_EnqueueError_RollbackCreated (P0.5)
+// TestService_RunAllMatches_EnqueueError_RollbackCreated
 // -----------------------------------------------------------------------------
 
 // Проверяем что при ошибке Enqueue свежесозданные матчи откатываются.

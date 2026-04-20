@@ -1,4 +1,4 @@
-# TJudge Self-Hosted Deployment Guide
+# Развёртывание TJudge на собственном сервере
 
 Руководство по развёртыванию TJudge на собственном сервере.
 
@@ -63,7 +63,7 @@ make deploy
 - Инициализирует секреты
 - Соберёт и запустит все сервисы
 
-> **Примечание:** Миграции базы данных выполняются автоматически. В Docker Compose определён сервис `migrate`, который применяет все миграции перед запуском API и Worker (через `condition: service_completed_successfully`). Ручной запуск миграций не требуется.
+Миграции базы данных выполняются автоматически. В Docker Compose определён сервис `migrate`, который применяет все миграции перед запуском API и Worker (через `condition: service_completed_successfully`). Ручной запуск миграций не требуется.
 
 ### 3. Ручной выбор профиля
 
@@ -236,7 +236,7 @@ make backup-list
 make restore BACKUP=backups/tjudge_20240115_020000.sql.gz
 ```
 
-**Важно:** Восстановление остановит API и Worker, создаст safety backup текущих данных, затем восстановит из указанного файла.
+Восстановление остановит API и Worker, создаст резервную копию текущих данных, затем восстановит из указанного файла.
 
 ### Хранение бэкапов
 
@@ -247,7 +247,7 @@ make restore BACKUP=backups/tjudge_20240115_020000.sql.gz
 BACKUP_RETENTION_DAYS=14
 ```
 
-Рекомендуется также копировать бэкапы на внешнее хранилище (S3, Google Drive, etc.).
+Рекомендуется также копировать бэкапы на внешнее хранилище (S3, Google Drive и т.п.).
 
 ---
 
@@ -280,10 +280,10 @@ curl http://localhost:9090/metrics
 ```
 
 Ключевые метрики:
-- `http_requests_total` — количество запросов
-- `http_request_duration_seconds` — время ответа
-- `matches_processed_total` — обработано матчей
-- `worker_pool_size` — размер пула воркеров
+- `http_requests_total` - количество запросов
+- `http_request_duration_seconds` - время ответа
+- `matches_processed_total` - обработано матчей
+- `worker_pool_size` - размер пула воркеров
 
 ### Логи
 

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// stubStore — in-memory IdempotencyStore для тестов.
+// stubStore - in-memory IdempotencyStore для тестов.
 type stubStore struct {
 	mu   sync.Mutex
 	data map[string]string
@@ -151,12 +151,12 @@ func TestIdempotency_FailedResponseNotCached(t *testing.T) {
 		_, _ = w.Write([]byte(`oops`))
 	}))
 
-	// Первый — 500, не должен кэшироваться.
+	// Первый запрос - 500, не должен кэшироваться.
 	req := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req.Header.Set("Idempotency-Key", "retry-after-error")
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
-	// Второй — тоже должен вызвать handler (ошибку клиент может фикснуть и повторить).
+	// Второй запрос - тоже должен вызвать handler (ошибку клиент может фикснуть и повторить).
 	req2 := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req2.Header.Set("Idempotency-Key", "retry-after-error")
 	handler.ServeHTTP(httptest.NewRecorder(), req2)

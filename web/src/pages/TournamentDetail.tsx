@@ -1403,7 +1403,7 @@ function GeneralLeaderboardTable({
                 </div>
               </div>
 
-              {/* Score bar — only in normal mode */}
+              {/* Score bar - только в обычном режиме */}
               {!isDark && (
                 <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div

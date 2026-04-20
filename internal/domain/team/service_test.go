@@ -943,7 +943,7 @@ func TestService_LeaveTeam_GetMembersReturnsOnlyLeader(t *testing.T) {
 }
 
 func TestService_LeaveTeam_GetMembersReturnsOnlyLeader_ActiveTournament(t *testing.T) {
-	// Same race condition, but tournament is active — team cannot be deleted.
+	// Same race condition, but tournament is active - team cannot be deleted.
 	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	teamID := uuid.New()

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockMatchRepository is a mock for MatchRepository
+// MockMatchRepository - мок MatchRepository
 type MockMatchRepository struct {
 	mock.Mock
 }
@@ -28,7 +28,7 @@ func (m *MockMatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, re
 	return args.Error(0)
 }
 
-// MockProcessorRatingRepository is a mock for RatingRepository in processor
+// MockProcessorRatingRepository - мок RatingRepository для processor
 type MockProcessorRatingRepository struct {
 	mock.Mock
 }
@@ -38,7 +38,7 @@ func (m *MockProcessorRatingRepository) GetParticipantRatings(ctx context.Contex
 	return args.Int(0), args.Int(1), args.Error(2)
 }
 
-// MockProcessorRatingService is a mock for RatingService
+// MockProcessorRatingService - мок RatingService
 type MockProcessorRatingService struct {
 	mock.Mock
 }
@@ -48,7 +48,7 @@ func (m *MockProcessorRatingService) ProcessMatchResult(ctx context.Context, mat
 	return args.Error(0)
 }
 
-// MockExecutor is a mock for Executor
+// MockExecutor - мок Executor
 type MockExecutor struct {
 	mock.Mock
 }
@@ -61,7 +61,7 @@ func (m *MockExecutor) Execute(ctx context.Context, match *domain.Match, program
 	return args.Get(0).(*domain.MatchResult), args.Error(1)
 }
 
-// MockProcessorProgramRepository is a mock for ProgramRepository
+// MockProcessorProgramRepository - мок ProgramRepository
 type MockProcessorProgramRepository struct {
 	mock.Mock
 }
@@ -97,7 +97,7 @@ func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProc
 		programRepo:   programRepo,
 		ratingService: ratingService,
 		executor:      executor,
-		matchCache:    nil, // nil cache - tests should not reach cache calls
+		matchCache:    nil, // nil cache - тесты не должны доходить до вызовов кэша
 		log:           log,
 	}
 
@@ -113,12 +113,12 @@ func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
 		Program2ID:   uuid.New(),
 	}
 
-	// UpdateStatus returns ErrMatchAlreadyProcessed — duplicate from queue
+	// UpdateStatus возвращает ErrMatchAlreadyProcessed - дубликат из очереди
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).
 		Return(domain.ErrMatchAlreadyProcessed)
 
 	err := p.Process(context.Background(), match)
-	assert.NoError(t, err) // should be silently skipped, not an error
+	assert.NoError(t, err) // должен быть тихо пропущен, а не считаться ошибкой
 	matchRepo.AssertExpectations(t)
 }
 
@@ -186,7 +186,7 @@ func TestProcessor_Process_Program2NotInResults(t *testing.T) {
 		Program2ID:   uuid.New(),
 	}
 
-	// GetByIDs returns only program1 — program2 is missing
+	// GetByIDs возвращает только program1 - program2 отсутствует
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
 		Return([]*domain.Program{{ID: match.Program1ID, CodePath: "/path/p1"}}, nil)
@@ -322,7 +322,7 @@ func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to process match result")
 }
 
-// --- Process full flow ---
+// --- Process полный сценарий ---
 
 func TestProcessor_Process_Success(t *testing.T) {
 	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)

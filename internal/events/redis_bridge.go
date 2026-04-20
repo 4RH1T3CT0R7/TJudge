@@ -13,27 +13,27 @@ import (
 
 const defaultChannel = "tjudge:events"
 
-// envelope wraps an event with its type name for JSON serialization.
+// envelope оборачивает событие вместе с именем типа для JSON-сериализации.
 type envelope struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 }
 
-// RedisPublisher is a cache.Cache-compatible interface for publishing.
+// redisPublisher - совместимый с cache.Cache интерфейс для публикации.
 type redisPublisher interface {
 	Publish(ctx context.Context, channel string, message interface{}) error
 }
 
-// redisSubscriber is a cache.Cache-compatible interface for subscribing.
+// redisSubscriber - совместимый с cache.Cache интерфейс для подписки.
 type redisSubscriber interface {
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 }
 
-// eventTypeRegistry maps type name → reflect.Type for deserialization.
+// eventTypeRegistry сопоставляет имя типа с reflect.Type для десериализации.
 var eventTypeRegistry = map[string]reflect.Type{}
 
 func init() {
-	// Register all event types that can cross the Redis bridge.
+	// Регистрируем все типы событий, которые проходят через Redis bridge.
 	registerType(MatchResultProcessed{})
 	registerType(TournamentStarted{})
 	registerType(TournamentCompleted{})
@@ -45,16 +45,16 @@ func registerType(v any) {
 	eventTypeRegistry[t.Name()] = t
 }
 
-// RedisEventPublisher is an event Handler that forwards events to a Redis Pub/Sub channel.
-// Attach it to a SyncBus so that events emitted in one process (e.g. worker) are forwarded
-// to other processes (e.g. API) that subscribe to the same Redis channel.
+// RedisEventPublisher - Handler событий, пересылающий их в Redis Pub/Sub канал.
+// Подключается к SyncBus, чтобы события, возникшие в одном процессе (например, worker),
+// пересылались в другие процессы (например, API), подписанные на тот же канал Redis.
 type RedisEventPublisher struct {
 	pub     redisPublisher
 	channel string
 	log     *logger.Logger
 }
 
-// NewRedisEventPublisher creates a publisher that sends events to the given Redis channel.
+// NewRedisEventPublisher создаёт publisher, отправляющий события в указанный Redis-канал.
 func NewRedisEventPublisher(pub redisPublisher, log *logger.Logger) *RedisEventPublisher {
 	return &RedisEventPublisher{
 		pub:     pub,
@@ -63,7 +63,7 @@ func NewRedisEventPublisher(pub redisPublisher, log *logger.Logger) *RedisEventP
 	}
 }
 
-// Handle serializes the event and publishes it to Redis.
+// Handle сериализует событие и публикует его в Redis.
 func (p *RedisEventPublisher) Handle(ctx context.Context, event any) error {
 	typeName := reflect.TypeOf(event).Name()
 
@@ -89,8 +89,8 @@ func (p *RedisEventPublisher) Handle(ctx context.Context, event any) error {
 	return nil
 }
 
-// RedisEventSubscriber listens on a Redis Pub/Sub channel and re-publishes
-// received events to a local event Bus (typically in the API process).
+// RedisEventSubscriber слушает Redis Pub/Sub канал и перепубликовывает
+// полученные события в локальную шину (обычно в процессе API).
 type RedisEventSubscriber struct {
 	sub     redisSubscriber
 	bus     Bus
@@ -99,7 +99,7 @@ type RedisEventSubscriber struct {
 	stopCh  chan struct{}
 }
 
-// NewRedisEventSubscriber creates a subscriber that listens on Redis and feeds events to the local bus.
+// NewRedisEventSubscriber создаёт подписчика, слушающего Redis и передающего события в локальную шину.
 func NewRedisEventSubscriber(sub redisSubscriber, bus Bus, log *logger.Logger) *RedisEventSubscriber {
 	return &RedisEventSubscriber{
 		sub:     sub,
@@ -110,8 +110,8 @@ func NewRedisEventSubscriber(sub redisSubscriber, bus Bus, log *logger.Logger) *
 	}
 }
 
-// Start begins listening for events on the Redis channel.
-// It blocks until Stop is called or the context is cancelled; call it in a goroutine.
+// Start начинает слушать события в Redis-канале.
+// Блокируется до вызова Stop или отмены контекста; вызывайте в goroutine.
 func (s *RedisEventSubscriber) Start(ctx context.Context) {
 	pubsub := s.sub.Subscribe(ctx, s.channel)
 	ch := pubsub.Channel()
@@ -140,11 +140,11 @@ func (s *RedisEventSubscriber) Start(ctx context.Context) {
 	}
 }
 
-// Stop signals the subscriber to stop, causing Start to return.
+// Stop сигнализирует подписчику остановиться, заставляя Start вернуться.
 func (s *RedisEventSubscriber) Stop() {
 	select {
 	case <-s.stopCh:
-		// Already stopped.
+		// Уже остановлен.
 	default:
 		close(s.stopCh)
 	}

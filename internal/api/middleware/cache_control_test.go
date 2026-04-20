@@ -44,14 +44,14 @@ func TestCacheControl_ReturnsNotModifiedOnETagMatch(t *testing.T) {
 		_, _ = w.Write([]byte(`stable-content`))
 	}))
 
-	// Первый запрос — получаем ETag.
+	// Первый запрос - получаем ETag.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	etag := rec.Header().Get("ETag")
 	assert.NotEmpty(t, etag)
 
-	// Повторный запрос с If-None-Match → 304.
+	// Повторный запрос с If-None-Match даёт 304.
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	req2.Header.Set("If-None-Match", etag)
 	rec2 := httptest.NewRecorder()

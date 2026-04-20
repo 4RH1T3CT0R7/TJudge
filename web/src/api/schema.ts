@@ -1,4 +1,4 @@
-// P2.13: lightweight runtime-валидатор для критичных API-responses.
+// Lightweight runtime-валидатор для критичных API-responses.
 //
 // Поскольку zod не установлен, используем type-guards (predicate functions).
 // Это ~50 строк кода вместо 100 KB Zod-рантайма.
@@ -20,8 +20,8 @@ export class SchemaError extends Error {
   readonly path: string;
   readonly received: unknown;
 
-  // CI fix: `erasableSyntaxOnly` (tsconfig.app.json) запрещает parameter-properties
-  // в конструкторе — объявляем поля явно и присваиваем внутри.
+  // `erasableSyntaxOnly` (tsconfig.app.json) запрещает parameter-properties
+  // в конструкторе - объявляем поля явно и присваиваем внутри.
   constructor(path: string, received: unknown) {
     super(`schema mismatch at ${path} (received: ${typeof received})`);
     this.name = 'SchemaError';
@@ -87,7 +87,7 @@ export function validateGame(v: unknown): void {
   check(isString(g.display_name), 'game.display_name', g.display_name);
 }
 
-/** LeaderboardEntry — компактный validator для list-response. */
+/** LeaderboardEntry - компактный validator для list-response. */
 export function validateLeaderboardEntry(v: unknown): void {
   check(isObject(v), 'leaderboardEntry', v);
   const e = v as Record<string, unknown>;

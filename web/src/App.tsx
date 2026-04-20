@@ -34,7 +34,7 @@ const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ defa
 const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
 
-// P2.1: prefetch только критичных страниц (Navigation targets) через
+// Prefetch критичных страниц (Navigation targets) через
 // requestIdleCallback, чтобы не тормозить LCP на медленных сетях и
 // не грузить three.js chunk заранее. three.js прогрузится лениво при
 // заходе на главную (через lazy(Home) в существующем коде).

@@ -213,14 +213,14 @@ const fragmentShader = `
     // Combine noise + waves + cursor effects
     float value = n + waveEffect + gather * 0.55 + scatterGlow;
 
-    // Brightness & contrast — darker = fewer visible pixels
+    // Яркость и контраст - темнее = меньше видимых пикселей
     value = (value - 0.75) * 1.4 + 0.5;
 
     // Bayer dithering threshold
     float threshold = bayer8(pixelUV / pixelSize) * 0.5;
     float pixel = step(threshold, value * 0.5);
 
-    // Apply invader force field — pixels organically avoid the invader
+    // Применяем силовое поле захватчика - пиксели органично избегают его
     pixel *= invaderFade;
 
     // Color: purple primary, green accent based on noise
@@ -353,8 +353,8 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     };
     ref.animId = requestAnimationFrame(animate);
 
-    // Listen for clicks on the hero section parent (captures clicks everywhere,
-    // including over text, buttons, and the invader — events bubble up naturally)
+    // Слушаем клики на parent hero-секции (ловим клики везде,
+    // включая текст, кнопки и захватчика - события всплывают естественно)
     const clickTarget = heroRef?.current || container;
     const onClick = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect();

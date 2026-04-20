@@ -29,7 +29,7 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
-// P1.10: retry/backoff parameters для transient-ошибок (5xx, network).
+// Retry/backoff parameters для transient-ошибок (5xx, network).
 const MAX_RETRY_ATTEMPTS = 3;
 const BASE_RETRY_DELAY_MS = 300;
 
@@ -70,10 +70,10 @@ function humanErrorMessage(
 
 // isRetryableError возвращает true для transient-ошибок, где retry имеет смысл.
 function isRetryableError(error: AxiosError): boolean {
-  // Network / timeout без response — retry полезен.
+  // Network / timeout без response - retry полезен.
   if (!error.response) return true;
   const status = error.response.status;
-  // 5xx и 429 — сервер перегружен/временно недоступен.
+  // 5xx и 429 - сервер перегружен/временно недоступен.
   return status >= 500 || status === 429;
 }
 
@@ -81,10 +81,10 @@ class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
 
-  // Mutex for token refresh to prevent race conditions
+  // Mutex для refresh токена, чтобы избежать гонок
   private refreshPromise: Promise<void> | null = null;
 
-  // Callback for auth failure (allows SPA-friendly redirect without full page reload)
+  // Callback для auth failure (SPA-friendly редирект без full page reload)
   private onAuthFailure: (() => void) | null = null;
 
   constructor() {
@@ -95,10 +95,10 @@ class ApiClient {
       },
     });
 
-    // Load token from localStorage
+    // Загружаем токен из localStorage
     this.accessToken = localStorage.getItem('access_token');
 
-    // Request interceptor to add auth header
+    // Request interceptor для добавления auth header
     this.client.interceptors.request.use((config) => {
       if (this.accessToken) {
         config.headers.Authorization = `Bearer ${this.accessToken}`;
@@ -106,13 +106,13 @@ class ApiClient {
       return config;
     });
 
-    // Response interceptor: unwrap standard API envelope and handle errors.
-    // The backend wraps all responses in { data, message?, meta? }.
-    // This interceptor extracts the inner `data` field so callers get the
-    // payload directly (e.g. response.data is Tournament[], not { data: Tournament[] }).
+    // Response interceptor: разворачиваем стандартный API envelope и обрабатываем ошибки.
+    // Бэкенд оборачивает все ответы в { data, message?, meta? }.
+    // Этот interceptor извлекает внутреннее поле `data`, чтобы вызывающий код получал
+    // payload напрямую (например, response.data это Tournament[], а не { data: Tournament[] }).
     this.client.interceptors.response.use(
       (response) => {
-        // Only unwrap JSON responses that follow the standard API envelope { data, message?, meta? }.
+        // Разворачиваем только JSON-ответы со стандартным envelope { data, message?, meta? }.
         const contentType = response.headers['content-type'] || '';
         if (
           contentType.includes('application/json') &&
@@ -128,12 +128,12 @@ class ApiClient {
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config;
 
-        // Skip refresh logic for auth endpoints (they don't need token refresh):
-        // - /auth/refresh: would cause infinite loop
-        // - /auth/logout: user is logging out, no need to refresh
-        // - /auth/login: user is authenticating, no token to refresh
-        // - /auth/register: new user registration, no token exists
-        // Also skip if request was already retried or no config exists
+        // Пропускаем refresh для auth-эндпоинтов (им не нужен refresh токена):
+        // - /auth/refresh: вызвал бы бесконечный цикл
+        // - /auth/logout: пользователь выходит, refresh не нужен
+        // - /auth/login: пользователь аутентифицируется, токена ещё нет
+        // - /auth/register: регистрация нового пользователя, токена не существует
+        // Также пропускаем, если запрос уже повторён или нет config
         const requestWithRetry = originalRequest as unknown as {
           _retry?: boolean;
           _retryCount?: number;
@@ -147,23 +147,23 @@ class ApiClient {
         ) {
           requestWithRetry._retry = true;
 
-          // Use mutex to prevent concurrent refresh attempts
+          // Mutex предотвращает одновременные refresh-попытки
           try {
             await this.refreshTokenWithMutex();
-            // Retry original request with new token
+            // Повторяем исходный запрос с новым токеном
             return this.client.request(originalRequest);
           } catch {
-            // Refresh failed - just clear tokens locally, don't call logout API
-            // (calling logout API would cause another 401 and infinite loop)
+            // Refresh провалился - просто очищаем токены локально, не вызываем logout API
+            // (вызов logout API привёл бы к ещё одному 401 и бесконечному циклу)
             this.clearTokens();
-            // Notify subscribers (e.g. auth store) so React Router can navigate
+            // Уведомляем подписчиков (напр. auth store), чтобы React Router сделал navigate
             if (this.onAuthFailure) {
               this.onAuthFailure();
             }
           }
         }
 
-        // P1.10: exponential backoff retry для transient-ошибок (5xx, 429, network).
+        // Exponential backoff retry для transient-ошибок (5xx, 429, network).
         // Идемпотентность: повторяем только GET/HEAD/OPTIONS, иначе можно создать дубль.
         const method = originalRequest?.method?.toUpperCase() || 'GET';
         const safeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
@@ -182,8 +182,8 @@ class ApiClient {
           }
         }
 
-        // Show global error toast for non-401 errors
-        // (401 errors are handled by the token refresh logic above)
+        // Показываем глобальный error-toast для не-401 ошибок
+        // (401 обрабатываются логикой refresh токена выше)
         if (error.response?.status !== 401) {
           const responseData = error.response?.data as
             | Record<string, unknown>
@@ -201,19 +201,19 @@ class ApiClient {
   }
 
   /**
-   * Refresh token with mutex to prevent race conditions.
-   * Multiple concurrent 401 errors will all wait for the same refresh promise.
+   * Refresh токена с mutex для защиты от гонок.
+   * Несколько одновременных 401 будут ждать один и тот же refresh-promise.
    */
   private async refreshTokenWithMutex(): Promise<void> {
-    // If a refresh is already in progress, wait for it
+    // Если refresh уже идёт - ждём его
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
 
-    // Start a new refresh and store the promise
+    // Запускаем новый refresh и сохраняем promise
     this.refreshPromise = this.refreshToken()
       .finally(() => {
-        // Clear the promise when done (success or failure)
+        // Очищаем promise по завершению (успех или неудача)
         this.refreshPromise = null;
       });
 
@@ -235,7 +235,7 @@ class ApiClient {
     localStorage.removeItem('refresh_token');
   }
 
-  // Auth endpoints
+  // Эндпоинты авторизации
   async register(username: string, email: string, password: string): Promise<AuthResponse> {
     const { data } = await this.client.post<AuthResponse>('/auth/register', {
       username,
@@ -252,7 +252,7 @@ class ApiClient {
       username,
       password,
     });
-    // P2.13: runtime-валидация — ранний сигнал при несовпадении схемы.
+    // Runtime-валидация - ранний сигнал при несовпадении схемы.
     this.validateOrWarn(() => validateAuthResponse(data), 'POST /auth/login');
     this.setAccessToken(data.access_token);
     localStorage.setItem('refresh_token', data.refresh_token);
@@ -261,7 +261,7 @@ class ApiClient {
 
   /**
    * validateOrWarn запускает schema-валидатор и логирует SchemaError как warning.
-   * Не кидает наружу, чтобы не ломать UX — большинство мелких несоответствий
+   * Не кидает наружу, чтобы не ломать UX - большинство мелких несоответствий
    * проявят себя в UI-ошибках ("undefined field"), но лог сразу покажет корень.
    */
   private validateOrWarn(fn: () => void, ctx: string) {

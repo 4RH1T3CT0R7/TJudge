@@ -83,9 +83,9 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 		zap.String("tournament_id", match.TournamentID.String()),
 	)
 
-	// Обновляем статус на "running" (только из pending — идемпотентная защита)
+	// Обновляем статус на "running" (только из pending - идемпотентная защита)
 	if err := p.matchRepo.UpdateStatus(ctx, match.ID, domain.MatchRunning); err != nil {
-		// Матч уже обрабатывается или обработан — пропускаем (дубликат из очереди)
+		// Матч уже обрабатывается или обработан - пропускаем (дубликат из очереди)
 		if stderrors.Is(err, domain.ErrMatchAlreadyProcessed) {
 			p.log.Info("Match already processed or in progress, skipping duplicate",
 				zap.String("match_id", match.ID.String()),

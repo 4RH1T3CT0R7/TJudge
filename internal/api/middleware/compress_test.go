@@ -25,7 +25,7 @@ func TestCompress_WithGzipAccept(t *testing.T) {
 	assert.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
 	assert.Equal(t, "Accept-Encoding", rr.Header().Get("Vary"))
 
-	// Decompress and verify body
+	// Декодируем и проверяем тело
 	reader, err := gzip.NewReader(rr.Body)
 	require.NoError(t, err)
 	defer reader.Close()
@@ -41,7 +41,7 @@ func TestCompress_WithoutGzipAccept(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	// No Accept-Encoding header
+	// Без заголовка Accept-Encoding
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -73,6 +73,6 @@ func TestCompress_ContentLengthRemoved(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
-	// Content-Length should be removed by gzipResponseWriter
+	// Content-Length должен быть удалён gzipResponseWriter
 	assert.Empty(t, rr.Header().Get("Content-Length"))
 }

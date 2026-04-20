@@ -1,8 +1,8 @@
-// P2.14: lightweight i18n без внешней зависимости.
+// Lightweight i18n без внешней зависимости.
 //
 // Предоставляет t(key) для ключей вида "auth.login_title", переключение
 // языка через `setLocale()` + event-based re-render (простой store).
-// При необходимости легко заменить на react-i18next — API совместимый.
+// При необходимости легко заменить на react-i18next - API совместимый.
 
 import { useEffect, useState } from 'react';
 import ru from './locales/ru.json';
@@ -30,7 +30,7 @@ function detectLocale(): Locale {
 let currentLocale: Locale = detectLocale();
 
 /**
- * t(key) возвращает строку по ключу "section.name". Если ключ не найден —
+ * t(key) возвращает строку по ключу "section.name". Если ключ не найден,
  * возвращает сам key (visible в UI, подсказывая добавить перевод).
  */
 export function t(key: string): string {
@@ -59,7 +59,7 @@ export function getLocale(): Locale {
 }
 
 /**
- * useTranslation — React hook: возвращает {t, locale, setLocale} и
+ * useTranslation - React hook: возвращает {t, locale, setLocale} и
  * подписывается на смену языка (вызывает re-render).
  */
 export function useTranslation() {

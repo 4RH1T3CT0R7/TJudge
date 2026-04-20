@@ -132,12 +132,12 @@ export function AdminPanel() {
     };
   }, []);
 
-  // "sudo" easter egg — full green hacker theme
+  // "sudo" easter egg - полностью зелёная hacker-тема
   const [sudoMode, setSudoMode] = useState(false);
   const [sudoActivating, setSudoActivating] = useState(false);
   const sudoCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Tab change with invader reaction (skipped in sudo mode — hacker phrases take over)
+  // Смена вкладки с реакцией захватчика (в sudo-режиме пропускается - хакерские фразы перехватывают управление)
   const handleTabChange = useCallback((tab: AdminTab) => {
     setActiveTab(tab);
     if (sudoMode) return;
@@ -235,7 +235,7 @@ export function AdminPanel() {
   const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
   const [resettingGame, setResettingGame] = useState<string | null>(null);
 
-  // Close modals on Escape — priority order (topmost first), replicating full cleanup from close helpers
+  // Закрываем модалки по Escape - в порядке приоритета (сверху вниз), повторяя полный cleanup из close-хелперов
   const anyModalOpen = showGameForm || showTournamentForm || managingTournamentId !== null;
   useEscapeKey(useCallback(() => {
     if (managingTournamentId !== null) {
@@ -1559,7 +1559,7 @@ export function AdminPanel() {
             </select>
           </div>
 
-          {/* Loading state — only show after 1s delay */}
+          {/* Loading state - показываем только после 1s задержки */}
           {showLoadingPrograms && (
             <div className="text-center py-8 text-gray-400">
               Загрузка программ...

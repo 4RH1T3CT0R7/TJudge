@@ -171,10 +171,10 @@ func TestValidateUsername_TooLong(t *testing.T) {
 
 func TestValidateUsername_InvalidCharacters(t *testing.T) {
 	invalidUsernames := []string{
-		"user name",    // space
-		"user@name",    // special char
-		"user.name",    // dot
-		"пользователь", // cyrillic
+		"user name",    // пробел
+		"user@name",    // спецсимвол
+		"user.name",    // точка
+		"пользователь", // кириллица
 	}
 
 	for _, username := range invalidUsernames {

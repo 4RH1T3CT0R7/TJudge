@@ -9,13 +9,13 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 )
 
-// AuditLogReader — что нужно endpoint'у от репозитория.
+// AuditLogReader описывает то, что нужно эндпоинту от репозитория.
 type AuditLogReader interface {
 	List(ctx context.Context, limit int) ([]*domain.AuditLogEntry, error)
 }
 
 // AuditHandler отдаёт записи admin audit log'а.
-// P1.12: endpoint GET /admin/audit — только для admin'ов (middleware в routes.go).
+// Эндпоинт GET /admin/audit доступен только админам (middleware в routes.go).
 type AuditHandler struct {
 	repo AuditLogReader
 	log  *logger.Logger

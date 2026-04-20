@@ -349,7 +349,7 @@ func TestE2E_TournamentGames(t *testing.T) {
 		err = client.parseResponse(resp, &games)
 		require.NoError(t, err)
 
-		// A fresh tournament may return null (nil slice) or empty array — both are valid
+		// A fresh tournament may return null (nil slice) or empty array - both are valid
 		t.Logf("Tournament %s has %d games", tournamentID, len(games))
 	})
 

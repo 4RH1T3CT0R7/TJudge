@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockAuthService implements middleware.AuthService for testing
+// MockAuthService реализует middleware.AuthService для тестов
 type MockAuthService struct {
 	mock.Mock
 }
@@ -101,7 +101,7 @@ func TestAuth_InvalidTokenFormat(t *testing.T) {
 		t.Error("Handler should not be called")
 	}))
 
-	// Test with missing "Bearer" prefix
+	// Тест с отсутствующим префиксом "Bearer"
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "invalid-token")
 	rr := httptest.NewRecorder()
@@ -169,7 +169,7 @@ func TestAuth_TokenFromWebSocketProtocol(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Token in Sec-WebSocket-Protocol header (for WebSocket)
+	// Токен в заголовке Sec-WebSocket-Protocol (для WebSocket)
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Sec-WebSocket-Protocol", "access_token.ws-token")
 	rr := httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestOptionalAuth_InvalidToken(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	// Should still pass (optional auth)
+	// Всё равно должен пройти (опциональная auth)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	mockAuth.AssertExpectations(t)
 }
@@ -278,13 +278,13 @@ func TestOptionalAuth_InvalidToken(t *testing.T) {
 func TestGetUserID(t *testing.T) {
 	userID := uuid.New()
 
-	// With user ID in context
+	// С user ID в контексте
 	ctx := context.WithValue(context.Background(), middleware.UserIDKey, userID)
 	gotID, ok := middleware.GetUserID(ctx)
 	assert.True(t, ok)
 	assert.Equal(t, userID, gotID)
 
-	// Without user ID in context
+	// Без user ID в контексте
 	emptyCtx := context.Background()
 	_, ok = middleware.GetUserID(emptyCtx)
 	assert.False(t, ok)
@@ -293,13 +293,13 @@ func TestGetUserID(t *testing.T) {
 func TestRequireUserID(t *testing.T) {
 	userID := uuid.New()
 
-	// With user ID in context
+	// С user ID в контексте
 	ctx := context.WithValue(context.Background(), middleware.UserIDKey, userID)
 	gotID, err := middleware.RequireUserID(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, userID, gotID)
 
-	// Without user ID in context
+	// Без user ID в контексте
 	emptyCtx := context.Background()
 	_, err = middleware.RequireUserID(emptyCtx)
 	assert.Error(t, err)
@@ -365,7 +365,7 @@ func TestOptionalAuth_BlacklistCheckError(t *testing.T) {
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, assert.AnError)
 
 	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Should proceed as anonymous — no user ID in context
+		// Должен продолжить как анонимный запрос: user ID в контексте нет
 		_, ok := middleware.GetUserID(r.Context())
 		assert.False(t, ok, "User ID should not be in context when blacklist check fails")
 
@@ -442,7 +442,7 @@ func TestAuth_WebSocket_MultipleProtocols(t *testing.T) {
 	userID := uuid.New()
 	claims := &auth.Claims{UserID: userID, Username: "wsuser", Role: domain.RoleUser}
 
-	// The middleware splits comma-separated protocols and finds "access_token.validtoken123"
+	// Middleware разбивает protocols через запятую и находит "access_token.validtoken123"
 	mockAuth.On("ValidateToken", "validtoken123").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "validtoken123").Return(false, nil)
 

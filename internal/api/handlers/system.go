@@ -13,7 +13,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-// SystemMetrics represents system resource metrics
+// SystemMetrics описывает метрики системных ресурсов
 type SystemMetrics struct {
 	CPU         CPUMetrics        `json:"cpu"`
 	Memory      MemoryMetrics     `json:"memory"`
@@ -23,7 +23,7 @@ type SystemMetrics struct {
 	Temperature []TemperatureInfo `json:"temperature,omitempty"`
 }
 
-// CPUMetrics represents CPU usage metrics
+// CPUMetrics описывает метрики использования CPU
 type CPUMetrics struct {
 	UsagePercent float64   `json:"usage_percent"`
 	Cores        int       `json:"cores"`
@@ -31,7 +31,7 @@ type CPUMetrics struct {
 	PerCore      []float64 `json:"per_core,omitempty"`
 }
 
-// MemoryMetrics represents memory usage metrics
+// MemoryMetrics описывает метрики использования памяти
 type MemoryMetrics struct {
 	Total       uint64  `json:"total"`
 	Used        uint64  `json:"used"`
@@ -39,7 +39,7 @@ type MemoryMetrics struct {
 	UsedPercent float64 `json:"used_percent"`
 }
 
-// DiskMetrics represents disk usage metrics
+// DiskMetrics описывает метрики использования диска
 type DiskMetrics struct {
 	Total       uint64  `json:"total"`
 	Used        uint64  `json:"used"`
@@ -48,7 +48,7 @@ type DiskMetrics struct {
 	Path        string  `json:"path"`
 }
 
-// HostMetrics represents host information
+// HostMetrics описывает информацию о хосте
 type HostMetrics struct {
 	Hostname        string `json:"hostname"`
 	Platform        string `json:"platform"`
@@ -58,7 +58,7 @@ type HostMetrics struct {
 	Uptime          uint64 `json:"uptime"`
 }
 
-// GoMetrics represents Go runtime metrics
+// GoMetrics описывает метрики Go runtime
 type GoMetrics struct {
 	Version    string `json:"version"`
 	Goroutines int    `json:"goroutines"`
@@ -68,25 +68,25 @@ type GoMetrics struct {
 	GOMAXPROCS int    `json:"gomaxprocs"`
 }
 
-// TemperatureInfo represents temperature sensor data
+// TemperatureInfo описывает данные датчика температуры
 type TemperatureInfo struct {
 	SensorKey   string  `json:"sensor_key"`
 	Temperature float64 `json:"temperature"`
 }
 
-// SystemHandler handles system-related API requests
+// SystemHandler обрабатывает system-related API-запросы
 type SystemHandler struct {
 	log *logger.Logger
 }
 
-// NewSystemHandler creates a new system handler
+// NewSystemHandler создаёт новый system handler
 func NewSystemHandler(log *logger.Logger) *SystemHandler {
 	return &SystemHandler{
 		log: log,
 	}
 }
 
-// GetMetrics returns system metrics
+// GetMetrics возвращает системные метрики
 // @Summary Системные метрики
 // @Description Возвращает метрики CPU, памяти, диска, Go runtime (только для админов)
 // @Tags system
@@ -99,13 +99,13 @@ func NewSystemHandler(log *logger.Logger) *SystemHandler {
 func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := SystemMetrics{}
 
-	// CPU metrics
+	// Метрики CPU
 	cpuPercent, err := cpu.Percent(100*time.Millisecond, false)
 	if err == nil && len(cpuPercent) > 0 {
 		metrics.CPU.UsagePercent = cpuPercent[0]
 	}
 
-	// Per-core CPU usage
+	// Загрузка CPU по ядрам
 	cpuPerCore, err := cpu.Percent(100*time.Millisecond, true)
 	if err == nil {
 		metrics.CPU.PerCore = cpuPerCore
@@ -113,13 +113,13 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	metrics.CPU.Cores = runtime.NumCPU()
 
-	// CPU model name
+	// Модель CPU
 	cpuInfo, err := cpu.Info()
 	if err == nil && len(cpuInfo) > 0 {
 		metrics.CPU.ModelName = cpuInfo[0].ModelName
 	}
 
-	// Memory metrics
+	// Метрики памяти
 	vmStat, err := mem.VirtualMemory()
 	if err == nil {
 		metrics.Memory.Total = vmStat.Total
@@ -128,7 +128,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		metrics.Memory.UsedPercent = vmStat.UsedPercent
 	}
 
-	// Disk metrics - try multiple paths to find the main system disk
+	// Метрики диска - пробуем несколько путей, чтобы найти основной системный диск
 	diskPaths := []string{"/System/Volumes/Data", "/", os.Getenv("HOME")}
 	if runtime.GOOS != "darwin" {
 		diskPaths = []string{"/"}
@@ -136,7 +136,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	for _, diskPath := range diskPaths {
 		diskStat, err := disk.Usage(diskPath)
-		if err == nil && diskStat.Total > 50*1024*1024*1024 { // At least 50GB to be considered real disk
+		if err == nil && diskStat.Total > 50*1024*1024*1024 { // минимум 50GB, чтобы считаться реальным диском
 			metrics.Disk.Total = diskStat.Total
 			metrics.Disk.Used = diskStat.Used
 			metrics.Disk.Free = diskStat.Free
@@ -146,7 +146,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Host information
+	// Информация о хосте
 	hostInfo, err := host.Info()
 	if err == nil {
 		metrics.Host.Hostname = hostInfo.Hostname
@@ -157,7 +157,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		metrics.Host.Uptime = hostInfo.Uptime
 	}
 
-	// Go runtime metrics
+	// Метрики Go runtime
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	metrics.Go.Version = runtime.Version()
@@ -167,7 +167,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics.Go.NumGC = memStats.NumGC
 	metrics.Go.GOMAXPROCS = runtime.GOMAXPROCS(0)
 
-	// Temperature sensors (may not be available on all systems)
+	// Датчики температуры (доступны не на всех системах)
 	temps, err := host.SensorsTemperatures()
 	if err == nil {
 		for _, temp := range temps {
@@ -183,7 +183,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, metrics)
 }
 
-// GetHealth returns system health status
+// GetHealth возвращает статус здоровья системы
 // @Summary Состояние системы
 // @Description Возвращает статус здоровья системы (только для админов)
 // @Tags system
@@ -205,7 +205,7 @@ func (h *SystemHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		health["hostname"] = hostname
 	}
 
-	// Basic resource check
+	// Базовая проверка ресурсов
 	vmStat, err := mem.VirtualMemory()
 	if err == nil {
 		if vmStat.UsedPercent > 90 {

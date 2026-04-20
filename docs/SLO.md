@@ -1,13 +1,13 @@
-# TJudge — Service Level Objectives
+# TJudge - Service Level Objectives
 
-Этот документ фиксирует пороги качества для мониторинга и алертинга. Значения — стартовые; уточняются после 1-2 месяцев работы в проде.
+Этот документ фиксирует пороги качества для мониторинга и алертинга. Значения стартовые, уточняются после 1-2 месяцев работы в проде.
 
 ## 1. SLI (Service Level Indicators)
 
 | SLI | Источник | Описание |
 |---|---|---|
 | API availability | Prometheus: `up{job="api"}` | 1 = доступен, 0 = нет |
-| API request success | `tjudge_http_requests_total{status!~"5.."}` / total | доля нe-5xx ответов |
+| API request success | `tjudge_http_requests_total{status!~"5.."}` / total | доля не-5xx ответов |
 | API P99 latency | `tjudge_http_request_duration_seconds` histogram | 99-й перцентиль |
 | Match processing latency | `tjudge_match_duration_seconds` | e2e от dequeue до результата |
 | Queue oldest age | derived: max(`created_at` of pending match) | насколько старое застряло |
@@ -31,9 +31,9 @@
 
 **Availability 99.5% за 28 дней** ≈ 3h 20m budget. Правила:
 - Если budget выработан, запрет на feature-релизы; только bugfixes и reliability-фиксы.
-- Sanctum: 25% budget (50m) — тревожный сигнал, review в следующем planning.
+- Sanctum: 25% budget (50m) - тревожный сигнал, ревью в следующем планировании.
 
-## 4. Alerts (Prometheus → Alertmanager)
+## 4. Alerts (Prometheus и Alertmanager)
 
 Примерные rules (`deployments/prometheus/alerts/*.yml`):
 
@@ -77,7 +77,7 @@
 | Match create (БД) | 2 ms | DB |
 | Worker pool 100 matches | 100 ms | Worker |
 
-Регрессия > 10% в PR → требуется объяснение/апрув.
+Регрессия > 10% в PR требует объяснения или апрува.
 
 ## 6. Security-SLO
 
@@ -90,6 +90,6 @@
 
 ## 7. Capacity planning
 
-- PostgreSQL: ~1 KB / match. При 1000 матчей/день → ~35 MB/год. Retention не требуется на 5+ лет.
+- PostgreSQL: ~1 KB / match. При 1000 матчей в день получается ~35 MB в год. Retention не требуется на 5+ лет.
 - Redis: queue и cache ~100 MB при нормальной нагрузке. Fatal при OOM; следить за `redis_memory_used_bytes`.
-- Disk: `backups_data` растёт ~RETENTION_DAYS × ~среднего dump-а. При > 10 GB — включить rclone sync.
+- Disk: `backups_data` растёт ~RETENTION_DAYS × ~среднего дампа. При > 10 GB нужно включить rclone sync.

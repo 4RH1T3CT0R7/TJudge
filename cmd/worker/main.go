@@ -113,7 +113,7 @@ func main() {
 		events.MatchResultProcessed{},
 	)
 
-	// Redis Pub/Sub bridge: forward events to API process for WebSocket broadcast
+	// Мост Redis Pub/Sub: пересылает события в процесс API для рассылки по WebSocket.
 	redisEventPub := events.NewRedisEventPublisher(redisCache, log)
 	eventBus.Subscribe(
 		redisEventPub,
@@ -328,7 +328,7 @@ func tryBuildWithCompose(log *logger.Logger) bool {
 
 	for _, path := range composePaths {
 		if _, err := os.Stat(path); err == nil {
-			// #nosec G204 -- "docker compose" hardcoded; path — hardcoded список
+			// #nosec G204 -- "docker compose" hardcoded; path - hardcoded список
 			// composePaths, не из внешнего input.
 			cmd := exec.Command("docker", "compose", "-f", path, "build", "tjudge-cli")
 			cmd.Stdout = os.Stdout
@@ -370,7 +370,7 @@ func tryBuildDirectly(log *logger.Logger) bool {
 	for _, paths := range dockerfilePaths {
 		if _, err := os.Stat(paths.dockerfile); err == nil {
 			// #nosec G204 -- все args hardcoded (docker, build, -t, tag);
-			// paths.dockerfile/context — hardcoded struct-literal.
+			// paths.dockerfile/context - hardcoded struct-literal.
 			cmd := exec.Command("docker", "build",
 				"-t", "tjudge-cli:latest",
 				"-f", paths.dockerfile,

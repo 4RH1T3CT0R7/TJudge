@@ -158,7 +158,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // Handle history navigation from state — syncs external state to local input
+  // Обработка навигации по истории из state - синхронизирует внешний state с локальным input
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (state.historyIndex >= 0 && state.historyIndex < state.commandHistory.length) {
@@ -277,7 +277,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
           </div>
         )}
 
-        {/* Tab completion popup — in flow above input to avoid clipping by overflow container */}
+        {/* Tab completion popup - в потоке над input, чтобы не обрезаться overflow-контейнером */}
         <TabPopup matches={tabMatches} selected={tabIndex} />
 
         {/* Input line */}

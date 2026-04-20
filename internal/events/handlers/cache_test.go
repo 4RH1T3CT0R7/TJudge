@@ -6,6 +6,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ func newTestLogger(t *testing.T) *logger.Logger {
 	return log
 }
 
-// --- Mock TournamentCacheWriter ---
+// --- Мок TournamentCacheWriter ---
 
 type mockTournamentCache struct {
 	mock.Mock
@@ -36,7 +37,7 @@ func (m *mockTournamentCache) Invalidate(ctx context.Context, tournamentID uuid.
 	return args.Error(0)
 }
 
-// --- Mock LeaderboardCacheWriter ---
+// --- Мок LeaderboardCacheWriter ---
 
 type mockLeaderboardCache struct {
 	mock.Mock
@@ -44,6 +45,11 @@ type mockLeaderboardCache struct {
 
 func (m *mockLeaderboardCache) UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error {
 	args := m.Called(ctx, tournamentID, programID, rating)
+	return args.Error(0)
+}
+
+func (m *mockLeaderboardCache) UpdateRatingsBatch(ctx context.Context, updates []cache.RatingUpdate) error {
+	args := m.Called(ctx, updates)
 	return args.Error(0)
 }
 
@@ -57,7 +63,7 @@ func (m *mockLeaderboardCache) InvalidateFullLeaderboard(ctx context.Context, to
 	return args.Error(0)
 }
 
-// --- TournamentCacheHandler tests ---
+// --- Тесты TournamentCacheHandler ---
 
 func TestTournamentCacheHandler_TournamentCreated(t *testing.T) {
 	tc := &mockTournamentCache{}
@@ -152,7 +158,7 @@ func TestTournamentCacheHandler_UnexpectedEvent(t *testing.T) {
 	assert.Contains(t, err.Error(), "unexpected event type")
 }
 
-// --- LeaderboardCacheHandler tests ---
+// --- Тесты LeaderboardCacheHandler ---
 
 func TestLeaderboardCacheHandler_ParticipantJoined(t *testing.T) {
 	lc := &mockLeaderboardCache{}
@@ -179,8 +185,11 @@ func TestLeaderboardCacheHandler_MatchResultProcessed(t *testing.T) {
 	tid := uuid.New()
 	p1 := uuid.New()
 	p2 := uuid.New()
-	lc.On("UpdateRating", mock.Anything, tid, p1, 1520).Return(nil)
-	lc.On("UpdateRating", mock.Anything, tid, p2, 1480).Return(nil)
+	expected := []cache.RatingUpdate{
+		{TournamentID: tid, ProgramID: p1, Rating: 1520},
+		{TournamentID: tid, ProgramID: p2, Rating: 1480},
+	}
+	lc.On("UpdateRatingsBatch", mock.Anything, expected).Return(nil)
 	lc.On("InvalidateFullLeaderboard", mock.Anything, tid).Return(nil)
 
 	err := h.Handle(context.Background(), events.MatchResultProcessed{

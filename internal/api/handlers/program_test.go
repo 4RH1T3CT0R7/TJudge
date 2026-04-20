@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockProgramRepository mocks the program repository
+// MockProgramRepository - мок program-репозитория
 type MockProgramRepository struct {
 	mock.Mock
 }
@@ -84,7 +84,7 @@ func (m *MockProgramRepository) ClearErrorMessages(ctx context.Context, tourname
 	return args.Get(0).(int64), args.Error(1)
 }
 
-// MockTeamMembershipChecker mocks the team membership checker
+// MockTeamMembershipChecker - мок чекера членства в команде
 type MockTeamMembershipChecker struct {
 	mock.Mock
 }
@@ -122,7 +122,7 @@ func TestProgramHandler_Create(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/programs", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 
-		// Add user ID to context
+		// Добавляем user ID в контекст
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
 		req = req.WithContext(ctx)
 
@@ -1312,7 +1312,7 @@ func TestProgramHandler_Download(t *testing.T) {
 	})
 }
 
-// MockRoundCompletionChecker mocks the RoundCompletionChecker interface
+// MockRoundCompletionChecker - мок интерфейса RoundCompletionChecker
 type MockRoundCompletionChecker struct {
 	mock.Mock
 }
@@ -1322,7 +1322,7 @@ func (m *MockRoundCompletionChecker) IsRoundCompleted(ctx context.Context, tourn
 	return args.Bool(0), args.Error(1)
 }
 
-// MockMatchExistenceChecker mocks the MatchExistenceChecker interface
+// MockMatchExistenceChecker - мок интерфейса MatchExistenceChecker
 type MockMatchExistenceChecker struct {
 	mock.Mock
 }
@@ -1384,7 +1384,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 
 		userID := uuid.New()
 
-		// Multipart form with file but no team_id, tournament_id, game_id
+		// Multipart-форма с файлом, но без team_id, tournament_id, game_id
 		req := createMultipartRequest(t, map[string]string{
 			"name": "My Strategy",
 		}, "strategy.py", []byte("print('hello')"))
@@ -1739,14 +1739,14 @@ func TestCanonicalExtension(t *testing.T) {
 }
 
 // TestJavaClassNameRegex блокирует shell-метасимволы в Java class name
-// (P0.1: shell injection в Java wrapper).
+// (защита от shell injection в Java wrapper).
 func TestJavaClassNameRegex(t *testing.T) {
-	// OK
+	// OK - валидные имена
 	okNames := []string{"Main", "Solution1", "_Hidden", "$Dollar", "A1_b2"}
 	for _, n := range okNames {
 		assert.True(t, javaClassNameRe.MatchString(n), "valid identifier rejected: %q", n)
 	}
-	// FAIL — всё что содержит shell-метасимволы или недопустимые символы
+	// FAIL - всё, что содержит shell-метасимволы или недопустимые символы
 	badNames := []string{
 		"Main;rm -rf /",
 		"A|B",
@@ -1764,7 +1764,7 @@ func TestJavaClassNameRegex(t *testing.T) {
 	}
 }
 
-// TestExtractJavaClassName — UR bug_008: извлечение declared class name
+// TestExtractJavaClassName проверяет извлечение declared class name
 // из Java-source для корректного переименования файла перед javac.
 func TestExtractJavaClassName(t *testing.T) {
 	cases := []struct {

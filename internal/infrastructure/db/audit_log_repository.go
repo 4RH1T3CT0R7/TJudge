@@ -7,7 +7,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
-// AuditLogRepository — репозиторий для audit-лога (P1.12).
+// AuditLogRepository - репозиторий для audit-лога.
 type AuditLogRepository struct {
 	db *DB
 }

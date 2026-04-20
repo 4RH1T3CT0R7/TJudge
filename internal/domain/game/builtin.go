@@ -1,7 +1,7 @@
 package game
 
-// RegisterBuiltinGames registers all 5 built-in game plugins supported by tjudge-cli.
-// Panics on registration error (programming bug — duplicate names, nil plugin, etc.).
+// RegisterBuiltinGames регистрирует все 5 встроенных игровых плагинов, поддерживаемых tjudge-cli.
+// Паникует при ошибке регистрации (программная ошибка - дубликат имён, nil-плагин и т.п.).
 func RegisterBuiltinGames(registry *Registry) {
 	must := func(err error) {
 		if err != nil {

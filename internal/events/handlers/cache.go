@@ -7,31 +7,33 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 )
 
-// TournamentCacheWriter is the subset of tournament cache used by event handlers.
+// TournamentCacheWriter - подмножество кэша турниров, используемое обработчиками событий.
 type TournamentCacheWriter interface {
 	Set(ctx context.Context, tournament *domain.Tournament) error
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// LeaderboardCacheWriter is the subset of leaderboard cache used by event handlers.
+// LeaderboardCacheWriter - подмножество кэша лидерборда, используемое обработчиками событий.
 type LeaderboardCacheWriter interface {
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
+	UpdateRatingsBatch(ctx context.Context, updates []cache.RatingUpdate) error
 	Clear(ctx context.Context, tournamentID uuid.UUID) error
 	InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// TournamentCacheHandler handles tournament cache invalidation in response to events.
+// TournamentCacheHandler инвалидирует кэш турниров в ответ на события.
 type TournamentCacheHandler struct {
 	tournamentCache  TournamentCacheWriter
 	leaderboardCache LeaderboardCacheWriter
 	log              *logger.Logger
 }
 
-// NewTournamentCacheHandler creates a handler that manages tournament cache side-effects.
+// NewTournamentCacheHandler создаёт handler, управляющий побочными эффектами кэша турниров.
 func NewTournamentCacheHandler(tc TournamentCacheWriter, lc LeaderboardCacheWriter, log *logger.Logger) *TournamentCacheHandler {
 	return &TournamentCacheHandler{
 		tournamentCache:  tc,
@@ -71,13 +73,13 @@ func (h *TournamentCacheHandler) Handle(ctx context.Context, event any) error {
 	}
 }
 
-// LeaderboardCacheHandler handles leaderboard cache updates in response to events.
+// LeaderboardCacheHandler обновляет кэш лидерборда в ответ на события.
 type LeaderboardCacheHandler struct {
 	cache LeaderboardCacheWriter
 	log   *logger.Logger
 }
 
-// NewLeaderboardCacheHandler creates a handler that manages leaderboard cache side-effects.
+// NewLeaderboardCacheHandler создаёт handler, управляющий побочными эффектами кэша лидерборда.
 func NewLeaderboardCacheHandler(cache LeaderboardCacheWriter, log *logger.Logger) *LeaderboardCacheHandler {
 	return &LeaderboardCacheHandler{cache: cache, log: log}
 }
@@ -91,9 +93,13 @@ func (h *LeaderboardCacheHandler) Handle(ctx context.Context, event any) error {
 		)
 
 	case events.MatchResultProcessed:
+		// Два ZADD через пайплайн: один RTT вместо двух.
+		updates := []cache.RatingUpdate{
+			{TournamentID: e.TournamentID, ProgramID: e.Program1ID, Rating: e.NewRating1},
+			{TournamentID: e.TournamentID, ProgramID: e.Program2ID, Rating: e.NewRating2},
+		}
 		return errors.Join(
-			h.cache.UpdateRating(ctx, e.TournamentID, e.Program1ID, e.NewRating1),
-			h.cache.UpdateRating(ctx, e.TournamentID, e.Program2ID, e.NewRating2),
+			h.cache.UpdateRatingsBatch(ctx, updates),
 			h.cache.InvalidateFullLeaderboard(ctx, e.TournamentID),
 		)
 

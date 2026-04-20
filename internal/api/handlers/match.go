@@ -53,8 +53,8 @@ type MatchHandler struct {
 	log           *logger.Logger
 }
 
-// NewMatchHandler creates a match handler. Optional dependencies (programLookup,
-// queueManager) can be nil — the handler gracefully degrades when they are absent.
+// NewMatchHandler создаёт match handler. Опциональные зависимости (programLookup,
+// queueManager) могут быть nil - handler корректно деградирует при их отсутствии.
 func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
 	return &MatchHandler{
 		matchRepo:     matchRepo,
@@ -194,7 +194,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
 	filter := domain.MatchFilter{}
 
-	// Tournament ID filter
+	// Фильтр по Tournament ID
 	if tournamentIDStr := r.URL.Query().Get("tournament_id"); tournamentIDStr != "" {
 		id, err := uuid.Parse(tournamentIDStr)
 		if err != nil {
@@ -204,7 +204,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.TournamentID = &id
 	}
 
-	// Program ID filter
+	// Фильтр по Program ID
 	if programIDStr := r.URL.Query().Get("program_id"); programIDStr != "" {
 		id, err := uuid.Parse(programIDStr)
 		if err != nil {
@@ -214,7 +214,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.ProgramID = &id
 	}
 
-	// Status filter
+	// Фильтр по статусу
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := domain.MatchStatus(status)
 		switch s {
@@ -226,10 +226,10 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Game type filter
+	// Фильтр по типу игры
 	filter.GameType = r.URL.Query().Get("game_type")
 
-	// Pagination
+	// Пагинация
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 	filter.Limit = pg.Limit
 	filter.Offset = pg.Offset

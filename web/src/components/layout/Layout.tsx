@@ -36,7 +36,7 @@ export function Layout() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary-600 focus:text-white focus:rounded-lg">
         Перейти к содержимому
       </a>
-      {/* Glassmorphism Header — no border */}
+      {/* Glassmorphism Header - no border */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl" style={{ backgroundColor: 'rgba(10,10,11,0.8)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative flex h-16 items-center justify-between">
@@ -129,7 +129,7 @@ export function Layout() {
         <AnimatedOutlet />
       </main>
 
-      {/* Minimal Footer — no border */}
+      {/* Minimal Footer - no border */}
       <footer className="mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

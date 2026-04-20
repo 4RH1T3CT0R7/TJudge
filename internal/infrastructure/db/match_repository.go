@@ -95,7 +95,7 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 }
 
 // DeleteBatch удаляет матчи по списку ID одним запросом.
-// Используется для компенсации (rollback) при ошибке EnqueueBatch (P0.5).
+// Используется для компенсации (rollback) при ошибке EnqueueBatch.
 // Идемпотентен: отсутствующие ID просто пропускаются без ошибки.
 func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
 	if len(ids) == 0 {

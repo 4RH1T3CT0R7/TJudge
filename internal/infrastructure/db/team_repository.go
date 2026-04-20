@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// orderByCreatedAtDesc — SQL-фрагмент сортировки по дате создания
+// orderByCreatedAtDesc - SQL-фрагмент сортировки по дате создания
 const orderByCreatedAtDesc = " ORDER BY created_at DESC"
 
 // TeamRepository - репозиторий для работы с командами
@@ -595,7 +595,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 
 	if len(programIDs) == 0 {
-		// Нет программ — просто коммитим дисквалификацию
+		// Нет программ, просто коммитим дисквалификацию
 		if err := tx.Commit(); err != nil {
 			return 0, 0, 0, errors.Wrap(err, "failed to commit transaction")
 		}

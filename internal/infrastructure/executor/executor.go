@@ -202,7 +202,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			}
 			return nil, fmt.Errorf("error waiting for container: %w", err)
 		}
-		// errCh fired with nil error — unexpected, treat as error
+		// errCh сработал с nil-ошибкой - неожиданно, считаем это ошибкой
 		return nil, fmt.Errorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
 		// Получаем логи контейнера
@@ -248,10 +248,10 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	}
 	defer logs.Close()
 
-	// Читаем логи используя stdcopy для демультиплексирования.
-	// P1.4: раньше общий LimitReader на 2 MB → при большом stdout stderr
-	// усекался до пустого, теряя сообщение об ошибке. Теперь каждый поток
-	// имеет независимый лимит 1 MB через limitWriter.
+	// Читаем логи, используя stdcopy для демультиплексирования.
+	// Раздельные читатели по 1 МБ на stdout и stderr через limitWriter:
+	// общий LimitReader при большом stdout молча обрезал stderr до нуля,
+	// теряя сообщение об ошибке.
 	const maxLogSize = 1 << 20
 	var stdoutBuf, stderrBuf bytes.Buffer
 	stdoutW := &limitWriter{w: &stdoutBuf, n: maxLogSize}
@@ -265,8 +265,8 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 
 // limitWriter оборачивает io.Writer и ограничивает общее число записанных байт.
 // Когда лимит исчерпан, последующие Write просто возвращают len(p) без ошибки,
-// чтобы не прерывать чтение из docker-логов (партнёрский поток может
-// продолжать писать — его лимит независим).
+// чтобы не прерывать чтение из docker-логов: партнёрский поток может
+// продолжать писать, его лимит независим.
 type limitWriter struct {
 	w io.Writer
 	n int // оставшийся бюджет в байтах
@@ -450,7 +450,7 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 		return e.containerPath + cleaned[len(e.programsPath):], nil
 	}
 
-	// Path is outside programsPath — return error
+	// Путь вне programsPath - возвращаем ошибку
 	return "", fmt.Errorf("path %q is outside programs directory %q", cleaned, e.programsPath)
 }
 

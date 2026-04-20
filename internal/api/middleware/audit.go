@@ -65,7 +65,7 @@ func (a *AuditLogger) Close() { close(a.ch) }
 // Dropped возвращает число записей, отброшенных из-за переполнения буфера.
 func (a *AuditLogger) Dropped() int64 { return a.dropped.Load() }
 
-// enqueue неблокирующе помещает запись в канал; при переполнении — drop.
+// enqueue неблокирующе помещает запись в канал; при переполнении - drop.
 func (a *AuditLogger) enqueue(e *domain.AuditLogEntry) {
 	select {
 	case a.ch <- e:
@@ -92,13 +92,13 @@ func (w *auditResponseWriter) WriteHeader(code int) {
 // Audit middleware пишет в audit-лог все state-changing запросы
 // (POST/PUT/PATCH/DELETE) от пользователей с ролью admin.
 //
-// Вызывать ПОСЛЕ auth middleware — читает UserIDKey и RoleKey из контекста.
+// Вызывать ПОСЛЕ auth middleware: читает UserIDKey и RoleKey из контекста.
 //
-// P1.12: audit trail для compliance и incident response.
+// Audit trail нужен для compliance и incident response.
 func Audit(a *AuditLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Только mutation-методы (POST/PUT/PATCH/DELETE) — читать-запросы не аудитим.
+			// Только mutation-методы (POST/PUT/PATCH/DELETE); read-запросы не аудитим.
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
 				next.ServeHTTP(w, r)
 				return

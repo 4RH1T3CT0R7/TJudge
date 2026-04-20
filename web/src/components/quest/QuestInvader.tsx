@@ -22,7 +22,7 @@ export function QuestInvader({ state }: QuestInvaderProps) {
   const prevJumpRef = useRef(invaderJump);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Trigger jump animation — timer-driven state transition
+  // Запуск анимации прыжка - переход состояния по таймеру
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (invaderJump !== prevJumpRef.current) {
@@ -33,7 +33,7 @@ export function QuestInvader({ state }: QuestInvaderProps) {
     }
   }, [invaderJump]);
 
-  // Shake on attack — timer-driven state transition
+  // Дрожание при атаке - переход состояния по таймеру
   useEffect(() => {
     if (invaderPose === 'attack') {
       setShakeTrigger(true);

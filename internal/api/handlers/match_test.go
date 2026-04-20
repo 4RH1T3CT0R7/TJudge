@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockMatchRepository mocks the match repository
+// MockMatchRepository - мок match-репозитория
 type MockMatchRepository struct {
 	mock.Mock
 }
@@ -56,7 +56,7 @@ func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	return args.Get(0).([]*domain.Match), args.Error(1)
 }
 
-// MockMatchCache mocks the match cache
+// MockMatchCache - мок match-кэша
 type MockMatchCache struct {
 	mock.Mock
 }
@@ -124,7 +124,7 @@ func TestMatchHandler_Get(t *testing.T) {
 		assert.Equal(t, cachedMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
-		// Repository should not be called if cache hit
+		// Репозиторий не должен вызываться при попадании в кэш
 		mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 	})
 
@@ -459,7 +459,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 	})
 }
 
-// MockMatchQueueManager mocks the queue manager interface
+// MockMatchQueueManager - мок интерфейса queue manager
 type MockMatchQueueManager struct {
 	mock.Mock
 }
@@ -482,7 +482,7 @@ func (m *MockMatchQueueManager) PurgeInvalidMatches(ctx context.Context, validat
 	return args.Get(0).(int64), args.Error(1)
 }
 
-// MockMatchProgramLookup mocks the program lookup interface
+// MockMatchProgramLookup - мок интерфейса program lookup
 type MockMatchProgramLookup struct {
 	mock.Mock
 }
@@ -795,7 +795,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		var response domain.Match
 		decodeJSONData(t, w.Body, &response)
-		// Empty error message is treated as no error - returned as-is
+		// Пустое сообщение об ошибке трактуется как отсутствие ошибки - возвращается как есть
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "", *response.ErrorMessage)
 
@@ -876,7 +876,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		// The failed program is program2 (winner=1 means program1 won)
+		// Упавшая программа - program2 (winner=1 значит победил program1)
 		failedProgram := &domain.Program{
 			ID:     program2ID,
 			UserID: ownerID,
@@ -937,8 +937,8 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		// The failed program is program2 (winner=1 means program1 won)
-		// The owner of program2 is programOwnerID, but the requesting user is otherUserID
+		// Упавшая программа - program2 (winner=1 значит победил program1).
+		// Владелец program2 - programOwnerID, но запрашивающий пользователь - otherUserID.
 		failedProgram := &domain.Program{
 			ID:     program2ID,
 			UserID: programOwnerID,
@@ -998,7 +998,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		// The failed program is program1 (winner=2 means program2 won)
+		// Упавшая программа - program1 (winner=2 значит победил program2)
 		failedProgram := &domain.Program{
 			ID:     program1ID,
 			UserID: ownerID,
@@ -1075,7 +1075,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		var response domain.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
-		// No winner means we cannot determine failed program, so error is hidden
+		// Без winner нельзя определить упавшую программу, поэтому ошибка скрыта
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
 
 		mockCache.AssertExpectations(t)
@@ -1109,7 +1109,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-		// Program lookup fails - error message should be hidden
+		// Program lookup падает - сообщение об ошибке должно быть скрыто
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(nil, errors.ErrNotFound.WithMessage("program not found"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
@@ -1140,7 +1140,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
-		// Handler without program lookup - errors should be returned as-is
+		// Handler без program lookup - ошибки возвращаются как есть
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
@@ -1179,7 +1179,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		var response domain.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
-		// Without program lookup, filterMatchError returns match as-is
+		// Без program lookup filterMatchError возвращает match как есть
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
 		mockCache.AssertExpectations(t)

@@ -46,36 +46,36 @@ func Wrap(err error, message string) error {
 // Предопределённые ошибки
 
 var (
-	// Auth errors
+	// Ошибки аутентификации
 	ErrUnauthorized       = New(http.StatusUnauthorized, "Unauthorized", nil)
 	ErrInvalidToken       = New(http.StatusUnauthorized, "Invalid token", nil)
 	ErrTokenExpired       = New(http.StatusUnauthorized, "Token expired", nil)
 	ErrInvalidCredentials = New(http.StatusUnauthorized, "Invalid credentials", nil)
 
-	// Validation errors
+	// Ошибки валидации
 	ErrValidation   = New(http.StatusBadRequest, "Validation failed", nil)
 	ErrInvalidInput = New(http.StatusBadRequest, "Invalid input", nil)
 	ErrBadRequest   = New(http.StatusBadRequest, "Bad request", nil)
 	ErrMissingField = New(http.StatusBadRequest, "Missing required field", nil)
 
-	// Resource errors
+	// Ошибки ресурсов
 	ErrNotFound      = New(http.StatusNotFound, "Resource not found", nil)
 	ErrAlreadyExists = New(http.StatusConflict, "Resource already exists", nil)
 	ErrConflict      = New(http.StatusConflict, "Conflict", nil)
 
-	// Permission errors
+	// Ошибки доступа
 	ErrForbidden        = New(http.StatusForbidden, "Forbidden", nil)
 	ErrPermissionDenied = New(http.StatusForbidden, "Permission denied", nil)
 
-	// Rate limiting errors
+	// Ошибки ограничения частоты запросов
 	ErrRateLimitExceeded = New(http.StatusTooManyRequests, "Rate limit exceeded", nil)
 
-	// Server errors
+	// Ошибки сервера
 	ErrInternal           = New(http.StatusInternalServerError, "Internal server error", nil)
 	ErrServiceUnavailable = New(http.StatusServiceUnavailable, "Service unavailable", nil)
 	ErrTimeout            = New(http.StatusGatewayTimeout, "Request timeout", nil)
 
-	// Business logic errors
+	// Ошибки бизнес-логики
 	ErrTournamentFull       = New(http.StatusConflict, "Tournament is full", nil)
 	ErrTournamentStarted    = New(http.StatusConflict, "Tournament already started", nil)
 	ErrTournamentNotStarted = New(http.StatusConflict, "Tournament not started yet", nil)

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// P2.15: image optimization — чтобы активировать, установите плагин:
+// Оптимизация изображений. Чтобы активировать, установите плагин:
 //   npm i -D vite-plugin-image-optimizer
 // и раскомментируйте импорт/плагин ниже. PNG-логотипы в /public получат
 // 20-30% экономии размера без потери визуального качества.

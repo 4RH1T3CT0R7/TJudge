@@ -16,11 +16,11 @@ export function useWebSocket({
   onOpen,
   onClose,
   onError,
-  enabled = false, // Disabled by default until server is properly configured
+  enabled = false, // По умолчанию выключено, пока сервер не настроен
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  // P2.12: online/offline awareness для UI + быстрый reconnect при возврате сети.
+  // Online/offline awareness для UI + быстрый reconnect при возврате сети.
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
@@ -30,17 +30,17 @@ export function useWebSocket({
   const mountedRef = useRef(true);
   const maxReconnectAttempts = 5;
 
-  // Store values in refs to avoid recreating functions
+  // Храним значения в refs, чтобы не пересоздавать функции
   const tournamentIdRef = useRef(tournamentId);
   const onMessageRef = useRef(onMessage);
   const onOpenRef = useRef(onOpen);
   const onCloseRef = useRef(onClose);
   const onErrorRef = useRef(onError);
 
-  // Ref to hold the connect function so onclose can reference it without forward declaration
+  // Ref для connect-функции, чтобы onclose мог ссылаться на неё без forward declaration
   const connectRef = useRef<() => void>(() => {});
 
-  // Update refs when values change
+  // Обновляем refs при смене значений
   useEffect(() => {
     tournamentIdRef.current = tournamentId;
     onMessageRef.current = onMessage;
@@ -50,37 +50,37 @@ export function useWebSocket({
   }, [tournamentId, onMessage, onOpen, onClose, onError]);
 
   const connect = useCallback(() => {
-    // Don't connect if unmounted
+    // Не коннектимся, если компонент размонтирован
     if (!mountedRef.current) {
       return;
     }
 
     const currentTournamentId = tournamentIdRef.current;
 
-    // Don't connect if no tournamentId
+    // Не коннектимся без tournamentId
     if (!currentTournamentId) {
       return;
     }
 
-    // Always get fresh token from localStorage
+    // Всегда берём свежий токен из localStorage
     const token = localStorage.getItem('access_token');
     if (!token) {
       return;
     }
 
-    // Close existing connection if any
+    // Закрываем существующее соединение, если есть
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
 
-    // Build WebSocket URL based on current location
+    // Собираем WebSocket URL на основе текущего location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/api/v1/ws/tournaments/${currentTournamentId}`;
 
-    // Send token via Sec-WebSocket-Protocol header instead of URL query string
-    // to avoid exposing JWT in browser history, server logs, and referrer headers
+    // Передаём токен через Sec-WebSocket-Protocol header вместо URL query string,
+    // чтобы не светить JWT в истории браузера, server logs и referrer headers
     const ws = new WebSocket(wsUrl, [`access_token.${token}`]);
 
     ws.onopen = () => {
@@ -100,10 +100,10 @@ export function useWebSocket({
       wsRef.current = null;
       onCloseRef.current?.();
 
-      // Don't reconnect if closed cleanly (code 1000) or max attempts reached
+      // Не реконнектимся, если закрыто чисто (code 1000) или достигнут лимит попыток
       if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
         reconnectAttempts.current++;
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        // Экспоненциальный backoff: 1s, 2s, 4s, 8s, 16s
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 16000);
         reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
       }
@@ -125,9 +125,9 @@ export function useWebSocket({
     };
 
     wsRef.current = ws;
-  }, []); // Empty deps - uses refs
+  }, []); // Пустые deps - используем refs
 
-  // Keep connectRef in sync with connect
+  // Держим connectRef в синхроне с connect
   useEffect(() => {
     connectRef.current = connect;
   });
@@ -142,7 +142,7 @@ export function useWebSocket({
       connectTimeoutRef.current = null;
     }
     if (wsRef.current) {
-      wsRef.current.close(1000); // Clean close
+      wsRef.current.close(1000); // Чистое закрытие
       wsRef.current = null;
     }
     setIsConnected(false);
@@ -154,8 +154,8 @@ export function useWebSocket({
     connect();
   }, [connect, disconnect]);
 
-  // P2.12: слушаем online/offline события браузера.
-  // При offline — закрываем WS и выставляем флаг, при online — быстрый reconnect
+  // Слушаем online/offline события браузера.
+  // При offline - закрываем WS и выставляем флаг, при online - быстрый reconnect
   // без exponential-backoff (не ждём 16s, пользователь уже вернул сеть).
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -163,14 +163,14 @@ export function useWebSocket({
     const handleOffline = () => {
       setIsOnline(false);
       if (wsRef.current) {
-        // UR bug_001: WebSocket.close() требует code=1000 ИЛИ 3000-4999 (WHATWG spec).
-        // 1001 ("going away") — это status code от сервера, не валидный аргумент
+        // WebSocket.close() требует code=1000 или 3000-4999 (WHATWG spec).
+        // 1001 ("going away") - это status code от сервера, не валидный аргумент
         // клиентского close(); передача 1001 бросает InvalidAccessError.
         // Используем 1000 (normal closure) как в disconnect() ниже.
         try {
           wsRef.current.close(1000);
         } catch (err) {
-          // Defensive: даже если какой-то агент нарушит spec — не ломаем UI.
+          // Defensive: даже если какой-то агент нарушит spec - не ломаем UI.
           console.warn('ws.close on offline failed', err);
         }
       }
@@ -192,31 +192,31 @@ export function useWebSocket({
     };
   }, [enabled]);
 
-  // Connect when tournamentId changes (with debounce)
+  // Коннектимся при изменении tournamentId (с debounce)
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    // Don't connect if disabled
+    // Не коннектимся, если отключено
     if (!enabled) {
       return;
     }
 
     mountedRef.current = true;
 
-    // Clear any pending connection
+    // Отменяем ожидающее подключение
     if (connectTimeoutRef.current) {
       clearTimeout(connectTimeoutRef.current);
     }
 
-    // Disconnect existing connection
+    // Рвём существующее соединение
     if (wsRef.current) {
       wsRef.current.close(1000);
       wsRef.current = null;
       setIsConnected(false);
     }
 
-    // Only connect if we have a valid tournamentId
+    // Коннектимся только при валидном tournamentId
     if (tournamentId) {
-      // Small delay to let React settle and avoid rapid reconnections
+      // Небольшая задержка, чтобы дать React успокоиться и избежать быстрых реконнектов
       connectTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current) {
           connect();

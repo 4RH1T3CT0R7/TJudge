@@ -79,7 +79,7 @@ func (s *AutoRoundScheduler) run(ctx context.Context) {
 	}
 }
 
-// tick — одна итерация проверки всех авто-раунд игр
+// tick - одна итерация проверки всех авто-раунд игр
 func (s *AutoRoundScheduler) tick(ctx context.Context) {
 	games, err := s.gameRepo.GetAutoRoundEnabledGames(ctx)
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 	}
 
 	// 3. Есть ли новые программы с последнего раунда?
-	since := time.Time{} // beginning of time if first run
+	since := time.Time{} // начало времён при первом запуске
 	if g.LastRunAt != nil {
 		since = *g.LastRunAt
 	}
@@ -160,7 +160,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 	})
 
 	if lockErr != nil {
-		// Lock не получен или ошибка — это нормально (другой процесс уже обрабатывает)
+		// Lock не получен или ошибка - это нормально (другой процесс уже обрабатывает)
 		s.log.Debug("Auto-round: skipped (lock or error)",
 			zap.Error(lockErr),
 			zap.String("tournament_id", g.TournamentID.String()),

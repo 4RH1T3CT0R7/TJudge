@@ -113,7 +113,7 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 	// Expected scores should sum to ~1.0
 	assert.InDelta(t, 1.0, scoreA+scoreB, 0.001)
 
-	// 200 point difference → ~0.76
+	// 200 point difference -> ~0.76
 	assert.InDelta(t, 0.76, scoreA, 0.01)
 }
 
@@ -223,7 +223,7 @@ func TestService_ProcessMatchResult_AtomicError(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// ProcessMatchResultAtomic fails — both updates should be rolled back
+	// ProcessMatchResultAtomic fails - both updates should be rolled back
 	repo.On("ProcessMatchResultAtomic", ctx,
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
@@ -241,7 +241,7 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
-	winner := 1 // Higher rated wins — small change expected
+	winner := 1 // Higher rated wins - small change expected
 	match := &domain.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
