@@ -60,6 +60,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - WORKER_MIN=20
       - WORKER_MAX=200
       - LOG_LEVEL=info
@@ -73,6 +74,7 @@ services:
     secrets:
       - db_password
       - redis_password
+      - jwt_secret
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - programs_data:/data/programs
