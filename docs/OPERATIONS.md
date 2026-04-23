@@ -105,6 +105,47 @@ GF_ADMIN_PASSWORD=<replace>
 
 Откат: `./scripts/rollback.sh`.
 
+### 7.1 Очистка диска после релизов
+
+`scripts/deploy.sh` и `scripts/blue-green-deploy.sh` автоматически вызывают `cleanup_old_images` после успешного деплоя. Функция делает три вещи:
+
+1. Удаляет **dangling-образы** (безымянные слои, оставшиеся после rebuild).
+2. Для каждого репозитория `tjudge-{api,worker,executor,migrate,cli}` **оставляет N последних тегов** (по умолчанию 3, переопределяется через `TJUDGE_IMAGE_KEEP`), остальные сносит.
+3. Чистит **build-кэш** старше 7 дней.
+
+**Почему не `docker image prune -a`**: образ `tjudge-executor` запускается воркером on-demand (`internal/infrastructure/executor/executor.go:169-186`), поэтому между матчами на него **нет ни одного работающего контейнера**. Blanket-prune удалил бы его и сломал бы выполнение матчей до следующего pull'а из ghcr.io. Tag-based retention решает это и сохраняет предыдущие версии API/worker для rollback.
+
+Если на сервере всё равно накопился мусор (длительный простой деплоя, старые проекты), ручная чистка:
+
+```bash
+# Безопасно: dangling-образы + build-кэш.
+docker image prune -f
+docker builder prune -af
+
+# Посмотреть, что занимает место.
+docker system df
+
+# Увеличить/уменьшить retention для следующего деплоя.
+TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>
+```
+
+**НЕ запускать на проде:**
+- `docker image prune -af` без фильтров — удалит `tjudge-executor`, следующий матч упадёт.
+- `docker system prune -af --volumes` и `docker volume prune` — если контейнер `postgres` или `redis` в этот момент остановлен (например, между переключениями blue-green), volume посчитается unused и улетит вместе с БД.
+
+Ротация логов контейнеров — в `/etc/docker/daemon.json`:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "50m", "max-file": "3" }
+}
+```
+
+После правки: `sudo systemctl restart docker`. Новые контейнеры подхватят настройку автоматически, старые — при следующем пересоздании (ближайший деплой).
+
+Каталог `data/programs/` (переменная `HOST_PROGRAMS_PATH`) хранит загруженные программы участников и **не чистится автоматически**. Это данные, не мусор; если нужна политика retention — обсуждается отдельно.
+
 ## 8. Быстрая диагностика
 
 ```bash

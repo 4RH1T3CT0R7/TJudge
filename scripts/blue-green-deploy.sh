@@ -33,6 +33,52 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Cleanup unused Docker images and build cache after a successful deployment.
+# We avoid `docker image prune -a` because the tjudge-executor image is
+# spawned on-demand by the worker and has no long-running container
+# holding its reference -- a blanket prune would delete it and break
+# match execution until the next pull.
+#
+# Instead we retain the N most recent tags per tjudge-* repository.
+# Override retention count via TJUDGE_IMAGE_KEEP (default: 3).
+cleanup_old_images() {
+    local keep="${TJUDGE_IMAGE_KEEP:-3}"
+    local repos repo tag old_tags
+
+    log_info "Cleaning up unused Docker resources (keeping ${keep} most recent tjudge-* tags)..."
+
+    # Dangling (untagged) images -- always safe.
+    if ! docker image prune -f >/dev/null; then
+        log_warning "docker image prune -f failed -- continuing"
+    fi
+
+    # Tag-based retention for tjudge-* repositories.
+    repos=$(docker images --format '{{.Repository}}' 2>/dev/null \
+        | grep -E '(^|/)tjudge-(api|worker|executor|migrate|cli)$' \
+        | sort -u) || repos=""
+
+    for repo in $repos; do
+        old_tags=$(docker images "$repo" --format '{{.CreatedAt}}|{{.Tag}}' 2>/dev/null \
+            | grep -v '|<none>$' \
+            | sort -r \
+            | awk -F'|' -v keep="$keep" 'NR>keep {print $2}') || old_tags=""
+
+        for tag in $old_tags; do
+            log_info "Removing old image: $repo:$tag"
+            if ! docker rmi "$repo:$tag" >/dev/null 2>&1; then
+                log_warning "  $repo:$tag still in use -- skipped"
+            fi
+        done
+    done
+
+    # Build cache -- safe, affects nothing at runtime.
+    if ! docker builder prune -af --filter "until=168h" >/dev/null; then
+        log_warning "docker builder prune failed -- continuing"
+    fi
+
+    log_success "Docker cleanup completed"
+}
+
 # Determine current active environment
 get_current_env() {
     if [ -f "$CURRENT_ENV_FILE" ]; then
@@ -160,6 +206,8 @@ main() {
     log_success "=== Deployment to ${target_env} successful ==="
     log_info "Run './scripts/switch-traffic.sh' to switch traffic to the new environment"
     log_info "Run './scripts/rollback.sh' to rollback if needed"
+
+    cleanup_old_images
 }
 
 main "$@"
