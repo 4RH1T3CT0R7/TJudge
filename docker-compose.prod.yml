@@ -86,12 +86,42 @@ services:
       - tjudge-network
     restart: "no"
 
-  # API Server
+  # Nginx load balancer in front of API replicas.
+  # Replaces the per-replica `ports:` mapping (which conflicts when replicas>1)
+  # with a single ingress on host port 8080 fronting both API instances.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: tjudge-nginx-prod
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deployments/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - tjudge-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # API Server (behind nginx load balancer)
   api:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-api:${VERSION:-latest}
-    ports:
-      - "8080:8080"
-      - "9090:9090"
+    expose:
+      - "8080"
+      - "9090"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=postgres
@@ -152,11 +182,11 @@ services:
         max-size: "100m"
         max-file: "5"
 
-  # Worker Pool
+  # Worker Pool (Prometheus scrapes via Docker DNS, no host port needed)
   worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-worker:${VERSION:-latest}
-    ports:
-      - "9091:9090"
+    expose:
+      - "9090"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=postgres
