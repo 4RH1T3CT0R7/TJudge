@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"sync"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -36,9 +37,39 @@ type ErrorResponse struct {
 }
 
 // WriteJSON оборачивает payload в стандартный Response-конверт и пишет его.
+//
+// Нормализует typed-nil slice/map в пустые коллекции, чтобы list-эндпоинты
+// отдавали `[]` / `{}` вместо `null`. Schema-валидаторы на фронте (см.
+// web/src/api/schema.ts) ожидают массив, и `null` им ломает контракт.
+// Untyped nil (writeJSON(w, ..., nil)) и nil-pointer оставляем как null
+// -- это семантика "ресурс отсутствует".
 func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
+	v = normalizeNilCollections(v)
 	envelope := Response{Data: v}
 	writeRawJSON(w, status, envelope)
+}
+
+// normalizeNilCollections заменяет typed-nil slice/map на пустую коллекцию
+// того же типа. Остальные значения возвращает без изменений.
+func normalizeNilCollections(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return v
+	}
+	switch rv.Kind() {
+	case reflect.Slice:
+		if rv.IsNil() {
+			return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+		}
+	case reflect.Map:
+		if rv.IsNil() {
+			return reflect.MakeMap(rv.Type()).Interface()
+		}
+	}
+	return v
 }
 
 // messageResponse используется WriteMessage, чтобы не отдавать "data":null.

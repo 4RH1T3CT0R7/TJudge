@@ -42,6 +42,50 @@ func TestWriteJSON_NilData(t *testing.T) {
 	assert.Nil(t, body["data"], "data should be null when nil is passed")
 }
 
+func TestWriteJSON_NilSliceNormalizedToEmptyArray(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	var items []string // typed-nil slice -- naive json marshalling = "null"
+	httputil.WriteJSON(rr, 200, items)
+
+	var body map[string]interface{}
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].([]interface{})
+	require.True(t, ok, "expected []interface{} for typed-nil slice, got %T (%v)", body["data"], body["data"])
+	assert.Empty(t, data, "expected []")
+}
+
+func TestWriteJSON_NilMapNormalizedToEmptyObject(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	var items map[string]int // typed-nil map -- naive json marshalling = "null"
+	httputil.WriteJSON(rr, 200, items)
+
+	var body map[string]interface{}
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].(map[string]interface{})
+	require.True(t, ok, "expected map[string]interface{} for typed-nil map, got %T", body["data"])
+	assert.Empty(t, data)
+}
+
+func TestWriteJSON_NonNilSliceUnchanged(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	httputil.WriteJSON(rr, 200, []string{"a", "b"})
+
+	var body map[string]interface{}
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].([]interface{})
+	require.True(t, ok)
+	assert.Equal(t, []interface{}{"a", "b"}, data)
+}
+
 func TestWriteJSON_StatusCode(t *testing.T) {
 	rr := httptest.NewRecorder()
 

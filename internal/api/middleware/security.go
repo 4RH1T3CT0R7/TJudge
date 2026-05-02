@@ -45,7 +45,7 @@ func DefaultSecurityConfig() SecurityConfig {
 		XSSProtection:           true,
 		ContentTypeNosniff:      true,
 		XFrameOptions:           "DENY",
-		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cloudflareinsights.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
 		ReferrerPolicy:          "strict-origin-when-cross-origin",
 		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
 		PermissionsPolicy:       "camera=(), microphone=(), geolocation=()",
