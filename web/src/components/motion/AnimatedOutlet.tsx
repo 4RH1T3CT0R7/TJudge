@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { pageTransitionVariants } from './invaderVariants';
+import { PageLoader } from '../PageLoader';
 
 export function AnimatedOutlet() {
   const location = useLocation();
@@ -16,7 +18,9 @@ export function AnimatedOutlet() {
         animate="animate"
         exit="exit"
       >
-        {outlet}
+        <Suspense fallback={<PageLoader />}>
+          {outlet}
+        </Suspense>
       </motion.div>
     </AnimatePresence>
   );

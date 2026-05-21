@@ -148,13 +148,15 @@ export function Profile() {
               </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn-primary"
-            >
-              {isLoading ? 'Сохранение...' : 'Сохранить email'}
-            </button>
+            <div className="flex justify-center">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn btn-primary"
+              >
+                {isLoading ? 'Сохранение...' : 'Сохранить email'}
+              </button>
+            </div>
           </form>
         )}
 
@@ -210,13 +212,15 @@ export function Profile() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn-primary"
-            >
-              {isLoading ? 'Сохранение...' : 'Изменить пароль'}
-            </button>
+            <div className="flex justify-center">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn btn-primary"
+              >
+                {isLoading ? 'Сохранение...' : 'Изменить пароль'}
+              </button>
+            </div>
           </form>
         )}
       </div>

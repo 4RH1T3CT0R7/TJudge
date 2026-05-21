@@ -1,8 +1,7 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
-import { PageLoader } from './components/PageLoader';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { useAuthStore } from './store/authStore';
@@ -129,44 +128,42 @@ function AppContent() {
   }
 
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
-          <Route path="login" element={<Login />} />
-          <Route path="tournaments" element={<Tournaments />} />
-          <Route path="tournaments/:id" element={<TournamentDetail />} />
-          <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
-          <Route path="games" element={<Games />} />
-          <Route path="games/:id" element={<GameView />} />
-          <Route
-            path="teams/:id"
-            element={
-              <ProtectedRoute>
-                <TeamManagement />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="admin"
-            element={
-              <AdminRoute>
-                <AdminPanel />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </Suspense>
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="login" element={<Login />} />
+        <Route path="tournaments" element={<Tournaments />} />
+        <Route path="tournaments/:id" element={<TournamentDetail />} />
+        <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
+        <Route path="games" element={<Games />} />
+        <Route path="games/:id" element={<GameView />} />
+        <Route
+          path="teams/:id"
+          element={
+            <ProtectedRoute>
+              <TeamManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin"
+          element={
+            <AdminRoute>
+              <AdminPanel />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
   );
 }
 
