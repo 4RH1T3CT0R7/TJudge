@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -253,13 +254,7 @@ func (c *Config) Validate() error {
 
 	// Валидация Logging
 	validLevels := []string{"debug", "info", "warn", "error"}
-	validLevel := false
-	for _, level := range validLevels {
-		if c.Logging.Level == level {
-			validLevel = true
-			break
-		}
-	}
+	validLevel := slices.Contains(validLevels, c.Logging.Level)
 	if !validLevel {
 		return fmt.Errorf("invalid logging level: %s", c.Logging.Level)
 	}
@@ -278,10 +273,7 @@ func (c *Config) Validate() error {
 func recommendedDBPoolSize(workerMax int) int {
 	const apiOverhead = 20
 	const dbCeiling = 100
-	val := int(float64(workerMax)*1.5) + apiOverhead
-	if val > dbCeiling {
-		val = dbCeiling
-	}
+	val := min(int(float64(workerMax)*1.5)+apiOverhead, dbCeiling)
 	if val < 10 {
 		val = 10
 	}

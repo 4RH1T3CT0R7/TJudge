@@ -1159,7 +1159,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, float64(5), response["cleared"])
 		assert.Contains(t, response["message"], "5")

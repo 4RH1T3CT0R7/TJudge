@@ -1958,7 +1958,7 @@ func TestConcurrentJoin(t *testing.T) {
 		errorCount := int64(0)
 		concurrentJoins := 20
 
-		for i := 0; i < concurrentJoins; i++ {
+		for i := range concurrentJoins {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
@@ -2067,10 +2067,8 @@ func TestConcurrentStart(t *testing.T) {
 		errorCount := int64(0)
 		concurrentStarts := 5
 
-		for i := 0; i < concurrentStarts; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range concurrentStarts {
+			wg.Go(func() {
 
 				err := service.Start(context.Background(), tournamentID)
 				if err == nil {
@@ -2078,7 +2076,7 @@ func TestConcurrentStart(t *testing.T) {
 				} else {
 					atomic.AddInt64(&errorCount, 1)
 				}
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -2106,7 +2104,7 @@ func TestGenerateCode(t *testing.T) {
 
 	t.Run("charset_excludes_ambiguous", func(t *testing.T) {
 		// Generate many codes and verify no ambiguous characters
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			code := generateCode()
 			for _, ch := range code {
 				assert.NotContains(t, "IOl01", string(ch), "code should not contain ambiguous characters")
@@ -2116,7 +2114,7 @@ func TestGenerateCode(t *testing.T) {
 
 	t.Run("unique_codes", func(t *testing.T) {
 		seen := make(map[string]bool)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			code := generateCode()
 			assert.False(t, seen[code], "duplicate code generated: %s", code)
 			seen[code] = true
@@ -2299,8 +2297,8 @@ func TestService_generateRoundRobinMatchesForGame_EdgeCases(t *testing.T) {
 		}
 
 		// Verify every ordered pair exists (both directions for each unordered pair)
-		for i := 0; i < len(programIDs); i++ {
-			for j := 0; j < len(programIDs); j++ {
+		for i := range programIDs {
+			for j := range programIDs {
 				if i == j {
 					continue
 				}
@@ -2770,7 +2768,7 @@ func TestService_GetLeaderboard_SingleflightDedup(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			result, err := service.GetLeaderboard(ctx, tournamentID, 10)

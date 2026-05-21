@@ -138,15 +138,15 @@ func NewService(
 
 // CreateRequest - запрос на создание турнира
 type CreateRequest struct {
-	Name            string                 `json:"name"`
-	Description     string                 `json:"description,omitempty"`
-	GameType        string                 `json:"game_type"`
-	MaxParticipants *int                   `json:"max_participants,omitempty"`
-	MaxTeamSize     int                    `json:"max_team_size,omitempty"`
-	IsPermanent     bool                   `json:"is_permanent,omitempty"`
-	StartTime       *time.Time             `json:"start_time,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	CreatorID       *uuid.UUID             `json:"-"` // Устанавливается из контекста, не из JSON
+	Name            string         `json:"name"`
+	Description     string         `json:"description,omitempty"`
+	GameType        string         `json:"game_type"`
+	MaxParticipants *int           `json:"max_participants,omitempty"`
+	MaxTeamSize     int            `json:"max_team_size,omitempty"`
+	IsPermanent     bool           `json:"is_permanent,omitempty"`
+	StartTime       *time.Time     `json:"start_time,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	CreatorID       *uuid.UUID     `json:"-"` // Устанавливается из контекста, не из JSON
 }
 
 // generateCode генерирует уникальный код турнира (6 символов)
@@ -490,7 +490,7 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 
 	// Cache miss - используем singleflight для предотвращения thundering herd
 	sfKey := fmt.Sprintf("leaderboard:%s:%d", tournamentID, limit)
-	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
+	val, err, _ := s.leaderboardSF.Do(sfKey, func() (any, error) {
 		leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
 		if err != nil {
 			return nil, err
@@ -589,7 +589,7 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 
 	// Cache miss - используем singleflight для предотвращения thundering herd
 	sfKey := fmt.Sprintf("crossgame:%s", tournamentID)
-	val, err, _ := s.leaderboardSF.Do(sfKey, func() (interface{}, error) {
+	val, err, _ := s.leaderboardSF.Do(sfKey, func() (any, error) {
 		entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)

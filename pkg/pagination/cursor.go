@@ -20,10 +20,10 @@ const (
 
 // Cursor представляет позицию в пагинированном списке
 type Cursor struct {
-	Type      CursorType             `json:"type"`
-	ID        *uuid.UUID             `json:"id,omitempty"`
-	Timestamp *time.Time             `json:"timestamp,omitempty"`
-	Fields    map[string]interface{} `json:"fields,omitempty"` // Для composite курсоров
+	Type      CursorType     `json:"type"`
+	ID        *uuid.UUID     `json:"id,omitempty"`
+	Timestamp *time.Time     `json:"timestamp,omitempty"`
+	Fields    map[string]any `json:"fields,omitempty"` // Для composite курсоров
 }
 
 // PageInfo содержит информацию о пагинации
@@ -59,7 +59,7 @@ func NewTimestampCursor(timestamp time.Time) *Cursor {
 }
 
 // NewCompositeCursor создаёт составной курсор
-func NewCompositeCursor(fields map[string]interface{}) *Cursor {
+func NewCompositeCursor(fields map[string]any) *Cursor {
 	return &Cursor{
 		Type:   CursorTypeComposite,
 		Fields: fields,

@@ -3,6 +3,8 @@ package validator
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 	"unicode"
 )
 
@@ -33,11 +35,12 @@ func (e ValidationErrors) Error() string {
 	if len(e) == 0 {
 		return ""
 	}
-	msg := "validation errors:"
+	var msg strings.Builder
+	msg.WriteString("validation errors:")
 	for _, err := range e {
-		msg += fmt.Sprintf("\n  - %s", err.Error())
+		fmt.Fprintf(&msg, "\n  - %s", err.Error())
 	}
-	return msg
+	return msg.String()
 }
 
 // HasErrors проверяет наличие ошибок
@@ -164,10 +167,8 @@ func ValidateRange(field string, value, min, max int) error {
 
 // ValidateEnum проверяет значение из списка
 func ValidateEnum(field, value string, allowedValues []string) error {
-	for _, allowed := range allowedValues {
-		if value == allowed {
-			return nil
-		}
+	if slices.Contains(allowedValues, value) {
+		return nil
 	}
 	return &ValidationError{
 		Field:   field,

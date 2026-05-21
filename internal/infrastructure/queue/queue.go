@@ -145,7 +145,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 	}
 
 	// Batch dedup-проверка через pipeline (один RTT вместо N)
-	dedupKeys := make(map[string]interface{}, len(matches))
+	dedupKeys := make(map[string]any, len(matches))
 	for _, match := range matches {
 		dedupKeys[dedupKeyFor(match.ID.String())] = "1"
 	}
@@ -160,7 +160,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 		dedupResults = nil
 	}
 
-	grouped := make(map[string][]interface{})
+	grouped := make(map[string][]any)
 	var addedToDedup []string
 	var skipped int
 
@@ -397,7 +397,7 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 	const maxIterations = 10000
 	var cursor uint64
-	for i := 0; i < maxIterations; i++ {
+	for range maxIterations {
 		keys, nextCursor, err := qm.cache.Scan(ctx, cursor, dedupPrefix+"*", 100)
 		if err != nil {
 			return fmt.Errorf("failed to scan dedup keys: %w", err)

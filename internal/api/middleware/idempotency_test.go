@@ -31,7 +31,7 @@ func (s *stubStore) Get(_ context.Context, key string) (string, error) {
 	return s.data[key], nil
 }
 
-func (s *stubStore) SetNX(_ context.Context, key string, value interface{}, _ time.Duration) (bool, error) {
+func (s *stubStore) SetNX(_ context.Context, key string, value any, _ time.Duration) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.data[key]; exists {
@@ -41,14 +41,14 @@ func (s *stubStore) SetNX(_ context.Context, key string, value interface{}, _ ti
 	return true, nil
 }
 
-func (s *stubStore) Set(_ context.Context, key string, value interface{}, _ time.Duration) error {
+func (s *stubStore) Set(_ context.Context, key string, value any, _ time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[key] = toString(value)
 	return nil
 }
 
-func toString(v interface{}) string {
+func toString(v any) string {
 	switch x := v.(type) {
 	case string:
 		return x

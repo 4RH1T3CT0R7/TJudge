@@ -88,7 +88,7 @@ make benchmark        # Бенчмарки
 
 | Backend | Frontend | Инфраструктура |
 |---------|----------|----------------|
-| Go 1.25 | React 19 | PostgreSQL 15 |
+| Go 1.26 | React 19 | PostgreSQL 15 |
 | Chi Router | TypeScript | Redis 7 |
 | WebSocket | Tailwind CSS 4 | Docker |
 | JWT + RBAC | Zustand | Prometheus/Grafana/Loki |

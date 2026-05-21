@@ -33,7 +33,7 @@ func TestNewTimestampCursor(t *testing.T) {
 }
 
 func TestNewCompositeCursor(t *testing.T) {
-	fields := map[string]interface{}{"rating": 1500, "name": "test"}
+	fields := map[string]any{"rating": 1500, "name": "test"}
 	cursor := NewCompositeCursor(fields)
 
 	require.NotNil(t, cursor)

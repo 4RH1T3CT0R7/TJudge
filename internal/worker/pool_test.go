@@ -280,7 +280,7 @@ func TestPool_ConcurrentProcessing(t *testing.T) {
 	pool := NewPool(cfg, queue, processor, log, m)
 
 	// Возвращаем 10 матчей, затем nil
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
@@ -611,7 +611,7 @@ func TestPool_PanicRecovery_Respawns(t *testing.T) {
 
 	// Нужно возвращать матчи, чтобы воркеры реально вызывали Process и ловили панику.
 	// Возвращаем достаточно матчей, чтобы и пересозданный воркер смог что-то взять.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
@@ -693,7 +693,7 @@ func TestPool_GetMatchesProcessed(t *testing.T) {
 	pool := NewPool(cfg, queue, processor, log, m)
 
 	// Возвращаем 5 матчей, затем nil
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
 	}
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)

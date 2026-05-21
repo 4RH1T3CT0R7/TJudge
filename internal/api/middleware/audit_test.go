@@ -135,8 +135,7 @@ func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 	// Маленький буфер + sink, который блокирует, должен приводить к drop, а не к deadlock.
 	blockingSink := &blockingSink{start: make(chan struct{})}
 	al := NewAuditLogger(blockingSink, 2, log)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go al.Run(ctx)
 	defer al.Close()
 
@@ -144,7 +143,7 @@ func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/x", nil)
 		req.RemoteAddr = "1.2.3.4:99"
 		c := context.WithValue(req.Context(), UserIDKey, uuid.New())

@@ -315,7 +315,7 @@ func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Reque
 		zap.Int64("cleared_count", cleared),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"cleared": cleared,
 		"message": fmt.Sprintf("Очищено %d ошибок", cleared),
 	})

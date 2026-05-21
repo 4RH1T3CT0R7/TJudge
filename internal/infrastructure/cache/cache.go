@@ -68,7 +68,7 @@ func (c *Cache) Get(ctx context.Context, key string) (string, error) {
 }
 
 // Set устанавливает значение с TTL
-func (c *Cache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
 	err := c.client.Set(ctx, key, value, ttl).Err()
 	if err != nil {
 		c.log.LogError("Redis SET failed", err, zap.String("key", key))
@@ -195,7 +195,7 @@ func (c *Cache) ZRem(ctx context.Context, key string, members ...string) error {
 }
 
 // LPush добавляет элемент в начало списка
-func (c *Cache) LPush(ctx context.Context, key string, values ...interface{}) error {
+func (c *Cache) LPush(ctx context.Context, key string, values ...any) error {
 	err := c.client.LPush(ctx, key, values...).Err()
 	if err != nil {
 		c.log.LogError("Redis LPUSH failed", err, zap.String("key", key))
@@ -261,7 +261,7 @@ func (c *Cache) LTrim(ctx context.Context, key string, start, stop int64) error 
 }
 
 // SAdd добавляет элементы в множество (SET). Возвращает количество добавленных элементов.
-func (c *Cache) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
+func (c *Cache) SAdd(ctx context.Context, key string, members ...any) (int64, error) {
 	count, err := c.client.SAdd(ctx, key, members...).Result()
 	if err != nil {
 		c.log.LogError("Redis SADD failed", err, zap.String("key", key))
@@ -272,7 +272,7 @@ func (c *Cache) SAdd(ctx context.Context, key string, members ...interface{}) (i
 
 // SAddWithExpire атомарно добавляет элементы в множество и устанавливает TTL через Lua скрипт.
 // Возвращает количество новых добавленных элементов. TTL должен быть >= 1 секунды.
-func (c *Cache) SAddWithExpire(ctx context.Context, key string, ttl time.Duration, members ...interface{}) (int64, error) {
+func (c *Cache) SAddWithExpire(ctx context.Context, key string, ttl time.Duration, members ...any) (int64, error) {
 	if len(members) == 0 {
 		return 0, nil
 	}
@@ -287,7 +287,7 @@ return added
 		return 0, fmt.Errorf("SAddWithExpire requires TTL >= 1 second, got %v", ttl)
 	}
 
-	args := make([]interface{}, 0, 1+len(members))
+	args := make([]any, 0, 1+len(members))
 	args = append(args, ttlSec)
 	args = append(args, members...)
 
@@ -306,7 +306,7 @@ return added
 }
 
 // SRem удаляет элементы из множества (SET)
-func (c *Cache) SRem(ctx context.Context, key string, members ...interface{}) error {
+func (c *Cache) SRem(ctx context.Context, key string, members ...any) error {
 	err := c.client.SRem(ctx, key, members...).Err()
 	if err != nil {
 		c.log.LogError("Redis SREM failed", err, zap.String("key", key))
@@ -316,7 +316,7 @@ func (c *Cache) SRem(ctx context.Context, key string, members ...interface{}) er
 }
 
 // SetNX устанавливает значение только если ключа не существует (для distributed locks)
-func (c *Cache) SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
+func (c *Cache) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
 	result, err := c.client.SetNX(ctx, key, value, ttl).Result()
 	if err != nil {
 		c.log.LogError("Redis SETNX failed", err, zap.String("key", key))
@@ -327,7 +327,7 @@ func (c *Cache) SetNX(ctx context.Context, key string, value interface{}, ttl ti
 
 // BatchSetNX выполняет несколько SetNX операций через pipeline.
 // Возвращает map[key]bool, где true означает что ключ был создан (новый).
-func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]interface{}, ttl time.Duration) (map[string]bool, error) {
+func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]any, ttl time.Duration) (map[string]bool, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
@@ -359,7 +359,7 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]interface{}, ttl
 }
 
 // Publish публикует сообщение в канал
-func (c *Cache) Publish(ctx context.Context, channel string, message interface{}) error {
+func (c *Cache) Publish(ctx context.Context, channel string, message any) error {
 	err := c.client.Publish(ctx, channel, message).Err()
 	if err != nil {
 		c.log.LogError("Redis PUBLISH failed", err, zap.String("channel", channel))
@@ -379,7 +379,7 @@ func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) er
 	pipe := c.client.TxPipeline()
 	pipe.Del(ctx, key)
 	if len(values) > 0 {
-		args := make([]interface{}, len(values))
+		args := make([]any, len(values))
 		for i, v := range values {
 			args[i] = v
 		}
@@ -395,7 +395,7 @@ func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) er
 
 // BatchLPush добавляет несколько элементов в разные списки одним pipeline-запросом.
 // items - map[key][]value, каждый value добавляется в список с ключом key.
-func (c *Cache) BatchLPush(ctx context.Context, items map[string][]interface{}) error {
+func (c *Cache) BatchLPush(ctx context.Context, items map[string][]any) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -423,7 +423,7 @@ func (c *Cache) Health(ctx context.Context) error {
 }
 
 // Eval выполняет Lua скрипт на Redis
-func (c *Cache) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
+func (c *Cache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	result, err := c.client.Eval(ctx, script, keys, args...).Result()
 	if err != nil {
 		c.log.LogError("Redis EVAL failed", err)

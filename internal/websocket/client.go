@@ -162,7 +162,7 @@ func (c *Client) WritePump() {
 
 			// Отправляем queued сообщения как отдельные WebSocket фреймы
 			n := len(c.send)
-			for i := 0; i < n; i++ {
+			for range n {
 				queued, ok := <-c.send
 				if !ok {
 					// Hub закрыл канал во время drain

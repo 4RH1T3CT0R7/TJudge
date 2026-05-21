@@ -99,18 +99,14 @@ func (p *Pool) Start() {
 	// Запускаем автоскейлер. Первый tick сделаем немедленно, чтобы burst
 	// на старте (например, заполненная очередь после рестарта воркера)
 	// не ждал полного AutoScaleInterval до первого масштабирования.
-	p.auxWg.Add(1)
-	go func() {
-		defer p.auxWg.Done()
+	p.auxWg.Go(func() {
 		p.autoScaler()
-	}()
+	})
 
 	// Запускаем монитор метрик
-	p.auxWg.Add(1)
-	go func() {
-		defer p.auxWg.Done()
+	p.auxWg.Go(func() {
 		p.metricsMonitor()
-	}()
+	})
 
 	p.log.Info("Worker pool started",
 		zap.Int32("workers", p.totalWorkers.Load()),
@@ -196,9 +192,7 @@ func (p *Pool) spawnWorker() {
 
 	current := p.totalWorkers.Add(1)
 
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
+	p.wg.Go(func() {
 		defer p.totalWorkers.Add(-1)
 		defer func() {
 			if r := recover(); r != nil {
@@ -252,7 +246,7 @@ func (p *Pool) spawnWorker() {
 				}
 			}
 		}
-	}()
+	})
 }
 
 // processNext обрабатывает следующий матч из очереди.
@@ -447,10 +441,7 @@ func (p *Pool) scale() {
 		// Ramp-up: добавляем воркеров пропорционально очереди.
 		// queueSize/5 даёт +20 воркеров на 100 матчей в очереди, и ещё один тик
 		// утроит пул при необходимости. Минимум +2, чтобы никогда не "топтаться".
-		grow := int(queueSize) / 5
-		if grow < 2 {
-			grow = 2
-		}
+		grow := max(int(queueSize)/5, 2)
 		targetWorkers = currentWorkers + grow
 	case queueSize == 0 && activeWorkers*3 < currentWorkers:
 		// Scale-down: очередь пуста и простаивает >66% пула. Снимаем по 2 воркера.
@@ -474,7 +465,7 @@ func (p *Pool) scale() {
 			zap.Int("target", targetWorkers),
 			zap.Int64("queue_size", queueSize),
 		)
-		for i := 0; i < toSpawn; i++ {
+		for range toSpawn {
 			p.spawnWorker()
 		}
 	case targetWorkers < currentWorkers:

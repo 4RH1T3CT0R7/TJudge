@@ -160,7 +160,7 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 	}))
 
 	// Fallback limit = max(1, int(10 * 0.5)) = 5 (burst). Первые 5 запросов проходят.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 
 	// Исчерпываем fallback для IP1. limit=1, fallback multiplier=0.5,
 	// int(1*0.5)=0, clamped к минимуму 1, поэтому burst=1.
-	for i := 0; i < 1; i++ {
+	for range 1 {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()

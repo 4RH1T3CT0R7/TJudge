@@ -560,7 +560,7 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 		zap.Int("enqueued", enqueued),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   "started",
 		"enqueued": enqueued,
 	})
@@ -618,7 +618,7 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 		zap.Int("enqueued", enqueued),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "started",
 		"game_type": req.GameType,
 		"enqueued":  enqueued,
@@ -657,7 +657,7 @@ func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Re
 		zap.Int("enqueued", enqueued),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   "retried",
 		"enqueued": enqueued,
 	})

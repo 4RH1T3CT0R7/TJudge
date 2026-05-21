@@ -131,7 +131,7 @@ func (r *MatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.
 		FROM matches
 	`
 
-	args := []interface{}{}
+	args := []any{}
 	if tournamentID != nil {
 		query += " WHERE tournament_id = $1"
 		args = append(args, *tournamentID)

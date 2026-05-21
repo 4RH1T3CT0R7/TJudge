@@ -7,6 +7,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -164,7 +165,7 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 		FROM teams
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	if filter.TournamentID != nil {
@@ -437,7 +438,7 @@ func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error)
 	const codeLength = 6
 	const maxAttempts = 10
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for range maxAttempts {
 		code := make([]byte, codeLength)
 		for i := range code {
 			n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
@@ -603,18 +604,18 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 
 	// Формируем массив для SQL IN
-	pidStrings := make([]interface{}, len(programIDs))
-	placeholders := ""
+	pidStrings := make([]any, len(programIDs))
+	var placeholders strings.Builder
 	for i, pid := range programIDs {
 		pidStrings[i] = pid
 		if i > 0 {
-			placeholders += ", "
+			placeholders.WriteString(", ")
 		}
-		placeholders += fmt.Sprintf("$%d", i+2) // $2, $3, ...
+		fmt.Fprintf(&placeholders, "$%d", i+2) // $2, $3, ...
 	}
 
 	// 3. Удалить rating_history для завершённых матчей с участием программ команды
-	args := append([]interface{}{tournamentID}, pidStrings...)
+	args := append([]any{tournamentID}, pidStrings...)
 	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM rating_history
 		WHERE tournament_id = $1
@@ -624,7 +625,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 			AND status = 'completed'
 			AND (program1_id IN (%s) OR program2_id IN (%s))
 		)
-	`, placeholders, placeholders), args...)
+	`, placeholders.String(), placeholders.String()), args...)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to delete rating history")
 	}
@@ -636,7 +637,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		WHERE tournament_id = $1
 		AND status = 'completed'
 		AND (program1_id IN (%s) OR program2_id IN (%s))
-	`, placeholders, placeholders), args...)
+	`, placeholders.String(), placeholders.String()), args...)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to delete completed matches")
 	}
@@ -649,7 +650,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		WHERE tournament_id = $1
 		AND status IN ('pending', 'running')
 		AND (program1_id IN (%s) OR program2_id IN (%s))
-	`, placeholders, placeholders), args...)
+	`, placeholders.String(), placeholders.String()), args...)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to cancel matches")
 	}
@@ -661,7 +662,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		SET rating = 1500, wins = 0, losses = 0, draws = 0
 		WHERE tournament_id = $1
 		AND program_id IN (%s)
-	`, placeholders), args...)
+	`, placeholders.String()), args...)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to reset participant stats")
 	}

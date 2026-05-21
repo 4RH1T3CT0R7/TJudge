@@ -30,7 +30,7 @@ func TestWebSocketHandler_GetStats(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var stats map[string]interface{}
+	var stats map[string]any
 	decodeJSONData(t, rr.Body, &stats)
 	assert.Contains(t, stats, "tournaments")
 	assert.Contains(t, stats, "total_clients")

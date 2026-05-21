@@ -10,7 +10,7 @@ import (
 
 // gzipWriterPool пул gzip writers для переиспользования
 var gzipWriterPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return gzip.NewWriter(io.Discard)
 	},
 }

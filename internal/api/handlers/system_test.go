@@ -27,7 +27,7 @@ func TestSystemHandler_GetMetrics_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-	var result map[string]interface{}
+	var result map[string]any
 	decodeJSONData(t, rr.Body, &result)
 
 	// Проверяем, что top-level ключи присутствуют
@@ -65,7 +65,7 @@ func TestSystemHandler_GetHealth_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var result map[string]interface{}
+	var result map[string]any
 	decodeJSONData(t, rr.Body, &result)
 
 	assert.Contains(t, result, "status")
@@ -82,7 +82,7 @@ func TestSystemHandler_GetHealth_StatusHealthy(t *testing.T) {
 
 	handler.GetHealth(rr, req)
 
-	var result map[string]interface{}
+	var result map[string]any
 	decodeJSONData(t, rr.Body, &result)
 
 	// Статус должен быть "healthy" или "warning" в зависимости от состояния системы

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -24,13 +25,7 @@ func RequireRole(requiredRoles ...domain.Role) func(http.Handler) http.Handler {
 			}
 
 			// Проверяем, есть ли роль в списке разрешённых
-			hasRole := false
-			for _, required := range requiredRoles {
-				if role == required {
-					hasRole = true
-					break
-				}
-			}
+			hasRole := slices.Contains(requiredRoles, role)
 
 			if !hasRole {
 				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))

@@ -15,7 +15,7 @@ import (
 
 // decodeJSONData unwraps the standard API envelope and decodes the "data" field
 // into the target. Use this for all handler tests that read successful responses.
-func decodeJSONData(t *testing.T, body *bytes.Buffer, target interface{}) {
+func decodeJSONData(t *testing.T, body *bytes.Buffer, target any) {
 	t.Helper()
 	var envelope httputil.Response
 	err := json.NewDecoder(body).Decode(&envelope)

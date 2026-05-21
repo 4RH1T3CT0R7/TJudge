@@ -7,7 +7,7 @@ import (
 )
 
 // writeJSON записывает JSON ответ (делегирует в httputil)
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	httputil.WriteJSON(w, status, v)
 }
 

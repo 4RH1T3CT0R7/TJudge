@@ -113,7 +113,7 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => {
         // Разворачиваем только JSON-ответы со стандартным envelope { data, message?, meta? }.
-        const contentType = response.headers['content-type'] || '';
+        const contentType = String(response.headers['content-type'] || '');
         if (
           contentType.includes('application/json') &&
           response.data &&

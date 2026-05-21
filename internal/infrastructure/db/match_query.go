@@ -326,7 +326,7 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 		FROM matches
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Фильтр по турниру
@@ -543,7 +543,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 		FROM matches
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Фильтр по турниру

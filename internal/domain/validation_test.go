@@ -345,11 +345,11 @@ func TestMatch_Validate_WinnerValues(t *testing.T) {
 		wantErr bool
 	}{
 		{"nil winner", nil, false},
-		{"winner 0 (draw)", intPtr(0), false},
-		{"winner 1", intPtr(1), false},
-		{"winner 2", intPtr(2), false},
-		{"winner -1 invalid", intPtr(-1), true},
-		{"winner 3 invalid", intPtr(3), true},
+		{"winner 0 (draw)", new(0), false},
+		{"winner 1", new(1), false},
+		{"winner 2", new(2), false},
+		{"winner -1 invalid", new(-1), true},
+		{"winner 3 invalid", new(3), true},
 	}
 
 	for _, tc := range tests {
@@ -453,7 +453,3 @@ func TestValidatePassword_NoLowercase(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// helper
-func intPtr(v int) *int {
-	return &v
-}

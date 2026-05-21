@@ -189,7 +189,7 @@ func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) 
 		zap.Int("interval", req.IntervalSeconds),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"enabled":          req.Enabled,
 		"interval_seconds": req.IntervalSeconds,
 	})
@@ -224,7 +224,7 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"enabled":          tg.AutoRoundEnabled,
 		"interval_seconds": tg.AutoRoundIntervalSecs,
 		"last_run_at":      tg.AutoRoundLastRunAt,

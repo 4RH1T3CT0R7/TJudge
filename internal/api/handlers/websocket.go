@@ -59,7 +59,7 @@ func checkWebSocketOrigin(r *http.Request) bool {
 		return true
 	}
 
-	for _, allowed := range strings.Split(allowedOrigins, ",") {
+	for allowed := range strings.SplitSeq(allowedOrigins, ",") {
 		if strings.TrimSpace(allowed) == origin {
 			return true
 		}
@@ -113,7 +113,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 	// Отражаем предложенный клиентом subprotocol дословно (RFC 6455, секция 4.2.2).
 	responseHeader := http.Header{}
 	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
-		for _, p := range strings.Split(proto, ",") {
+		for p := range strings.SplitSeq(proto, ",") {
 			p = strings.TrimSpace(p)
 			if strings.HasPrefix(p, "access_token.") {
 				responseHeader.Set("Sec-WebSocket-Protocol", p)

@@ -391,7 +391,7 @@ func parseBenchmarkOutput(output string) []BenchmarkResult {
 	// Шаблон: BenchmarkName-N    iterations    ns/op    B/op    allocs/op.
 	re := regexp.MustCompile(`(Benchmark\w+)(?:-\d+)?\s+(\d+)\s+([\d.]+)\s+ns/op(?:\s+([\d.]+)\s+B/op)?(?:\s+(\d+)\s+allocs/op)?`)
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		matches := re.FindStringSubmatch(line)
 		if len(matches) >= 4 {
 			nsOp, _ := strconv.ParseFloat(matches[3], 64)

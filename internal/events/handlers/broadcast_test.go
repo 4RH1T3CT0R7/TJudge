@@ -18,7 +18,7 @@ type mockBroadcaster struct {
 	mock.Mock
 }
 
-func (m *mockBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, payload interface{}) {
+func (m *mockBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, payload any) {
 	m.Called(tournamentID, messageType, payload)
 }
 
@@ -30,8 +30,8 @@ func TestBroadcastHandler_TournamentStarted(t *testing.T) {
 
 	id := uuid.New()
 	now := time.Now()
-	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p interface{}) bool {
-		m, ok := p.(map[string]interface{})
+	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p any) bool {
+		m, ok := p.(map[string]any)
 		return ok && m["status"] == domain.TournamentActive
 	})).Return()
 
@@ -50,8 +50,8 @@ func TestBroadcastHandler_TournamentCompleted(t *testing.T) {
 
 	id := uuid.New()
 	now := time.Now()
-	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p interface{}) bool {
-		m, ok := p.(map[string]interface{})
+	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p any) bool {
+		m, ok := p.(map[string]any)
 		return ok && m["status"] == domain.TournamentCompleted
 	})).Return()
 
@@ -70,8 +70,8 @@ func TestBroadcastHandler_MatchesCreated(t *testing.T) {
 
 	id := uuid.New()
 	pid := uuid.New()
-	bc.On("Broadcast", id, "matches_created", mock.MatchedBy(func(p interface{}) bool {
-		m, ok := p.(map[string]interface{})
+	bc.On("Broadcast", id, "matches_created", mock.MatchedBy(func(p any) bool {
+		m, ok := p.(map[string]any)
 		return ok && m["matches_count"] == 10
 	})).Return()
 
@@ -90,8 +90,8 @@ func TestBroadcastHandler_MatchResultProcessed(t *testing.T) {
 
 	id := uuid.New()
 	mid := uuid.New()
-	bc.On("Broadcast", id, "match_result", mock.MatchedBy(func(p interface{}) bool {
-		m, ok := p.(map[string]interface{})
+	bc.On("Broadcast", id, "match_result", mock.MatchedBy(func(p any) bool {
+		m, ok := p.(map[string]any)
 		return ok && m["winner"] == 1 && m["new_rating1"] == 1520
 	})).Return()
 
