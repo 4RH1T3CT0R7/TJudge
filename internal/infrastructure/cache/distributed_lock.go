@@ -146,10 +146,7 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 	defer close(done)
 
 	lockKey := fmt.Sprintf("lock:%s", key)
-	interval := ttl / 3
-	if interval < 500*time.Millisecond {
-		interval = 500 * time.Millisecond
-	}
+	interval := max(ttl/3, 500*time.Millisecond)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

@@ -31,7 +31,7 @@ type MockCache struct {
 	mock.Mock
 }
 
-func (m *MockCache) LPush(ctx context.Context, key string, values ...interface{}) error {
+func (m *MockCache) LPush(ctx context.Context, key string, values ...any) error {
 	args := m.Called(ctx, key, values)
 	return args.Error(0)
 }
@@ -56,7 +56,7 @@ func (m *MockCache) Del(ctx context.Context, keys ...string) error {
 
 // CacheInterface is the interface that QueueManager uses
 type CacheInterface interface {
-	LPush(ctx context.Context, key string, values ...interface{}) error
+	LPush(ctx context.Context, key string, values ...any) error
 	BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error)
 	LLen(ctx context.Context, key string) (int64, error)
 	Del(ctx context.Context, keys ...string) error
@@ -181,7 +181,7 @@ func NewInMemoryQueue() *InMemoryQueue {
 	}
 }
 
-func (q *InMemoryQueue) LPush(ctx context.Context, key string, values ...interface{}) error {
+func (q *InMemoryQueue) LPush(ctx context.Context, key string, values ...any) error {
 	if q.queues[key] == nil {
 		q.queues[key] = make([]string, 0)
 	}
@@ -406,10 +406,10 @@ func TestQueueManager_GetStats(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue matches of different priorities.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
 	}
 	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
@@ -627,7 +627,7 @@ func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
 	medMatches := make([]*domain.Match, 20)
 	lowMatches := make([]*domain.Match, 20)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		highMatches[i] = testMatch(domain.PriorityHigh)
 		medMatches[i] = testMatch(domain.PriorityMedium)
 		lowMatches[i] = testMatch(domain.PriorityLow)
@@ -639,7 +639,7 @@ func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
 
 	// Dequeue all 60 matches and track which priority was dequeued
 	priorityCounts := map[domain.MatchPriority]int{}
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		match, err := qm.Dequeue(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, match, "expected match at iteration %d", i)
@@ -893,10 +893,10 @@ func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {
 	enqueueWg.Add(enqueueGoroutines)
 
 	// Launch concurrent enqueuers.
-	for g := 0; g < enqueueGoroutines; g++ {
+	for range enqueueGoroutines {
 		go func() {
 			defer enqueueWg.Done()
-			for i := 0; i < matchesPerGoroutine; i++ {
+			for range matchesPerGoroutine {
 				match := testMatch(domain.PriorityMedium)
 				err := qm.Enqueue(ctx, match)
 				assert.NoError(t, err)
@@ -928,7 +928,7 @@ func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {
 	var dequeueWg sync.WaitGroup
 	dequeueWg.Add(dequeueGoroutines)
 
-	for g := 0; g < dequeueGoroutines; g++ {
+	for range dequeueGoroutines {
 		go func() {
 			defer dequeueWg.Done()
 			for {

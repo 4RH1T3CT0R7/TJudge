@@ -42,7 +42,7 @@ func TestClient_ReadLimiterInitialized(t *testing.T) {
 	client := NewClient(hub, nil, uuid.New(), uuid.New(), log)
 
 	// Все первые clientMessageBurst Allow() должны пройти.
-	for i := 0; i < clientMessageBurst; i++ {
+	for i := range clientMessageBurst {
 		assert.True(t, client.readLimiter.Allow(), "burst msg %d must be allowed", i)
 	}
 	// Следующий Allow после burst должен быть false (rate limit).
@@ -60,7 +60,7 @@ func TestClient_CloseSendConcurrent(t *testing.T) {
 	const n = 100
 	var wg sync.WaitGroup
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			client.CloseSend()

@@ -644,7 +644,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "Invalid matches purged successfully", response["message"])
 		assert.Equal(t, float64(7), response["purged_count"])
@@ -701,7 +701,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, float64(0), response["purged_count"])
 

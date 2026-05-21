@@ -145,7 +145,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			MemorySwap:     e.config.MemoryLimit, // Запрещаем swap
 			PidsLimit:      &e.config.PidsLimit,
 			CpusetCpus:     e.config.CPUSetCPUs, // Ограничиваем ядра CPU
-			OomKillDisable: boolPtr(false),      // Разрешаем OOM killer
+			OomKillDisable: new(false),          // Разрешаем OOM killer
 			// BlkioWeight не поддерживается на macOS (cgroups v2)
 			Ulimits: []*container.Ulimit{
 				{Name: "nofile", Soft: 1024, Hard: 1024},        // Достаточно для Python + subprocess
@@ -389,10 +389,7 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.M
 	// runs are not rejected.  1000 points-per-iteration is a generous upper
 	// bound for any supported game type; the floor of 100 000 covers the
 	// default 100-iteration setting comfortably.
-	maxScore := e.config.DefaultIterations * 1000
-	if maxScore < 100_000 {
-		maxScore = 100_000
-	}
+	maxScore := max(e.config.DefaultIterations*1000, 100_000)
 	if score1 > maxScore || score1 < -maxScore || score2 > maxScore || score2 < -maxScore {
 		return nil, fmt.Errorf("scores out of bounds [-%d, %d]: %d, %d", maxScore, maxScore, score1, score2)
 	}
@@ -486,7 +483,3 @@ func (e *Executor) Close() error {
 	return nil
 }
 
-// boolPtr возвращает указатель на bool
-func boolPtr(b bool) *bool {
-	return &b
-}

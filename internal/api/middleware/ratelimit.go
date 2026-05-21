@@ -46,10 +46,7 @@ const fallbackLimitMultiplier = 0.5
 func newFallbackLimiter(limit int, window time.Duration) *fallbackLimiter {
 	// Используем коэффициент 0.5 (строже основного) вместо 2.0.
 	// Минимум burst = 1, чтобы limit=1 не превратился в 0.
-	fallbackLimit := int(float64(limit) * fallbackLimitMultiplier)
-	if fallbackLimit < 1 {
-		fallbackLimit = 1
-	}
+	fallbackLimit := max(int(float64(limit)*fallbackLimitMultiplier), 1)
 	r := rate.Limit(float64(fallbackLimit) / window.Seconds())
 
 	return &fallbackLimiter{

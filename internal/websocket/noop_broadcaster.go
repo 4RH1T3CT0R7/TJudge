@@ -14,6 +14,6 @@ func NewNoopBroadcaster() *NoopBroadcaster {
 }
 
 // Broadcast ничего не делает
-func (n *NoopBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, payload interface{}) {
+func (n *NoopBroadcaster) Broadcast(tournamentID uuid.UUID, messageType string, payload any) {
 	// Ничего не делаем
 }

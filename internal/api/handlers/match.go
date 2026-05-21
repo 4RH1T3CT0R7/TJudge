@@ -379,7 +379,7 @@ func (h *MatchHandler) PurgeInvalidMatches(w http.ResponseWriter, r *http.Reques
 		zap.Int64("purged_count", purged),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"message":      "Invalid matches purged successfully",
 		"purged_count": purged,
 	})

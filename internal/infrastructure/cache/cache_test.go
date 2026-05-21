@@ -448,7 +448,7 @@ func TestCache_BatchLPush(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	items := map[string][]interface{}{
+	items := map[string][]any{
 		"batch-list-a": {[]byte("a1"), []byte("a2")},
 		"batch-list-b": {[]byte("b1")},
 	}
@@ -472,7 +472,7 @@ func TestCache_BatchLPush_Empty(t *testing.T) {
 	err := c.BatchLPush(ctx, nil)
 	require.NoError(t, err)
 
-	err = c.BatchLPush(ctx, map[string][]interface{}{})
+	err = c.BatchLPush(ctx, map[string][]any{})
 	require.NoError(t, err)
 }
 
@@ -499,10 +499,10 @@ func TestCache_ConcurrentReadWrite(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				key := fmt.Sprintf("concurrent-key-%d-%d", id, i)
 				value := fmt.Sprintf("value-%d-%d", id, i)
 
@@ -535,10 +535,10 @@ func TestCache_ConcurrentSortedSet(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				member := fmt.Sprintf("member-%d-%d", id, i)
 				score := float64(id*iterations + i)
 
@@ -654,7 +654,7 @@ func TestCache_ErrorPaths(t *testing.T) {
 	err = c.ReplaceList(ctx, "key", [][]byte{[]byte("value")})
 	assert.Error(t, err)
 
-	err = c.BatchLPush(ctx, map[string][]interface{}{"key": {"value"}})
+	err = c.BatchLPush(ctx, map[string][]any{"key": {"value"}})
 	assert.Error(t, err)
 
 	err = c.Health(ctx)

@@ -311,7 +311,7 @@ func TestLeaderboardCache_Clear(t *testing.T) {
 	tournamentID := uuid.New()
 
 	// Add several entries.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		err := lc.UpdateRating(ctx, tournamentID, uuid.New(), 1000+i*100)
 		require.NoError(t, err)
 	}

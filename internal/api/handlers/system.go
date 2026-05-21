@@ -194,7 +194,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 // @Failure 403 {object} object{error=string}
 // @Router /system/health [get]
 func (h *SystemHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
-	health := map[string]interface{}{
+	health := map[string]any{
 		"status":    "healthy",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"hostname":  "",

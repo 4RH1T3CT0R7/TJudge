@@ -27,7 +27,7 @@ type redisCacheAdapter struct {
 	client *redis.Client
 }
 
-func (a *redisCacheAdapter) Publish(ctx context.Context, channel string, message interface{}) error {
+func (a *redisCacheAdapter) Publish(ctx context.Context, channel string, message any) error {
 	return a.client.Publish(ctx, channel, message).Err()
 }
 
@@ -103,8 +103,7 @@ func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go sub.Start(ctx)
 
@@ -166,8 +165,7 @@ func TestRedisEventSubscriber_UnknownTypeIgnored(t *testing.T) {
 
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
@@ -228,8 +226,7 @@ func TestRedisEndToEnd_PublisherToSubscriber(t *testing.T) {
 
 	// Настраиваем подписчика.
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
 
@@ -282,8 +279,7 @@ func TestRedisEventSubscriber_InvalidEnvelopeJSON(t *testing.T) {
 
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
@@ -317,8 +313,7 @@ func TestRedisEventSubscriber_InvalidEventData(t *testing.T) {
 
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
@@ -384,7 +379,7 @@ func TestRedisEventSubscriber_DoubleStop(t *testing.T) {
 // failingPublisher всегда возвращает ошибку при вызове Publish.
 type failingPublisher struct{}
 
-func (f *failingPublisher) Publish(_ context.Context, _ string, _ interface{}) error {
+func (f *failingPublisher) Publish(_ context.Context, _ string, _ any) error {
 	return assert.AnError
 }
 

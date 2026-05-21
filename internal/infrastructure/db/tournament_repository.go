@@ -114,7 +114,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 		FROM tournaments
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Фильтр по статусу
@@ -299,7 +299,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 		FROM tournaments
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Фильтр по статусу

@@ -456,8 +456,8 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *domain
 	now := time.Now()
 
 	// Каждый участник играет с каждым в обе стороны (AB и BA)
-	for i := 0; i < len(participants); i++ {
-		for j := 0; j < len(participants); j++ {
+	for i := range participants {
+		for j := range participants {
 			// Пропускаем матч против себя
 			if i == j {
 				continue

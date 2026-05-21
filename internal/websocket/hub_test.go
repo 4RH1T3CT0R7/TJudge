@@ -397,7 +397,7 @@ func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
 	waitForStats(t, hub, "total_clients", 1)
 
 	// Заполняем broadcast-канал хаба до ёмкости (256)
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
 			Type:         MessageTypeMatchUpdate,
@@ -467,12 +467,12 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 	// Конкурентно регистрируем клиентов
 	clients := make([]*Client, numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		clients[i] = newTestClient(hub, tournamentID, uuid.New())
 	}
 
 	// Половина горутин делает register, половина - broadcast
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -480,12 +480,10 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range numGoroutines {
+		wg.Go(func() {
 			hub.Broadcast(tournamentID, string(MessageTypeMatchUpdate), map[string]string{"data": "test"})
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -505,7 +503,7 @@ func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
 	tournamentID := uuid.New()
 
 	// Заполняем broadcast-канал до ёмкости.
-	for i := 0; i < 256; i++ {
+	for i := range 256 {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
 			Type:         MessageTypeMatchUpdate,

@@ -740,7 +740,7 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "started", response["status"])
 		assert.Equal(t, float64(15), response["enqueued"])
@@ -816,7 +816,7 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "started", response["status"])
 		assert.Equal(t, "prisoners_dilemma", response["game_type"])
@@ -910,7 +910,7 @@ func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "retried", response["status"])
 		assert.Equal(t, float64(3), response["enqueued"])
@@ -1242,7 +1242,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityHigh).Return(expectedMatch, nil)
 
-		body, _ := json.Marshal(map[string]interface{}{
+		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,
 			"program2_id": program2ID,
 			"priority":    "high",
@@ -1288,7 +1288,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityMedium).Return(expectedMatch, nil)
 
-		body, _ := json.Marshal(map[string]interface{}{
+		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,
 			"program2_id": program2ID,
 		})
@@ -1317,7 +1317,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
-		body, _ := json.Marshal(map[string]interface{}{
+		body, _ := json.Marshal(map[string]any{
 			"program1_id": uuid.New(),
 			"program2_id": uuid.New(),
 			"priority":    "high",
@@ -1366,7 +1366,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityMedium).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
 
-		body, _ := json.Marshal(map[string]interface{}{
+		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,
 			"program2_id": program2ID,
 		})

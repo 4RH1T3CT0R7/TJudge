@@ -226,10 +226,8 @@ func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 		var wg sync.WaitGroup
 
 		// Start 10 goroutines trying to acquire the same lock
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 10 {
+			wg.Go(func() {
 
 				err := lock.WithLock(ctx, "test-concurrent", 2*time.Second, func(ctx context.Context) error {
 					// Critical section
@@ -243,7 +241,7 @@ func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 				if err != nil {
 					t.Logf("Failed to acquire lock: %v", err)
 				}
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -257,10 +255,8 @@ func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 		var maxConcurrent int64
 		var wg sync.WaitGroup
 
-		for i := 0; i < 5; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 5 {
+			wg.Go(func() {
 
 				_ = lock.WithLock(ctx, "test-concurrent-2", 2*time.Second, func(ctx context.Context) error {
 					current := atomic.AddInt64(&inCriticalSection, 1)
@@ -277,7 +273,7 @@ func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 					atomic.AddInt64(&inCriticalSection, -1)
 					return nil
 				})
-			}()
+			})
 		}
 
 		wg.Wait()

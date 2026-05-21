@@ -199,8 +199,8 @@ func TestParseResult_InvalidOutput_Empty(t *testing.T) {
 // --- boolPtr ---
 
 func TestBoolPtr(t *testing.T) {
-	trueVal := boolPtr(true)
-	falseVal := boolPtr(false)
+	trueVal := new(true)
+	falseVal := new(false)
 
 	assert.True(t, *trueVal)
 	assert.False(t, *falseVal)

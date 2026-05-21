@@ -110,7 +110,7 @@ func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]
 		FROM games
 		WHERE 1=1
 	`
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Фильтр по имени (partial match)

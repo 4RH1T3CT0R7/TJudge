@@ -12,16 +12,16 @@ import (
 
 // bufferPool пул буферов для JSON сериализации
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
 
 // Response - стандартный API-конверт для всех успешных ответов.
 type Response struct {
-	Data    interface{} `json:"data"`
-	Message string      `json:"message,omitempty"`
-	Meta    *Meta       `json:"meta,omitempty"`
+	Data    any    `json:"data"`
+	Message string `json:"message,omitempty"`
+	Meta    *Meta  `json:"meta,omitempty"`
 }
 
 // Meta содержит pagination-метаданные для list-эндпоинтов.
@@ -43,7 +43,7 @@ type ErrorResponse struct {
 // web/src/api/schema.ts) ожидают массив, и `null` им ломает контракт.
 // Untyped nil (writeJSON(w, ..., nil)) и nil-pointer оставляем как null
 // -- это семантика "ресурс отсутствует".
-func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
+func WriteJSON(w http.ResponseWriter, status int, v any) {
 	v = normalizeNilCollections(v)
 	envelope := Response{Data: v}
 	writeRawJSON(w, status, envelope)
@@ -51,7 +51,7 @@ func WriteJSON(w http.ResponseWriter, status int, v interface{}) {
 
 // normalizeNilCollections заменяет typed-nil slice/map на пустую коллекцию
 // того же типа. Остальные значения возвращает без изменений.
-func normalizeNilCollections(v interface{}) interface{} {
+func normalizeNilCollections(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func WriteMessage(w http.ResponseWriter, status int, message string) {
 }
 
 // writeRawJSON кодирует любое значение в JSON и пишет его в ответ.
-func writeRawJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeRawJSON(w http.ResponseWriter, status int, v any) {
 	buf := bufferPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()

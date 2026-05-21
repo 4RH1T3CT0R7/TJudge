@@ -35,7 +35,7 @@ type Hub struct {
 type Message struct {
 	TournamentID uuid.UUID   `json:"tournament_id"`
 	Type         MessageType `json:"type"`
-	Payload      interface{} `json:"payload"`
+	Payload      any         `json:"payload"`
 }
 
 // MessageType тип сообщения
@@ -188,7 +188,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 }
 
 // Broadcast отправляет сообщение в канал broadcast
-func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload interface{}) {
+func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload any) {
 	message := &Message{
 		TournamentID: tournamentID,
 		Type:         MessageType(messageType),
@@ -230,7 +230,7 @@ func (h *Hub) shutdown() {
 }
 
 // GetStats возвращает статистику hub
-func (h *Hub) GetStats() map[string]interface{} {
+func (h *Hub) GetStats() map[string]any {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -239,7 +239,7 @@ func (h *Hub) GetStats() map[string]interface{} {
 		totalClients += len(clients)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"tournaments":   len(h.tournaments),
 		"total_clients": totalClients,
 	}

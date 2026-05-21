@@ -30,7 +30,7 @@ func TestRateLimiter_Allow_ExceedsLimit(t *testing.T) {
 	limit := 3
 
 	// Make exactly `limit` requests -- all should be allowed.
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		allowed, err := rl.Allow(ctx, "test:exceed", limit, time.Minute)
 		require.NoError(t, err)
 		assert.True(t, allowed, "request %d should be allowed", i+1)
@@ -75,7 +75,7 @@ func TestRateLimiter_Allow_WindowExpiry(t *testing.T) {
 	window := 10 * time.Second
 
 	// Exhaust the limit.
-	for i := 0; i < limit; i++ {
+	for range limit {
 		allowed, err := rl.Allow(ctx, "test:expiry", limit, window)
 		require.NoError(t, err)
 		assert.True(t, allowed)
@@ -115,7 +115,7 @@ func TestRateLimiter_AllowWithIncr_ExceedsLimit(t *testing.T) {
 	ctx := context.Background()
 	limit := 2
 
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		allowed, err := rl.AllowWithIncr(ctx, "test:incr-exceed", limit, time.Minute)
 		require.NoError(t, err)
 		assert.True(t, allowed, "request %d should be allowed", i+1)

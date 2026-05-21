@@ -53,10 +53,10 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			// Если токена нет в header, проверяем Sec-WebSocket-Protocol (для WebSocket)
 			if token == "" {
 				if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
-					for _, p := range strings.Split(proto, ",") {
+					for p := range strings.SplitSeq(proto, ",") {
 						p = strings.TrimSpace(p)
-						if strings.HasPrefix(p, "access_token.") {
-							token = strings.TrimPrefix(p, "access_token.")
+						if after, ok := strings.CutPrefix(p, "access_token."); ok {
+							token = after
 							break
 						}
 					}

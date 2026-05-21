@@ -86,7 +86,7 @@ func (db *DB) monitorConnectionPool() {
 const slowQueryThreshold = 500 * time.Millisecond
 
 // ExecWithMetrics выполняет запрос с записью метрик
-func (db *DB) ExecWithMetrics(ctx context.Context, queryType string, query string, args ...interface{}) (sql.Result, error) {
+func (db *DB) ExecWithMetrics(ctx context.Context, queryType string, query string, args ...any) (sql.Result, error) {
 	start := time.Now()
 	result, err := db.ExecContext(ctx, query, args...)
 	duration := time.Since(start)
@@ -109,7 +109,7 @@ func (db *DB) ExecWithMetrics(ctx context.Context, queryType string, query strin
 }
 
 // QueryWithMetrics выполняет запрос с записью метрик
-func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest interface{}, query string, args ...interface{}) error {
+func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest any, query string, args ...any) error {
 	start := time.Now()
 	err := db.SelectContext(ctx, dest, query, args...)
 	duration := time.Since(start)
@@ -132,7 +132,7 @@ func (db *DB) QueryWithMetrics(ctx context.Context, queryType string, dest inter
 }
 
 // QueryRowWithMetrics выполняет запрос одной строки с записью метрик
-func (db *DB) QueryRowWithMetrics(ctx context.Context, queryType string, dest interface{}, query string, args ...interface{}) error {
+func (db *DB) QueryRowWithMetrics(ctx context.Context, queryType string, dest any, query string, args ...any) error {
 	start := time.Now()
 	err := db.GetContext(ctx, dest, query, args...)
 	duration := time.Since(start)
@@ -265,7 +265,7 @@ func (db *DB) PrepareNamed(query string) (*PreparedStatement, error) {
 }
 
 // ExecContext выполняет prepared statement
-func (ps *PreparedStatement) ExecContext(ctx context.Context, queryType string, arg interface{}) (sql.Result, error) {
+func (ps *PreparedStatement) ExecContext(ctx context.Context, queryType string, arg any) (sql.Result, error) {
 	start := time.Now()
 	result, err := ps.stmt.ExecContext(ctx, arg)
 	ps.db.metrics.RecordDBQuery(queryType, time.Since(start))
@@ -280,7 +280,7 @@ func (ps *PreparedStatement) ExecContext(ctx context.Context, queryType string, 
 }
 
 // QueryContext выполняет prepared statement query
-func (ps *PreparedStatement) QueryContext(ctx context.Context, queryType string, dest interface{}, arg interface{}) error {
+func (ps *PreparedStatement) QueryContext(ctx context.Context, queryType string, dest any, arg any) error {
 	start := time.Now()
 	err := ps.stmt.SelectContext(ctx, dest, arg)
 	ps.db.metrics.RecordDBQuery(queryType, time.Since(start))

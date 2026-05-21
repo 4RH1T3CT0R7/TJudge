@@ -21,7 +21,7 @@ type envelope struct {
 
 // redisPublisher - совместимый с cache.Cache интерфейс для публикации.
 type redisPublisher interface {
-	Publish(ctx context.Context, channel string, message interface{}) error
+	Publish(ctx context.Context, channel string, message any) error
 }
 
 // redisSubscriber - совместимый с cache.Cache интерфейс для подписки.
