@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -44,6 +44,7 @@ help:
 	@echo "  make migrate-up    - Apply database migrations"
 	@echo "  make migrate-down  - Rollback database migrations"
 	@echo "  make admin         - Make user admin (EMAIL=user@example.com)"
+	@echo "  make create-user   - Register user via API (EMAIL=, USERNAME=, PASSWORD= [ADMIN=1])"
 	@echo ""
 	@echo "  make clean         - Clean build artifacts"
 
@@ -254,6 +255,39 @@ endif
 		|| echo "Failed to update user. Make sure the container is running and user exists."
 	@echo ""
 	@echo "Done! User must log out and log in again to get the new role."
+
+# Create user via API (registers a new account). Pass ADMIN=1 to promote to admin.
+# Usage:
+#   make create-user EMAIL=a@b.c USERNAME=alice PASSWORD=secret123
+#   make create-user EMAIL=a@b.c USERNAME=alice PASSWORD=secret123 ADMIN=1
+create-user:
+ifndef EMAIL
+	@echo "Usage: make create-user EMAIL=user@example.com USERNAME=user PASSWORD=secret [ADMIN=1]"
+	@exit 1
+endif
+ifndef USERNAME
+	@echo "Usage: make create-user EMAIL=user@example.com USERNAME=user PASSWORD=secret [ADMIN=1]"
+	@exit 1
+endif
+ifndef PASSWORD
+	@echo "Usage: make create-user EMAIL=user@example.com USERNAME=user PASSWORD=secret [ADMIN=1]"
+	@exit 1
+endif
+	@API_URL=$${API_URL:-http://localhost:8080}; \
+	echo "Registering $(USERNAME) <$(EMAIL)> at $$API_URL..."; \
+	HTTP_CODE=$$(curl -sS -o /tmp/tjudge-create-user.json -w "%{http_code}" \
+		-X POST "$$API_URL/api/v1/auth/register" \
+		-H 'Content-Type: application/json' \
+		-d '{"username":"$(USERNAME)","email":"$(EMAIL)","password":"$(PASSWORD)"}'); \
+	echo "HTTP $$HTTP_CODE"; \
+	cat /tmp/tjudge-create-user.json; echo; \
+	if [ "$$HTTP_CODE" != "200" ] && [ "$$HTTP_CODE" != "201" ]; then \
+		echo "Registration failed."; rm -f /tmp/tjudge-create-user.json; exit 1; \
+	fi; \
+	rm -f /tmp/tjudge-create-user.json
+ifeq ($(ADMIN),1)
+	@$(MAKE) admin EMAIL=$(EMAIL)
+endif
 
 # =============================================================================
 # Self-Hosted Deployment
