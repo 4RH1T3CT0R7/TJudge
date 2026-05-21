@@ -243,18 +243,27 @@ security:
 	@which govulncheck > /dev/null || (echo "Installing govulncheck..." && go install golang.org/x/vuln/cmd/govulncheck@latest)
 	govulncheck ./...
 
-# Make user admin by email
+# Make user admin by email. Auto-detects postgres container (local or prod).
 admin:
 ifndef EMAIL
 	@echo "Usage: make admin EMAIL=user@example.com"
 	@exit 1
 endif
-	@echo "Making $(EMAIL) an admin..."
-	@docker exec tjudge-postgres psql -U tjudge -d tjudge -c \
-		"UPDATE users SET role = 'admin' WHERE email = '$(EMAIL)' RETURNING username, email, role;" \
-		|| echo "Failed to update user. Make sure the container is running and user exists."
-	@echo ""
-	@echo "Done! User must log out and log in again to get the new role."
+	@set -e; \
+	container=$$(docker ps --filter "name=tjudge-postgres" --format '{{.Names}}' | head -1); \
+	if [ -z "$$container" ]; then \
+		echo "Error: no running tjudge-postgres* container found"; \
+		exit 1; \
+	fi; \
+	echo "Promoting $(EMAIL) to admin via container $$container..."; \
+	result=$$(docker exec "$$container" psql -U tjudge -d tjudge -tA -c \
+		"UPDATE users SET role = 'admin' WHERE email = '$(EMAIL)' RETURNING username, email, role;"); \
+	if [ -z "$$result" ]; then \
+		echo "Error: no user with email '$(EMAIL)' (UPDATE matched 0 rows)"; \
+		exit 1; \
+	fi; \
+	echo "Updated: $$result"; \
+	echo "Done! User must log out and log in again to get the new role."
 
 # Create user via API (registers a new account). Pass ADMIN=1 to promote to admin.
 # Usage:
