@@ -122,6 +122,11 @@ services:
     expose:
       - "8080"
       - "9090"
+    labels:
+      monitoring: "enabled"
+      prometheus_job: "tjudge-api"
+      prometheus_port: "9090"
+      prometheus_service: "api"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=postgres
@@ -158,6 +163,7 @@ services:
       - programs_data:/data/programs
     networks:
       - tjudge-network
+      - monitoring
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -187,6 +193,11 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-worker:${VERSION:-latest}
     expose:
       - "9090"
+    labels:
+      monitoring: "enabled"
+      prometheus_job: "tjudge-worker"
+      prometheus_port: "9090"
+      prometheus_service: "worker"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=postgres
@@ -224,6 +235,7 @@ services:
       - programs_data:/data/programs
     networks:
       - tjudge-network
+      - monitoring
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -235,115 +247,10 @@ services:
         max-size: "100m"
         max-file: "5"
 
-  # Alertmanager
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: tjudge-alertmanager-prod
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./deployments/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=https://alerts.tjudge.example.com'
-      - '--cluster.advertise-address=0.0.0.0:9093'
-    networks:
-      - tjudge-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: always
-
-  # Prometheus
-  prometheus:
-    image: prom/prometheus:v2.53.0
-    container_name: tjudge-prometheus-prod
-    ports:
-      - "9092:9090"
-    volumes:
-      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./deployments/prometheus/alerts:/etc/prometheus/alerts:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=90d'
-      - '--storage.tsdb.retention.size=50GB'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    depends_on:
-      alertmanager:
-        condition: service_healthy
-    networks:
-      - tjudge-network
-    restart: always
-
-  # Grafana
-  grafana:
-    image: grafana/grafana:11.1.0
-    container_name: tjudge-grafana-prod
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=https://grafana.tjudge.example.com
-      - GF_SECURITY_COOKIE_SECURE=true
-      - GF_SECURITY_STRICT_TRANSPORT_SECURITY=true
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./deployments/grafana/provisioning:/etc/grafana/provisioning:ro
-    depends_on:
-      - prometheus
-      - loki
-    networks:
-      - tjudge-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: always
-
-  # Loki
-  loki:
-    image: grafana/loki:3.1.0
-    container_name: tjudge-loki-prod
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./deployments/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - tjudge-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: always
-
-  # Promtail
-  promtail:
-    image: grafana/promtail:3.1.0
-    container_name: tjudge-promtail-prod
-    volumes:
-      - ./deployments/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      loki:
-        condition: service_healthy
-    networks:
-      - tjudge-network
-    restart: always
+  # Monitoring stack (Prometheus/Grafana/Loki/Alertmanager) вынесен в отдельный
+  # репо infra-monitoring и работает через внешнюю docker-сеть `monitoring`.
+  # Соответствующие папки конфигов в TJudge удалены — старые tjudge-*-prod
+  # контейнеры запускать больше нельзя.
 
   # P1.14: автоматический pg_dump (prod). Включается профилем "backup":
   #   docker compose --profile backup up -d backup
@@ -380,10 +287,6 @@ volumes:
   postgres_data:
   redis_data:
   programs_data:
-  prometheus_data:
-  grafana_data:
-  loki_data:
-  alertmanager_data:
   backups_data:
 
 networks:
@@ -392,3 +295,6 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
+  monitoring:
+    name: monitoring
+    external: true
