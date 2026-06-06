@@ -93,10 +93,14 @@ export const pageTransitionVariants: Variants = {
     y: 0,
     transition: { duration: 0.2, ease: 'easeOut' },
   },
+  // Exit мгновенный: с mode="wait" AnimatePresence ждёт завершения exit перед
+  // монтированием новой страницы. Любая ненулевая длительность создаёт «провал
+  // в пустоту» (старая уже исчезла, новая ещё не появилась) — это и есть
+  // промаргивание при каждом переходе. Мгновенный exit убирает пустой кадр,
+  // остаётся только чистое появление новой страницы.
   exit: {
     opacity: 0,
-    y: -8,
-    transition: { duration: 0.15, ease: 'easeIn' },
+    transition: { duration: 0 },
   },
 };
 

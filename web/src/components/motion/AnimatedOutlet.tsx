@@ -9,7 +9,7 @@ export function AnimatedOutlet() {
   const outlet = useOutlet();
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" initial={false}>
       <motion.div
         key={location.pathname}
         className="flex-1 flex flex-col"

@@ -168,6 +168,10 @@ func (s *Server) setupMiddleware() {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
+	// Prometheus HTTP-метрики (tjudge_http_requests_total / _duration_seconds /
+	// _in_flight). Раньше HTTP инструментировался только otelhttp (трейсы), а
+	// метрики в Prometheus не попадали — HTTP-панели дашборда были пустыми.
+	s.router.Use(middleware.Metrics())
 	s.router.Use(chiMiddleware.RealIP)
 	s.router.Use(chiMiddleware.Logger)
 	s.router.Use(chiMiddleware.Recoverer)

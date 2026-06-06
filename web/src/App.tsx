@@ -68,9 +68,13 @@ function prefetchCriticalPages() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, isInitialized } = useAuthStore();
+  const { isAuthenticated, isInitialized } = useAuthStore();
 
-  if (!isInitialized || isLoading) {
+  // Полноэкранный лоадер показываем ТОЛЬКО до первичной инициализации auth.
+  // Раньше здесь был ещё `|| isLoading`, из-за чего любое фоновое действие,
+  // дёргающее isLoading после init (сохранение профиля и т.п.), мгновенно
+  // подменяло всю страницу на «Загрузка...» и обратно — видимое промаргивание.
+  if (!isInitialized) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Загрузка...</p>
@@ -86,9 +90,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, isInitialized, user } = useAuthStore();
+  const { isAuthenticated, isInitialized, user } = useAuthStore();
 
-  if (!isInitialized || isLoading) {
+  if (!isInitialized) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p>Загрузка...</p>
