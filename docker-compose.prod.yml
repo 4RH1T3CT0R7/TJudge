@@ -72,7 +72,7 @@ services:
       dockerfile: docker/migrate/Dockerfile
     container_name: tjudge-migrate-prod
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=tjudge-postgres-prod
       - DB_PORT=5432
       - DB_USER=tjudge
       - DB_PASSWORD_FILE=/run/secrets/db_password
@@ -129,13 +129,13 @@ services:
       prometheus_service: "api"
     environment:
       - ENVIRONMENT=production
-      - DB_HOST=postgres
+      - DB_HOST=tjudge-postgres-prod
       - DB_PORT=5432
       - DB_USER=tjudge
       - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=tjudge
       - DB_MAX_CONNECTIONS=100
-      - REDIS_HOST=redis
+      - REDIS_HOST=tjudge-redis-prod
       - REDIS_PORT=6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
@@ -200,12 +200,12 @@ services:
       prometheus_service: "worker"
     environment:
       - ENVIRONMENT=production
-      - DB_HOST=postgres
+      - DB_HOST=tjudge-postgres-prod
       - DB_PORT=5432
       - DB_USER=tjudge
       - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=tjudge
-      - REDIS_HOST=redis
+      - REDIS_HOST=tjudge-redis-prod
       - REDIS_PORT=6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
