@@ -1,53 +1,31 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api/client';
+import { useGames } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
-import type { Game } from '../types';
 
 export function Games() {
-  const [games, setGames] = useState<Game[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const showLoading = useDelayedLoading(isLoading);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadGames();
-  }, []);
-
-  const loadGames = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await api.getGames();
-      setGames(data);
-    } catch (err) {
-      setError('Не удалось загрузить список игр');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data, isPending, isError, refetch } = useGames();
+  const showLoading = useDelayedLoading(isPending);
+  const games = data ?? [];
 
   if (showLoading) {
     return <TerminalLoader />;
   }
 
-  if (isLoading) {
+  if (isPending) {
     return null;
   }
 
-  if (error) {
+  if (isError) {
     return (
       <div className="text-center py-12">
         <div className="flex justify-center mb-4">
           <SpaceInvader size="sm" controlledPose="dizzy" speechBubble="// ошибка загрузки" eyeOverride="sad" />
         </div>
-        <p className="text-red-400">{error}</p>
-        <button onClick={loadGames} className="btn btn-secondary mt-4">
+        <p className="text-red-400">Не удалось загрузить список игр</p>
+        <button onClick={() => refetch()} className="btn btn-secondary mt-4">
           Попробовать снова
         </button>
       </div>

@@ -6,6 +6,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 )
 
@@ -88,6 +89,81 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 		return errors.Wrap(err, "failed to update match result")
 	}
 
+	return nil
+}
+
+// UpdateResultWithOutbox обновляет результат матча и в той же транзакции
+// записывает outbox-задачу «обновить рейтинг» (для успешно завершённых
+// матчей с определившимся победителем). Гарантия: если результат
+// зафиксирован, рейтинг будет обработан - сразу воркером (fast path)
+// или OutboxDispatcher'ом после сбоя.
+func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
+	status := domain.MatchCompleted
+	if result.ErrorCode != 0 {
+		status = domain.MatchFailed
+	}
+
+	var errorCode *int
+	if result.ErrorCode != 0 {
+		errorCode = &result.ErrorCode
+	}
+
+	var errorMsg *string
+	if result.ErrorMessage != "" {
+		errorMsg = &result.ErrorMessage
+	}
+
+	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		updateQuery := `
+			UPDATE matches
+			SET status = $2, score1 = $3, score2 = $4, winner = $5,
+			    error_code = $6, error_message = $7, completed_at = NOW()
+			WHERE id = $1
+		`
+		if _, err := tx.ExecContext(ctx, updateQuery,
+			id, status, result.Score1, result.Score2, result.Winner, errorCode, errorMsg,
+		); err != nil {
+			return errors.Wrap(err, "failed to update match result")
+		}
+
+		if status == domain.MatchCompleted && result.Winner >= 0 {
+			outboxQuery := `INSERT INTO match_outbox (match_id, kind) VALUES ($1, $2)`
+			if _, err := tx.ExecContext(ctx, outboxQuery, id, OutboxKindRatingUpdate); err != nil {
+				return errors.Wrap(err, "failed to insert outbox entry")
+			}
+		}
+
+		return nil
+	})
+}
+
+// MarkRatingApplied помечает outbox-задачу рейтинга выполненной (fast path:
+// воркер успел обновить рейтинг сразу после записи результата).
+func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
+	query := `
+		UPDATE match_outbox
+		SET status = 'done', processed_at = NOW()
+		WHERE match_id = $1 AND kind = $2 AND status = 'pending'
+	`
+	if _, err := r.db.ExecContext(ctx, query, matchID, OutboxKindRatingUpdate); err != nil {
+		return errors.Wrap(err, "failed to mark rating applied")
+	}
+	return nil
+}
+
+// ResetToPending возвращает матч из running в pending после транзиентной
+// инфраструктурной ошибки executor'а (Docker daemon недоступен и т.п.):
+// программа участника не виновата, матч будет повторён - ретраем пула
+// или периодическим recovery-сервисом.
+func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
+	query := `
+		UPDATE matches
+		SET status = 'pending', started_at = NULL
+		WHERE id = $1 AND status = 'running'
+	`
+	if _, err := r.db.ExecWithMetrics(ctx, "match_reset_pending", query, id); err != nil {
+		return errors.Wrap(err, "failed to reset match to pending")
+	}
 	return nil
 }
 

@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Запускаем периодическое обслуживание партиций (каждые 24ч)
-	database.StartPartitionMaintenance()
+	database.StartPartitionMaintenance(cfg.Database.PartitionRetentionMonths)
 
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
@@ -117,7 +117,7 @@ func main() {
 	redisEventPub := events.NewRedisEventPublisher(redisCache, log)
 	eventBus.Subscribe(
 		redisEventPub,
-		events.MatchResultProcessed{},
+		events.MatchResultProcessed{}, events.ProgramCompiled{},
 	)
 
 	// Инициализируем rating service
@@ -125,6 +125,16 @@ func main() {
 
 	// Проверяем наличие образа tjudge-cli
 	checkTJudgeCLIImage(log)
+
+	// Проверяем наличие builder-образа для компиляции программ (warn-only:
+	// без него compile-задачи будут копиться, stuck-recovery повторит их
+	// после появления образа).
+	if !imageExists(cfg.Executor.BuilderImage, log) {
+		log.Warn("Builder image not found - compile tasks will wait until it is available",
+			zap.String("image", cfg.Executor.BuilderImage),
+			zap.String("hint", "make docker-build-builder"),
+		)
+	}
 
 	// Инициализируем executor с путём к программам
 	exec, err := executor.NewExecutor(cfg.Executor, cfg.Storage.ProgramsPath, cfg.Storage.HostProgramsPath, log)
@@ -149,11 +159,6 @@ func main() {
 		matchCache,
 		log,
 	)
-
-	// Инициализируем leaderboard refresher (обновляет materialized views каждые 30 секунд)
-	leaderboardRefresher := db.NewLeaderboardRefresher(database, 30*time.Second, log)
-	leaderboardRefresher.Start()
-	log.Info("Leaderboard refresher started")
 
 	// Инициализируем worker pool
 	pool := worker.NewPool(
@@ -184,6 +189,37 @@ func main() {
 
 	// Запускаем периодическое восстановление
 	recoveryService.Start()
+
+	// Outbox-диспетчер: доводит до конца обновления рейтингов, потерянные
+	// при сбое между записью результата матча и fast-path обработкой.
+	outboxRepo := db.NewOutboxRepository(database)
+	outboxDispatcher := worker.NewOutboxDispatcher(
+		outboxRepo,
+		matchRepo,
+		ratingRepo,
+		ratingService,
+		eventBus,
+		log,
+	)
+	outboxDispatcher.Start()
+
+	// Compile-worker: асинхронная компиляция загруженных программ
+	// в Docker-песочнице (builder-образ с тулчейнами).
+	compiler, err := executor.NewCompiler(
+		cfg.Executor.BuilderImage,
+		cfg.Storage.ProgramsPath,
+		cfg.Storage.HostProgramsPath,
+		cfg.Executor.CompileTimeout,
+		log,
+	)
+	if err != nil {
+		log.Fatal("Failed to create sandbox compiler", zap.Error(err))
+	}
+	defer compiler.Close()
+
+	compileQueue := queue.NewCompileQueue(redisCache, log)
+	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler, eventBus, log)
+	compileWorker.Start()
 
 	// Запускаем worker pool
 	pool.Start()
@@ -232,8 +268,11 @@ func main() {
 	// Останавливаем recovery service
 	recoveryService.Stop()
 
-	// Останавливаем leaderboard refresher
-	leaderboardRefresher.Stop()
+	// Останавливаем outbox-диспетчер
+	outboxDispatcher.Stop()
+
+	// Останавливаем compile-worker
+	compileWorker.Stop()
 
 	// Останавливаем worker pool
 	pool.Stop()

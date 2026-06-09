@@ -162,7 +162,10 @@ type ParticipantWithGameType struct {
 // GetLatestParticipantsGroupedByGame получает участников турнира сгруппированных по играм
 // Возвращает map[game_type] -> participants
 func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
-	// Выбираем участников с последней версией программы и их game_type
+	// Выбираем участников с последней ГОТОВОЙ версией программы и их game_type.
+	// Только status='ready': compiling ещё не собралась, failed не собралась
+	// вообще. Если новая версия сломана, команда продолжает играть предыдущей
+	// рабочей версией (MAX(version) берётся среди ready).
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at, g.name as game_type
 		FROM tournament_participants tp
@@ -170,12 +173,14 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 		INNER JOIN games g ON g.id = p.game_id
 		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 		WHERE tp.tournament_id = $1
+		  AND p.status = 'ready'
 		  AND p.version = (
 		      SELECT MAX(p2.version)
 		      FROM programs p2
 		      WHERE p2.team_id = p.team_id
 		        AND p2.game_id = p.game_id
 		        AND p2.tournament_id = p.tournament_id
+		        AND p2.status = 'ready'
 		  )
 		ORDER BY g.name, tp.created_at ASC
 	`

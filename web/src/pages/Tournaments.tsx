@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api/client';
+import { useTournaments } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import type { Tournament, TournamentStatus } from '../types';
+import type { TournamentStatus } from '../types';
 
 const UsersIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -20,26 +20,10 @@ const statusLabels: Record<TournamentStatus, { label: string; className: string 
 };
 
 export function Tournaments() {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const showLoading = useDelayedLoading(isLoading);
   const [filter, setFilter] = useState<TournamentStatus | ''>('');
-
-  const loadTournaments = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await api.getTournaments(filter || undefined);
-      setTournaments(data || []);
-    } catch (err) {
-      console.error('Failed to load tournaments:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    loadTournaments();
-  }, [loadTournaments]);
+  const { data, isPending } = useTournaments(filter || undefined);
+  const showLoading = useDelayedLoading(isPending);
+  const tournaments = data ?? [];
 
   return (
     <div>
@@ -69,7 +53,7 @@ export function Tournaments() {
       {/* Content */}
       {showLoading ? (
         <TerminalLoader />
-      ) : isLoading ? null : tournaments.length === 0 ? (
+      ) : isPending ? null : tournaments.length === 0 ? (
         <div className="text-center py-16">
           <div className="relative inline-block">
             <SpaceInvader size="md" controlledPose="cry" eyeOverride="sad" speechBubble="// пусто..." />

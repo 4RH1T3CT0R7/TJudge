@@ -45,6 +45,14 @@ func (h *BroadcastHandler) Handle(_ context.Context, event any) error {
 			"matches_count": e.MatchCount,
 		})
 
+	case events.ProgramCompiled:
+		h.broadcaster.Broadcast(e.TournamentID, "program_update", map[string]any{
+			"program_id":    e.ProgramID.String(),
+			"team_id":       e.TeamID.String(),
+			"status":        e.Status,
+			"error_message": e.ErrorMessage,
+		})
+
 	case events.MatchResultProcessed:
 		h.broadcaster.Broadcast(e.TournamentID, "match_result", map[string]any{
 			"match_id":    e.MatchID.String(),

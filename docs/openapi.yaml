@@ -2546,6 +2546,13 @@ components:
         language:
           type: string
           description: Detected or specified language (python, cpp, c, go, rust, java, javascript, ruby, php, lua)
+        status:
+          type: string
+          enum: [compiling, ready, failed]
+          description: >-
+            Жизненный цикл программы: compiling - в очереди или компилируется
+            в Docker-песочнице worker'а; ready - готова к матчам; failed -
+            компиляция/проверка синтаксиса не прошла (см. error_message).
         team_id:
           type: string
           format: uuid

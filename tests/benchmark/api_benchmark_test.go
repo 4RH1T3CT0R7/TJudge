@@ -119,7 +119,7 @@ func setupTestServer(b *testing.B) {
 	programHandler := handlers.NewProgramHandler(
 		programRepo, tournamentRepo, tournamentRepo,
 		nil, gameService, matchRepo, gameRepo,
-		teamRepo, gameRepo, cfg.Storage.ProgramsPath, log,
+		teamRepo, gameRepo, nil, cfg.Storage.ProgramsPath, log,
 	)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandler(

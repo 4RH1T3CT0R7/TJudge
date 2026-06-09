@@ -1,0 +1,223 @@
+# Nightly: тяжёлые проверки, не влезающие в PR-цикл.
+#
+# 1. full-flow  - ЕДИНСТВЕННЫЙ прогон полного пути продукта:
+#                 API + worker + реальный Docker-executor
+#                 (загрузка → компиляция в песочнице → матч → ELO).
+#                 В обычном CI e2e гоняется без worker'а.
+# 2. perf-gate  - бенчмарки против baseline (порог регрессии 10%, SLO.md §5).
+# 3. restore-test - backup.sh → restore-test.sh: непротестированный бэкап
+#                 не считается бэкапом.
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '30 2 * * *' # 02:30 UTC ежедневно
+  workflow_dispatch: {}
+
+jobs:
+  full-flow:
+    name: Full match flow (API + worker + Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: tjudge
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: tjudge_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: tjudge
+      DB_PASSWORD: secret
+      DB_NAME: tjudge_test
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: test-jwt-secret-for-nightly-ci
+      PROGRAMS_PATH: /tmp/tjudge-programs
+      HOST_PROGRAMS_PATH: /tmp/tjudge-programs
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+        working-directory: web
+
+      - name: Build executor images
+        run: |
+          docker build -t tjudge-cli:latest -f docker/tjudge/Dockerfile .
+          docker build -t tjudge-builder:latest -f docker/builder/Dockerfile .
+
+      - name: Run migrations
+        run: go run cmd/migrations/main.go up
+
+      - name: Start API and worker
+        env:
+          API_PORT: 8080
+          WORKER_MIN: 2
+          WORKER_MAX: 5
+          METRICS_PORT: 9091
+        run: |
+          mkdir -p /tmp/tjudge-programs
+          go build -o bin/api ./cmd/api
+          go build -o bin/worker ./cmd/worker
+          ./bin/api > api.log 2>&1 &
+          ./bin/worker > worker.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "API ready"; break
+            fi
+            sleep 1
+          done
+          curl -f http://localhost:8080/health
+
+      - name: Run E2E tests (with live worker)
+        env:
+          E2E_API_URL: http://localhost:8080
+        run: go test -v -tags=e2e -timeout=20m ./tests/e2e/...
+
+      - name: Run executor Docker integration tests
+        env:
+          RUN_INTEGRATION: 'true'
+          RUN_DOCKER_TESTS: 'true'
+        run: go test -v -tags='integration docker' -timeout=10m ./tests/integration/...
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== api.log (tail) ==="; tail -100 api.log || true
+          echo "=== worker.log (tail) ==="; tail -100 worker.log || true
+
+  perf-gate:
+    name: Benchmark regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Run benchmarks
+        run: |
+          go test -tags=benchmark -bench=. -benchmem -benchtime=1s -count=5 \
+            ./tests/benchmark/... | tee bench-current.txt
+
+      # Baseline хранится в репо (tests/benchmark/baseline.txt) и обновляется
+      # осознанно: при намеренном изменении перфоманса перезапишите файл
+      # выводом этого job'а (артефакт bench-current).
+      - name: Compare with baseline (fail on >10% regression)
+        run: |
+          if [ ! -f tests/benchmark/baseline.txt ]; then
+            echo "::warning::tests/benchmark/baseline.txt отсутствует - сравнение пропущено."
+            echo "Скачайте артефакт bench-current и закоммитьте как baseline."
+            exit 0
+          fi
+          benchstat tests/benchmark/baseline.txt bench-current.txt | tee benchstat.txt
+          # benchstat печатает дельты вида +12.34%; ищем регрессии > +10%
+          # в колонке sec/op (строки с p-значением, без 'no significant').
+          regressions=$(awk '/[+][0-9]+\.[0-9]+%/ {
+            for (i=1; i<=NF; i++) {
+              if ($i ~ /^\+[0-9]+\.[0-9]+%$/) {
+                gsub(/[+%]/, "", $i)
+                if ($i + 0 > 10) print
+              }
+            }
+          }' benchstat.txt | sort -u)
+          if [ -n "$regressions" ]; then
+            echo "::error::Обнаружены регрессии производительности > 10% (SLO.md §5):"
+            echo "$regressions"
+            exit 1
+          fi
+          echo "Регрессий > 10% не обнаружено."
+
+      - name: Upload current benchmarks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-current
+          path: bench-current.txt
+          retention-days: 30
+
+  restore-test:
+    name: Backup restore roundtrip
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      # Поднимаем postgres с именем, которое ожидает backup.sh,
+      # прогоняем миграции (схема = содержимое для дампа).
+      - name: Start postgres and migrate
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: tjudge
+          DB_PASSWORD: secret
+          DB_NAME: tjudge
+        run: |
+          docker run -d --name tjudge-postgres \
+            -e POSTGRES_USER=tjudge -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=tjudge \
+            -p 5432:5432 postgres:15-alpine
+          for i in $(seq 1 30); do
+            docker exec tjudge-postgres pg_isready -U tjudge && break
+            sleep 1
+          done
+          go run cmd/migrations/main.go up
+
+      - name: Create backup
+        run: ./scripts/backup.sh ./backups
+
+      - name: Restore into throwaway postgres and smoke-test
+        run: ./scripts/restore-test.sh

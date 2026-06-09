@@ -179,7 +179,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		"",
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create container: %w", err)
+		return nil, infraErrorf("failed to create container: %w", err)
 	}
 
 	containerID := resp.ID
@@ -187,7 +187,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 
 	// Запускаем контейнер
 	if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to start container: %w", err)
+		return nil, infraErrorf("failed to start container: %w", err)
 	}
 
 	// Ждём завершения
@@ -200,16 +200,17 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			if logErr == nil && stderr != "" {
 				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
 			}
-			return nil, fmt.Errorf("error waiting for container: %w", err)
+			return nil, infraErrorf("error waiting for container: %w", err)
 		}
 		// errCh сработал с nil-ошибкой - неожиданно, считаем это ошибкой
-		return nil, fmt.Errorf("container %s: wait returned nil error without status", containerID)
+		return nil, infraErrorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
 		// Получаем логи контейнера
 		stdout, stderrRaw, err := e.getContainerLogs(ctx, containerID)
 		if err != nil {
-			// Если не можем получить логи, возвращаем код выхода
-			return nil, fmt.Errorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
+			// Логи недоступны из-за Docker API - это проблема окружения,
+			// а не программы: матч можно безопасно повторить.
+			return nil, infraErrorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
 
 		stderr := sanitizeStderr(stderrRaw)
@@ -482,4 +483,3 @@ func (e *Executor) Close() error {
 	}
 	return nil
 }
-

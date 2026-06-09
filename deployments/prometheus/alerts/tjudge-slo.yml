@@ -1,0 +1,120 @@
+# Алерты TJudge по SLO (docs/SLO.md §2, §4).
+# Имена метрик - pkg/metrics/metrics.go.
+
+groups:
+  - name: tjudge-availability
+    rules:
+      # API недоступен - главный CRIT (SLO: availability >= 99.5%/28d).
+      - alert: APIDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API недоступен"
+          description: "Prometheus не может скрейпить api:8080/metrics уже 1 минуту."
+
+      - alert: WorkerDown
+        expr: up{job="worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker недоступен"
+          description: "Матчи не обрабатываются: worker не отвечает на скрейп 2 минуты."
+
+      # SLO: 5xx < 0.5% за 1h; алерт - ранний сигнал на 10м окне.
+      - alert: APIHighErrorRate
+        expr: |
+          sum(rate(tjudge_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(tjudge_http_requests_total[5m])) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx rate > 0.5% в течение 10 минут"
+
+      # SLO: P99 read < 1s (по всем ручкам; write-пороги уточняются по факту).
+      - alert: APIHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(tjudge_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API P99 latency > 1s в течение 15 минут"
+
+  - name: tjudge-queue
+    rules:
+      # SLO: queue oldest age < 5 min. Прямой метрики возраста нет -
+      # проксируем застревание через размер high-priority очереди.
+      - alert: QueueStuck
+        expr: tjudge_queue_size{priority="high"} > 500
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High-priority очередь > 500 матчей 5 минут подряд"
+          description: "Матчи не разбираются: проверь worker и Docker daemon."
+
+      - alert: DeadLetterGrowing
+        expr: increase(tjudge_queue_deadletter_push_total[10m]) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead-letter очередь растёт (>10 за 10 минут)"
+          description: "Повреждённые задачи в очереди: смотри логи worker'а."
+
+      # SLO: match pickup lag < 30s (p85). Большое время ожидания в очереди.
+      - alert: MatchPickupLagHigh
+        expr: |
+          histogram_quantile(0.85,
+            sum(rate(tjudge_queue_wait_time_seconds_bucket[10m])) by (le)) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "85-й перцентиль ожидания матча в очереди > 30s"
+
+  - name: tjudge-worker
+    rules:
+      # SLO: worker respawns 0/24h - любая паника воркера тревожна.
+      - alert: WorkerPoolSaturated
+        expr: |
+          tjudge_active_workers / clamp_min(tjudge_worker_pool_size, 1) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Пул воркеров насыщен > 90% в течение 15 минут"
+
+      - alert: WorkerDrainTooSlow
+        expr: |
+          histogram_quantile(0.99,
+            rate(tjudge_worker_drain_duration_seconds_bucket[1h])) > 90
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drain пула воркеров P99 > 90s"
+
+      - alert: MatchFailureRateHigh
+        expr: |
+          sum(rate(tjudge_matches_total{status="failed"}[15m]))
+            / clamp_min(sum(rate(tjudge_matches_total[15m])), 0.0001) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "> 20% матчей фейлится 15 минут подряд"
+          description: "Возможны проблемы executor'а/образов, а не программ участников."
+
+  - name: tjudge-db
+    rules:
+      - alert: DBConnectionsNearLimit
+        expr: tjudge_db_connections{state="open"} / 50 > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Использовано > 85% пула соединений БД"

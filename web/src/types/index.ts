@@ -95,9 +95,9 @@ export interface Program {
   game_id?: string;
   name: string;
   game_type: string;
-  code_path: string;
-  file_path?: string;
   language: string;
+  /** Жизненный цикл: compiling - собирается в песочнице, ready - готова к матчам, failed - ошибка компиляции */
+  status: 'compiling' | 'ready' | 'failed';
   error_message?: string;
   version: number;
   created_at: string;

@@ -67,6 +67,12 @@ type AutoRoundChecker interface {
 	IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
 }
 
+// CompileEnqueuer ставит загруженную программу в очередь асинхронной
+// компиляции (выполняется worker'ом в Docker-песочнице).
+type CompileEnqueuer interface {
+	Enqueue(ctx context.Context, programID uuid.UUID) error
+}
+
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
 	programRepo      ProgramRepository
@@ -78,6 +84,7 @@ type ProgramHandler struct {
 	roundChecker     RoundCompletionChecker
 	teamChecker      TeamMembershipChecker
 	autoRoundChecker AutoRoundChecker
+	compileQueue     CompileEnqueuer
 	uploadDir        string
 	maxFileSize      int64
 	log              *logger.Logger
@@ -94,6 +101,7 @@ func NewProgramHandler(
 	roundChecker RoundCompletionChecker,
 	teamChecker TeamMembershipChecker,
 	autoRoundChecker AutoRoundChecker,
+	compileQueue CompileEnqueuer,
 	uploadDir string,
 	log *logger.Logger,
 ) *ProgramHandler {
@@ -115,6 +123,7 @@ func NewProgramHandler(
 		roundChecker:     roundChecker,
 		teamChecker:      teamChecker,
 		autoRoundChecker: autoRoundChecker,
+		compileQueue:     compileQueue,
 		uploadDir:        uploadDir,
 		maxFileSize:      10 * 1024 * 1024, // 10MB
 		log:              log,

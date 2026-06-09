@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -24,9 +25,13 @@ func NewProgramRepository(db *DB) *ProgramRepository {
 
 // Create создаёт новую программу
 func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program) error {
+	if program.Status == "" {
+		program.Status = domain.ProgramReady
+	}
+
 	query := `
-		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, error_message, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at
 	`
 
@@ -41,6 +46,7 @@ func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program)
 		program.CodePath,
 		program.FilePath,
 		program.Language,
+		program.Status,
 		program.ErrorMessage,
 		program.Version,
 	).Scan(&program.CreatedAt, &program.UpdatedAt)
@@ -57,9 +63,13 @@ func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program)
 // При конкурентных загрузках уникальный индекс может вызвать конфликт;
 // в этом случае запрос автоматически повторяется (до 3 раз).
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
+	if program.Status == "" {
+		program.Status = domain.ProgramReady
+	}
+
 	query := `
-		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, error_message, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
 			COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
 		)
 		RETURNING version, created_at, updated_at
@@ -78,6 +88,7 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 			program.CodePath,
 			program.FilePath,
 			program.Language,
+			program.Status,
 			program.ErrorMessage,
 		).Scan(&program.Version, &program.CreatedAt, &program.UpdatedAt)
 
@@ -104,7 +115,7 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE id = $1
 	`
@@ -120,6 +131,7 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		&program.CodePath,
 		&program.FilePath,
 		&program.Language,
+		&program.Status,
 		&program.ErrorMessage,
 		&program.Version,
 		&program.CreatedAt,
@@ -143,7 +155,7 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*d
 
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE id = ANY($1)
 	`
@@ -161,7 +173,7 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*d
 func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -187,6 +199,7 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 			&p.CodePath,
 			&p.FilePath,
 			&p.Language,
+			&p.Status,
 			&p.ErrorMessage,
 			&p.Version,
 			&p.CreatedAt,
@@ -209,7 +222,7 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID uuid.UUID, gameType string) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE user_id = $1 AND game_type = $2
 		ORDER BY created_at DESC
@@ -235,6 +248,7 @@ func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID u
 			&p.CodePath,
 			&p.FilePath,
 			&p.Language,
+			&p.Status,
 			&p.ErrorMessage,
 			&p.Version,
 			&p.CreatedAt,
@@ -278,6 +292,54 @@ func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program)
 	}
 
 	return nil
+}
+
+// UpdateCompileResult записывает итог компиляции: статус, путь к исполняемому
+// файлу (бинарник или исходник для интерпретируемых языков) и сообщение об
+// ошибке. Вызывается compile-worker'ом после сборки в Docker-песочнице.
+func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status domain.ProgramStatus, codePath string, errorMessage *string) error {
+	query := `
+		UPDATE programs
+		SET status = $2, code_path = $3, error_message = $4, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.ExecWithMetrics(ctx, "program_update_compile_result", query, id, status, codePath, errorMessage)
+	if err != nil {
+		return errors.Wrap(err, "failed to update compile result")
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+	if rows == 0 {
+		return errors.ErrProgramNotFound
+	}
+
+	return nil
+}
+
+// GetStuckCompiling возвращает программы, зависшие в статусе compiling дольше
+// olderThan: задача потерялась (краш между созданием программы и enqueue,
+// падение Redis). Compile-worker периодически возвращает их в очередь.
+func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error) {
+	query := `
+		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		FROM programs
+		WHERE status = 'compiling' AND updated_at < NOW() - $1::interval
+		ORDER BY updated_at ASC
+		LIMIT $2
+	`
+
+	var programs []*domain.Program
+	err := r.db.QueryWithMetrics(ctx, "program_get_stuck_compiling", &programs, query, olderThan.String(), limit)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get stuck compiling programs")
+	}
+
+	return programs, nil
 }
 
 // Delete удаляет программу
@@ -358,7 +420,7 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	query := `
 		SELECT DISTINCT ON (team_id)
 		       id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE tournament_id = $1 AND game_id = $2 AND team_id IS NOT NULL
 		ORDER BY team_id, version DESC
@@ -384,6 +446,7 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 			&p.CodePath,
 			&p.FilePath,
 			&p.Language,
+			&p.Status,
 			&p.ErrorMessage,
 			&p.Version,
 			&p.CreatedAt,
@@ -406,7 +469,7 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE team_id = $1 AND game_id = $2
 		ORDER BY version DESC
@@ -432,6 +495,7 @@ func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, tea
 			&p.CodePath,
 			&p.FilePath,
 			&p.Language,
+			&p.Status,
 			&p.ErrorMessage,
 			&p.Version,
 			&p.CreatedAt,

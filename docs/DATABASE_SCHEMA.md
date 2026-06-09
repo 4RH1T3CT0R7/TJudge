@@ -247,52 +247,20 @@
 
 ---
 
-## Материализованные представления
+## Лидерборды
 
-### leaderboard_tournament
+Лидерборды считаются «живыми» запросами по `matches` в момент обращения
+(`internal/infrastructure/db/tournament_leaderboard.go`): матч разворачивается
+в две «стороны» через `UNION ALL` (по одной строке на каждую программу), что
+позволяет каждой ветке использовать составной индекс
+`idx_matches_tournament_game_status` из миграции 000037 вместо OR-join.
+Тайбрейк при равном счёте и победах — `MIN(created_at)` последних версий
+программ команды.
 
-Обновлено в миграции 000027 с поддержкой тайбрейка по времени загрузки программы.
-
-```sql
-CREATE MATERIALIZED VIEW leaderboard_tournament AS
-SELECT
-    tp.tournament_id,
-    tp.program_id,
-    p.name AS program_name,
-    p.user_id,
-    u.username,
-    COALESCE(stats.total_score, 0) AS rating,
-    COALESCE(stats.total_matches, 0) AS total_matches,
-    COALESCE(stats.wins, 0) AS wins,
-    COALESCE(stats.losses, 0) AS losses,
-    COALESCE(stats.draws, 0) AS draws,
-    tp.created_at AS joined_at,
-    COALESCE(stats.last_match, tp.created_at) AS last_updated
-FROM tournament_participants tp
-INNER JOIN programs p ON tp.program_id = p.id
-INNER JOIN users u ON p.user_id = u.id
-LEFT JOIN LATERAL (
-    -- Агрегация статистики матчей для участника
-    SELECT COUNT(*) AS total_matches,
-           SUM(CASE WHEN ... THEN 1 ELSE 0 END) AS wins,
-           SUM(CASE WHEN ... THEN 1 ELSE 0 END) AS losses,
-           SUM(CASE WHEN m.winner = 0 THEN 1 ELSE 0 END) AS draws,
-           SUM(...) AS total_score,
-           MAX(m.completed_at) AS last_match
-    FROM matches m
-    WHERE (m.program1_id = p.id OR m.program2_id = p.id)
-      AND m.tournament_id = tp.tournament_id
-      AND m.status = 'completed'
-) stats ON true
-ORDER BY tp.tournament_id, rating DESC, wins DESC,
-    -- Тайбрейк: MIN(created_at) последних версий программ
-    COALESCE(
-        (SELECT MIN(sub_p.created_at) FROM (...) sub_p),
-        p.created_at
-    ) ASC;
-```
-
-Индексы: `idx_leaderboard_tournament_pk (tournament_id, program_id)`, `idx_leaderboard_tournament_id (tournament_id, rating DESC)`
+Материализованные представления `leaderboard_global` и `leaderboard_tournament`
+(миграции 000010/000017/000027) **удалены в миграции 000038**: чтение всегда шло
+живым запросом ради актуальности, а периодический refresh каждые 30 секунд
+впустую нагружал БД.
 
 ---
 
@@ -340,7 +308,7 @@ migrations/
 └── 000036_fk_cascade_audit.down.sql
 ```
 
-**Миграции 023-036 (подробности):**
+**Миграции 023-038 (подробности):**
 
 | Миграция | Название | Описание |
 |----------|----------|----------|
@@ -357,6 +325,8 @@ migrations/
 | 000033 | `rating_history_composite_index` | Композитный индекс `(program_id, tournament_id, created_at DESC)` для `rating_history`. Ускоряет выборку последнего рейтинга программы в рамках турнира. |
 | 000034 | `audit_log` | Таблица `audit_log` для записи админских действий: кто, что, над каким ресурсом, когда, с какого IP/UA. Retention 1 год. |
 | 000036 | `fk_cascade_audit` | Явные политики `ON DELETE` для внешних ключей (были неявные `NO ACTION`/`RESTRICT`); нормализует поведение каскадов для `matches`, `teams`, `audit_log`. |
+| 000037 | `matches_composite_index` | Составной индекс `(tournament_id, game_type, status)` для `matches` — основной индекс живых лидербордов. |
+| 000038 | `drop_leaderboard_matviews` | Удаление materialized views `leaderboard_global`/`leaderboard_tournament`: чтение всегда шло живым запросом, периодический refresh впустую нагружал БД. |
 
 ---
 
@@ -418,12 +388,6 @@ GROUP BY t.id, u.username
 ORDER BY t.created_at;
 ```
 
-### Обновление материализованного представления
-
-```sql
-REFRESH MATERIALIZED VIEW CONCURRENTLY leaderboard_tournament;
-```
-
 ---
 
 ## Автопартиционирование
@@ -460,7 +424,7 @@ SELECT create_rating_history_partition_if_needed();
 - **Составные индексы** для частых фильтров
 - **Тайбрейк-индекс** для эффективного разрешения одинаковых рейтингов в лидерборде
 - **Уникальное ограничение версий** программ для предотвращения гонок при загрузке
-- **Материализованные представления** для лидербордов с поддержкой `REFRESH CONCURRENTLY`
+- **Живые лидерборды** через `UNION ALL` по сторонам матча (вместо OR-join), опираются на составной индекс `(tournament_id, game_type, status)`
 
 ---
 

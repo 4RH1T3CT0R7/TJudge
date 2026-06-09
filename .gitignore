@@ -63,3 +63,6 @@ temp/
 
 claude.md
 .claude/
+
+# Секрет Telegram-бота для Alertmanager и бэкапов
+deployments/alertmanager/telegram_token

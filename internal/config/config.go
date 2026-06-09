@@ -105,6 +105,10 @@ type DatabaseConfig struct {
 	MaxConnections int           `yaml:"max_connections"`
 	MaxIdle        int           `yaml:"max_idle"`
 	MaxLifetime    time.Duration `yaml:"max_lifetime"`
+	// PartitionRetentionMonths - сколько месяцев хранить партиции
+	// matches/rating_history. 0 (по умолчанию) - retention выключен:
+	// удаление турнирных данных должно быть осознанным решением оператора.
+	PartitionRetentionMonths int `yaml:"partition_retention_months"`
 }
 
 // DSN возвращает строку подключения к PostgreSQL (формат key=value)
@@ -162,6 +166,8 @@ type ExecutorConfig struct {
 	SeccompProfile    string        `yaml:"seccomp_profile"`    // Путь к seccomp профилю
 	AppArmorProfile   string        `yaml:"apparmor_profile"`   // Имя AppArmor профиля
 	CPUSetCPUs        string        `yaml:"cpuset_cpus"`        // Привязка к ядрам CPU (например "0-3")
+	BuilderImage      string        `yaml:"builder_image"`      // Docker-образ с тулчейнами для компиляции программ
+	CompileTimeout    time.Duration `yaml:"compile_timeout"`    // Таймаут компиляции одной программы
 }
 
 // JWTConfig - конфигурация JWT токенов
@@ -307,6 +313,8 @@ func Load() (*Config, error) {
 			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", defaultPoolSize),
 			MaxIdle:        getEnvInt("DB_MAX_IDLE", defaultPoolSize/5), // 20% от max
 			MaxLifetime:    getEnvDuration("DB_MAX_LIFETIME", 1*time.Hour),
+
+			PartitionRetentionMonths: getEnvInt("DB_PARTITION_RETENTION_MONTHS", 0),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
@@ -336,6 +344,8 @@ func Load() (*Config, error) {
 			Verbose:           getEnvBool("EXECUTOR_VERBOSE", false),
 			SeccompProfile:    getEnv("EXECUTOR_SECCOMP_PROFILE", ""),
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),
+			BuilderImage:      getEnv("EXECUTOR_BUILDER_IMAGE", "tjudge-builder:latest"),
+			CompileTimeout:    getEnvDuration("EXECUTOR_COMPILE_TIMEOUT", 120*time.Second),
 			CPUSetCPUs:        getEnv("EXECUTOR_CPUSET_CPUS", ""),
 		},
 		Storage: StorageConfig{

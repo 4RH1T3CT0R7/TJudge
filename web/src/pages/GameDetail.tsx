@@ -1,34 +1,33 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import axios from 'axios';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../api/client';
+import { queryKeys } from '../api/queryKeys';
+import {
+  useTournament,
+  useGame,
+  useTournamentGamesStatus,
+  useGameLeaderboard,
+  useMyTeam,
+} from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { getGameConfig } from '../utils/gameConfig';
-import type { Game, Program, Team, LeaderboardEntry, Match, Tournament, TournamentGameWithDetails } from '../types';
+import type { Program, Match } from '../types';
 
 const remarkPlugins = [remarkGfm];
 
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
   const { isAuthenticated } = useAuthStore();
-  const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [game, setGame] = useState<Game | null>(null);
-  const [gameStatus, setGameStatus] = useState<TournamentGameWithDetails | null>(null);
-  const [myTeam, setMyTeam] = useState<Team | null>(null);
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [currentProgram, setCurrentProgram] = useState<Program | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'rules' | 'leaderboard' | 'matches'>('rules');
 
   // Pagination state for matches
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalMatches, setTotalMatches] = useState(0);
   const matchesPerPage = 20;
 
   // Upload state
@@ -42,85 +41,79 @@ export function GameDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  const loadData = useCallback(async () => {
-    if (!gameId || !tournamentId) return;
+  // Базовые данные страницы
+  const tournamentQuery = useTournament(tournamentId ?? '');
+  const gameQuery = useGame(gameId ?? '');
+  const gamesStatusQuery = useTournamentGamesStatus(tournamentId ?? '');
+  const leaderboardQuery = useGameLeaderboard(tournamentId ?? '', gameId ?? '');
+  const myTeamQuery = useMyTeam(tournamentId ?? '', { enabled: isAuthenticated });
 
-    setIsLoading(true);
-    setError(null);
+  const tournament = tournamentQuery.data ?? null;
+  const game = gameQuery.data ?? null;
+  const myTeam = myTeamQuery.data ?? null;
+  const leaderboard = leaderboardQuery.data ?? [];
+  const gameStatus = useMemo(
+    () => (gamesStatusQuery.data ?? []).find((gs) => gs.game_id === gameId) ?? null,
+    [gamesStatusQuery.data, gameId]
+  );
 
-    try {
-      // Load tournament, game data, and game status in parallel
-      const [tournamentData, gameData, gamesStatusData] = await Promise.all([
-        api.getTournament(tournamentId),
-        api.getGame(gameId),
-        api.getTournamentGamesStatus(tournamentId).catch(() => []),
-      ]);
-      setTournament(tournamentData);
-      setGame(gameData);
+  // Матчи с пагинацией: ключ включает страницу, предыдущая страница
+  // остаётся на экране, пока грузится новая
+  const matchesQuery = useQuery({
+    queryKey: [...queryKeys.gameMatches(tournamentId ?? '', gameId ?? ''), currentPage] as const,
+    queryFn: () =>
+      api.getGameMatches(
+        tournamentId ?? '',
+        gameId ?? '',
+        undefined,
+        matchesPerPage,
+        (currentPage - 1) * matchesPerPage
+      ),
+    enabled: !!tournamentId && !!gameId,
+    placeholderData: keepPreviousData,
+  });
+  const matches = matchesQuery.data ?? [];
+  const totalMatches = matches.length;
 
-      // Find and set the status for the current game
-      const currentGameStatus = gamesStatusData.find(gs => gs.game_id === gameId);
-      setGameStatus(currentGameStatus || null);
+  // Программы команды: поллинг каждые 10с, пока какая-то версия
+  // компилируется (бейдж статуса обновится сам)
+  const myTeamId = myTeam?.id;
+  const programsQuery = useQuery({
+    queryKey: queryKeys.programs,
+    queryFn: () => api.getPrograms(),
+    enabled: isAuthenticated && !!myTeamId,
+    refetchInterval: (query) => {
+      const hasCompiling = query.state.data?.some(
+        (p) => p.team_id === myTeamId && p.game_id === gameId && p.status === 'compiling'
+      );
+      return hasCompiling ? 10000 : false;
+    },
+  });
+  const programs = useMemo(
+    () =>
+      (programsQuery.data ?? []).filter(
+        (p) => p.team_id === myTeamId && p.game_id === gameId
+      ),
+    [programsQuery.data, myTeamId, gameId]
+  );
+  const currentProgram = useMemo(
+    () =>
+      programs.length > 0
+        ? programs.reduce((a, b) => (a.version > b.version ? a : b))
+        : null,
+    [programs]
+  );
 
-      // Load leaderboard and matches in parallel
-      const [leaderboardData, matchesData] = await Promise.all([
-        api.getGameLeaderboard(tournamentId, gameId).catch(() => []),
-        api.getGameMatches(tournamentId, gameId, undefined, matchesPerPage, 0).catch(() => []),
-      ]);
-      setLeaderboard(leaderboardData || []);
-      setMatches(matchesData || []);
-      setTotalMatches(matchesData?.length || 0); // Will be updated with proper count
+  const isLoading =
+    tournamentQuery.isPending ||
+    gameQuery.isPending ||
+    gamesStatusQuery.isPending ||
+    leaderboardQuery.isPending ||
+    matchesQuery.isPending ||
+    (isAuthenticated && myTeamQuery.isPending) ||
+    (isAuthenticated && !!myTeamId && programsQuery.isPending);
 
-      if (isAuthenticated) {
-        try {
-          const teamData = await api.getMyTeam(tournamentId);
-          setMyTeam(teamData);
-
-          // Load programs for this team
-          const programsData = await api.getPrograms();
-          const teamPrograms = programsData.filter(
-            (p) => p.team_id === teamData?.id && p.game_id === gameId
-          );
-          setPrograms(teamPrograms);
-
-          // Set current program (latest version)
-          if (teamPrograms.length > 0) {
-            const latest = teamPrograms.reduce((a, b) =>
-              a.version > b.version ? a : b
-            );
-            setCurrentProgram(latest);
-          }
-        } catch {
-          // User might not have a team
-        }
-      }
-    } catch (err) {
-      setError('Не удалось загрузить данные игры');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [gameId, tournamentId, isAuthenticated]);
-
-  useEffect(() => {
-    if (gameId && tournamentId) {
-      loadData();
-    }
-  }, [gameId, tournamentId, loadData]);
-
-  // Load more matches when page changes
-  const loadMatchesPage = useCallback(async (page: number) => {
-    if (!gameId || !tournamentId) return;
-
-    try {
-      const offset = (page - 1) * matchesPerPage;
-      const matchesData = await api.getGameMatches(tournamentId, gameId, undefined, matchesPerPage, offset);
-      setMatches(matchesData || []);
-      setCurrentPage(page);
-    } catch (err) {
-      console.error('Failed to load matches:', err);
-    }
-  }, [gameId, tournamentId]);
+  const error = tournamentQuery.isError || gameQuery.isError;
 
   const canUpload = tournament?.status === 'active' && !gameStatus?.round_completed && !isUploading;
 
@@ -162,8 +155,8 @@ export function GameDetail() {
       formData.append('name', file.name);
 
       const program = await api.uploadProgram(formData);
-      setCurrentProgram(program);
-      setPrograms(prev => [...prev, program]);
+      // Кэш программ обновится сам - текущая версия и список пересчитаются
+      queryClient.invalidateQueries({ queryKey: queryKeys.programs });
 
       // Check for syntax errors in uploaded program
       if (program.error_message) {
@@ -264,7 +257,7 @@ export function GameDetail() {
   if (error || !game) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-500">{error || 'Игра не найдена'}</p>
+        <p className="text-red-500">{error ? 'Не удалось загрузить данные игры' : 'Игра не найдена'}</p>
         <Link to={`/tournaments/${tournamentId}`} className="btn btn-secondary mt-4">
           Назад к турниру
         </Link>
@@ -411,7 +404,7 @@ export function GameDetail() {
                   {totalMatches > matchesPerPage && (
                     <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-700">
                       <button
-                        onClick={() => loadMatchesPage(currentPage - 1)}
+                        onClick={() => setCurrentPage((p) => p - 1)}
                         disabled={currentPage === 1}
                         className="btn btn-secondary text-sm disabled:opacity-50"
                       >
@@ -421,7 +414,7 @@ export function GameDetail() {
                         Страница {currentPage} из {Math.ceil(totalMatches / matchesPerPage)}
                       </span>
                       <button
-                        onClick={() => loadMatchesPage(currentPage + 1)}
+                        onClick={() => setCurrentPage((p) => p + 1)}
                         disabled={currentPage >= Math.ceil(totalMatches / matchesPerPage)}
                         className="btn btn-secondary text-sm disabled:opacity-50"
                       >
@@ -496,9 +489,12 @@ export function GameDetail() {
                 <div className="mb-4 p-3 bg-gray-800 rounded-lg">
                   <div className="flex justify-between items-start mb-2">
                     <p className="font-medium text-gray-200">{currentProgram.name}</p>
-                    <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
-                      v{currentProgram.version}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <ProgramStatusBadge program={currentProgram} />
+                      <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
+                        v{currentProgram.version}
+                      </span>
+                    </div>
                   </div>
                   <p className="text-sm text-gray-400">
                     Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
@@ -652,7 +648,10 @@ export function GameDetail() {
                           className="flex justify-between items-center text-sm p-2 bg-gray-800 rounded"
                         >
                           <div className="flex flex-col">
-                            <span className="text-gray-100">v{program.version}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-100">v{program.version}</span>
+                              <ProgramStatusBadge program={program} />
+                            </div>
                             <span className="text-xs text-gray-400">
                               {new Date(program.created_at).toLocaleDateString('ru-RU')}
                             </span>
@@ -878,6 +877,27 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
       )}
     </div>
   );
+}
+
+// Program status badge component
+function ProgramStatusBadge({ program }: { program: Program }) {
+  switch (program.status) {
+    case 'compiling':
+      return <span className="text-xs bg-yellow-900/50 text-yellow-300 px-2 py-0.5 rounded">Компилируется…</span>;
+    case 'ready':
+      return <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">Готова</span>;
+    case 'failed':
+      return (
+        <span
+          className="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded"
+          title={program.error_message || 'Ошибка компиляции'}
+        >
+          Ошибка компиляции
+        </span>
+      );
+    default:
+      return null;
+  }
 }
 
 // Match status badge component

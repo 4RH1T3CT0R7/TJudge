@@ -1,6 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
+import { queryKeys } from '../api/queryKeys';
+import {
+  useGames,
+  useTournaments,
+  useTournamentGames,
+  useTournamentGamesStatus,
+  useQueueStats,
+  useMatchStatistics,
+  useSystemMetrics,
+} from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
@@ -9,9 +20,12 @@ import { useEscapeKey } from '../hooks/useEscapeKey';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
-import type { Game, Tournament, TournamentStatus, LeaderboardEntry, QueueStats, MatchStatistics, Program, SystemMetrics, Match, TournamentGameWithDetails } from '../types';
+import type { Game, TournamentStatus, LeaderboardEntry, Program } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
+
+/** Интервал поллинга вкладки «Система». TanStack приостанавливает его в фоновой вкладке браузера. */
+const SYSTEM_POLL_INTERVAL = 10_000;
 
 const SUDO_PHRASES = [
   '// I\'m in.',
@@ -63,9 +77,13 @@ export function AdminPanel() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<AdminTab>('games');
-  const [games, setGames] = useState<Game[]>([]);
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const gamesQuery = useGames();
+  const tournamentsQuery = useTournaments();
+  const games = gamesQuery.data ?? [];
+  const tournaments = tournamentsQuery.data ?? [];
+  const isLoading = gamesQuery.isLoading || tournamentsQuery.isLoading;
   const showLoading = useDelayedLoading(isLoading);
 
   // Game form state
@@ -225,11 +243,13 @@ export function AdminPanel() {
   // Action errors
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Tournament games management state
+  // Tournament games management state: данные модалки тянут query-хуки, пока managingTournamentId задан
   const [managingTournamentId, setManagingTournamentId] = useState<string | null>(null);
-  const [managingTournamentGames, setManagingTournamentGames] = useState<Game[]>([]);
-  const [managingTournamentGamesStatus, setManagingTournamentGamesStatus] = useState<TournamentGameWithDetails[]>([]);
-  const [isLoadingTournamentGames, setIsLoadingTournamentGames] = useState(false);
+  const managingGamesQuery = useTournamentGames(managingTournamentId ?? '');
+  const managingStatusQuery = useTournamentGamesStatus(managingTournamentId ?? '');
+  const managingTournamentGames = managingGamesQuery.data ?? [];
+  const managingTournamentGamesStatus = managingStatusQuery.data ?? [];
+  const isLoadingTournamentGames = managingGamesQuery.isLoading || managingStatusQuery.isLoading;
   const showLoadingTournamentGames = useDelayedLoading(isLoadingTournamentGames);
   const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
   const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
@@ -241,8 +261,6 @@ export function AdminPanel() {
     if (managingTournamentId !== null) {
       // mirrors closeTournamentGamesManagement()
       setManagingTournamentId(null);
-      setManagingTournamentGames([]);
-      setManagingTournamentGamesStatus([]);
       setRunningGameMatches(null);
       setSettingActiveGame(null);
       return;
@@ -265,21 +283,100 @@ export function AdminPanel() {
     }
   }, [managingTournamentId, showTournamentForm, showGameForm]), anyModalOpen);
 
-  // Programs tab state
+  // Programs tab state: композитный запрос (игры турнира + лидерборды + детали программ).
+  // Ключ лежит в поддереве queryKeys.tournament(id), поэтому invalidate по турниру сбрасывает и его.
+  // Each request inside is independent to avoid cascading failures.
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
-  const [tournamentGames, setTournamentGames] = useState<Game[]>([]);
-  const [programsData, setProgramsData] = useState<Record<string, LeaderboardEntry[]>>({});
-  const [programDetails, setProgramDetails] = useState<Record<string, Program[]>>({});
-  const [isLoadingPrograms, setIsLoadingPrograms] = useState(false);
+  const programsQuery = useQuery({
+    queryKey: [...queryKeys.tournament(selectedTournamentId ?? ''), 'admin-programs'],
+    enabled: !!selectedTournamentId,
+    queryFn: async () => {
+      const tournamentId = selectedTournamentId;
+      if (!tournamentId) throw new Error('tournament not selected');
+
+      // Get games for this tournament
+      const gamesData = await api.getTournamentGames(tournamentId);
+
+      // Load leaderboard and program details for each game
+      const programsByGame: Record<string, LeaderboardEntry[]> = {};
+      const detailsByGame: Record<string, Program[]> = {};
+
+      // First, try to get game-specific leaderboards and program details
+      for (const game of gamesData) {
+        try {
+          const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
+          if (leaderboard && leaderboard.length > 0) {
+            programsByGame[game.id] = leaderboard;
+          }
+        } catch {
+          console.error(`Failed to load leaderboard for game ${game.id}`);
+        }
+
+        // Load full program details (includes error_message)
+        try {
+          const programs = await api.getGamePrograms(tournamentId, game.id);
+          if (programs && programs.length > 0) {
+            detailsByGame[game.id] = programs;
+          }
+        } catch {
+          console.error(`Failed to load programs for game ${game.id}`);
+        }
+      }
+
+      // If no game-specific data, fall back to tournament-level leaderboard
+      if (Object.keys(programsByGame).length === 0) {
+        try {
+          const tournamentLeaderboard = await api.getLeaderboard(tournamentId);
+          if (tournamentLeaderboard && tournamentLeaderboard.length > 0) {
+            // Put all programs under "all" key or first game
+            const key = gamesData.length > 0 ? gamesData[0].id : 'all';
+            programsByGame[key] = tournamentLeaderboard;
+          }
+        } catch {
+          console.error('Failed to load tournament leaderboard');
+        }
+      }
+
+      return { games: gamesData, programsByGame, detailsByGame };
+    },
+  });
+  const tournamentGames = programsQuery.data?.games ?? [];
+  const programsData = programsQuery.data?.programsByGame ?? {};
+  const programDetails = programsQuery.data?.detailsByGame ?? {};
+  const isLoadingPrograms = programsQuery.isLoading;
   const showLoadingPrograms = useDelayedLoading(isLoadingPrograms);
 
-  // System tab state
-  const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
-  const [matchStats, setMatchStats] = useState<MatchStatistics | null>(null);
-  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
-  const [failedMatches, setFailedMatches] = useState<Match[]>([]);
-  const [isLoadingSystem, setIsLoadingSystem] = useState(false);
+  // System tab state: поллинг через refetchInterval самих запросов (только на активной вкладке
+  // «Система»; в фоновой вкладке браузера TanStack приостанавливает интервал сам).
+  // Each request is independent to avoid cascading failures.
+  const isSystemTab = activeTab === 'system';
+  const queueStatsQuery = useQueueStats({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
+  const matchStatsQuery = useMatchStatistics(undefined, { enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
+  const systemMetricsQuery = useSystemMetrics({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
+  // useFailedMatches из hooks/queries использует лимит API по умолчанию (20); здесь нужен прежний лимит 50.
+  const failedMatchesQuery = useQuery({
+    queryKey: queryKeys.failedMatches,
+    queryFn: () => api.getFailedMatches(50),
+    enabled: isSystemTab,
+    refetchInterval: SYSTEM_POLL_INTERVAL,
+  });
+
+  const queueStats = queueStatsQuery.data ?? null;
+  const matchStats = matchStatsQuery.data ?? null;
+  const systemMetrics = systemMetricsQuery.data ?? null;
+  const failedMatches = failedMatchesQuery.data ?? [];
+  const isLoadingSystem =
+    queueStatsQuery.isFetching ||
+    matchStatsQuery.isFetching ||
+    systemMetricsQuery.isFetching ||
+    failedMatchesQuery.isFetching;
   const showLoadingSystem = useDelayedLoading(isLoadingSystem);
+  // Show fetch error only if all requests failed
+  const allSystemQueriesFailed =
+    queueStatsQuery.isError &&
+    matchStatsQuery.isError &&
+    systemMetricsQuery.isError &&
+    failedMatchesQuery.isError;
   const [systemError, setSystemError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
@@ -288,96 +385,34 @@ export function AdminPanel() {
     // Redirect non-admin users
     if (user && user.role !== 'admin') {
       navigate('/');
-      return;
     }
-    loadData();
   }, [user, navigate]);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [gamesData, tournamentsData] = await Promise.all([
-        api.getGames(),
-        api.getTournaments(),
-      ]);
-      setGames(gamesData || []);
-      setTournaments(tournamentsData || []);
-    } catch (err) {
-      console.error('Failed to load data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // System data loading - each request is independent to avoid cascading failures
-  const loadSystemData = useCallback(async () => {
-    setIsLoadingSystem(true);
-    setSystemError(null);
-
-    // Load each data source independently
-    const results = await Promise.allSettled([
-      api.getQueueStats(),
-      api.getMatchStatistics(),
-      api.getSystemMetrics(),
-      api.getFailedMatches(50),
+  // Принудительное обновление данных вкладки «Система» (кнопка «Обновить» и пост-мутации).
+  const refreshSystemData = useCallback(() => {
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.queueStats }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.matchStatistics() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.systemMetrics }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.failedMatches }),
     ]);
+  }, [queryClient]);
 
-    // Process queue stats
-    if (results[0].status === 'fulfilled') {
-      setQueueStats(results[0].value);
-    } else {
-      console.error('Failed to load queue stats:', results[0].reason);
-    }
-
-    // Process match stats
-    if (results[1].status === 'fulfilled') {
-      setMatchStats(results[1].value);
-    } else {
-      console.error('Failed to load match stats:', results[1].reason);
-    }
-
-    // Process system metrics
-    if (results[2].status === 'fulfilled') {
-      setSystemMetrics(results[2].value);
-    } else {
-      console.error('Failed to load system metrics:', results[2].reason);
-    }
-
-    // Process failed matches
-    if (results[3].status === 'fulfilled') {
-      setFailedMatches(results[3].value || []);
-    } else {
-      console.error('Failed to load failed matches:', results[3].reason);
-    }
-
-    // Show error only if all requests failed
-    const allFailed = results.every(r => r.status === 'rejected');
-    if (allFailed) {
-      setSystemError('Не удалось загрузить данные системы');
-    }
-
-    // Invader reactions to system state
-    const q = results[0].status === 'fulfilled' ? results[0].value : null;
-    const fm = results[3].status === 'fulfilled' ? (results[3].value || []) : [];
-    if (fm.length > 0) {
+  // Invader reactions to system state. Зависимости — сырые data из запросов:
+  // structural sharing TanStack сохраняет идентичность при неизменных данных,
+  // поэтому реакция срабатывает только на реальные изменения.
+  const queueStatsData = queueStatsQuery.data;
+  const failedMatchesData = failedMatchesQuery.data;
+  useEffect(() => {
+    if (activeTab !== 'system') return;
+    if (failedMatchesData && failedMatchesData.length > 0) {
       setAdminReaction('dizzy', '// ошибки!', 4000);
-    } else if (q && q.total > 50) {
+    } else if (queueStatsData && queueStatsData.total > 50) {
       setAdminReaction('run', '// очередь растёт!', 4000);
-    } else if (q && q.total === 0) {
+    } else if (queueStatsData && queueStatsData.total === 0) {
       setAdminReaction('idle', '// всё чисто', 3000);
     }
-
-    setIsLoadingSystem(false);
-  }, [setAdminReaction]);
-
-  // Auto-refresh system data when on system tab
-  useEffect(() => {
-    if (activeTab === 'system') {
-      loadSystemData();
-      const interval = setInterval(loadSystemData, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, loadSystemData]);
+  }, [activeTab, failedMatchesData, queueStatsData, setAdminReaction]);
 
   const handleClearQueue = async () => {
     if (!confirm('Вы уверены, что хотите очистить очередь? Все ожидающие матчи будут удалены.')) {
@@ -387,7 +422,7 @@ export function AdminPanel() {
     setSystemError(null);
     try {
       await api.clearQueue();
-      loadSystemData();
+      refreshSystemData();
       setAdminReaction('dizzy', '// очередь пуста', 2500);
     } catch (err) {
       console.error('Failed to clear queue:', err);
@@ -403,7 +438,7 @@ export function AdminPanel() {
     try {
       const result = await api.purgeInvalidMatches();
       alert(`Удалено ${result.purged_count} невалидных матчей из очереди`);
-      loadSystemData();
+      refreshSystemData();
     } catch (err) {
       console.error('Failed to purge invalid matches:', err);
       setSystemError('Не удалось очистить невалидные матчи');
@@ -430,15 +465,15 @@ export function AdminPanel() {
 
     try {
       if (editingGame) {
-        const updated = await api.updateGame(editingGame.id, {
+        await api.updateGame(editingGame.id, {
           display_name: gameForm.display_name,
           rules: gameForm.rules,
         });
-        setGames(games.map((g) => (g.id === editingGame.id ? updated : g)));
       } else {
-        const newGame = await api.createGame(gameForm);
-        setGames([...games, newGame]);
+        await api.createGame(gameForm);
       }
+      // Ключ queryKeys.games — префикс и для queryKeys.game(id), инвалидируются оба
+      await queryClient.invalidateQueries({ queryKey: queryKeys.games });
       setAdminReaction('celebrate', '// готово!', 2000);
       resetGameForm();
     } catch (err) {
@@ -453,7 +488,7 @@ export function AdminPanel() {
     setAdminReaction('cry', '// удаляем...', 2000);
     try {
       await api.deleteGame(id);
-      setGames(games.filter((g) => g.id !== id));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.games });
       setDeleteGameId(null);
     } catch (err) {
       console.error('Failed to delete game:', err);
@@ -465,7 +500,7 @@ export function AdminPanel() {
     setAdminReaction('cry', '// удаляем...', 2000);
     try {
       await api.deleteTournament(id);
-      setTournaments(tournaments.filter((t) => t.id !== id));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() });
       setDeleteTournamentId(null);
       setActionError(null);
     } catch (err: unknown) {
@@ -480,7 +515,10 @@ export function AdminPanel() {
     setAdminReaction('fly', '// запуск!', 3000);
     try {
       await api.startTournament(id);
-      loadData();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tournament(id) }),
+      ]);
     } catch (err: unknown) {
       console.error('Failed to start tournament:', err);
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -532,7 +570,7 @@ export function AdminPanel() {
         }
       }
 
-      setTournaments([...tournaments, newTournament]);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() });
       resetTournamentForm();
     } catch (err) {
       console.error('Failed to create tournament:', err);
@@ -603,69 +641,9 @@ export function AdminPanel() {
     setShowGameForm(true);
   };
 
-  // Load programs for selected tournament
-  const loadTournamentPrograms = async (tournamentId: string) => {
-    setIsLoadingPrograms(true);
-    setProgramsData({});
-    setProgramDetails({});
-
-    try {
-      // Get games for this tournament
-      const gamesData = await api.getTournamentGames(tournamentId);
-      setTournamentGames(gamesData);
-
-      // Load leaderboard and program details for each game
-      const programsByGame: Record<string, LeaderboardEntry[]> = {};
-      const detailsByGame: Record<string, Program[]> = {};
-
-      // First, try to get game-specific leaderboards and program details
-      for (const game of gamesData) {
-        try {
-          const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
-          if (leaderboard && leaderboard.length > 0) {
-            programsByGame[game.id] = leaderboard;
-          }
-        } catch {
-          console.error(`Failed to load leaderboard for game ${game.id}`);
-        }
-
-        // Load full program details (includes error_message)
-        try {
-          const programs = await api.getGamePrograms(tournamentId, game.id);
-          if (programs && programs.length > 0) {
-            detailsByGame[game.id] = programs;
-          }
-        } catch {
-          console.error(`Failed to load programs for game ${game.id}`);
-        }
-      }
-
-      // If no game-specific data, fall back to tournament-level leaderboard
-      if (Object.keys(programsByGame).length === 0) {
-        try {
-          const tournamentLeaderboard = await api.getLeaderboard(tournamentId);
-          if (tournamentLeaderboard && tournamentLeaderboard.length > 0) {
-            // Put all programs under "all" key or first game
-            const key = gamesData.length > 0 ? gamesData[0].id : 'all';
-            programsByGame[key] = tournamentLeaderboard;
-          }
-        } catch {
-          console.error('Failed to load tournament leaderboard');
-        }
-      }
-
-      setProgramsData(programsByGame);
-      setProgramDetails(detailsByGame);
-    } catch (err) {
-      console.error('Failed to load tournament programs:', err);
-    } finally {
-      setIsLoadingPrograms(false);
-    }
-  };
-
+  // Программы выбранного турнира тянет programsQuery по смене selectedTournamentId
   const handleTournamentSelect = (tournamentId: string) => {
     setSelectedTournamentId(tournamentId);
-    loadTournamentPrograms(tournamentId);
   };
 
   // Download program file
@@ -707,30 +685,14 @@ export function AdminPanel() {
     }
   };
 
-  // Open tournament games management modal
-  const openTournamentGamesManagement = async (tournamentId: string) => {
+  // Open tournament games management modal (данные подтянут query-хуки по managingTournamentId)
+  const openTournamentGamesManagement = (tournamentId: string) => {
     setManagingTournamentId(tournamentId);
-    setIsLoadingTournamentGames(true);
-    try {
-      const [gamesData, gamesStatus] = await Promise.all([
-        api.getTournamentGames(tournamentId),
-        api.getTournamentGamesStatus(tournamentId),
-      ]);
-      setManagingTournamentGames(gamesData || []);
-      setManagingTournamentGamesStatus(gamesStatus || []);
-    } catch (err) {
-      console.error('Failed to load tournament games:', err);
-      setActionError('Не удалось загрузить игры турнира');
-    } finally {
-      setIsLoadingTournamentGames(false);
-    }
   };
 
   // Close tournament games management modal
   const closeTournamentGamesManagement = () => {
     setManagingTournamentId(null);
-    setManagingTournamentGames([]);
-    setManagingTournamentGamesStatus([]);
     setRunningGameMatches(null);
     setSettingActiveGame(null);
   };
@@ -745,8 +707,7 @@ export function AdminPanel() {
     try {
       await api.setActiveGame(managingTournamentId, gameId);
       // Reload games status to update UI
-      const gamesStatus = await api.getTournamentGamesStatus(managingTournamentId);
-      setManagingTournamentGamesStatus(gamesStatus || []);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(managingTournamentId) });
     } catch (err: unknown) {
       console.error('Failed to set active game:', err);
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -793,9 +754,11 @@ export function AdminPanel() {
     try {
       const result = await api.resetGameRound(managingTournamentId, gameId);
 
-      // Reload games status to update UI
-      const gamesStatus = await api.getTournamentGamesStatus(managingTournamentId);
-      setManagingTournamentGamesStatus(gamesStatus || []);
+      // Сбрасываем всё поддерево турнира (статусы игр, лидерборды, программы) и статистику матчей
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.tournament(managingTournamentId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.matchStatistics() }),
+      ]);
 
       alert(
         `Раунд сброшен успешно!\n\n` +
@@ -822,6 +785,12 @@ export function AdminPanel() {
     try {
       const result = await api.runGameMatches(managingTournamentId, gameType);
       setActionError(null);
+      // Очередь и статусы игр изменились — инвалидируем связанные ключи
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.queueStats }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.matchStatistics() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(managingTournamentId) }),
+      ]);
       // Show success message
       alert(`Запущено ${result.enqueued} матчей для "${gameName}"`);
     } catch (err: unknown) {
@@ -1486,7 +1455,10 @@ export function AdminPanel() {
                             setActionError(null);
                             try {
                               await api.completeTournament(tournament.id);
-                              loadData();
+                              await Promise.all([
+                                queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() }),
+                                queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournament.id) }),
+                              ]);
                               setAdminReaction('salute', '// турнир окончен', 3000);
                             } catch (err: unknown) {
                               console.error('Failed to complete tournament:', err);
@@ -1805,7 +1777,7 @@ export function AdminPanel() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-100">Состояние системы</h2>
             <button
-              onClick={loadSystemData}
+              onClick={refreshSystemData}
               disabled={isLoadingSystem}
               className="btn btn-secondary text-sm"
             >
@@ -1813,9 +1785,9 @@ export function AdminPanel() {
             </button>
           </div>
 
-          {systemError && (
+          {(systemError || allSystemQueriesFailed) && (
             <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
-              {systemError}
+              {systemError ?? 'Не удалось загрузить данные системы'}
             </div>
           )}
 

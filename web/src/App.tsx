@@ -1,5 +1,6 @@
 import { useEffect, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -171,17 +172,34 @@ function AppContent() {
   );
 }
 
+// Единый QueryClient приложения.
+// retry: false - ApiClient уже делает exponential retry для GET/5xx/429
+// в axios-интерсепторе; дублировать ретраи на уровне Query не нужно.
+// staleTime 15s - турнирные данные обновляются WS-инвалидациями
+// (useTournamentLive), фоновое поведение по умолчанию консервативное.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+    },
+  },
+});
+
 function App() {
   return (
     <ErrorBoundary>
-      <MotionConfig reducedMotion="user">
-        <InvaderProvider>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-          <ToastContainer />
-        </InvaderProvider>
-      </MotionConfig>
+      <QueryClientProvider client={queryClient}>
+        <MotionConfig reducedMotion="user">
+          <InvaderProvider>
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
+            <ToastContainer />
+          </InvaderProvider>
+        </MotionConfig>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

@@ -288,6 +288,23 @@ services:
     profiles:
       - monitoring
 
+  # Alertmanager: доставка алертов в Telegram (см. deployments/alertmanager/alertmanager.yml)
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: tjudge-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./deployments/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./deployments/alertmanager/telegram_token:/etc/alertmanager/telegram_token:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    networks:
+      - tjudge-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
   # Grafana (optional - comment out on very weak hardware)
   grafana:
     image: grafana/grafana:11.1.0

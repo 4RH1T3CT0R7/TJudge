@@ -66,6 +66,45 @@ else
     exit 1
 fi
 
+# Off-site доставка: отправляем дамп документом в Telegram.
+# Конфиг: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (env или .env).
+# Лимит Bot API на документ - 50MB; больший дамп остаётся только локально
+# (предупреждение в лог: пора переходить на rclone/S3).
+send_to_telegram() {
+    local file="$1"
+
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+        log_warn "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы - off-site копия не отправлена"
+        return 0
+    fi
+
+    local size_bytes
+    size_bytes=$(wc -c < "$file")
+    if [ "$size_bytes" -gt 50000000 ]; then
+        log_warn "Дамп больше 50MB (лимит Telegram Bot API) - off-site копия не отправлена."
+        log_warn "Настройте rclone/S3 для дампов такого размера (docs/OPERATIONS.md §10)."
+        return 0
+    fi
+
+    log_info "Отправка бэкапа в Telegram..."
+    local response
+    if response=$(curl -sS --max-time 120 \
+        -F "chat_id=${TELEGRAM_CHAT_ID}" \
+        -F "document=@${file}" \
+        -F "caption=TJudge backup $(date '+%Y-%m-%d %H:%M:%S') ($(du -h "$file" | cut -f1 | tr -d ' '))" \
+        "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"); then
+        if echo "$response" | grep -q '"ok":true'; then
+            log_info "Бэкап отправлен в Telegram"
+        else
+            log_error "Telegram отклонил документ: $(echo "$response" | head -c 300)"
+        fi
+    else
+        log_error "Не удалось отправить бэкап в Telegram (сеть/таймаут)"
+    fi
+}
+
+send_to_telegram "$BACKUP_FILE"
+
 # Cleanup old backups
 log_info "Cleaning up backups older than ${RETENTION_DAYS} days..."
 DELETED=$(find "$BACKUP_DIR" -name "tjudge_*.sql.gz" -mtime +"$RETENTION_DAYS" -delete -print | wc -l)

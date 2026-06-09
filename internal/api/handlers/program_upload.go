@@ -7,16 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/codescan"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -95,52 +91,6 @@ func canonicalExtension(language string) string {
 	default:
 		return ""
 	}
-}
-
-// javaClassNameRe допускает только валидные Java identifier-ы.
-// Строгое allowlist-регулярное выражение используется в compileIfNeeded для
-// предотвращения shell-injection при сборке wrapper-скрипта.
-var javaClassNameRe = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
-
-// javaClassDeclRe выделяет имя первого top-level класса Java из исходника.
-// Нужен, потому что имя файла на диске (<hex>_<hex>_<hex>.java) не совпадает
-// с declared class: javac отвергает `public class Main`, а wrapper пытается
-// запустить несуществующий класс с hex-именем. Java-файл копируется
-// в <ClassName>.java перед javac.
-//
-// Поддерживает `public class X`, `class X`, с модификаторами `final/abstract`.
-// Не обрабатывает вложенные классы и edge-cases (multi-class в одном файле -
-// тогда берётся первый).
-var javaClassDeclRe = regexp.MustCompile(`(?m)^\s*(?:public\s+|final\s+|abstract\s+|static\s+)*class\s+([A-Za-z_$][A-Za-z0-9_$]*)`)
-
-// extractJavaClassName возвращает имя первого top-level класса в Java-source,
-// либо пустую строку если не найдено. Используется до вызова javac для
-// переименования файла.
-func extractJavaClassName(source string) string {
-	// Игнорируем содержимое внутри /* */ и // комментариев.
-	// Простой stripper: не обрабатывает nested-строковые литералы с "//",
-	// что приемлемо для идентификации class declaration.
-	cleaned := stripJavaComments(source)
-	m := javaClassDeclRe.FindStringSubmatch(cleaned)
-	if len(m) < 2 {
-		return ""
-	}
-	return m[1]
-}
-
-func stripJavaComments(s string) string {
-	// Удаляем /* ... */ блоки
-	blockRe := regexp.MustCompile(`/\*[\s\S]*?\*/`)
-	s = blockRe.ReplaceAllString(s, "")
-	// Удаляем // до конца строки
-	lineRe := regexp.MustCompile(`//[^\n]*`)
-	return lineRe.ReplaceAllString(s, "")
-}
-
-// shellSingleQuote квотирует строку для безопасного встраивания в /bin/sh.
-// Заменяет каждую одинарную кавычку на '\” и оборачивает результат в '...'.
-func shellSingleQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // getShebang возвращает shebang для интерпретируемых языков
@@ -444,65 +394,47 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	return true
 }
 
-// validateAndCompileProgram запускает проверку синтаксиса и компиляцию загруженной программы.
-// Возвращает путь к исполняемому файлу и опциональное сообщение об ошибке синтаксиса/компиляции.
-func (h *ProgramHandler) validateAndCompileProgram(language, filePath string) (execPath string, syntaxError *string) {
-	execPath = filePath
-
-	// Defense-in-depth: сканируем исходник на подозрительные API-вызовы.
-	// По-умолчанию только warn-лог; при CODESCAN_STRICT=true отказываем upload'у.
-	if scanner := codescan.ScannerFor(language); scanner != nil {
-		// #nosec G304 -- filePath тот же, что мы сами создали выше (UUID-based).
-		if src, err := os.ReadFile(filePath); err == nil {
-			findings := scanner.Scan(string(src))
-			if len(findings) > 0 {
-				for _, f := range findings {
-					h.log.Warn("Code scan finding",
-						zap.String("file", filePath),
-						zap.String("language", language),
-						zap.Int("line", f.Line),
-						zap.String("level", string(f.Level)),
-						zap.String("pattern", f.Pattern),
-						zap.String("message", f.Message),
-					)
-				}
-				if os.Getenv("CODESCAN_STRICT") == "true" && codescan.HasForbidden(findings) {
-					msg := "Обнаружены запрещённые API-вызовы; загрузка отклонена (CODESCAN_STRICT)"
-					syntaxError = &msg
-					return execPath, syntaxError
-				}
-			}
-		}
+// validateProgramSource выполняет статический анализ исходника (codescan).
+// Возвращает сообщение об отказе при CODESCAN_STRICT=true и запрещённых
+// API-вызовах, иначе nil.
+//
+// Проверка синтаксиса и компиляция здесь НЕ выполняются: недоверенный код
+// никогда не должен попадать в тулчейны на хосте API-процесса. Программа
+// создаётся в статусе compiling, и worker собирает её в Docker-песочнице.
+func (h *ProgramHandler) validateProgramSource(language, filePath string) *string {
+	scanner := codescan.ScannerFor(language)
+	if scanner == nil {
+		return nil
 	}
 
-	// Проверяем синтаксис для всех поддерживаемых языков
-	if errMsg := validateSyntax(language, filePath); errMsg != "" {
-		syntaxError = &errMsg
-		h.log.Info("Syntax error detected",
+	// #nosec G304 -- filePath тот же, что мы сами создали выше (UUID-based).
+	src, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil
+	}
+
+	findings := scanner.Scan(string(src))
+	if len(findings) == 0 {
+		return nil
+	}
+
+	for _, f := range findings {
+		h.log.Warn("Code scan finding",
 			zap.String("file", filePath),
 			zap.String("language", language),
-			zap.String("error", errMsg),
-		)
-		return execPath, syntaxError
-	}
-
-	// Компилируем программу для компилируемых языков
-	if compiled, compileErr := compileIfNeeded(language, filePath, h.log); compileErr != "" {
-		syntaxError = &compileErr
-		h.log.Info("Compilation failed",
-			zap.String("file", filePath),
-			zap.String("language", language),
-			zap.String("error", compileErr),
-		)
-	} else if compiled != "" {
-		execPath = compiled
-		h.log.Info("Program compiled",
-			zap.String("source", filePath),
-			zap.String("binary", compiled),
+			zap.Int("line", f.Line),
+			zap.String("level", string(f.Level)),
+			zap.String("pattern", f.Pattern),
+			zap.String("message", f.Message),
 		)
 	}
 
-	return execPath, syntaxError
+	if os.Getenv("CODESCAN_STRICT") == "true" && codescan.HasForbidden(findings) {
+		msg := "Обнаружены запрещённые API-вызовы; загрузка отклонена (CODESCAN_STRICT)"
+		return &msg
+	}
+
+	return nil
 }
 
 // registerTournamentParticipant регистрирует программу как участника турнира.
@@ -585,8 +517,15 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Проверяем синтаксис и компилируем
-	execPath, syntaxError := h.validateAndCompileProgram(language, filePath)
+	// Статический анализ исходника (codescan). Компиляция и проверка
+	// синтаксиса выполняются асинхронно в Docker-песочнице worker'а.
+	scanError := h.validateProgramSource(language, filePath)
+
+	status := domain.ProgramCompiling
+	if scanError != nil {
+		// Запрещённые API при CODESCAN_STRICT: компилировать нечего.
+		status = domain.ProgramFailed
+	}
 
 	// Создаём запись в БД с атомарным назначением версии
 	program := &domain.Program{
@@ -597,10 +536,11 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		GameID:       &form.gameID,
 		Name:         form.name,
 		GameType:     "",       // Заполнится из game
-		CodePath:     execPath, // Путь к исполняемому файлу (бинарник или скрипт)
+		CodePath:     filePath, // Исходник; после компиляции worker заменит на бинарник
 		FilePath:     &filePath,
 		Language:     language,
-		ErrorMessage: syntaxError,
+		Status:       status,
+		ErrorMessage: scanError,
 	}
 
 	if err := h.programRepo.CreateWithAtomicVersion(r.Context(), program); err != nil {
@@ -614,6 +554,17 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// Автоматически регистрируем программу как участника турнира
 	h.registerTournamentParticipant(r.Context(), program, form.tournamentID)
 
+	// Ставим программу в очередь компиляции. При ошибке enqueue ничего не
+	// теряется: compile-worker периодически возвращает в очередь программы,
+	// зависшие в статусе compiling.
+	if status == domain.ProgramCompiling && h.compileQueue != nil {
+		if err := h.compileQueue.Enqueue(r.Context(), program.ID); err != nil {
+			h.log.LogError("Failed to enqueue compile task, stuck-recovery will retry", err,
+				zap.String("program_id", program.ID.String()),
+			)
+		}
+	}
+
 	// ВАЖНО: Матчи НЕ создаются автоматически при загрузке программы!
 	// Администратор должен вручную запустить матчи через кнопку "Run All Matches"
 	// POST /api/v1/tournaments/{id}/run-matches.
@@ -623,183 +574,9 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		zap.String("user_id", userID.String()),
 		zap.String("team_id", form.teamID.String()),
 		zap.String("file", form.filename),
+		zap.String("status", string(program.Status)),
 		zap.Int("version", program.Version),
 	)
 
 	writeJSON(w, http.StatusCreated, program)
-}
-
-// syntaxCheckTimeout - максимальное время, отводимое на команду проверки синтаксиса.
-const syntaxCheckTimeout = 10 * time.Second
-
-// runSyntaxCheck выполняет проверку синтаксиса с помощью внешней команды.
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен.
-func runSyntaxCheck(command string, args []string, defaultMsg string) string {
-	_, lookErr := exec.LookPath(command)
-	if lookErr != nil {
-		return ""
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), syntaxCheckTimeout)
-	defer cancel()
-
-	// #nosec G204 -- `command` - hardcoded имя из runSyntaxCheck-callers
-	// ("python3", "node", "ruby", "php", "luac", "gcc", "g++", "javac");
-	// args[last] - наш UUID-based filePath, не user-controlled.
-	cmd := exec.CommandContext(ctx, command, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "Syntax check timed out"
-		}
-		errorMsg := strings.TrimSpace(string(output))
-		if errorMsg == "" {
-			errorMsg = defaultMsg
-		}
-		if len(errorMsg) > 500 {
-			errorMsg = errorMsg[:500] + "..."
-		}
-		return errorMsg
-	}
-	return ""
-}
-
-// validateSyntax проверяет синтаксис файла в зависимости от языка
-// Возвращает сообщение об ошибке или пустую строку, если синтаксис корректен
-func validateSyntax(language, filePath string) string {
-	switch language {
-	case LangPython:
-		return runSyntaxCheck("python3", []string{"-m", "py_compile", filePath}, "Синтаксическая ошибка в Python коде")
-	case LangJavaScript:
-		return runSyntaxCheck("node", []string{"--check", filePath}, "Синтаксическая ошибка в JavaScript коде")
-	case LangRuby:
-		return runSyntaxCheck("ruby", []string{"-c", filePath}, "Синтаксическая ошибка в Ruby коде")
-	case LangPHP:
-		return runSyntaxCheck("php", []string{"-l", filePath}, "Синтаксическая ошибка в PHP коде")
-	case LangLua:
-		return runSyntaxCheck("luac", []string{"-p", filePath}, "Синтаксическая ошибка в Lua коде")
-	case LangC:
-		return runSyntaxCheck("gcc", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C")
-	case LangCpp:
-		return runSyntaxCheck("g++", []string{"-fsyntax-only", filePath}, "Ошибка компиляции C++")
-	case LangJava:
-		return runSyntaxCheck("javac", []string{"-Xlint:none", "-d", "/tmp", filePath}, "Ошибка компиляции Java")
-	default:
-		return ""
-	}
-}
-
-// compileIfNeeded компилирует исходный код для компилируемых языков.
-// Возвращает (путь к бинарнику, "") при успехе или ("", сообщение об ошибке) при ошибке.
-// Для интерпретируемых языков возвращает ("", "").
-func compileIfNeeded(language, sourcePath string, log *logger.Logger) (string, string) {
-	outputPath := strings.TrimSuffix(sourcePath, filepath.Ext(sourcePath))
-
-	// #nosec G204 -- compiler-вызовы ниже: первый arg - hardcoded имя
-	// ("gcc", "g++", "go", "rustc", "javac"); outputPath/sourcePath формируются
-	// из UUID и не контролируются пользователем. Shell-injection невозможен.
-	var cmd *exec.Cmd
-	switch language {
-	case LangC:
-		if _, err := exec.LookPath("gcc"); err != nil {
-			log.Warn("gcc not found, skipping compilation")
-			return "", ""
-		}
-		cmd = exec.Command("gcc", "-O2", "-o", outputPath, sourcePath, "-lm") // #nosec G204
-	case LangCpp:
-		if _, err := exec.LookPath("g++"); err != nil {
-			log.Warn("g++ not found, skipping compilation")
-			return "", ""
-		}
-		cmd = exec.Command("g++", "-O2", "-o", outputPath, sourcePath) // #nosec G204
-	case LangGo:
-		if _, err := exec.LookPath("go"); err != nil {
-			log.Warn("go not found, skipping compilation")
-			return "", ""
-		}
-		cmd = exec.Command("go", "build", "-o", outputPath, sourcePath) // #nosec G204
-	case LangRust:
-		if _, err := exec.LookPath("rustc"); err != nil {
-			log.Warn("rustc not found, skipping compilation")
-			return "", ""
-		}
-		cmd = exec.Command("rustc", "-O", "-o", outputPath, sourcePath) // #nosec G204
-	case LangJava:
-		if _, err := exec.LookPath("javac"); err != nil {
-			log.Warn("javac not found, skipping compilation")
-			return "", ""
-		}
-		// Имя файла на диске - <hex>_<hex>_<hex>.java (из UUID-ов),
-		// но javac требует, чтобы `public class Foo` лежал в `Foo.java`,
-		// а java-runtime ищет класс по declared name. Поэтому:
-		// 1) Парсим declared class name из source.
-		// 2) Переименовываем файл в <ClassName>.java в том же dir.
-		// 3) Запускаем javac, wrapper использует declared name.
-		// #nosec G304 -- sourcePath - наш собственный UUID-based path.
-		srcBytes, readErr := os.ReadFile(sourcePath)
-		if readErr != nil {
-			return "", fmt.Sprintf("Не удалось прочитать Java-исходник: %s", readErr.Error())
-		}
-		className := extractJavaClassName(string(srcBytes))
-		if className == "" {
-			return "", "В Java-файле не найден объявление class X"
-		}
-		if !javaClassNameRe.MatchString(className) {
-			return "", fmt.Sprintf("Недопустимое имя Java-класса: %q", className)
-		}
-		classDir := filepath.Dir(sourcePath)
-		properPath := filepath.Join(classDir, className+".java")
-		if properPath != sourcePath {
-			// #nosec G703 -- sourcePath/properPath собраны из UUID-prefixes +
-			// className (regex-allowlist); path-traversal невозможен.
-			if err := os.Rename(sourcePath, properPath); err != nil {
-				return "", fmt.Sprintf("Не удалось переименовать Java-файл: %s", err.Error())
-			}
-		}
-		// Java: компилируем .java в .class, затем создаём wrapper-скрипт.
-		// #nosec G204 -- "javac" hardcoded; properPath собран из classDir (наш
-		// upload-dir) + className (прошёл javaClassNameRe regex-allowlist).
-		javacCmd := exec.Command("javac", properPath)
-		var javacStderr bytes.Buffer
-		javacCmd.Stderr = &javacStderr
-		if err := javacCmd.Run(); err != nil {
-			errMsg := strings.TrimSpace(javacStderr.String())
-			if errMsg == "" {
-				errMsg = err.Error()
-			}
-			return "", fmt.Sprintf("Ошибка компиляции Java: %s", errMsg)
-		}
-		// Создаём wrapper-скрипт для запуска java -cp <dir> <ClassName>.
-		// SECURITY: className уже прошёл regex-валидацию выше; classDir
-		// квотируется через shellSingleQuote.
-		wrapperPath := strings.TrimSuffix(properPath, ".java")
-		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp %s %s \"$@\"\n", shellSingleQuote(classDir), className)
-		// #nosec G306 G703 -- wrapper должен быть executable shell-скриптом; 0o750
-		// ограничивает до appuser+docker, other - 0. wrapperPath - UUID-based,
-		// не user-controlled.
-		if err := os.WriteFile(wrapperPath, []byte(wrapper), 0o750); err != nil {
-			return "", fmt.Sprintf("Ошибка создания wrapper: %s", err.Error())
-		}
-		return wrapperPath, ""
-	default:
-		return "", ""
-	}
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg == "" {
-			errMsg = err.Error()
-		}
-		return "", fmt.Sprintf("Ошибка компиляции: %s", errMsg)
-	}
-
-	// Делаем бинарник исполняемым.
-	// #nosec G302 -- скомпилированный бинарник боту требуется исполнять; 0o750
-	// ограничивает до appuser+docker.
-	_ = os.Chmod(outputPath, 0o750)
-
-	return outputPath, ""
 }

@@ -22,11 +22,15 @@ export function QuestEnvironment({ level, invaderPose, children }: QuestEnvironm
   const [attackGlitch, setAttackGlitch] = useState(false);
 
   useEffect(() => {
-    if (invaderPose === 'attack') {
-      setAttackGlitch(true);
-      const t = setTimeout(() => setAttackGlitch(false), 500);
-      return () => clearTimeout(t);
-    }
+    if (invaderPose !== 'attack') return;
+    // setState через макротаску, а не синхронно в эффекте: иначе каскадный
+    // ререндер (react-hooks/set-state-in-effect).
+    const on = setTimeout(() => setAttackGlitch(true), 0);
+    const off = setTimeout(() => setAttackGlitch(false), 500);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
   }, [invaderPose]);
 
   if (level === 0) return <>{children}</>;

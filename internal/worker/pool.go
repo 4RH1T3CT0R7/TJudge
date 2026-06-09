@@ -361,6 +361,15 @@ func (p *Pool) processWithRetry(ctx context.Context, match *domain.Match) error 
 			return nil // Возвращаем nil чтобы не считать это ошибкой
 		}
 
+		// Терминальная ошибка программы участника: матч уже помечен failed,
+		// повторные попытки бессмысленны (и раньше всё равно отбивались
+		// guard'ом pending→running). Транзиентные инфра-ошибки сюда не
+		// попадают - для них Process возвращает матч в pending и retry
+		// действительно повторяет исполнение.
+		if errors.Is(err, ErrProgramFailed) {
+			return err
+		}
+
 		lastErr = err
 		p.log.LogError("Match processing attempt failed", err,
 			zap.String("match_id", match.ID.String()),

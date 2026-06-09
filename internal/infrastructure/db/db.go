@@ -208,11 +208,41 @@ func (db *DB) EnsureRatingHistoryPartitions(ctx context.Context) error {
 	return nil
 }
 
+// DropOldPartitions удаляет партиции matches/rating_history старше
+// retentionMonths месяцев (функция drop_old_partitions, миграция 000041).
+// При retentionMonths <= 0 ничего не делает.
+func (db *DB) DropOldPartitions(ctx context.Context, retentionMonths int) error {
+	if retentionMonths <= 0 {
+		return nil
+	}
+
+	for _, table := range []string{"matches", "rating_history"} {
+		var dropped int
+		if err := db.QueryRowContext(ctx,
+			"SELECT drop_old_partitions($1, $2)", table, retentionMonths,
+		).Scan(&dropped); err != nil {
+			return fmt.Errorf("drop old partitions of %s: %w", table, err)
+		}
+		if dropped > 0 {
+			db.log.Info("Dropped old partitions",
+				zap.String("table", table),
+				zap.Int("dropped", dropped),
+				zap.Int("retention_months", retentionMonths),
+			)
+		}
+	}
+
+	return nil
+}
+
 // StartPartitionMaintenance launches a background goroutine that periodically
 // ensures partitions exist for the current and next month for all partitioned
 // tables (matches, rating_history). This prevents partition-not-found errors
 // if the application runs for extended periods without restart.
-func (db *DB) StartPartitionMaintenance() {
+//
+// retentionMonths > 0 дополнительно включает удаление партиций старше
+// указанного числа месяцев (DB_PARTITION_RETENTION_MONTHS; 0 - выключено).
+func (db *DB) StartPartitionMaintenance(retentionMonths int) {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -231,6 +261,12 @@ func (db *DB) StartPartitionMaintenance() {
 					db.log.Error("Periodic rating_history partition maintenance failed", zap.Error(err))
 				}
 				cancel2()
+
+				ctx3, cancel3 := context.WithTimeout(context.Background(), 60*time.Second)
+				if err := db.DropOldPartitions(ctx3, retentionMonths); err != nil {
+					db.log.Error("Periodic partition retention failed", zap.Error(err))
+				}
+				cancel3()
 			case <-db.done:
 				return
 			}

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)
 ![React](https://img.shields.io/badge/React-19+-61DAFB?style=for-the-badge&logo=react)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis)
@@ -140,10 +140,10 @@ make admin EMAIL=your-email@example.com
 | Компонент | Технологии |
 |-----------|------------|
 | Frontend | React 19, TypeScript, Tailwind CSS 4, Zustand |
-| API Server | Go 1.24, Chi Router, JWT, WebSocket |
+| API Server | Go 1.26, Chi Router, JWT, WebSocket |
 | Domain Events | In-process Event Bus -- декаплинг side-effects (кэш, broadcast) от бизнес-логики |
 | Worker Pool | Go, автомасштабирование 10-1000, приоритетная очередь |
-| Database | PostgreSQL 15 (30 миграций), материализованные представления для лидерборда |
+| Database | PostgreSQL 15 (41 миграция), живые лидерборды по партиционированным matches |
 | Cache/Queue | Redis 7, кэширование турниров/лидерборда, очередь матчей, rate limiting |
 | Monitoring | Prometheus, Grafana, Loki, Promtail, Alertmanager |
 | Executor | Docker-изолированный [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust) |
@@ -192,7 +192,7 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 
 ### Тестирование
 
-В проекте **1200+ тестовых функций** на трёх уровнях:
+В проекте **1600+ тестовых функций** (Go) и vitest-тесты фронтенда:
 
 | Уровень | Описание |
 |---------|----------|
@@ -206,7 +206,7 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 
 ### CI/CD
 
-GitHub Actions: lint, unit тесты, race detector, сборка, security scan, интеграционные тесты, E2E тесты.
+GitHub Actions: фронтенд (eslint, vitest, сборка артефактом), lint, unit тесты, race detector, сборка, security scan, интеграционные, E2E и хаос-тесты; nightly - полный match-flow с Docker, перф-гейт (benchstat), restore-тест бэкапа.
 
 ---
 
@@ -274,7 +274,7 @@ TJudge/
 │   ├── worker/                 # Пул воркеров
 │   └── websocket/              # Real-time обновления
 ├── web/                        # React фронтенд
-├── migrations/                 # SQL миграции (30 шт.)
+├── migrations/                 # SQL миграции (000001-000041)
 ├── tests/
 │   ├── e2e/                    # End-to-end тесты
 │   ├── integration/            # Интеграционные тесты

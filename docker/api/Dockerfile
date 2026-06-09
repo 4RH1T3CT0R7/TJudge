@@ -51,8 +51,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # Final stage
 FROM alpine:3.20
 
-# Install ca-certificates, compilers and interpreters for program validation/compilation
-RUN apk --no-cache add ca-certificates wget gcc g++ musl-dev python3 go openjdk17-jdk rust
+# Только ca-certificates и wget (healthcheck). Компиляторы удалены:
+# компиляция программ выполняется worker'ом в изолированном
+# builder-контейнере (docker/builder/Dockerfile), а не на хосте API.
+RUN apk --no-cache add ca-certificates wget
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \

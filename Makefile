@@ -113,11 +113,17 @@ docker-build:
 	docker build -t tjudge/api:latest -f docker/api/Dockerfile .
 	docker build -t tjudge/worker:latest -f docker/worker/Dockerfile .
 	docker build -t tjudge-cli:latest -f docker/tjudge/Dockerfile .
+	docker build -t tjudge-builder:latest -f docker/builder/Dockerfile .
 
 # Build only tjudge-cli executor image
 docker-build-executor:
 	@echo "Building tjudge-cli executor image..."
 	docker build -t tjudge-cli:latest -f docker/tjudge/Dockerfile .
+
+# Build only tjudge-builder compile sandbox image
+docker-build-builder:
+	@echo "Building tjudge-builder compile sandbox image..."
+	docker build -t tjudge-builder:latest -f docker/builder/Dockerfile .
 
 # Start Docker Compose
 docker-up:

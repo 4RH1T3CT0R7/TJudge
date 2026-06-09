@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import api from '../api/client';
-import type { Game } from '../types';
+import { useGame } from '../hooks/queries';
 import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
@@ -13,49 +11,26 @@ const remarkPlugins = [remarkGfm];
 
 export function GameView() {
   const { id } = useParams<{ id: string }>();
-  const [game, setGame] = useState<Game | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const showLoading = useDelayedLoading(isLoading);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadGame = useCallback(async () => {
-    if (!id) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const gameData = await api.getGame(id);
-      setGame(gameData);
-    } catch (err) {
-      setError('Не удалось загрузить информацию об игре');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (id) {
-      loadGame();
-    }
-  }, [id, loadGame]);
+  const { data: game, isPending, isError } = useGame(id ?? '');
+  const showLoading = useDelayedLoading(isPending);
 
   if (showLoading) {
     return <TerminalLoader />;
   }
 
-  if (isLoading) {
+  if (isPending) {
     return null;
   }
 
-  if (error || !game) {
+  if (isError || !game) {
     return (
       <div className="text-center py-12">
         <div className="flex justify-center mb-4">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// игра не найдена" eyeOverride="sad" />
         </div>
-        <p className="text-red-400 mb-4">{error || 'Игра не найдена'}</p>
+        <p className="text-red-400 mb-4">
+          {isError ? 'Не удалось загрузить информацию об игре' : 'Игра не найдена'}
+        </p>
         <Link to="/games" className="btn btn-secondary">
           Назад к списку игр
         </Link>

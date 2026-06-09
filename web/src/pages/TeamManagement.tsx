@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
+import { queryKeys } from '../api/queryKeys';
+import { useTeam } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
-import type { TeamWithMembers } from '../types';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
@@ -11,10 +13,9 @@ export function TeamManagement() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [teamData, setTeamData] = useState<TeamWithMembers | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const showLoading = useDelayedLoading(isLoading);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { data: teamData, isPending, isError } = useTeam(id ?? '');
+  const showLoading = useDelayedLoading(isPending);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -34,30 +35,6 @@ export function TeamManagement() {
 
   // Invader state
   const [invaderSpeech, setInvaderSpeech] = useState<string | null>(null);
-
-  const loadTeamData = useCallback(async () => {
-    if (!id) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const data = await api.getTeam(id);
-      setTeamData(data);
-      setNewName(data.name);
-    } catch (err) {
-      setError('Не удалось загрузить данные команды');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (id) {
-      loadTeamData();
-    }
-  }, [id, loadTeamData]);
 
   // Set initial invader speech based on role (no pose change to avoid layout shift)
   useEffect(() => {
@@ -84,9 +61,7 @@ export function TeamManagement() {
     setIsSaving(true);
     try {
       await api.updateTeamName(id, newName.trim());
-      setTeamData((prev) =>
-        prev ? { ...prev, name: newName.trim() } : null
-      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.team(id) });
       setIsEditing(false);
     } catch (err) {
       console.error('Failed to update team name:', err);
@@ -135,6 +110,10 @@ export function TeamManagement() {
     setIsLeaving(true);
     try {
       await api.leaveTeam(id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.team(id) });
+      if (teamData) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.myTeam(teamData.tournament_id) });
+      }
       navigate(`/tournaments/${teamData?.tournament_id}`);
     } catch (err) {
       console.error('Failed to leave team:', err);
@@ -149,11 +128,7 @@ export function TeamManagement() {
 
     try {
       await api.removeMember(id, userId);
-      setTeamData((prev) =>
-        prev
-          ? { ...prev, members: prev.members.filter((m) => m.id !== userId) }
-          : null
-      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.team(id) });
       setMemberToRemove(null);
     } catch (err) {
       console.error('Failed to remove member:', err);
@@ -164,17 +139,17 @@ export function TeamManagement() {
     return <TerminalLoader />;
   }
 
-  if (isLoading) {
+  if (isPending) {
     return null;
   }
 
-  if (error || !teamData) {
+  if (isError || !teamData) {
     return (
       <div className="text-center py-12">
         <div className="flex justify-center mb-4">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// не найдено" eyeOverride="sad" />
         </div>
-        <p className="text-red-400">{error || 'Команда не найдена'}</p>
+        <p className="text-red-400">{isError ? 'Не удалось загрузить данные команды' : 'Команда не найдена'}</p>
         <Link to="/tournaments" className="btn btn-secondary mt-4">
           Назад к турнирам
         </Link>
@@ -244,7 +219,7 @@ export function TeamManagement() {
             )}
             {isLeader && (
               <div className="flex justify-center mt-5 mb-4">
-                <button onClick={() => setIsEditing(true)} className="btn btn-secondary">
+                <button onClick={() => { setNewName(teamData.name); setIsEditing(true); }} className="btn btn-secondary">
                   Изменить название
                 </button>
               </div>

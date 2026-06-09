@@ -51,6 +51,18 @@ type MatchesCreated struct {
 	MatchCount   int
 }
 
+// ProgramCompiled is published when async compilation of an uploaded program
+// finishes (successfully or not). Carries everything the WebSocket layer needs
+// to notify the team without extra DB reads.
+type ProgramCompiled struct {
+	Version      int // Event schema version
+	TournamentID uuid.UUID
+	ProgramID    uuid.UUID
+	TeamID       uuid.UUID
+	Status       string  // domain.ProgramStatus: ready | failed
+	ErrorMessage *string // компиляционная ошибка при status=failed
+}
+
 // GameRoundReset is published when a game round is reset (matches deleted, ratings reverted to 1500).
 type GameRoundReset struct {
 	Version      int // Event schema version

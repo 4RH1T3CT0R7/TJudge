@@ -118,7 +118,7 @@ func main() {
 	if err := database.EnsureRatingHistoryPartitions(context.Background()); err != nil {
 		log.Error("Failed to ensure rating_history partitions", zap.Error(err))
 	}
-	database.StartPartitionMaintenance()
+	database.StartPartitionMaintenance(cfg.Database.PartitionRetentionMonths)
 
 	// Подключаемся к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
@@ -185,7 +185,7 @@ func main() {
 	wsBus := events.NewSyncBus(log)
 	wsBus.Subscribe(
 		eventhandlers.NewBroadcastHandler(wsHub, log),
-		events.MatchResultProcessed{},
+		events.MatchResultProcessed{}, events.ProgramCompiled{},
 	)
 	redisEventSub := events.NewRedisEventSubscriber(redisCache, wsBus, log)
 	go redisEventSub.Start(ctx)
@@ -239,6 +239,10 @@ func main() {
 		programRepo:       programRepo,
 	}
 
+	// Очередь асинхронной компиляции: upload ставит задачу, worker
+	// компилирует программу в Docker-песочнице.
+	compileQueue := queue.NewCompileQueue(redisCache, log)
+
 	// Инициализируем handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
@@ -247,6 +251,7 @@ func main() {
 		matchScheduler, gameService, matchRepo, gameRepo,
 		teamRepo,
 		gameRepo, // autoRoundChecker
+		compileQueue,
 		cfg.Storage.ProgramsPath, log,
 	)
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)

@@ -153,6 +153,7 @@ func NewTestHarness(t *testing.T) *TestHarness {
 		h.RoundChecker,
 		h.TeamChecker,
 		h.AutoRoundChecker,
+		nil, // compileQueue: в contract-тестах компиляция не выполняется
 		h.UploadDir,
 		log,
 	)

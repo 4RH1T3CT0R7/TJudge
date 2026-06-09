@@ -1,0 +1,36 @@
+# Prometheus-конфигурация TJudge.
+# Монтируется в docker-compose.selfhosted.yml (профиль monitoring).
+# Алерты: alerts/*.yml (пороги - docs/SLO.md).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # API-сервер: HTTP-метрики, БД, кэш, очередь (продюсер).
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:8080
+
+  # Worker: пул, executor, очередь (консьюмер). METRICS_PORT=9090.
+  - job_name: worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - worker:9090
+
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090

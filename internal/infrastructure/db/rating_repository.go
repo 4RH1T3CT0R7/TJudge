@@ -68,6 +68,26 @@ func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UU
 	return history, nil
 }
 
+// GetByMatchID получает записи истории рейтинга конкретного матча.
+// Используется OutboxDispatcher'ом как идемпотентный guard: если записи
+// уже существуют, рейтинг по матчу обработан и повторять его нельзя.
+func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*domain.RatingHistory, error) {
+	var history []*domain.RatingHistory
+
+	query := `
+		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
+		FROM rating_history
+		WHERE match_id = $1
+	`
+
+	err := r.db.QueryWithMetrics(ctx, "rating_get_by_match", &history, query, matchID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get rating history by match")
+	}
+
+	return history, nil
+}
+
 // GetByTournamentID получает историю рейтинга в турнире
 func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.RatingHistory, error) {
 	var history []*domain.RatingHistory

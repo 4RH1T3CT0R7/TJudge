@@ -1,8 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { queryKeys } from '../api/queryKeys';
+import {
+  useTournament,
+  useCrossGameLeaderboard,
+  useMatchesByRounds,
+  useTournamentGames,
+  useTournamentGamesStatus,
+  useTournamentTeams,
+  useMyTeam,
+} from '../hooks/queries';
+import { useTournamentLive } from '../hooks/useTournamentLive';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
@@ -17,7 +28,6 @@ import type {
   Game,
   CrossGameLeaderboardEntry,
   MatchRound,
-  WSMessage,
   TournamentGameWithDetails,
 } from '../types';
 
@@ -147,21 +157,47 @@ const statusConfig: Record<TournamentStatus, {
 
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
+  const tournamentId = id ?? '';
   const { isAuthenticated, user } = useAuthStore();
-  const [tournament, setTournament] = useState<Tournament | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
-  const [crossGameLeaderboard, setCrossGameLeaderboard] = useState<CrossGameLeaderboardEntry[]>([]);
-  const [matchRounds, setMatchRounds] = useState<MatchRound[]>([]);
-  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const queryClient = useQueryClient();
+
+  // Живые обновления: WS-события точечно инвалидируют кэш (useTournamentLive),
+  // а pollInterval включается только как fallback, когда WS недоступен.
+  const live = useTournamentLive({ tournamentId, enabled: isAuthenticated });
+  const { isConnected } = live;
+
+  const tournamentQuery = useTournament(tournamentId);
+  const teamsQuery = useTournamentTeams(tournamentId);
+  const gamesQuery = useTournamentGames(tournamentId);
+  const leaderboardQuery = useCrossGameLeaderboard(tournamentId, { pollInterval: live.pollInterval });
+  const matchRoundsQuery = useMatchesByRounds(tournamentId, { pollInterval: live.pollInterval });
+  const gamesStatusQuery = useTournamentGamesStatus(tournamentId, { pollInterval: live.pollInterval });
+  const myTeamQuery = useMyTeam(tournamentId, { enabled: isAuthenticated });
+
+  const tournament: Tournament | null = tournamentQuery.data ?? null;
+  const teams: Team[] = teamsQuery.data ?? [];
+  const games: Game[] = gamesQuery.data ?? [];
+  const crossGameLeaderboard: CrossGameLeaderboardEntry[] = leaderboardQuery.data ?? [];
+  const matchRounds: MatchRound[] = matchRoundsQuery.data ?? [];
+  const gamesStatus: TournamentGameWithDetails[] = gamesStatusQuery.data ?? [];
+  const myTeam: Team | null = myTeamQuery.data ?? null;
+
   const [activeTab, setActiveTab] = useState<TabType>('info');
-  const [isLoading, setIsLoading] = useState(true);
+  // Первичная загрузка всех данных страницы (раньше - единый ручной флаг).
+  // isLoading у disabled-запросов (myTeam без авторизации) - false.
+  const isLoading =
+    tournamentQuery.isLoading ||
+    teamsQuery.isLoading ||
+    gamesQuery.isLoading ||
+    leaderboardQuery.isLoading ||
+    matchRoundsQuery.isLoading ||
+    gamesStatusQuery.isLoading ||
+    myTeamQuery.isLoading;
   const showLoading = useDelayedLoading(isLoading);
-  const [error, setError] = useState<string | null>(null);
+  const error = tournamentQuery.isError ? 'Не удалось загрузить данные турнира' : null;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
-  const [isRefreshingMatches, setIsRefreshingMatches] = useState(false);
 
   // Join modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -177,7 +213,6 @@ export function TournamentDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Games status state (for active game management)
-  const [gamesStatus, setGamesStatus] = useState<TournamentGameWithDetails[]>([]);
   const [runningGameId, setRunningGameId] = useState<string | null>(null);
   const [settingActiveGameId, setSettingActiveGameId] = useState<string | null>(null);
   const [resettingGameId, setResettingGameId] = useState<string | null>(null);
@@ -202,115 +237,78 @@ export function TournamentDetail() {
     }, duration);
   }, []);
 
-  const handleWebSocketMessage = useCallback((message: WSMessage) => {
-    // WebSocket updates can trigger refresh of data
-    if (message.type === 'leaderboard_update') {
+  // Реакции инвейдера и синематики: раньше триггерились WS-сообщениями напрямую,
+  // теперь - изменением данных в кэше (WS-инвалидации useTournamentLive или fallback-поллинг
+  // приводят к рефетчу; structural sharing TanStack Query меняет ссылку только при
+  // реальном изменении данных, поэтому ложных срабатываний нет).
+  const leaderboardData = leaderboardQuery.data;
+  const prevLeaderboardDataRef = useRef<CrossGameLeaderboardEntry[] | undefined>(undefined);
+  useEffect(() => {
+    if (!leaderboardData) return;
+    const prev = prevLeaderboardDataRef.current;
+    prevLeaderboardDataRef.current = leaderboardData;
+    if (prev && prev !== leaderboardData) {
       flashWsInvader('attack', '// обновление!', 800);
-      // Refresh cross-game leaderboard on updates
-      if (id) {
-        api.getCrossGameLeaderboard(id).then(data => {
-          setCrossGameLeaderboard(data || []);
+    }
 
-          // Check if user's team reached #1
-          if (myTeam && data && data.length > 0) {
-            const userEntry = data.find(e => e.team_id === myTeam.id);
-            if (userEntry) {
-              const wasNotFirst = prevLeaderRankRef.current !== null && prevLeaderRankRef.current > 1;
-              if (userEntry.rank === 1 && wasNotFirst) {
-                setCinematicTeamName(myTeam.name);
-                setCinematicType('top1_leaderboard');
-              }
-              prevLeaderRankRef.current = userEntry.rank;
-            }
-          }
-        }).catch(err => {
-          console.error('Failed to refresh leaderboard:', err);
-        });
+    // Check if user's team reached #1
+    if (myTeam && leaderboardData.length > 0) {
+      const userEntry = leaderboardData.find(e => e.team_id === myTeam.id);
+      if (userEntry) {
+        const wasNotFirst = prevLeaderRankRef.current !== null && prevLeaderRankRef.current > 1;
+        if (userEntry.rank === 1 && wasNotFirst) {
+          setCinematicTeamName(myTeam.name);
+          setCinematicType('top1_leaderboard');
+        }
+        prevLeaderRankRef.current = userEntry.rank;
       }
-    } else if (message.type === 'tournament_update') {
+    }
+  }, [leaderboardData, myTeam, flashWsInvader]);
+
+  const tournamentStatusValue = tournament?.status;
+  const prevTournamentStatusRef = useRef<TournamentStatus | undefined>(undefined);
+  useEffect(() => {
+    if (!tournamentStatusValue) return;
+    const prev = prevTournamentStatusRef.current;
+    prevTournamentStatusRef.current = tournamentStatusValue;
+    if (prev && prev !== tournamentStatusValue) {
       flashWsInvader('handsUp', '// турнир обновлён!', 2000);
 
       // Check for tournament completion with user's team at #1
-      if (id) {
-        api.getTournament(id).then(t => {
-          setTournament(t);
-          if (t.status === 'completed' && myTeam && crossGameLeaderboard.length > 0) {
-            const userEntry = crossGameLeaderboard.find(e => e.team_id === myTeam.id);
-            if (userEntry && userEntry.rank === 1) {
-              setCinematicTeamName(myTeam.name);
-              setCinematicType('tournament_victory');
-            }
-          }
-        }).catch(err => {
-          console.error('Failed to refresh tournament:', err);
-        });
-      }
-    } else if (message.type === 'match_update') {
-      flashWsInvader('run', '// матч!', 1000);
-    }
-  }, [id, flashWsInvader, myTeam, crossGameLeaderboard]);
-
-  // WebSocket for real-time updates (hook handles auth internally)
-  const { isConnected } = useWebSocket({
-    tournamentId: id || '',
-    onMessage: handleWebSocketMessage,
-    enabled: isAuthenticated,
-  });
-
-  const loadTournamentData = useCallback(async () => {
-    if (!id) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const tournamentData = await api.getTournament(id);
-      setTournament(tournamentData);
-
-      const [teamsData, gamesData, crossGameData, matchRoundsData, gamesStatusData] = await Promise.all([
-        api.getTournamentTeams(id).catch(err => { console.error('Failed to load teams:', err); return []; }),
-        api.getTournamentGames(id).catch(err => { console.error('Failed to load games:', err); return []; }),
-        api.getCrossGameLeaderboard(id).catch(err => { console.error('Failed to load leaderboard:', err); return []; }),
-        api.getMatchesByRounds(id).catch(err => { console.error('Failed to load match rounds:', err); return []; }),
-        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to load games status:', err); return []; }),
-      ]);
-
-      setTeams(teamsData || []);
-      setGames(gamesData || []);
-      setCrossGameLeaderboard(crossGameData || []);
-      setMatchRounds(matchRoundsData || []);
-      setGamesStatus(gamesStatusData || []);
-
-      if (isAuthenticated) {
-        try {
-          const myTeamData = await api.getMyTeam(id);
-          setMyTeam(myTeamData);
-        } catch {
-          setMyTeam(null);
+      if (tournamentStatusValue === 'completed' && myTeam && leaderboardData && leaderboardData.length > 0) {
+        const userEntry = leaderboardData.find(e => e.team_id === myTeam.id);
+        if (userEntry && userEntry.rank === 1) {
+          setCinematicTeamName(myTeam.name);
+          setCinematicType('tournament_victory');
         }
       }
-    } catch (err) {
-      setError('Не удалось загрузить данные турнира');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
     }
-  }, [id, isAuthenticated]);
+  }, [tournamentStatusValue, myTeam, leaderboardData, flashWsInvader]);
 
+  const matchRoundsData = matchRoundsQuery.data;
+  const prevMatchRoundsDataRef = useRef<MatchRound[] | undefined>(undefined);
   useEffect(() => {
-    if (id) {
-      loadTournamentData();
+    if (!matchRoundsData) return;
+    const prev = prevMatchRoundsDataRef.current;
+    prevMatchRoundsDataRef.current = matchRoundsData;
+    if (prev && prev !== matchRoundsData) {
+      flashWsInvader('run', '// матч!', 1000);
     }
-  }, [id, loadTournamentData]);
+  }, [matchRoundsData, flashWsInvader]);
+
+  // Инвалидация всего поддерева турнира: детали, лидерборды, матчи, games-status, команды, my-team.
+  const invalidateTournamentData = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId) });
+  }, [queryClient, tournamentId]);
 
   const handleCreateTeam = async () => {
-    if (!id || !teamName.trim()) return;
+    if (!tournamentId || !teamName.trim()) return;
 
     setIsJoining(true);
     try {
-      const team = await api.createTeam(id, teamName.trim());
-      setMyTeam(team);
-      setTeams([...teams, team]);
+      const team = await api.createTeam(tournamentId, teamName.trim());
+      queryClient.setQueryData<Team | null>(queryKeys.myTeam(tournamentId), team);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentTeams(tournamentId) });
       setShowJoinModal(false);
       setTeamName('');
     } catch (err) {
@@ -327,13 +325,10 @@ export function TournamentDetail() {
     setJoinError('');
     try {
       const team = await api.joinTeamByCode(joinCode.trim());
-      setMyTeam(team);
+      queryClient.setQueryData<Team | null>(queryKeys.myTeam(tournamentId), team);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentTeams(tournamentId) });
       setShowJoinModal(false);
       setJoinCode('');
-      if (id) {
-        const teamsData = await api.getTournamentTeams(id);
-        setTeams(teamsData || []);
-      }
     } catch {
       setJoinError('Неверный код');
     } finally {
@@ -352,7 +347,7 @@ export function TournamentDetail() {
     setActionError(null);
     try {
       await api.startTournament(tournament.id);
-      await loadTournamentData();
+      invalidateTournamentData();
     } catch (err: unknown) {
       console.error('Failed to start tournament:', err);
       setActionError(extractErrorMessage(err, 'Не удалось запустить турнир'));
@@ -368,7 +363,7 @@ export function TournamentDetail() {
     setActionError(null);
     try {
       await api.completeTournament(tournament.id);
-      await loadTournamentData();
+      invalidateTournamentData();
     } catch (err: unknown) {
       console.error('Failed to complete tournament:', err);
       setActionError(extractErrorMessage(err, 'Не удалось завершить турнир'));
@@ -386,7 +381,7 @@ export function TournamentDetail() {
       const result = await api.retryFailedMatches(tournament.id);
       setActionError(null);
       alert(`Перезапущено ${result.enqueued} неудачных матчей`);
-      await loadTournamentData();
+      invalidateTournamentData();
     } catch (err: unknown) {
       console.error('Failed to retry matches:', err);
       setActionError(extractErrorMessage(err, 'Не удалось перезапустить матчи'));
@@ -396,7 +391,7 @@ export function TournamentDetail() {
   };
 
   // Helper function to wait for matches to complete and auto-retry if needed
-  const waitForMatchesAndAutoRetry = async (tournamentId: string, initialEnqueued: number) => {
+  const waitForMatchesAndAutoRetry = async (targetTournamentId: string, initialEnqueued: number) => {
     const MAX_WAIT_TIME = 10 * 60 * 1000; // 10 minutes max
     const POLL_INTERVAL = 2000; // 2 seconds
     const AUTO_RETRY_THRESHOLD = 50;
@@ -408,19 +403,14 @@ export function TournamentDetail() {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
 
       try {
-        const stats = await api.getMatchStatistics(tournamentId);
+        const stats = await api.getMatchStatistics(targetTournamentId);
         const inProgress = stats.pending + stats.running;
 
         // Refresh leaderboard while matches are running
         if (inProgress !== lastPending) {
           lastPending = inProgress;
-          // Refresh data
-          const [leaderboardData, matchRoundsData] = await Promise.all([
-            api.getCrossGameLeaderboard(tournamentId).catch(err => { console.error('Failed to refresh leaderboard:', err); return []; }),
-            api.getMatchesByRounds(tournamentId).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
-          ]);
-          setCrossGameLeaderboard(leaderboardData);
-          setMatchRounds(matchRoundsData || []);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(targetTournamentId) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(targetTournamentId) });
         }
 
         // All matches completed
@@ -429,10 +419,10 @@ export function TournamentDetail() {
           if (stats.failed > 0 && stats.failed <= AUTO_RETRY_THRESHOLD) {
             console.log(`Auto-retrying ${stats.failed} failed matches (threshold: ${AUTO_RETRY_THRESHOLD})`);
             try {
-              const retryResult = await api.retryFailedMatches(tournamentId);
+              const retryResult = await api.retryFailedMatches(targetTournamentId);
               if (retryResult.enqueued > 0) {
                 // Wait for retry to complete recursively
-                await waitForMatchesAndAutoRetry(tournamentId, retryResult.enqueued);
+                await waitForMatchesAndAutoRetry(targetTournamentId, retryResult.enqueued);
               }
             } catch (retryErr) {
               console.error('Failed to auto-retry matches:', retryErr);
@@ -450,12 +440,12 @@ export function TournamentDetail() {
 
   // Run matches for a specific game
   const handleRunGameMatches = async (gameId: string, gameName: string, gameDisplayName: string) => {
-    if (!tournament || !id) return;
+    if (!tournament || !tournamentId) return;
 
     setRunningGameId(gameId);
     setActionError(null);
     try {
-      const result = await api.runGameMatches(id, gameName);
+      const result = await api.runGameMatches(tournamentId, gameName);
 
       // Find current game index and check if there's a next game
       const currentIndex = games.findIndex(g => g.id === gameId);
@@ -464,35 +454,25 @@ export function TournamentDetail() {
       if (!isLastGame) {
         // Switch to the next game
         const nextGame = games[currentIndex + 1];
-        await api.setActiveGame(id, nextGame.id);
+        await api.setActiveGame(tournamentId, nextGame.id);
         alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}". Ожидание завершения матчей...`);
       } else {
         // Last game - deactivate all games
-        await api.deactivateAllGames(id);
+        await api.deactivateAllGames(tournamentId);
         alert(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы. Ожидание завершения матчей...`);
       }
 
       // Wait for matches to complete and auto-retry if needed (runs in background)
-      waitForMatchesAndAutoRetry(id, result.enqueued).then(() => {
+      void waitForMatchesAndAutoRetry(tournamentId, result.enqueued).then(() => {
         // Final refresh after all matches complete
-        Promise.all([
-          api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
-          api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
-          api.getCrossGameLeaderboard(id).catch(err => { console.error('Failed to refresh leaderboard:', err); return []; }),
-        ]).then(([gamesStatusData, matchRoundsData, leaderboardData]) => {
-          setGamesStatus(gamesStatusData || []);
-          setMatchRounds(matchRoundsData || []);
-          setCrossGameLeaderboard(leaderboardData);
-        });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
       });
 
       // Immediate refresh
-      const [gamesStatusData, matchRoundsData] = await Promise.all([
-        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
-        api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
-      ]);
-      setGamesStatus(gamesStatusData || []);
-      setMatchRounds(matchRoundsData || []);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to run game matches:', err);
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -504,15 +484,14 @@ export function TournamentDetail() {
 
   // Set active game for tournament
   const handleSetActiveGame = async (gameId: string) => {
-    if (!id) return;
+    if (!tournamentId) return;
 
     setSettingActiveGameId(gameId);
     setActionError(null);
     try {
-      await api.setActiveGame(id, gameId);
+      await api.setActiveGame(tournamentId, gameId);
       // Reload games status
-      const gamesStatusData = await api.getTournamentGamesStatus(id);
-      setGamesStatus(gamesStatusData || []);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to set active game:', err);
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -524,7 +503,7 @@ export function TournamentDetail() {
 
   // Reset game round (delete all matches and reset ratings)
   const handleResetGameRound = async (gameId: string, gameDisplayName: string) => {
-    if (!id) return;
+    if (!tournamentId) return;
 
     const confirmed = window.confirm(
       `Вы уверены, что хотите сбросить раунд для игры "${gameDisplayName}"?\n\n` +
@@ -540,20 +519,17 @@ export function TournamentDetail() {
     setResettingGameId(gameId);
     setActionError(null);
     try {
-      const result = await api.resetGameRound(id, gameId);
+      const result = await api.resetGameRound(tournamentId, gameId);
       alert(
         `Раунд сброшен успешно!\n\n` +
         `Удалено матчей: ${result.matches_deleted}\n` +
         `Сброшено рейтингов: ${result.participants_reset}\n` +
         `Удалено записей истории: ${result.rating_history_reset}`
       );
-      // Reload games status and matches
-      const [gamesStatusData, matchRoundsData] = await Promise.all([
-        api.getTournamentGamesStatus(id).catch(err => { console.error('Failed to refresh games status:', err); return []; }),
-        api.getMatchesByRounds(id).catch(err => { console.error('Failed to refresh match rounds:', err); return []; }),
-      ]);
-      setGamesStatus(gamesStatusData || []);
-      setMatchRounds(matchRoundsData || []);
+      // Reload games status, matches and leaderboard (ratings were reset)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to reset game round:', err);
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -563,36 +539,19 @@ export function TournamentDetail() {
     }
   };
 
-  // Функция для обновления только матчей (для авто-обновления)
-  const refreshMatches = useCallback(async () => {
-    if (!id || isRefreshingMatches) return;
+  // Ручное обновление матчей (кнопка «Обновить»): refetch стабилен между рендерами.
+  const refetchMatches = matchRoundsQuery.refetch;
+  const refreshMatches = useCallback(() => {
+    void refetchMatches();
+  }, [refetchMatches]);
+  const isRefreshingMatches = matchRoundsQuery.isRefetching;
 
-    setIsRefreshingMatches(true);
-    try {
-      const matchRoundsData = await api.getMatchesByRounds(id);
-      setMatchRounds(matchRoundsData || []);
-    } catch (err) {
-      console.error('Failed to refresh matches:', err);
-    } finally {
-      setIsRefreshingMatches(false);
-    }
-  }, [id, isRefreshingMatches]);
-
-  // Функция для обновления таблиц рейтинга (для авто-обновления)
-  const [isRefreshingLeaderboard, setIsRefreshingLeaderboard] = useState(false);
-  const refreshLeaderboard = useCallback(async () => {
-    if (!id || isRefreshingLeaderboard) return;
-
-    setIsRefreshingLeaderboard(true);
-    try {
-      const crossGameData = await api.getCrossGameLeaderboard(id);
-      setCrossGameLeaderboard(crossGameData || []);
-    } catch (err) {
-      console.error('Failed to refresh leaderboard:', err);
-    } finally {
-      setIsRefreshingLeaderboard(false);
-    }
-  }, [id, isRefreshingLeaderboard]);
+  // Ручное обновление таблиц рейтинга (кнопка «Обновить»).
+  const refetchLeaderboard = leaderboardQuery.refetch;
+  const refreshLeaderboard = useCallback(() => {
+    void refetchLeaderboard();
+  }, [refetchLeaderboard]);
+  const isRefreshingLeaderboard = leaderboardQuery.isRefetching;
 
   if (showLoading) {
     return <TerminalLoader />;
@@ -909,7 +868,7 @@ export function TournamentDetail() {
               if (!window.confirm('Дисквалифицировать команду? Все матчи с её участием будут удалены.')) return;
               try {
                 await api.disqualifyTeam(teamId);
-                await loadTournamentData();
+                invalidateTournamentData();
               } catch (err) {
                 console.error('Failed to disqualify team:', err);
                 window.alert('Не удалось дисквалифицировать команду. Попробуйте снова.');
@@ -919,7 +878,7 @@ export function TournamentDetail() {
               if (!window.confirm('Восстановить команду? Она снова сможет участвовать в турнире.')) return;
               try {
                 await api.restoreTeam(teamId);
-                await loadTournamentData();
+                invalidateTournamentData();
               } catch (err) {
                 console.error('Failed to restore team:', err);
                 window.alert('Не удалось восстановить команду. Попробуйте снова.');
@@ -1192,18 +1151,10 @@ function LeaderboardTab({
   hasActiveMatches: boolean;
   isCompleted: boolean;
 }) {
+  // Поллинг каждые 2с удалён: живые данные приходят через WS-инвалидации
+  // (useTournamentLive) либо fallback-поллинг TanStack Query на уровне страницы.
+  // Флаг оставлен для индикатора «Обновление...» в шапке вкладки.
   const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // Автообновление каждые 2 секунды если есть активные матчи
-  useEffect(() => {
-    if (!autoRefresh || !hasActiveMatches) return;
-
-    const interval = setInterval(() => {
-      onRefresh();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, hasActiveMatches, onRefresh]);
 
   return (
     <div>
@@ -1577,6 +1528,8 @@ function GamesTab({
   resettingGameId?: string | null;
   matchRounds?: MatchRound[];
 }) {
+  const queryClient = useQueryClient();
+
   const handleRunMatches = async (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1615,7 +1568,7 @@ function GamesTab({
       }
       try {
         await api.setAutoRound(tournamentId, gameId, true, interval);
-        window.location.reload();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
       } catch (err) {
         console.error('Failed to enable auto-round:', err);
         alert('Не удалось включить авто-раунд');
@@ -1623,7 +1576,7 @@ function GamesTab({
     } else {
       try {
         await api.setAutoRound(tournamentId, gameId, false, currentStatus?.auto_round_interval_seconds ?? 60);
-        window.location.reload();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
       } catch (err) {
         console.error('Failed to disable auto-round:', err);
         alert('Не удалось выключить авто-раунд');
@@ -1836,31 +1789,27 @@ function TeamsTab({
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
   const [membersExpanded, setMembersExpanded] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<Record<string, { username: string; email: string }[]>>({});
-  const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const toggleAllMembers = async () => {
-    if (membersExpanded) {
-      setMembersExpanded(false);
-      return;
+  // Составы команд: запросы выполняются только после раскрытия (enabled),
+  // кэшируются по queryKeys.team и дедуплицируются между перерисовками.
+  const memberQueries = useQueries({
+    queries: teams.map((t) => ({
+      queryKey: queryKeys.team(t.id),
+      queryFn: () => api.getTeam(t.id),
+      enabled: membersExpanded,
+    })),
+  });
+  const loadingMembers = membersExpanded && memberQueries.some(q => q.isLoading);
+  const teamMembers: Record<string, { username: string; email: string }[]> = {};
+  teams.forEach((t, i) => {
+    const data = memberQueries[i]?.data;
+    if (data) {
+      teamMembers[t.id] = data.members.map(m => ({ username: m.username, email: m.email }));
     }
-    setMembersExpanded(true);
-    const missing = teams.filter(t => !teamMembers[t.id]);
-    if (missing.length > 0) {
-      setLoadingMembers(true);
-      const results = await Promise.allSettled(missing.map(t => api.getTeam(t.id)));
-      setTeamMembers(prev => {
-        const next = { ...prev };
-        missing.forEach((t, i) => {
-          const r = results[i];
-          next[t.id] = r.status === 'fulfilled'
-            ? r.value.members.map(m => ({ username: m.username, email: m.email }))
-            : [];
-        });
-        return next;
-      });
-      setLoadingMembers(false);
-    }
+  });
+
+  const toggleAllMembers = () => {
+    setMembersExpanded(prev => !prev);
   };
 
   return (
@@ -2042,20 +1991,11 @@ function MatchesTab({
   const showAllRounds = () => setHiddenRounds(new Set());
 
   // Проверяем, есть ли активные матчи (pending или running)
+  // Поллинг каждые 2с удалён: живые данные приходят через WS-инвалидации
+  // (useTournamentLive) либо fallback-поллинг TanStack Query на уровне страницы.
   const hasActiveMatches = rounds.some(
     r => r.pending_count > 0 || r.running_count > 0
   );
-
-  // Автообновление каждые 2 секунды если есть активные матчи
-  useEffect(() => {
-    if (!autoRefresh || !hasActiveMatches) return;
-
-    const interval = setInterval(() => {
-      onRefresh();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, hasActiveMatches, onRefresh]);
 
   const toggleRound = (roundKey: string) => {
     setExpandedRounds(prev => {

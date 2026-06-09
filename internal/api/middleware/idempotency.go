@@ -23,6 +23,7 @@ type IdempotencyStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error)
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+	Del(ctx context.Context, keys ...string) error
 }
 
 // idempotencyEntry - сохраняемый снапшот ответа.
@@ -60,7 +61,17 @@ func (r *idempotencyRecorder) Write(p []byte) (int, error) {
 //     пере-исполнения handler'а.
 //   - Конкурентный запрос с тем же ключом получает 409 Conflict - защита от
 //     двойного создания при параллельных ретраях.
+//   - Ключ скоупится по userID+method+path: чужой Idempotency-Key нельзя
+//     ни переиграть (replay чужого ответа), ни заблокировать.
+//   - При не-2xx ответе (или панике) in-flight маркер снимается - клиент
+//     может сразу повторить запрос с тем же ключом.
 const idempotencyTTL = 24 * time.Hour
+
+// inFlightTTL - страховочный TTL маркера "запрос выполняется": в нормальном
+// потоке маркер снимается явно (заменяется ответом или удаляется при ошибке),
+// TTL защищает только от падения процесса между SetNX и завершением handler'а.
+const inFlightTTL = 2 * time.Minute
+
 const idempotencyKeyMax = 128
 const idempotencyKeyPrefix = "idempotency:"
 
@@ -88,7 +99,14 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 
-			cacheKey := idempotencyKeyPrefix + rawKey
+			// Скоупим ключ по пользователю и маршруту: глобальный ключ позволял
+			// бы угадавшему чужой Idempotency-Key получить replay чужого ответа
+			// или заблокировать чужое создание 409-ми.
+			scope := "anon"
+			if userID, ok := GetUserID(r.Context()); ok {
+				scope = userID.String()
+			}
+			cacheKey := idempotencyKeyPrefix + scope + ":" + r.Method + ":" + r.URL.Path + ":" + rawKey
 
 			// 1. Проверяем, есть ли уже сохранённый ответ.
 			if saved, err := store.Get(r.Context(), cacheKey); err == nil && saved != "" && saved != "in-flight" {
@@ -107,7 +125,7 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 			}
 
 			// 2. Концурентный запрос: пробуем захватить "in-flight" маркер через SetNX.
-			ok, err := store.SetNX(r.Context(), cacheKey, "in-flight", idempotencyTTL)
+			ok, err := store.SetNX(r.Context(), cacheKey, "in-flight", inFlightTTL)
 			if err != nil {
 				log.Warn("idempotency store error, bypassing", zap.Error(err))
 				next.ServeHTTP(w, r)
@@ -121,6 +139,16 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 			}
 
 			// 3. Первый запрос - исполняем handler и сохраняем snapshot.
+			// Если ответ не сохранён (не-2xx, ошибка сериализации или паника
+			// handler'а), снимаем in-flight маркер: иначе честный ретрай с тем же
+			// ключом получал бы 409 до истечения TTL.
+			stored := false
+			defer func() {
+				if !stored {
+					_ = store.Del(r.Context(), cacheKey)
+				}
+			}()
+
 			rec := &idempotencyRecorder{
 				ResponseWriter: w,
 				buf:            &bytes.Buffer{},
@@ -144,7 +172,9 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 					Body:   rec.buf.String(),
 				}
 				if payload, err := json.Marshal(entry); err == nil {
-					_ = store.Set(r.Context(), cacheKey, string(payload), idempotencyTTL)
+					if store.Set(r.Context(), cacheKey, string(payload), idempotencyTTL) == nil {
+						stored = true
+					}
 				}
 			}
 		})

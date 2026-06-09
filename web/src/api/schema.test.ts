@@ -1,7 +1,7 @@
-// Тесты schema-валидатора (vitest-совместимые).
-// Исполняются при наличии `npm test` - нет runner'а в проекте сейчас, но файл
-// готов для активации. Паттерн: проверка happy-path + каждой выбрасываемой ошибки.
+// Тесты schema-валидатора (vitest).
+// Паттерн: проверка happy-path + каждой выбрасываемой ошибки.
 
+import { describe, it, expect } from 'vitest';
 import {
   validateUser,
   validateAuthResponse,
@@ -11,49 +11,81 @@ import {
   SchemaError,
 } from './schema';
 
-function expectThrows(fn: () => void, pathContains: string) {
+function expectSchemaError(fn: () => void, pathContains: string) {
   try {
     fn();
     throw new Error('expected SchemaError but got none');
   } catch (e) {
-    if (!(e instanceof SchemaError)) throw e;
-    if (!e.path.includes(pathContains)) {
-      throw new Error(`expected path to contain "${pathContains}", got "${e.path}"`);
-    }
+    expect(e).toBeInstanceOf(SchemaError);
+    expect((e as SchemaError).path).toContain(pathContains);
   }
 }
 
-// Smoke tests - экспортируются чтобы runner'у было что подхватить.
-export function runAllTests() {
-  // User
-  validateUser({ id: '1', username: 'u', email: 'e', role: 'user' });
-  expectThrows(() => validateUser(null), 'user');
-  expectThrows(() => validateUser({ id: 1, username: 'u', email: 'e', role: 'user' }), 'user.id');
-  expectThrows(() => validateUser({ id: '1', username: 'u', email: 'e' }), 'user.role');
-
-  // AuthResponse
-  validateAuthResponse({
-    access_token: 'a',
-    refresh_token: 'r',
-    user: { id: '1', username: 'u', email: 'e', role: 'user' },
+describe('validateUser', () => {
+  it('принимает валидного пользователя', () => {
+    expect(() => validateUser({ id: '1', username: 'u', email: 'e', role: 'user' })).not.toThrow();
   });
-  expectThrows(() => validateAuthResponse({ access_token: 'a' }), 'authResponse');
 
-  // Tournament
-  validateTournament({ id: '1', name: 'T', status: 'pending' });
-  expectThrows(() => validateTournament({ id: '1', name: 'T' }), 'tournament.status');
+  it('отклоняет null', () => {
+    expectSchemaError(() => validateUser(null), 'user');
+  });
 
-  // TournamentList
-  validateTournamentList([
-    { id: '1', name: 'A', status: 'pending' },
-    { id: '2', name: 'B', status: 'active' },
-  ]);
-  expectThrows(
-    () => validateTournamentList([{ id: '1', name: 'A' }]),
-    'tournamentList[0]'
-  );
+  it('отклоняет числовой id', () => {
+    expectSchemaError(() => validateUser({ id: 1, username: 'u', email: 'e', role: 'user' }), 'user.id');
+  });
 
-  // game
-  validateGame({ id: '1', name: 'n', display_name: 'Display' });
-  expectThrows(() => validateGame({ id: '1' }), 'game.name');
-}
+  it('отклоняет отсутствие role', () => {
+    expectSchemaError(() => validateUser({ id: '1', username: 'u', email: 'e' }), 'user.role');
+  });
+});
+
+describe('validateAuthResponse', () => {
+  it('принимает валидный ответ', () => {
+    expect(() =>
+      validateAuthResponse({
+        access_token: 'a',
+        refresh_token: 'r',
+        user: { id: '1', username: 'u', email: 'e', role: 'user' },
+      })
+    ).not.toThrow();
+  });
+
+  it('отклоняет ответ без user/refresh_token', () => {
+    expectSchemaError(() => validateAuthResponse({ access_token: 'a' }), 'authResponse');
+  });
+});
+
+describe('validateTournament', () => {
+  it('принимает валидный турнир', () => {
+    expect(() => validateTournament({ id: '1', name: 'T', status: 'pending' })).not.toThrow();
+  });
+
+  it('отклоняет турнир без статуса', () => {
+    expectSchemaError(() => validateTournament({ id: '1', name: 'T' }), 'tournament.status');
+  });
+});
+
+describe('validateTournamentList', () => {
+  it('принимает валидный список', () => {
+    expect(() =>
+      validateTournamentList([
+        { id: '1', name: 'A', status: 'pending' },
+        { id: '2', name: 'B', status: 'active' },
+      ])
+    ).not.toThrow();
+  });
+
+  it('указывает индекс сломанного элемента', () => {
+    expectSchemaError(() => validateTournamentList([{ id: '1', name: 'A' }]), 'tournamentList[0]');
+  });
+});
+
+describe('validateGame', () => {
+  it('принимает валидную игру', () => {
+    expect(() => validateGame({ id: '1', name: 'n', display_name: 'Display' })).not.toThrow();
+  });
+
+  it('отклоняет игру без name', () => {
+    expectSchemaError(() => validateGame({ id: '1' }), 'game.name');
+  });
+});

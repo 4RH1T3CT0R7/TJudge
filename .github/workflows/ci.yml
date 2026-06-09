@@ -7,7 +7,91 @@ on:
     branches: [ main, develop ]
 
 jobs:
+  # Фронтенд собирается ОДИН раз; web/dist раздаётся остальным jobs артефактом
+  # (раньше npm ci + npm run build повторялись в 8 jobs за прогон).
+  frontend:
+    name: Frontend (lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: ESLint
+        run: npm run lint
+        working-directory: web
+
+      - name: Vitest
+        run: npm test
+        working-directory: web
+
+      # Сгенерированные из docs/openapi.yaml типы обязаны быть свежими:
+      # рассинхрон спеки и фронта - ошибка CI, а не тихий баг.
+      - name: OpenAPI codegen freshness
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/api/generated \
+            || { echo "::error::web/src/api/generated устарел - выполните npm run generate:api и закоммитьте"; exit 1; }
+        working-directory: web
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
+
+      # P2.1: bundlesize check. Фейлим pipeline, если chunk > 1.5 MB gzipped
+      # или сумма > 5 MB gzipped.
+      - name: Frontend bundle size check
+        run: |
+          if [ ! -d ../internal/web/dist/assets ]; then
+            echo "::error::Frontend build output not found at ../internal/web/dist/assets"
+            exit 1
+          fi
+          found=$(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \) | wc -l)
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No bundle assets found (expected .js/.css in dist/assets)"
+            exit 1
+          fi
+          total_gz=0
+          oversized=0
+          while IFS= read -r f; do
+            size=$(gzip -c "$f" | wc -c)
+            total_gz=$((total_gz + size))
+            kb=$((size / 1024))
+            echo "  ${f#../internal/web/dist/}  ${kb}KB (gzipped)"
+            if [ "$size" -gt 1572864 ]; then
+              echo "::error file=${f}::Chunk $(basename "$f") = ${kb}KB gzipped > 1.5MB budget"
+              oversized=$((oversized + 1))
+            fi
+          done < <(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \))
+          total_mb=$((total_gz / 1024 / 1024))
+          echo "Total bundle (gzipped): ${total_mb}MB across ${found} files"
+          if [ "$oversized" -gt 0 ]; then
+            exit 1
+          fi
+          if [ "$total_gz" -gt 5242880 ]; then
+            echo "::error::Total bundle ${total_mb}MB > 5MB hard limit"
+            exit 1
+          fi
+        working-directory: web
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: internal/web/dist
+          retention-days: 1
+
   lint:
+    needs: [frontend]
     name: Lint
     runs-on: ubuntu-latest
     steps:
@@ -19,18 +103,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       # P2.1: bundlesize check. Фейлим pipeline, если main-bundle вырос > 1 MB gzipped,
       # или любой chunk > 1.5 MB gzipped. Пороги консервативные; уточнить после baseline.
@@ -84,7 +161,13 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run --timeout=5m ./...
 
+      # Проверка заземляемых фактов документации (число миграций, версия Go,
+      # существование файлов, на которые ссылаются доки и compose).
+      - name: Docs consistency check
+        run: ./scripts/check-docs.sh
+
   test:
+    needs: [frontend]
     name: Test
     runs-on: ubuntu-latest
 
@@ -122,18 +205,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download dependencies
         run: go mod download
@@ -183,6 +259,7 @@ jobs:
           name: codecov-umbrella
 
   race:
+    needs: [frontend]
     name: Race Detection
     runs-on: ubuntu-latest
 
@@ -220,18 +297,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download dependencies
         run: go mod download
@@ -261,6 +331,7 @@ jobs:
         run: go build -race ./cmd/api ./cmd/worker
 
   build:
+    needs: [frontend]
     name: Build
     runs-on: ubuntu-latest
 
@@ -273,18 +344,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download Go dependencies
         run: go mod download
@@ -306,6 +370,7 @@ jobs:
           retention-days: 7
 
   security:
+    needs: [frontend]
     name: Security Scan
     runs-on: ubuntu-latest
     permissions:
@@ -321,18 +386,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       # P1.9: gosec блокирует pipeline на MEDIUM-severity findings (и выше).
       # Все legacy-issues разобраны:
@@ -344,11 +402,12 @@ jobs:
       #   G204 (exec var)     → #nosec (hardcoded binary names, args без
       #                         user-input).
       #
-      # Используем go-install latest вместо securego/gosec-action, т.к. старый
+      # Используем go-install вместо securego/gosec-action, т.к. старый
       # docker-образ (2.21.4) ставит exit-code по ВСЕМ findings независимо от
       # -severity фильтра → false-positive fail на legacy-коде.
+      # Версия запинена: @latest - источник внезапных красных CI при релизах gosec.
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.22.4
 
       - name: Run gosec (text output для логов)
         run: gosec -severity medium -confidence medium ./...
@@ -412,10 +471,10 @@ jobs:
         working-directory: web
 
       # P1.9: Trivy filesystem scan на high/critical CVE.
-      # Используем master-tag: aquasecurity публикует версии как v-tags
-      # (v0.24.0, v0.25.0...), @master гарантированно резолвится.
+      # Версия запинена (@master - источник внезапных красных CI и supply-chain
+      # риск: код action'а может измениться без нашего ведома).
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -428,6 +487,7 @@ jobs:
           trivyignores: .trivyignore
 
   contract:
+    needs: [frontend]
     name: Contract Tests
     runs-on: ubuntu-latest
 
@@ -440,18 +500,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download dependencies
         run: go mod download
@@ -527,7 +580,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [integration]
+    needs: [integration, frontend]
 
     services:
       postgres:
@@ -563,18 +616,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download dependencies
         run: go mod download
@@ -665,18 +711,11 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: web
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: web
+          name: web-dist
+          path: internal/web/dist
 
       - name: Download dependencies
         run: go mod download

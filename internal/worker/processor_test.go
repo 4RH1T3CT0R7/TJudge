@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -25,6 +26,21 @@ func (m *MockMatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, st
 
 func (m *MockMatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
 	args := m.Called(ctx, id, result)
+	return args.Error(0)
+}
+
+func (m *MockMatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
+	args := m.Called(ctx, id, result)
+	return args.Error(0)
+}
+
+func (m *MockMatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
+	args := m.Called(ctx, matchID)
+	return args.Error(0)
+}
+
+func (m *MockMatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
@@ -215,14 +231,46 @@ func TestProcessor_Process_ExecutorFailure(t *testing.T) {
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
-		Return(nil, fmt.Errorf("docker timeout"))
+		Return(nil, fmt.Errorf("invalid output format"))
 	matchRepo.On("UpdateResult", mock.Anything, match.ID, mock.AnythingOfType("*domain.MatchResult")).Return(nil)
 
 	err := p.Process(context.Background(), match)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to execute match")
+	// Ошибка программы терминальна: матч помечен failed, ретраи не нужны.
+	assert.ErrorIs(t, err, ErrProgramFailed)
 	matchRepo.AssertExpectations(t)
 	executor.AssertExpectations(t)
+	matchRepo.AssertNotCalled(t, "ResetToPending", mock.Anything, mock.Anything)
+}
+
+func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
+	p, matchRepo, _, programRepo, _, executorMock := newTestProcessor(t)
+	match := &domain.Match{
+		ID:           uuid.New(),
+		TournamentID: uuid.New(),
+		Program1ID:   uuid.New(),
+		Program2ID:   uuid.New(),
+	}
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return([]*domain.Program{
+			{ID: match.Program1ID, CodePath: "/path/p1"},
+			{ID: match.Program2ID, CodePath: "/path/p2"},
+		}, nil)
+	// Инфраструктурная ошибка: Docker daemon недоступен.
+	executorMock.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
+		Return(nil, &executor.InfraError{Err: fmt.Errorf("failed to create container: daemon unreachable")})
+	matchRepo.On("ResetToPending", mock.Anything, match.ID).Return(nil)
+
+	err := p.Process(context.Background(), match)
+	assert.Error(t, err)
+	// Транзиентная ошибка НЕ терминальна - пул будет ретраить.
+	assert.NotErrorIs(t, err, ErrProgramFailed)
+	matchRepo.AssertExpectations(t)
+	// Матч НЕ должен помечаться failed.
+	matchRepo.AssertNotCalled(t, "UpdateResult", mock.Anything, mock.Anything, mock.Anything)
+	matchRepo.AssertNotCalled(t, "UpdateResultWithOutbox", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestProcessor_Process_UpdateResultFailure(t *testing.T) {
@@ -247,7 +295,7 @@ func TestProcessor_Process_UpdateResultFailure(t *testing.T) {
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
 		Return(result, nil)
-	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).
 		Return(fmt.Errorf("db error"))
 
 	err := p.Process(context.Background(), match)
@@ -347,10 +395,12 @@ func TestProcessor_Process_Success(t *testing.T) {
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
-	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(1200, 1000, nil)
 	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).Return(nil)
+	// Fast path успешно обновил рейтинг - outbox-задача закрывается.
+	matchRepo.On("MarkRatingApplied", mock.Anything, match.ID).Return(nil)
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)
@@ -384,7 +434,7 @@ func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
-	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(0, 0, fmt.Errorf("redis connection lost"))
 
@@ -420,7 +470,7 @@ func TestProcessor_Process_ErrorCode_SkipsRatings(t *testing.T) {
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
-	matchRepo.On("UpdateResult", mock.Anything, match.ID, result).Return(nil)
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(nil)
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)

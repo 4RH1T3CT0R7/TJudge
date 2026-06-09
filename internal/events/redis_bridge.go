@@ -38,6 +38,7 @@ func init() {
 	registerType(TournamentStarted{})
 	registerType(TournamentCompleted{})
 	registerType(MatchesCreated{})
+	registerType(ProgramCompiled{})
 }
 
 func registerType(v any) {

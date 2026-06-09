@@ -7,6 +7,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -17,10 +18,24 @@ import (
 // Это не ошибка обработки - матч просто нужно пропустить
 var ErrMatchNotFound = stderrors.New("match not found in database")
 
+// ErrProgramFailed - терминальная ошибка программы участника (ненулевой
+// exit-code, мусорный вывод, превышение таймаута). Ретраи бессмысленны:
+// матч уже помечен failed, пул не должен повторять обработку.
+var ErrProgramFailed = stderrors.New("match failed: program error")
+
 // MatchRepository интерфейс для работы с матчами
 type MatchRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MatchStatus) error
 	UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error
+	// UpdateResultWithOutbox записывает результат и outbox-задачу рейтинга
+	// в одной транзакции - гарантия, что рейтинг не потеряется при сбое.
+	UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error
+	// MarkRatingApplied закрывает outbox-задачу после успешного fast-path
+	// обновления рейтинга.
+	MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error
+	// ResetToPending возвращает матч в pending после транзиентной
+	// инфраструктурной ошибки executor'а.
+	ResetToPending(ctx context.Context, id uuid.UUID) error
 }
 
 // RatingRepository интерфейс для работы с рейтингами
@@ -125,7 +140,21 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 	// Выполняем матч через executor
 	result, err := p.executor.Execute(ctx, match, program1.CodePath, program2.CodePath)
 	if err != nil {
-		// Сохраняем ошибку в БД
+		// Инфраструктурная ошибка (Docker daemon, образ, контейнер):
+		// программа участника не виновата - матч НЕ помечается failed,
+		// а возвращается в pending. Его повторит retry-цикл пула, а если
+		// попытки исчерпаются - периодический recovery-сервис.
+		if executor.IsInfraError(err) {
+			if resetErr := p.matchRepo.ResetToPending(ctx, match.ID); resetErr != nil {
+				p.log.Error("Failed to reset match to pending after infra error",
+					zap.String("match_id", match.ID.String()),
+					zap.Error(resetErr),
+				)
+			}
+			return fmt.Errorf("transient executor error: %w", err)
+		}
+
+		// Ошибка программы (exit-code, формат вывода, таймаут) - терминальна.
 		errorResult := &domain.MatchResult{
 			MatchID:      match.ID,
 			ErrorCode:    1,
@@ -137,11 +166,12 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 				zap.Error(dbErr),
 			)
 		}
-		return fmt.Errorf("failed to execute match: %w", err)
+		return fmt.Errorf("%w: %s", ErrProgramFailed, err.Error())
 	}
 
-	// Обновляем результат в БД
-	if err := p.matchRepo.UpdateResult(ctx, match.ID, result); err != nil {
+	// Обновляем результат в БД; для успешных матчей в той же транзакции
+	// создаётся outbox-задача «обновить рейтинг».
+	if err := p.matchRepo.UpdateResultWithOutbox(ctx, match.ID, result); err != nil {
 		return fmt.Errorf("failed to update match result: %w", err)
 	}
 
@@ -152,13 +182,19 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 		}
 	}
 
-	// Если матч успешно завершён, обновляем рейтинги
+	// Если матч успешно завершён, обновляем рейтинги (fast path).
+	// При ошибке ничего не теряется: outbox-задача осталась pending,
+	// её доведёт до конца OutboxDispatcher.
 	if result.ErrorCode == 0 && result.Winner >= 0 {
 		if err := p.updateRatings(ctx, match, result); err != nil {
-			p.log.LogError("Failed to update ratings", err,
+			p.log.LogError("Failed to update ratings, outbox dispatcher will retry", err,
 				zap.String("match_id", match.ID.String()),
 			)
-			// Не возвращаем ошибку, так как матч уже выполнен
+		} else if err := p.matchRepo.MarkRatingApplied(ctx, match.ID); err != nil {
+			// Не страшно: диспетчер увидит rating_history и закроет задачу сам.
+			p.log.LogError("Failed to mark outbox entry done", err,
+				zap.String("match_id", match.ID.String()),
+			)
 		}
 	}
 
