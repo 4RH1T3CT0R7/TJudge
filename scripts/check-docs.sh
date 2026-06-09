@@ -14,11 +14,17 @@ err() { echo "::error::DOC-CHECK: $1"; FAIL=1; }
 ok()  { echo "  OK: $1"; }
 
 # 1. Диапазон миграций в CLAUDE.md соответствует migrations/.
+# CLAUDE.md сознательно не коммитится (.gitignore) - в CI его нет, проверка
+# выполняется только локально.
 max_migration=$(ls migrations/ | grep -oE '^[0-9]{6}' | sort -u | tail -1)
-if grep -q "000001\`-\`${max_migration}" CLAUDE.md; then
-    ok "CLAUDE.md: диапазон миграций до ${max_migration}"
+if [ -f CLAUDE.md ]; then
+    if grep -q "000001\`-\`${max_migration}" CLAUDE.md; then
+        ok "CLAUDE.md: диапазон миграций до ${max_migration}"
+    else
+        err "CLAUDE.md заявляет не тот диапазон миграций (фактический максимум: ${max_migration})"
+    fi
 else
-    err "CLAUDE.md заявляет не тот диапазон миграций (фактический максимум: ${max_migration})"
+    ok "CLAUDE.md отсутствует (gitignored) - проверка пропущена"
 fi
 
 # 2. Версия Go в README не отстаёт от go.mod.

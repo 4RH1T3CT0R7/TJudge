@@ -474,7 +474,7 @@ jobs:
       # Версия запинена (@master - источник внезапных красных CI и supply-chain
       # риск: код action'а может измениться без нашего ведома).
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           scan-type: 'fs'
           scan-ref: '.'
