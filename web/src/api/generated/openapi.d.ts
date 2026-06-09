@@ -1219,6 +1219,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Full system status (admin)
+         * @description Полное состояние системы одним ответом: версия и аптайм процесса, здоровье и пул соединений БД, версия миграций, здоровье Redis, размеры всех очередей (приоритеты, dead-letter, компиляция), матчи и программы по статусам, outbox пост-обработки, WebSocket-подключения.
+         */
+        get: operations["systemFullStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/health": {
         parameters: {
             query?: never;
@@ -1709,6 +1729,63 @@ export interface components {
                 /** Format: double */
                 temperature?: number;
             }[];
+        };
+        FullSystemStatus: {
+            app?: {
+                /** @description Короткий vcs.revision сборки или "dev" */
+                version?: string;
+                build_time?: string;
+                /** @description Сборка из дерева с незакоммиченными изменениями */
+                dirty?: boolean;
+                go_version?: string;
+                /** Format: date-time */
+                started_at?: string;
+                uptime_seconds?: number;
+            };
+            database?: {
+                healthy?: boolean;
+                /** @description Версия миграций из schema_migrations */
+                schema_version?: number;
+                schema_dirty?: boolean;
+                open_connections?: number;
+                in_use?: number;
+                idle?: number;
+                max_open?: number;
+            };
+            redis?: {
+                healthy?: boolean;
+            };
+            queues?: {
+                high?: number;
+                medium?: number;
+                low?: number;
+                total?: number;
+                dead_letter?: number;
+                compile?: number;
+            };
+            matches?: {
+                by_status?: {
+                    [key: string]: number;
+                };
+                /** Format: date-time */
+                last_completed_at?: string | null;
+            };
+            /** @description Число программ в каждом статусе (compiling/ready/failed) */
+            programs?: {
+                [key: string]: number;
+            };
+            outbox?: {
+                pending?: number;
+                errors?: number;
+                done_last_24h?: number;
+                oldest_pending_age_seconds?: number | null;
+                /** Format: date-time */
+                last_processed_at?: string | null;
+            } | null;
+            websocket?: {
+                tournaments?: number;
+                total_clients?: number;
+            };
         };
         HealthStatus: {
             /** @enum {string} */
@@ -3771,6 +3848,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["SystemMetrics"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    systemFullStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full system status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["FullSystemStatus"];
                     };
                 };
             };

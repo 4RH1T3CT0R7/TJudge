@@ -418,7 +418,9 @@ func copyFile(src, dst string) error {
 	defer in.Close()
 
 	// #nosec G304
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o640)
+	// 0o600: исходник в build-каталоге читает только процесс worker'а
+	// (builder-контейнер монтирует каталог от того же uid).
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

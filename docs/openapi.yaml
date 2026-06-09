@@ -1905,6 +1905,36 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /system/status:
+    get:
+      tags: [system]
+      summary: Full system status (admin)
+      description: >-
+        Полное состояние системы одним ответом: версия и аптайм процесса,
+        здоровье и пул соединений БД, версия миграций, здоровье Redis,
+        размеры всех очередей (приоритеты, dead-letter, компиляция),
+        матчи и программы по статусам, outbox пост-обработки,
+        WebSocket-подключения.
+      operationId: systemFullStatus
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Full system status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FullSystemStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /system/health:
     get:
       tags: [system]
@@ -2957,6 +2987,106 @@ components:
               temperature:
                 type: number
                 format: double
+
+    FullSystemStatus:
+      type: object
+      properties:
+        app:
+          type: object
+          properties:
+            version:
+              type: string
+              description: Короткий vcs.revision сборки или "dev"
+            build_time:
+              type: string
+            dirty:
+              type: boolean
+              description: Сборка из дерева с незакоммиченными изменениями
+            go_version:
+              type: string
+            started_at:
+              type: string
+              format: date-time
+            uptime_seconds:
+              type: integer
+        database:
+          type: object
+          properties:
+            healthy:
+              type: boolean
+            schema_version:
+              type: integer
+              description: Версия миграций из schema_migrations
+            schema_dirty:
+              type: boolean
+            open_connections:
+              type: integer
+            in_use:
+              type: integer
+            idle:
+              type: integer
+            max_open:
+              type: integer
+        redis:
+          type: object
+          properties:
+            healthy:
+              type: boolean
+        queues:
+          type: object
+          properties:
+            high:
+              type: integer
+            medium:
+              type: integer
+            low:
+              type: integer
+            total:
+              type: integer
+            dead_letter:
+              type: integer
+            compile:
+              type: integer
+        matches:
+          type: object
+          properties:
+            by_status:
+              type: object
+              additionalProperties:
+                type: integer
+            last_completed_at:
+              type: string
+              format: date-time
+              nullable: true
+        programs:
+          type: object
+          description: Число программ в каждом статусе (compiling/ready/failed)
+          additionalProperties:
+            type: integer
+        outbox:
+          type: object
+          nullable: true
+          properties:
+            pending:
+              type: integer
+            errors:
+              type: integer
+            done_last_24h:
+              type: integer
+            oldest_pending_age_seconds:
+              type: number
+              nullable: true
+            last_processed_at:
+              type: string
+              format: date-time
+              nullable: true
+        websocket:
+          type: object
+          properties:
+            tournaments:
+              type: integer
+            total_clients:
+              type: integer
 
     HealthStatus:
       type: object

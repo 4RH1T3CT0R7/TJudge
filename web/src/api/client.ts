@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
 import type {
+  FullSystemStatus,
   User,
   AuthResponse,
   Tournament,
@@ -680,6 +681,11 @@ class ApiClient {
   // System endpoints (admin only)
   async getSystemMetrics(): Promise<SystemMetrics> {
     const { data } = await this.client.get<SystemMetrics>('/system/metrics');
+    return data;
+  }
+
+  async getFullSystemStatus(): Promise<FullSystemStatus> {
+    const { data } = await this.client.get<FullSystemStatus>('/system/status');
     return data;
   }
 

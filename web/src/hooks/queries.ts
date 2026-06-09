@@ -178,6 +178,15 @@ export function useMatchStatistics(tournamentId?: string, opts: PollOption = {})
   });
 }
 
+export function useFullSystemStatus(opts: PollOption = {}) {
+  return useQuery({
+    queryKey: queryKeys.fullSystemStatus,
+    queryFn: () => api.getFullSystemStatus(),
+    enabled: opts.enabled ?? true,
+    refetchInterval: opts.pollInterval ?? false,
+  });
+}
+
 export function useSystemMetrics(opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.systemMetrics,

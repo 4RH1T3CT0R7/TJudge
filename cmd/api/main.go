@@ -292,7 +292,15 @@ func main() {
 		log,
 	).WithAdminChecker(adminChecker).
 		WithIdempotency(redisCache).
-		WithAuditLog(auditLogger, auditHandler)
+		WithAuditLog(auditLogger, auditHandler).
+		WithSystemStatus(handlers.NewSystemStatusHandler(
+			db.NewSystemStatusRepository(database),
+			queueManager,
+			compileQueue,
+			wsHub,
+			redisCache,
+			log,
+		))
 
 	// Создаём HTTP сервер
 	srv := &http.Server{

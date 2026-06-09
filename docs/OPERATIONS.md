@@ -148,6 +148,32 @@ TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>
 
 ## 8. Быстрая диагностика
 
+### make status — всё состояние одной командой
+
+```bash
+# На сервере, рядом с docker-compose:
+make status
+# или с полным статусом (БД, очереди, матчи, программы, outbox):
+ADMIN_TOKEN=<admin-jwt> make status
+```
+
+Команда проверяет: контейнеры, наличие образов `tjudge-cli`/`tjudge-builder`,
+**не работают ли контейнеры api/worker на устаревшем образе** (образ пересобран,
+но контейнер не перезапущен — главный ответ на вопрос «надо ли пересобирать»),
+health API/worker'а и, при наличии `ADMIN_TOKEN`, полный статус из
+`GET /api/v1/system/status`: версия сборки и аптайм, здоровье и версия миграций
+PostgreSQL, Redis, размеры всех очередей (включая компиляцию и dead-letter),
+матчи и программы по статусам, outbox целостности рейтингов, WebSocket-клиенты.
+
+Тот же полный статус доступен:
+- в **админ-панели** на вкладке «Система» (обновляется каждые 10 секунд);
+- в **Grafana**: дашборд «TJudge — Обзор системы» (provisioning автоматический,
+  профиль `monitoring` в docker-compose.selfhosted.yml);
+- сырым JSON: `curl -sH "Authorization: Bearer <admin-jwt>" \
+  http://localhost:8080/api/v1/system/status | jq`
+
+### Точечные проверки
+
 ```bash
 # Health API.
 curl -sf http://localhost:8080/health            # "OK"

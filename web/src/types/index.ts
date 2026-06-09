@@ -253,6 +253,49 @@ export interface TemperatureInfo {
   temperature: number;
 }
 
+// Полное состояние системы (GET /system/status, admin)
+export interface FullSystemStatus {
+  app: {
+    version: string;
+    build_time: string;
+    dirty: boolean;
+    go_version: string;
+    started_at: string;
+    uptime_seconds: number;
+  };
+  database: {
+    healthy: boolean;
+    schema_version: number;
+    schema_dirty: boolean;
+    open_connections: number;
+    in_use: number;
+    idle: number;
+    max_open: number;
+  };
+  redis: { healthy: boolean };
+  queues: {
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+    dead_letter: number;
+    compile: number;
+  };
+  matches: {
+    by_status: Record<string, number>;
+    last_completed_at?: string | null;
+  };
+  programs: Record<string, number>;
+  outbox?: {
+    pending: number;
+    errors: number;
+    done_last_24h: number;
+    oldest_pending_age_seconds?: number | null;
+    last_processed_at?: string | null;
+  } | null;
+  websocket: { tournaments?: number; total_clients?: number };
+}
+
 export interface SystemMetrics {
   cpu: CPUMetrics;
   memory: MemoryMetrics;

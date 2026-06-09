@@ -31,9 +31,10 @@ type Server struct {
 	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
 	systemHandler     *handlers.SystemHandler
-	auditHandler      *handlers.AuditHandler      // опциональный
-	auditLogger       *middleware.AuditLogger     // опциональный
-	idempStore        middleware.IdempotencyStore // опциональный
+	statusHandler     *handlers.SystemStatusHandler // опциональный: GET /system/status
+	auditHandler      *handlers.AuditHandler        // опциональный
+	auditLogger       *middleware.AuditLogger       // опциональный
+	idempStore        middleware.IdempotencyStore   // опциональный
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
 	adminChecker      *middleware.VerifiedAdminChecker
@@ -138,6 +139,14 @@ func (s *Server) idempotency() func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler { return next }
 	}
 	return middleware.Idempotency(s.idempStore, s.log)
+}
+
+// WithSystemStatus подключает агрегированный статус системы
+// (GET /system/status: версия, БД, очереди, матчи, программы, outbox, WS).
+func (s *Server) WithSystemStatus(handler *handlers.SystemStatusHandler) *Server {
+	s.statusHandler = handler
+	s.rebuildRouter()
+	return s
 }
 
 // WithAuditLog подключает admin audit log.
@@ -442,6 +451,11 @@ func (s *Server) setupRoutes() {
 
 			r.Get("/metrics", s.systemHandler.GetMetrics)
 			r.Get("/health", s.systemHandler.GetHealth)
+
+			// Полный агрегированный статус (опциональный, см. WithSystemStatus).
+			if s.statusHandler != nil {
+				r.Get("/status", s.statusHandler.GetFullStatus)
+			}
 		})
 
 		// Admin-only audit log.

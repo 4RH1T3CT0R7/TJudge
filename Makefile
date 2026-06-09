@@ -1,4 +1,4 @@
-.PHONY: help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: status help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -119,6 +119,10 @@ docker-build:
 docker-build-executor:
 	@echo "Building tjudge-cli executor image..."
 	docker build -t tjudge-cli:latest -f docker/tjudge/Dockerfile .
+
+# Show full system status (containers, images, health, /system/status)
+status:
+	@./scripts/status.sh
 
 # Build only tjudge-builder compile sandbox image
 docker-build-builder:

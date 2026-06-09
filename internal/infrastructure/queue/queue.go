@@ -461,6 +461,11 @@ func (qm *QueueManager) GetStats(ctx context.Context) (*QueueStats, error) {
 	return stats, nil
 }
 
+// GetDeadLetterSize возвращает размер dead-letter очереди.
+func (qm *QueueManager) GetDeadLetterSize(ctx context.Context) (int64, error) {
+	return qm.cache.LLen(ctx, "queue:dead_letter")
+}
+
 // PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД
 // Принимает функцию-валидатор, которая проверяет существование матча
 // Возвращает количество удалённых матчей

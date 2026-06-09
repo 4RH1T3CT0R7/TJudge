@@ -48,6 +48,7 @@ export const queryKeys = {
   queueStats: ['admin', 'queue-stats'] as const,
   matchStatistics: (tournamentId?: string) => ['admin', 'match-stats', tournamentId ?? 'all'] as const,
   systemMetrics: ['admin', 'system-metrics'] as const,
+  fullSystemStatus: ['admin', 'full-system-status'] as const,
   systemHealth: ['admin', 'system-health'] as const,
   failedMatches: ['admin', 'failed-matches'] as const,
   matches: (limit: number, offset: number) => ['matches', limit, offset] as const,

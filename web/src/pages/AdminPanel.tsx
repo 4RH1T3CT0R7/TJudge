@@ -11,6 +11,7 @@ import {
   useQueueStats,
   useMatchStatistics,
   useSystemMetrics,
+  useFullSystemStatus,
 } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
@@ -72,6 +73,47 @@ const formatUptime = (seconds: number): string => {
 
   return parts.join(' ');
 };
+
+// Возраст в секундах -> «45 с» или «12 мин 30 с» (для outbox.oldest_pending_age_seconds)
+const formatAgeSeconds = (seconds: number): string => {
+  const total = Math.max(0, Math.round(seconds));
+  if (total < 60) return `${total} с`;
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest > 0 ? `${minutes} мин ${rest} с` : `${minutes} мин`;
+};
+
+// Единый порядок вывода статусов матчей/программ; неизвестные ключи — в конец по алфавиту
+const STATUS_ORDER = ['pending', 'compiling', 'ready', 'running', 'completed', 'failed', 'cancelled'];
+
+const sortStatusEntries = (record: Record<string, number>): [string, number][] =>
+  Object.entries(record).sort(([a], [b]) => {
+    const ia = STATUS_ORDER.indexOf(a);
+    const ib = STATUS_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+// Метки и бейджи статусов матчей (matches.by_status); неизвестный ключ выводится как есть, серым
+const matchStatusMeta: Record<string, { label: string; badge: string }> = {
+  pending: { label: 'Ожидают', badge: 'bg-yellow-900/30 text-yellow-400' },
+  running: { label: 'Выполняются', badge: 'bg-blue-900/30 text-blue-400' },
+  completed: { label: 'Завершены', badge: 'bg-green-900/30 text-green-400' },
+  failed: { label: 'С ошибкой', badge: 'bg-red-900/30 text-red-400' },
+  cancelled: { label: 'Отменены', badge: 'bg-gray-700 text-gray-300' },
+};
+
+// Метки и бейджи статусов программ (programs)
+const programStatusMeta: Record<string, { label: string; badge: string }> = {
+  pending: { label: 'Ожидают', badge: 'bg-gray-700 text-gray-300' },
+  compiling: { label: 'Компилируются', badge: 'bg-yellow-900/30 text-yellow-400' },
+  ready: { label: 'Готовы', badge: 'bg-green-900/30 text-green-400' },
+  failed: { label: 'С ошибкой', badge: 'bg-red-900/30 text-red-400' },
+};
+
+const unknownStatusBadge = 'bg-gray-700 text-gray-300';
 
 export function AdminPanel() {
   const navigate = useNavigate();
@@ -353,6 +395,7 @@ export function AdminPanel() {
   const queueStatsQuery = useQueueStats({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
   const matchStatsQuery = useMatchStatistics(undefined, { enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
   const systemMetricsQuery = useSystemMetrics({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
+  const fullStatusQuery = useFullSystemStatus({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
   // useFailedMatches из hooks/queries использует лимит API по умолчанию (20); здесь нужен прежний лимит 50.
   const failedMatchesQuery = useQuery({
     queryKey: queryKeys.failedMatches,
@@ -365,18 +408,37 @@ export function AdminPanel() {
   const matchStats = matchStatsQuery.data ?? null;
   const systemMetrics = systemMetricsQuery.data ?? null;
   const failedMatches = failedMatchesQuery.data ?? [];
+  const fullStatus = fullStatusQuery.data ?? null;
   const isLoadingSystem =
     queueStatsQuery.isFetching ||
     matchStatsQuery.isFetching ||
     systemMetricsQuery.isFetching ||
-    failedMatchesQuery.isFetching;
+    failedMatchesQuery.isFetching ||
+    fullStatusQuery.isFetching;
   const showLoadingSystem = useDelayedLoading(isLoadingSystem);
   // Show fetch error only if all requests failed
   const allSystemQueriesFailed =
     queueStatsQuery.isError &&
     matchStatsQuery.isError &&
     systemMetricsQuery.isError &&
-    failedMatchesQuery.isError;
+    failedMatchesQuery.isError &&
+    fullStatusQuery.isError;
+
+  // Очередь: приоритеты из useQueueStats, фолбэк — раздел queues нового /system/status
+  const queueNumbers = queueStats ?? fullStatus?.queues ?? null;
+  // Статусы матчей: полный набор ключей из /system/status, фолбэк — агрегаты useMatchStatistics
+  const matchStatusEntries: [string, number][] = fullStatus
+    ? sortStatusEntries(fullStatus.matches.by_status)
+    : matchStats
+      ? [
+          ['pending', matchStats.pending],
+          ['running', matchStats.running],
+          ['completed', matchStats.completed],
+          ['failed', matchStats.failed],
+        ]
+      : [];
+  const matchesTotal =
+    matchStats?.total ?? matchStatusEntries.reduce((sum, [, count]) => sum + count, 0);
   const [systemError, setSystemError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
@@ -395,6 +457,7 @@ export function AdminPanel() {
       queryClient.invalidateQueries({ queryKey: queryKeys.matchStatistics() }),
       queryClient.invalidateQueries({ queryKey: queryKeys.systemMetrics }),
       queryClient.invalidateQueries({ queryKey: queryKeys.failedMatches }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.fullSystemStatus }),
     ]);
   }, [queryClient]);
 
@@ -1791,80 +1854,277 @@ export function AdminPanel() {
             </div>
           )}
 
-          {isLoadingSystem && !queueStats && !matchStats && !showLoadingSystem ? (
+          {isLoadingSystem && !queueStats && !matchStats && !fullStatus && !showLoadingSystem ? (
             null
-          ) : showLoadingSystem && !queueStats && !matchStats ? (
+          ) : showLoadingSystem && !queueStats && !matchStats && !fullStatus ? (
             <div className="text-center py-8 text-gray-400">
               Загрузка данных системы...
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Queue Stats Card */}
+              {/* Services Health Card */}
+              <div className="card md:col-span-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">🩺</span>
+                  Состояние сервисов
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* API */}
+                  <div className="p-3 border border-gray-700 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${fullStatus ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-sm font-medium text-gray-300">API</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {fullStatus ? 'Работает' : fullStatusQuery.isError ? 'Недоступен' : 'Нет данных'}
+                    </p>
+                  </div>
+                  {/* PostgreSQL */}
+                  <div
+                    className={`p-3 border rounded-lg ${
+                      fullStatus?.database.schema_dirty
+                        ? 'border-red-800 bg-red-900/20'
+                        : 'border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${fullStatus?.database.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-sm font-medium text-gray-300">PostgreSQL</span>
+                    </div>
+                    {fullStatus ? (
+                      <p className="text-xs text-gray-400">
+                        Миграции: v{fullStatus.database.schema_version}
+                        {fullStatus.database.schema_dirty && (
+                          <span className="text-red-400 font-medium"> (dirty!)</span>
+                        )}
+                        <br />
+                        Соединения: {fullStatus.database.in_use}/{fullStatus.database.max_open}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Нет данных</p>
+                    )}
+                  </div>
+                  {/* Redis */}
+                  <div className="p-3 border border-gray-700 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${fullStatus?.redis.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-sm font-medium text-gray-300">Redis</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {fullStatus ? (fullStatus.redis.healthy ? 'Работает' : 'Недоступен') : 'Нет данных'}
+                    </p>
+                  </div>
+                  {/* WebSocket */}
+                  <div className="p-3 border border-gray-700 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2 h-2 rounded-full ${fullStatus ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="text-sm font-medium text-gray-300">WebSocket</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {fullStatus
+                        ? `${fullStatus.websocket.total_clients ?? 0} подключений / ${fullStatus.websocket.tournaments ?? 0} каналов`
+                        : 'Нет данных'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Version & Uptime Card */}
               <div className="card">
                 <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">📊</span>
-                  Очередь матчей
+                  <span className="text-xl">📦</span>
+                  Версия и аптайм
                 </h3>
-                {queueStats ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-700">
-                      <span className="text-gray-400">Всего в очереди</span>
-                      <span className="text-2xl font-bold text-gray-100">{queueStats.total}</span>
+                {fullStatus ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Версия</span>
+                      <span className="font-medium text-gray-100 font-mono">
+                        {fullStatus.app.version}
+                        {fullStatus.app.dirty && <span className="text-orange-400">-dirty</span>}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 pt-2">
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Высокий</div>
-                        <div className="text-lg font-semibold text-red-400">{queueStats.high}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Средний</div>
-                        <div className="text-lg font-semibold text-yellow-400">{queueStats.medium}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1">Низкий</div>
-                        <div className="text-lg font-semibold text-blue-400">{queueStats.low}</div>
-                      </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Go</span>
+                      <span className="font-medium text-gray-100 font-mono">{fullStatus.app.go_version}</span>
                     </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Аптайм</span>
+                      <span className="font-medium text-gray-100">{formatUptime(fullStatus.app.uptime_seconds)}</span>
+                    </div>
+                    {fullStatus.app.build_time && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-400">Сборка</span>
+                        <span className="font-medium text-gray-100">
+                          {Number.isNaN(Date.parse(fullStatus.app.build_time))
+                            ? fullStatus.app.build_time
+                            : new Date(fullStatus.app.build_time).toLocaleString('ru-RU')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-400">Нет данных</p>
                 )}
               </div>
 
-              {/* Match Stats Card */}
+              {/* Programs Card */}
+              <div className="card">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">📁</span>
+                  Программы
+                </h3>
+                {fullStatus ? (
+                  Object.keys(fullStatus.programs).length === 0 ? (
+                    <p className="text-gray-400">Программы ещё не загружены</p>
+                  ) : (
+                    <div className="space-y-3 text-sm">
+                      {sortStatusEntries(fullStatus.programs).map(([status, count]) => {
+                        const meta = programStatusMeta[status] ?? { label: status, badge: unknownStatusBadge };
+                        return (
+                          <div key={status} className="flex justify-between items-center">
+                            <span className="text-gray-400">{meta.label}</span>
+                            <span className={`px-2 py-1 rounded font-medium ${meta.badge}`}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  <p className="text-gray-400">Нет данных</p>
+                )}
+              </div>
+
+              {/* Queue Stats Card */}
+              <div className="card">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  Очередь матчей
+                </h3>
+                {queueNumbers ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-700">
+                      <span className="text-gray-400">Всего в очереди</span>
+                      <span className="text-2xl font-bold text-gray-100">{queueNumbers.total}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div className="text-center">
+                        <div className="text-xs text-gray-400 mb-1">Высокий</div>
+                        <div className="text-lg font-semibold text-red-400">{queueNumbers.high}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-gray-400 mb-1">Средний</div>
+                        <div className="text-lg font-semibold text-yellow-400">{queueNumbers.medium}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs text-gray-400 mb-1">Низкий</div>
+                        <div className="text-lg font-semibold text-blue-400">{queueNumbers.low}</div>
+                      </div>
+                    </div>
+                    {fullStatus && (
+                      <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-700">
+                        <span
+                          className={`px-2 py-1 text-xs rounded font-medium ${
+                            fullStatus.queues.dead_letter > 0
+                              ? 'bg-red-900/30 text-red-400'
+                              : 'bg-gray-700 text-gray-300'
+                          }`}
+                        >
+                          Dead letter: {fullStatus.queues.dead_letter}
+                        </span>
+                        <span
+                          className={`px-2 py-1 text-xs rounded font-medium ${
+                            fullStatus.queues.compile > 0
+                              ? 'bg-yellow-900/30 text-yellow-400'
+                              : 'bg-gray-700 text-gray-300'
+                          }`}
+                        >
+                          Компиляция: {fullStatus.queues.compile}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-400">Нет данных</p>
+                )}
+              </div>
+
+              {/* Match Stats Card: статусы из /system/status (все ключи by_status), фолбэк — useMatchStatistics */}
               <div className="card">
                 <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
                   <span className="text-xl">🎮</span>
                   Статистика матчей
                 </h3>
-                {matchStats ? (
+                {matchStats || fullStatus ? (
                   <div className="space-y-3">
                     <div className="flex justify-between items-center py-2 border-b border-gray-700">
                       <span className="text-gray-400">Всего матчей</span>
-                      <span className="text-2xl font-bold text-gray-100">{matchStats.total}</span>
+                      <span className="text-2xl font-bold text-gray-100">{matchesTotal}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Ожидают</span>
-                        <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded font-medium">{matchStats.pending}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Выполняются</span>
-                        <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded font-medium">{matchStats.running}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Завершены</span>
-                        <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded font-medium">{matchStats.completed}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400">С ошибкой</span>
-                        <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded font-medium">{matchStats.failed}</span>
-                      </div>
+                      {matchStatusEntries.map(([status, count]) => {
+                        const meta = matchStatusMeta[status] ?? { label: status, badge: unknownStatusBadge };
+                        return (
+                          <div key={status} className="flex justify-between items-center">
+                            <span className="text-gray-400">{meta.label}</span>
+                            <span className={`px-2 py-1 rounded font-medium ${meta.badge}`}>{count}</span>
+                          </div>
+                        );
+                      })}
                     </div>
+                    {fullStatus?.matches.last_completed_at && (
+                      <p className="text-xs text-gray-400 pt-2 border-t border-gray-700">
+                        Последний завершённый:{' '}
+                        {new Date(fullStatus.matches.last_completed_at).toLocaleString('ru-RU')}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-400">Нет данных</p>
                 )}
+              </div>
+
+              {/* Outbox Card */}
+              <div className="card md:col-span-2">
+                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                  <span className="text-xl">✉️</span>
+                  Outbox (целостность рейтингов)
+                </h3>
+                {fullStatus?.outbox ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Ожидают</div>
+                      <div className="text-lg font-semibold text-gray-100">{fullStatus.outbox.pending}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Ошибки</div>
+                      <div
+                        className={`text-lg font-semibold ${
+                          fullStatus.outbox.errors > 0 ? 'text-red-400' : 'text-gray-100'
+                        }`}
+                      >
+                        {fullStatus.outbox.errors}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-400 mb-1">Выполнено за 24ч</div>
+                      <div className="text-lg font-semibold text-green-400">{fullStatus.outbox.done_last_24h}</div>
+                    </div>
+                    {typeof fullStatus.outbox.oldest_pending_age_seconds === 'number' && (
+                      <div className="text-center">
+                        <div className="text-xs text-gray-400 mb-1">Старейшая ожидающая</div>
+                        <div className="text-lg font-semibold text-gray-100">
+                          {formatAgeSeconds(fullStatus.outbox.oldest_pending_age_seconds)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-400">Нет данных</p>
+                )}
+                <p className="text-xs text-gray-400 mt-3">
+                  Задачи пост-обработки матчей; errors &gt; 0 требует внимания.
+                </p>
               </div>
 
               {/* System Metrics Card */}

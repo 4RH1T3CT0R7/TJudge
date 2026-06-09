@@ -1,0 +1,13 @@
+# Автопровижнинг дашбордов из deployments/grafana/dashboards.
+apiVersion: 1
+
+providers:
+  - name: tjudge
+    orgId: 1
+    folder: TJudge
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false
