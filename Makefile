@@ -1,4 +1,4 @@
-.PHONY: status help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: status doctor help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -123,6 +123,10 @@ docker-build-executor:
 # Show full system status (containers, images, health, /system/status)
 status:
 	@./scripts/status.sh
+
+# Deep post-deploy diagnostics (containers, images, logs, metrics, alerts)
+doctor:
+	@./scripts/doctor.sh
 
 # Build only tjudge-builder compile sandbox image
 docker-build-builder:

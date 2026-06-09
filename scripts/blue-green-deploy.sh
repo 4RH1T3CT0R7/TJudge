@@ -211,3 +211,9 @@ main() {
 }
 
 main "$@"
+
+# Пост-деплойная диагностика (best-effort: трафик уже переключён, проблемы
+# уйдут отчётом в Telegram и на дашборд «TJudge - Doctor»).
+if [ -x "$(dirname "$0")/doctor.sh" ]; then
+    "$(dirname "$0")/doctor.sh" || true
+fi

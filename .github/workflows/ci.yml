@@ -473,9 +473,12 @@ jobs:
       # P1.9: Trivy filesystem scan на high/critical CVE.
       # Версия запинена (@master - источник внезапных красных CI и supply-chain
       # риск: код action'а может измениться без нашего ведома).
+      # version бинарника тоже запинен явно: дефолт action'а (v0.65.0) был
+      # УДАЛЁН из релизов aquasecurity/trivy - установка падала на download.
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.33.1
         with:
+          version: v0.71.0
           scan-type: 'fs'
           scan-ref: '.'
           severity: 'HIGH,CRITICAL'

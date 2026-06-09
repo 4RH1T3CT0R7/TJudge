@@ -172,6 +172,43 @@ PostgreSQL, Redis, размеры всех очередей (включая ко
 - сырым JSON: `curl -sH "Authorization: Bearer <admin-jwt>" \
   http://localhost:8080/api/v1/system/status | jq`
 
+### make doctor — глубокая диагностика после деплоя
+
+```bash
+make doctor                         # терминальный отчёт + Telegram при проблемах
+./scripts/doctor.sh --json          # машиночитаемый вывод
+DOCTOR_TELEGRAM=always make doctor  # отчёт в Telegram даже когда всё ок
+```
+
+Doctor — «умный» чекер, который проверяет, что система **корректно запустилась
+и работает**: контейнеры (включая crash-loop по RestartCount), наличие образов
+и работу контейнеров на устаревших образах, health API/worker, глубокий статус
+(БД+миграции, Redis, dead-letter, outbox, зависшая компиляция — нужен
+`ADMIN_TOKEN`), метрики Prometheus (up-цели, 5xx против SLO, **активные
+алерты** — их описания попадают в отчёт), **ошибки в логах** api/worker за
+`DOCTOR_LOG_WINDOW` (с топом повторяющихся сообщений) и диск.
+
+Каждая проблема сопровождается подсказкой «куда смотреть». Вердикт:
+HEALTHY / DEGRADED / CRITICAL (exit 1 → деплой считается неуспешным).
+
+Куда отчитывается:
+- **Telegram** (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`): при проблемах —
+  вердикт + список «что не так и на что обратить внимание»;
+- **Grafana**: отдельный дашборд «TJudge — Doctor» (вердикт, таблица всех
+  проверок, история) — через Pushgateway (`PUSHGATEWAY_URL`, сервис
+  `pushgateway` в профиле `monitoring`);
+- **Prometheus-алерты**: `DoctorCritical`/`DoctorDegraded`/`DoctorStale`
+  (deployments/prometheus/alerts/tjudge-doctor.yml) → Telegram через
+  Alertmanager.
+
+Запускается **автоматически после деплоя** (`scripts/deploy.sh` — staging
+гейтится по CRITICAL; blue-green — best-effort после переключения трафика).
+Рекомендуемый cron на сервере для регулярной проверки:
+
+```
+*/30 * * * * cd /opt/tjudge && ./scripts/doctor.sh >/dev/null 2>&1
+```
+
 ### Точечные проверки
 
 ```bash

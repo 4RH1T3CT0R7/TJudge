@@ -288,6 +288,18 @@ services:
     profiles:
       - monitoring
 
+  # Pushgateway: метрики батч-задач (doctor, backup) для Prometheus/Grafana
+  pushgateway:
+    image: prom/pushgateway:v1.9.0
+    container_name: tjudge-pushgateway
+    ports:
+      - "9094:9091"
+    networks:
+      - tjudge-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
   # Alertmanager: доставка алертов в Telegram (см. deployments/alertmanager/alertmanager.yml)
   alertmanager:
     image: prom/alertmanager:v0.27.0

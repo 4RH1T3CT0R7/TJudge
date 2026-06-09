@@ -104,6 +104,22 @@ deploy_staging() {
     fi
 
     cleanup_old_images
+
+    # Глубокая диагностика после деплоя: контейнеры, образы, логи, метрики.
+    # При CRITICAL деплой считается неуспешным (отчёт уходит в Telegram).
+    run_doctor
+}
+
+# run_doctor запускает scripts/doctor.sh, если он есть (см. docs/OPERATIONS.md §8).
+run_doctor() {
+    local doctor="${DEPLOY_DIR}/scripts/doctor.sh"
+    if [ -x "$doctor" ]; then
+        log_info "Running post-deploy doctor..."
+        if ! "$doctor"; then
+            log_error "Doctor: CRITICAL - деплой развёрнут, но система нездорова (детали выше и в Telegram)"
+            exit 1
+        fi
+    fi
 }
 
 deploy_production() {
