@@ -2091,12 +2091,15 @@ export function AdminPanel() {
                   Outbox (целостность рейтингов)
                 </h3>
                 {fullStatus?.outbox ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center">
+                  // flex + justify-evenly вместо grid-cols-4: четвёртый элемент
+                  // условный, и с фиксированной сеткой три элемента прижимались
+                  // влево, оставляя пустую правую колонку.
+                  <div className="flex flex-wrap justify-evenly gap-3">
+                    <div className="text-center min-w-[110px]">
                       <div className="text-xs text-gray-400 mb-1">Ожидают</div>
                       <div className="text-lg font-semibold text-gray-100">{fullStatus.outbox.pending}</div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center min-w-[110px]">
                       <div className="text-xs text-gray-400 mb-1">Ошибки</div>
                       <div
                         className={`text-lg font-semibold ${
@@ -2106,12 +2109,12 @@ export function AdminPanel() {
                         {fullStatus.outbox.errors}
                       </div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center min-w-[110px]">
                       <div className="text-xs text-gray-400 mb-1">Выполнено за 24ч</div>
                       <div className="text-lg font-semibold text-green-400">{fullStatus.outbox.done_last_24h}</div>
                     </div>
                     {typeof fullStatus.outbox.oldest_pending_age_seconds === 'number' && (
-                      <div className="text-center">
+                      <div className="text-center min-w-[110px]">
                         <div className="text-xs text-gray-400 mb-1">Старейшая ожидающая</div>
                         <div className="text-lg font-semibold text-gray-100">
                           {formatAgeSeconds(fullStatus.outbox.oldest_pending_age_seconds)}
