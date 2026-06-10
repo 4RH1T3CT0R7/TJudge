@@ -115,7 +115,9 @@ services:
       - tjudge-network
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      # 127.0.0.1, не localhost: в alpine localhost резолвится и в ::1,
+      # а nginx слушает только IPv4 - busybox-wget получал connection refused.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/nginx-health"]
       interval: 30s
       timeout: 5s
       retries: 3
