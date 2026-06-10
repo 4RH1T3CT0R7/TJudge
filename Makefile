@@ -150,19 +150,20 @@ docker-build-builder:
 # Start Docker Compose
 docker-up:
 	@echo "Starting Docker Compose..."
-	docker-compose up -d
+	@docker network create monitoring 2>/dev/null || true
+	docker compose up -d
 	@echo "Services started. Waiting for health checks..."
 	@sleep 5
-	@docker-compose ps
+	@docker compose ps
 
 # Stop Docker Compose
 docker-down:
 	@echo "Stopping Docker Compose..."
-	docker-compose down
+	docker compose down
 
 # View Docker logs
 docker-logs:
-	docker-compose logs -f
+	docker compose logs -f
 
 # Apply database migrations
 migrate-up:
