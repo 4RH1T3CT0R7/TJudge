@@ -14,6 +14,9 @@ ALTER TABLE programs ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'read
 -- Backfill: существующие программы с ошибкой компиляции считаем failed.
 UPDATE programs SET status = 'failed' WHERE error_message IS NOT NULL;
 
+-- DROP IF EXISTS перед ADD: ADD CONSTRAINT не идемпотентен, и при повторном
+-- прогоне после частичного применения (dirty-состояние) миграция падала бы.
+ALTER TABLE programs DROP CONSTRAINT IF EXISTS programs_status_check;
 ALTER TABLE programs ADD CONSTRAINT programs_status_check
     CHECK (status IN ('compiling', 'ready', 'failed'));
 
