@@ -106,6 +106,14 @@ Pushgateway (:9094, метрики doctor'а), Grafana (:3000, дашборды
 командой выше: дело почти всегда в том, что Prometheus находится в другой
 docker-сети и не резолвит имена `api`/`worker`.
 
+**Guardian (только external-режим).** В стек infra-monitoring входит guardian —
+авто-восстановление контейнеров. В `docker-compose.prod.yml` уже стоят лейблы:
+nginx/api/worker — `guardian.enabled` (рестарт при unhealthy), postgres/redis —
+`notify-only` (БД не рестартим: при WAL-replay это удлинит восстановление).
+Перед долгими ручными работами на сервере:
+`cd ~/infra-monitoring && make maintenance 1h` — guardian не будет вмешиваться.
+Подробности: README репозитория infra-monitoring.
+
 Учётные данные Grafana задаются в `.env.production`:
 
 ```
@@ -186,9 +194,19 @@ TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>
 ```bash
 # На сервере, рядом с docker-compose:
 make status
-# или с полным статусом (БД, очереди, матчи, программы, outbox):
-ADMIN_TOKEN=<admin-jwt> make status
 ```
+
+Для полного статуса (БД, очереди, матчи, программы, outbox) задайте в `.env`
+учётку админа — скрипт сам получит свежий JWT на каждый запуск:
+
+```
+ADMIN_USER=<логин или email админа>
+ADMIN_PASSWORD=<пароль>
+```
+
+Рекомендация: заведите отдельную служебную учётку (`make admin EMAIL=...`),
+чтобы не хранить личный пароль. Альтернатива — `ADMIN_TOKEN=<jwt>`, но он
+истекает за `JWT_ACCESS_TTL` (24ч) и в `.env` быстро протухает.
 
 Команда проверяет: контейнеры, наличие образов `tjudge-cli`/`tjudge-builder`,
 **не работают ли контейнеры api/worker на устаревшем образе** (образ пересобран,
@@ -216,8 +234,8 @@ DOCTOR_TELEGRAM=always make doctor  # отчёт в Telegram даже когда
 Doctor — «умный» чекер, который проверяет, что система **корректно запустилась
 и работает**: контейнеры (включая crash-loop по RestartCount), наличие образов
 и работу контейнеров на устаревших образах, health API/worker, глубокий статус
-(БД+миграции, Redis, dead-letter, outbox, зависшая компиляция — нужен
-`ADMIN_TOKEN`), метрики Prometheus (up-цели, 5xx против SLO, **активные
+(БД+миграции, Redis, dead-letter, outbox, зависшая компиляция — нужны
+`ADMIN_USER`/`ADMIN_PASSWORD` в `.env`, как у `make status`), метрики Prometheus (up-цели, 5xx против SLO, **активные
 алерты** — их описания попадают в отчёт), **ошибки в логах** api/worker за
 `DOCTOR_LOG_WINDOW` (с топом повторяющихся сообщений) и диск.
 
@@ -228,8 +246,9 @@ HEALTHY / DEGRADED / CRITICAL (exit 1 → деплой считается неу
 - **Telegram** (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`): при проблемах —
   вердикт + список «что не так и на что обратить внимание»;
 - **Grafana**: отдельный дашборд «TJudge — Doctor» (вердикт, таблица всех
-  проверок, история) — через Pushgateway (`PUSHGATEWAY_URL`, сервис
-  `pushgateway` в профиле `monitoring`);
+  проверок, история) — через Pushgateway. `PUSHGATEWAY_URL` по умолчанию
+  `http://localhost:9094` (стандартный порт из infra-monitoring); если
+  pushgateway не поднят, push тихо пропускается;
 - **Prometheus-алерты**: `DoctorCritical`/`DoctorDegraded`/`DoctorStale`
   (deployments/prometheus/alerts/tjudge-doctor.yml) → Telegram через
   Alertmanager.
@@ -262,6 +281,36 @@ docker exec -it tjudge-redis redis-cli -n 0 llen queue:dead_letter
 ```
 
 ## 9. Инциденты
+
+### 9.0 Всё упало: полный старт/стоп
+
+После перезагрузки сервера обычно делать ничего не нужно: у контейнеров
+`restart: always`, docker поднимет всё сам — подождите 2-3 минуты и проверьте
+`make doctor`.
+
+Ручной полный старт (порядок важен — TJudge требует внешнюю сеть `monitoring`,
+её создаёт инфра-стек):
+
+```bash
+cd ~/infra-monitoring && make up                                  # 1. мониторинг + сеть
+cd ~/TJudge && docker compose -f docker-compose.prod.yml up -d    # 2. TJudge
+docker compose -f docker-compose.prod.yml --profile backup up -d backup  # 3. бэкапы
+make doctor                                                       # 4. проверка
+```
+
+Запуск TJudge без мониторинга: достаточно самой сети —
+`docker network create monitoring`, дальше шаг 2.
+
+Полная остановка (мониторинг первым, чтобы не спамить алертами в Telegram):
+
+```bash
+cd ~/infra-monitoring && make down
+cd ~/TJudge && docker compose -f docker-compose.prod.yml down
+```
+
+НИКОГДА не добавляйте `-v` к `down` — флаг удаляет volumes: базу, Redis и
+загруженные программы. Для «остановить на время» достаточно
+`docker compose stop` (контейнеры остаются, вернуть — `start`).
 
 ### 9.1 API падает или уходит в perpetual restart
 

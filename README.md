@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)
 ![React](https://img.shields.io/badge/React-19+-61DAFB?style=for-the-badge&logo=react)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis)
@@ -106,7 +106,8 @@ make admin EMAIL=your-email@example.com
 | Турниры | Создание с настройкой размера команд, лимита участников, постоянных/разовых |
 | Игры | Добавление игр с правилами (Markdown), множитель очков, кросс-игровой лидерборд |
 | Раунды | Управление раундами по играм -- запуск, пауза, завершение, автозапуск по таймеру |
-| Мониторинг | Grafana дашборды, метрики Prometheus, агрегированные логи |
+| Диагностика | Вкладка «Система» в админ-панели: БД, очереди, outbox + кнопки восстановления (retry outbox, requeue компиляции, сброс зависших матчей, очистка dead-letter) |
+| Мониторинг | Grafana дашборды, метрики Prometheus, агрегированные логи, post-deploy doctor с отчётом в Telegram |
 
 ---
 
@@ -145,7 +146,7 @@ make admin EMAIL=your-email@example.com
 | Worker Pool | Go, автомасштабирование 10-1000, приоритетная очередь |
 | Database | PostgreSQL 15 (41 миграция), живые лидерборды по партиционированным matches |
 | Cache/Queue | Redis 7, кэширование турниров/лидерборда, очередь матчей, rate limiting |
-| Monitoring | Prometheus, Grafana, Loki, Promtail, Alertmanager |
+| Monitoring | Prometheus, Grafana, Loki, Promtail, Alertmanager; прод-стек — отдельное репо infra-monitoring (+ guardian: авто-восстановление контейнеров) |
 | Executor | Docker-изолированный [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust) |
 
 ---
@@ -189,6 +190,8 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 | | `make admin EMAIL=...` | Назначить администратора |
 | **Бэкапы** | `make backup` | Создать бэкап БД |
 | | `make restore BACKUP=...` | Восстановить из бэкапа |
+| **Диагностика** | `make status` | Полное состояние системы в терминале |
+| | `make doctor` | Глубокая проверка: контейнеры, БД, очереди, метрики, логи, диск |
 
 ### Тестирование
 
@@ -206,7 +209,7 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 
 ### CI/CD
 
-GitHub Actions: фронтенд (eslint, vitest, сборка артефактом), lint, unit тесты, race detector, сборка, security scan, интеграционные, E2E и хаос-тесты; nightly - полный match-flow с Docker, перф-гейт (benchstat), restore-тест бэкапа.
+GitHub Actions: фронтенд (eslint, vitest, сборка артефактом), lint, unit тесты, race detector, сборка, security scan, интеграционные, E2E и хаос-тесты; nightly - полный match-flow с Docker, перф-гейт (benchstat), restore-тест бэкапа. Деплой по тегу релиза: сборка образов (версия вшивается в `/system/status`), выкладка на сервер, верификация запущенной версии и пост-деплойный doctor — упавшая проверка валит деплой.
 
 ---
 
@@ -282,7 +285,7 @@ TJudge/
 │   ├── load/                   # Нагрузочные тесты
 │   └── chaos/                  # Хаос-тесты
 ├── deployments/                # Prometheus, Grafana, Loki конфиги
-├── scripts/                    # Деплой, бэкапы
+├── scripts/                    # Деплой, бэкапы, status/doctor-диагностика
 ├── docker/                     # Dockerfiles
 └── docs/                       # Документация
 ```
@@ -303,6 +306,7 @@ TJudge/
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
 | [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md) | Добавление новых игр |
 | [docs/PERFORMANCE_TESTING.md](docs/PERFORMANCE_TESTING.md) | Тестирование производительности |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Отложенные задачи и принятые решения |
 
 ---
 
