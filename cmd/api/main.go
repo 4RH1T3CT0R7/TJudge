@@ -300,6 +300,14 @@ func main() {
 			wsHub,
 			redisCache,
 			log,
+		)).
+		WithSystemRecovery(handlers.NewSystemRecoveryHandler(
+			db.NewOutboxRepository(database),
+			programRepo,
+			compileQueue,
+			matchRepo,
+			queueManager,
+			log,
 		))
 
 	// Создаём HTTP сервер

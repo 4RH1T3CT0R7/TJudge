@@ -1935,6 +1935,114 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /system/recovery/outbox-retry:
+    post:
+      tags: [system]
+      summary: Retry failed outbox tasks (admin)
+      operationId: systemRecoveryOutboxRetry
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Number of retried tasks
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          retried:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /system/recovery/requeue-compiling:
+    post:
+      tags: [system]
+      summary: Requeue stuck compiling programs (admin)
+      operationId: systemRecoveryRequeueCompiling
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Number of requeued programs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          requeued:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /system/recovery/reset-stuck-matches:
+    post:
+      tags: [system]
+      summary: Reset stuck running matches back to queue (admin)
+      operationId: systemRecoveryResetStuckMatches
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Number of reset matches
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          reset:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /system/recovery/clear-dead-letter:
+    post:
+      tags: [system]
+      summary: Clear dead-letter queue (admin)
+      operationId: systemRecoveryClearDeadLetter
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Number of cleared entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          cleared:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /system/health:
     get:
       tags: [system]
@@ -3054,6 +3162,9 @@ components:
               type: object
               additionalProperties:
                 type: integer
+            stuck_running:
+              type: integer
+              description: Матчи в running дольше 2 минут (чинится кнопкой восстановления)
             last_completed_at:
               type: string
               format: date-time

@@ -90,3 +90,20 @@ func (r *OutboxRepository) MarkFailed(ctx context.Context, id int64, errMsg stri
 	}
 	return nil
 }
+
+// RetryErrors возвращает терминально-ошибочные задачи (status='error')
+// обратно в pending со сброшенным счётчиком попыток. Используется кнопкой
+// восстановления в админ-панели: после устранения причины (например, починили
+// БД) рейтинги дообрабатываются OutboxDispatcher'ом.
+func (r *OutboxRepository) RetryErrors(ctx context.Context) (int64, error) {
+	query := `
+		UPDATE match_outbox
+		SET status = 'pending', attempts = 0, claimed_at = NULL, last_error = NULL
+		WHERE status = 'error'
+	`
+	result, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to retry outbox errors")
+	}
+	return result.RowsAffected()
+}

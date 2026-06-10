@@ -31,10 +31,11 @@ type Server struct {
 	teamHandler       *handlers.TeamHandler
 	wsHandler         *handlers.WebSocketHandler
 	systemHandler     *handlers.SystemHandler
-	statusHandler     *handlers.SystemStatusHandler // опциональный: GET /system/status
-	auditHandler      *handlers.AuditHandler        // опциональный
-	auditLogger       *middleware.AuditLogger       // опциональный
-	idempStore        middleware.IdempotencyStore   // опциональный
+	statusHandler     *handlers.SystemStatusHandler   // опциональный: GET /system/status
+	recoveryHandler   *handlers.SystemRecoveryHandler // опциональный: POST /system/recovery/*
+	auditHandler      *handlers.AuditHandler          // опциональный
+	auditLogger       *middleware.AuditLogger         // опциональный
+	idempStore        middleware.IdempotencyStore     // опциональный
 	authService       middleware.AuthService
 	rateLimiter       middleware.RateLimiter
 	adminChecker      *middleware.VerifiedAdminChecker
@@ -145,6 +146,14 @@ func (s *Server) idempotency() func(http.Handler) http.Handler {
 // (GET /system/status: версия, БД, очереди, матчи, программы, outbox, WS).
 func (s *Server) WithSystemStatus(handler *handlers.SystemStatusHandler) *Server {
 	s.statusHandler = handler
+	s.rebuildRouter()
+	return s
+}
+
+// WithSystemRecovery подключает кнопки восстановления админ-панели
+// (повтор outbox, перезапуск компиляции, сброс зависших матчей, dead-letter).
+func (s *Server) WithSystemRecovery(h *handlers.SystemRecoveryHandler) *Server {
+	s.recoveryHandler = h
 	s.rebuildRouter()
 	return s
 }
@@ -455,6 +464,14 @@ func (s *Server) setupRoutes() {
 			// Полный агрегированный статус (опциональный, см. WithSystemStatus).
 			if s.statusHandler != nil {
 				r.Get("/status", s.statusHandler.GetFullStatus)
+			}
+
+			// Кнопки восстановления из админ-панели (опциональные).
+			if s.recoveryHandler != nil {
+				r.Post("/recovery/outbox-retry", s.recoveryHandler.RetryOutboxErrors)
+				r.Post("/recovery/requeue-compiling", s.recoveryHandler.RequeueCompiling)
+				r.Post("/recovery/reset-stuck-matches", s.recoveryHandler.ResetStuckMatches)
+				r.Post("/recovery/clear-dead-letter", s.recoveryHandler.ClearDeadLetter)
 			}
 		})
 

@@ -689,6 +689,28 @@ class ApiClient {
     return data;
   }
 
+  // --- Восстановление (admin): прикладные поломки чинятся из интерфейса ---
+
+  async recoveryRetryOutbox(): Promise<{ retried: number }> {
+    const { data } = await this.client.post<{ retried: number }>('/system/recovery/outbox-retry');
+    return data;
+  }
+
+  async recoveryRequeueCompiling(): Promise<{ requeued: number }> {
+    const { data } = await this.client.post<{ requeued: number }>('/system/recovery/requeue-compiling');
+    return data;
+  }
+
+  async recoveryResetStuckMatches(): Promise<{ reset: number }> {
+    const { data } = await this.client.post<{ reset: number }>('/system/recovery/reset-stuck-matches');
+    return data;
+  }
+
+  async recoveryClearDeadLetter(): Promise<{ cleared: number }> {
+    const { data } = await this.client.post<{ cleared: number }>('/system/recovery/clear-dead-letter');
+    return data;
+  }
+
   async getSystemHealth(): Promise<{ status: string; timestamp: string; hostname: string; pid: number }> {
     const { data } = await this.client.get<{ status: string; timestamp: string; hostname: string; pid: number }>('/system/health');
     return data;

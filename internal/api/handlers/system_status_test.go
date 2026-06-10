@@ -43,6 +43,10 @@ func (s *stubStatusRepo) LastCompletedMatchAt(_ context.Context) (*time.Time, er
 	return &ts, nil
 }
 
+func (s *stubStatusRepo) StuckRunningCount(_ context.Context, _ time.Duration) (int64, error) {
+	return 2, nil
+}
+
 func (s *stubStatusRepo) ConnectionStats() sql.DBStats {
 	return sql.DBStats{OpenConnections: 5, InUse: 2, Idle: 3, MaxOpenConnections: 50}
 }
@@ -109,6 +113,7 @@ func TestSystemStatus_FullStatusHealthy(t *testing.T) {
 	assert.Equal(t, int64(4), status.Queues.DeadLetter)
 	assert.Equal(t, int64(7), status.Queues.Compile)
 	assert.Equal(t, int64(100), status.Matches.ByStatus["completed"])
+	assert.Equal(t, int64(2), status.Matches.StuckRunning)
 	assert.NotNil(t, status.Matches.LastCompletedAt)
 	assert.Equal(t, int64(10), status.Programs["ready"])
 	require.NotNil(t, status.Outbox)

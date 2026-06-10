@@ -24,6 +24,7 @@ type SystemStatusRepository interface {
 	ProgramCountsByStatus(ctx context.Context) (map[string]int64, error)
 	OutboxStats(ctx context.Context) (*db.OutboxStatus, error)
 	LastCompletedMatchAt(ctx context.Context) (*time.Time, error)
+	StuckRunningCount(ctx context.Context, olderThan time.Duration) (int64, error)
 	ConnectionStats() sql.DBStats
 	Healthy(ctx context.Context) bool
 }
@@ -101,8 +102,11 @@ type QueueStatus struct {
 
 // MatchesStatus - матчи по статусам.
 type MatchesStatus struct {
-	ByStatus        map[string]int64 `json:"by_status"`
-	LastCompletedAt *time.Time       `json:"last_completed_at,omitempty"`
+	ByStatus map[string]int64 `json:"by_status"`
+	// StuckRunning - матчи в running дольше 2 минут: признак умершего
+	// worker'а; чинится кнопкой «Сбросить зависшие матчи».
+	StuckRunning    int64      `json:"stuck_running"`
+	LastCompletedAt *time.Time `json:"last_completed_at,omitempty"`
 }
 
 // SystemStatusHandler отдаёт полное состояние системы.
@@ -209,6 +213,10 @@ func (h *SystemStatusHandler) GetFullStatus(w http.ResponseWriter, r *http.Reque
 
 		if last, err := h.statusRepo.LastCompletedMatchAt(ctx); err == nil {
 			status.Matches.LastCompletedAt = last
+		}
+
+		if stuck, err := h.statusRepo.StuckRunningCount(ctx, recoveryStuckThreshold); err == nil {
+			status.Matches.StuckRunning = stuck
 		}
 
 		if counts, err := h.statusRepo.ProgramCountsByStatus(ctx); err == nil {

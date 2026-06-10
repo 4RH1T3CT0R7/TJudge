@@ -283,6 +283,8 @@ export interface FullSystemStatus {
   };
   matches: {
     by_status: Record<string, number>;
+    /** Матчи в running дольше 2 минут — чинится кнопкой восстановления */
+    stuck_running: number;
     last_completed_at?: string | null;
   };
   programs: Record<string, number>;

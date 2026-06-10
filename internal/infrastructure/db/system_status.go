@@ -104,6 +104,20 @@ func (r *SystemStatusRepository) LastCompletedMatchAt(ctx context.Context) (*tim
 	return ts, nil
 }
 
+// StuckRunningCount возвращает число матчей, зависших в running дольше
+// olderThan (признак умершего worker'а или потерянного результата).
+func (r *SystemStatusRepository) StuckRunningCount(ctx context.Context, olderThan time.Duration) (int64, error) {
+	var count int64
+	row := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM matches WHERE status = 'running' AND started_at < NOW() - $1::interval",
+		olderThan.String(),
+	)
+	if err := row.Scan(&count); err != nil {
+		return 0, errors.Wrap(err, "failed to count stuck running matches")
+	}
+	return count, nil
+}
+
 // ConnectionStats возвращает статистику пула соединений БД.
 func (r *SystemStatusRepository) ConnectionStats() sql.DBStats {
 	return r.db.Stats()

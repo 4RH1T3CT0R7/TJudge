@@ -466,6 +466,20 @@ func (qm *QueueManager) GetDeadLetterSize(ctx context.Context) (int64, error) {
 	return qm.cache.LLen(ctx, "queue:dead_letter")
 }
 
+// ClearDeadLetter очищает dead-letter очередь (повреждённые задачи, которые
+// невозможно распарсить и повторить). Возвращает число удалённых записей.
+func (qm *QueueManager) ClearDeadLetter(ctx context.Context) (int64, error) {
+	size, err := qm.cache.LLen(ctx, "queue:dead_letter")
+	if err != nil {
+		return 0, err
+	}
+	if err := qm.cache.Del(ctx, "queue:dead_letter"); err != nil {
+		return 0, err
+	}
+	qm.metrics.SetQueueDeadLetterSize(0)
+	return size, nil
+}
+
 // PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД
 // Принимает функцию-валидатор, которая проверяет существование матча
 // Возвращает количество удалённых матчей
