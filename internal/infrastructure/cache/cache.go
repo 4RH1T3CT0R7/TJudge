@@ -42,6 +42,10 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 		zap.Int("db", cfg.DB),
 	)
 
+	if m != nil {
+		m.PrimeCacheType("get", "zrevrange")
+	}
+
 	return &Cache{
 		client:  client,
 		log:     log,

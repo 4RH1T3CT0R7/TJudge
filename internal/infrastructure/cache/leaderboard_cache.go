@@ -31,6 +31,9 @@ func NewLeaderboardCache(cache *Cache) *LeaderboardCache {
 // WithMetrics добавляет метрики в кэш
 func (lc *LeaderboardCache) WithMetrics(m *metrics.Metrics) *LeaderboardCache {
 	lc.metrics = m
+	if m != nil {
+		m.PrimeCacheType("leaderboard", "leaderboard_full", "leaderboard_crossgame")
+	}
 	return lc
 }
 

@@ -30,6 +30,9 @@ func NewMatchCache(cache *Cache) *MatchCache {
 // WithMetrics добавляет метрики в кэш
 func (mc *MatchCache) WithMetrics(m *metrics.Metrics) *MatchCache {
 	mc.metrics = m
+	if m != nil {
+		m.PrimeCacheType("match", "match_result")
+	}
 	return mc
 }
 

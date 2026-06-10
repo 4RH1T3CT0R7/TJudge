@@ -225,6 +225,16 @@ func (m *Metrics) RecordDBQuery(queryType string, duration time.Duration) {
 	m.DBQueryDuration.WithLabelValues(queryType).Observe(duration.Seconds())
 }
 
+// PrimeCacheType создаёт нулевые серии hit/miss для типа кэша.
+// Без этого counter-серии появляются только после первого инкремента,
+// и дашборды до первого трафика показывают «no data» вместо нулей.
+func (m *Metrics) PrimeCacheType(cacheTypes ...string) {
+	for _, t := range cacheTypes {
+		m.CacheHits.WithLabelValues(t).Add(0)
+		m.CacheMisses.WithLabelValues(t).Add(0)
+	}
+}
+
 // RecordCacheHit записывает попадание в кэш
 func (m *Metrics) RecordCacheHit(cacheType string) {
 	m.CacheHits.WithLabelValues(cacheType).Inc()

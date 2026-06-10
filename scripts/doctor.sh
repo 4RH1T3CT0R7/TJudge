@@ -32,7 +32,7 @@ set -uo pipefail
 #   API_URL=http://localhost:8080
 #   WORKER_METRICS_URL=http://localhost:9090
 #   PROMETHEUS_URL=http://localhost:9092
-#   PUSHGATEWAY_URL=http://localhost:9094      # пусто - пропустить push
+#   PUSHGATEWAY_URL=http://localhost:9094      # дефолт; недоступен - тихий скип
 #   ADMIN_USER=<логин или email админа>        # авто-логин для /system/status
 #   ADMIN_PASSWORD=<пароль>
 #   ADMIN_TOKEN=<jwt>                          # альтернатива: готовый токен
@@ -52,7 +52,9 @@ if [ -f .env ]; then set -a; . ./.env 2>/dev/null; set +a; fi
 API_URL="${API_URL:-http://localhost:8080}"
 WORKER_METRICS_URL="${WORKER_METRICS_URL:-http://localhost:9090}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9092}"
-PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-}"
+# Дефолт - стандартный порт pushgateway из infra-monitoring (127.0.0.1:9094);
+# если его нет (dev-машина), push тихо скипается с одной строчкой в выводе.
+PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://localhost:9094}"
 DOCTOR_TELEGRAM="${DOCTOR_TELEGRAM:-auto}"
 DOCTOR_LOG_WINDOW="${DOCTOR_LOG_WINDOW:-15m}"
 DOCTOR_LOG_ERROR_THRESHOLD="${DOCTOR_LOG_ERROR_THRESHOLD:-5}"
