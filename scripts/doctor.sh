@@ -105,6 +105,10 @@ check_containers() {
         elif [ "$state" != "running" ]; then
             add crit "container:$name" "статус $state" "docker logs --tail=100 $name; docker compose up -d $name"
             all_ok=false
+        elif [ "$health" = "starting" ]; then
+            # Healthcheck ещё в start_period (сразу после деплоя) - не сбой.
+            add warn "container:$name" "health=starting (ещё проходит первый healthcheck)" "повторите make doctor через минуту"
+            all_ok=false
         elif [ -n "$health" ] && [ "$health" != "healthy" ]; then
             add crit "container:$name" "запущен, но health=$health" "docker inspect $name --format '{{json .State.Health}}' | jq"
             all_ok=false
