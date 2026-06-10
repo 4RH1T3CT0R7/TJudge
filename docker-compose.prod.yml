@@ -19,6 +19,11 @@ services:
       POSTGRES_USER: tjudge
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    labels:
+      # Guardian: БД не рестартим автоматически (unhealthy при WAL-replay -
+      # рестарт только удлинит восстановление), restart:always покрывает падения.
+      guardian.enabled: "true"
+      guardian.action: "notify-only"
     secrets:
       - db_password
     volumes:
@@ -47,6 +52,10 @@ services:
       --appendonly yes
       --maxmemory 1gb
       --maxmemory-policy allkeys-lru'
+    labels:
+      # Guardian: как и postgres - только уведомления (AOF-load при старте).
+      guardian.enabled: "true"
+      guardian.action: "notify-only"
     secrets:
       - redis_password
     volumes:
@@ -94,6 +103,9 @@ services:
     container_name: tjudge-nginx-prod
     ports:
       - "8080:80"
+    labels:
+      # Guardian: stateless, безопасно рестартить при unhealthy.
+      guardian.enabled: "true"
     volumes:
       - ./deployments/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -127,6 +139,7 @@ services:
       prometheus_job: "tjudge-api"
       prometheus_port: "9090"
       prometheus_service: "api"
+      guardian.enabled: "true"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=tjudge-postgres-prod
@@ -198,6 +211,7 @@ services:
       prometheus_job: "tjudge-worker"
       prometheus_port: "9090"
       prometheus_service: "worker"
+      guardian.enabled: "true"
     environment:
       - ENVIRONMENT=production
       - DB_HOST=tjudge-postgres-prod
