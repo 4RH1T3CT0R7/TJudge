@@ -33,7 +33,10 @@ set -uo pipefail
 #   WORKER_METRICS_URL=http://localhost:9090
 #   PROMETHEUS_URL=http://localhost:9092
 #   PUSHGATEWAY_URL=http://localhost:9094      # пусто - пропустить push
-#   ADMIN_TOKEN=<jwt>                          # пусто - пропустить /system/status
+#   ADMIN_USER=<логин или email админа>        # авто-логин для /system/status
+#   ADMIN_PASSWORD=<пароль>
+#   ADMIN_TOKEN=<jwt>                          # альтернатива: готовый токен
+#                                              # (истекает за JWT_ACCESS_TTL)
 #   DOCTOR_TELEGRAM=auto|always|never          # default auto
 #   DOCTOR_LOG_WINDOW=15m
 #   DOCTOR_LOG_ERROR_THRESHOLD=5               # ошибок в окне до warn
@@ -168,11 +171,26 @@ check_health() {
 
 # ------------------------------------------------------------- 4. /system/status
 check_system_status() {
+    have jq || { add warn system-status "jq не установлен - разбор /system/status пропущен"; return; }
+
+    # Авто-логин: свежий JWT на каждый запуск, готовый ADMIN_TOKEN в .env
+    # протухает за JWT_ACCESS_TTL.
+    if [ -z "${ADMIN_TOKEN:-}" ] && [ -n "${ADMIN_USER:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
+        local login_field="username"
+        case "$ADMIN_USER" in *@*) login_field="email" ;; esac
+        ADMIN_TOKEN=$(jq -n --arg f "$login_field" --arg u "$ADMIN_USER" --arg p "$ADMIN_PASSWORD" '{($f): $u, password: $p}' \
+            | curl -sf --max-time 5 -H 'Content-Type: application/json' -d @- "$API_URL/api/v1/auth/login" 2>/dev/null \
+            | jq -r '.data.access_token // empty')
+        if [ -z "$ADMIN_TOKEN" ]; then
+            add warn system-status "авто-логин под $ADMIN_USER не удался" "проверьте ADMIN_USER/ADMIN_PASSWORD в .env и роль admin у учётки"
+            return
+        fi
+    fi
+
     if [ -z "${ADMIN_TOKEN:-}" ]; then
-        add warn system-status "ADMIN_TOKEN не задан - глубокая проверка БД/очередей/outbox пропущена" "задайте ADMIN_TOKEN в .env для полной диагностики"
+        add warn system-status "нет доступа - глубокая проверка БД/очередей/outbox пропущена" "задайте ADMIN_USER и ADMIN_PASSWORD (учётка админа) в .env"
         return
     fi
-    have jq || { add warn system-status "jq не установлен - разбор /system/status пропущен"; return; }
 
     local body
     body=$(curl -sf --max-time 8 -H "Authorization: Bearer $ADMIN_TOKEN" "$API_URL/api/v1/system/status" 2>/dev/null)

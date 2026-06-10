@@ -8,8 +8,9 @@ set -uo pipefail
 #
 # Конфиг через ENV (или .env в корне):
 #   API_URL        - адрес API (по умолчанию http://localhost:8080)
-#   ADMIN_TOKEN    - JWT админа: добавляет секцию полного статуса
-#                    (очереди, матчи, программы, outbox) из /system/status
+#   ADMIN_USER     - логин или email админа: скрипт сам получит свежий JWT
+#   ADMIN_PASSWORD - пароль админа
+#   ADMIN_TOKEN    - готовый JWT (альтернатива паре выше; истекает за 24ч)
 #
 # Что проверяется:
 #   1. Контейнеры (docker compose ps)
@@ -102,9 +103,20 @@ else
 fi
 
 # --------------------------------------------------------- полный статус API
+# Авто-логин: ADMIN_USER/ADMIN_PASSWORD в .env -> свежий JWT на каждый запуск
+# (готовый ADMIN_TOKEN истекает за JWT_ACCESS_TTL и протухает в .env).
+if [ -z "${ADMIN_TOKEN:-}" ] && [ -n "${ADMIN_USER:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ] && command -v jq >/dev/null 2>&1; then
+    login_field="username"
+    case "$ADMIN_USER" in *@*) login_field="email" ;; esac
+    ADMIN_TOKEN=$(jq -n --arg f "$login_field" --arg u "$ADMIN_USER" --arg p "$ADMIN_PASSWORD" '{($f): $u, password: $p}' \
+        | curl -sf --max-time 5 -H 'Content-Type: application/json' -d @- "$API_URL/api/v1/auth/login" 2>/dev/null \
+        | jq -r '.data.access_token // empty')
+    [ -z "$ADMIN_TOKEN" ] && warn "авто-логин под $ADMIN_USER не удался — проверьте ADMIN_USER/ADMIN_PASSWORD в .env"
+fi
+
 hdr "── Полный статус (/system/status) ────────────────────────"
 if [ -z "${ADMIN_TOKEN:-}" ]; then
-    warn "ADMIN_TOKEN не задан — пропуск. Получить: ADMIN_TOKEN=\$(curl -s $API_URL/api/v1/auth/login -d '{\"username\":\"...\",\"password\":\"...\"}' -H 'Content-Type: application/json' | jq -r .data.access_token)"
+    warn "Нет доступа к /system/status — задайте ADMIN_USER и ADMIN_PASSWORD (учётка админа) в .env"
 else
     status=$(curl -sf --max-time 5 -H "Authorization: Bearer $ADMIN_TOKEN" "$API_URL/api/v1/system/status" 2>/dev/null)
     if [ -z "$status" ]; then
