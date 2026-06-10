@@ -44,9 +44,14 @@ COPY . .
 # Vite outDir is '../internal/web/dist' relative to /frontend/, resolving to /internal/web/dist
 COPY --from=frontend-builder /internal/web/dist ./internal/web/dist
 
-# Build the binary with cache mount for faster rebuilds
+# Build the binary with cache mount for faster rebuilds.
+# VERSION прокидывается из CD (тег релиза) и видна в /system/status:
+# .git исключён из контекста сборки, поэтому vcs.revision здесь недоступен.
+ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/api ./cmd/api
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags "-w -s -X github.com/bmstu-itstech/tjudge/internal/api/handlers.injectedVersion=${VERSION}" \
+    -o /app/api ./cmd/api
 
 # Final stage
 FROM alpine:3.20

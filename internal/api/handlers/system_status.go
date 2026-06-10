@@ -138,9 +138,18 @@ func NewSystemStatusHandler(
 	}
 }
 
-// appVersion извлекает версию из VCS-метаданных, вшитых go build.
+// injectedVersion вшивается при сборке Docker-образа (тег релиза):
+// в контексте сборки нет .git, поэтому vcs.revision там недоступен.
+//
+//	go build -ldflags "-X github.com/bmstu-itstech/tjudge/internal/api/handlers.injectedVersion=v1.7.6"
+var injectedVersion string
+
+// appVersion извлекает версию: тег из ldflags, иначе VCS-метаданные go build.
 func appVersion() (revision, buildTime string, dirty bool) {
 	revision = "dev"
+	if injectedVersion != "" {
+		revision = injectedVersion
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return revision, buildTime, dirty
@@ -148,7 +157,8 @@ func appVersion() (revision, buildTime string, dirty bool) {
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			if len(s.Value) >= 8 {
+			// Тег из ldflags точнее коммита - не перетираем его.
+			if injectedVersion == "" && len(s.Value) >= 8 {
 				revision = s.Value[:8]
 			}
 		case "vcs.time":

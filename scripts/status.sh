@@ -98,6 +98,10 @@ fi
 
 if curl -sf --max-time 3 "$WORKER_METRICS_URL/health" >/dev/null 2>&1; then
     ok "Worker $WORKER_METRICS_URL/health"
+elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^tjudge-worker(-[0-9]+)?$'; then
+    # В prod метрики-порт worker'а не публикуется на хост (expose-only):
+    # Prometheus скрейпит его по Docker-сети. Здоровье - по контейнеру.
+    ok "Worker запущен (метрики-порт не опубликован на хост — норма для prod)"
 else
     warn "Worker $WORKER_METRICS_URL/health недоступен (METRICS_ENABLED=false или другой порт)"
 fi
