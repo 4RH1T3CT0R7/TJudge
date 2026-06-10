@@ -6,16 +6,16 @@ groups:
     rules:
       # API недоступен - главный CRIT (SLO: availability >= 99.5%/28d).
       - alert: APIDown
-        expr: up{job="api"} == 0
+        expr: up{job="tjudge-api"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "API недоступен"
-          description: "Prometheus не может скрейпить api:8080/metrics уже 1 минуту."
+          description: "Prometheus не может скрейпить метрики API (порт 9090) уже 1 минуту."
 
       - alert: WorkerDown
-        expr: up{job="worker"} == 0
+        expr: up{job="tjudge-worker"} == 0
         for: 2m
         labels:
           severity: critical

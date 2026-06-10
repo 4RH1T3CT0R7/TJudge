@@ -1,4 +1,4 @@
-.PHONY: status doctor help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
 
 # Default target
 help:
@@ -127,6 +127,20 @@ status:
 # Deep post-deploy diagnostics (containers, images, logs, metrics, alerts)
 doctor:
 	@./scripts/doctor.sh
+
+# Start monitoring stack. MONITORING_MODE=external means the shared
+# infra-monitoring stack scrapes TJudge - nothing to start here.
+monitoring-up:
+	@if [ "$${MONITORING_MODE:-standalone}" = "external" ]; then \
+		echo "MONITORING_MODE=external: мониторинг обеспечивает общий стек infra-monitoring"; \
+		echo "(api/worker уже подключены к сети monitoring; поднимите стек в репо infra-monitoring)"; \
+	else \
+		docker network create monitoring 2>/dev/null || true; \
+		docker compose -f docker-compose.monitoring.yml up -d; \
+	fi
+
+monitoring-down:
+	@docker compose -f docker-compose.monitoring.yml down
 
 # Build only tjudge-builder compile sandbox image
 docker-build-builder:

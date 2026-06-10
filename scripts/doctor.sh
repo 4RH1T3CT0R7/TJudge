@@ -90,7 +90,19 @@ check_containers() {
         health=$(docker inspect "$name" --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' 2>/dev/null)
         restarts=$(docker inspect "$name" --format '{{.RestartCount}}' 2>/dev/null)
 
-        if [ "$state" != "running" ]; then
+        if [ "$state" = "exited" ]; then
+            # One-shot задачи (migrate и т.п.): exited с кодом 0 - нормальное
+            # завершение, а не сбой. Сбой - только ненулевой exit-код.
+            local exit_code policy
+            exit_code=$(docker inspect "$name" --format '{{.State.ExitCode}}' 2>/dev/null)
+            policy=$(docker inspect "$name" --format '{{.HostConfig.RestartPolicy.Name}}' 2>/dev/null)
+            if [ "${exit_code:-1}" = "0" ] && { [ "$policy" = "no" ] || [ "$policy" = "on-failure" ] || [ -z "$policy" ]; }; then
+                add ok "container:$name" "one-shot задача завершилась успешно (exit 0)"
+            else
+                add crit "container:$name" "завершился с кодом ${exit_code:-?}" "docker logs --tail=100 $name"
+                all_ok=false
+            fi
+        elif [ "$state" != "running" ]; then
             add crit "container:$name" "статус $state" "docker logs --tail=100 $name; docker compose up -d $name"
             all_ok=false
         elif [ -n "$health" ] && [ "$health" != "healthy" ]; then
@@ -119,7 +131,7 @@ check_images() {
     done
 
     # Контейнер на устаревшем образе: образ пересобрали, контейнер не перезапустили.
-    for ctr in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-(api|worker)$' || true); do
+    for ctr in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-?.*(api|worker)' || true); do
         local running tag latest
         running=$(docker inspect "$ctr" --format '{{.Image}}' 2>/dev/null)
         tag=$(docker inspect "$ctr" --format '{{.Config.Image}}' 2>/dev/null)
@@ -140,8 +152,13 @@ check_health() {
 
     if curl -sf --max-time 5 "$WORKER_METRICS_URL/health" >/dev/null 2>&1; then
         add ok worker-health "worker отвечает ($WORKER_METRICS_URL/health)"
+    elif have docker && docker ps --format '{{.Names}}' 2>/dev/null | grep -qE '^tjudge-worker|^tjudge.*worker'; then
+        # В prod метрики-порт worker'а не публикуется на хост (expose-only) -
+        # это норма; здоровье воркера подтверждаем по состоянию контейнера,
+        # а скрейп метрик проверяет Prometheus-чек ниже.
+        add ok worker-health "worker запущен (метрики-порт не опубликован на хост - норма для prod)"
     else
-        add warn worker-health "worker health недоступен ($WORKER_METRICS_URL/health)" "METRICS_ENABLED=false или другой порт? docker logs --tail=100 tjudge-worker"
+        add warn worker-health "worker health недоступен ($WORKER_METRICS_URL/health) и контейнер не найден" "docker compose up -d worker; METRICS_ENABLED/METRICS_PORT в .env"
     fi
 }
 
@@ -208,11 +225,11 @@ check_prometheus() {
     fi
 
     local v
-    v=$(prom_query 'up{job="api"}')
+    v=$(prom_query 'max(up{job=~"tjudge-api|api"})')
     [ "$v" = "1" ] && add ok prom-api-up "Prometheus видит API" \
-        || add warn prom-api-up "Prometheus НЕ скрейпит API (up=${v:-нет данных})" "проверьте deployments/prometheus/prometheus.yml и сеть"
+        || add warn prom-api-up "Prometheus НЕ скрейпит API (up=${v:-нет данных})" "мониторинг-стек поднят и в одной сети с api? docker compose -f docker-compose.monitoring.yml up -d (см. docs/OPERATIONS.md §5)"
 
-    v=$(prom_query 'up{job="worker"}')
+    v=$(prom_query 'max(up{job=~"tjudge-worker|worker"})')
     [ "$v" = "1" ] && add ok prom-worker-up "Prometheus видит worker" \
         || add warn prom-worker-up "Prometheus НЕ скрейпит worker (up=${v:-нет данных})" "METRICS_PORT=9090 у worker'а?"
 
@@ -245,8 +262,9 @@ check_prometheus() {
 check_logs() {
     have docker || return 0
 
-    for ctr in tjudge-api tjudge-worker; do
-        docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^$ctr$" || continue
+    local log_ctrs
+    log_ctrs=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-?.*(api|worker)' || true)
+    for ctr in $log_ctrs; do
 
         local logs errors panics
         logs=$(docker logs --since "$DOCTOR_LOG_WINDOW" "$ctr" 2>&1 || true)

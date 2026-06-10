@@ -16,19 +16,28 @@ alerting:
             - alertmanager:9093
 
 scrape_configs:
+  # Имена job'ов tjudge-api/tjudge-worker - ЕДИНЫЕ с центральной системой
+  # infra-monitoring (там они приходят из docker-лейблов prometheus_job):
+  # дашборды и алерты работают одинаково в обоих режимах.
+  #
   # API-сервер: HTTP-метрики, БД, кэш, очередь (продюсер).
-  - job_name: api
+  # ВАЖНО: метрики API на отдельном порту 9090 (METRICS_PORT), не на 8080.
+  # dns_sd вместо static: docker-DNS возвращает ВСЕ реплики сервиса
+  # (в prod api/worker по 2 реплики) - каждая скрейпится отдельно.
+  - job_name: tjudge-api
     metrics_path: /metrics
-    static_configs:
-      - targets:
-          - api:8080
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 9090
 
   # Worker: пул, executor, очередь (консьюмер). METRICS_PORT=9090.
-  - job_name: worker
+  - job_name: tjudge-worker
     metrics_path: /metrics
-    static_configs:
-      - targets:
-          - worker:9090
+    dns_sd_configs:
+      - names: [worker]
+        type: A
+        port: 9090
 
   # Pushgateway: метрики doctor'а и других батч-задач.
   # honor_labels - чтобы лейблы job/instance из push'а не перетирались.

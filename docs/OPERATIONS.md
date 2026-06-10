@@ -69,11 +69,44 @@ docker compose -f docker-compose.prod.yml --profile backup up -d backup
 
 ## 5. Мониторинг
 
+Два режима (флаг `MONITORING_MODE` в `.env`, по умолчанию `standalone`).
+api/worker из prod-compose подключены к внешней docker-сети `monitoring`
+и несут лейблы `prometheus_job: tjudge-api / tjudge-worker` — оба режима
+скрейпят их по этой сети, имена job'ов и дашборды идентичны.
+
+**standalone** — автономный стек TJudge:
+
 ```bash
-docker compose -f docker-compose.prod.yml --profile monitoring up -d prometheus grafana loki alertmanager
+make monitoring-up        # = docker compose -f docker-compose.monitoring.yml up -d
 ```
 
-Grafana на `https://tjudge.example.com:3000` (или за reverse-proxy). Учётные данные задаются в `.env.production`:
+**external** — общая система infra-monitoring (Prometheus+Grafana+Loki+
+Alertmanager+Pushgateway на той же сети `monitoring`, авто-дискавери по
+docker-лейблам). TJudge ничего не поднимает:
+
+```bash
+# в .env: MONITORING_MODE=external
+# стек поднимается из репозитория infra-monitoring:
+#   cd ~/infra-monitoring && docker compose up -d
+```
+
+Порты в обоих режимах одинаковые (Prometheus 9092, Alertmanager 9093,
+Pushgateway 9094, Grafana 3000) — `make doctor`, дашборды и алерты работают
+без перенастройки. ВАЖНО: не запускайте оба стека одновременно — порты
+конфликтуют.
+
+Поднимает: Prometheus (:9092, алерты из `deployments/prometheus/alerts/`),
+Alertmanager (:9093, доставка в Telegram — токен в
+`deployments/alertmanager/telegram_token`, chat_id в `alertmanager.yml`),
+Pushgateway (:9094, метрики doctor'а), Grafana (:3000, дашборды
+«TJudge — Обзор системы» и «TJudge — Doctor» провижнятся автоматически).
+
+Если Prometheus был запущен раньше другим способом и `make doctor` пишет
+«Prometheus НЕ скрейпит API» — остановите старый контейнер и поднимите стек
+командой выше: дело почти всегда в том, что Prometheus находится в другой
+docker-сети и не резолвит имена `api`/`worker`.
+
+Учётные данные Grafana задаются в `.env.production`:
 
 ```
 GF_ADMIN_USER=admin

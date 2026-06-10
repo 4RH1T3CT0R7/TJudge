@@ -43,7 +43,7 @@
       },
       "targets": [
         {
-          "expr": "up{job=\"api\"}",
+          "expr": "up{job=\"tjudge-api\"}",
           "legendFormat": "api",
           "refId": "A",
           "datasource": {
@@ -91,7 +91,7 @@
       },
       "targets": [
         {
-          "expr": "up{job=\"worker\"}",
+          "expr": "up{job=\"tjudge-worker\"}",
           "legendFormat": "worker",
           "refId": "A",
           "datasource": {
