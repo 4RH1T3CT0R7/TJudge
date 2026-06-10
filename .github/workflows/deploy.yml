@@ -104,7 +104,13 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN
+          # script_stop: каждая команда обязана завершиться успешно.
+          # Раньше упавший docker login (протухший GHCR_TOKEN) не валил скрипт:
+          # pull молча не происходил, up -d поднимал СТАРЫЕ локальные образы,
+          # а деплой отчитывался зелёной галкой.
+          script_stop: true
           script: |
+            set -e
             cd ~/TJudge
             git fetch origin && git pull origin main
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
@@ -114,8 +120,18 @@ jobs:
             ./scripts/init-secrets.sh
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml pull
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # Контроль: api-контейнер обязан работать на ЗАПРОШЕННОЙ версии.
+            requested="ghcr.io/4rh1t3ct0r7/tjudge-api:${{ needs.prepare.outputs.version }}"
+            running=$(docker inspect tjudge-api-1 --format '{{.Image}}' 2>/dev/null || true)
+            expected=$(docker image inspect "$requested" --format '{{.Id}}' 2>/dev/null || true)
+            if [ -z "$expected" ] || [ "$running" != "$expected" ]; then
+              echo "::error::Контейнер api работает НЕ на $requested - деплой не применился"
+              exit 1
+            fi
             docker image prune -f
             docker builder prune -f
+            # Глубокая пост-деплойная диагностика (отчёт в Telegram при проблемах).
+            ./scripts/doctor.sh || { echo "::error::Doctor: CRITICAL после деплоя"; exit 1; }
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
 
