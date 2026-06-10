@@ -10,6 +10,19 @@ services:
     networks:
       - tjudge-network
 
+  # Песочница компиляции загруженных программ (только сборка).
+  # Без этого образа программы зависают в failed: worker компилирует
+  # их в изолированном tjudge-builder контейнере (network none).
+  tjudge-builder:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: tjudge-builder:latest
+    entrypoint: ["echo", "tjudge-builder image built successfully"]
+    restart: "no"
+    networks:
+      - tjudge-network
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine

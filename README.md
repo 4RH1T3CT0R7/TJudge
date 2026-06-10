@@ -38,8 +38,13 @@ TJudge -- система, в которой команды пишут прогр
 git clone https://github.com/bmstu-itstech/tjudge.git
 cd tjudge
 cp .env.example .env
-docker-compose up -d
+docker network create monitoring   # внешняя сеть для метрик/логов (один раз)
+docker compose up -d               # или: make docker-up (создаст сеть сам)
 ```
+
+Первый запуск собирает все образы (api, worker, исполнитель матчей
+tjudge-cli, песочница компиляции tjudge-builder) — это займёт несколько
+минут. Миграции БД применяются автоматически.
 
 После запуска:
 
