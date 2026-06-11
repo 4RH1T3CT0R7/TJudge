@@ -23,11 +23,31 @@ type DB struct {
 	done    chan struct{}
 }
 
-// New создаёт новое подключение к базе данных
+// New создаёт новое подключение к базе данных.
+// Подключение с ретраями: после рестарта Postgres недоступен секунды
+// (recovery/WAL-replay) - ждать правильнее, чем мгновенно падать fatal'ом
+// (роняло api/worker каскадом при каждом рестарте БД).
 func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*DB, error) {
-	db, err := sqlx.Connect("postgres", cfg.DSN())
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	const (
+		connectTimeout = 60 * time.Second
+		retryInterval  = 2 * time.Second
+	)
+	var db *sqlx.DB
+	var err error
+	deadline := time.Now().Add(connectTimeout)
+	for {
+		db, err = sqlx.Connect("postgres", cfg.DSN())
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("failed to connect to database after %s: %w", connectTimeout, err)
+		}
+		log.Warn("Postgres недоступен, повтор подключения",
+			zap.Error(err),
+			zap.Duration("retry_in", retryInterval),
+		)
+		time.Sleep(retryInterval)
 	}
 
 	// Настраиваем connection pool

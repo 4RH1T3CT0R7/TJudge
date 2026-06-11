@@ -29,12 +29,31 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 		PoolSize: cfg.PoolSize,
 	})
 
-	// Проверяем соединение
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to redis: %w", err)
+	// Проверяем соединение с ретраями: после рестарта Redis отвечает
+	// LOADING (грузит AOF в память), при старте хоста может быть ещё
+	// недоступен. Это транзиентные состояния на секунды - ждать правильнее,
+	// чем мгновенно падать fatal'ом (роняло api/worker каскадом при
+	// каждом рестарте Redis).
+	const (
+		connectTimeout = 60 * time.Second
+		retryInterval  = 2 * time.Second
+	)
+	deadline := time.Now().Add(connectTimeout)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := client.Ping(ctx).Err()
+		cancel()
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("failed to connect to redis after %s: %w", connectTimeout, err)
+		}
+		log.Warn("Redis недоступен, повтор подключения",
+			zap.Error(err),
+			zap.Duration("retry_in", retryInterval),
+		)
+		time.Sleep(retryInterval)
 	}
 
 	log.Info("Redis connected successfully",
