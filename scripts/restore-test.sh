@@ -40,9 +40,12 @@ docker run -d --name "$TEST_CONTAINER" \
     -e POSTGRES_USER=tjudge -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tjudge \
     "$PG_IMAGE" >/dev/null
 
-# Ждём готовности
+# Ждём готовности. ВАЖНО: проверка по TCP (-h 127.0.0.1), не unix-socket:
+# во время initdb энтрипоинт поднимает ВРЕМЕННЫЙ сервер (socket-only),
+# pg_isready без -h отвечает на него успешно, а затем сервер рестартует -
+# psql попадал в окно рестарта и падал с connection refused.
 for i in $(seq 1 30); do
-    if docker exec "$TEST_CONTAINER" pg_isready -U tjudge >/dev/null 2>&1; then
+    if docker exec "$TEST_CONTAINER" pg_isready -h 127.0.0.1 -U tjudge >/dev/null 2>&1; then
         break
     fi
     [ "$i" -eq 30 ] && fail "PostgreSQL не поднялся за 30 секунд"
@@ -51,8 +54,9 @@ done
 
 # 3. Восстановление
 log "Восстанавливаем дамп..."
-if ! gunzip -c "$BACKUP_FILE" | docker exec -i "$TEST_CONTAINER" psql -U tjudge -d tjudge -q -v ON_ERROR_STOP=0 >/dev/null 2>&1; then
-    fail "psql завершился с ошибкой при восстановлении"
+RESTORE_ERR=""
+if ! RESTORE_ERR=$(gunzip -c "$BACKUP_FILE" | docker exec -i "$TEST_CONTAINER" psql -U tjudge -d tjudge -q -v ON_ERROR_STOP=0 2>&1 >/dev/null); then
+    fail "psql завершился с ошибкой при восстановлении: $(echo "$RESTORE_ERR" | tail -3)"
 fi
 
 # 4. Smoke-запросы: ключевые таблицы существуют и читаются

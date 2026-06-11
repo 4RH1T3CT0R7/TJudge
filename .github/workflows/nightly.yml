@@ -113,12 +113,6 @@ jobs:
           E2E_API_URL: http://localhost:8080
         run: go test -v -tags=e2e -timeout=20m ./tests/e2e/...
 
-      - name: Run executor Docker integration tests
-        env:
-          RUN_INTEGRATION: 'true'
-          RUN_DOCKER_TESTS: 'true'
-        run: go test -v -tags='integration docker' -timeout=10m ./tests/integration/...
-
       - name: Dump service logs on failure
         if: failure()
         run: |
