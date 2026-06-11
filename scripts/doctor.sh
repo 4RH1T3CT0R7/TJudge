@@ -268,9 +268,14 @@ check_prometheus() {
     fi
 
     # Активные алерты Prometheus - готовые «на что обратить внимание».
+    # Doctor* исключены: они строятся из метрик самого доктора, и их учёт
+    # зацикливает вердикт (DEGRADED -> алерт DoctorDegraded -> следующий
+    # прогон видит алерт -> снова DEGRADED, даже когда всё уже здорово).
     local alerts
     alerts=$(curl -sf --max-time 5 "$PROMETHEUS_URL/api/v1/alerts" 2>/dev/null \
-        | jq -r '.data.alerts[]? | select(.state=="firing") | "\(.labels.alertname)|\(.labels.severity // "warning")|\(.annotations.summary // "")"' 2>/dev/null)
+        | jq -r '.data.alerts[]? | select(.state=="firing")
+                 | select(.labels.alertname | startswith("Doctor") | not)
+                 | "\(.labels.alertname)|\(.labels.severity // "warning")|\(.annotations.summary // "")"' 2>/dev/null)
     if [ -n "$alerts" ]; then
         while IFS='|' read -r aname asev asum; do
             [ -z "$aname" ] && continue
