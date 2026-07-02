@@ -22,6 +22,10 @@ export const queryKeys = {
   myTeam: (id: string) => ['tournament', id, 'my-team'] as const,
   gameLeaderboard: (tournamentId: string, gameId: string) =>
     ['tournament', tournamentId, 'game', gameId, 'leaderboard'] as const,
+  headToHead: (tournamentId: string, gameId: string) =>
+    ['tournament', tournamentId, 'game', gameId, 'head-to-head'] as const,
+  ratingHistory: (tournamentId: string, programId: string) =>
+    ['tournament', tournamentId, 'program', programId, 'rating-history'] as const,
   gameMatches: (tournamentId: string, gameId: string) =>
     ['tournament', tournamentId, 'game', gameId, 'matches'] as const,
   gamePrograms: (tournamentId: string, gameId: string) =>

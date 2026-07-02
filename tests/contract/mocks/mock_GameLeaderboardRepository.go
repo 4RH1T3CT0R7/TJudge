@@ -25,6 +25,66 @@ func (_m *MockGameLeaderboardRepository) EXPECT() *MockGameLeaderboardRepository
 	return &MockGameLeaderboardRepository_Expecter{mock: &_m.Mock}
 }
 
+// GetHeadToHead provides a mock function with given fields: ctx, tournamentID, gameType
+func (_m *MockGameLeaderboardRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
+	ret := _m.Called(ctx, tournamentID, gameType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetHeadToHead")
+	}
+
+	var r0 []*domain.HeadToHeadCell
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, string) ([]*domain.HeadToHeadCell, error)); ok {
+		return rf(ctx, tournamentID, gameType)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, string) []*domain.HeadToHeadCell); ok {
+		r0 = rf(ctx, tournamentID, gameType)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.HeadToHeadCell)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, string) error); ok {
+		r1 = rf(ctx, tournamentID, gameType)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockGameLeaderboardRepository_GetHeadToHead_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetHeadToHead'
+type MockGameLeaderboardRepository_GetHeadToHead_Call struct {
+	*mock.Call
+}
+
+// GetHeadToHead is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tournamentID uuid.UUID
+//   - gameType string
+func (_e *MockGameLeaderboardRepository_Expecter) GetHeadToHead(ctx interface{}, tournamentID interface{}, gameType interface{}) *MockGameLeaderboardRepository_GetHeadToHead_Call {
+	return &MockGameLeaderboardRepository_GetHeadToHead_Call{Call: _e.mock.On("GetHeadToHead", ctx, tournamentID, gameType)}
+}
+
+func (_c *MockGameLeaderboardRepository_GetHeadToHead_Call) Run(run func(ctx context.Context, tournamentID uuid.UUID, gameType string)) *MockGameLeaderboardRepository_GetHeadToHead_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(uuid.UUID), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockGameLeaderboardRepository_GetHeadToHead_Call) Return(_a0 []*domain.HeadToHeadCell, _a1 error) *MockGameLeaderboardRepository_GetHeadToHead_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockGameLeaderboardRepository_GetHeadToHead_Call) RunAndReturn(run func(context.Context, uuid.UUID, string) ([]*domain.HeadToHeadCell, error)) *MockGameLeaderboardRepository_GetHeadToHead_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLeaderboardByGameType provides a mock function with given fields: ctx, tournamentID, gameType, limit
 func (_m *MockGameLeaderboardRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
 	ret := _m.Called(ctx, tournamentID, gameType, limit)

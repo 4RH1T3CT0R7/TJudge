@@ -5,6 +5,8 @@ import { useDarkMode } from '../../hooks/useDarkMode';
 import { SpaceInvader } from '../SpaceInvader';
 import { AnimatedOutlet } from '../motion/AnimatedOutlet';
 import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { Bars3Icon, XMarkIcon } from '../icons';
 
 const GLOW_STYLE = { transitionProperty: 'color, text-shadow' } as const;
 const glowEnter = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.textShadow = '0 0 12px rgba(139,92,246,0.5)'; };
@@ -13,6 +15,8 @@ const glowLeave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.
 export function Layout() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEscapeKey(useCallback(() => setMobileMenuOpen(false), []), mobileMenuOpen);
   useDarkMode();
   const navigate = useNavigate();
 
@@ -54,7 +58,7 @@ export function Layout() {
             </Link>
 
             {/* Center navigation */}
-            <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
+            <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center gap-1">
               {isAuthenticated && (
                 <>
                   <Link
@@ -92,6 +96,16 @@ export function Layout() {
 
             {/* Auth section */}
             <div className="flex items-center gap-3 shrink-0 z-10">
+              {isAuthenticated && (
+                <button
+                  onClick={() => setMobileMenuOpen((v) => !v)}
+                  aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+                  aria-expanded={mobileMenuOpen}
+                  className="md:hidden p-2 rounded-lg text-gray-400 hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
+                >
+                  {mobileMenuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
+                </button>
+              )}
               {isAuthenticated ? (
                 <div className={`flex items-center gap-3 ${isLoggingOut ? 'animate-pixel-dissolve' : ''}`}>
                   <Link
@@ -122,6 +136,42 @@ export function Layout() {
             </div>
           </div>
         </div>
+
+        {/* Mobile navigation panel */}
+        {mobileMenuOpen && (
+          <nav
+            className="md:hidden border-t border-gray-800/60 px-4 pt-2 pb-4 flex flex-col gap-1"
+            style={{ animation: 'slide-down 0.2s ease-out' }}
+          >
+            {isAuthenticated && (
+              <>
+                <Link
+                  to="/tournaments"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-gray-300 px-4 py-3 rounded-lg text-base font-medium hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
+                >
+                  Турниры
+                </Link>
+                <Link
+                  to="/games"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-gray-300 px-4 py-3 rounded-lg text-base font-medium hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
+                >
+                  Игры
+                </Link>
+              </>
+            )}
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 px-4 py-3 rounded-lg text-base font-medium hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
+              >
+                Админ
+              </Link>
+            )}
+          </nav>
+        )}
       </header>
 
       {/* Main content with top padding for fixed header */}

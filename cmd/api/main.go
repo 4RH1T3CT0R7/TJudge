@@ -308,6 +308,10 @@ func main() {
 			matchRepo,
 			queueManager,
 			log,
+		)).
+		WithRatingHistory(handlers.NewRatingHistoryHandler(
+			db.NewRatingRepository(database),
+			log,
 		))
 
 	// Создаём HTTP сервер

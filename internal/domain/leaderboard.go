@@ -54,3 +54,18 @@ type GameRatingInfo struct {
 	Draws      int       `json:"draws"`
 	TotalGames int       `json:"total_games"`
 }
+
+// HeadToHeadCell - агрегат личных встреч пары команд в конкретной игре
+// турнира. Обе ориентации матчей (AB и BA) уже слиты: wins - победы
+// team_id над opponent_id независимо от того, кто был первым игроком.
+type HeadToHeadCell struct {
+	TeamID       uuid.UUID `json:"team_id" db:"team_id"`
+	TeamName     string    `json:"team_name" db:"team_name"`
+	OpponentID   uuid.UUID `json:"opponent_id" db:"opponent_id"`
+	OpponentName string    `json:"opponent_name" db:"opponent_name"`
+	Wins         int       `json:"wins" db:"wins"`
+	Losses       int       `json:"losses" db:"losses"`
+	Draws        int       `json:"draws" db:"draws"`
+	ScoreFor     int       `json:"score_for" db:"score_for"`
+	ScoreAgainst int       `json:"score_against" db:"score_against"`
+}

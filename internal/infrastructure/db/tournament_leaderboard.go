@@ -377,3 +377,57 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 
 	return leaderboard, nil
 }
+
+// GetHeadToHead возвращает агрегат личных встреч всех пар команд в игре
+// турнира. Обе ориентации матча (AB и BA) сливаются UNION ALL'ом: каждая
+// завершённая встреча даёт две перспективы, дальше GROUP BY по паре команд.
+// Дисквалифицированные команды исключаются, как и в лидербордах.
+func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
+	query := `
+		WITH sides AS (
+			SELECT p1.team_id AS team_id,
+			       p2.team_id AS opponent_id,
+			       (m.winner = 1)::int AS win,
+			       (m.winner = 2)::int AS loss,
+			       (m.winner = 0)::int AS draw,
+			       COALESCE(m.score1, 0) AS score_for,
+			       COALESCE(m.score2, 0) AS score_against
+			FROM matches m
+			JOIN programs p1 ON p1.id = m.program1_id
+			JOIN programs p2 ON p2.id = m.program2_id
+			WHERE m.tournament_id = $1 AND m.game_type = $2 AND m.status = 'completed'
+			UNION ALL
+			SELECT p2.team_id,
+			       p1.team_id,
+			       (m.winner = 2)::int,
+			       (m.winner = 1)::int,
+			       (m.winner = 0)::int,
+			       COALESCE(m.score2, 0),
+			       COALESCE(m.score1, 0)
+			FROM matches m
+			JOIN programs p1 ON p1.id = m.program1_id
+			JOIN programs p2 ON p2.id = m.program2_id
+			WHERE m.tournament_id = $1 AND m.game_type = $2 AND m.status = 'completed'
+		)
+		SELECT s.team_id,
+		       t.name  AS team_name,
+		       s.opponent_id,
+		       ot.name AS opponent_name,
+		       SUM(s.win)           AS wins,
+		       SUM(s.loss)          AS losses,
+		       SUM(s.draw)          AS draws,
+		       SUM(s.score_for)     AS score_for,
+		       SUM(s.score_against) AS score_against
+		FROM sides s
+		JOIN teams t  ON t.id  = s.team_id     AND NOT t.is_disqualified
+		JOIN teams ot ON ot.id = s.opponent_id AND NOT ot.is_disqualified
+		GROUP BY s.team_id, t.name, s.opponent_id, ot.name
+		ORDER BY team_name, opponent_name
+	`
+
+	var cells []*domain.HeadToHeadCell
+	if err := r.db.QueryWithMetrics(ctx, "leaderboard_head_to_head", &cells, query, tournamentID, gameType); err != nil {
+		return nil, errors.Wrap(err, "failed to get head-to-head")
+	}
+	return cells, nil
+}

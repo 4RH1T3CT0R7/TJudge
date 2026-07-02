@@ -22,26 +22,27 @@ import (
 
 // Server представляет HTTP сервер
 type Server struct {
-	router            *chi.Mux
-	authHandler       *handlers.AuthHandler
-	tournamentHandler *handlers.TournamentHandler
-	programHandler    *handlers.ProgramHandler
-	matchHandler      *handlers.MatchHandler
-	gameHandler       *handlers.GameHandler
-	teamHandler       *handlers.TeamHandler
-	wsHandler         *handlers.WebSocketHandler
-	systemHandler     *handlers.SystemHandler
-	statusHandler     *handlers.SystemStatusHandler   // опциональный: GET /system/status
-	recoveryHandler   *handlers.SystemRecoveryHandler // опциональный: POST /system/recovery/*
-	auditHandler      *handlers.AuditHandler          // опциональный
-	auditLogger       *middleware.AuditLogger         // опциональный
-	idempStore        middleware.IdempotencyStore     // опциональный
-	authService       middleware.AuthService
-	rateLimiter       middleware.RateLimiter
-	adminChecker      *middleware.VerifiedAdminChecker
-	corsConfig        config.CORSConfig
-	rateLimitConfig   config.RateLimitConfig
-	log               *logger.Logger
+	router               *chi.Mux
+	authHandler          *handlers.AuthHandler
+	tournamentHandler    *handlers.TournamentHandler
+	programHandler       *handlers.ProgramHandler
+	matchHandler         *handlers.MatchHandler
+	gameHandler          *handlers.GameHandler
+	teamHandler          *handlers.TeamHandler
+	wsHandler            *handlers.WebSocketHandler
+	systemHandler        *handlers.SystemHandler
+	statusHandler        *handlers.SystemStatusHandler   // опциональный: GET /system/status
+	ratingHistoryHandler *handlers.RatingHistoryHandler  // опциональный: GET .../rating-history
+	recoveryHandler      *handlers.SystemRecoveryHandler // опциональный: POST /system/recovery/*
+	auditHandler         *handlers.AuditHandler          // опциональный
+	auditLogger          *middleware.AuditLogger         // опциональный
+	idempStore           middleware.IdempotencyStore     // опциональный
+	authService          middleware.AuthService
+	rateLimiter          middleware.RateLimiter
+	adminChecker         *middleware.VerifiedAdminChecker
+	corsConfig           config.CORSConfig
+	rateLimitConfig      config.RateLimitConfig
+	log                  *logger.Logger
 
 	// rateLimitStopCh закрывается при Close(), завершая cleanup-горутины
 	// fallback-лимитеров. Без него каждый rebuild через WithXxx() раньше
@@ -146,6 +147,14 @@ func (s *Server) idempotency() func(http.Handler) http.Handler {
 // (GET /system/status: версия, БД, очереди, матчи, программы, outbox, WS).
 func (s *Server) WithSystemStatus(handler *handlers.SystemStatusHandler) *Server {
 	s.statusHandler = handler
+	s.rebuildRouter()
+	return s
+}
+
+// WithRatingHistory подключает историю рейтинга программы
+// (GET /tournaments/{id}/programs/{programId}/rating-history - данные графика).
+func (s *Server) WithRatingHistory(h *handlers.RatingHistoryHandler) *Server {
+	s.ratingHistoryHandler = h
 	s.rebuildRouter()
 	return s
 }
@@ -319,9 +328,13 @@ func (s *Server) setupRoutes() {
 
 			// Эндпоинты для конкретной игры в турнире
 			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
+			r.Get("/{id}/games/{gameId}/head-to-head", s.gameHandler.GetHeadToHead)
 			r.Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
 			r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
 			r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
+			if s.ratingHistoryHandler != nil {
+				r.Get("/{id}/programs/{programId}/rating-history", s.ratingHistoryHandler.GetProgramRatingHistory)
+			}
 
 			// Защищённые маршруты
 			r.Group(func(r chi.Router) {

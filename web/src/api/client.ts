@@ -13,6 +13,8 @@ import type {
   MatchRound,
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
+  HeadToHeadCell,
+  RatingHistoryPoint,
   ApiError,
   QueueStats,
   MatchStatistics,
@@ -556,6 +558,25 @@ class ApiClient {
   async getGameLeaderboard(tournamentId: string, gameId: string, limit = 100): Promise<LeaderboardEntry[]> {
     const { data } = await this.client.get<LeaderboardEntry[]>(
       `/tournaments/${tournamentId}/games/${gameId}/leaderboard`,
+      { params: { limit } }
+    );
+    return data;
+  }
+
+  async getHeadToHead(tournamentId: string, gameId: string): Promise<HeadToHeadCell[]> {
+    const { data } = await this.client.get<HeadToHeadCell[]>(
+      `/tournaments/${tournamentId}/games/${gameId}/head-to-head`
+    );
+    return data;
+  }
+
+  async getProgramRatingHistory(
+    tournamentId: string,
+    programId: string,
+    limit = 200
+  ): Promise<RatingHistoryPoint[]> {
+    const { data } = await this.client.get<RatingHistoryPoint[]>(
+      `/tournaments/${tournamentId}/programs/${programId}/rating-history`,
       { params: { limit } }
     );
     return data;

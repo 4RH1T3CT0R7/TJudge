@@ -602,6 +602,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{id}/programs/{programId}/rating-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                programId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Program rating history
+         * @description Хронология изменений ELO программы в турнире (данные для графика).
+         */
+        get: operations["tournamentProgramRatingHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tournaments/{id}/games/{gameId}/head-to-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                /** @description Game UUID (in tournament context) */
+                gameId: components["parameters"]["GameIDPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Head-to-head matrix
+         * @description Агрегат личных встреч всех пар команд в игре (обе ориентации матчей слиты).
+         */
+        get: operations["tournamentGameHeadToHead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{id}/games/{gameId}/matches": {
         parameters: {
             query?: never;
@@ -1737,6 +1786,40 @@ export interface components {
             losses?: number;
             draws?: number;
             total_games?: number;
+        };
+        HeadToHeadCell: {
+            /** Format: uuid */
+            team_id?: string;
+            team_name?: string;
+            /** Format: uuid */
+            opponent_id?: string;
+            opponent_name?: string;
+            wins?: number;
+            losses?: number;
+            draws?: number;
+            score_for?: number;
+            score_against?: number;
+        };
+        RatingHistoryPoint: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            program_id?: string;
+            /** Format: uuid */
+            tournament_id?: string;
+            old_rating?: number;
+            new_rating?: number;
+            change?: number;
+            /** Format: uuid */
+            match_id?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        HeadToHeadListEnvelope: components["schemas"]["SuccessEnvelope"] & {
+            data?: components["schemas"]["HeadToHeadCell"][];
+        };
+        RatingHistoryListEnvelope: components["schemas"]["SuccessEnvelope"] & {
+            data?: components["schemas"]["RatingHistoryPoint"][];
         };
         LeaderboardListEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["LeaderboardEntry"][];
@@ -2956,6 +3039,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaderboardListEnvelope"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    tournamentProgramRatingHistory: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                programId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating history points (chronological) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingHistoryListEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    tournamentGameHeadToHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                /** @description Game UUID (in tournament context) */
+                gameId: components["parameters"]["GameIDPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Head-to-head cells */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeadToHeadListEnvelope"];
                 };
             };
             404: components["responses"]["NotFound"];

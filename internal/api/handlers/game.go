@@ -27,6 +27,7 @@ type GameService interface {
 // GameLeaderboardRepository - интерфейс для leaderboard конкретной игры.
 type GameLeaderboardRepository interface {
 	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error)
+	GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error)
 }
 
 // GameMatchRepository - интерфейс для листинга матчей игры.

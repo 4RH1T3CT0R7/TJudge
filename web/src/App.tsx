@@ -5,6 +5,7 @@ import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
+import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
 import { useAuthStore } from './store/authStore';
 import { InvaderProvider } from './context/InvaderContext';
 
@@ -197,6 +198,7 @@ function App() {
               <AppContent />
             </BrowserRouter>
             <ToastContainer />
+            <ConfirmDialogHost />
           </InvaderProvider>
         </MotionConfig>
       </QueryClientProvider>

@@ -947,6 +947,55 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /tournaments/{id}/programs/{programId}/rating-history:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - name: programId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [tournaments]
+      summary: Program rating history
+      description: Хронология изменений ELO программы в турнире (данные для графика).
+      operationId: tournamentProgramRatingHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: Rating history points (chronological)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingHistoryListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /tournaments/{id}/games/{gameId}/head-to-head:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Head-to-head matrix
+      description: Агрегат личных встреч всех пар команд в игре (обе ориентации матчей слиты).
+      operationId: tournamentGameHeadToHead
+      responses:
+        '200':
+          description: Head-to-head cells
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeadToHeadListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /tournaments/{id}/games/{gameId}/matches:
     parameters:
       - $ref: '#/components/parameters/TournamentID'
@@ -2979,6 +3028,51 @@ components:
           type: integer
         total_games:
           type: integer
+
+    HeadToHeadCell:
+      type: object
+      properties:
+        team_id: { type: string, format: uuid }
+        team_name: { type: string }
+        opponent_id: { type: string, format: uuid }
+        opponent_name: { type: string }
+        wins: { type: integer }
+        losses: { type: integer }
+        draws: { type: integer }
+        score_for: { type: integer }
+        score_against: { type: integer }
+
+    RatingHistoryPoint:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        program_id: { type: string, format: uuid }
+        tournament_id: { type: string, format: uuid }
+        old_rating: { type: integer }
+        new_rating: { type: integer }
+        change: { type: integer }
+        match_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    HeadToHeadListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/HeadToHeadCell'
+
+    RatingHistoryListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/RatingHistoryPoint'
 
     LeaderboardListEnvelope:
       allOf:

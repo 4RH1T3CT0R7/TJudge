@@ -1031,6 +1031,14 @@ func (m *MockGameLeaderboardRepository) GetLeaderboardByGameType(ctx context.Con
 	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
 }
 
+func (m *MockGameLeaderboardRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.HeadToHeadCell), args.Error(1)
+}
+
 type MockGameMatchRepository struct {
 	mock.Mock
 }

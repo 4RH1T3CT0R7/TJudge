@@ -247,6 +247,47 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, leaderboard)
 }
 
+// GetHeadToHead возвращает матрицу личных встреч команд в игре турнира.
+// @Summary Head-to-head матрица по игре
+// @Description Агрегат личных встреч всех пар команд (обе ориентации матчей слиты)
+// @Tags games
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param gameId path string true "Game ID" format(uuid)
+// @Success 200 {array} domain.HeadToHeadCell
+// @Failure 404 {object} object{error=string}
+// @Router /tournaments/{id}/games/{gameId}/head-to-head [get]
+func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request) {
+	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
+	if !ok {
+		return
+	}
+
+	if h.leaderboardRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("leaderboard repository not configured"))
+		return
+	}
+
+	g, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game", err)
+		writeError(w, err)
+		return
+	}
+
+	cells, err := h.leaderboardRepo.GetHeadToHead(r.Context(), tournamentID, g.Name)
+	if err != nil {
+		h.log.LogError("Failed to get head-to-head", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", g.Name),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, cells)
+}
+
 // GetGameMatches возвращает матчи для конкретной игры в турнире.
 // @Summary Матчи по игре
 // @Description Возвращает матчи для конкретной игры в турнире с фильтрацией по статусу

@@ -14,7 +14,13 @@ import {
   useMyTeam,
 } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
+import { useToastStore } from '../store/toastStore';
 import { SpaceInvader } from '../components/SpaceInvader';
+import { Modal } from '../components/ui/Modal';
+import { LineChart } from '../components/ui/LineChart';
+import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
+import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
+import { ChartBarIcon } from '../components/icons';
 import { getGameConfig } from '../utils/gameConfig';
 import type { Program, Match } from '../types';
 
@@ -56,6 +62,23 @@ export function GameDetail() {
     () => (gamesStatusQuery.data ?? []).find((gs) => gs.game_id === gameId) ?? null,
     [gamesStatusQuery.data, gameId]
   );
+
+  // График рейтинга: история подгружается лениво при открытии модалки.
+  const [chartProgram, setChartProgram] = useState<{ id: string; name: string } | null>(null);
+  const ratingHistoryQuery = useQuery({
+    queryKey: queryKeys.ratingHistory(tournamentId ?? '', chartProgram?.id ?? ''),
+    queryFn: () => api.getProgramRatingHistory(tournamentId!, chartProgram!.id),
+    enabled: Boolean(tournamentId && chartProgram),
+    staleTime: 30_000,
+  });
+
+  // Head-to-head матрица: грузится при открытой вкладке рейтинга.
+  const headToHeadQuery = useQuery({
+    queryKey: queryKeys.headToHead(tournamentId ?? '', gameId ?? ''),
+    queryFn: () => api.getHeadToHead(tournamentId!, gameId!),
+    enabled: Boolean(tournamentId && gameId) && activeTab === 'leaderboard',
+    staleTime: 30_000,
+  });
 
   // Матчи с пагинацией: ключ включает страницу, предыдущая страница
   // остаётся на экране, пока грузится новая
@@ -288,8 +311,17 @@ export function GameDetail() {
           </div>
           <div>
             <h1 className={`text-2xl font-bold mb-1 text-gray-100`}>{game.display_name}</h1>
-            <p className="text-gray-400">
-              ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
+            <p className="text-gray-400 flex items-center gap-3 flex-wrap">
+              <span>
+                ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
+              </span>
+              {gameStatus && (
+                <AutoRoundCountdown
+                  enabled={gameStatus.auto_round_enabled}
+                  intervalSeconds={gameStatus.auto_round_interval_seconds}
+                  lastRunAt={gameStatus.auto_round_last_run_at}
+                />
+              )}
             </p>
           </div>
         </div>
@@ -364,6 +396,7 @@ export function GameDetail() {
                         <th className="pb-2 pr-4 text-center">L</th>
                         <th className="pb-2 pr-4 text-center">D</th>
                         <th className="pb-2 text-center">Игр</th>
+                        <th className="pb-2 text-center" aria-label="График рейтинга"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -376,6 +409,16 @@ export function GameDetail() {
                           <td className="py-2 pr-4 text-center text-red-400">{entry.losses}</td>
                           <td className="py-2 pr-4 text-center text-gray-400">{entry.draws}</td>
                           <td className="py-2 text-center text-gray-200">{entry.total_games}</td>
+                          <td className="py-2 text-center">
+                            <button
+                              onClick={() => setChartProgram({ id: entry.program_id, name: entry.program_name })}
+                              className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
+                              title="График рейтинга"
+                              aria-label={`График рейтинга ${entry.program_name}`}
+                            >
+                              <ChartBarIcon className="w-4 h-4" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -383,6 +426,14 @@ export function GameDetail() {
                 </div>
               ) : (
                 <p className="text-gray-400">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
+              )}
+
+              {/* Head-to-head: кто кого бьёт */}
+              {(headToHeadQuery.data?.length ?? 0) > 0 && (
+                <div className="mt-8 pt-6 border-t border-gray-800">
+                  <h3 className="text-base font-semibold mb-4 text-gray-100">Личные встречи</h3>
+                  <HeadToHeadMatrix cells={headToHeadQuery.data ?? []} />
+                </div>
               )}
             </div>
           )}
@@ -518,7 +569,7 @@ export function GameDetail() {
                         document.body.removeChild(a);
                       } catch (err) {
                         console.error('Download failed:', err);
-                        alert('Не удалось скачать программу');
+                        useToastStore.getState().addToast('Не удалось скачать программу', 'error');
                       }
                     }}
                     className="btn btn-secondary w-full mt-2 text-sm"
@@ -670,7 +721,7 @@ export function GameDetail() {
                                 document.body.removeChild(a);
                               } catch (err) {
                                 console.error('Download failed:', err);
-                                alert('Не удалось скачать программу');
+                                useToastStore.getState().addToast('Не удалось скачать программу', 'error');
                               }
                             }}
                             className="text-primary-400 hover:text-primary-300 text-xs font-medium"
@@ -705,6 +756,33 @@ export function GameDetail() {
           )}
         </div>
       </div>
+      {/* Rating chart modal */}
+      <Modal
+        open={chartProgram !== null}
+        onClose={() => setChartProgram(null)}
+        title={chartProgram ? `Динамика рейтинга — ${chartProgram.name}` : ''}
+        maxWidth="max-w-2xl"
+      >
+        {ratingHistoryQuery.isPending ? (
+          <div className="skeleton h-52 w-full" />
+        ) : (
+          <>
+            <LineChart
+              points={(ratingHistoryQuery.data ?? []).map((h) => ({
+                value: h.new_rating,
+                label: new Date(h.created_at).toLocaleString('ru-RU', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                }),
+              }))}
+            />
+            {(ratingHistoryQuery.data?.length ?? 0) > 0 && (
+              <p className="text-xs text-gray-500 mt-3">
+                Последние {ratingHistoryQuery.data!.length} изменений рейтинга в этом турнире
+              </p>
+            )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

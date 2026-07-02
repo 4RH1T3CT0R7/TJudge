@@ -327,3 +327,29 @@ export interface TournamentUpdate {
   start_time?: string;
   end_time?: string;
 }
+
+// Head-to-head матрица: агрегат личных встреч пары команд в игре турнира
+// (обе ориентации матчей AB/BA уже слиты бэкендом).
+export interface HeadToHeadCell {
+  team_id: string;
+  team_name: string;
+  opponent_id: string;
+  opponent_name: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  score_for: number;
+  score_against: number;
+}
+
+// Точка истории рейтинга программы (хронологический порядок).
+export interface RatingHistoryPoint {
+  id: string;
+  program_id: string;
+  tournament_id: string;
+  old_rating: number;
+  new_rating: number;
+  change: number;
+  match_id?: string;
+  created_at: string;
+}
