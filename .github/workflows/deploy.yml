@@ -117,6 +117,9 @@ jobs:
             export GITHUB_REPOSITORY_OWNER="4rh1t3ct0r7"
             export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
             mkdir -p data/programs
+            # Доступ worker'а (non-root) к docker.sock: GID сокета у каждого
+            # хоста свой - определяем автоматически и фиксируем в .env один раз.
+            grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
             ./scripts/init-secrets.sh
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml pull
             VERSION=${{ needs.prepare.outputs.version }} docker compose -f docker-compose.prod.yml up -d --remove-orphans

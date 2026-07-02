@@ -259,6 +259,10 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 
 	match, err := p.queue.Dequeue(ctx)
 	if err != nil {
+		// Cancel родительского контекста = graceful shutdown пула - тихо выходим.
+		if errors.Is(err, context.Canceled) && workerCtx.Err() != nil {
+			return true
+		}
 		p.log.LogError("Failed to dequeue match", err, zap.Int32("worker_id", workerID))
 		time.Sleep(time.Second)
 		return true

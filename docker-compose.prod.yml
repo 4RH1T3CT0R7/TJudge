@@ -249,6 +249,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - programs_data:/data/programs
+    # Доступ non-root пользователя (1000) к docker.sock: GID группы docker
+    # ХОСТА добавляется как supplementary group. В образ запечён дефолт 999
+    # (build-arg DOCKER_GID), но GID хоста может отличаться - задайте в .env:
+    #   DOCKER_SOCK_GID=$(getent group docker | cut -d: -f3)
+    group_add:
+      - "${DOCKER_SOCK_GID:-999}"
     networks:
       - tjudge-network
       - monitoring

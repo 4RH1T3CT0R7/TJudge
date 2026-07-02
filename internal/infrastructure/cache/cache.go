@@ -247,6 +247,12 @@ func (c *Cache) BRPop(ctx context.Context, timeout time.Duration, keys ...string
 		return nil, nil
 	}
 	if err != nil {
+		// Отмена контекста - штатный graceful shutdown (каждая заблокированная
+		// горутина пула получает cancel); не считаем ошибкой, чтобы не
+		// засыпать логи и доктора ложными "Redis BRPOP failed" на рестартах.
+		if stderrors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		c.log.LogError("Redis BRPOP failed", err)
 		return nil, err
 	}
