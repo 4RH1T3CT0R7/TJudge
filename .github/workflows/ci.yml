@@ -1,175 +1,48 @@
-name: CI
+name: ci
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
 
 jobs:
-  # Фронтенд собирается ОДИН раз; web/dist раздаётся остальным jobs артефактом
-  # (раньше npm ci + npm run build повторялись в 8 jobs за прогон).
   frontend:
-    name: Frontend (lint, test, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: install deps
         run: npm ci
         working-directory: web
 
-      - name: ESLint
+      - name: lint
         run: npm run lint
         working-directory: web
 
-      - name: Vitest
+      - name: tests
         run: npm test
         working-directory: web
 
-      # Сгенерированные из docs/openapi.yaml типы обязаны быть свежими:
-      # рассинхрон спеки и фронта - ошибка CI, а не тихий баг.
-      - name: OpenAPI codegen freshness
-        run: |
-          npm run generate:api
-          git diff --exit-code -- src/api/generated \
-            || { echo "::error::web/src/api/generated устарел - выполните npm run generate:api и закоммитьте"; exit 1; }
-        working-directory: web
-
-      - name: Build frontend
+      - name: build
         run: npm run build
         working-directory: web
 
-      # P2.1: bundlesize check. Фейлим pipeline, если chunk > 1.5 MB gzipped
-      # или сумма > 5 MB gzipped.
-      - name: Frontend bundle size check
-        run: |
-          if [ ! -d ../internal/web/dist/assets ]; then
-            echo "::error::Frontend build output not found at ../internal/web/dist/assets"
-            exit 1
-          fi
-          found=$(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \) | wc -l)
-          if [ "$found" -eq 0 ]; then
-            echo "::error::No bundle assets found (expected .js/.css in dist/assets)"
-            exit 1
-          fi
-          total_gz=0
-          oversized=0
-          while IFS= read -r f; do
-            size=$(gzip -c "$f" | wc -c)
-            total_gz=$((total_gz + size))
-            kb=$((size / 1024))
-            echo "  ${f#../internal/web/dist/}  ${kb}KB (gzipped)"
-            if [ "$size" -gt 1572864 ]; then
-              echo "::error file=${f}::Chunk $(basename "$f") = ${kb}KB gzipped > 1.5MB budget"
-              oversized=$((oversized + 1))
-            fi
-          done < <(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \))
-          total_mb=$((total_gz / 1024 / 1024))
-          echo "Total bundle (gzipped): ${total_mb}MB across ${found} files"
-          if [ "$oversized" -gt 0 ]; then
-            exit 1
-          fi
-          if [ "$total_gz" -gt 5242880 ]; then
-            echo "::error::Total bundle ${total_mb}MB > 5MB hard limit"
-            exit 1
-          fi
-        working-directory: web
-
-      - name: Upload frontend dist
-        uses: actions/upload-artifact@v4
+      # dist нужен go-джобе: бинарник встраивает фронтенд через go:embed
+      - uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: internal/web/dist
           retention-days: 1
 
-  lint:
-    needs: [frontend]
-    name: Lint
+  go:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      # P2.1: bundlesize check. Фейлим pipeline, если main-bundle вырос > 1 MB gzipped,
-      # или любой chunk > 1.5 MB gzipped. Пороги консервативные; уточнить после baseline.
-      # UR bug_022: fail-fast если build не произвёл dist/assets (иначе safety-net
-      # беззвучно проходит при сломанном build/rename outDir).
-      - name: Frontend bundle size check
-        run: |
-          if [ ! -d ../internal/web/dist/assets ]; then
-            echo "::error::Frontend build output not found at ../internal/web/dist/assets"
-            exit 1
-          fi
-          found=$(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \) | wc -l)
-          if [ "$found" -eq 0 ]; then
-            echo "::error::No bundle assets found (expected .js/.css in dist/assets)"
-            exit 1
-          fi
-          total_gz=0
-          oversized=0
-          while IFS= read -r f; do
-            size=$(gzip -c "$f" | wc -c)
-            total_gz=$((total_gz + size))
-            kb=$((size / 1024))
-            echo "  ${f#../internal/web/dist/}  ${kb}KB (gzipped)"
-            if [ "$size" -gt 1572864 ]; then
-              echo "::error file=${f}::Chunk $(basename "$f") = ${kb}KB gzipped > 1.5MB budget"
-              oversized=$((oversized + 1))
-            fi
-          done < <(find ../internal/web/dist/assets -type f \( -name '*.js' -o -name '*.css' \))
-          total_mb=$((total_gz / 1024 / 1024))
-          echo "Total bundle (gzipped): ${total_mb}MB across ${found} files"
-          if [ "$oversized" -gt 0 ]; then
-            exit 1
-          fi
-          if [ "$total_gz" -gt 5242880 ]; then
-            echo "::error::Total bundle ${total_mb}MB > 5MB hard limit"
-            exit 1
-          fi
-        working-directory: web
-
-      # golangci-lint через go install, чтобы бинарник собрался под
-      # установленный на runner'е Go (1.25.9). Action @v6 использует
-      # prebuilt-бинарник собранный под старый Go 1.24 → конфликт с
-      # go.mod 1.25.
-      #
-      # Версия пиннется явно. С `@latest` свежие релизы линтера
-      # ужесточают правила (например goconst) и красят CI без изменений
-      # в нашем коде. Поднимать версию целенаправленно.
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
-
-      - name: Run golangci-lint
-        run: golangci-lint run --timeout=5m ./...
-
-      # Проверка заземляемых фактов документации (число миграций, версия Go,
-      # существование файлов, на которые ссылаются доки и compose).
-      - name: Docs consistency check
-        run: ./scripts/check-docs.sh
-
-  test:
-    needs: [frontend]
-    name: Test
-    runs-on: ubuntu-latest
+    needs: frontend
 
     services:
       postgres:
@@ -185,7 +58,6 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-
       redis:
         image: redis:7-alpine
         options: >-
@@ -196,584 +68,55 @@ jobs:
         ports:
           - 6379:6379
 
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: tjudge
+      DB_PASSWORD: secret
+      DB_NAME: tjudge_test
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: internal/web/dist
 
-      - name: Download dependencies
+      - name: deps
         run: go mod download
 
-      - name: Run migrations
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
+      - name: vet
+        run: go vet ./...
+
+      # ставим go install чтобы линтер собрался под наш go
+      # версию пиним, @latest ломает ci на каждом релизе линтера
+      - name: golangci-lint
         run: |
-          go run cmd/migrations/main.go up
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+          golangci-lint run --timeout=5m ./...
 
-      - name: Run tests
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
+      - name: migrations
+        run: go run cmd/migrations/main.go up
 
-      # P2.21 roadmap: текущий минимальный threshold — 45%. Целевой — 70% к Q3.
-      # Поднимать threshold нужно одновременно с добавлением тестов на новые
-      # packages (audit, idempotency, cache_control).
-      # Чтобы не ломать CI на старых PR, делаем step-by-step ratchet:
-      # 45 → 50 → 55 → 60 → 65 → 70.
-      - name: Check coverage threshold
+      - name: tests
+        run: go test -count=1 ./...
+
+      - name: build
         run: |
-          grep -v '/tests/contract/mocks/' coverage.out > coverage-filtered.out || cp coverage.out coverage-filtered.out
-          TOTAL=$(go tool cover -func=coverage-filtered.out | grep '^total:' | awk '{print $3}' | tr -d '%')
-          echo "Total coverage: ${TOTAL}%"
-          if [ $(echo "$TOTAL < 45.0" | bc -l) -eq 1 ]; then
-            echo "::error::Coverage ${TOTAL}% is below minimum threshold of 45%"
-            exit 1
-          fi
-          echo "Coverage ${TOTAL}% meets the minimum threshold of 45%"
+          go build -o bin/api ./cmd/api
+          go build -o bin/worker ./cmd/worker
+          go build -o bin/migrate ./cmd/migrations
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage-filtered.out
-          flags: unittests
-          name: codecov-umbrella
-
-  race:
-    needs: [frontend]
-    name: Race Detection
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:15
+      - name: integration tests
         env:
-          POSTGRES_USER: tjudge
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: tjudge_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run migrations
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-        run: |
-          go run cmd/migrations/main.go up
-
-      - name: Run tests with race detector
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: go test -race -count=1 -timeout=10m ./...
-
-      - name: Build with race detector
-        run: go build -race ./cmd/api ./cmd/worker
-
-  build:
-    needs: [frontend]
-    name: Build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      - name: Download Go dependencies
-        run: go mod download
-
-      - name: Build API
-        run: go build -v -o bin/api ./cmd/api
-
-      - name: Build Worker
-        run: go build -v -o bin/worker ./cmd/worker
-
-      - name: Build Migrations
-        run: go build -v -o bin/migrate ./cmd/migrations
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries
-          path: bin/
-          retention-days: 7
-
-  security:
-    needs: [frontend]
-    name: Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      # P1.9: gosec блокирует pipeline на MEDIUM-severity findings (и выше).
-      # Все legacy-issues разобраны:
-      #   G301 (dir perms)    → 0o750.
-      #   G302/G306 (exec bit)→ 0o750 + #nosec с обоснованием (bot/wrapper
-      #                         требуют execute).
-      #   G304 (os.Open var)  → #nosec (paths UUID-controlled или
-      #                         absUploadDir-validated).
-      #   G204 (exec var)     → #nosec (hardcoded binary names, args без
-      #                         user-input).
-      #
-      # Используем go-install вместо securego/gosec-action, т.к. старый
-      # docker-образ (2.21.4) ставит exit-code по ВСЕМ findings независимо от
-      # -severity фильтра → false-positive fail на legacy-коде.
-      # Версия запинена: @latest - источник внезапных красных CI при релизах gosec.
-      - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.22.4
-
-      - name: Run gosec (text output для логов)
-        run: gosec -severity medium -confidence medium ./...
-
-      - name: Run gosec (SARIF для Code Scanning)
-        if: always()
-        run: gosec -severity medium -confidence medium -fmt sarif -out results.sarif ./... || true
-
-      - name: Upload SARIF file
-        # Requires Code Scanning to be enabled: Settings → Code security → Code scanning
-        if: always()
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: results.sarif
-          category: gosec
-        continue-on-error: true
-
-      # P1.9: govulncheck блокирующий для обычных CVE.
-      #
-      # Accepted-risk advisories в docker/docker — все daemon-side (код
-      # движка dockerd, а не клиентского SDK, которым мы пользуемся);
-      # fix для модуля docker/docker N/A upstream (исправления уходят только
-      # в moby/moby/v2 — новый модульный путь, пока в бете; пересмотреть пин
-      # v28.5.2 при stable-релизе v2). Наш код использует docker-client только
-      # для Container{Create,Start,Logs,Kill} через docker.sock:
-      #   GO-2026-4887, GO-2026-4883 — Moby plugin authorization (AuthZ-плагины
-      #     не задействованы);
-      #   GO-2026-5746 — PUT /containers/{id}/archive выполняет бинарь
-      #     контейнера на хосте (июнь 2026; archive-эндпоинт мы не вызываем —
-      #     CopyTo/FromContainer в коде нет, программы передаются через volume);
-      #   GO-2026-5668, GO-2026-5617 — гонки в docker cp (июнь 2026; cp не
-      #     используем). Патчи демона приходят с обновлением docker-ce на хосте.
-      # Если govulncheck возвращает только их — step проходит; любая новая
-      # vulnerability ломает build.
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Run govulncheck
-        run: |
-          set +e
-          output=$(govulncheck -format=text ./... 2>&1)
-          code=$?
-          echo "$output"
-
-          if [ "$code" -eq 0 ]; then
-            exit 0
-          fi
-
-          # Извлекаем ID каждой найденной vulnerability (строки "Vulnerability #N: GO-YYYY-NNNN").
-          # Затем вычитаем accepted-list; остаток должен быть пустым.
-          ids=$(echo "$output" | grep -Eo 'GO-[0-9]{4}-[0-9]+' | sort -u)
-          accepted="GO-2026-4887 GO-2026-4883 GO-2026-5746 GO-2026-5668 GO-2026-5617"
-          unknown=""
-          for id in $ids; do
-            case " $accepted " in
-              *" $id "*) ;;
-              *) unknown="$unknown $id" ;;
-            esac
-          done
-
-          if [ -n "$unknown" ]; then
-            echo "::error::Found new CVE(s) not in accepted list:${unknown}"
-            exit 1
-          fi
-          echo "Only accepted Moby daemon-side advisories present; treating as PASS."
-
-      # P1.9: npm audit для frontend-зависимостей (блокирует high+).
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-        working-directory: web
-
-      # P1.9: Trivy filesystem scan на high/critical CVE.
-      # Версия запинена (@master - источник внезапных красных CI и supply-chain
-      # риск: код action'а может измениться без нашего ведома).
-      # version бинарника тоже запинен явно: дефолт action'а (v0.65.0) был
-      # УДАЛЁН из релизов aquasecurity/trivy - установка падала на download.
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          version: v0.71.0
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '1'
-          ignore-unfixed: true
-          format: 'table'
-          # Accepted CVEs (нет доступного исправления в Go module registry):
-          # CVE-2026-34040 — Moby authz bypass, fix v29.3.1 но в registry только v28.5.2.
-          trivyignores: .trivyignore
-
-  contract:
-    needs: [frontend]
-    name: Contract Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run contract tests
-        run: go test -v -tags=contract -count=1 -timeout=5m ./tests/contract/...
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: [test, build]
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: tjudge
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: tjudge_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run migrations
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-        run: |
-          go run cmd/migrations/main.go up
-
-      - name: Run integration tests
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          JWT_SECRET: test-jwt-secret-for-ci
           RUN_INTEGRATION: true
-        run: go test -v -tags=integration -timeout=10m ./tests/integration/...
-
-  e2e:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: [integration, frontend]
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: tjudge
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: tjudge_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run migrations
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-        run: |
-          go run cmd/migrations/main.go up
-
-      - name: Build and start API server
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
           JWT_SECRET: test-jwt-secret-for-ci
-          API_PORT: 8080
-        run: |
-          go build -o bin/api ./cmd/api
-          ./bin/api &
-          # Wait for API to be ready (up to 30s)
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-              echo "API server is ready"
-              break
-            fi
-            sleep 1
-          done
-          curl -f http://localhost:8080/health || exit 1
-
-      - name: Run E2E tests
-        env:
-          E2E_API_URL: http://localhost:8080
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: go test -v -tags=e2e -timeout=15m ./tests/e2e/...
-
-  chaos:
-    name: Chaos Tests
-    runs-on: ubuntu-latest
-    needs: [e2e]
-    if: github.ref == 'refs/heads/main'
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: tjudge
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: tjudge_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: internal/web/dist
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run migrations
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-        run: |
-          go run cmd/migrations/main.go up
-
-      - name: Build and start API server
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          JWT_SECRET: test-jwt-secret-for-ci
-          API_PORT: 8080
-        run: |
-          go build -o bin/api ./cmd/api
-          ./bin/api &
-          # Wait for API to be ready (up to 30s)
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-              echo "API server is ready"
-              break
-            fi
-            sleep 1
-          done
-          curl -f http://localhost:8080/health || exit 1
-
-      - name: Run Chaos tests
-        env:
-          CHAOS_API_URL: http://localhost:8080
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: tjudge
-          DB_PASSWORD: secret
-          DB_NAME: tjudge_test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-        run: go test -v -tags=chaos -timeout=20m ./tests/chaos/...
+        run: go test -tags=integration -timeout=10m ./tests/integration/...

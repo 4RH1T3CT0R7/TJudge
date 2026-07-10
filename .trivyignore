@@ -1,7 +1,0 @@
-# Accepted CVEs:
-#
-# CVE-2026-34040 — Moby authorization bypass. Fix in docker/docker v29.3.1.
-# Не доступен в Go module registry (только v28.5.2+incompatible), апстрим
-# не публикует v29.x как Go-модуль. Risk mitigated: используем docker client
-# только в worker-контейнере, не экспортируем Moby-API наружу.
-CVE-2026-34040
