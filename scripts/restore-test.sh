@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Непротестированный бэкап - это не бэкап: скрипт разворачивает последний
 # дамп в одноразовый PostgreSQL-контейнер и прогоняет smoke-запросы.
-# Запускается вручную или nightly-CI (.github/workflows/nightly.yml).
+# Запускается вручную.
 #
 # Usage: ./scripts/restore-test.sh [backup_file]
 #   Без аргумента берётся самый свежий дамп из $BACKUP_DIR (./backups).
