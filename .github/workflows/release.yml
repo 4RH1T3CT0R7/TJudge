@@ -1,139 +1,95 @@
-name: Release
+name: release
 
 on:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-  packages: write
+# ghcr требует lowercase, поэтому owner прописан руками
+env:
+  REG: ghcr.io/4rh1t3ct0r7
 
 jobs:
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
-      - name: Build frontend
-        run: |
-          cd web
-          npm ci
-          npm run build
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Build binaries for multiple platforms
-        run: |
-          mkdir -p dist
-
-          # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-api-linux-amd64 ./cmd/api
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-worker-linux-amd64 ./cmd/worker
-
-          # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-api-linux-arm64 ./cmd/api
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-worker-linux-arm64 ./cmd/worker
-
-          # macOS AMD64
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-api-darwin-amd64 ./cmd/api
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-worker-darwin-amd64 ./cmd/worker
-
-          # macOS ARM64
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-api-darwin-arm64 ./cmd/api
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-worker-darwin-arm64 ./cmd/worker
-
-          # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-api-windows-amd64.exe ./cmd/api
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o dist/tjudge-worker-windows-amd64.exe ./cmd/worker
-
-      - name: Create checksums
-        run: |
-          cd dist
-          sha256sum * > checksums.txt
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          if [ -z "$PREV_TAG" ]; then
-            echo "First release, no previous tag found"
-            echo "changelog=Initial release" >> $GITHUB_OUTPUT
-          else
-            # Generate changelog from commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD)
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            echo "$CHANGELOG" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-          generate_release_notes: true
-          body: |
-            ## What's Changed
-            ${{ steps.changelog.outputs.changelog }}
-
-            ## Docker Images
-            ```
-            ghcr.io/${{ github.repository_owner }}/tjudge-api:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/tjudge-worker:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/tjudge-executor:${{ github.ref_name }}
-            ```
-
-            ## Checksums
-            See checksums.txt in release assets.
-          files: |
-            dist/*
-
-  update-docs:
-    name: Update Documentation
-    needs: release
+  images:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v5
+
+      - uses: docker/login-action@v3
         with:
-          ref: main
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update version in README
-        env:
-          VERSION: ${{ github.ref_name }}
+      # тег образа = версия без v, VERSION идёт только в api (виден в /system/status)
+      - name: build
         run: |
-          # Update Go version badge if needed (no-op if pattern doesn't match)
-          sed -i "s/Go-[0-9.]*+-00ADD8/Go-1.24+-00ADD8/g" README.md || true
+          V=${GITHUB_REF_NAME#v}
+          docker build -t $REG/tjudge-api:$V --build-arg VERSION=$GITHUB_REF_NAME -f docker/api/Dockerfile .
+          docker build -t $REG/tjudge-worker:$V -f docker/worker/Dockerfile .
+          docker build -t $REG/tjudge-executor:$V -f docker/tjudge/Dockerfile .
+          docker build -t $REG/tjudge-builder:$V -f docker/builder/Dockerfile .
 
-      - name: Commit changes
-        env:
-          VERSION: ${{ github.ref_name }}
+      - name: push
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add -A
-          git diff --quiet && git diff --staged --quiet || git commit -m "docs: update version to $VERSION"
-          git push || true
+          V=${GITHUB_REF_NAME#v}
+          for img in tjudge-api tjudge-worker tjudge-executor tjudge-builder; do
+            docker push $REG/$img:$V
+          done
+
+      # latest только для финальных релизов: прод-compose без VERSION берёт его
+      - name: push latest
+        if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
+        run: |
+          V=${GITHUB_REF_NAME#v}
+          for img in tjudge-api tjudge-worker tjudge-executor tjudge-builder; do
+            docker tag $REG/$img:$V $REG/$img:latest
+            docker push $REG/$img:latest
+          done
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: images
+    environment: production
+
+    steps:
+      - name: deploy
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_TOKEN,TAG
+          script_stop: true
+          script: |
+            set -e
+            cd ~/TJudge
+            git pull origin main
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
+            export GITHUB_REPOSITORY_OWNER=4rh1t3ct0r7
+            export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
+            mkdir -p data/programs
+            # gid docker.sock у каждого хоста свой, фиксируем в .env один раз
+            grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+            ./scripts/init-secrets.sh
+            V=${TAG#v}
+            VERSION=$V docker compose -f docker-compose.prod.yml pull
+            VERSION=$V docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # проверяем, что api реально работает на запрошенной версии
+            requested="ghcr.io/4rh1t3ct0r7/tjudge-api:$V"
+            running=$(docker inspect tjudge-api-1 --format '{{.Image}}' 2>/dev/null || true)
+            expected=$(docker image inspect "$requested" --format '{{.Id}}' 2>/dev/null || true)
+            if [ -z "$expected" ] || [ "$running" != "$expected" ]; then
+              echo "api работает не на $requested — деплой не применился"
+              exit 1
+            fi
+            docker image prune -f
+            docker builder prune -f
+            ./scripts/doctor.sh
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          TAG: ${{ github.ref_name }}
