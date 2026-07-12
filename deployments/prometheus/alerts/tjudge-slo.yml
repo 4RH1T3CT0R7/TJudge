@@ -1,4 +1,4 @@
-# Алерты TJudge по SLO (docs/SLO.md §2, §4).
+# Алерты TJudge по SLO.
 # Имена метрик - pkg/metrics/metrics.go.
 
 groups:

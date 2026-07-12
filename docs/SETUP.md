@@ -81,9 +81,6 @@ cd web && npm run dev
 | `make migrate-up` | Применить миграции |
 | `make migrate-down` | Откатить миграции |
 | `make admin EMAIL=x@y.z` | Назначить администратора |
-| `make benchmark` | Бенчмарки производительности |
-| `make benchmark-interpret` | Бенчмарки с анализом |
-| `make test-load` | Нагрузочные тесты |
 
 ### Работа с фронтендом
 
@@ -320,10 +317,8 @@ http://localhost:9093
 
 | Workflow | Описание |
 |----------|----------|
-| `ci.yml` | Lint, Test, Build, Security scan |
-| `cd.yml` | Сборка и публикация Docker образов |
-| `deploy.yml` | Деплой в production |
-| `release.yml` | Управление релизами |
+| `ci.yml` | Линт, тесты, сборка |
+| `release.yml` | Сборка образов и деплой по тегу v* |
 
 ### Запуск CI локально
 
