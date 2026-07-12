@@ -1,4 +1,4 @@
-.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user benchmark benchmark-interpret test-load test-contract generate-contract-mocks deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list generate tools
+.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list
 
 # Default target
 help:
@@ -30,10 +30,7 @@ help:
 	@echo "  make test          - Run all tests"
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
-	@echo "  make test-contract - Run contract/API tests (no external services)"
 	@echo "  make test-e2e      - Run end-to-end tests"
-	@echo "  make benchmark     - Run performance benchmarks"
-	@echo "  make test-load     - Run load tests"
 	@echo ""
 	@echo "  === Docker ==="
 	@echo "  make docker-build  - Build all Docker images"
@@ -48,18 +45,9 @@ help:
 	@echo ""
 	@echo "  make clean         - Clean build artifacts"
 
-# Install development tools
-tools:
-	@echo "Installing development tools..."
-	go install go.uber.org/mock/mockgen@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Generate mocks, swagger, and other code
+# Generate swagger docs
 generate:
-	@echo "Generating code..."
-	go generate ./...
 	@which swag > /dev/null 2>&1 && swag init -g cmd/api/main.go -o docs/swagger --parseInternal --quiet || true
-	@echo "Done."
 
 # Download dependencies
 deps:
@@ -198,21 +186,6 @@ fmt:
 	go fmt ./...
 	gofmt -s -w .
 
-# Generate mocks (alias for generate)
-mocks: generate
-
-# Generate mocks for contract tests
-generate-contract-mocks:
-	@echo "Generating contract test mocks..."
-	@which mockery > /dev/null 2>&1 || (echo "Installing mockery..." && go install github.com/vektra/mockery/v2@latest)
-	mockery
-	@echo "Done."
-
-# Run contract/API tests (no external services needed)
-test-contract:
-	@echo "Running contract tests..."
-	go test -tags=contract -count=1 -parallel=8 -timeout=5m ./tests/contract/...
-
 # Run integration tests
 test-integration:
 	@echo "Running integration tests..."
@@ -222,47 +195,6 @@ test-integration:
 test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
-
-# Run performance benchmarks
-benchmark:
-	@echo "Running performance benchmarks..."
-	@echo "Note: Benchmarks requiring DB/Redis will be skipped if services are not running"
-	@echo ""
-	go test -tags=benchmark -bench=. -benchmem -benchtime=1s ./tests/benchmark/...
-
-# Run benchmarks with interpretation
-benchmark-interpret:
-	@echo "Running benchmarks with interpretation..."
-	@go run ./cmd/benchmark -run
-
-# Run benchmark with specific pattern
-benchmark-api:
-	@echo "Running API benchmarks..."
-	go test -tags=benchmark -bench=BenchmarkHealth -benchmem ./tests/benchmark/...
-
-benchmark-worker:
-	@echo "Running Worker benchmarks..."
-	go test -tags=benchmark -bench=BenchmarkWorkerPool -benchmem ./tests/benchmark/...
-
-benchmark-queue:
-	@echo "Running Queue benchmarks..."
-	go test -tags=benchmark -bench=BenchmarkQueue -benchmem ./tests/benchmark/...
-
-benchmark-db:
-	@echo "Running Database benchmarks..."
-	go test -tags=benchmark -bench=BenchmarkDB -benchmem ./tests/benchmark/...
-
-# Load testing
-test-load:
-	@echo "Running load tests..."
-	@echo "Make sure the API server is running on localhost:8080"
-	@echo ""
-	go test -tags=load -v -timeout=5m ./tests/load/...
-
-# Quick load test (shorter duration)
-test-load-quick:
-	@echo "Running quick load tests..."
-	go test -tags=load -v -short -timeout=2m ./tests/load/...
 
 # Security scan
 security:
