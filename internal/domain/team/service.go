@@ -1,7 +1,5 @@
 package team
 
-//go:generate mockgen -destination=../../mocks/mock_team.go -package=mocks github.com/bmstu-itstech/tjudge/internal/domain/team TeamRepository,DistributedLock
-
 import (
 	"context"
 	"fmt"

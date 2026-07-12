@@ -1,7 +1,5 @@
 package tournament
 
-//go:generate mockgen -destination=../../mocks/mock_tournament.go -package=mocks github.com/bmstu-itstech/tjudge/internal/domain/tournament TournamentCacher,LeaderboardCacher,TournamentRepository,MatchRepository,QueueManager
-
 import (
 	"context"
 	"crypto/rand"

@@ -37,7 +37,6 @@ linters:
           - unparam
         path: _test\.go
     paths:
-      - internal/mocks
       - vendor
       - web/node_modules
       - node_modules
