@@ -131,7 +131,7 @@ GF_ADMIN_PASSWORD=<replace>
 - [ ] Worker запущен не от root: `docker compose ps worker` показывает `user=1000`.
 - [ ] `RATE_LIMIT_ENABLED=true`.
 - [ ] Backup-сервис работает: `docker ps | grep tjudge-backup`.
-- [ ] В CI прошли `gosec`, `npm audit`, `Trivy`; HIGH-находки исправлены.
+- [ ] Локально прошёл `make security`; HIGH-находки исправлены.
 - [ ] Первый админ назначен, пароль надёжный.
 
 ## 7. Обновление (blue-green)

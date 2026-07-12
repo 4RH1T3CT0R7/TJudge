@@ -1,6 +1,6 @@
 # Prometheus-конфигурация TJudge.
 # Монтируется в docker-compose.selfhosted.yml (профиль monitoring).
-# Алерты: alerts/*.yml (пороги - docs/SLO.md).
+# Алерты: alerts/*.yml.
 
 global:
   scrape_interval: 15s

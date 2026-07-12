@@ -11,11 +11,9 @@
 | Документ | Описание |
 |----------|----------|
 | [SETUP.md](SETUP.md) | Настройка окружения, локальная разработка |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Архитектура системы, Domain Events, компоненты, потоки данных |
 | [API_GUIDE.md](API_GUIDE.md) | REST API эндпоинты, WebSocket протокол, формат ответов |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Схема БД, таблицы, миграции, полезные запросы |
 | [ADDING_GAMES.md](ADDING_GAMES.md) | Как добавить новую игру в систему |
-| [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md) | Бенчмарки, нагрузочные тесты, метрики, профилирование |
 
 ## Для эксплуатации
 
@@ -23,8 +21,6 @@
 |----------|----------|
 | [SELF_HOSTED.md](SELF_HOSTED.md) | Self-hosted развёртывание с Docker Compose |
 | [OPERATIONS.md](OPERATIONS.md) | Production деплой, runbook, бэкапы, мониторинг, инциденты |
-| [SLO.md](SLO.md) | Service Level Objectives, алерты, error budget |
-| [ROADMAP.md](ROADMAP.md) | Отложенные задачи, что решили не делать сейчас и почему |
 
 ## Справочники API
 
@@ -48,7 +44,6 @@ cd web && npm run dev # Фронтенд
 make test             # Unit тесты
 make test-race        # С детектором гонок
 make lint             # Линтер
-make benchmark        # Бенчмарки
 ```
 
 | URL | Сервис |
@@ -82,7 +77,7 @@ make benchmark        # Бенчмарки
          └─────────────────────────────────┘
 ```
 
-Подробнее: [ARCHITECTURE.md](ARCHITECTURE.md)
+Подробнее — раздел «Архитектура» в корневом README.
 
 ## Технологии
 
