@@ -1,3 +1,4 @@
+// Package errors — ошибки приложения с http кодами
 package errors
 
 import (
@@ -6,14 +7,13 @@ import (
 	"net/http"
 )
 
-// AppError - кастомная ошибка приложения с HTTP кодом
+// AppError ошибка с http кодом и сообщением для юзера
 type AppError struct {
-	Code    int    // HTTP код
-	Message string // Сообщение для пользователя
-	Err     error  // Внутренняя ошибка
+	Code    int    // http код
+	Message string // что показать пользователю
+	Err     error  // внутренняя ошибка, наружу не отдаём
 }
 
-// Error реализует интерфейс error
 func (e *AppError) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Err)
@@ -21,12 +21,11 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-// Unwrap позволяет использовать errors.Unwrap
+// Unwrap чтобы работал errors.As/Is по цепочке
 func (e *AppError) Unwrap() error {
 	return e.Err
 }
 
-// New создаёт новую ошибку приложения
 func New(code int, message string, err error) *AppError {
 	return &AppError{
 		Code:    code,
@@ -35,7 +34,8 @@ func New(code int, message string, err error) *AppError {
 	}
 }
 
-// Wrap оборачивает ошибку
+// Wrap оборачивает ошибку с текстом. обязательно через %w -
+// иначе выше по стеку не достанем http код из обёрнутого сентинела
 func Wrap(err error, message string) error {
 	if err == nil {
 		return nil
@@ -43,42 +43,38 @@ func Wrap(err error, message string) error {
 	return fmt.Errorf("%s: %w", message, err)
 }
 
-// Предопределённые ошибки
-
 var (
-	// Ошибки аутентификации
+	// аутентификация
 	ErrUnauthorized       = New(http.StatusUnauthorized, "Unauthorized", nil)
 	ErrInvalidToken       = New(http.StatusUnauthorized, "Invalid token", nil)
 	ErrTokenExpired       = New(http.StatusUnauthorized, "Token expired", nil)
 	ErrInvalidCredentials = New(http.StatusUnauthorized, "Invalid credentials", nil)
 
-	// Ошибки валидации
+	// валидация
 	ErrValidation   = New(http.StatusBadRequest, "Validation failed", nil)
 	ErrInvalidInput = New(http.StatusBadRequest, "Invalid input", nil)
 	ErrBadRequest   = New(http.StatusBadRequest, "Bad request", nil)
 
-	// Ошибки ресурсов
+	// ресурсы
 	ErrNotFound      = New(http.StatusNotFound, "Resource not found", nil)
 	ErrAlreadyExists = New(http.StatusConflict, "Resource already exists", nil)
 	ErrConflict      = New(http.StatusConflict, "Conflict", nil)
 
-	// Ошибки доступа
 	ErrForbidden = New(http.StatusForbidden, "Forbidden", nil)
 
-	// Ошибки ограничения частоты запросов
 	ErrRateLimitExceeded = New(http.StatusTooManyRequests, "Rate limit exceeded", nil)
 
-	// Ошибки сервера
 	ErrInternal = New(http.StatusInternalServerError, "Internal server error", nil)
 
-	// Ошибки бизнес-логики
+	// бизнес-логика
 	ErrTournamentFull    = New(http.StatusConflict, "Tournament is full", nil)
 	ErrTournamentStarted = New(http.StatusConflict, "Tournament already started", nil)
 	ErrProgramNotFound   = New(http.StatusNotFound, "Program not found", nil)
 	ErrConcurrentUpdate  = New(http.StatusConflict, "Concurrent update detected", nil)
 )
 
-// WithMessage создаёт новую ошибку с кастомным сообщением
+// WithMessage новая ошибка с тем же кодом но другим текстом.
+// именно НОВАЯ - сентинелы это глобалы, мутировать их нельзя
 func (e *AppError) WithMessage(msg string) *AppError {
 	return &AppError{
 		Code:    e.Code,
@@ -87,7 +83,7 @@ func (e *AppError) WithMessage(msg string) *AppError {
 	}
 }
 
-// WithError добавляет внутреннюю ошибку
+// WithError подкладывает внутреннюю ошибку (тоже копией)
 func (e *AppError) WithError(err error) *AppError {
 	return &AppError{
 		Code:    e.Code,
@@ -96,13 +92,11 @@ func (e *AppError) WithError(err error) *AppError {
 	}
 }
 
-// IsAppError проверяет, является ли ошибка AppError
 func IsAppError(err error) bool {
 	var appErr *AppError
 	return errors.As(err, &appErr)
 }
 
-// GetAppError извлекает AppError из ошибки
 func GetAppError(err error) *AppError {
 	var appErr *AppError
 	if errors.As(err, &appErr) {
@@ -111,7 +105,8 @@ func GetAppError(err error) *AppError {
 	return nil
 }
 
-// ToAppError преобразует ошибку в AppError
+// ToAppError достаёт AppError из ошибки, а если это не наша ошибка -
+// заворачивает в 500
 func ToAppError(err error) *AppError {
 	if err == nil {
 		return nil
@@ -124,7 +119,6 @@ func ToAppError(err error) *AppError {
 	return ErrInternal.WithError(err)
 }
 
-// IsNotFound проверяет, является ли ошибка типом "not found"
 func IsNotFound(err error) bool {
 	appErr := GetAppError(err)
 	if appErr != nil {
