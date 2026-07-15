@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)
 ![React](https://img.shields.io/badge/React-19+-61DAFB?style=for-the-badge&logo=react)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis)
@@ -183,8 +183,6 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 | | `make test-coverage` | С отчётом покрытия (HTML) |
 | | `make test-integration` | Интеграционные (PostgreSQL + Redis) |
 | | `make test-e2e` | End-to-end (запущенный сервер) |
-| | `make benchmark` | Бенчмарки производительности |
-| | `make test-load` | Нагрузочное тестирование |
 | **Сборка** | `make build` | Бинарники (api, worker, migrate) |
 | | `make docker-build` | Docker образы |
 | **Качество** | `make lint` | golangci-lint |
@@ -200,21 +198,19 @@ cd web && npm run dev                  # Фронтенд (hot reload)
 
 ### Тестирование
 
-В проекте **1600+ тестовых функций** (Go) и vitest-тесты фронтенда:
+Тесты трёх уровней:
 
 | Уровень | Описание |
 |---------|----------|
-| Unit (~970) | Бизнес-логика, handlers, middleware, cache, worker, websocket |
-| DB Integration (~200 subtests) | PostgreSQL репозитории через `testify/suite` |
-| E2E (24) | HTTP API через запущенный сервер |
+| Unit | Бизнес-логика, handlers, middleware, cache, worker, websocket |
+| Integration | PostgreSQL репозитории и очередь (нужны БД и Redis) |
+| E2E | HTTP API через запущенный сервер |
 
-Также: бенчмарки производительности, нагрузочные тесты, хаос-тесты.
-
-Подробнее о покрытии по пакетам: [docs/SETUP.md](docs/SETUP.md)
+Подробнее: [docs/SETUP.md](docs/SETUP.md)
 
 ### CI/CD
 
-GitHub Actions: фронтенд (eslint, vitest, сборка артефактом), lint, unit тесты, race detector, сборка, security scan, интеграционные, E2E и хаос-тесты; nightly - полный match-flow с Docker, перф-гейт (benchstat), restore-тест бэкапа. Деплой по тегу релиза: сборка образов (версия вшивается в `/system/status`), выкладка на сервер, верификация запущенной версии и пост-деплойный doctor — упавшая проверка валит деплой.
+GitHub Actions: ci (фронтенд + линт, тесты, сборка, интеграционные) и release по тегу v* — сборка образов (версия вшивается в `/system/status`), выкладка на сервер, верификация запущенной версии и пост-деплойный doctor — упавшая проверка валит деплой.
 
 ---
 
@@ -253,8 +249,7 @@ TJudge/
 ├── cmd/                        # Точки входа
 │   ├── api/                    #   API сервер
 │   ├── worker/                 #   Worker сервис
-│   ├── migrations/             #   Инструмент миграций
-│   └── benchmark/              #   Интерпретатор бенчмарков
+│   └── migrations/             #   Инструмент миграций
 ├── internal/
 │   ├── api/                    # HTTP слой
 │   │   ├── handlers/           #   Обработчики запросов
@@ -286,9 +281,7 @@ TJudge/
 ├── tests/
 │   ├── e2e/                    # End-to-end тесты
 │   ├── integration/            # Интеграционные тесты
-│   ├── benchmark/              # Бенчмарки
-│   ├── load/                   # Нагрузочные тесты
-│   └── chaos/                  # Хаос-тесты
+│   └── security/               # Security-тесты
 ├── deployments/                # Prometheus, Grafana, Loki конфиги
 ├── scripts/                    # Деплой, бэкапы, status/doctor-диагностика
 ├── docker/                     # Dockerfiles
@@ -305,13 +298,9 @@ TJudge/
 | [docs/SETUP.md](docs/SETUP.md) | Настройка окружения и локальная разработка |
 | [docs/SELF_HOSTED.md](docs/SELF_HOSTED.md) | Развёртывание на собственном сервере |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Production деплой, runbook, бэкапы, мониторинг |
-| [docs/SLO.md](docs/SLO.md) | Service Level Objectives и алерты |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Детальная архитектура системы |
 | [docs/API_GUIDE.md](docs/API_GUIDE.md) | REST API и WebSocket эндпоинты |
 | [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
 | [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md) | Добавление новых игр |
-| [docs/PERFORMANCE_TESTING.md](docs/PERFORMANCE_TESTING.md) | Тестирование производительности |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Отложенные задачи и принятые решения |
 
 ---
 
