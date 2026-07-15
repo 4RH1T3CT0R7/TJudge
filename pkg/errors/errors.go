@@ -56,7 +56,6 @@ var (
 	ErrValidation   = New(http.StatusBadRequest, "Validation failed", nil)
 	ErrInvalidInput = New(http.StatusBadRequest, "Invalid input", nil)
 	ErrBadRequest   = New(http.StatusBadRequest, "Bad request", nil)
-	ErrMissingField = New(http.StatusBadRequest, "Missing required field", nil)
 
 	// Ошибки ресурсов
 	ErrNotFound      = New(http.StatusNotFound, "Resource not found", nil)
@@ -64,25 +63,19 @@ var (
 	ErrConflict      = New(http.StatusConflict, "Conflict", nil)
 
 	// Ошибки доступа
-	ErrForbidden        = New(http.StatusForbidden, "Forbidden", nil)
-	ErrPermissionDenied = New(http.StatusForbidden, "Permission denied", nil)
+	ErrForbidden = New(http.StatusForbidden, "Forbidden", nil)
 
 	// Ошибки ограничения частоты запросов
 	ErrRateLimitExceeded = New(http.StatusTooManyRequests, "Rate limit exceeded", nil)
 
 	// Ошибки сервера
-	ErrInternal           = New(http.StatusInternalServerError, "Internal server error", nil)
-	ErrServiceUnavailable = New(http.StatusServiceUnavailable, "Service unavailable", nil)
-	ErrTimeout            = New(http.StatusGatewayTimeout, "Request timeout", nil)
+	ErrInternal = New(http.StatusInternalServerError, "Internal server error", nil)
 
 	// Ошибки бизнес-логики
-	ErrTournamentFull       = New(http.StatusConflict, "Tournament is full", nil)
-	ErrTournamentStarted    = New(http.StatusConflict, "Tournament already started", nil)
-	ErrTournamentNotStarted = New(http.StatusConflict, "Tournament not started yet", nil)
-	ErrInvalidGameType      = New(http.StatusBadRequest, "Invalid game type", nil)
-	ErrMatchInProgress      = New(http.StatusConflict, "Match is already in progress", nil)
-	ErrProgramNotFound      = New(http.StatusNotFound, "Program not found", nil)
-	ErrConcurrentUpdate     = New(http.StatusConflict, "Concurrent update detected", nil)
+	ErrTournamentFull    = New(http.StatusConflict, "Tournament is full", nil)
+	ErrTournamentStarted = New(http.StatusConflict, "Tournament already started", nil)
+	ErrProgramNotFound   = New(http.StatusNotFound, "Program not found", nil)
+	ErrConcurrentUpdate  = New(http.StatusConflict, "Concurrent update detected", nil)
 )
 
 // WithMessage создаёт новую ошибку с кастомным сообщением
