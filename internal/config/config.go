@@ -10,15 +10,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// defaultJWTSecret - секрет JWT по умолчанию (только для разработки).
+// дефолтный секрет, он же первый в блоклисте - в prod с ним не пустим
 const defaultJWTSecret = "change-this-secret-in-production"
 
-// minJWTSecretLength - минимальная длина JWT secret для production.
-// Менее 32 байт уязвимо к brute-force на современном железе.
+// меньше 32 байт в prod не даём, брутфорсится
 const minJWTSecretLength = 32
 
-// jwtSecretPlaceholders - список placeholder-значений, которые не должны
-// попасть в prod ни под каким предлогом. Совпадение (case-insensitive) приводит к fail.
+// секреты-заглушки, которые нельзя тащить в прод (сравниваем без регистра)
 var jwtSecretPlaceholders = []string{
 	defaultJWTSecret,
 	"your-secret-key-change-in-production",
@@ -31,14 +29,12 @@ var jwtSecretPlaceholders = []string{
 	"test",
 }
 
-// isProductionEnv возвращает true если ENVIRONMENT=production|prod.
 func isProductionEnv() bool {
 	env := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
 	return env == "production" || env == "prod"
 }
 
-// validateJWTSecret проверяет, что secret безопасен для production.
-// В dev-режиме допускаются короткие/placeholder значения (с предупреждением).
+// проверяем секрет только в prod, в dev пускаем что угодно
 func validateJWTSecret(secret string, isProd bool) error {
 	if !isProd {
 		return nil
@@ -194,14 +190,11 @@ type RateLimitConfig struct {
 	Burst             int  `yaml:"burst"`
 }
 
-// Validate валидирует конфигурацию
 func (c *Config) Validate() error {
-	// Валидация Server
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
 
-	// Валидация Database
 	if c.Database.Host == "" {
 		return fmt.Errorf("database host is required")
 	}
@@ -218,7 +211,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("database max_connections must be positive")
 	}
 
-	// Валидация Redis
 	if c.Redis.Host == "" {
 		return fmt.Errorf("redis host is required")
 	}
@@ -226,7 +218,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid redis port: %d", c.Redis.Port)
 	}
 
-	// Валидация Worker
 	if c.Worker.MinWorkers < 1 {
 		return fmt.Errorf("worker min_workers must be positive")
 	}
@@ -237,7 +228,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("worker queue_size must be positive")
 	}
 
-	// Валидация JWT: в prod требуем минимум 32 байта и не placeholder.
+	// jwt проверяем строго только в prod
 	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
 		return err
 	}
@@ -245,7 +236,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("JWT access_ttl is too short")
 	}
 
-	// Валидация Logging
 	validLevels := []string{"debug", "info", "warn", "error"}
 	validLevel := slices.Contains(validLevels, c.Logging.Level)
 	if !validLevel {
@@ -255,14 +245,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// recommendedDBPoolSize вычисляет sensible max_connections для БД.
-//
-// Формула: min(dbCeiling, workerMax * 1.5 + apiOverhead).
-//   - workerMax * 1.5 - запас на retry и долгие матчи.
-//   - apiOverhead = 20 - HTTP-обработчики, миграции, backup-утилиты.
-//   - dbCeiling = 100 - не выходим за default-лимит PostgreSQL (max_connections=100).
-//
-// Если пользователь задал DB_MAX_CONNECTIONS явно, используется его значение.
+// подбираем пул под воркеров, но не больше дефолтного лимита постгреса (100).
+// если DB_MAX_CONNECTIONS задан явно - берётся он, это только дефолт
 func recommendedDBPoolSize(workerMax int) int {
 	const apiOverhead = 20
 	const dbCeiling = 100
@@ -377,9 +361,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// Вспомогательные функции для чтения переменных окружения
-
-// splitAndTrim splits a comma-separated string into trimmed non-empty parts.
+// режем csv по запятой, пустые куски выкидываем
 func splitAndTrim(s string) []string {
 	parts := strings.Split(s, ",")
 	var result []string
@@ -425,25 +407,17 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-// getEnvOrFile читает значение из переменной окружения или из файла
-// Сначала проверяет KEY, затем KEY_FILE
-// Это поддерживает Docker secrets
+// сначала пробуем обычную переменную, потом KEY_FILE (docker secrets)
 func getEnvOrFile(key, defaultValue string) string {
-	// Сначала проверяем обычную переменную
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
 
-	// Затем проверяем переменную с суффиксом _FILE
 	fileKey := key + "_FILE"
 	if filePath := os.Getenv(fileKey); filePath != "" {
-		// #nosec G304 G703 -- filePath приходит из env-var контролируемой
-		// оператором (Docker secrets / systemd unit), не от внешнего input.
-		// Это стандартный Docker-secrets pattern.
-		content, err := os.ReadFile(filePath)
+		content, err := os.ReadFile(filePath) // #nosec G304 -- путь из env, это docker secrets
 		if err == nil {
-			// Убираем trailing newline
-			return strings.TrimSpace(string(content))
+			return strings.TrimSpace(string(content)) // убираем хвостовой перевод строки
 		}
 	}
 
