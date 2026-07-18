@@ -8,7 +8,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )

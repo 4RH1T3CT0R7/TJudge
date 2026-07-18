@@ -5,7 +5,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 )

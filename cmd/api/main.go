@@ -25,7 +25,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
