@@ -1,10 +1,8 @@
 package logger
 
 import (
-	"context"
 	"os"
 
-	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -27,15 +25,6 @@ func New(level string, format string) (*Logger, error) {
 		Level:  level,
 		Format: format,
 		Async:  false,
-	})
-}
-
-// NewAsync создаёт новый логгер с асинхронным логированием
-func NewAsync(level string, format string) (*Logger, error) {
-	return NewWithOptions(Options{
-		Level:  level,
-		Format: format,
-		Async:  true,
 	})
 }
 
@@ -89,48 +78,8 @@ func NewWithOptions(opts Options) (*Logger, error) {
 	return &Logger{Logger: logger}, nil
 }
 
-// WithFields добавляет дополнительные поля к логгеру
-func (l *Logger) WithFields(fields ...zap.Field) *Logger {
-	return &Logger{Logger: l.Logger.With(fields...)}
-}
-
-// WithRequestID добавляет request_id к логгеру
-func (l *Logger) WithRequestID(requestID string) *Logger {
-	return l.WithFields(zap.String("request_id", requestID))
-}
-
-// WithContextRequestID извлекает request ID из контекста и возвращает логгер
-// с присоединённым полем request_id. Если в контексте нет request ID, возвращает
-// логгер без изменений.
-func (l *Logger) WithContextRequestID(ctx context.Context) *Logger {
-	if id := requestid.FromContext(ctx); id != "" {
-		return l.WithRequestID(id)
-	}
-	return l
-}
-
-// WithUserID добавляет user_id к логгеру
-func (l *Logger) WithUserID(userID string) *Logger {
-	return l.WithFields(zap.String("user_id", userID))
-}
-
-// WithMatchID добавляет match_id к логгеру
-func (l *Logger) WithMatchID(matchID string) *Logger {
-	return l.WithFields(zap.String("match_id", matchID))
-}
-
-// WithTournamentID добавляет tournament_id к логгеру
-func (l *Logger) WithTournamentID(tournamentID string) *Logger {
-	return l.WithFields(zap.String("tournament_id", tournamentID))
-}
-
 // LogError логирует ошибку с контекстом
 func (l *Logger) LogError(msg string, err error, fields ...zap.Field) {
 	fields = append(fields, zap.Error(err))
 	l.Error(msg, fields...)
-}
-
-// Sync синхронизирует буфер логгера
-func (l *Logger) Sync() error {
-	return l.Logger.Sync()
 }
