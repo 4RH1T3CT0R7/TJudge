@@ -85,7 +85,7 @@ type ServerConfig struct {
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
 	ShutdownTimeout time.Duration
-	BaseURL         string // для ссылок, напр. инвайты в команду
+	BaseURL         string // для ссылок, напр. инвайты в комманду
 }
 
 type DatabaseConfig struct {
@@ -229,6 +229,7 @@ func (c *Config) Validate() error {
 	}
 
 	// jwt проверяем строго только в prod
+	// TODO: валидировать бы ещё format/output логгера, пока проверяем только level
 	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
 		return err
 	}
@@ -259,10 +260,10 @@ func recommendedDBPoolSize(workerMax int) int {
 
 // Load загружает конфигурацию из переменных окружения
 func Load() (*Config, error) {
-	// Загружаем .env файл если существует (игнорируем ошибку если файла нет)
+	// .env подхватываем если есть, нет так нет
 	_ = godotenv.Load()
 
-	// Если DB_MAX_CONNECTIONS не задан, подбираем по WORKER_MAX.
+	// дефолт для пула бд считаем от WORKER_MAX
 	workerMax := getEnvInt("WORKER_MAX", 1000)
 	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
@@ -278,11 +279,11 @@ func Load() (*Config, error) {
 			Host:           getEnv("DB_HOST", "localhost"),
 			Port:           getEnvInt("DB_PORT", 5432),
 			User:           getEnv("DB_USER", "tjudge"),
-			Password:       getEnvOrFile("DB_PASSWORD", "secret"), // Поддержка Docker secrets
+			Password:       getEnvOrFile("DB_PASSWORD", "secret"),
 			Name:           getEnv("DB_NAME", "tjudge"),
 			SSLMode:        getEnv("DB_SSLMODE", "disable"),
 			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", defaultPoolSize),
-			MaxIdle:        getEnvInt("DB_MAX_IDLE", defaultPoolSize/5), // 20% от max
+			MaxIdle:        getEnvInt("DB_MAX_IDLE", defaultPoolSize/5), // ~20% от макс
 			MaxLifetime:    getEnvDuration("DB_MAX_LIFETIME", 1*time.Hour),
 
 			PartitionRetentionMonths: getEnvInt("DB_PARTITION_RETENTION_MONTHS", 0),
@@ -290,7 +291,7 @@ func Load() (*Config, error) {
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
 			Port:     getEnvInt("REDIS_PORT", 6379),
-			Password: getEnvOrFile("REDIS_PASSWORD", ""), // Поддержка Docker secrets
+			Password: getEnvOrFile("REDIS_PASSWORD", ""),
 			DB:       getEnvInt("REDIS_DB", 0),
 			PoolSize: getEnvInt("REDIS_POOL_SIZE", 100),
 		},
@@ -321,19 +322,19 @@ func Load() (*Config, error) {
 		},
 		Storage: StorageConfig{
 			ProgramsPath:     getEnv("PROGRAMS_PATH", "/data/programs"),
-			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // Если пусто, используется ProgramsPath
-			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10MB
+			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // пусто = берём ProgramsPath
+			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10мб
 		},
 		JWT: JWTConfig{
-			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret),      // Поддержка Docker secrets
-			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),    // 24 часа активной сессии
-			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour), // 7 дней неактивности
+			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret),
+			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),    // сутки активной сессии
+			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour), // неделя неактивности
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
 			Format: getEnv("LOG_FORMAT", "json"),
 			Output: getEnv("LOG_OUTPUT", "stdout"),
-			Async:  getEnvBool("LOG_ASYNC", true), // По умолчанию async для production
+			Async:  getEnvBool("LOG_ASYNC", true), // в проде асинхронно
 		},
 		Metrics: MetricsConfig{
 			Enabled: getEnvBool("METRICS_ENABLED", true),
@@ -384,6 +385,7 @@ func getEnv(key, defaultValue string) string {
 func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		var result int
+		// sscanf а не atoi специально: "42abc" распарсит 42, так исторически
 		if _, err := fmt.Sscanf(value, "%d", &result); err == nil {
 			return result
 		}
