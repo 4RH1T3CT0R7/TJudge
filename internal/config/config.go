@@ -63,7 +63,7 @@ func validateJWTSecret(secret string, isProd bool) error {
 	return nil
 }
 
-// Config содержит всю конфигурацию приложения
+// Config вся конфигурация приложения
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Database  DatabaseConfig  `yaml:"database"`
@@ -78,23 +78,20 @@ type Config struct {
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 }
 
-// StorageConfig - конфигурация хранения файлов
 type StorageConfig struct {
 	ProgramsPath     string `yaml:"programs_path"`
-	HostProgramsPath string `yaml:"host_programs_path"` // Путь на хосте для Docker-in-Docker
-	MaxFileSize      int64  `yaml:"max_file_size"`      // В байтах
+	HostProgramsPath string `yaml:"host_programs_path"` // путь на хосте для docker-in-docker
+	MaxFileSize      int64  `yaml:"max_file_size"`
 }
 
-// ServerConfig - конфигурация HTTP сервера
 type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	ReadTimeout     time.Duration `yaml:"read_timeout"`
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
-	BaseURL         string        `yaml:"base_url"` // Базовый URL для ссылок (например, для приглашений в команду)
+	BaseURL         string        `yaml:"base_url"` // для ссылок, напр. инвайты в команду
 }
 
-// DatabaseConfig - конфигурация PostgreSQL
 type DatabaseConfig struct {
 	Host           string        `yaml:"host"`
 	Port           int           `yaml:"port"`
@@ -105,13 +102,12 @@ type DatabaseConfig struct {
 	MaxConnections int           `yaml:"max_connections"`
 	MaxIdle        int           `yaml:"max_idle"`
 	MaxLifetime    time.Duration `yaml:"max_lifetime"`
-	// PartitionRetentionMonths - сколько месяцев хранить партиции
-	// matches/rating_history. 0 (по умолчанию) - retention выключен:
-	// удаление турнирных данных должно быть осознанным решением оператора.
+	// сколько месяцев хранить партиции matches/rating_history.
+	// 0 = не удаляем, чистка турнирных данных должна быть осознанной
 	PartitionRetentionMonths int `yaml:"partition_retention_months"`
 }
 
-// DSN возвращает строку подключения к PostgreSQL (формат key=value)
+// DSN строка подключения к postgres в формате key=value
 func (c DatabaseConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -119,7 +115,7 @@ func (c DatabaseConfig) DSN() string {
 	)
 }
 
-// DSNURL возвращает строку подключения в URL формате (для golang-migrate)
+// DSNURL то же самое но url-ом, нужно для golang-migrate
 func (c DatabaseConfig) DSNURL() string {
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
@@ -127,7 +123,6 @@ func (c DatabaseConfig) DSNURL() string {
 	)
 }
 
-// RedisConfig - конфигурация Redis
 type RedisConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
@@ -136,12 +131,10 @@ type RedisConfig struct {
 	PoolSize int    `yaml:"pool_size"`
 }
 
-// Address возвращает адрес Redis
 func (c RedisConfig) Address() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
 
-// WorkerConfig - конфигурация worker pool
 type WorkerConfig struct {
 	MinWorkers        int           `yaml:"min_workers"`
 	MaxWorkers        int           `yaml:"max_workers"`
@@ -149,50 +142,45 @@ type WorkerConfig struct {
 	Timeout           time.Duration `yaml:"timeout"`
 	RetryAttempts     int           `yaml:"retry_attempts"`
 	RetryDelay        time.Duration `yaml:"retry_delay"`
-	AutoScaleInterval time.Duration `yaml:"auto_scale_interval"` // интервал проверки пула, 0 = 2s
+	AutoScaleInterval time.Duration `yaml:"auto_scale_interval"` // как часто проверяем пул, 0 = 2s
 }
 
-// ExecutorConfig - конфигурация исполнителя матчей
 type ExecutorConfig struct {
-	TJudgePath        string        `yaml:"tjudge_path"`        // Путь к tjudge-cli внутри контейнера
-	DockerImage       string        `yaml:"docker_image"`       // Имя Docker образа для tjudge-cli
-	Timeout           time.Duration `yaml:"timeout"`            // Таймаут выполнения матча
-	CPUQuota          int64         `yaml:"cpu_quota"`          // Лимит CPU (микросекунды на 100ms)
-	MemoryLimit       int64         `yaml:"memory_limit"`       // Лимит памяти в байтах
-	PidsLimit         int64         `yaml:"pids_limit"`         // Лимит процессов
-	NetworkDisabled   bool          `yaml:"network_disabled"`   // Отключить сеть
-	DefaultIterations int           `yaml:"default_iterations"` // Количество итераций по умолчанию
-	Verbose           bool          `yaml:"verbose"`            // Включить verbose вывод
-	SeccompProfile    string        `yaml:"seccomp_profile"`    // Путь к seccomp профилю
-	AppArmorProfile   string        `yaml:"apparmor_profile"`   // Имя AppArmor профиля
-	CPUSetCPUs        string        `yaml:"cpuset_cpus"`        // Привязка к ядрам CPU (например "0-3")
-	BuilderImage      string        `yaml:"builder_image"`      // Docker-образ с тулчейнами для компиляции программ
-	CompileTimeout    time.Duration `yaml:"compile_timeout"`    // Таймаут компиляции одной программы
+	TJudgePath        string        `yaml:"tjudge_path"`
+	DockerImage       string        `yaml:"docker_image"`
+	Timeout           time.Duration `yaml:"timeout"`
+	CPUQuota          int64         `yaml:"cpu_quota"`    // микросекунды на 100ms
+	MemoryLimit       int64         `yaml:"memory_limit"` // в байтах
+	PidsLimit         int64         `yaml:"pids_limit"`
+	NetworkDisabled   bool          `yaml:"network_disabled"`
+	DefaultIterations int           `yaml:"default_iterations"`
+	Verbose           bool          `yaml:"verbose"`
+	SeccompProfile    string        `yaml:"seccomp_profile"`
+	AppArmorProfile   string        `yaml:"apparmor_profile"`
+	CPUSetCPUs        string        `yaml:"cpuset_cpus"` // привязка к ядрам, напр "0-3"
+	BuilderImage      string        `yaml:"builder_image"`
+	CompileTimeout    time.Duration `yaml:"compile_timeout"`
 }
 
-// JWTConfig - конфигурация JWT токенов
 type JWTConfig struct {
 	Secret     string        `yaml:"secret"`
 	AccessTTL  time.Duration `yaml:"access_ttl"`
 	RefreshTTL time.Duration `yaml:"refresh_ttl"`
 }
 
-// LoggingConfig - конфигурация логирования
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 	Output string `yaml:"output"`
-	Async  bool   `yaml:"async"` // Асинхронное логирование с буферизацией
+	Async  bool   `yaml:"async"`
 }
 
-// MetricsConfig - конфигурация метрик
 type MetricsConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Port    int    `yaml:"port"`
 	Path    string `yaml:"path"`
 }
 
-// CORSConfig - конфигурация CORS
 type CORSConfig struct {
 	AllowedOrigins []string `yaml:"allowed_origins"`
 	AllowedMethods []string `yaml:"allowed_methods"`
@@ -200,7 +188,6 @@ type CORSConfig struct {
 	MaxAge         int      `yaml:"max_age"`
 }
 
-// RateLimitConfig - конфигурация rate limiting
 type RateLimitConfig struct {
 	Enabled           bool `yaml:"enabled"`
 	RequestsPerMinute int  `yaml:"requests_per_minute"`
