@@ -21,7 +21,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
 	"github.com/bmstu-itstech/tjudge/internal/worker"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )

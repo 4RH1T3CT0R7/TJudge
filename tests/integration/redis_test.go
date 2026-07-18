@@ -14,7 +14,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

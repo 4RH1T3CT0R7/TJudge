@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )

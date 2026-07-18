@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/pkg/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
