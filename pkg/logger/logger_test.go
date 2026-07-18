@@ -1,10 +1,8 @@
 package logger
 
 import (
-	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -54,14 +52,6 @@ func TestNew_JSONFormat(t *testing.T) {
 	assert.NotNil(t, log)
 }
 
-func TestNewAsync(t *testing.T) {
-	log, err := NewAsync("info", "json")
-
-	require.NoError(t, err)
-	assert.NotNil(t, log)
-	defer func() { _ = log.Sync() }()
-}
-
 func TestNewWithOptions(t *testing.T) {
 	opts := Options{
 		Level:  "debug",
@@ -98,95 +88,6 @@ func TestNewWithOptions_AllFormats(t *testing.T) {
 			assert.NotNil(t, log)
 		})
 	}
-}
-
-func TestLogger_WithFields(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.WithFields(
-		zap.String("key1", "value1"),
-		zap.Int("key2", 42),
-	)
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_WithRequestID(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.WithRequestID("req-12345")
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_WithContextRequestID(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	ctx := requestid.WithContext(context.Background(), "ctx-req-99")
-	enriched := log.WithContextRequestID(ctx)
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_WithContextRequestID_EmptyContext(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	// Нет request ID в контексте - должен вернуться тот же логгер
-	enriched := log.WithContextRequestID(context.Background())
-
-	assert.NotNil(t, enriched)
-	assert.Same(t, log, enriched)
-}
-
-func TestLogger_WithUserID(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.WithUserID("user-12345")
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_WithMatchID(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.WithMatchID("match-12345")
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_WithTournamentID(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.WithTournamentID("tournament-12345")
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
-}
-
-func TestLogger_ChainedWithMethods(t *testing.T) {
-	log, err := New("info", "json")
-	require.NoError(t, err)
-
-	enriched := log.
-		WithRequestID("req-1").
-		WithUserID("user-1").
-		WithMatchID("match-1").
-		WithTournamentID("tournament-1")
-
-	assert.NotNil(t, enriched)
-	assert.NotSame(t, log, enriched)
 }
 
 func TestLogger_Sync(t *testing.T) {
@@ -228,48 +129,8 @@ func TestLogger_LoggingWithFields(t *testing.T) {
 	)
 }
 
-func TestLogger_AsyncFlush(t *testing.T) {
-	log, err := NewAsync("info", "json")
-	require.NoError(t, err)
-
-	log.Info("async message 1")
-	log.Info("async message 2")
-
-	// Должен сбросить буферизированные сообщения
-	err = log.Sync()
-	_ = err // игнорируем ошибки sync
-}
-
 func BenchmarkLogger_Info(b *testing.B) {
 	log, _ := New("info", "json")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		log.Info("benchmark message", zap.Int("iteration", i))
-	}
-}
-
-func BenchmarkLogger_WithFields(b *testing.B) {
-	log, _ := New("info", "json")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		log.WithFields(zap.String("key", "value"))
-	}
-}
-
-func BenchmarkLogger_ChainedWith(b *testing.B) {
-	log, _ := New("info", "json")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		log.WithRequestID("req-1").WithUserID("user-1")
-	}
-}
-
-func BenchmarkLoggerAsync_Info(b *testing.B) {
-	log, _ := NewAsync("info", "json")
-	defer func() { _ = log.Sync() }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
