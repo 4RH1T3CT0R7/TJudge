@@ -61,46 +61,46 @@ func validateJWTSecret(secret string, isProd bool) error {
 
 // Config вся конфигурация приложения
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Database  DatabaseConfig  `yaml:"database"`
-	Redis     RedisConfig     `yaml:"redis"`
-	Worker    WorkerConfig    `yaml:"worker"`
-	Executor  ExecutorConfig  `yaml:"executor"`
-	Storage   StorageConfig   `yaml:"storage"`
-	JWT       JWTConfig       `yaml:"jwt"`
-	Logging   LoggingConfig   `yaml:"logging"`
-	Metrics   MetricsConfig   `yaml:"metrics"`
-	CORS      CORSConfig      `yaml:"cors"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	Server    ServerConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Worker    WorkerConfig
+	Executor  ExecutorConfig
+	Storage   StorageConfig
+	JWT       JWTConfig
+	Logging   LoggingConfig
+	Metrics   MetricsConfig
+	CORS      CORSConfig
+	RateLimit RateLimitConfig
 }
 
 type StorageConfig struct {
-	ProgramsPath     string `yaml:"programs_path"`
-	HostProgramsPath string `yaml:"host_programs_path"` // путь на хосте для docker-in-docker
-	MaxFileSize      int64  `yaml:"max_file_size"`
+	ProgramsPath     string
+	HostProgramsPath string // путь на хосте для docker-in-docker
+	MaxFileSize      int64
 }
 
 type ServerConfig struct {
-	Port            int           `yaml:"port"`
-	ReadTimeout     time.Duration `yaml:"read_timeout"`
-	WriteTimeout    time.Duration `yaml:"write_timeout"`
-	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
-	BaseURL         string        `yaml:"base_url"` // для ссылок, напр. инвайты в команду
+	Port            int
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	ShutdownTimeout time.Duration
+	BaseURL         string // для ссылок, напр. инвайты в команду
 }
 
 type DatabaseConfig struct {
-	Host           string        `yaml:"host"`
-	Port           int           `yaml:"port"`
-	User           string        `yaml:"user"`
-	Password       string        `yaml:"password"`
-	Name           string        `yaml:"name"`
-	SSLMode        string        `yaml:"sslmode"`
-	MaxConnections int           `yaml:"max_connections"`
-	MaxIdle        int           `yaml:"max_idle"`
-	MaxLifetime    time.Duration `yaml:"max_lifetime"`
+	Host           string
+	Port           int
+	User           string
+	Password       string
+	Name           string
+	SSLMode        string
+	MaxConnections int
+	MaxIdle        int
+	MaxLifetime    time.Duration
 	// сколько месяцев хранить партиции matches/rating_history.
 	// 0 = не удаляем, чистка турнирных данных должна быть осознанной
-	PartitionRetentionMonths int `yaml:"partition_retention_months"`
+	PartitionRetentionMonths int
 }
 
 // DSN строка подключения к postgres в формате key=value
@@ -120,11 +120,11 @@ func (c DatabaseConfig) DSNURL() string {
 }
 
 type RedisConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-	PoolSize int    `yaml:"pool_size"`
+	Host     string
+	Port     int
+	Password string
+	DB       int
+	PoolSize int
 }
 
 func (c RedisConfig) Address() string {
@@ -132,62 +132,62 @@ func (c RedisConfig) Address() string {
 }
 
 type WorkerConfig struct {
-	MinWorkers        int           `yaml:"min_workers"`
-	MaxWorkers        int           `yaml:"max_workers"`
-	QueueSize         int           `yaml:"queue_size"`
-	Timeout           time.Duration `yaml:"timeout"`
-	RetryAttempts     int           `yaml:"retry_attempts"`
-	RetryDelay        time.Duration `yaml:"retry_delay"`
-	AutoScaleInterval time.Duration `yaml:"auto_scale_interval"` // как часто проверяем пул, 0 = 2s
+	MinWorkers        int
+	MaxWorkers        int
+	QueueSize         int
+	Timeout           time.Duration
+	RetryAttempts     int
+	RetryDelay        time.Duration
+	AutoScaleInterval time.Duration // как часто проверяем пул, 0 = 2s
 }
 
 type ExecutorConfig struct {
-	TJudgePath        string        `yaml:"tjudge_path"`
-	DockerImage       string        `yaml:"docker_image"`
-	Timeout           time.Duration `yaml:"timeout"`
-	CPUQuota          int64         `yaml:"cpu_quota"`    // микросекунды на 100ms
-	MemoryLimit       int64         `yaml:"memory_limit"` // в байтах
-	PidsLimit         int64         `yaml:"pids_limit"`
-	NetworkDisabled   bool          `yaml:"network_disabled"`
-	DefaultIterations int           `yaml:"default_iterations"`
-	Verbose           bool          `yaml:"verbose"`
-	SeccompProfile    string        `yaml:"seccomp_profile"`
-	AppArmorProfile   string        `yaml:"apparmor_profile"`
-	CPUSetCPUs        string        `yaml:"cpuset_cpus"` // привязка к ядрам, напр "0-3"
-	BuilderImage      string        `yaml:"builder_image"`
-	CompileTimeout    time.Duration `yaml:"compile_timeout"`
+	TJudgePath        string
+	DockerImage       string
+	Timeout           time.Duration
+	CPUQuota          int64 // микросекунды на 100ms
+	MemoryLimit       int64 // в байтах
+	PidsLimit         int64
+	NetworkDisabled   bool
+	DefaultIterations int
+	Verbose           bool
+	SeccompProfile    string
+	AppArmorProfile   string
+	CPUSetCPUs        string // привязка к ядрам, напр "0-3"
+	BuilderImage      string
+	CompileTimeout    time.Duration
 }
 
 type JWTConfig struct {
-	Secret     string        `yaml:"secret"`
-	AccessTTL  time.Duration `yaml:"access_ttl"`
-	RefreshTTL time.Duration `yaml:"refresh_ttl"`
+	Secret     string
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
 }
 
 type LoggingConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
-	Output string `yaml:"output"`
-	Async  bool   `yaml:"async"`
+	Level  string
+	Format string
+	Output string
+	Async  bool
 }
 
 type MetricsConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Port    int    `yaml:"port"`
-	Path    string `yaml:"path"`
+	Enabled bool
+	Port    int
+	Path    string
 }
 
 type CORSConfig struct {
-	AllowedOrigins []string `yaml:"allowed_origins"`
-	AllowedMethods []string `yaml:"allowed_methods"`
-	AllowedHeaders []string `yaml:"allowed_headers"`
-	MaxAge         int      `yaml:"max_age"`
+	AllowedOrigins []string
+	AllowedMethods []string
+	AllowedHeaders []string
+	MaxAge         int
 }
 
 type RateLimitConfig struct {
-	Enabled           bool `yaml:"enabled"`
-	RequestsPerMinute int  `yaml:"requests_per_minute"`
-	Burst             int  `yaml:"burst"`
+	Enabled           bool
+	RequestsPerMinute int
+	Burst             int
 }
 
 func (c *Config) Validate() error {
