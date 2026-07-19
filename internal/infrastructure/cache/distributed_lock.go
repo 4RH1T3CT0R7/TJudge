@@ -11,21 +11,19 @@ import (
 	"go.uber.org/zap"
 )
 
-// DistributedLock реализует distributed lock на Redis
+// DistributedLock - лок на редисе (redlock по мотивам redis.io)
 type DistributedLock struct {
 	cache *Cache
 }
 
-// NewDistributedLock создаёт новый distributed lock
 func NewDistributedLock(cache *Cache) *DistributedLock {
 	return &DistributedLock{
 		cache: cache,
 	}
 }
 
-// Lock пытается захватить блокировку
+// Lock захватывает лок через SETNX со своим токеном
 func (dl *DistributedLock) Lock(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	// Генерируем уникальный token для этой блокировки
 	token, err := generateToken()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate lock token: %w", err)
@@ -33,7 +31,6 @@ func (dl *DistributedLock) Lock(ctx context.Context, key string, ttl time.Durati
 
 	lockKey := fmt.Sprintf("lock:%s", key)
 
-	// Пытаемся установить блокировку с помощью SETNX
 	acquired, err := dl.cache.SetNX(ctx, lockKey, token, ttl)
 	if err != nil {
 		return "", fmt.Errorf("failed to acquire lock: %w", err)
@@ -46,7 +43,7 @@ func (dl *DistributedLock) Lock(ctx context.Context, key string, ttl time.Durati
 	return token, nil
 }
 
-// TryLock пытается захватить блокировку с повторными попытками
+// TryLock - Lock с ретраями
 func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Duration, maxAttempts int, retryDelay time.Duration) (string, error) {
 	var lastErr error
 
@@ -58,13 +55,12 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 
 		lastErr = err
 
-		// Если это не последняя попытка, ждём перед повторной попыткой
+		// после последней попытки не спим
 		if attempt < maxAttempts {
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
 			case <-time.After(retryDelay):
-				// Продолжаем
 			}
 		}
 	}
@@ -72,7 +68,7 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 	return "", fmt.Errorf("failed to acquire lock after %d attempts: %w", maxAttempts, lastErr)
 }
 
-// Unlock освобождает блокировку атомарно с помощью Lua скрипта
+// Unlock снимает лок атомарно через lua
 func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string) error {
 	lockKey := fmt.Sprintf("lock:%s", key)
 
@@ -91,10 +87,10 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 		return fmt.Errorf("failed to unlock: %w", err)
 	}
 
-	// result is 0 if token didn't match (or key already gone), 1 if deleted
+	// 0 = токен не наш или ключа уже нет, 1 = удалили
 	if val, ok := result.(int64); ok && val == 0 {
-		// Key was already gone or token mismatch -- not necessarily an error
-		// If key doesn't exist, it was already unlocked (TTL expired)
+		// если ключа нет - лок уже сняли (протух ttl), это ок.
+		// если ключ есть но токен не наш - кто-то другой держит лок
 		exists, err := dl.cache.Exists(ctx, lockKey)
 		if err != nil {
 			return fmt.Errorf("failed to check lock existence: %w", err)
@@ -102,57 +98,53 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 		if exists {
 			return errors.ErrConflict.WithMessage("lock token mismatch")
 		}
-		// Already unlocked -- safe no-op
 		return nil
 	}
 
 	return nil
 }
 
-// WithLock выполняет функцию с захваченной блокировкой.
-// A background goroutine renews the lock at ttl/3 intervals to prevent
-// expiry during long-running operations.
+// WithLock выполняет fn под локом. пока fn работает, фоновая горутина
+// продлевает лок каждые ttl/3 чтобы он не протух на долгой операции
 func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error {
-	// Захватываем блокировку
 	token, err := dl.TryLock(ctx, key, ttl, 3, 100*time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
-	// Start lock renewal goroutine.
 	renewCtx, renewCancel := context.WithCancel(ctx)
 	renewDone := make(chan struct{})
-	// #nosec G118 -- renewCtx derived from caller ctx, не Background. gosec
-	// false-positive (видит goroutine, но ctx реально request-scoped).
 	go dl.renewLoop(renewCtx, key, token, ttl, renewDone)
 
-	// Гарантируем освобождение блокировки
 	defer func() {
+		// сначала гасим продление и ЖДЁМ горутину, только потом снимаем лок,
+		// иначе renew может продлить лок уже после снятия
 		renewCancel()
-		<-renewDone // wait for renewal goroutine to exit
+		<-renewDone
 
+		// свой контекст, родительский к этому моменту может быть отменён
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		// Игнорируем ошибку разблокировки, так как основная операция уже выполнена
+		// ошибку тут глотаем, основная работа уже сделана
 		_ = dl.Unlock(unlockCtx, key, token)
 	}()
 
-	// Выполняем функцию
 	return fn(ctx)
 }
 
-// renewLoop periodically extends the lock TTL until the context is cancelled.
+// renewLoop продлевает ttl лока пока не отменят контекст
 func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token string, ttl time.Duration, done chan struct{}) {
 	defer close(done)
 
 	lockKey := fmt.Sprintf("lock:%s", key)
+	// 500мс - пол из экспериментов, чтобы на мелких ttl не молотить редис
 	interval := max(ttl/3, 500*time.Millisecond)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Lua script: only extend if we still own the lock
+	// продлеваем только если лок всё ещё наш
 	script := `
 		if redis.call("get", KEYS[1]) == ARGV[1] then
 			return redis.call("pexpire", KEYS[1], ARGV[2])
@@ -176,6 +168,7 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 					zap.Error(err),
 				)
 			} else if val, ok := result.(int64); ok && val == 0 {
+				// лок увели или он протух, продлевать больше нечего
 				dl.cache.log.Warn("Distributed lock lost (token mismatch or expired)",
 					zap.String("key", key),
 				)
@@ -185,7 +178,7 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 	}
 }
 
-// generateToken генерирует случайный токен для блокировки
+// generateToken - 16 случайных байт в hex
 func generateToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -194,7 +187,6 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// IsLocked проверяет, захвачена ли блокировка
 func (dl *DistributedLock) IsLocked(ctx context.Context, key string) (bool, error) {
 	lockKey := fmt.Sprintf("lock:%s", key)
 	return dl.cache.Exists(ctx, lockKey)
