@@ -76,7 +76,8 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string) error {
 	lockKey := fmt.Sprintf("lock:%s", key)
 
-	// Lua script atomically checks token and deletes if matching
+	// скрипт с redis.io, удаляет лок только если токен наш
+	// https://redis.io/docs/latest/develop/use/patterns/distributed-locks/
 	script := `
 		if redis.call("get", KEYS[1]) == ARGV[1] then
 			return redis.call("del", KEYS[1])
