@@ -7,20 +7,19 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
-// Cache оборачивает Redis клиент и добавляет метрики
 type Cache struct {
 	client  *redis.Client
 	log     *logger.Logger
 	metrics *metrics.Metrics
 }
 
-// New создаёт новое подключение к Redis
+// New - подключение к редису с ретраями (см. ниже)
 func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cache, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Address(),
@@ -29,11 +28,9 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 		PoolSize: cfg.PoolSize,
 	})
 
-	// Проверяем соединение с ретраями: после рестарта Redis отвечает
-	// LOADING (грузит AOF в память), при старте хоста может быть ещё
-	// недоступен. Это транзиентные состояния на секунды - ждать правильнее,
-	// чем мгновенно падать fatal'ом (роняло api/worker каскадом при
-	// каждом рестарте Redis).
+	// после рестарта редис отвечает LOADING пока грузит aof, или ещё не поднялся.
+	// это на пару секунд, поэтому ждём а не падаем сразу (иначе роняло api/worker
+	// каскадом на каждом рестарте редиса)
 	const (
 		connectTimeout = 60 * time.Second
 		retryInterval  = 2 * time.Second
@@ -72,7 +69,6 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 	}, nil
 }
 
-// Get получает значение по ключу
 func (c *Cache) Get(ctx context.Context, key string) (string, error) {
 	val, err := c.client.Get(ctx, key).Result()
 
@@ -90,7 +86,6 @@ func (c *Cache) Get(ctx context.Context, key string) (string, error) {
 	return val, nil
 }
 
-// Set устанавливает значение с TTL
 func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
 	err := c.client.Set(ctx, key, value, ttl).Err()
 	if err != nil {
@@ -100,7 +95,6 @@ func (c *Cache) Set(ctx context.Context, key string, value any, ttl time.Duratio
 	return nil
 }
 
-// Del удаляет ключ
 func (c *Cache) Del(ctx context.Context, keys ...string) error {
 	err := c.client.Del(ctx, keys...).Err()
 	if err != nil {
@@ -110,7 +104,6 @@ func (c *Cache) Del(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-// Exists проверяет существование ключа
 func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 	count, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -120,7 +113,6 @@ func (c *Cache) Exists(ctx context.Context, key string) (bool, error) {
 	return count > 0, nil
 }
 
-// Expire устанавливает TTL для ключа
 func (c *Cache) Expire(ctx context.Context, key string, ttl time.Duration) error {
 	err := c.client.Expire(ctx, key, ttl).Err()
 	if err != nil {
@@ -130,7 +122,7 @@ func (c *Cache) Expire(ctx context.Context, key string, ttl time.Duration) error
 	return nil
 }
 
-// Incr атомарно увеличивает значение ключа на 1. Создаёт ключ со значением 1 если не существует.
+// Incr - атомарный +1, создаёт ключ если не было
 func (c *Cache) Incr(ctx context.Context, key string) (int64, error) {
 	val, err := c.client.Incr(ctx, key).Result()
 	if err != nil {
@@ -140,7 +132,6 @@ func (c *Cache) Incr(ctx context.Context, key string) (int64, error) {
 	return val, nil
 }
 
-// ZAdd добавляет элемент в sorted set
 func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member string) error {
 	err := c.client.ZAdd(ctx, key, redis.Z{
 		Score:  score,
@@ -154,16 +145,14 @@ func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member stri
 	return nil
 }
 
-// ZAddBatchMember - один элемент для BatchZAdd.
+// ZAddBatchMember - элемент для BatchZAdd
 type ZAddBatchMember struct {
 	Key    string
 	Score  float64
 	Member string
 }
 
-// BatchZAdd добавляет N элементов через Redis-пайплайн за один RTT.
-// Используется для rating-апдейтов после матча (две ZADD за раз),
-// а также для массовых инвалидаций/перекачек.
+// BatchZAdd - N элементов одним пайплайном (рейтинг после матча кладёт две ZADD за раз)
 func (c *Cache) BatchZAdd(ctx context.Context, members []ZAddBatchMember) error {
 	if len(members) == 0 {
 		return nil
@@ -179,7 +168,6 @@ func (c *Cache) BatchZAdd(ctx context.Context, members []ZAddBatchMember) error 
 	return nil
 }
 
-// ZRevRangeWithScores получает элементы из sorted set в обратном порядке
 func (c *Cache) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) ([]redis.Z, error) {
 	result, err := c.client.ZRevRangeWithScores(ctx, key, start, stop).Result()
 
@@ -197,7 +185,6 @@ func (c *Cache) ZRevRangeWithScores(ctx context.Context, key string, start, stop
 	return result, nil
 }
 
-// ZIncrBy увеличивает score элемента в sorted set
 func (c *Cache) ZIncrBy(ctx context.Context, key string, increment float64, member string) error {
 	err := c.client.ZIncrBy(ctx, key, increment, member).Err()
 	if err != nil {
@@ -207,7 +194,6 @@ func (c *Cache) ZIncrBy(ctx context.Context, key string, increment float64, memb
 	return nil
 }
 
-// ZRem удаляет элемент из sorted set
 func (c *Cache) ZRem(ctx context.Context, key string, members ...string) error {
 	err := c.client.ZRem(ctx, key, members).Err()
 	if err != nil {
@@ -217,7 +203,6 @@ func (c *Cache) ZRem(ctx context.Context, key string, members ...string) error {
 	return nil
 }
 
-// LPush добавляет элемент в начало списка
 func (c *Cache) LPush(ctx context.Context, key string, values ...any) error {
 	err := c.client.LPush(ctx, key, values...).Err()
 	if err != nil {
@@ -227,7 +212,6 @@ func (c *Cache) LPush(ctx context.Context, key string, values ...any) error {
 	return nil
 }
 
-// RPop удаляет и возвращает последний элемент списка
 func (c *Cache) RPop(ctx context.Context, key string) (string, error) {
 	val, err := c.client.RPop(ctx, key).Result()
 	if stderrors.Is(err, redis.Nil) {
@@ -247,9 +231,8 @@ func (c *Cache) BRPop(ctx context.Context, timeout time.Duration, keys ...string
 		return nil, nil
 	}
 	if err != nil {
-		// Отмена контекста - штатный graceful shutdown (каждая заблокированная
-		// горутина пула получает cancel); не считаем ошибкой, чтобы не
-		// засыпать логи и доктора ложными "Redis BRPOP failed" на рестартах.
+		// отмена контекста - это штатный graceful shutdown (заблокированным
+		// горутинам пула прилетает cancel), не логируем чтобы не пугать доктора
 		if stderrors.Is(err, context.Canceled) {
 			return nil, err
 		}
@@ -259,7 +242,6 @@ func (c *Cache) BRPop(ctx context.Context, timeout time.Duration, keys ...string
 	return result, nil
 }
 
-// LLen возвращает длину списка
 func (c *Cache) LLen(ctx context.Context, key string) (int64, error) {
 	length, err := c.client.LLen(ctx, key).Result()
 	if err != nil {
@@ -269,7 +251,6 @@ func (c *Cache) LLen(ctx context.Context, key string) (int64, error) {
 	return length, nil
 }
 
-// LRange возвращает элементы списка в диапазоне [start, stop]
 func (c *Cache) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
 	result, err := c.client.LRange(ctx, key, start, stop).Result()
 	if err != nil {
@@ -279,7 +260,6 @@ func (c *Cache) LRange(ctx context.Context, key string, start, stop int64) ([]st
 	return result, nil
 }
 
-// LTrim обрезает список, оставляя только элементы в диапазоне [start, stop]
 func (c *Cache) LTrim(ctx context.Context, key string, start, stop int64) error {
 	err := c.client.LTrim(ctx, key, start, stop).Err()
 	if err != nil {
@@ -289,7 +269,7 @@ func (c *Cache) LTrim(ctx context.Context, key string, start, stop int64) error 
 	return nil
 }
 
-// SAdd добавляет элементы в множество (SET). Возвращает количество добавленных элементов.
+// SAdd - добавить в set, возвращает сколько новых
 func (c *Cache) SAdd(ctx context.Context, key string, members ...any) (int64, error) {
 	count, err := c.client.SAdd(ctx, key, members...).Result()
 	if err != nil {
@@ -299,8 +279,7 @@ func (c *Cache) SAdd(ctx context.Context, key string, members ...any) (int64, er
 	return count, nil
 }
 
-// SAddWithExpire атомарно добавляет элементы в множество и устанавливает TTL через Lua скрипт.
-// Возвращает количество новых добавленных элементов. TTL должен быть >= 1 секунды.
+// SAddWithExpire - добавить в set и выставить ttl одним lua, чтобы атомарно. ttl >= 1с
 func (c *Cache) SAddWithExpire(ctx context.Context, key string, ttl time.Duration, members ...any) (int64, error) {
 	if len(members) == 0 {
 		return 0, nil
@@ -334,7 +313,6 @@ return added
 	return count, nil
 }
 
-// SRem удаляет элементы из множества (SET)
 func (c *Cache) SRem(ctx context.Context, key string, members ...any) error {
 	err := c.client.SRem(ctx, key, members...).Err()
 	if err != nil {
@@ -344,7 +322,7 @@ func (c *Cache) SRem(ctx context.Context, key string, members ...any) error {
 	return nil
 }
 
-// SetNX устанавливает значение только если ключа не существует (для distributed locks)
+// SetNX - выставить только если ключа нет (нужно для локов)
 func (c *Cache) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
 	result, err := c.client.SetNX(ctx, key, value, ttl).Result()
 	if err != nil {
@@ -354,8 +332,7 @@ func (c *Cache) SetNX(ctx context.Context, key string, value any, ttl time.Durat
 	return result, nil
 }
 
-// BatchSetNX выполняет несколько SetNX операций через pipeline.
-// Возвращает map[key]bool, где true означает что ключ был создан (новый).
+// BatchSetNX - пачка SetNX пайплайном, true = ключ новый
 func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]any, ttl time.Duration) (map[string]bool, error) {
 	if len(keys) == 0 {
 		return nil, nil
@@ -368,8 +345,8 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]any, ttl time.Du
 	}
 
 	_, pipeErr := pipe.Exec(ctx)
-	// Даже при ошибке pipeline собираем индивидуальные результаты:
-	// часть команд могла успешно выполниться.
+	// даже если pipeline ошибся, собираем что успело выполниться -
+	// на этом держится откат dedup в очереди
 	results := make(map[string]bool, len(cmds))
 	for key, cmd := range cmds {
 		val, cmdErr := cmd.Result()
@@ -387,7 +364,6 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]any, ttl time.Du
 	return results, pipeErr
 }
 
-// Publish публикует сообщение в канал
 func (c *Cache) Publish(ctx context.Context, channel string, message any) error {
 	err := c.client.Publish(ctx, channel, message).Err()
 	if err != nil {
@@ -397,13 +373,11 @@ func (c *Cache) Publish(ctx context.Context, channel string, message any) error 
 	return nil
 }
 
-// Subscribe подписывается на канал
 func (c *Cache) Subscribe(ctx context.Context, channels ...string) *redis.PubSub {
 	return c.client.Subscribe(ctx, channels...)
 }
 
-// ReplaceList atomically replaces a list with the given values using MULTI/EXEC pipeline.
-// It deletes the key and then pushes all values back in a single transaction.
+// ReplaceList - целиком заменить список в одной транзакции (del + lpush в MULTI/EXEC)
 func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) error {
 	pipe := c.client.TxPipeline()
 	pipe.Del(ctx, key)
@@ -422,8 +396,7 @@ func (c *Cache) ReplaceList(ctx context.Context, key string, values [][]byte) er
 	return nil
 }
 
-// BatchLPush добавляет несколько элементов в разные списки одним pipeline-запросом.
-// items - map[key][]value, каждый value добавляется в список с ключом key.
+// BatchLPush - разложить значения по спискам одним пайплайном
 func (c *Cache) BatchLPush(ctx context.Context, items map[string][]any) error {
 	if len(items) == 0 {
 		return nil
@@ -443,7 +416,6 @@ func (c *Cache) BatchLPush(ctx context.Context, items map[string][]any) error {
 	return nil
 }
 
-// Health проверяет здоровье Redis
 func (c *Cache) Health(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -451,7 +423,6 @@ func (c *Cache) Health(ctx context.Context) error {
 	return c.client.Ping(ctx).Err()
 }
 
-// Eval выполняет Lua скрипт на Redis
 func (c *Cache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	result, err := c.client.Eval(ctx, script, keys, args...).Result()
 	if err != nil {
@@ -461,7 +432,6 @@ func (c *Cache) Eval(ctx context.Context, script string, keys []string, args ...
 	return result, nil
 }
 
-// Scan итеративно сканирует ключи Redis по паттерну
 func (c *Cache) Scan(ctx context.Context, cursor uint64, pattern string, count int64) ([]string, uint64, error) {
 	keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, count).Result()
 	if err != nil {
@@ -471,7 +441,6 @@ func (c *Cache) Scan(ctx context.Context, cursor uint64, pattern string, count i
 	return keys, nextCursor, nil
 }
 
-// Close закрывает соединение с Redis
 func (c *Cache) Close() error {
 	c.log.Info("Closing Redis connection")
 	return c.client.Close()
