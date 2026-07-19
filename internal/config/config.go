@@ -348,13 +348,12 @@ func Load() (*Config, error) {
 			MaxAge:         getEnvInt("CORS_MAX_AGE", 3600),
 		},
 		RateLimit: RateLimitConfig{
-			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // Disabled by default for development
+			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // в дев-режиме выключен
 			RequestsPerMinute: getEnvInt("RATE_LIMIT_RPM", 100),
 			Burst:             getEnvInt("RATE_LIMIT_BURST", 200),
 		},
 	}
 
-	// Валидируем конфигурацию
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
