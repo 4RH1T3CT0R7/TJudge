@@ -6,20 +6,18 @@ import (
 	"time"
 )
 
-// RateLimiter реализует rate limiting используя Redis
+// RateLimiter - rate limit на редисе
 type RateLimiter struct {
 	cache *Cache
 }
 
-// NewRateLimiter создаёт новый rate limiter
 func NewRateLimiter(cache *Cache) *RateLimiter {
 	return &RateLimiter{
 		cache: cache,
 	}
 }
 
-// Allow проверяет, разрешён ли запрос для данного ключа
-// Использует атомарный Lua скрипт с алгоритмом fixed window counter
+// Allow - fixed window: инкрементим счётчик, на первом запросе вешаем ttl окна
 func (rl *RateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	script := `
 		local current = redis.call("INCR", KEYS[1])
@@ -42,7 +40,7 @@ func (rl *RateLimiter) Allow(ctx context.Context, key string, limit int, window 
 	return count <= int64(limit), nil
 }
 
-// AllowWithIncr проверяет лимит используя атомарный Lua скрипт с INCRBY
+// AllowWithIncr - то же но через INCRBY (сейчас инкремент всегда 1)
 func (rl *RateLimiter) AllowWithIncr(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	script := `
 		local current = redis.call("INCRBY", KEYS[1], ARGV[2])
@@ -66,7 +64,6 @@ func (rl *RateLimiter) AllowWithIncr(ctx context.Context, key string, limit int,
 	return count <= int64(limit), nil
 }
 
-// Reset сбрасывает счётчик для ключа
 func (rl *RateLimiter) Reset(ctx context.Context, key string) error {
 	return rl.cache.Del(ctx, key)
 }
