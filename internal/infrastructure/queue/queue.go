@@ -9,14 +9,13 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
 
-// QueueManager управляет очередями матчей с приоритетами.
-// Использует weighted fair queueing для предотвращения starvation
-// очередей с низким приоритетом (соотношение 5:3:1 для HIGH:MEDIUM:LOW).
+// QueueManager - очереди матчей по приоритетам с ротацией 5:3:1,
+// чтобы low не голодала когда high постоянно забита
 type QueueManager struct {
 	cache             *cache.Cache
 	log               *logger.Logger
@@ -24,9 +23,7 @@ type QueueManager struct {
 	lastMetricsUpdate time.Time
 	metricsMu         sync.Mutex
 
-	// Weighted fair queueing: счётчик dequeue-операций для ротации приоритетов.
-	// Каждые 5 подряд выборок из HIGH переключаемся на MEDIUM (3 выборки),
-	// затем на LOW (1 выборка), после чего цикл повторяется.
+	// счётчик выборок для ротации приоритетов
 	dequeueMu    sync.Mutex
 	dequeueCount int
 }
@@ -105,16 +102,8 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 	return nil
 }
 
-// weightedQueueKeys возвращает ключи очередей, упорядоченные по приоритету
-// с учётом weighted fair queueing для предотвращения starvation.
-//
-// Цикл из 9 итераций (5+3+1):
-//   - Итерации 0-4: HIGH первый, порядок H, M, L
-//   - Итерации 5-7: MEDIUM первый, порядок M, H, L
-//   - Итерация 8:   LOW первый, порядок L, H, M
-//
-// Это гарантирует, что MEDIUM/LOW очереди проверяются первыми
-// как минимум 4/9 ≈ 44% времени, предотвращая starvation.
+// простая ротация чтобы low очередь не голодала:
+// 5 раз подряд смотрим сначала high, потом 3 раза сначала medium, потом 1 раз low
 func (qm *QueueManager) weightedQueueKeys() []string {
 	qm.dequeueMu.Lock()
 	pos := qm.dequeueCount % 9
@@ -220,18 +209,13 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 	return nil
 }
 
-// Dequeue извлекает матч из очереди с учётом приоритета.
-// Использует weighted fair queueing (5:3:1) для предотвращения starvation
-// очередей MEDIUM и LOW при постоянно заполненной HIGH.
+// Dequeue достаёт матч с учётом ротации 5:3:1
 func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
-	// Используем multi-key BRPOP с ротируемым порядком ключей
 	queueKeys := qm.weightedQueueKeys()
 
-	// Блокирующее чтение с таймаутом 2 секунды на все очереди сразу.
-	// BRPOP блокируется на стороне Redis, поэтому не тратит CPU воркера;
-	// увеличение таймаута с 1с до 2с уменьшает частоту idle-RTT при пустой
-	// очереди без ущерба для отзывчивости (BRPOP прерывается ctx-cancel
-	// и любым LPUSH в один из ключей).
+	// таймаут 2с (не 1) чтобы реже дёргать редис на пустой очереди.
+	// brpop блокируется на стороне редиса, cpu воркера не жрёт,
+	// прерывается по ctx-cancel и любым lpush в один из ключей
 	result, err := qm.cache.BRPop(ctx, 2*time.Second, queueKeys...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dequeue match: %w", err)
