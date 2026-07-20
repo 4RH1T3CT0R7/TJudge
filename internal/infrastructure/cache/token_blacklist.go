@@ -6,19 +6,16 @@ import (
 	"time"
 )
 
-// TokenBlacklistCache управляет чёрным списком токенов
 type TokenBlacklistCache struct {
 	cache *Cache
 }
 
-// NewTokenBlacklistCache создаёт новый кэш чёрного списка токенов
 func NewTokenBlacklistCache(cache *Cache) *TokenBlacklistCache {
 	return &TokenBlacklistCache{
 		cache: cache,
 	}
 }
 
-// Add добавляет токен в чёрный список
 func (tbc *TokenBlacklistCache) Add(ctx context.Context, token string, ttl time.Duration) error {
 	key := fmt.Sprintf("blacklist:token:%s", token)
 
@@ -30,7 +27,6 @@ func (tbc *TokenBlacklistCache) Add(ctx context.Context, token string, ttl time.
 	return nil
 }
 
-// IsBlacklisted проверяет, находится ли токен в чёрном списке
 func (tbc *TokenBlacklistCache) IsBlacklisted(ctx context.Context, token string) (bool, error) {
 	key := fmt.Sprintf("blacklist:token:%s", token)
 
@@ -42,9 +38,8 @@ func (tbc *TokenBlacklistCache) IsBlacklisted(ctx context.Context, token string)
 	return exists, nil
 }
 
-// AddIfNotExists атомарно добавляет токен в чёрный список только если его там нет.
-// Возвращает true если токен был добавлен (новый), false если уже существовал.
-// Используется для token rotation: предотвращает TOCTOU race condition.
+// AddIfNotExists кладёт токен только если его ещё нет, атомарно через setnx.
+// true = добавили. нужно для ротации токенов, иначе TOCTOU-гонка
 func (tbc *TokenBlacklistCache) AddIfNotExists(ctx context.Context, token string, ttl time.Duration) (bool, error) {
 	key := fmt.Sprintf("blacklist:token:%s", token)
 
@@ -56,7 +51,7 @@ func (tbc *TokenBlacklistCache) AddIfNotExists(ctx context.Context, token string
 	return wasSet, nil
 }
 
-// Remove удаляет токен из чёрного списка (для тестов или администрирования)
+// Remove - для тестов/админки
 func (tbc *TokenBlacklistCache) Remove(ctx context.Context, token string) error {
 	key := fmt.Sprintf("blacklist:token:%s", token)
 
