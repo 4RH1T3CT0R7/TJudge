@@ -215,17 +215,16 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 		return nil, nil
 	}
 
-	// result[0] содержит имя очереди, result[1] - данные
+	// result[0] - имя очереди, result[1] - данные
 	var match domain.Match
 	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
-		// Push to dead-letter queue for manual inspection
+		// битый json - в dead-letter, разберёмся руками потом
 		deadLetterKey := "queue:dead_letter"
 		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
 			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
 		} else {
 			qm.metrics.RecordQueueDeadLetterPush("unmarshal_error")
-			// Cap dead-letter queue to 1000 entries and set 7-day TTL.
-			// Логируем ошибки вместо тихого игнора и обновляем gauge-метрику.
+			// держим dead-letter не больше 1000 записей и 7 дней
 			if trimErr := qm.cache.LTrim(ctx, deadLetterKey, 0, 999); trimErr != nil {
 				qm.log.Error("Failed to LTRIM dead-letter queue",
 					zap.Error(trimErr),
@@ -242,7 +241,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 				qm.metrics.SetQueueDeadLetterSize(size)
 			}
 		}
-		// Truncate raw data for logging to prevent log injection
+		// обрезаем сырые данные в логе, а то мало ли что там (log injection)
 		rawData := result[1]
 		if len(rawData) > 1024 {
 			rawData = rawData[:1024] + "...(truncated)"
@@ -300,7 +299,7 @@ func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
-// updateQueueSizeMetrics обновляет метрики размеров очередей (max once per second)
+// updateQueueSizeMetrics - обновляем гейджи размеров, не чаще раза в секунду
 func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 	qm.metricsMu.Lock()
 	if time.Since(qm.lastMetricsUpdate) < time.Second {
@@ -327,14 +326,13 @@ func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 		qm.metrics.SetQueueSize(string(priority), int(size))
 	}
 
-	// Обновляем метрику размера dead-letter очереди.
-	// Ошибка здесь не критична: просто не обновим gauge.
+	// заодно размер dead-letter, если не вышло - ну и ладно
 	if dlSize, err := qm.cache.LLen(ctx, "queue:dead_letter"); err == nil {
 		qm.metrics.SetQueueDeadLetterSize(dlSize)
 	}
 }
 
-// Clear очищает все очереди
+// Clear - снести все очереди (админка)
 func (qm *QueueManager) Clear(ctx context.Context) error {
 	priorities := []domain.MatchPriority{
 		domain.PriorityHigh,
@@ -349,7 +347,7 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 		}
 	}
 
-	// Очищаем dedup-ключи по паттерну
+	// и dedup-ключи заодно
 	if err := qm.clearDedupKeys(ctx); err != nil {
 		return fmt.Errorf("failed to clear dedup keys: %w", err)
 	}
@@ -358,15 +356,9 @@ func (qm *QueueManager) Clear(ctx context.Context) error {
 	return nil
 }
 
-// clearDedupKeys удаляет все dedup-ключи по паттерну queue:dedup:*.
-//
-// В нормальном режиме dedup-ключи имеют независимый TTL (24h) через SetNX,
-// так что фоновой очистки не требуется. Этот метод вызывается ТОЛЬКО из
-// admin-action `Clear()`, который форс-очищает все очереди.
-//
-// Ограничение: максимум 10000 итераций SCAN (1M ключей при COUNT=100),
-// защита от бесконечного цикла при corrupted cursor или очень больших сетах.
-// В нормальной ситуации ключей будет не больше размера очередей * 2.
+// clearDedupKeys сносит все ключи queue:dedup:* сканом.
+// TODO: почистить старые dedup ключи? вроде ttl (24h) и так справляется,
+// метод дёргается только из Clear() (админка). cap 10000 итераций от greedy-цикла
 func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 	const maxIterations = 10000
 	var cursor uint64
@@ -385,22 +377,19 @@ func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 			return nil
 		}
 	}
-	// Достигли safety cap: логируем, чтобы оператор заметил, но не возвращаем error.
-	// Уже удалённые ключи останутся удалёнными, оставшиеся сами expire через TTL.
+	// упёрлись в лимит итераций, что удалили - удалили, остальное само протухнет по ttl
 	qm.log.Warn("clearDedupKeys hit max iterations, остановлено для безопасности",
 		zap.Int("max_iterations", maxIterations),
 	)
 	return nil
 }
 
-// Health проверяет здоровье очередей
 func (qm *QueueManager) Health(ctx context.Context) error {
-	// Проверяем, что можем получить размеры очередей
 	_, err := qm.GetTotalQueueSize(ctx)
 	return err
 }
 
-// QueueStats статистика очередей
+// QueueStats - размеры очередей для админки
 type QueueStats struct {
 	High   int64 `json:"high"`
 	Medium int64 `json:"medium"`
@@ -408,7 +397,6 @@ type QueueStats struct {
 	Total  int64 `json:"total"`
 }
 
-// GetStats возвращает статистику всех очередей
 func (qm *QueueManager) GetStats(ctx context.Context) (*QueueStats, error) {
 	stats := &QueueStats{}
 
@@ -434,13 +422,11 @@ func (qm *QueueManager) GetStats(ctx context.Context) (*QueueStats, error) {
 	return stats, nil
 }
 
-// GetDeadLetterSize возвращает размер dead-letter очереди.
 func (qm *QueueManager) GetDeadLetterSize(ctx context.Context) (int64, error) {
 	return qm.cache.LLen(ctx, "queue:dead_letter")
 }
 
-// ClearDeadLetter очищает dead-letter очередь (повреждённые задачи, которые
-// невозможно распарсить и повторить). Возвращает число удалённых записей.
+// ClearDeadLetter чистит dead-letter, возвращает сколько удалили
 func (qm *QueueManager) ClearDeadLetter(ctx context.Context) (int64, error) {
 	size, err := qm.cache.LLen(ctx, "queue:dead_letter")
 	if err != nil {
@@ -453,9 +439,7 @@ func (qm *QueueManager) ClearDeadLetter(ctx context.Context) (int64, error) {
 	return size, nil
 }
 
-// PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД
-// Принимает функцию-валидатор, которая проверяет существование матча
-// Возвращает количество удалённых матчей
+// PurgeInvalidMatches выкидывает из очередей матчи которых уже нет в бд (валидатор проверяет)
 func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error) {
 	var purged int64
 
@@ -483,15 +467,12 @@ func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(
 	return purged, nil
 }
 
-// purgeQueueInvalidMatches очищает одну очередь от невалидных матчей.
-// Существует небольшое окно между LRange и ReplaceList, в котором новые
-// добавленные элементы могут быть потеряны. Это допустимо, так как purge
-// является admin-only операцией и не должен выполняться во время активной
-// обработки матчей.
+// purgeQueueInvalidMatches чистит одну очередь.
+// между LRange и ReplaceList есть окно где новые элементы могут потеряться,
+// но purge это админка и не гоняется во время активной обработки, так что ок
 func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority domain.MatchPriority, validator func(matchID string) bool) (int64, error) {
 	queueKey := qm.getQueueKey(priority)
 
-	// Получаем все элементы очереди
 	items, err := qm.cache.LRange(ctx, queueKey, 0, -1)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get queue items: %w", err)
@@ -501,7 +482,7 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 		return 0, nil
 	}
 
-	// Собираем валидные матчи
+	// оставляем только те что есть в бд
 	var validMatches [][]byte
 	var purgedCount int64
 
@@ -513,7 +494,6 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 			continue
 		}
 
-		// Проверяем существование матча
 		if validator(match.ID.String()) {
 			data, mErr := json.Marshal(match)
 			if mErr != nil {
@@ -525,13 +505,13 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 		}
 	}
 
-	// Если ничего не изменилось - выходим
+	// ничего не выкинули - и не трогаем очередь
 	if purgedCount == 0 {
 		return 0, nil
 	}
 
-	// Atomically replace the queue: DEL + LPUSH in a single MULTI/EXEC transaction.
-	// Reverse the order so that after LPUSH the queue preserves the original ordering.
+	// заменяем очередь целиком в одной транзакции. разворачиваем порядок,
+	// чтобы после lpush он остался как был
 	reversed := make([][]byte, len(validMatches))
 	for i, v := range validMatches {
 		reversed[len(validMatches)-1-i] = v
