@@ -12,30 +12,24 @@ import (
 	"go.uber.org/zap"
 )
 
-// compileQueueKey - Redis-ключ очереди задач компиляции программ.
 const compileQueueKey = "queue:compile"
 
-// CompileTask - задача компиляции программы в Docker-песочнице.
 type CompileTask struct {
 	ProgramID uuid.UUID `json:"program_id"`
 }
 
-// CompileQueue - очередь задач компиляции на Redis (LPUSH/BRPOP).
-//
-// Потеря задачи (падение Redis, краш между созданием программы и enqueue)
-// не фатальна: compile-worker периодически возвращает в очередь программы,
-// зависшие в статусе compiling (ProgramRepository.GetStuckCompiling).
+// CompileQueue - простая очередь компиляции на редисе (lpush/brpop).
+// потеря задачи не страшна: compile-worker периодически подбирает программы
+// зависшие в compiling (GetStuckCompiling), так что подстрахованы
 type CompileQueue struct {
 	cache *cache.Cache
 	log   *logger.Logger
 }
 
-// NewCompileQueue создаёт очередь компиляции.
 func NewCompileQueue(c *cache.Cache, log *logger.Logger) *CompileQueue {
 	return &CompileQueue{cache: c, log: log}
 }
 
-// Enqueue добавляет задачу компиляции в очередь.
 func (q *CompileQueue) Enqueue(ctx context.Context, programID uuid.UUID) error {
 	payload, err := json.Marshal(CompileTask{ProgramID: programID})
 	if err != nil {
