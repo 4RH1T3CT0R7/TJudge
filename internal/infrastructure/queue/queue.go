@@ -42,30 +42,27 @@ func (qm *QueueManager) getQueueKey(priority domain.MatchPriority) string {
 	return fmt.Sprintf("queue:%s", priority)
 }
 
-// dedupPrefix is the key prefix for per-match deduplication keys.
-// Each match gets its own key "queue:dedup:{matchID}" with an independent TTL,
-// preventing the old shared-SET problem where active queues reset the TTL
-// for ALL entries on every SADD, causing unbounded growth.
+// на каждый матч свой ключ дедупа со своим ttl.
+// раньше был один общий SET и ttl обновлялся сразу на всех при каждом SADD,
+// ключи копились без конца. теперь у каждого матча свой ключ
 const dedupPrefix = "queue:dedup:"
 
-// dedupTTL is the TTL for each individual deduplication key
 const dedupTTL = 24 * time.Hour
 
-// dedupKeyFor returns the per-match deduplication key
 func dedupKeyFor(matchID string) string {
 	return dedupPrefix + matchID
 }
 
-// Enqueue добавляет матч в очередь с учётом приоритета
+// Enqueue кладёт матч в очередь по его приоритету
 func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error {
-	// Атомарно проверяем дедупликацию: SetNX создаёт ключ только если его нет
+	// setnx создаёт ключ дедупа только если его ещё нет
 	matchIDStr := match.ID.String()
 	isNew, err := qm.cache.SetNX(ctx, dedupKeyFor(matchIDStr), "1", dedupTTL)
 	if err != nil {
 		qm.log.LogError("Failed to check dedup key", err,
 			zap.String("match_id", matchIDStr),
 		)
-		// Продолжаем даже при ошибке дедупликации: лучше дублировать, чем потерять
+		// на ошибке дедупа не падаем - лучше дубль чем потерять матч
 	} else if !isNew {
 		qm.log.Info("Match already enqueued, skipping",
 			zap.String("match_id", matchIDStr),
@@ -73,16 +70,14 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 		return nil
 	}
 
-	// Сериализуем матч
 	data, err := json.Marshal(match)
 	if err != nil {
 		return fmt.Errorf("failed to marshal match: %w", err)
 	}
 
-	// Добавляем в соответствующую очередь
 	queueKey := qm.getQueueKey(match.Priority)
 	if err := qm.cache.LPush(ctx, queueKey, data); err != nil {
-		// Откатываем запись в dedup, так как матч не был добавлен в очередь
+		// lpush упал - откатываем дедуп, иначе матч навсегда "в очереди" и не переставится
 		if delErr := qm.cache.Del(ctx, dedupKeyFor(matchIDStr)); delErr != nil {
 			qm.log.LogError("Failed to rollback dedup entry on enqueue failure", delErr,
 				zap.String("match_id", matchIDStr),
@@ -91,7 +86,6 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error 
 		return fmt.Errorf("failed to enqueue match: %w", err)
 	}
 
-	// Обновляем метрики
 	qm.updateQueueSizeMetrics(ctx)
 
 	qm.log.Info("Match enqueued",
@@ -124,16 +118,13 @@ func (qm *QueueManager) weightedQueueKeys() []string {
 	}
 }
 
-// EnqueueBatch добавляет несколько матчей в очереди.
-// Использует Redis pipeline для batch dedup-проверки (один RTT вместо N).
-// Финальный LPUSH также выполняется pipeline-запросом.
-// При ошибке BatchLPush записи в dedup откатываются.
+// EnqueueBatch - то же самое но пачкой, дедуп и lpush одним пайплайном
 func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
 
-	// Batch dedup-проверка через pipeline (один RTT вместо N)
+	// batch-дедуп одним RTT вместо N
 	dedupKeys := make(map[string]any, len(matches))
 	for _, match := range matches {
 		dedupKeys[dedupKeyFor(match.ID.String())] = "1"
@@ -142,7 +133,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 	dedupResults, err := qm.cache.BatchSetNX(ctx, dedupKeys, dedupTTL)
 	if err != nil {
 		qm.log.LogError("Failed batch dedup check, enqueuing all matches", err)
-		// Cleanup any partially-set dedup keys before falling through
+		// подчищаем что успело выставиться и валим всё в очередь без дедупа
 		for key := range dedupKeys {
 			_ = qm.cache.Del(ctx, key)
 		}
@@ -155,7 +146,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 
 	for _, match := range matches {
 		key := dedupKeyFor(match.ID.String())
-		// Если pipeline работал, проверяем результат, иначе пропускаем dedup
+		// если пайплайн отработал - смотрим результат, иначе дедуп пропускаем
 		if dedupResults != nil {
 			isNew, ok := dedupResults[key]
 			if ok && !isNew {
@@ -183,10 +174,8 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 		return nil
 	}
 
-	// Batch LPUSH через pipeline
 	if err := qm.cache.BatchLPush(ctx, grouped); err != nil {
-		// Откатываем записи в dedup, иначе матчи будут считаться
-		// "уже в очереди" хотя реально туда не попали
+		// тот же откат что в Enqueue, только пачкой
 		for _, dedupKey := range addedToDedup {
 			if delErr := qm.cache.Del(ctx, dedupKey); delErr != nil {
 				qm.log.LogError("Failed to rollback dedup entry on batch enqueue failure", delErr,
