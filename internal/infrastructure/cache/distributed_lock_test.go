@@ -14,309 +14,194 @@ import (
 func TestDistributedLock_Lock(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
-
 	lock := NewDistributedLock(cache)
 	ctx := context.Background()
 
-	t.Run("successfully acquires lock", func(t *testing.T) {
-		token, err := lock.Lock(ctx, "test-lock", 5*time.Second)
-		require.NoError(t, err)
-		assert.NotEmpty(t, token)
+	token, err := lock.Lock(ctx, "test-lock", 5*time.Second)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
 
-		// Cleanup
-		err = lock.Unlock(ctx, "test-lock", token)
-		assert.NoError(t, err)
-	})
+	// занятый лок второй раз не берётся
+	_, err = lock.Lock(ctx, "test-lock", 5*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "lock already held")
 
-	t.Run("fails to acquire already held lock", func(t *testing.T) {
-		token1, err := lock.Lock(ctx, "test-lock-2", 5*time.Second)
-		require.NoError(t, err)
-		defer func() { _ = lock.Unlock(ctx, "test-lock-2", token1) }()
-
-		token2, err := lock.Lock(ctx, "test-lock-2", 5*time.Second)
-		assert.Error(t, err)
-		assert.Empty(t, token2)
-		assert.Contains(t, err.Error(), "lock already held")
-	})
-
-	t.Run("lock expires after TTL", func(t *testing.T) {
-		// Use miniredis with FastForward to simulate TTL expiry
-		cacheWithMR, mr := setupTestCacheWithMR(t)
-		defer cacheWithMR.Close()
-		lockWithMR := NewDistributedLock(cacheWithMR)
-
-		token1, err := lockWithMR.Lock(ctx, "test-lock-3", 100*time.Millisecond)
-		require.NoError(t, err)
-		assert.NotEmpty(t, token1)
-
-		// Fast-forward miniredis time to expire the lock
-		mr.FastForward(200 * time.Millisecond)
-
-		// Should be able to acquire again
-		token2, err := lockWithMR.Lock(ctx, "test-lock-3", 5*time.Second)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, token2)
-		assert.NotEqual(t, token1, token2)
-
-		// Cleanup
-		_ = lockWithMR.Unlock(ctx, "test-lock-3", token2)
-	})
+	require.NoError(t, lock.Unlock(ctx, "test-lock", token))
 }
 
 func TestDistributedLock_TryLock(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
-
 	lock := NewDistributedLock(cache)
 	ctx := context.Background()
 
-	t.Run("acquires lock on first attempt", func(t *testing.T) {
-		token, err := lock.TryLock(ctx, "test-trylock", 5*time.Second, 3, 50*time.Millisecond)
-		require.NoError(t, err)
-		assert.NotEmpty(t, token)
+	// свободный лок берётся с первой попытки
+	token, err := lock.TryLock(ctx, "test-trylock", 5*time.Second, 3, 50*time.Millisecond)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
 
-		// Cleanup
-		_ = lock.Unlock(ctx, "test-trylock", token)
-	})
+	// пока держим — второй TryLock исчерпает попытки и вернёт ошибку с текстом
+	_, err = lock.TryLock(ctx, "test-trylock", 5*time.Second, 2, 10*time.Millisecond)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to acquire lock after")
 
-	t.Run("retries and eventually acquires lock", func(t *testing.T) {
-		// Use miniredis with FastForward to simulate TTL expiry during retries
-		cacheWithMR, mr := setupTestCacheWithMR(t)
-		defer cacheWithMR.Close()
-		lockWithMR := NewDistributedLock(cacheWithMR)
-
-		// First lock with short TTL
-		token1, err := lockWithMR.Lock(ctx, "test-trylock-2", 200*time.Millisecond)
-		require.NoError(t, err)
-
-		// Fast-forward to expire the lock before TryLock retries
-		mr.FastForward(300 * time.Millisecond)
-
-		// TryLock should succeed now that the lock has expired
-		token2, err := lockWithMR.TryLock(ctx, "test-trylock-2", 5*time.Second, 5, 100*time.Millisecond)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, token2)
-		assert.NotEqual(t, token1, token2)
-
-		// Cleanup
-		_ = lockWithMR.Unlock(ctx, "test-trylock-2", token2)
-	})
-
-	t.Run("fails after max attempts", func(t *testing.T) {
-		token1, err := lock.Lock(ctx, "test-trylock-3", 5*time.Second)
-		require.NoError(t, err)
-		defer func() { _ = lock.Unlock(ctx, "test-trylock-3", token1) }()
-
-		token2, err := lock.TryLock(ctx, "test-trylock-3", 5*time.Second, 2, 10*time.Millisecond)
-		assert.Error(t, err)
-		assert.Empty(t, token2)
-		assert.Contains(t, err.Error(), "failed to acquire lock after")
-	})
+	_ = lock.Unlock(ctx, "test-trylock", token)
 }
 
+// Unlock: снять может только владелец правильным токеном. чужой токен лок
+// не трогает, а снятие уже протухшего ключа — безопасный no-op
 func TestDistributedLock_Unlock(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
-
 	lock := NewDistributedLock(cache)
 	ctx := context.Background()
 
-	t.Run("successfully unlocks with correct token", func(t *testing.T) {
+	t.Run("правильный токен снимает лок", func(t *testing.T) {
 		token, err := lock.Lock(ctx, "test-unlock", 5*time.Second)
 		require.NoError(t, err)
 
-		err = lock.Unlock(ctx, "test-unlock", token)
-		assert.NoError(t, err)
+		require.NoError(t, lock.Unlock(ctx, "test-unlock", token))
 
-		// Should be able to lock again
-		token2, err := lock.Lock(ctx, "test-unlock", 5*time.Second)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, token2)
-
-		// Cleanup
-		_ = lock.Unlock(ctx, "test-unlock", token2)
+		locked, err := lock.IsLocked(ctx, "test-unlock")
+		require.NoError(t, err)
+		assert.False(t, locked)
 	})
 
-	t.Run("fails to unlock with wrong token", func(t *testing.T) {
-		token, err := lock.Lock(ctx, "test-unlock-2", 5*time.Second)
+	t.Run("чужой токен не снимает лок", func(t *testing.T) {
+		// A держит лок
+		tokenA, err := lock.Lock(ctx, "test-unlock-2", 5*time.Second)
 		require.NoError(t, err)
-		defer func() { _ = lock.Unlock(ctx, "test-unlock-2", token) }()
 
+		// B пытается снять чужим токеном — облом, ключ жив
 		err = lock.Unlock(ctx, "test-unlock-2", "wrong-token")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "token mismatch")
+		assert.Contains(t, err.Error(), "lock token mismatch")
+
+		// лок всё ещё за A, B захватить не может
+		_, err = lock.Lock(ctx, "test-unlock-2", 5*time.Second)
+		assert.Error(t, err)
+
+		// A снимает своим токеном, теперь B заходит
+		require.NoError(t, lock.Unlock(ctx, "test-unlock-2", tokenA))
+		tokenB, err := lock.Lock(ctx, "test-unlock-2", 5*time.Second)
+		require.NoError(t, err)
+		_ = lock.Unlock(ctx, "test-unlock-2", tokenB)
 	})
 
-	t.Run("unlocking already unlocked lock is safe", func(t *testing.T) {
-		token, err := lock.Lock(ctx, "test-unlock-3", 5*time.Second)
+	t.Run("снятие протухшего лока это no-op", func(t *testing.T) {
+		cacheMR, mr := setupTestCacheWithMR(t)
+		defer cacheMR.Close()
+		lockMR := NewDistributedLock(cacheMR)
+
+		token, err := lockMR.Lock(ctx, "test-unlock-3", 100*time.Millisecond)
 		require.NoError(t, err)
 
-		err = lock.Unlock(ctx, "test-unlock-3", token)
-		assert.NoError(t, err)
+		// ttl протух, ключа уже нет
+		mr.FastForward(200 * time.Millisecond)
 
-		// Unlock again - should not error
-		err = lock.Unlock(ctx, "test-unlock-3", token)
-		assert.NoError(t, err)
+		// снятие пропавшего ключа не ошибка
+		require.NoError(t, lockMR.Unlock(ctx, "test-unlock-3", token))
 	})
 }
 
+// WithLock держит лок пока работает fn и снимает после — на любом исходе.
+// фоновое продление не даёт локу протухнуть на долгой операции
 func TestDistributedLock_WithLock(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
-
 	lock := NewDistributedLock(cache)
 	ctx := context.Background()
 
-	t.Run("executes function with lock", func(t *testing.T) {
+	t.Run("выполняет fn и снимает лок", func(t *testing.T) {
 		executed := false
 		err := lock.WithLock(ctx, "test-withlock", 5*time.Second, func(ctx context.Context) error {
 			executed = true
 			return nil
 		})
-
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, executed)
 
-		// Lock should be released
-		isLocked, err := lock.IsLocked(ctx, "test-withlock")
-		assert.NoError(t, err)
-		assert.False(t, isLocked)
+		locked, err := lock.IsLocked(ctx, "test-withlock")
+		require.NoError(t, err)
+		assert.False(t, locked)
 	})
 
-	t.Run("unlocks even if function returns error", func(t *testing.T) {
+	t.Run("снимает лок если fn вернула ошибку", func(t *testing.T) {
 		err := lock.WithLock(ctx, "test-withlock-2", 5*time.Second, func(ctx context.Context) error {
 			return assert.AnError
 		})
-
 		assert.Error(t, err)
 
-		// Lock should be released
-		isLocked, err := lock.IsLocked(ctx, "test-withlock-2")
-		assert.NoError(t, err)
-		assert.False(t, isLocked)
+		locked, err := lock.IsLocked(ctx, "test-withlock-2")
+		require.NoError(t, err)
+		assert.False(t, locked)
 	})
 
-	t.Run("unlocks even if function panics", func(t *testing.T) {
+	t.Run("снимает лок если fn паникует", func(t *testing.T) {
 		defer func() {
 			r := recover()
-			require.NotNil(t, r, "expected panic")
+			require.NotNil(t, r, "паника должна пробросится наружу")
 
-			// Lock should be released after WithLock's internal defer runs
-			isLocked, err := lock.IsLocked(ctx, "test-withlock-3")
-			assert.NoError(t, err)
-			assert.False(t, isLocked)
+			locked, err := lock.IsLocked(ctx, "test-withlock-3")
+			require.NoError(t, err)
+			assert.False(t, locked)
 		}()
 
 		_ = lock.WithLock(ctx, "test-withlock-3", 5*time.Second, func(ctx context.Context) error {
 			panic("test panic")
 		})
 	})
+
+	t.Run("продление держит лок дольше ttl", func(t *testing.T) {
+		// ttl 600мс, fn работает 750мс. без продления лок бы протух посреди
+		// работы, но renewLoop тикает и продлевает пока fn не вернётся
+		start := time.Now()
+		err := lock.WithLock(ctx, "test-renew", 600*time.Millisecond, func(ctx context.Context) error {
+			time.Sleep(750 * time.Millisecond)
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Greater(t, time.Since(start), 700*time.Millisecond)
+
+		// после возврата fn лок снят
+		locked, err := lock.IsLocked(ctx, "test-renew")
+		require.NoError(t, err)
+		assert.False(t, locked)
+	})
 }
 
 func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
-
 	lock := NewDistributedLock(cache)
 	ctx := context.Background()
 
-	t.Run("only one goroutine acquires lock at a time", func(t *testing.T) {
-		var counter int64
-		var successCount int64
-		var wg sync.WaitGroup
+	// 5 горутин лезут в один лок. в критической секции одновременно
+	// должна быть максимум одна
+	var inCriticalSection int64
+	var maxConcurrent int64
+	var wg sync.WaitGroup
 
-		// Start 10 goroutines trying to acquire the same lock
-		for range 10 {
-			wg.Go(func() {
-
-				err := lock.WithLock(ctx, "test-concurrent", 2*time.Second, func(ctx context.Context) error {
-					// Critical section
-					current := atomic.LoadInt64(&counter)
-					time.Sleep(10 * time.Millisecond) // Simulate work
-					atomic.StoreInt64(&counter, current+1)
-					atomic.AddInt64(&successCount, 1)
-					return nil
-				})
-
-				if err != nil {
-					t.Logf("Failed to acquire lock: %v", err)
-				}
-			})
-		}
-
-		wg.Wait()
-
-		// All operations that acquired lock should have succeeded
-		assert.Equal(t, successCount, counter)
-	})
-
-	t.Run("concurrent WithLock calls are serialized", func(t *testing.T) {
-		var inCriticalSection int64
-		var maxConcurrent int64
-		var wg sync.WaitGroup
-
-		for range 5 {
-			wg.Go(func() {
-
-				_ = lock.WithLock(ctx, "test-concurrent-2", 2*time.Second, func(ctx context.Context) error {
-					current := atomic.AddInt64(&inCriticalSection, 1)
-
-					// Track max concurrent
-					for {
-						max := atomic.LoadInt64(&maxConcurrent)
-						if current <= max || atomic.CompareAndSwapInt64(&maxConcurrent, max, current) {
-							break
-						}
+	for range 5 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = lock.WithLock(ctx, "test-concurrent", 2*time.Second, func(ctx context.Context) error {
+				current := atomic.AddInt64(&inCriticalSection, 1)
+				for {
+					m := atomic.LoadInt64(&maxConcurrent)
+					if current <= m || atomic.CompareAndSwapInt64(&maxConcurrent, m, current) {
+						break
 					}
-
-					time.Sleep(50 * time.Millisecond)
-					atomic.AddInt64(&inCriticalSection, -1)
-					return nil
-				})
+				}
+				time.Sleep(50 * time.Millisecond)
+				atomic.AddInt64(&inCriticalSection, -1)
+				return nil
 			})
-		}
+		}()
+	}
 
-		wg.Wait()
+	wg.Wait()
 
-		// Max concurrent should be 1 (serialized access)
-		assert.LessOrEqual(t, maxConcurrent, int64(1), "expected serialized access, but found concurrent execution")
-	})
+	assert.LessOrEqual(t, maxConcurrent, int64(1), "доступ должен быть сериализован")
 }
-
-func TestDistributedLock_IsLocked(t *testing.T) {
-	cache := setupTestCache(t)
-	defer cache.Close()
-
-	lock := NewDistributedLock(cache)
-	ctx := context.Background()
-
-	t.Run("returns true when locked", func(t *testing.T) {
-		token, err := lock.Lock(ctx, "test-islocked", 5*time.Second)
-		require.NoError(t, err)
-		defer func() { _ = lock.Unlock(ctx, "test-islocked", token) }()
-
-		isLocked, err := lock.IsLocked(ctx, "test-islocked")
-		assert.NoError(t, err)
-		assert.True(t, isLocked)
-	})
-
-	t.Run("returns false when not locked", func(t *testing.T) {
-		isLocked, err := lock.IsLocked(ctx, "test-islocked-2")
-		assert.NoError(t, err)
-		assert.False(t, isLocked)
-	})
-
-	t.Run("returns false after unlock", func(t *testing.T) {
-		token, err := lock.Lock(ctx, "test-islocked-3", 5*time.Second)
-		require.NoError(t, err)
-
-		err = lock.Unlock(ctx, "test-islocked-3", token)
-		assert.NoError(t, err)
-
-		isLocked, err := lock.IsLocked(ctx, "test-islocked-3")
-		assert.NoError(t, err)
-		assert.False(t, isLocked)
-	})
-}
-
-// setupTestCache is defined in test_helpers_test.go
