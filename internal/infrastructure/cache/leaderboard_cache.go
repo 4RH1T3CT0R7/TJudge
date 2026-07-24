@@ -12,23 +12,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// полный лидерборд живёт всего 10 сек: он тяжёлый и его дёргают часто,
+// короткий ttl режет нагрузку на бд, а данные при этом почти свежие
 const fullLeaderboardTTL = 10 * time.Second
 
-// LeaderboardCache - кэш для таблицы лидеров
+// кэш таблицы лидеров (sorted set + json на полные данные)
 type LeaderboardCache struct {
 	cache   *Cache
 	metrics *metrics.Metrics
 }
 
-// NewLeaderboardCache создаёт новый кэш для leaderboard
 func NewLeaderboardCache(cache *Cache) *LeaderboardCache {
 	return &LeaderboardCache{
 		cache:   cache,
-		metrics: nil, // metrics опциональны
+		metrics: nil, // метрики опциональны
 	}
 }
 
-// WithMetrics добавляет метрики в кэш
 func (lc *LeaderboardCache) WithMetrics(m *metrics.Metrics) *LeaderboardCache {
 	lc.metrics = m
 	if m != nil {
@@ -37,27 +37,25 @@ func (lc *LeaderboardCache) WithMetrics(m *metrics.Metrics) *LeaderboardCache {
 	return lc
 }
 
-// getKey возвращает ключ для leaderboard турнира
 func (lc *LeaderboardCache) getKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("leaderboard:%s", tournamentID.String())
 }
 
-// UpdateRating обновляет рейтинг программы в leaderboard
 func (lc *LeaderboardCache) UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error {
 	key := lc.getKey(tournamentID)
 	return lc.cache.ZAdd(ctx, key, float64(rating), programID.String())
 }
 
-// RatingUpdate - один рейтинг в пакетной операции.
+// один рейтинг в пакетной операции
 type RatingUpdate struct {
 	TournamentID uuid.UUID
 	ProgramID    uuid.UUID
 	Rating       int
 }
 
-// UpdateRatingsBatch обновляет рейтинги пакетом через Redis-пайплайн.
-// Для пары участников одного матча экономит один RTT; при буферизации
-// нескольких матчей экономия линейна по числу апдейтов.
+// UpdateRatingsBatch пишет рейтинги одним пайплайном.
+// на паре участников матча экономит один RTT, а если буферизуем
+// несколько матчей — экономия растёт линейно по числу апдейтов
 func (lc *LeaderboardCache) UpdateRatingsBatch(ctx context.Context, updates []RatingUpdate) error {
 	if len(updates) == 0 {
 		return nil
@@ -73,17 +71,14 @@ func (lc *LeaderboardCache) UpdateRatingsBatch(ctx context.Context, updates []Ra
 	return lc.cache.BatchZAdd(ctx, members)
 }
 
-// IncrementRating увеличивает рейтинг программы
 func (lc *LeaderboardCache) IncrementRating(ctx context.Context, tournamentID, programID uuid.UUID, delta int) error {
 	key := lc.getKey(tournamentID)
 	return lc.cache.ZIncrBy(ctx, key, float64(delta), programID.String())
 }
 
-// GetTop получает топ N программ из leaderboard.
-// Возвращает частичные данные: заполнены только Rank, ProgramID и Rating.
-// Остальные поля LeaderboardEntry (ProgramName, TeamID, TeamName, Wins, Losses,
-// Draws, TotalGames) имеют нулевые значения. Если нужны полные данные, вызывающий
-// код должен запросить их напрямую из БД.
+// GetTop отдаёт топ N из sorted set.
+// данные неполные: заполнены только Rank, ProgramID и Rating,
+// остальное (имя, команда, w/l/d) нулевое — кому надо, дотянет из бд
 func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	key := lc.getKey(tournamentID)
 	results, err := lc.cache.ZRevRangeWithScores(ctx, key, 0, int64(limit-1))
@@ -91,7 +86,7 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 		return nil, err
 	}
 
-	// Если пустой результат - cache miss
+	// пусто = промах
 	if len(results) == 0 {
 		if lc.metrics != nil {
 			lc.metrics.RecordCacheMiss("leaderboard")
@@ -99,7 +94,6 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 		return nil, nil
 	}
 
-	// Cache hit
 	if lc.metrics != nil {
 		lc.metrics.RecordCacheHit("leaderboard")
 	}
@@ -128,24 +122,22 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 	return entries, nil
 }
 
-// Remove удаляет программу из leaderboard
 func (lc *LeaderboardCache) Remove(ctx context.Context, tournamentID, programID uuid.UUID) error {
 	key := lc.getKey(tournamentID)
 	return lc.cache.ZRem(ctx, key, programID.String())
 }
 
-// Clear очищает весь leaderboard турнира (sorted set + all per-limit JSON caches + cross-game cache)
+// Clear сносит весь лидерборд турнира: sorted set + все json по лимитам + кросс-гейм
 func (lc *LeaderboardCache) Clear(ctx context.Context, tournamentID uuid.UUID) error {
 	key := lc.getKey(tournamentID)
-	// Delete the sorted set
 	if err := lc.cache.Del(ctx, key); err != nil {
 		return err
 	}
-	// Delete all per-limit full JSON caches + cross-game cache via SCAN
+	// json-кэши и кросс-гейм добиваем сканом
 	return lc.InvalidateFullLeaderboard(ctx, tournamentID)
 }
 
-// --- Full JSON leaderboard cache (short TTL, complete data) ---
+// --- полный json-лидерборд (короткий ttl, все поля на месте) ---
 
 func (lc *LeaderboardCache) getFullKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("leaderboard:full:%s", tournamentID.String())
@@ -155,7 +147,6 @@ func (lc *LeaderboardCache) getCrossGameKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("leaderboard:crossgame:%s", tournamentID.String())
 }
 
-// GetFullLeaderboard returns the cached full leaderboard JSON, or nil on miss.
 func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
 	data, err := lc.cache.Get(ctx, key)
@@ -170,6 +161,7 @@ func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID
 	}
 	var entries []*domain.LeaderboardEntry
 	if err := json.Unmarshal([]byte(data), &entries); err != nil {
+		// битый json проще удалить и посчитать заново
 		lc.cache.log.Warn("leaderboard cache: corrupt full leaderboard JSON, deleting key",
 			zap.String("key", key), zap.String("tournament_id", tournamentID.String()), zap.Error(err))
 		_ = lc.cache.Del(ctx, key)
@@ -181,7 +173,6 @@ func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID
 	return entries, nil
 }
 
-// SetFullLeaderboard caches the complete leaderboard with short TTL.
 func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error {
 	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
 	data, err := json.Marshal(entries)
@@ -191,7 +182,6 @@ func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID
 	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
 }
 
-// GetFullCrossGameLeaderboard returns the cached cross-game leaderboard, or nil on miss.
 func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
 	key := lc.getCrossGameKey(tournamentID)
 	data, err := lc.cache.Get(ctx, key)
@@ -217,7 +207,6 @@ func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tou
 	return entries, nil
 }
 
-// SetFullCrossGameLeaderboard caches the cross-game leaderboard with short TTL.
 func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error {
 	key := lc.getCrossGameKey(tournamentID)
 	data, err := json.Marshal(entries)
@@ -227,9 +216,10 @@ func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tou
 	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
 }
 
-// InvalidateFullLeaderboard deletes the full JSON caches for a tournament.
+// InvalidateFullLeaderboard выносит json-кэши турнира.
+// ключей несколько (по каждому лимиту свой), поэтому идём сканом,
+// в конце добавляем кросс-гейм ключ и удаляем всё пачкой
 func (lc *LeaderboardCache) InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error {
-	// Use Scan to find all limit-specific keys
 	pattern := fmt.Sprintf("leaderboard:full:%s:*", tournamentID.String())
 	crossKey := lc.getCrossGameKey(tournamentID)
 
