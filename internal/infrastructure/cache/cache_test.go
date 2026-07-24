@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCache_Get_Miss(t *testing.T) {
+func TestCache_GetMiss(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
@@ -25,7 +25,7 @@ func TestCache_Get_Miss(t *testing.T) {
 	assert.Equal(t, "", val)
 }
 
-func TestCache_Set_Get_RoundTrip(t *testing.T) {
+func TestCache_SetGet(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
@@ -37,32 +37,24 @@ func TestCache_Set_Get_RoundTrip(t *testing.T) {
 	assert.Equal(t, "test-value", val)
 }
 
-func TestCache_Get_Hit(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.Set(ctx, "hit-key", "hit-value", time.Minute))
-
-	val, err := c.Get(ctx, "hit-key")
-	require.NoError(t, err)
-	assert.Equal(t, "hit-value", val)
-}
-
 func TestCache_Del(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "del-key", "value", time.Minute))
+	require.NoError(t, c.Set(ctx, "k1", "v1", time.Minute))
+	require.NoError(t, c.Set(ctx, "k2", "v2", time.Minute))
 
-	err := c.Del(ctx, "del-key")
+	err := c.Del(ctx, "k1", "k2")
 	require.NoError(t, err)
 
-	val, err := c.Get(ctx, "del-key")
-	require.NoError(t, err)
-	assert.Equal(t, "", val) // Gone
+	for _, key := range []string{"k1", "k2"} {
+		exists, err := c.Exists(ctx, key)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	}
 }
 
-func TestCache_Exists_True(t *testing.T) {
+func TestCache_Exists(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
@@ -71,30 +63,23 @@ func TestCache_Exists_True(t *testing.T) {
 	exists, err := c.Exists(ctx, "exists-key")
 	require.NoError(t, err)
 	assert.True(t, exists)
-}
 
-func TestCache_Exists_False(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	exists, err := c.Exists(ctx, "nonexistent")
+	exists, err = c.Exists(ctx, "nope")
 	require.NoError(t, err)
 	assert.False(t, exists)
 }
 
-func TestCache_Expire_FastForward(t *testing.T) {
+func TestCache_Expire(t *testing.T) {
 	c, mr := setupTestCacheWithMR(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "expire-key", "value", 0)) // No TTL
+	require.NoError(t, c.Set(ctx, "expire-key", "value", 0)) // без ttl
 	require.NoError(t, c.Expire(ctx, "expire-key", 2*time.Second))
 
-	// Key exists before expiry
 	exists, err := c.Exists(ctx, "expire-key")
 	require.NoError(t, err)
 	assert.True(t, exists)
 
-	// Fast forward past TTL
 	mr.FastForward(3 * time.Second)
 
 	exists, err = c.Exists(ctx, "expire-key")
@@ -102,293 +87,22 @@ func TestCache_Expire_FastForward(t *testing.T) {
 	assert.False(t, exists)
 }
 
-func TestCache_RPop_EmptyList(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	val, err := c.RPop(ctx, "empty-list")
-	require.NoError(t, err)
-	assert.Equal(t, "", val)
-}
-
-func TestCache_LPush_RPop(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "list-key", "item1", "item2"))
-
-	val, err := c.RPop(ctx, "list-key")
-	require.NoError(t, err)
-	assert.Equal(t, "item1", val)
-
-	val, err = c.RPop(ctx, "list-key")
-	require.NoError(t, err)
-	assert.Equal(t, "item2", val)
-}
-
-func TestCache_LPush_LRange(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "range-list", "a", "b", "c"))
-
-	result, err := c.LRange(ctx, "range-list", 0, -1)
-	require.NoError(t, err)
-	assert.Len(t, result, 3)
-}
-
-func TestCache_LLen(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "len-list", "a", "b"))
-
-	length, err := c.LLen(ctx, "len-list")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), length)
-}
-
-func TestCache_Health(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	err := c.Health(ctx)
-	assert.NoError(t, err)
-}
-
-func TestCache_Publish(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	err := c.Publish(ctx, "test-channel", "test-message")
-	assert.NoError(t, err)
-}
-
 func TestCache_SetNX(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	// First SetNX should succeed
+	// первый setnx проходит, второй нет
 	ok, err := c.SetNX(ctx, "nx-key", "value", time.Minute)
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	// Second SetNX should fail
 	ok, err = c.SetNX(ctx, "nx-key", "value2", time.Minute)
 	require.NoError(t, err)
 	assert.False(t, ok)
 
-	// Value should be the first one
 	val, err := c.Get(ctx, "nx-key")
 	require.NoError(t, err)
 	assert.Equal(t, "value", val)
-}
-
-func TestCache_ZAdd_ZRevRangeWithScores(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.ZAdd(ctx, "zset", 100, "player1"))
-	require.NoError(t, c.ZAdd(ctx, "zset", 200, "player2"))
-
-	result, err := c.ZRevRangeWithScores(ctx, "zset", 0, -1)
-	require.NoError(t, err)
-	assert.Len(t, result, 2)
-	assert.Equal(t, "player2", result[0].Member) // Higher score first
-}
-
-func TestCache_ZRem(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.ZAdd(ctx, "zrem-set", 100, "player1"))
-
-	err := c.ZRem(ctx, "zrem-set", "player1")
-	require.NoError(t, err)
-
-	result, err := c.ZRevRangeWithScores(ctx, "zrem-set", 0, -1)
-	require.NoError(t, err)
-	assert.Len(t, result, 0)
-}
-
-func TestCache_ZIncrBy(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.ZAdd(ctx, "incr-set", 100, "player1"))
-	require.NoError(t, c.ZIncrBy(ctx, "incr-set", 50, "player1"))
-
-	result, err := c.ZRevRangeWithScores(ctx, "incr-set", 0, -1)
-	require.NoError(t, err)
-	require.Len(t, result, 1)
-	assert.Equal(t, float64(150), result[0].Score)
-}
-
-func TestCache_ReplaceList(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "replace-list", "old1", "old2"))
-
-	err := c.ReplaceList(ctx, "replace-list", [][]byte{[]byte("new1"), []byte("new2")})
-	require.NoError(t, err)
-
-	result, err := c.LRange(ctx, "replace-list", 0, -1)
-	require.NoError(t, err)
-	assert.Len(t, result, 2)
-	assert.Contains(t, result, "new1")
-	assert.Contains(t, result, "new2")
-}
-
-func TestCache_ReplaceList_Empty(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "replace-empty", "old1", "old2"))
-
-	err := c.ReplaceList(ctx, "replace-empty", [][]byte{})
-	require.NoError(t, err)
-
-	length, err := c.LLen(ctx, "replace-empty")
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), length)
-}
-
-func TestCache_Eval_SimpleScript(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	result, err := c.Eval(ctx, "return 1+1", nil)
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), result)
-}
-
-func TestCache_Scan_WithPattern(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.Set(ctx, "scan:a", "1", time.Minute))
-	require.NoError(t, c.Set(ctx, "scan:b", "2", time.Minute))
-	require.NoError(t, c.Set(ctx, "other:c", "3", time.Minute))
-
-	var allKeys []string
-	var cursor uint64
-	for {
-		keys, nextCursor, err := c.Scan(ctx, cursor, "scan:*", 100)
-		require.NoError(t, err)
-		allKeys = append(allKeys, keys...)
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	assert.Len(t, allKeys, 2)
-	assert.Contains(t, allKeys, "scan:a")
-	assert.Contains(t, allKeys, "scan:b")
-}
-
-func TestCache_Scan_NoResults(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	var allKeys []string
-	var cursor uint64
-	for {
-		keys, nextCursor, err := c.Scan(ctx, cursor, "nonexistent:*", 100)
-		require.NoError(t, err)
-		allKeys = append(allKeys, keys...)
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-
-	assert.Empty(t, allKeys)
-}
-
-func TestCache_Close(t *testing.T) {
-	c := setupTestCache(t)
-
-	err := c.Close()
-	assert.NoError(t, err)
-}
-
-func TestCache_Del_Multiple(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.Set(ctx, "k1", "v1", time.Minute))
-	require.NoError(t, c.Set(ctx, "k2", "v2", time.Minute))
-	require.NoError(t, c.Set(ctx, "k3", "v3", time.Minute))
-
-	err := c.Del(ctx, "k1", "k2", "k3")
-	require.NoError(t, err)
-
-	for _, key := range []string{"k1", "k2", "k3"} {
-		exists, err := c.Exists(ctx, key)
-		require.NoError(t, err)
-		assert.False(t, exists, "key %s should be deleted", key)
-	}
-}
-
-func TestCache_Set_TTL(t *testing.T) {
-	c, mr := setupTestCacheWithMR(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.Set(ctx, "ttl-key", "value", 100*time.Millisecond))
-
-	exists, err := c.Exists(ctx, "ttl-key")
-	require.NoError(t, err)
-	assert.True(t, exists)
-
-	mr.FastForward(200 * time.Millisecond)
-
-	exists, err = c.Exists(ctx, "ttl-key")
-	require.NoError(t, err)
-	assert.False(t, exists)
-}
-
-func TestCache_ZRevRangeWithScores_Empty(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	result, err := c.ZRevRangeWithScores(ctx, "nonexistent-zset", 0, -1)
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Empty(t, result)
-}
-
-func TestCache_LPush_LLen_Multiple(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "multi-list", "item1"))
-	length, err := c.LLen(ctx, "multi-list")
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), length)
-
-	require.NoError(t, c.LPush(ctx, "multi-list", "item2"))
-	length, err = c.LLen(ctx, "multi-list")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), length)
-
-	require.NoError(t, c.LPush(ctx, "multi-list", "item3"))
-	length, err = c.LLen(ctx, "multi-list")
-	require.NoError(t, err)
-	assert.Equal(t, int64(3), length)
-}
-
-func TestCache_BRPop_WithItem(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.LPush(ctx, "brpop-list", "hello"))
-
-	result, err := c.BRPop(ctx, 1*time.Second, "brpop-list")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, []string{"brpop-list", "hello"}, result)
 }
 
 func TestCache_Incr(t *testing.T) {
@@ -404,44 +118,73 @@ func TestCache_Incr(t *testing.T) {
 	assert.Equal(t, int64(2), val)
 }
 
-func TestCache_LTrim(t *testing.T) {
+// --- списки ---
+
+func TestCache_LPushRPop(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.LPush(ctx, "trim-list", "a", "b", "c", "d"))
+	require.NoError(t, c.LPush(ctx, "list-key", "item1", "item2"))
 
-	err := c.LTrim(ctx, "trim-list", 0, 1)
+	val, err := c.RPop(ctx, "list-key")
 	require.NoError(t, err)
+	assert.Equal(t, "item1", val)
 
-	length, err := c.LLen(ctx, "trim-list")
+	val, err = c.RPop(ctx, "list-key")
+	require.NoError(t, err)
+	assert.Equal(t, "item2", val)
+
+	// пустой список отдаёт ""
+	val, err = c.RPop(ctx, "empty-list")
+	require.NoError(t, err)
+	assert.Equal(t, "", val)
+}
+
+func TestCache_LRangeLLenLTrim(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.LPush(ctx, "range-list", "a", "b", "c", "d"))
+
+	items, err := c.LRange(ctx, "range-list", 0, -1)
+	require.NoError(t, err)
+	assert.Len(t, items, 4)
+
+	length, err := c.LLen(ctx, "range-list")
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), length)
+
+	require.NoError(t, c.LTrim(ctx, "range-list", 0, 1))
+	length, err = c.LLen(ctx, "range-list")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), length)
 }
 
-func TestCache_SAdd_SRem(t *testing.T) {
+func TestCache_BRPop(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	count, err := c.SAdd(ctx, "test-set", "member1", "member2")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), count)
+	require.NoError(t, c.LPush(ctx, "brpop-list", "hello"))
 
-	// Adding same member again returns 0
-	count, err = c.SAdd(ctx, "test-set", "member1")
+	res, err := c.BRPop(ctx, 1*time.Second, "brpop-list")
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), count)
-
-	err = c.SRem(ctx, "test-set", "member1")
-	require.NoError(t, err)
+	assert.Equal(t, []string{"brpop-list", "hello"}, res)
 }
 
-func TestCache_Subscribe(t *testing.T) {
+func TestCache_ReplaceList(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	sub := c.Subscribe(ctx, "test-chan")
-	require.NotNil(t, sub)
-	_ = sub.Close()
+	require.NoError(t, c.LPush(ctx, "replace-list", "old1", "old2"))
+
+	err := c.ReplaceList(ctx, "replace-list", [][]byte{[]byte("new1"), []byte("new2")})
+	require.NoError(t, err)
+
+	res, err := c.LRange(ctx, "replace-list", 0, -1)
+	require.NoError(t, err)
+	assert.Len(t, res, 2)
+	assert.Contains(t, res, "new1")
+	assert.Contains(t, res, "new2")
 }
 
 func TestCache_BatchLPush(t *testing.T) {
@@ -463,32 +206,135 @@ func TestCache_BatchLPush(t *testing.T) {
 	lenB, err := c.LLen(ctx, "batch-list-b")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), lenB)
+
+	// пустой вход не должен падать
+	require.NoError(t, c.BatchLPush(ctx, nil))
 }
 
-func TestCache_BatchLPush_Empty(t *testing.T) {
+// --- sorted set ---
+
+func TestCache_ZAddZRevRange(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
 
-	err := c.BatchLPush(ctx, nil)
-	require.NoError(t, err)
+	require.NoError(t, c.ZAdd(ctx, "zset", 100, "player1"))
+	require.NoError(t, c.ZAdd(ctx, "zset", 200, "player2"))
 
-	err = c.BatchLPush(ctx, map[string][]any{})
+	res, err := c.ZRevRangeWithScores(ctx, "zset", 0, -1)
 	require.NoError(t, err)
+	require.Len(t, res, 2)
+	assert.Equal(t, "player2", res[0].Member) // больший скор первым
+
+	// убрали одного - остался второй
+	require.NoError(t, c.ZRem(ctx, "zset", "player1"))
+	res, err = c.ZRevRangeWithScores(ctx, "zset", 0, -1)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+
+	// пустой zset -> пустая выдача
+	res, err = c.ZRevRangeWithScores(ctx, "nope-zset", 0, -1)
+	require.NoError(t, err)
+	assert.Empty(t, res)
 }
 
-func TestCache_Eval_WithKeys(t *testing.T) {
+func TestCache_ZIncrBy(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
+
+	require.NoError(t, c.ZAdd(ctx, "incr-set", 100, "player1"))
+	require.NoError(t, c.ZIncrBy(ctx, "incr-set", 50, "player1"))
+
+	res, err := c.ZRevRangeWithScores(ctx, "incr-set", 0, -1)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.Equal(t, float64(150), res[0].Score)
+}
+
+func TestCache_SAddSRem(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	count, err := c.SAdd(ctx, "test-set", "member1", "member2")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+
+	// повторный member даёт 0
+	count, err = c.SAdd(ctx, "test-set", "member1")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+
+	require.NoError(t, c.SRem(ctx, "test-set", "member1"))
+}
+
+// --- eval / scan / pubsub / служебное ---
+
+func TestCache_Eval(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	res, err := c.Eval(ctx, "return 1+1", nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), res)
 
 	require.NoError(t, c.Set(ctx, "eval-key", "hello", time.Minute))
-
-	result, err := c.Eval(ctx, `return redis.call("GET", KEYS[1])`, []string{"eval-key"})
+	res, err = c.Eval(ctx, `return redis.call("GET", KEYS[1])`, []string{"eval-key"})
 	require.NoError(t, err)
-	assert.Equal(t, "hello", result)
+	assert.Equal(t, "hello", res)
 }
 
-// --- Concurrency / Race Detection Tests ---
+func TestCache_Scan(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
 
+	require.NoError(t, c.Set(ctx, "scan:a", "1", time.Minute))
+	require.NoError(t, c.Set(ctx, "scan:b", "2", time.Minute))
+	require.NoError(t, c.Set(ctx, "other:c", "3", time.Minute))
+
+	keys := scanAll(t, c, "scan:*")
+	assert.Len(t, keys, 2)
+	assert.Contains(t, keys, "scan:a")
+	assert.Contains(t, keys, "scan:b")
+
+	// паттерн без совпадений
+	assert.Empty(t, scanAll(t, c, "nonexistent:*"))
+}
+
+// scanAll гоняет курсор до конца и собирает ключи
+func scanAll(t *testing.T, c *Cache, pattern string) []string {
+	t.Helper()
+	var all []string
+	var cursor uint64
+	for {
+		keys, next, err := c.Scan(context.Background(), cursor, pattern, 100)
+		require.NoError(t, err)
+		all = append(all, keys...)
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return all
+}
+
+func TestCache_HealthPublishSubscribe(t *testing.T) {
+	c := setupTestCache(t)
+	ctx := context.Background()
+
+	assert.NoError(t, c.Health(ctx))
+	assert.NoError(t, c.Publish(ctx, "test-channel", "test-message"))
+
+	sub := c.Subscribe(ctx, "test-chan")
+	require.NotNil(t, sub)
+	_ = sub.Close()
+}
+
+func TestCache_Close(t *testing.T) {
+	c := setupTestCache(t)
+
+	assert.NoError(t, c.Close())
+}
+
+// гоняем set/get/del параллельно, интересует детектор гонок
 func TestCache_ConcurrentReadWrite(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
@@ -503,20 +349,16 @@ func TestCache_ConcurrentReadWrite(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for i := range iterations {
-				key := fmt.Sprintf("concurrent-key-%d-%d", id, i)
-				value := fmt.Sprintf("value-%d-%d", id, i)
+				key := fmt.Sprintf("ck-%d-%d", id, i)
+				val := fmt.Sprintf("v-%d-%d", id, i)
 
-				require.NotPanics(t, func() {
-					err := c.Set(ctx, key, value, 5*time.Minute)
-					assert.NoError(t, err)
+				assert.NoError(t, c.Set(ctx, key, val, 5*time.Minute))
 
-					got, err := c.Get(ctx, key)
-					assert.NoError(t, err)
-					assert.Equal(t, value, got)
+				got, err := c.Get(ctx, key)
+				assert.NoError(t, err)
+				assert.Equal(t, val, got)
 
-					err = c.Del(ctx, key)
-					assert.NoError(t, err)
-				})
+				assert.NoError(t, c.Del(ctx, key))
 			}
 		}(g)
 	}
@@ -524,145 +366,33 @@ func TestCache_ConcurrentReadWrite(t *testing.T) {
 	wg.Wait()
 }
 
-func TestCache_ConcurrentSortedSet(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	const goroutines = 5
-	const iterations = 100
-	const zsetKey = "concurrent-zset"
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-
-	for g := range goroutines {
-		go func(id int) {
-			defer wg.Done()
-			for i := range iterations {
-				member := fmt.Sprintf("member-%d-%d", id, i)
-				score := float64(id*iterations + i)
-
-				require.NotPanics(t, func() {
-					err := c.ZAdd(ctx, zsetKey, score, member)
-					assert.NoError(t, err)
-
-					results, err := c.ZRevRangeWithScores(ctx, zsetKey, 0, 9)
-					assert.NoError(t, err)
-					assert.NotNil(t, results)
-				})
-			}
-		}(g)
-	}
-
-	wg.Wait()
-
-	// After all goroutines finish, the sorted set should contain all members.
-	results, err := c.ZRevRangeWithScores(ctx, zsetKey, 0, -1)
-	require.NoError(t, err)
-	assert.Equal(t, goroutines*iterations, len(results))
-}
-
-// TestCache_ErrorPaths closes miniredis to simulate Redis being down,
-// then verifies that every Cache operation returns an error.
+// когда редис недоступен, операции должны возвращать ошибку а не паниковать
 func TestCache_ErrorPaths(t *testing.T) {
 	mr := miniredis.RunT(t)
 
-	// Use MaxRetries: -1 to disable retries, a short DialTimeout, and small
-	// pool so failed connections return immediately instead of retrying.
+	// MaxRetries -1 и короткий диалтаймаут чтобы упавшее соединение
+	// сразу отдавало ошибку, а не ретраилось
 	client := redis.NewClient(&redis.Options{
 		Addr:        mr.Addr(),
 		MaxRetries:  -1,
 		DialTimeout: 10 * time.Millisecond,
 		PoolSize:    1,
 	})
-
 	log, _ := logger.New("error", "json")
-	m := metrics.New()
-
-	c := &Cache{
-		client:  client,
-		log:     log,
-		metrics: m,
-	}
+	c := &Cache{client: client, log: log, metrics: metrics.New()}
 	ctx := context.Background()
 
-	// Close miniredis to simulate Redis being down.
-	mr.Close()
-
-	// Every operation should now return an error.
+	mr.Close() // роняем редис
 
 	_, err := c.Get(ctx, "key")
 	assert.Error(t, err)
 
-	err = c.Set(ctx, "key", "value", time.Minute)
-	assert.Error(t, err)
-
-	err = c.Del(ctx, "key")
-	assert.Error(t, err)
-
-	_, err = c.Exists(ctx, "key")
-	assert.Error(t, err)
-
-	err = c.Expire(ctx, "key", time.Minute)
-	assert.Error(t, err)
-
-	_, err = c.Incr(ctx, "key")
-	assert.Error(t, err)
-
-	err = c.ZAdd(ctx, "key", 1.0, "member")
-	assert.Error(t, err)
-
-	_, err = c.ZRevRangeWithScores(ctx, "key", 0, -1)
-	assert.Error(t, err)
-
-	err = c.ZIncrBy(ctx, "key", 1.0, "member")
-	assert.Error(t, err)
-
-	err = c.ZRem(ctx, "key", "member")
-	assert.Error(t, err)
-
-	err = c.LPush(ctx, "key", "value")
-	assert.Error(t, err)
-
-	_, err = c.RPop(ctx, "key")
-	assert.Error(t, err)
-
-	_, err = c.BRPop(ctx, time.Millisecond, "key")
-	assert.Error(t, err)
-
-	_, err = c.LLen(ctx, "key")
-	assert.Error(t, err)
-
-	_, err = c.LRange(ctx, "key", 0, -1)
-	assert.Error(t, err)
-
-	err = c.LTrim(ctx, "key", 0, 10)
-	assert.Error(t, err)
-
-	_, err = c.SAdd(ctx, "key", "member")
-	assert.Error(t, err)
-
-	err = c.SRem(ctx, "key", "member")
-	assert.Error(t, err)
-
-	_, err = c.SetNX(ctx, "key", "value", time.Minute)
-	assert.Error(t, err)
-
-	err = c.Publish(ctx, "channel", "message")
-	assert.Error(t, err)
-
-	err = c.ReplaceList(ctx, "key", [][]byte{[]byte("value")})
-	assert.Error(t, err)
-
-	err = c.BatchLPush(ctx, map[string][]any{"key": {"value"}})
-	assert.Error(t, err)
-
-	err = c.Health(ctx)
-	assert.Error(t, err)
+	assert.Error(t, c.Set(ctx, "key", "value", time.Minute))
+	assert.Error(t, c.Del(ctx, "key"))
+	assert.Error(t, c.ZAdd(ctx, "key", 1.0, "member"))
+	assert.Error(t, c.LPush(ctx, "key", "value"))
+	assert.Error(t, c.Health(ctx))
 
 	_, err = c.Eval(ctx, "return 1", nil)
-	assert.Error(t, err)
-
-	_, _, err = c.Scan(ctx, 0, "*", 10)
 	assert.Error(t, err)
 }

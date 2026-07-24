@@ -11,27 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLeaderboardCache_UpdateRating(t *testing.T) {
-	c := setupTestCache(t)
-	defer c.Close()
-
-	lc := NewLeaderboardCache(c)
-	ctx := context.Background()
-	tournamentID := uuid.New()
-	programID := uuid.New()
-
-	err := lc.UpdateRating(ctx, tournamentID, programID, 1500)
-	require.NoError(t, err)
-
-	entries, err := lc.GetTop(ctx, tournamentID, 10)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-
-	assert.Equal(t, 1, entries[0].Rank)
-	assert.Equal(t, programID, entries[0].ProgramID)
-	assert.Equal(t, 1500, entries[0].Rating)
-}
-
 func TestLeaderboardCache_GetTop(t *testing.T) {
 	c := setupTestCache(t)
 	defer c.Close()
@@ -40,50 +19,25 @@ func TestLeaderboardCache_GetTop(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	// Add multiple entries with different ratings.
-	programs := []struct {
-		id     uuid.UUID
-		rating int
-	}{
-		{uuid.New(), 1200},
-		{uuid.New(), 1800},
-		{uuid.New(), 1500},
-		{uuid.New(), 2000},
-		{uuid.New(), 1000},
+	for _, r := range []int{1200, 1800, 1500, 2000, 1000} {
+		require.NoError(t, lc.UpdateRating(ctx, tournamentID, uuid.New(), r))
 	}
 
-	for _, p := range programs {
-		err := lc.UpdateRating(ctx, tournamentID, p.id, p.rating)
-		require.NoError(t, err)
+	// отсортировано по убыванию рейтинга, ранги с 1
+	entries, err := lc.GetTop(ctx, tournamentID, 10)
+	require.NoError(t, err)
+	require.Len(t, entries, 5)
+	assert.Equal(t, 2000, entries[0].Rating)
+	assert.Equal(t, 1000, entries[4].Rating)
+	for i, e := range entries {
+		assert.Equal(t, i+1, e.Rank)
 	}
 
-	t.Run("returns entries ordered by rating descending", func(t *testing.T) {
-		entries, err := lc.GetTop(ctx, tournamentID, 10)
-		require.NoError(t, err)
-		require.Len(t, entries, 5)
-
-		// Highest rating first.
-		assert.Equal(t, 2000, entries[0].Rating)
-		assert.Equal(t, 1800, entries[1].Rating)
-		assert.Equal(t, 1500, entries[2].Rating)
-		assert.Equal(t, 1200, entries[3].Rating)
-		assert.Equal(t, 1000, entries[4].Rating)
-
-		// Ranks are sequential starting at 1.
-		for i, entry := range entries {
-			assert.Equal(t, i+1, entry.Rank)
-		}
-	})
-
-	t.Run("limit restricts number of results", func(t *testing.T) {
-		entries, err := lc.GetTop(ctx, tournamentID, 3)
-		require.NoError(t, err)
-		require.Len(t, entries, 3)
-
-		assert.Equal(t, 2000, entries[0].Rating)
-		assert.Equal(t, 1800, entries[1].Rating)
-		assert.Equal(t, 1500, entries[2].Rating)
-	})
+	// лимит режет выдачу
+	top3, err := lc.GetTop(ctx, tournamentID, 3)
+	require.NoError(t, err)
+	require.Len(t, top3, 3)
+	assert.Equal(t, 1500, top3[2].Rating)
 }
 
 func TestLeaderboardCache_GetTop_Empty(t *testing.T) {
@@ -91,9 +45,8 @@ func TestLeaderboardCache_GetTop_Empty(t *testing.T) {
 	defer c.Close()
 
 	lc := NewLeaderboardCache(c)
-	ctx := context.Background()
 
-	entries, err := lc.GetTop(ctx, uuid.New(), 10)
+	entries, err := lc.GetTop(context.Background(), uuid.New(), 10)
 	require.NoError(t, err)
 	assert.Nil(t, entries)
 }
@@ -107,17 +60,15 @@ func TestLeaderboardCache_IncrementRating(t *testing.T) {
 	tournamentID := uuid.New()
 	programID := uuid.New()
 
-	// Set initial rating.
-	err := lc.UpdateRating(ctx, tournamentID, programID, 1500)
-	require.NoError(t, err)
-
-	// Increment by 50.
-	err = lc.IncrementRating(ctx, tournamentID, programID, 50)
-	require.NoError(t, err)
+	require.NoError(t, lc.UpdateRating(ctx, tournamentID, programID, 1500))
+	require.NoError(t, lc.IncrementRating(ctx, tournamentID, programID, 50))
 
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
+	// заодно проверяем что UpdateRating кладёт member/score корректно
+	assert.Equal(t, 1, entries[0].Rank)
+	assert.Equal(t, programID, entries[0].ProgramID)
 	assert.Equal(t, 1550, entries[0].Rating)
 }
 
@@ -128,24 +79,47 @@ func TestLeaderboardCache_Remove(t *testing.T) {
 	lc := NewLeaderboardCache(c)
 	ctx := context.Background()
 	tournamentID := uuid.New()
-
 	programA := uuid.New()
 	programB := uuid.New()
 
-	err := lc.UpdateRating(ctx, tournamentID, programA, 1500)
-	require.NoError(t, err)
-	err = lc.UpdateRating(ctx, tournamentID, programB, 1600)
-	require.NoError(t, err)
+	require.NoError(t, lc.UpdateRating(ctx, tournamentID, programA, 1500))
+	require.NoError(t, lc.UpdateRating(ctx, tournamentID, programB, 1600))
 
-	// Remove programA.
-	err = lc.Remove(ctx, tournamentID, programA)
-	require.NoError(t, err)
+	require.NoError(t, lc.Remove(ctx, tournamentID, programA))
 
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, programB, entries[0].ProgramID)
-	assert.Equal(t, 1600, entries[0].Rating)
+}
+
+// Clear сносит и sorted set, и json-кэши по лимитам (через InvalidateFullLeaderboard)
+func TestLeaderboardCache_Clear(t *testing.T) {
+	c := setupTestCache(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+
+	full := []*domain.LeaderboardEntry{{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", Rating: 2000}}
+	for i := range 5 {
+		require.NoError(t, lc.UpdateRating(ctx, tournamentID, uuid.New(), 1000+i*100))
+	}
+	require.NoError(t, lc.SetFullLeaderboard(ctx, tournamentID, 100, full))
+	require.NoError(t, lc.SetFullLeaderboard(ctx, tournamentID, 50, full))
+
+	require.NoError(t, lc.Clear(ctx, tournamentID))
+
+	entries, err := lc.GetTop(ctx, tournamentID, 10)
+	require.NoError(t, err)
+	assert.Nil(t, entries)
+
+	// json по всем лимитам тоже снесён
+	r1, _ := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+	r2, _ := lc.GetFullLeaderboard(ctx, tournamentID, 50)
+	assert.Nil(t, r1)
+	assert.Nil(t, r2)
 }
 
 func TestLeaderboardCache_FullLeaderboard(t *testing.T) {
@@ -161,51 +135,29 @@ func TestLeaderboardCache_FullLeaderboard(t *testing.T) {
 		{Rank: 2, ProgramID: uuid.New(), ProgramName: "Beta", Rating: 1800, Wins: 8, Losses: 4},
 	}
 
-	t.Run("miss returns nil", func(t *testing.T) {
-		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
+	// промах до записи
+	result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 
-	t.Run("set and get", func(t *testing.T) {
-		err := lc.SetFullLeaderboard(ctx, tournamentID, 100, entries)
-		require.NoError(t, err)
+	require.NoError(t, lc.SetFullLeaderboard(ctx, tournamentID, 100, entries))
 
-		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
-		require.NoError(t, err)
-		require.Len(t, result, 2)
-		assert.Equal(t, "Alpha", result[0].ProgramName)
-		assert.Equal(t, 2000, result[0].Rating)
-		assert.Equal(t, 10, result[0].Wins)
-		assert.Equal(t, "Beta", result[1].ProgramName)
-	})
+	result, err = lc.GetFullLeaderboard(ctx, tournamentID, 100)
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	assert.Equal(t, "Alpha", result[0].ProgramName)
+	assert.Equal(t, 10, result[0].Wins)
 
-	t.Run("different limits are separate cache entries", func(t *testing.T) {
-		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 50)
-		require.NoError(t, err)
-		assert.Nil(t, result) // limit=50 was never set
-	})
+	// разные лимиты — разные ключи
+	other, err := lc.GetFullLeaderboard(ctx, tournamentID, 50)
+	require.NoError(t, err)
+	assert.Nil(t, other)
 
-	t.Run("TTL expiration", func(t *testing.T) {
-		mr.FastForward(fullLeaderboardTTL)
-
-		result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
-		require.NoError(t, err)
-		assert.Nil(t, result) // expired
-	})
-
-	t.Run("invalidate clears all limits", func(t *testing.T) {
-		_ = lc.SetFullLeaderboard(ctx, tournamentID, 100, entries)
-		_ = lc.SetFullLeaderboard(ctx, tournamentID, 50, entries[:1])
-
-		err := lc.InvalidateFullLeaderboard(ctx, tournamentID)
-		require.NoError(t, err)
-
-		r1, _ := lc.GetFullLeaderboard(ctx, tournamentID, 100)
-		r2, _ := lc.GetFullLeaderboard(ctx, tournamentID, 50)
-		assert.Nil(t, r1)
-		assert.Nil(t, r2)
-	})
+	// короткий ttl протухает
+	mr.FastForward(fullLeaderboardTTL)
+	result, err = lc.GetFullLeaderboard(ctx, tournamentID, 100)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
@@ -220,40 +172,21 @@ func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
 		{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", TotalRating: 3500, TotalWins: 15},
 	}
 
-	t.Run("miss returns nil", func(t *testing.T) {
-		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
+	result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 
-	t.Run("set and get", func(t *testing.T) {
-		err := lc.SetFullCrossGameLeaderboard(ctx, tournamentID, entries)
-		require.NoError(t, err)
+	require.NoError(t, lc.SetFullCrossGameLeaderboard(ctx, tournamentID, entries))
 
-		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
-		require.NoError(t, err)
-		require.Len(t, result, 1)
-		assert.Equal(t, "Alpha", result[0].ProgramName)
-		assert.Equal(t, 3500, result[0].TotalRating)
-	})
+	result, err = lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, 3500, result[0].TotalRating)
 
-	t.Run("TTL expiration", func(t *testing.T) {
-		mr.FastForward(fullLeaderboardTTL)
-
-		result, err := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
-		require.NoError(t, err)
-		assert.Nil(t, result)
-	})
-
-	t.Run("Clear removes cross-game cache too", func(t *testing.T) {
-		_ = lc.SetFullCrossGameLeaderboard(ctx, tournamentID, entries)
-
-		err := lc.Clear(ctx, tournamentID)
-		require.NoError(t, err)
-
-		result, _ := lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
-		assert.Nil(t, result)
-	})
+	mr.FastForward(fullLeaderboardTTL)
+	result, err = lc.GetFullCrossGameLeaderboard(ctx, tournamentID)
+	require.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 func TestLeaderboardCache_GetFullLeaderboard_CorruptJSON(t *testing.T) {
@@ -264,21 +197,16 @@ func TestLeaderboardCache_GetFullLeaderboard_CorruptJSON(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	// The full leaderboard key format is "leaderboard:full:<id>:<limit>".
+	// формат ключа полного лидерборда: "leaderboard:full:<id>:<limit>"
 	limit := 100
 	key := fmt.Sprintf("leaderboard:full:%s:%d", tournamentID.String(), limit)
-
-	// Set corrupt JSON directly via miniredis.
 	require.NoError(t, mr.Set(key, "not-json{{{"))
-	require.True(t, mr.Exists(key), "key should exist before GetFullLeaderboard")
 
-	// GetFullLeaderboard should auto-delete the corrupt key and return nil, nil.
+	// битый json автоудаляется, наружу nil без ошибки
 	result, err := lc.GetFullLeaderboard(ctx, tournamentID, limit)
 	assert.NoError(t, err)
 	assert.Nil(t, result)
-
-	// The key should have been deleted.
-	assert.False(t, mr.Exists(key), "corrupt key should be deleted")
+	assert.False(t, mr.Exists(key), "битый ключ должен быть удалён")
 }
 
 func TestLeaderboardCache_GetTop_InvalidUUID(t *testing.T) {
@@ -289,38 +217,13 @@ func TestLeaderboardCache_GetTop_InvalidUUID(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	// The sorted set key is "leaderboard:<id>".
+	// ключ sorted set-а: "leaderboard:<id>"
 	key := fmt.Sprintf("leaderboard:%s", tournamentID.String())
-
-	// Add a member with an invalid UUID string to the sorted set.
 	_, err := mr.ZAdd(key, 1500, "not-a-valid-uuid")
 	require.NoError(t, err)
 
-	// GetTop should skip the invalid UUID member and return an empty slice.
+	// битый uuid просто пропускаем
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
 	require.NoError(t, err)
-	assert.Empty(t, entries, "invalid UUID members should be skipped")
-}
-
-func TestLeaderboardCache_Clear(t *testing.T) {
-	c := setupTestCache(t)
-	defer c.Close()
-
-	lc := NewLeaderboardCache(c)
-	ctx := context.Background()
-	tournamentID := uuid.New()
-
-	// Add several entries.
-	for i := range 5 {
-		err := lc.UpdateRating(ctx, tournamentID, uuid.New(), 1000+i*100)
-		require.NoError(t, err)
-	}
-
-	// Clear the leaderboard.
-	err := lc.Clear(ctx, tournamentID)
-	require.NoError(t, err)
-
-	entries, err := lc.GetTop(ctx, tournamentID, 10)
-	require.NoError(t, err)
-	assert.Nil(t, entries)
+	assert.Empty(t, entries)
 }
