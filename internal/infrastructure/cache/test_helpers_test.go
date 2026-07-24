@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/redis/go-redis/v9"
 )
 
