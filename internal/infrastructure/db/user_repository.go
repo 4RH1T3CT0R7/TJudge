@@ -10,17 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// UserRepository - репозиторий для работы с пользователями
 type UserRepository struct {
 	db *DB
 }
 
-// NewUserRepository создаёт новый репозиторий пользователей
 func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// Create создаёт нового пользователя
 func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	query := `
 		INSERT INTO users (id, username, email, password_hash)
@@ -42,7 +39,6 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
-// GetByID получает пользователя по ID
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	var user domain.User
 
@@ -63,7 +59,6 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 	return &user, nil
 }
 
-// GetByUsername получает пользователя по username
 func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
 	var user domain.User
 
@@ -84,7 +79,6 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*d
 	return &user, nil
 }
 
-// GetByEmail получает пользователя по email
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
 
@@ -105,7 +99,6 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	return &user, nil
 }
 
-// Update обновляет пользователя
 func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	query := `
 		UPDATE users
@@ -131,7 +124,6 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
-// Delete удаляет пользователя
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM users WHERE id = $1`
 
@@ -152,7 +144,6 @@ func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// Exists проверяет существование пользователя по username или email
 func (r *UserRepository) Exists(ctx context.Context, username, email string) (bool, error) {
 	var exists bool
 
