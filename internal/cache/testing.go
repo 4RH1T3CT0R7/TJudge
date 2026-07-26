@@ -6,8 +6,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// NewFromClient creates a Cache from an existing redis.Client.
-// Intended for use in tests with miniredis.
+// NewFromClient - Cache поверх готового redis.Client, для тестов на miniredis
 func NewFromClient(client *redis.Client) *Cache {
 	log, _ := logger.New("error", "json")
 	m := metrics.New()
