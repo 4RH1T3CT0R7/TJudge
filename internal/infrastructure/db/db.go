@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"go.uber.org/zap"
@@ -23,10 +23,9 @@ type DB struct {
 	done    chan struct{}
 }
 
-// New создаёт новое подключение к базе данных.
-// Подключение с ретраями: после рестарта Postgres недоступен секунды
-// (recovery/WAL-replay) - ждать правильнее, чем мгновенно падать fatal'ом
-// (роняло api/worker каскадом при каждом рестарте БД).
+// New подключается к базе с ретраями. после рестарта постгрес недоступен
+// пару секунд (recovery/WAL) - лучше подождать чем сразу падать фаталом,
+// иначе api и воркер валятся каскадом на каждом рестарте бд
 func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*DB, error) {
 	const (
 		connectTimeout = 60 * time.Second
@@ -50,12 +49,12 @@ func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*D
 		time.Sleep(retryInterval)
 	}
 
-	// Настраиваем connection pool
+	// настраиваем пул соединений
 	db.SetMaxOpenConns(cfg.MaxConnections)
 	db.SetMaxIdleConns(cfg.MaxIdle)
 	db.SetConnMaxLifetime(cfg.MaxLifetime)
 
-	// Проверяем соединение
+	// проверяем соединение
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -76,7 +75,7 @@ func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*D
 		done:    make(chan struct{}),
 	}
 
-	// Запускаем мониторинг метрик пула
+	// запускаем мониторинг метрик пула
 	go d.monitorConnectionPool()
 
 	return d, nil
@@ -102,7 +101,7 @@ func (db *DB) monitorConnectionPool() {
 	}
 }
 
-// slowQueryThreshold is the duration after which a query is logged at WARN level.
+// slowQueryThreshold - порог, выше которого запрос считаем медленным и логируем
 const slowQueryThreshold = 500 * time.Millisecond
 
 // ExecWithMetrics выполняет запрос с записью метрик
@@ -174,13 +173,11 @@ func (db *DB) QueryRowWithMetrics(ctx context.Context, queryType string, dest an
 	return err
 }
 
-// BeginTx начинает транзакцию
 func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
 	return db.DB.BeginTxx(ctx, opts)
 }
 
-// RunInTx выполняет функцию внутри транзакции.
-// Если функция возвращает ошибку, транзакция откатывается.
+// RunInTx гоняет fn в транзакции, при ошибке откатывает
 func (db *DB) RunInTx(ctx context.Context, fn func(tx *sqlx.Tx) error) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -198,7 +195,6 @@ func (db *DB) RunInTx(ctx context.Context, fn func(tx *sqlx.Tx) error) error {
 	return nil
 }
 
-// Health проверяет здоровье базы данных
 func (db *DB) Health(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -255,13 +251,10 @@ func (db *DB) DropOldPartitions(ctx context.Context, retentionMonths int) error 
 	return nil
 }
 
-// StartPartitionMaintenance launches a background goroutine that periodically
-// ensures partitions exist for the current and next month for all partitioned
-// tables (matches, rating_history). This prevents partition-not-found errors
-// if the application runs for extended periods without restart.
-//
-// retentionMonths > 0 дополнительно включает удаление партиций старше
-// указанного числа месяцев (DB_PARTITION_RETENTION_MONTHS; 0 - выключено).
+// StartPartitionMaintenance раз в сутки досоздаёт партиции на текущий и
+// следующий месяц (иначе при долгой работе без рестарта ловим
+// partition-not-found). retentionMonths > 0 ещё и удаляет партиции старше
+// этого числа месяцев (DB_PARTITION_RETENTION_MONTHS; 0 - выключено)
 func (db *DB) StartPartitionMaintenance(retentionMonths int) {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
@@ -294,20 +287,18 @@ func (db *DB) StartPartitionMaintenance(retentionMonths int) {
 	}()
 }
 
-// Close закрывает соединение с базой данных
 func (db *DB) Close() error {
 	close(db.done)
 	db.log.Info("Closing database connection")
 	return db.DB.Close()
 }
 
-// PreparedStatement кэш для prepared statements
+// PreparedStatement - кэш для prepared statement
 type PreparedStatement struct {
 	stmt *sqlx.NamedStmt
 	db   *DB
 }
 
-// PrepareNamed создаёт именованный prepared statement
 func (db *DB) PrepareNamed(query string) (*PreparedStatement, error) {
 	stmt, err := db.DB.PrepareNamed(query)
 	if err != nil {
@@ -320,7 +311,6 @@ func (db *DB) PrepareNamed(query string) (*PreparedStatement, error) {
 	}, nil
 }
 
-// ExecContext выполняет prepared statement
 func (ps *PreparedStatement) ExecContext(ctx context.Context, queryType string, arg any) (sql.Result, error) {
 	start := time.Now()
 	result, err := ps.stmt.ExecContext(ctx, arg)
@@ -335,7 +325,6 @@ func (ps *PreparedStatement) ExecContext(ctx context.Context, queryType string, 
 	return result, err
 }
 
-// QueryContext выполняет prepared statement query
 func (ps *PreparedStatement) QueryContext(ctx context.Context, queryType string, dest any, arg any) error {
 	start := time.Now()
 	err := ps.stmt.SelectContext(ctx, dest, arg)
@@ -350,7 +339,6 @@ func (ps *PreparedStatement) QueryContext(ctx context.Context, queryType string,
 	return err
 }
 
-// Close закрывает prepared statement
 func (ps *PreparedStatement) Close() error {
 	return ps.stmt.Close()
 }
