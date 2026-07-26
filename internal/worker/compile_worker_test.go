@@ -9,7 +9,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
+	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"

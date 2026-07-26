@@ -8,7 +8,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
+	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"

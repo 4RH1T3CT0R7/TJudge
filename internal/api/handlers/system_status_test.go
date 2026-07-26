@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
+	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
