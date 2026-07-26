@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

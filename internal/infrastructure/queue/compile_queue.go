@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"

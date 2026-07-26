@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"

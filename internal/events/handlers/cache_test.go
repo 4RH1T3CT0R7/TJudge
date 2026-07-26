@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/cache"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
