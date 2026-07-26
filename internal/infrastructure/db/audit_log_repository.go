@@ -7,17 +7,15 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
-// AuditLogRepository - репозиторий для audit-лога.
 type AuditLogRepository struct {
 	db *DB
 }
 
-// NewAuditLogRepository создаёт репозиторий audit-лога.
 func NewAuditLogRepository(db *DB) *AuditLogRepository {
 	return &AuditLogRepository{db: db}
 }
 
-// Insert сохраняет одну запись audit-лога. Вызывается асинхронно из middleware.
+// Insert пишет одну запись, дёргается асинхронно из middleware
 func (r *AuditLogRepository) Insert(ctx context.Context, e *domain.AuditLogEntry) error {
 	const query = `
 		INSERT INTO audit_log (id, actor_id, actor_role, action, target_type, target_id,
@@ -34,8 +32,7 @@ func (r *AuditLogRepository) Insert(ctx context.Context, e *domain.AuditLogEntry
 	return nil
 }
 
-// List возвращает последние N записей audit-лога.
-// Используется endpoint'ом /admin/audit с keyset pagination (before=created_at).
+// List отдаёт последние N записей для /admin/audit
 func (r *AuditLogRepository) List(ctx context.Context, limit int) ([]*domain.AuditLogEntry, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
