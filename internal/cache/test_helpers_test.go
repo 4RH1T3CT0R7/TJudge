@@ -9,8 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// setupTestCache creates a Cache backed by miniredis for unit tests.
-// The miniredis server is automatically closed when the test ends.
+// поднимаем Cache поверх miniredis, сервер сам закрывается по концу теста
 func setupTestCache(t *testing.T) *Cache {
 	t.Helper()
 
@@ -30,8 +29,7 @@ func setupTestCache(t *testing.T) *Cache {
 	}
 }
 
-// setupTestCacheWithMR creates a Cache and returns the underlying miniredis
-// instance so that tests can manipulate time (e.g. FastForward).
+// то же, но отдаём и miniredis чтобы крутить время (FastForward)
 func setupTestCacheWithMR(t *testing.T) (*Cache, *miniredis.Miniredis) {
 	t.Helper()
 

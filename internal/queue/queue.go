@@ -378,7 +378,7 @@ func (qm *QueueManager) clearDedupKeys(ctx context.Context) error {
 		}
 	}
 	// упёрлись в лимит итераций, что удалили - удалили, остальное само протухнет по ttl
-	qm.log.Warn("clearDedupKeys hit max iterations, остановлено для безопасности",
+	qm.log.Warn("clearDedupKeys hit max iterations, stopping",
 		zap.Int("max_iterations", maxIterations),
 	)
 	return nil
