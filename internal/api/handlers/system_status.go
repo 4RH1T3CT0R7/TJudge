@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/queue"
+	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
