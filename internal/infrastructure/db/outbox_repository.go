@@ -23,23 +23,21 @@ const OutboxKindRatingUpdate = "rating_update"
 // (терминальный статус), чтобы «ядовитая» задача не крутилась вечно.
 const outboxMaxAttempts = 10
 
-// OutboxRepository управляет задачами match_outbox.
+// OutboxRepository - запасная таблица match_outbox: если воркер упал между
+// записью результата матча и пересчётом рейтинга, задачу добираем отсюда
 type OutboxRepository struct {
 	db *DB
 }
 
-// NewOutboxRepository создаёт репозиторий outbox-задач.
 func NewOutboxRepository(database *DB) *OutboxRepository {
 	return &OutboxRepository{db: database}
 }
 
 // ClaimPending атомарно забирает пачку зависших pending-задач.
-//
-// Берутся только задачи старше olderThan (свежие обрабатывает fast path
-// воркера) и без активного lease (claimed_at старше минуты или NULL).
-// FOR UPDATE SKIP LOCKED позволяет нескольким диспетчерам работать
-// параллельно без двойного клейма; lease защищает от повторного клейма
-// после выхода из транзакции, пока задача обрабатывается.
+// берём только старше olderThan (свежие тянет fast path воркера) и без
+// живого lease (claimed_at старше минуты или NULL). FOR UPDATE SKIP LOCKED
+// даёт нескольким диспетчерам работать параллельно без двойного клейма,
+// а lease не даёт заклеймить повторно пока задачу обрабатывают
 func (r *OutboxRepository) ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*OutboxEntry, error) {
 	query := `
 		UPDATE match_outbox
@@ -66,7 +64,6 @@ func (r *OutboxRepository) ClaimPending(ctx context.Context, olderThan time.Dura
 	return entries, nil
 }
 
-// MarkDone помечает задачу выполненной.
 func (r *OutboxRepository) MarkDone(ctx context.Context, id int64) error {
 	query := `UPDATE match_outbox SET status = 'done', processed_at = NOW() WHERE id = $1`
 	if _, err := r.db.ExecContext(ctx, query, id); err != nil {
@@ -75,8 +72,8 @@ func (r *OutboxRepository) MarkDone(ctx context.Context, id int64) error {
 	return nil
 }
 
-// MarkFailed записывает ошибку попытки; после outboxMaxAttempts задача
-// переводится в терминальный статус error.
+// MarkFailed пишет ошибку попытки, после outboxMaxAttempts задача
+// уходит в терминальный error
 func (r *OutboxRepository) MarkFailed(ctx context.Context, id int64, errMsg string) error {
 	query := `
 		UPDATE match_outbox
@@ -91,10 +88,9 @@ func (r *OutboxRepository) MarkFailed(ctx context.Context, id int64, errMsg stri
 	return nil
 }
 
-// RetryErrors возвращает терминально-ошибочные задачи (status='error')
-// обратно в pending со сброшенным счётчиком попыток. Используется кнопкой
-// восстановления в админ-панели: после устранения причины (например, починили
-// БД) рейтинги дообрабатываются OutboxDispatcher'ом.
+// RetryErrors возвращает застрявшие в error задачи обратно в pending со
+// сбросом счётчика. дёргается кнопкой восстановления в админке: после того
+// как починили причину (например бд), рейтинги добьёт OutboxDispatcher
 func (r *OutboxRepository) RetryErrors(ctx context.Context) (int64, error) {
 	query := `
 		UPDATE match_outbox
