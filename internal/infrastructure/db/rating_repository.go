@@ -13,17 +13,14 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// RatingRepository - репозиторий для работы с рейтингами
 type RatingRepository struct {
 	db *DB
 }
 
-// NewRatingRepository создаёт новый репозиторий рейтингов
 func NewRatingRepository(db *DB) *RatingRepository {
 	return &RatingRepository{db: db}
 }
 
-// Create создаёт запись в истории рейтингов
 func (r *RatingRepository) Create(ctx context.Context, history *domain.RatingHistory) error {
 	query := `
 		INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
@@ -48,7 +45,6 @@ func (r *RatingRepository) Create(ctx context.Context, history *domain.RatingHis
 	return nil
 }
 
-// GetByProgramID получает историю рейтинга программы
 func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error) {
 	var history []*domain.RatingHistory
 
@@ -68,13 +64,12 @@ func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UU
 	return history, nil
 }
 
-// GetByProgramAndTournament получает историю рейтинга программы в турнире
-// в хронологическом порядке (для графика). Использует составной индекс
-// (program_id, tournament_id); limit ограничивает число последних точек.
+// GetByProgramAndTournament - история рейтинга программы в турнире в
+// хронологии, для графика. limit ограничивает число последних точек
 func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*domain.RatingHistory, error) {
 	var history []*domain.RatingHistory
 
-	// Последние limit записей, развёрнутые в хронологию.
+	// последние limit записей, развёрнутые в хронологию
 	query := `
 		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
 		FROM (
@@ -95,9 +90,9 @@ func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, progra
 	return history, nil
 }
 
-// GetByMatchID получает записи истории рейтинга конкретного матча.
-// Используется OutboxDispatcher'ом как идемпотентный guard: если записи
-// уже существуют, рейтинг по матчу обработан и повторять его нельзя.
+// GetByMatchID - записи истории рейтинга по матчу. OutboxDispatcher юзает
+// как идемпотентный guard: если по матчу уже есть rating_history значит
+// рейтинг посчитан, второй раз применять нельзя (иначе задвоится)
 func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*domain.RatingHistory, error) {
 	var history []*domain.RatingHistory
 
@@ -115,7 +110,6 @@ func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) 
 	return history, nil
 }
 
-// GetByTournamentID получает историю рейтинга в турнире
 func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.RatingHistory, error) {
 	var history []*domain.RatingHistory
 
@@ -135,22 +129,11 @@ func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID u
 	return history, nil
 }
 
-// UpdateParticipantRating обновляет рейтинг участника турнира (delta-based).
-//
-// Инвариант: UPDATE вычисляет `rating + $3` В САМОЙ БД, под row-level
-// lock'ом PostgreSQL. Это значит, что concurrent UPDATE-ы НЕ теряют deltas:
-// БД сериализует их через MVCC и суммирует корректно.
-//
-// Известное ограничение: вычисление delta (в `rating.Service.ProcessMatchResult`)
-// использует rating, прочитанный ДО транзакции. Для параллельных матчей
-// одного участника это даёт snapshot-based delta, а не "тотально синхронное"
-// ELO. В массовых RR-турнирах эффект размывается и приемлем. Строгая
-// сериализация потребует advisory lock на (tournament_id, program_id),
-// пока отложено (см. план).
-//
-// Все вызовы этого метода должны идти через ProcessMatchResultAtomic, который
-// обрабатывает обоих участников матча в одной транзакции (гарантирует
-// нулевую сумму delta per match).
+// UpdateParticipantRating прибавляет дельту к рейтингу участника.
+// важно: rating + $3 считается в самой бд под row-lock, поэтому
+// параллельные апдейты не теряют дельты (mvcc сериализует и суммирует).
+// строгая сериализация через advisory lock на (tournament_id, program_id)
+// пока отложена, см. план
 func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
 	query := `
 		UPDATE tournament_participants
@@ -175,7 +158,6 @@ func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tourname
 	return nil
 }
 
-// UpdateParticipantStats обновляет статистику участника (wins/losses/draws)
 func (r *RatingRepository) UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error {
 	var query string
 
@@ -216,7 +198,6 @@ func (r *RatingRepository) UpdateParticipantStats(ctx context.Context, tournamen
 	return nil
 }
 
-// GetParticipantRating получает текущий рейтинг участника турнира
 func (r *RatingRepository) GetParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID) (int, error) {
 	var rating int
 
@@ -237,7 +218,6 @@ func (r *RatingRepository) GetParticipantRating(ctx context.Context, tournamentI
 	return rating, nil
 }
 
-// GetParticipantRatings получает рейтинги обоих участников матча
 func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (rating1, rating2 int, err error) {
 	query := `
 		SELECT rating
@@ -245,7 +225,7 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 		WHERE tournament_id = $1 AND program_id = $2
 	`
 
-	// Получаем рейтинг первого участника
+	// рейтинг первого участника
 	err = r.db.QueryRowContext(ctx, query, tournamentID, program1ID).Scan(&rating1)
 	if stderrors.Is(err, sql.ErrNoRows) {
 		return 0, 0, errors.ErrNotFound.WithMessage("program1 not found in tournament")
@@ -254,7 +234,7 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 		return 0, 0, errors.Wrap(err, "failed to get program1 rating")
 	}
 
-	// Получаем рейтинг второго участника
+	// рейтинг второго участника
 	err = r.db.QueryRowContext(ctx, query, tournamentID, program2ID).Scan(&rating2)
 	if stderrors.Is(err, sql.ErrNoRows) {
 		return 0, 0, errors.ErrNotFound.WithMessage("program2 not found in tournament")
@@ -266,9 +246,9 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 	return rating1, rating2, nil
 }
 
-// ResetParticipantsForGame сбрасывает рейтинги и статистику всех участников для определённой игры
+// ResetParticipantsForGame сбрасывает рейтинг и статистику участников по игре
 func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
-	// Сначала получаем программы для этой игры
+	// апдейтим только участников, чьи программы этой игры
 	query := `
 		UPDATE tournament_participants tp
 		SET rating = 1500, wins = 0, losses = 0, draws = 0
@@ -291,7 +271,7 @@ func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournam
 	return rows, nil
 }
 
-// UpdateParticipantRatingAndStats atomically updates rating (delta-based) and stats for a participant
+// UpdateParticipantRatingAndStats атомарно обновляет рейтинг (дельтой) и статистику участника
 func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error {
 	var statsField string
 	if won {
@@ -325,12 +305,13 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 	return nil
 }
 
-// ProcessMatchResultAtomic выполняет все обновления рейтингов и статистики для обоих участников
-// матча в одной транзакции. Если любая операция падает, все откатываются.
+// ProcessMatchResultAtomic обновляет рейтинг и статистику обоих участников
+// матча в одной транзакции. падает любая операция - откатывается всё
+// (за счёт этого дельты за матч дают нулевую сумму)
 func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *rating.ParticipantUpdate) error {
 	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
 		for _, u := range []*rating.ParticipantUpdate{update1, update2} {
-			// Вставляем запись в историю рейтингов
+			// пишем запись в историю рейтингов
 			insertQuery := `
 				INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -349,7 +330,7 @@ func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1
 				return errors.Wrap(err, fmt.Sprintf("failed to create rating history for program %s", u.ProgramID))
 			}
 
-			// Атомарно обновляем рейтинг и статистику участника
+			// атомарно обновляем рейтинг и статистику участника
 			var statsField string
 			if u.Won {
 				statsField = "wins = wins + 1"
@@ -383,7 +364,6 @@ func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1
 	})
 }
 
-// DeleteRatingHistoryForGame удаляет историю рейтингов для определённой игры
 func (r *RatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
 	query := `
 		DELETE FROM rating_history rh
