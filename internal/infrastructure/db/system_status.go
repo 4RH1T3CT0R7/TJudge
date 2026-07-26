@@ -15,7 +15,6 @@ type SystemStatusRepository struct {
 	db *DB
 }
 
-// NewSystemStatusRepository создаёт репозиторий статуса системы.
 func NewSystemStatusRepository(database *DB) *SystemStatusRepository {
 	return &SystemStatusRepository{db: database}
 }
@@ -118,12 +117,10 @@ func (r *SystemStatusRepository) StuckRunningCount(ctx context.Context, olderTha
 	return count, nil
 }
 
-// ConnectionStats возвращает статистику пула соединений БД.
 func (r *SystemStatusRepository) ConnectionStats() sql.DBStats {
 	return r.db.Stats()
 }
 
-// Healthy проверяет доступность БД.
 func (r *SystemStatusRepository) Healthy(ctx context.Context) bool {
 	return r.db.Health(ctx) == nil
 }
