@@ -11,17 +11,14 @@ import (
 	"github.com/lib/pq"
 )
 
-// MatchRepository - репозиторий для работы с матчами
 type MatchRepository struct {
 	db *DB
 }
 
-// NewMatchRepository создаёт новый репозиторий матчей
 func NewMatchRepository(db *DB) *MatchRepository {
 	return &MatchRepository{db: db}
 }
 
-// Create создаёт новый матч
 func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error {
 	query := `
 		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number, created_at)
@@ -47,7 +44,8 @@ func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error
 	return nil
 }
 
-// CreateBatch создаёт несколько матчей одновременно
+// CreateBatch вставляет пачку матчей в одной транзакции.
+// prepared statement переиспользуем, чтобы не парсить один и тот же запрос на каждый матч
 func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Match) error {
 	if len(matches) == 0 {
 		return nil
@@ -94,9 +92,9 @@ func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Mat
 	return nil
 }
 
-// DeleteBatch удаляет матчи по списку ID одним запросом.
-// Используется для компенсации (rollback) при ошибке EnqueueBatch.
-// Идемпотентен: отсутствующие ID просто пропускаются без ошибки.
+// DeleteBatch сносит матчи по списку id одним запросом.
+// нужно для отката, если EnqueueBatch упал уже после вставки матчей.
+// идемпотентно - если каких-то id уже нет, ошибки не будет
 func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
 	if len(ids) == 0 {
 		return nil
@@ -113,7 +111,6 @@ func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) erro
 	return nil
 }
 
-// GetByID получает матч по ID
 func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error) {
 	var match domain.Match
 

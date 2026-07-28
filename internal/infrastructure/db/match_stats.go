@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// MatchStatistics - статистика матчей
+// MatchStatistics - счётчики матчей по статусам (отдаём в /matches/queue/stats)
 type MatchStatistics struct {
 	Total     int `json:"total"`
 	Pending   int `json:"pending"`
@@ -18,8 +18,7 @@ type MatchStatistics struct {
 	Failed    int `json:"failed"`
 }
 
-// HasStartedMatches проверяет, есть ли запущенные или завершённые матчи для турнира и игры
-// Возвращает true, если есть матчи со статусом running или completed
+// HasStartedMatches - есть ли по этой игре уже running или completed матчи
 func (r *MatchRepository) HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
 	query := `
 		SELECT EXISTS(
@@ -39,8 +38,8 @@ func (r *MatchRepository) HasStartedMatches(ctx context.Context, tournamentID uu
 	return exists, nil
 }
 
-// HasAnyRunningMatches проверяет, есть ли запущенные (running) или ожидающие (pending) матчи
-// для любой игры в турнире. Используется для блокировки загрузки программ когда раунд активен.
+// HasAnyRunningMatches - есть ли в турнире running/pending матчи по любой игре.
+// нужно чтобы не давать грузить программы пока раунд крутится
 func (r *MatchRepository) HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error) {
 	query := `
 		SELECT EXISTS(
@@ -59,8 +58,8 @@ func (r *MatchRepository) HasAnyRunningMatches(ctx context.Context, tournamentID
 	return exists, nil
 }
 
-// GetActiveGameType возвращает тип игры, для которой сейчас выполняются матчи.
-// Возвращает пустую строку, если нет активных матчей.
+// GetActiveGameType - какая игра сейчас крутится (running в приоритете, потом pending).
+// пустая строка, если активных матчей нет
 func (r *MatchRepository) GetActiveGameType(ctx context.Context, tournamentID uuid.UUID) (string, error) {
 	query := `
 		SELECT COALESCE(
@@ -84,7 +83,6 @@ func (r *MatchRepository) GetActiveGameType(ctx context.Context, tournamentID uu
 	return gameType, nil
 }
 
-// GetNextRoundNumber получает следующий номер раунда для турнира
 func (r *MatchRepository) GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	var maxRound sql.NullInt64
 
@@ -102,7 +100,6 @@ func (r *MatchRepository) GetNextRoundNumber(ctx context.Context, tournamentID u
 	return int(maxRound.Int64) + 1, nil
 }
 
-// GetNextRoundNumberByGame получает следующий номер раунда для конкретной игры в турнире
 func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
 	query := `
 		SELECT COALESCE(MAX(round_number), 0) + 1
@@ -119,7 +116,6 @@ func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tourname
 	return nextRound, nil
 }
 
-// GetStatistics получает статистику матчей
 func (r *MatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*MatchStatistics, error) {
 	query := `
 		SELECT
