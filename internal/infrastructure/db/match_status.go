@@ -10,14 +10,12 @@ import (
 	"github.com/lib/pq"
 )
 
-// UpdateStatus обновляет статус матча
 func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MatchStatus) error {
 	var query string
 
 	if status == domain.MatchRunning {
-		// Только pending матчи могут перейти в running.
-		// Это предотвращает повторную обработку матча, если он оказался
-		// в очереди дважды (например, при retry).
+		// в running переходим только из pending - защита от двойной обработки,
+		// если матч случайно оказался в очереди дважды (retry)
 		query = `
 			UPDATE matches
 			SET status = $2, started_at = NOW()
@@ -42,6 +40,7 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	}
 
 	if rows == 0 {
+		// строк 0 при running = матч уже не pending, кто-то его увёл (не not found!)
 		if status == domain.MatchRunning {
 			return domain.ErrMatchAlreadyProcessed
 		}
@@ -51,7 +50,6 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	return nil
 }
 
-// UpdateResult обновляет результат матча
 func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
 	query := `
 		UPDATE matches
@@ -92,11 +90,9 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 	return nil
 }
 
-// UpdateResultWithOutbox обновляет результат матча и в той же транзакции
-// записывает outbox-задачу «обновить рейтинг» (для успешно завершённых
-// матчей с определившимся победителем). Гарантия: если результат
-// зафиксирован, рейтинг будет обработан - сразу воркером (fast path)
-// или OutboxDispatcher'ом после сбоя.
+// UpdateResultWithOutbox пишет результат матча и в той же транзакции кладёт
+// outbox-задачу на пересчёт рейтинга. смысл: если результат сохранён, рейтинг
+// точно посчитается - сразу воркером или потом аутбокс-диспетчером после сбоя
 func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
 	status := domain.MatchCompleted
 	if result.ErrorCode != 0 {
@@ -126,6 +122,7 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 			return errors.Wrap(err, "failed to update match result")
 		}
 
+		// outbox только для успешных матчей с победителем/ничьёй (winner>=0)
 		if status == domain.MatchCompleted && result.Winner >= 0 {
 			outboxQuery := `INSERT INTO match_outbox (match_id, kind) VALUES ($1, $2)`
 			if _, err := tx.ExecContext(ctx, outboxQuery, id, OutboxKindRatingUpdate); err != nil {
@@ -137,8 +134,7 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 	})
 }
 
-// MarkRatingApplied помечает outbox-задачу рейтинга выполненной (fast path:
-// воркер успел обновить рейтинг сразу после записи результата).
+// MarkRatingApplied - fast path: воркер сразу посчитал рейтинг, гасим outbox-задачу
 func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
 	query := `
 		UPDATE match_outbox
@@ -151,10 +147,8 @@ func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UU
 	return nil
 }
 
-// ResetToPending возвращает матч из running в pending после транзиентной
-// инфраструктурной ошибки executor'а (Docker daemon недоступен и т.п.):
-// программа участника не виновата, матч будет повторён - ретраем пула
-// или периодическим recovery-сервисом.
+// ResetToPending возвращает матч running->pending при транзиентной ошибке
+// executor'а (докер недоступен и т.п.) - программа не виновата, матч повторим
 func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
 	query := `
 		UPDATE matches
@@ -167,7 +161,7 @@ func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
-// ResetFailedMatches сбрасывает все failed матчи турнира в pending
+// ResetFailedMatches - все failed матчи турнира обратно в pending
 func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
 	query := `
 		UPDATE matches
@@ -189,7 +183,6 @@ func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID u
 	return rows, nil
 }
 
-// BatchUpdateStatus обновляет статус для нескольких матчей одновременно
 func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status domain.MatchStatus) error {
 	if len(matchIDs) == 0 {
 		return nil
@@ -203,7 +196,7 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 
 	var query string
 	if status == domain.MatchRunning {
-		// Только pending матчи могут перейти в running (защита от дублирования)
+		// тот же guard что в UpdateStatus, только пачкой
 		query = `
 			UPDATE matches
 			SET status = $1, started_at = NOW()
@@ -229,7 +222,6 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 	return nil
 }
 
-// BatchUpdateResults обновляет результаты для нескольких матчей одновременно
 func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*domain.MatchResult) error {
 	if len(results) == 0 {
 		return nil
@@ -291,7 +283,7 @@ func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uu
 	return nil
 }
 
-// DeleteMatchesForGame удаляет все матчи турнира для определённой игры
+// DeleteMatchesForGame - снести все матчи турнира по игре
 func (r *MatchRepository) DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
 	query := `DELETE FROM matches WHERE tournament_id = $1 AND game_type = $2`
 

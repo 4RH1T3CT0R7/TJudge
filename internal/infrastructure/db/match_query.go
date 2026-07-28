@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetByTournamentID получает все матчи турнира
 func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
 	var matches []*domain.Match
 
@@ -63,7 +62,6 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	return matches, nil
 }
 
-// GetPendingByTournamentID получает ожидающие матчи турнира по приоритету
 func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error) {
 	var matches []*domain.Match
 
@@ -120,7 +118,6 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 	return matches, nil
 }
 
-// GetPendingByTournamentAndGame получает ожидающие матчи турнира для конкретной игры
 func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error) {
 	var matches []*domain.Match
 
@@ -177,10 +174,8 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 	return matches, nil
 }
 
-// GetPlayedProgramPairs возвращает множество пар (program1_id, program2_id),
-// для которых уже существуют матчи (любого статуса) в данном турнире и игре.
-// Ключи формата "uuid1|uuid2" направленные (AB не равно BA), что соответствует
-// round-robin генерации, которая создаёт матчи в обоих направлениях.
+// GetPlayedProgramPairs - пары программ, которые уже играли в этом турнире и игре (любой статус).
+// ключ "uuid1|uuid2" направленный, AB и BA считаем разными - round-robin гоняет обе ориентации
 func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
 	query := `
 		SELECT program1_id, program2_id
@@ -211,7 +206,6 @@ func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentI
 	return pairs, nil
 }
 
-// GetMatchesByRounds получает матчи турнира сгруппированные по раундам и играм
 func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
 	query := `
 		SELECT
@@ -258,7 +252,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// Получаем все матчи турнира одним запросом вместо N+1
+	// тянем все матчи турнира разом чтобы не делать N+1
 	matchQuery := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
@@ -273,7 +267,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 	}
 	defer matchRows.Close()
 
-	// Индексируем раунды по (round_number, game_type) для быстрого поиска
+	// индексируем раунды по (round_number, game_type) чтобы быстро раскидать матчи
 	type roundKey struct {
 		roundNumber int
 		gameType    string
@@ -318,7 +312,6 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 	return rounds, nil
 }
 
-// List получает список матчей с фильтрацией и пагинацией
 func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -329,38 +322,33 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 	args := []any{}
 	argCount := 1
 
-	// Фильтр по турниру
 	if filter.TournamentID != nil {
 		query += fmt.Sprintf(" AND tournament_id = $%d", argCount)
 		args = append(args, *filter.TournamentID)
 		argCount++
 	}
 
-	// Фильтр по программе (участвует как program1 или program2)
+	// программа могла быть и первой и второй, поэтому OR по обоим полям
 	if filter.ProgramID != nil {
 		query += fmt.Sprintf(" AND (program1_id = $%d OR program2_id = $%d)", argCount, argCount)
 		args = append(args, *filter.ProgramID)
 		argCount++
 	}
 
-	// Фильтр по статусу
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, filter.Status)
 		argCount++
 	}
 
-	// Фильтр по типу игры
 	if filter.GameType != "" {
 		query += fmt.Sprintf(" AND game_type = $%d", argCount)
 		args = append(args, filter.GameType)
 		argCount++
 	}
 
-	// Сортировка (по умолчанию - сначала новые раунды)
 	query += " ORDER BY round_number DESC, created_at DESC"
 
-	// Пагинация
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argCount)
 		args = append(args, filter.Limit)
@@ -411,7 +399,6 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 	return matches, nil
 }
 
-// GetByIDs получает несколько матчей по их ID за один запрос
 func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error) {
 	if len(ids) == 0 {
 		return []*domain.Match{}, nil
@@ -465,7 +452,6 @@ func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*dom
 	return matches, nil
 }
 
-// GetPending получает ожидающие матчи по приоритету
 func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.Match, error) {
 	var matches []*domain.Match
 
@@ -523,20 +509,17 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 	return matches, nil
 }
 
-// ListWithCursor получает список матчей с cursor-based пагинацией
+// ListWithCursor - список матчей через cursor-пагинацию (курсор по created_at)
 func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.MatchFilter, pageReq *pagination.PageRequest) ([]*domain.Match, bool, error) {
-	// Валидация запроса пагинации
 	if err := pageReq.Validate(); err != nil {
 		return nil, false, errors.Wrap(err, "invalid pagination request")
 	}
 
-	// Получаем курсор
 	cursor, err := pageReq.GetCursor()
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to decode cursor")
 	}
 
-	// Базовый запрос
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
@@ -546,35 +529,31 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 	args := []any{}
 	argCount := 1
 
-	// Фильтр по турниру
 	if filter.TournamentID != nil {
 		query += fmt.Sprintf(" AND tournament_id = $%d", argCount)
 		args = append(args, *filter.TournamentID)
 		argCount++
 	}
 
-	// Фильтр по программе
 	if filter.ProgramID != nil {
 		query += fmt.Sprintf(" AND (program1_id = $%d OR program2_id = $%d)", argCount, argCount)
 		args = append(args, *filter.ProgramID)
 		argCount++
 	}
 
-	// Фильтр по статусу
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, filter.Status)
 		argCount++
 	}
 
-	// Фильтр по типу игры
 	if filter.GameType != "" {
 		query += fmt.Sprintf(" AND game_type = $%d", argCount)
 		args = append(args, filter.GameType)
 		argCount++
 	}
 
-	// Применяем курсор для пагинации
+	// forward - идём в прошлое (created_at меньше курсора), backward - в обратную сторону
 	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
 		if pageReq.IsForward() {
 			query += fmt.Sprintf(" AND created_at < $%d", argCount)
@@ -585,14 +564,13 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 		argCount++
 	}
 
-	// Сортировка
 	if pageReq.IsBackward() {
 		query += " ORDER BY round_number ASC, created_at ASC"
 	} else {
 		query += " ORDER BY round_number DESC, created_at DESC"
 	}
 
-	// Добавляем +1 к лимиту для определения hasNextPage
+	// берём на одну строку больше лимита - если она пришла, значит есть следующая страница
 	limit := pageReq.GetLimit() + 1
 	query += fmt.Sprintf(" LIMIT $%d", argCount)
 	args = append(args, limit)
@@ -634,13 +612,12 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 		return nil, false, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// Определяем, есть ли ещё страницы
 	hasMore := len(matches) > pageReq.GetLimit()
 	if hasMore {
 		matches = matches[:len(matches)-1]
 	}
 
-	// Для backward pagination разворачиваем результаты
+	// при backward выбирали в обратном порядке, разворачиваем обратно
 	if pageReq.IsBackward() {
 		for i, j := 0, len(matches)-1; i < j; i, j = i+1, j-1 {
 			matches[i], matches[j] = matches[j], matches[i]
@@ -650,7 +627,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 	return matches, hasMore, nil
 }
 
-// GetStuckRunning получает матчи, застрявшие в статусе running дольше указанного времени
+// GetStuckRunning - матчи, зависшие в running дольше stuckDuration (воркер умер посреди матча)
 func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error) {
 	var matches []*domain.Match
 
