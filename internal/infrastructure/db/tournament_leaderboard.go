@@ -10,13 +10,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetLeaderboard получает таблицу лидеров турнира «живым» запросом.
-// Рейтинг = сумма всех очков из всех матчей.
-//
-// Матчи разворачиваются в «стороны» через UNION ALL вместо
-// JOIN ... ON (program1_id = p.id OR program2_id = p.id): OR-join ломал
-// index scan и сканировал партиции matches целиком, а UNION ALL позволяет
-// каждой ветке использовать индекс по (tournament_id, game_type, status).
+// GetLeaderboard - живой лидерборд турнира, рейтинг это просто сумма очков по всем матчам.
+// матчи разворачиваем в стороны через UNION ALL, а не JOIN с OR по program1_id/program2_id:
+// OR-join ломал index scan и читал партиции matches целиком, а с UNION ALL каждая ветка
+// идёт по индексу (tournament_id, game_type, status).
+// живой запрос, на больших турнирах тяжеловат но пока ок
 func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
 	query := `
 		WITH match_sides AS (
@@ -103,8 +101,8 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 	return leaderboard, nil
 }
 
-// GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
-// Рейтинг = сумма всех очков из всех матчей
+// GetCrossGameLeaderboard - агрегированный рейтинг по всем играм турнира.
+// рейтинг команды это сумма очков из всех матчей, очки масштабируются на score_multiplier игры
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
 	// Получаем все команды и программы в турнире со статистикой по каждой игре
 	// Используем team_id для связи матчей (чтобы учитывать все версии программ команды)
@@ -243,7 +241,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			return nil, errors.Wrap(err, "failed to scan cross-game leaderboard entry")
 		}
 
-		// Parse game ratings JSON
+		// разбираем game_ratings из json
 		entry.GameRatings = make(map[string]domain.GameRatingInfo)
 		if gameRatingsJSON != nil {
 			var rawRatings map[string]domain.GameRatingInfo
@@ -262,9 +260,8 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 	return entries, nil
 }
 
-// GetLeaderboardByGameType получает таблицу лидеров для конкретной игры в турнире
-// gameType - имя игры (game.name), используется для фильтрации матчей
-// Рейтинг = сумма всех очков из всех матчей
+// GetLeaderboardByGameType - лидерборд одной игры в турнире.
+// gameType это имя игры (game.name), по нему фильтруем матчи
 func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
 	// Получаем рейтинг на основе результатов матчей для конкретной игры
 	// Используем team_id для агрегации (чтобы учитывать все версии программ команды)
@@ -378,10 +375,9 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 	return leaderboard, nil
 }
 
-// GetHeadToHead возвращает агрегат личных встреч всех пар команд в игре
-// турнира. Обе ориентации матча (AB и BA) сливаются UNION ALL'ом: каждая
-// завершённая встреча даёт две перспективы, дальше GROUP BY по паре команд.
-// Дисквалифицированные команды исключаются, как и в лидербордах.
+// GetHeadToHead - матрица личных встреч всех пар команд в игре турнира.
+// обе ориентации матча (AB и BA) сливаем через UNION ALL: одна встреча даёт
+// две перспективы, потом группируем по паре команд. дисквалифицированных исключаем.
 func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
 	query := `
 		WITH sides AS (
