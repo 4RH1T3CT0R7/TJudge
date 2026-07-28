@@ -14,20 +14,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// orderByCreatedAtDesc - SQL-фрагмент сортировки по дате создания
 const orderByCreatedAtDesc = " ORDER BY created_at DESC"
 
-// TeamRepository - репозиторий для работы с командами
 type TeamRepository struct {
 	db *DB
 }
 
-// NewTeamRepository создаёт новый репозиторий команд
 func NewTeamRepository(db *DB) *TeamRepository {
 	return &TeamRepository{db: db}
 }
 
-// Create создаёт новую команду
 func (r *TeamRepository) Create(ctx context.Context, team *domain.Team) error {
 	query := `
 		INSERT INTO teams (id, tournament_id, name, code, leader_id)
@@ -50,7 +46,6 @@ func (r *TeamRepository) Create(ctx context.Context, team *domain.Team) error {
 	return nil
 }
 
-// GetByID получает команду по ID
 func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
 	var team domain.Team
 
@@ -82,7 +77,6 @@ func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tea
 	return &team, nil
 }
 
-// GetByCode получает команду по уникальному коду
 func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Team, error) {
 	var team domain.Team
 
@@ -114,7 +108,6 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 	return &team, nil
 }
 
-// GetByTournamentID получает все команды турнира
 func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
@@ -158,7 +151,6 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 	return teams, nil
 }
 
-// List получает список команд с фильтрацией
 func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]*domain.Team, error) {
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
@@ -227,7 +219,6 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 	return teams, nil
 }
 
-// Update обновляет команду
 func (r *TeamRepository) Update(ctx context.Context, team *domain.Team) error {
 	query := `
 		UPDATE teams
@@ -252,7 +243,6 @@ func (r *TeamRepository) Update(ctx context.Context, team *domain.Team) error {
 	return nil
 }
 
-// Delete удаляет команду
 func (r *TeamRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM teams WHERE id = $1`
 
@@ -273,7 +263,6 @@ func (r *TeamRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// AddMember добавляет участника в команду
 func (r *TeamRepository) AddMember(ctx context.Context, member *domain.TeamMember) error {
 	query := `
 		INSERT INTO team_members (id, team_id, user_id)
@@ -294,7 +283,6 @@ func (r *TeamRepository) AddMember(ctx context.Context, member *domain.TeamMembe
 	return nil
 }
 
-// RemoveMember удаляет участника из команды
 func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
 	query := `DELETE FROM team_members WHERE team_id = $1 AND user_id = $2`
 
@@ -315,7 +303,6 @@ func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, userID uuid.U
 	return nil
 }
 
-// GetMembers получает всех участников команды
 func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	query := `
 		SELECT id, team_id, user_id, joined_at
@@ -354,7 +341,6 @@ func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*d
 	return members, nil
 }
 
-// GetMemberCount получает количество участников команды
 func (r *TeamRepository) GetMemberCount(ctx context.Context, teamID uuid.UUID) (int, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM team_members WHERE team_id = $1`
@@ -367,7 +353,6 @@ func (r *TeamRepository) GetMemberCount(ctx context.Context, teamID uuid.UUID) (
 	return count, nil
 }
 
-// IsUserInTeam проверяет, является ли пользователь членом команды
 func (r *TeamRepository) IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM team_members WHERE team_id = $1 AND user_id = $2)`
@@ -380,7 +365,6 @@ func (r *TeamRepository) IsUserInTeam(ctx context.Context, teamID, userID uuid.U
 	return exists, nil
 }
 
-// IsUserInAnyTeamInTournament проверяет, состоит ли пользователь в какой-либо команде турнира
 func (r *TeamRepository) IsUserInAnyTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (bool, error) {
 	var exists bool
 	query := `
@@ -399,7 +383,6 @@ func (r *TeamRepository) IsUserInAnyTeamInTournament(ctx context.Context, tourna
 	return exists, nil
 }
 
-// GetUserTeamInTournament получает команду пользователя в турнире
 func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error) {
 	var team domain.Team
 
@@ -432,7 +415,6 @@ func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournament
 	return &team, nil
 }
 
-// GenerateUniqueCode генерирует уникальный код для команды
 func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	const codeLength = 6
@@ -450,7 +432,7 @@ func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error)
 
 		codeStr := string(code)
 
-		// Проверяем уникальность
+		// проверяем что такого кода ещё нет
 		var exists bool
 		query := `SELECT EXISTS(SELECT 1 FROM teams WHERE code = $1)`
 		err := r.db.QueryRowContext(ctx, query, codeStr).Scan(&exists)
@@ -466,14 +448,13 @@ func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error)
 	return "", errors.ErrInternal.WithMessage("failed to generate unique code after max attempts")
 }
 
-// GetTeamWithMembers получает команду вместе с участниками
 func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error) {
 	team, err := r.GetByID(ctx, teamID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Получаем участников с информацией о пользователях
+	// тянем участников вместе с инфой о пользователях
 	query := `
 		SELECT u.id, u.username, u.email, u.role, u.created_at, u.updated_at
 		FROM users u
@@ -515,7 +496,6 @@ func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUI
 	}, nil
 }
 
-// IsTeamDisqualified проверяет, дисквалифицирована ли команда
 func (r *TeamRepository) IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error) {
 	var disqualified bool
 	query := `SELECT is_disqualified FROM teams WHERE id = $1`
@@ -531,7 +511,6 @@ func (r *TeamRepository) IsTeamDisqualified(ctx context.Context, teamID uuid.UUI
 	return disqualified, nil
 }
 
-// RestoreTeam снимает дисквалификацию с команды
 func (r *TeamRepository) RestoreTeam(ctx context.Context, teamID uuid.UUID) error {
 	query := `
 		UPDATE teams
@@ -555,8 +534,9 @@ func (r *TeamRepository) RestoreTeam(ctx context.Context, teamID uuid.UUID) erro
 	return nil
 }
 
-// DisqualifyTeamFull выполняет полную дисквалификацию команды в транзакции:
-// помечает команду, удаляет завершённые матчи, отменяет pending, сбрасывает рейтинги.
+// DisqualifyTeamFull целиком дисквалифицирует команду в одной транзакции:
+// метит команду, чистит завершённые матчи и их rating_history,
+// отменяет pending/running и обнуляет статистику участников
 func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (matchesDeleted, matchesCancelled, ratingHistoryDeleted int64, err error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -564,7 +544,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// 1. Пометить команду как дисквалифицированную
+	// 1. метим команду дисквалифицированной
 	_, err = tx.ExecContext(ctx, `
 		UPDATE teams SET is_disqualified = true, disqualified_at = NOW(), updated_at = NOW()
 		WHERE id = $1
@@ -573,7 +553,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		return 0, 0, 0, errors.Wrap(err, "failed to mark team as disqualified")
 	}
 
-	// 2. Получить ID программ этой команды в этом турнире
+	// 2. берём id программ этой команды в этом турнире
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id FROM programs WHERE team_id = $1 AND tournament_id = $2
 	`, teamID, tournamentID)
@@ -596,14 +576,14 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 
 	if len(programIDs) == 0 {
-		// Нет программ, просто коммитим дисквалификацию
+		// программ нет — просто коммитим отметку и выходим
 		if err := tx.Commit(); err != nil {
 			return 0, 0, 0, errors.Wrap(err, "failed to commit transaction")
 		}
 		return 0, 0, 0, nil
 	}
 
-	// Формируем массив для SQL IN
+	// строю плейсхолдеры руками, sqlx.In лень подключать
 	pidStrings := make([]any, len(programIDs))
 	var placeholders strings.Builder
 	for i, pid := range programIDs {
@@ -614,7 +594,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		fmt.Fprintf(&placeholders, "$%d", i+2) // $2, $3, ...
 	}
 
-	// 3. Удалить rating_history для завершённых матчей с участием программ команды
+	// 3. сносим rating_history по завершённым матчам с программами команды
 	args := append([]any{tournamentID}, pidStrings...)
 	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM rating_history
@@ -631,7 +611,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	ratingHistoryDeleted, _ = result.RowsAffected()
 
-	// 4. Удалить завершённые матчи
+	// 4. сносим сами завершённые матчи
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM matches
 		WHERE tournament_id = $1
@@ -643,7 +623,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesDeleted, _ = result.RowsAffected()
 
-	// 5. Отменить pending и running матчи (running воркер пропустит при финализации)
+	// 5. отменяем pending и running (running воркер сам пропустит на финализации)
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE matches
 		SET status = 'cancelled', error_message = 'Team disqualified'
@@ -656,7 +636,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesCancelled, _ = result.RowsAffected()
 
-	// 6. Сбросить статистику только дисквалифицированной команды
+	// 6. обнуляем статистику только у этой команды
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE tournament_participants
 		SET rating = 1500, wins = 0, losses = 0, draws = 0
