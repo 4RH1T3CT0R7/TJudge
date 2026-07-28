@@ -13,17 +13,14 @@ import (
 	"github.com/lib/pq"
 )
 
-// ProgramRepository - репозиторий для работы с программами
 type ProgramRepository struct {
 	db *DB
 }
 
-// NewProgramRepository создаёт новый репозиторий программ
 func NewProgramRepository(db *DB) *ProgramRepository {
 	return &ProgramRepository{db: db}
 }
 
-// Create создаёт новую программу
 func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program) error {
 	if program.Status == "" {
 		program.Status = domain.ProgramReady
@@ -58,10 +55,10 @@ func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program)
 	return nil
 }
 
-// CreateWithAtomicVersion создаёт программу с атомарным назначением версии.
-// Версия вычисляется как COALESCE(MAX(version), 0) + 1 внутри INSERT.
-// При конкурентных загрузках уникальный индекс может вызвать конфликт;
-// в этом случае запрос автоматически повторяется (до 3 раз).
+// CreateWithAtomicVersion создаёт программу и сам считает версию:
+// COALESCE(MAX(version),0)+1 прямо внутри INSERT, без отдельного запроса.
+// если две загрузки прилетели одновременно — уникальный индекс ругнётся,
+// тогда повторяем с новым id, до 3 раз
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
 	if program.Status == "" {
 		program.Status = domain.ProgramReady
@@ -96,10 +93,10 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 			return nil
 		}
 
-		// Retry on unique constraint violation (concurrent version collision)
+		// повтор на конфликте уникального индекса (две версии столкнулись)
 		var pqErr *pq.Error
 		if stderrors.As(err, &pqErr) && pqErr.Code == "23505" && attempt < maxRetries-1 {
-			program.ID = uuid.New() // New ID for retry since the failed INSERT may have consumed the old one
+			program.ID = uuid.New() // новый id на повтор, старый мог сгореть на упавшем INSERT
 			continue
 		}
 
@@ -109,7 +106,6 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 	return errors.Wrap(fmt.Errorf("max retries exceeded"), "failed to create program with atomic version")
 }
 
-// GetByID получает программу по ID
 func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
 	var program domain.Program
 
@@ -147,7 +143,6 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return &program, nil
 }
 
-// GetByIDs получает программы по списку ID за один запрос
 func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -169,7 +164,6 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*d
 	return programs, nil
 }
 
-// GetByUserID получает все программы пользователя
 func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
@@ -218,7 +212,6 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	return programs, nil
 }
 
-// GetByUserIDAndGameType получает программы пользователя по типу игры
 func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID uuid.UUID, gameType string) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
@@ -267,7 +260,6 @@ func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID u
 	return programs, nil
 }
 
-// Update обновляет программу
 func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program) error {
 	query := `
 		UPDATE programs
@@ -294,9 +286,9 @@ func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program)
 	return nil
 }
 
-// UpdateCompileResult записывает итог компиляции: статус, путь к исполняемому
-// файлу (бинарник или исходник для интерпретируемых языков) и сообщение об
-// ошибке. Вызывается compile-worker'ом после сборки в Docker-песочнице.
+// UpdateCompileResult пишет итог компиляции: статус, путь к бинарю
+// (или к исходнику для интерпретируемых языков) и текст ошибки.
+// зовётся из compile-worker'а после сборки в докер-песочнице
 func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status domain.ProgramStatus, codePath string, errorMessage *string) error {
 	query := `
 		UPDATE programs
@@ -320,9 +312,9 @@ func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-// GetStuckCompiling возвращает программы, зависшие в статусе compiling дольше
-// olderThan: задача потерялась (краш между созданием программы и enqueue,
-// падение Redis). Compile-worker периодически возвращает их в очередь.
+// GetStuckCompiling достаёт программы, застрявшие в compiling дольше olderThan —
+// значит задача где-то потерялась (упали между созданием и enqueue, или редис лёг).
+// compile-worker периодически закидывает их обратно в очередь
 func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
@@ -342,7 +334,6 @@ func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan tim
 	return programs, nil
 }
 
-// Delete удаляет программу
 func (r *ProgramRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM programs WHERE id = $1`
 
@@ -363,7 +354,6 @@ func (r *ProgramRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// CheckOwnership проверяет, принадлежит ли программа пользователю
 func (r *ProgramRepository) CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error) {
 	var exists bool
 
@@ -382,7 +372,6 @@ func (r *ProgramRepository) CheckOwnership(ctx context.Context, programID, userI
 	return exists, nil
 }
 
-// ClearErrorMessages очищает error_message для всех программ в турнире
 func (r *ProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
 	query := `
 		UPDATE programs
@@ -396,7 +385,6 @@ func (r *ProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID
 	return result.RowsAffected()
 }
 
-// GetLatestVersion получает последнюю версию программы для команды и игры
 func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
 	var version int
 
@@ -414,9 +402,9 @@ func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID
 	return version, nil
 }
 
-// GetByTournamentAndGame получает только ПОСЛЕДНИЕ версии программ для каждой команды в турнире
+// GetByTournamentAndGame отдаёт только последние версии программ по каждой команде турнира
 func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
-	// Используем DISTINCT ON для получения только последней версии программы для каждой команды
+	// DISTINCT ON берёт только последнюю версию по каждой команде
 	query := `
 		SELECT DISTINCT ON (team_id)
 		       id, user_id, team_id, tournament_id, game_id, name, game_type,
@@ -465,7 +453,6 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	return programs, nil
 }
 
-// GetAllVersionsByTeamAndGame получает ВСЕ версии программ для команды и игры
 func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
