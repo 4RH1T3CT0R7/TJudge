@@ -18,12 +18,10 @@ type GameRepository struct {
 	db *DB
 }
 
-// NewGameRepository создаёт новый репозиторий игр
 func NewGameRepository(db *DB) *GameRepository {
 	return &GameRepository{db: db}
 }
 
-// Create создаёт новую игру
 func (r *GameRepository) Create(ctx context.Context, game *domain.Game) error {
 	query := `
 		INSERT INTO games (id, name, display_name, rules)
@@ -45,7 +43,6 @@ func (r *GameRepository) Create(ctx context.Context, game *domain.Game) error {
 	return nil
 }
 
-// GetByID получает игру по ID
 func (r *GameRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
 	var game domain.Game
 
@@ -103,7 +100,6 @@ func (r *GameRepository) GetByName(ctx context.Context, name string) (*domain.Ga
 	return &game, nil
 }
 
-// List получает список всех игр
 func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
 	query := `
 		SELECT id, name, display_name, rules, created_at, updated_at
@@ -166,7 +162,6 @@ func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]
 	return games, nil
 }
 
-// Update обновляет игру
 func (r *GameRepository) Update(ctx context.Context, game *domain.Game) error {
 	query := `
 		UPDATE games
@@ -191,7 +186,6 @@ func (r *GameRepository) Update(ctx context.Context, game *domain.Game) error {
 	return nil
 }
 
-// Delete удаляет игру
 func (r *GameRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM games WHERE id = $1`
 
@@ -212,7 +206,6 @@ func (r *GameRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// GetByTournamentID получает игры, связанные с турниром
 func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
 	query := `
 		SELECT g.id, g.name, g.display_name, g.rules, g.created_at, g.updated_at
@@ -254,7 +247,6 @@ func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 	return games, nil
 }
 
-// AddToTournament добавляет игру к турниру
 func (r *GameRepository) AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `
 		INSERT INTO tournament_games (tournament_id, game_id)
@@ -270,7 +262,6 @@ func (r *GameRepository) AddToTournament(ctx context.Context, tournamentID, game
 	return nil
 }
 
-// RemoveFromTournament удаляет игру из турнира
 func (r *GameRepository) RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `DELETE FROM tournament_games WHERE tournament_id = $1 AND game_id = $2`
 
@@ -304,7 +295,6 @@ func (r *GameRepository) Exists(ctx context.Context, name string) (bool, error) 
 	return exists, nil
 }
 
-// GetTournamentGame получает связь турнира с игрой
 func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
 	var tg domain.TournamentGame
 
@@ -338,7 +328,6 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	return &tg, nil
 }
 
-// GetTournamentGames получает все связи турнира с играми
 func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
 	query := `
 		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0),
@@ -385,8 +374,8 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 	return tgs, nil
 }
 
-// GetTournamentGamesWithDetails получает все связи турнира с играми, включая данные об играх
-// Выполняет один JOIN запрос вместо N+1 отдельных запросов
+// GetTournamentGamesWithDetails - связи турнира с играми вместе с данными игр,
+// одним JOIN-запросом чтобы не плодить N+1
 func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error) {
 	query := `
 		SELECT tg.tournament_id, tg.game_id,
@@ -439,7 +428,6 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 	return results, nil
 }
 
-// MarkRoundCompleted отмечает раунд игры как завершённый
 func (r *GameRepository) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `
 		UPDATE tournament_games
@@ -464,7 +452,6 @@ func (r *GameRepository) MarkRoundCompleted(ctx context.Context, tournamentID, g
 	return nil
 }
 
-// IsRoundCompleted проверяет, завершён ли раунд для игры в турнире
 func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
 	var completed bool
 	query := `
@@ -485,7 +472,6 @@ func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gam
 	return completed, nil
 }
 
-// IncrementCurrentRound увеличивает номер текущего раунда
 func (r *GameRepository) IncrementCurrentRound(ctx context.Context, tournamentID, gameID uuid.UUID) (int, error) {
 	var newRound int
 	query := `
@@ -563,7 +549,6 @@ func (r *GameRepository) DeactivateAllGames(ctx context.Context, tournamentID uu
 	return nil
 }
 
-// GetActiveGame получает активную игру для турнира
 func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
 	var tg domain.TournamentGame
 
@@ -597,7 +582,6 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 	return &tg, nil
 }
 
-// IsGameActive проверяет, является ли игра активной
 func (r *GameRepository) IsGameActive(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
 	var isActive bool
 	query := `
@@ -617,7 +601,6 @@ func (r *GameRepository) IsGameActive(ctx context.Context, tournamentID, gameID 
 	return isActive, nil
 }
 
-// ResetGameRound сбрасывает номер раунда и статус завершения для игры в турнире
 func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `
 		UPDATE tournament_games
@@ -783,7 +766,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 	})
 }
 
-// ========== Auto-Round методы ==========
+// авто-раунд
 
 // GetAutoRoundEnabledGames возвращает все игры с включённым авто-раундом в активных турнирах
 func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error) {
@@ -818,7 +801,6 @@ func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domai
 	return results, nil
 }
 
-// UpdateAutoRoundLastRun обновляет время последнего запуска авто-раунда
 func (r *GameRepository) UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	query := `
 		UPDATE tournament_games
@@ -834,7 +816,6 @@ func (r *GameRepository) UpdateAutoRoundLastRun(ctx context.Context, tournamentI
 	return nil
 }
 
-// SetAutoRound включает или выключает авто-раунд для игры в турнире
 func (r *GameRepository) SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error {
 	query := `
 		UPDATE tournament_games
@@ -858,7 +839,6 @@ func (r *GameRepository) SetAutoRound(ctx context.Context, tournamentID, gameID 
 	return nil
 }
 
-// IsAutoRoundEnabled проверяет, включён ли авто-раунд для игры в турнире
 func (r *GameRepository) IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
 	var enabled bool
 	query := `
@@ -878,7 +858,6 @@ func (r *GameRepository) IsAutoRoundEnabled(ctx context.Context, tournamentID, g
 	return enabled, nil
 }
 
-// HasNewProgramsSince проверяет, есть ли новые программы для игры после указанного времени
 func (r *GameRepository) HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error) {
 	var exists bool
 	query := `
@@ -897,7 +876,6 @@ func (r *GameRepository) HasNewProgramsSince(ctx context.Context, tournamentID u
 	return exists, nil
 }
 
-// HasActiveMatchesForGame проверяет, есть ли pending/running матчи для конкретной игры в турнире
 func (r *GameRepository) HasActiveMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
 	var exists bool
 	query := `
