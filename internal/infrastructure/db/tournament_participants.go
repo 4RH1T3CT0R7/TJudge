@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetParticipantsCount получает количество участников турнира
 func (r *TournamentRepository) GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	var count int
 
@@ -23,7 +22,6 @@ func (r *TournamentRepository) GetParticipantsCount(ctx context.Context, tournam
 	return count, nil
 }
 
-// GetTeamsCount получает количество команд в турнире
 func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	var count int
 
@@ -37,7 +35,6 @@ func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID u
 	return count, nil
 }
 
-// AddParticipant добавляет участника в турнир
 func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error {
 	query := `
 		INSERT INTO tournament_participants (id, tournament_id, program_id, rating)
@@ -59,7 +56,6 @@ func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *
 	return nil
 }
 
-// GetParticipants получает список участников турнира
 func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error) {
 	var participants []*domain.TournamentParticipant
 
@@ -101,7 +97,6 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 	return participants, nil
 }
 
-// GetLatestParticipants получает список участников турнира, но только с последней версией программы каждой команды
 func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error) {
 	var participants []*domain.TournamentParticipant
 
@@ -159,8 +154,7 @@ type ParticipantWithGameType struct {
 	GameType string `json:"game_type" db:"game_type"`
 }
 
-// GetLatestParticipantsGroupedByGame получает участников турнира сгруппированных по играм
-// Возвращает map[game_type] -> participants
+// GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)
 func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
 	// Выбираем участников с последней ГОТОВОЙ версией программы и их game_type.
 	// Только status='ready': compiling ещё не собралась, failed не собралась
@@ -219,7 +213,6 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 	return result, nil
 }
 
-// GetLatestParticipantsByGame получает участников турнира для конкретной игры
 func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
 	var participants []*domain.TournamentParticipant
 
@@ -273,8 +266,8 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 	return participants, nil
 }
 
-// GetParticipantsByTournamentIDs получает участников для нескольких турниров одним запросом
-// Это предотвращает N+1 проблему при загрузке списка турниров с участниками
+// GetParticipantsByTournamentIDs тянет участников сразу для нескольких турниров одним запросом,
+// чтобы не ловить N+1 при загрузке списка турниров с участниками
 func (r *TournamentRepository) GetParticipantsByTournamentIDs(ctx context.Context, tournamentIDs []uuid.UUID) (map[uuid.UUID][]*domain.TournamentParticipant, error) {
 	if len(tournamentIDs) == 0 {
 		return make(map[uuid.UUID][]*domain.TournamentParticipant), nil

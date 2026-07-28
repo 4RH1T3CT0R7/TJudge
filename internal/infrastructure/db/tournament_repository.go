@@ -18,12 +18,10 @@ type TournamentRepository struct {
 	db *DB
 }
 
-// NewTournamentRepository создаёт новый репозиторий турниров
 func NewTournamentRepository(db *DB) *TournamentRepository {
 	return &TournamentRepository{db: db}
 }
 
-// Create создаёт новый турнир
 func (r *TournamentRepository) Create(ctx context.Context, tournament *domain.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
@@ -59,7 +57,6 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *domain.To
 	return nil
 }
 
-// GetByID получает турнир по ID
 func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
 	var tournament domain.Tournament
 	var metadataJSON []byte
@@ -106,7 +103,6 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 	return &tournament, nil
 }
 
-// List получает список турниров с фильтрацией и пагинацией
 func (r *TournamentRepository) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
 	query := `
 		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
@@ -194,7 +190,9 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 	return tournaments, nil
 }
 
-// Update обновляет турнир с optimistic locking
+// Update обновляет турнир с optimistic lock: апдейт проходит только если version
+// в базе совпала с прочитанной, иначе кто-то успел обновить раньше нас и мы
+// отдаём ErrConcurrentUpdate. version инкрементится тем же запросом.
 func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
@@ -233,7 +231,6 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.To
 	return nil
 }
 
-// UpdateStatus обновляет только статус турнира
 func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error {
 	query := `
 		UPDATE tournaments
@@ -258,7 +255,6 @@ func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, s
 	return nil
 }
 
-// Delete удаляет турнир
 func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM tournaments WHERE id = $1`
 
@@ -279,7 +275,7 @@ func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// ListWithCursor получает список турниров с cursor-based пагинацией
+// ListWithCursor - список турниров с курсорной пагинацией
 func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain.TournamentFilter, pageReq *pagination.PageRequest) ([]*domain.Tournament, bool, error) {
 	// Валидация запроса пагинации
 	if err := pageReq.Validate(); err != nil {
@@ -319,10 +315,10 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 	// Применяем курсор для пагинации
 	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
 		if pageReq.IsForward() {
-			// Forward pagination: получаем записи после курсора
+			// вперёд: записи после курсора
 			query += fmt.Sprintf(" AND created_at < $%d", argCount)
 		} else {
-			// Backward pagination: получаем записи до курсора
+			// назад: записи до курсора
 			query += fmt.Sprintf(" AND created_at > $%d", argCount)
 		}
 		args = append(args, *cursor.Timestamp)
@@ -331,7 +327,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 
 	// Сортировка (по умолчанию - от новых к старым)
 	if pageReq.IsBackward() {
-		query += " ORDER BY created_at ASC" // Обратный порядок для backward pagination
+		query += " ORDER BY created_at ASC" // обратный порядок для пагинации назад
 	} else {
 		query += orderByCreatedAtDesc
 	}
@@ -394,7 +390,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 		tournaments = tournaments[:len(tournaments)-1]
 	}
 
-	// Для backward pagination нужно развернуть результаты
+	// для пагинации назад разворачиваем результаты
 	if pageReq.IsBackward() {
 		for i, j := 0, len(tournaments)-1; i < j; i, j = i+1, j-1 {
 			tournaments[i], tournaments[j] = tournaments[j], tournaments[i]
