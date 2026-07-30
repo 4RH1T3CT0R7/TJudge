@@ -1,6 +1,6 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -19,12 +19,12 @@ import (
 
 type ProgramRepositorySuite struct {
 	suite.Suite
-	database       *db.DB
-	repo           *db.ProgramRepository
-	userRepo       *db.UserRepository
-	tournamentRepo *db.TournamentRepository
-	teamRepo       *db.TeamRepository
-	gameRepo       *db.GameRepository
+	database       *storage.DB
+	repo           *storage.ProgramRepository
+	userRepo       *storage.UserRepository
+	tournamentRepo *storage.TournamentRepository
+	teamRepo       *storage.TeamRepository
+	gameRepo       *storage.GameRepository
 	// айдишники для очистки
 	programIDs    []uuid.UUID
 	teamIDs       []uuid.UUID
@@ -37,11 +37,11 @@ func TestProgramRepositorySuite(t *testing.T) {
 	database := setupTestDB(t)
 	s := &ProgramRepositorySuite{
 		database:       database,
-		repo:           db.NewProgramRepository(database),
-		userRepo:       db.NewUserRepository(database),
-		tournamentRepo: db.NewTournamentRepository(database),
-		teamRepo:       db.NewTeamRepository(database),
-		gameRepo:       db.NewGameRepository(database),
+		repo:           storage.NewProgramRepository(database),
+		userRepo:       storage.NewUserRepository(database),
+		tournamentRepo: storage.NewTournamentRepository(database),
+		teamRepo:       storage.NewTeamRepository(database),
+		gameRepo:       storage.NewGameRepository(database),
 	}
 	suite.Run(t, s)
 }

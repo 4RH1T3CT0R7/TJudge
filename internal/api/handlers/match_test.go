@@ -8,8 +8,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -40,12 +40,12 @@ func (m *MockMatchRepository) List(ctx context.Context, filter domain.MatchFilte
 	return args.Get(0).([]*domain.Match), args.Error(1)
 }
 
-func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*db.MatchStatistics, error) {
+func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*db.MatchStatistics), args.Error(1)
+	return args.Get(0).(*storage.MatchStatistics), args.Error(1)
 }
 
 func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error) {
@@ -373,7 +373,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
-		expectedStats := &db.MatchStatistics{
+		expectedStats := &storage.MatchStatistics{
 			Total:     100,
 			Completed: 80,
 			Running:   15,
@@ -390,7 +390,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response db.MatchStatistics
+		var response storage.MatchStatistics
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, 100, response.Total)
 		assert.Equal(t, 80, response.Completed)
@@ -404,7 +404,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		tournamentID := uuid.New()
-		expectedStats := &db.MatchStatistics{
+		expectedStats := &storage.MatchStatistics{
 			Total:     20,
 			Completed: 18,
 			Running:   2,
@@ -421,7 +421,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response db.MatchStatistics
+		var response storage.MatchStatistics
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, 20, response.Total)
 

@@ -16,10 +16,10 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/internal/worker"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -55,7 +55,7 @@ func main() {
 	m := metrics.New()
 
 	// Подключаемся к базе данных
-	database, err := db.New(&cfg.Database, log, m)
+	database, err := storage.New(&cfg.Database, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to database", zap.Error(err))
 	}
@@ -95,9 +95,9 @@ func main() {
 	)
 
 	// Инициализируем репозитории
-	matchRepo := db.NewMatchRepository(database)
-	ratingRepo := db.NewRatingRepository(database)
-	programRepo := db.NewProgramRepository(database)
+	matchRepo := storage.NewMatchRepository(database)
+	ratingRepo := storage.NewRatingRepository(database)
+	programRepo := storage.NewProgramRepository(database)
 
 	// Инициализируем кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
@@ -192,7 +192,7 @@ func main() {
 
 	// Outbox-диспетчер: доводит до конца обновления рейтингов, потерянные
 	// при сбое между записью результата матча и fast-path обработкой.
-	outboxRepo := db.NewOutboxRepository(database)
+	outboxRepo := storage.NewOutboxRepository(database)
 	outboxDispatcher := worker.NewOutboxDispatcher(
 		outboxRepo,
 		matchRepo,

@@ -1,6 +1,6 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,13 +18,13 @@ import (
 
 type TournamentRepositorySuite struct {
 	suite.Suite
-	database    *db.DB
-	repo        *db.TournamentRepository
-	userRepo    *db.UserRepository
-	programRepo *db.ProgramRepository
-	teamRepo    *db.TeamRepository
-	gameRepo    *db.GameRepository
-	matchRepo   *db.MatchRepository
+	database    *storage.DB
+	repo        *storage.TournamentRepository
+	userRepo    *storage.UserRepository
+	programRepo *storage.ProgramRepository
+	teamRepo    *storage.TeamRepository
+	gameRepo    *storage.GameRepository
+	matchRepo   *storage.MatchRepository
 	// айдишники для очистки
 	participantIDs []uuid.UUID
 	matchIDs       []uuid.UUID
@@ -39,12 +39,12 @@ func TestTournamentRepositorySuite(t *testing.T) {
 	database := setupTestDB(t)
 	s := &TournamentRepositorySuite{
 		database:    database,
-		repo:        db.NewTournamentRepository(database),
-		userRepo:    db.NewUserRepository(database),
-		programRepo: db.NewProgramRepository(database),
-		teamRepo:    db.NewTeamRepository(database),
-		gameRepo:    db.NewGameRepository(database),
-		matchRepo:   db.NewMatchRepository(database),
+		repo:        storage.NewTournamentRepository(database),
+		userRepo:    storage.NewUserRepository(database),
+		programRepo: storage.NewProgramRepository(database),
+		teamRepo:    storage.NewTeamRepository(database),
+		gameRepo:    storage.NewGameRepository(database),
+		matchRepo:   storage.NewMatchRepository(database),
 	}
 	suite.Run(t, s)
 }
@@ -98,7 +98,7 @@ func (s *TournamentRepositorySuite) createTrackedTournament(code string, creator
 }
 
 // алиас чтобы не путаться - это тот же s.repo
-func (s *TournamentRepositorySuite) tournamentRepo() *db.TournamentRepository {
+func (s *TournamentRepositorySuite) tournamentRepo() *storage.TournamentRepository {
 	return s.repo
 }
 

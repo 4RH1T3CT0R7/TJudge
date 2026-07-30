@@ -13,8 +13,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -26,12 +26,12 @@ import (
 // TournamentLifecycleSuite is the integration test suite for full tournament lifecycle operations
 type TournamentLifecycleSuite struct {
 	suite.Suite
-	db             *db.DB
-	userRepo       *db.UserRepository
-	tournamentRepo *db.TournamentRepository
-	teamRepo       *db.TeamRepository
-	gameRepo       *db.GameRepository
-	programRepo    *db.ProgramRepository
+	db             *storage.DB
+	userRepo       *storage.UserRepository
+	tournamentRepo *storage.TournamentRepository
+	teamRepo       *storage.TeamRepository
+	gameRepo       *storage.GameRepository
+	programRepo    *storage.ProgramRepository
 	ctx            context.Context
 }
 
@@ -52,7 +52,7 @@ func (s *TournamentLifecycleSuite) SetupSuite() {
 	m := metrics.New()
 
 	var err error
-	s.db, err = db.New(&config.DatabaseConfig{
+	s.db, err = storage.New(&config.DatabaseConfig{
 		Host:           host,
 		Port:           port,
 		User:           user,
@@ -65,11 +65,11 @@ func (s *TournamentLifecycleSuite) SetupSuite() {
 	}, log, m)
 	require.NoError(s.T(), err)
 
-	s.userRepo = db.NewUserRepository(s.db)
-	s.tournamentRepo = db.NewTournamentRepository(s.db)
-	s.teamRepo = db.NewTeamRepository(s.db)
-	s.gameRepo = db.NewGameRepository(s.db)
-	s.programRepo = db.NewProgramRepository(s.db)
+	s.userRepo = storage.NewUserRepository(s.db)
+	s.tournamentRepo = storage.NewTournamentRepository(s.db)
+	s.teamRepo = storage.NewTeamRepository(s.db)
+	s.gameRepo = storage.NewGameRepository(s.db)
+	s.programRepo = storage.NewProgramRepository(s.db)
 }
 
 func (s *TournamentLifecycleSuite) TearDownSuite() {

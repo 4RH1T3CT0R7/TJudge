@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,8 +34,8 @@ func (s *stubStatusRepo) ProgramCountsByStatus(_ context.Context) (map[string]in
 	return map[string]int64{"ready": 10, "compiling": 1}, nil
 }
 
-func (s *stubStatusRepo) OutboxStats(_ context.Context) (*db.OutboxStatus, error) {
-	return &db.OutboxStatus{Pending: 1, Errors: 0, DoneLast24h: 50}, nil
+func (s *stubStatusRepo) OutboxStats(_ context.Context) (*storage.OutboxStatus, error) {
+	return &storage.OutboxStatus{Pending: 1, Errors: 0, DoneLast24h: 50}, nil
 }
 
 func (s *stubStatusRepo) LastCompletedMatchAt(_ context.Context) (*time.Time, error) {

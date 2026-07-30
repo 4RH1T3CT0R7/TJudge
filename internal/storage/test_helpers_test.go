@@ -1,6 +1,6 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -20,7 +20,7 @@ import (
 
 // setupTestDB поднимает коннект к БД для интеграционных тестов.
 // параметры берём из env, с дефолтами под локальный docker-compose.
-func setupTestDB(t *testing.T) *db.DB {
+func setupTestDB(t *testing.T) *storage.DB {
 	t.Helper()
 
 	if os.Getenv("RUN_INTEGRATION") != "true" {
@@ -42,7 +42,7 @@ func setupTestDB(t *testing.T) *db.DB {
 	log, _ := logger.New("error", "json")
 	m := metrics.New()
 
-	database, err := db.New(cfg, log, m)
+	database, err := storage.New(cfg, log, m)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -53,7 +53,7 @@ func setupTestDB(t *testing.T) *db.DB {
 }
 
 // cleanupTable сносит строки таблицы по условию where
-func cleanupTable(t *testing.T, database *db.DB, table, where string, args ...interface{}) {
+func cleanupTable(t *testing.T, database *storage.DB, table, where string, args ...interface{}) {
 	t.Helper()
 	ctx := context.Background()
 	query := fmt.Sprintf("DELETE FROM %s WHERE %s", table, where)
@@ -64,7 +64,7 @@ func cleanupTable(t *testing.T, database *db.DB, table, where string, args ...in
 }
 
 // createTestUser создаёт юзера для теста
-func createTestUser(t *testing.T, repo *db.UserRepository, suffix string) *domain.User {
+func createTestUser(t *testing.T, repo *storage.UserRepository, suffix string) *domain.User {
 	t.Helper()
 	ctx := context.Background()
 
@@ -82,7 +82,7 @@ func createTestUser(t *testing.T, repo *db.UserRepository, suffix string) *domai
 }
 
 // createTestTournament создаёт турнир. creatorID должен ссылаться на существующего юзера.
-func createTestTournament(t *testing.T, repo *db.TournamentRepository, code string, creatorID uuid.UUID) *domain.Tournament {
+func createTestTournament(t *testing.T, repo *storage.TournamentRepository, code string, creatorID uuid.UUID) *domain.Tournament {
 	t.Helper()
 	ctx := context.Background()
 
@@ -106,7 +106,7 @@ func createTestTournament(t *testing.T, repo *db.TournamentRepository, code stri
 }
 
 // createTestTournamentWithUser создаёт и юзера, и турнир - чтобы не ловить FK по creator_id
-func createTestTournamentWithUser(t *testing.T, tournamentRepo *db.TournamentRepository, userRepo *db.UserRepository, code string) (*domain.Tournament, *domain.User) {
+func createTestTournamentWithUser(t *testing.T, tournamentRepo *storage.TournamentRepository, userRepo *storage.UserRepository, code string) (*domain.Tournament, *domain.User) {
 	t.Helper()
 	ctx := context.Background()
 

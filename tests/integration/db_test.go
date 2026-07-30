@@ -12,8 +12,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -25,10 +25,10 @@ import (
 // DBTestSuite is the integration test suite for database operations
 type DBTestSuite struct {
 	suite.Suite
-	db          *db.DB
-	userRepo    *db.UserRepository
-	programRepo *db.ProgramRepository
-	matchRepo   *db.MatchRepository
+	db          *storage.DB
+	userRepo    *storage.UserRepository
+	programRepo *storage.ProgramRepository
+	matchRepo   *storage.MatchRepository
 	ctx         context.Context
 }
 
@@ -50,7 +50,7 @@ func (s *DBTestSuite) SetupSuite() {
 	m := metrics.New()
 
 	var err error
-	s.db, err = db.New(&config.DatabaseConfig{
+	s.db, err = storage.New(&config.DatabaseConfig{
 		Host:           host,
 		Port:           port,
 		User:           user,
@@ -63,9 +63,9 @@ func (s *DBTestSuite) SetupSuite() {
 	}, log, m)
 	require.NoError(s.T(), err)
 
-	s.userRepo = db.NewUserRepository(s.db)
-	s.programRepo = db.NewProgramRepository(s.db)
-	s.matchRepo = db.NewMatchRepository(s.db)
+	s.userRepo = storage.NewUserRepository(s.db)
+	s.programRepo = storage.NewProgramRepository(s.db)
+	s.matchRepo = storage.NewMatchRepository(s.db)
 }
 
 func (s *DBTestSuite) TearDownSuite() {

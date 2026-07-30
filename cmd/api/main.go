@@ -20,10 +20,10 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/internal/websocket"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -34,7 +34,7 @@ import (
 // matchSchedulerAdapter адаптер для tournament.SchedulingService.ScheduleNewProgramMatches
 type matchSchedulerAdapter struct {
 	schedulingService *tournament.SchedulingService
-	programRepo       *db.ProgramRepository
+	programRepo       *storage.ProgramRepository
 }
 
 func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error {
@@ -95,7 +95,7 @@ func main() {
 	m := metrics.New()
 
 	// Подключаемся к базе данных
-	database, err := db.New(&cfg.Database, log, m)
+	database, err := storage.New(&cfg.Database, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to database", zap.Error(err))
 	}
@@ -133,12 +133,12 @@ func main() {
 	)
 
 	// Инициализируем репозитории
-	userRepo := db.NewUserRepository(database)
-	programRepo := db.NewProgramRepository(database)
-	tournamentRepo := db.NewTournamentRepository(database)
-	matchRepo := db.NewMatchRepository(database)
-	gameRepo := db.NewGameRepository(database)
-	teamRepo := db.NewTeamRepository(database)
+	userRepo := storage.NewUserRepository(database)
+	programRepo := storage.NewProgramRepository(database)
+	tournamentRepo := storage.NewTournamentRepository(database)
+	matchRepo := storage.NewMatchRepository(database)
+	gameRepo := storage.NewGameRepository(database)
+	teamRepo := storage.NewTeamRepository(database)
 
 	// Инициализируем кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
@@ -268,7 +268,7 @@ func main() {
 
 	// Audit log (async). Буфер 2048: при нагрузке 10 admin-запросов/сек
 	// даёт ~200 сек запаса перед drop'ом.
-	auditRepo := db.NewAuditLogRepository(database)
+	auditRepo := storage.NewAuditLogRepository(database)
 	auditLogger := middleware.NewAuditLogger(auditRepo, 2048, log)
 	auditCtx, cancelAudit := context.WithCancel(context.Background())
 	defer cancelAudit()
@@ -294,7 +294,7 @@ func main() {
 		WithIdempotency(redisCache).
 		WithAuditLog(auditLogger, auditHandler).
 		WithSystemStatus(handlers.NewSystemStatusHandler(
-			db.NewSystemStatusRepository(database),
+			storage.NewSystemStatusRepository(database),
 			queueManager,
 			compileQueue,
 			wsHub,
@@ -302,7 +302,7 @@ func main() {
 			log,
 		)).
 		WithSystemRecovery(handlers.NewSystemRecoveryHandler(
-			db.NewOutboxRepository(database),
+			storage.NewOutboxRepository(database),
 			programRepo,
 			compileQueue,
 			matchRepo,
@@ -310,7 +310,7 @@ func main() {
 			log,
 		)).
 		WithRatingHistory(handlers.NewRatingHistoryHandler(
-			db.NewRatingRepository(database),
+			storage.NewRatingRepository(database),
 			log,
 		))
 
