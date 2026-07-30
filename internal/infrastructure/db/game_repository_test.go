@@ -42,7 +42,7 @@ func (s *GameRepositorySuite) TearDownTest() {
 	_, _ = s.database.ExecContext(ctx, "DELETE FROM users WHERE username LIKE 'testuser_%'")
 }
 
-// createGame is a helper that inserts a game with a unique name based on suffix.
+// createGame вставляет игру с уникальным именем по суффиксу
 func (s *GameRepositorySuite) createGame(suffix string) *domain.Game {
 	s.T().Helper()
 	ctx := context.Background()
@@ -59,17 +59,14 @@ func (s *GameRepositorySuite) createGame(suffix string) *domain.Game {
 	return game
 }
 
-// createTournamentForGame is a helper that creates a user and a tournament for
-// tournament-game relationship tests.
+// createTournamentForGame готовит юзера и турнир для тестов связки турнир-игра
 func (s *GameRepositorySuite) createTournamentForGame(code string) *domain.Tournament {
 	s.T().Helper()
 	user := createTestUser(s.T(), s.userRepo, "game_"+code)
 	return createTestTournament(s.T(), s.tournamentRepo, "GTEST"+code, user.ID)
 }
 
-// ---------------------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------------------
+// --- Create ---
 
 func (s *GameRepositorySuite) TestCreate() {
 	ctx := context.Background()
@@ -103,9 +100,7 @@ func (s *GameRepositorySuite) TestCreate_DuplicateName() {
 	assert.Error(s.T(), err)
 }
 
-// ---------------------------------------------------------------------------
-// GetByID
-// ---------------------------------------------------------------------------
+// --- GetByID ---
 
 func (s *GameRepositorySuite) TestGetByID() {
 	game := s.createGame("getbyid")
@@ -130,9 +125,7 @@ func (s *GameRepositorySuite) TestGetByID_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// GetByName
-// ---------------------------------------------------------------------------
+// --- GetByName ---
 
 func (s *GameRepositorySuite) TestGetByName() {
 	game := s.createGame("getbyname")
@@ -154,9 +147,7 @@ func (s *GameRepositorySuite) TestGetByName_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// List
-// ---------------------------------------------------------------------------
+// --- List ---
 
 func (s *GameRepositorySuite) TestList() {
 	s.createGame("list_a")
@@ -199,23 +190,19 @@ func (s *GameRepositorySuite) TestList_Pagination() {
 
 	ctx := context.Background()
 
-	// Fetch first page
 	page1, err := s.repo.List(ctx, domain.GameFilter{Limit: 1})
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), page1, 1)
 
-	// Fetch second page
 	page2, err := s.repo.List(ctx, domain.GameFilter{Limit: 1, Offset: 1})
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), page2, 1)
 
-	// Pages should contain different games
+	// на разных страницах должны быть разные игры
 	assert.NotEqual(s.T(), page1[0].ID, page2[0].ID)
 }
 
-// ---------------------------------------------------------------------------
-// Update
-// ---------------------------------------------------------------------------
+// --- Update ---
 
 func (s *GameRepositorySuite) TestUpdate() {
 	game := s.createGame("update")
@@ -228,10 +215,10 @@ func (s *GameRepositorySuite) TestUpdate() {
 	err := s.repo.Update(ctx, game)
 	require.NoError(s.T(), err)
 
-	// updated_at should have changed
+	// updated_at должен обновиться
 	assert.True(s.T(), game.UpdatedAt.After(originalUpdatedAt) || game.UpdatedAt.Equal(originalUpdatedAt))
 
-	// Verify via re-read
+	// перечитываем и сверяем
 	result, err := s.repo.GetByID(ctx, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "Updated Display Name", result.DisplayName)
@@ -251,9 +238,7 @@ func (s *GameRepositorySuite) TestUpdate_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// Delete
-// ---------------------------------------------------------------------------
+// --- Delete ---
 
 func (s *GameRepositorySuite) TestDelete() {
 	game := s.createGame("delete")
@@ -275,9 +260,7 @@ func (s *GameRepositorySuite) TestDelete_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// Exists
-// ---------------------------------------------------------------------------
+// --- Exists ---
 
 func (s *GameRepositorySuite) TestExists_True() {
 	s.createGame("exists")
@@ -295,9 +278,7 @@ func (s *GameRepositorySuite) TestExists_False() {
 	assert.False(s.T(), exists)
 }
 
-// ---------------------------------------------------------------------------
-// AddToTournament / GetByTournamentID
-// ---------------------------------------------------------------------------
+// --- AddToTournament / GetByTournamentID ---
 
 func (s *GameRepositorySuite) TestAddToTournament() {
 	game := s.createGame("add_to_t")
@@ -307,7 +288,7 @@ func (s *GameRepositorySuite) TestAddToTournament() {
 	err := s.repo.AddToTournament(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
-	// Verify the game appears in tournament games
+	// игра появилась в списке игр турнира
 	games, err := s.repo.GetByTournamentID(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 
@@ -322,14 +303,14 @@ func (s *GameRepositorySuite) TestAddToTournament_Idempotent() {
 
 	ctx := context.Background()
 
-	// Add twice -- should not error due to ON CONFLICT DO NOTHING
+	// добавляем дважды - ON CONFLICT DO NOTHING, ошибки быть не должно
 	err := s.repo.AddToTournament(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
 	err = s.repo.AddToTournament(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
-	// Should still have only one entry
+	// запись всё равно одна
 	games, err := s.repo.GetByTournamentID(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), games, 1)
@@ -358,9 +339,7 @@ func (s *GameRepositorySuite) TestGetByTournamentID_Multiple() {
 	assert.Len(s.T(), games, 2)
 }
 
-// ---------------------------------------------------------------------------
-// RemoveFromTournament
-// ---------------------------------------------------------------------------
+// --- RemoveFromTournament ---
 
 func (s *GameRepositorySuite) TestRemoveFromTournament() {
 	game := s.createGame("remove")
@@ -386,9 +365,7 @@ func (s *GameRepositorySuite) TestRemoveFromTournament_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// GetTournamentGame / GetTournamentGames
-// ---------------------------------------------------------------------------
+// --- GetTournamentGame / GetTournamentGames ---
 
 func (s *GameRepositorySuite) TestGetTournamentGame() {
 	game := s.createGame("tg_get")
@@ -445,9 +422,7 @@ func (s *GameRepositorySuite) TestGetTournamentGames_Empty() {
 	assert.Empty(s.T(), tgs)
 }
 
-// ---------------------------------------------------------------------------
-// MarkRoundCompleted / IsRoundCompleted / ResetGameRound
-// ---------------------------------------------------------------------------
+// --- MarkRoundCompleted / IsRoundCompleted / ResetGameRound ---
 
 func (s *GameRepositorySuite) TestMarkRoundCompleted() {
 	game := s.createGame("mark_round")
@@ -459,7 +434,6 @@ func (s *GameRepositorySuite) TestMarkRoundCompleted() {
 	err := s.repo.MarkRoundCompleted(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
-	// Verify via GetTournamentGame
 	tg, err := s.repo.GetTournamentGame(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 	assert.True(s.T(), tg.RoundCompleted)
@@ -502,7 +476,7 @@ func (s *GameRepositorySuite) TestIsRoundCompleted_True() {
 func (s *GameRepositorySuite) TestIsRoundCompleted_NoLink() {
 	ctx := context.Background()
 
-	// When the tournament-game link does not exist, IsRoundCompleted returns false (not an error)
+	// связки турнир-игра нет - возвращаем false, а не ошибку
 	completed, err := s.repo.IsRoundCompleted(ctx, uuid.New(), uuid.New())
 	require.NoError(s.T(), err)
 	assert.False(s.T(), completed)
@@ -515,12 +489,12 @@ func (s *GameRepositorySuite) TestResetGameRound() {
 	ctx := context.Background()
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
 
-	// Mark round completed and increment
+	// закрываем раунд и инкрементим
 	require.NoError(s.T(), s.repo.MarkRoundCompleted(ctx, tournament.ID, game.ID))
 	_, err := s.repo.IncrementCurrentRound(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
-	// Reset
+	// сброс
 	err = s.repo.ResetGameRound(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
@@ -539,9 +513,7 @@ func (s *GameRepositorySuite) TestResetGameRound_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// ---------------------------------------------------------------------------
-// IncrementCurrentRound
-// ---------------------------------------------------------------------------
+// --- IncrementCurrentRound ---
 
 func (s *GameRepositorySuite) TestIncrementCurrentRound() {
 	game := s.createGame("incr_round")
@@ -559,9 +531,7 @@ func (s *GameRepositorySuite) TestIncrementCurrentRound() {
 	assert.Equal(s.T(), 2, round2)
 }
 
-// ---------------------------------------------------------------------------
-// SetActiveGame / GetActiveGame / IsGameActive / DeactivateAllGames
-// ---------------------------------------------------------------------------
+// --- SetActiveGame / GetActiveGame / IsGameActive / DeactivateAllGames ---
 
 func (s *GameRepositorySuite) TestSetActiveGame() {
 	game1 := s.createGame("active_a")
@@ -572,7 +542,7 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game1.ID))
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game2.ID))
 
-	// Activate game1
+	// активируем game1
 	err := s.repo.SetActiveGame(ctx, tournament.ID, game1.ID)
 	require.NoError(s.T(), err)
 
@@ -581,7 +551,7 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	assert.Equal(s.T(), game1.ID, active.GameID)
 	assert.True(s.T(), active.IsActive)
 
-	// Switch to game2
+	// переключаемся на game2
 	err = s.repo.SetActiveGame(ctx, tournament.ID, game2.ID)
 	require.NoError(s.T(), err)
 
@@ -589,7 +559,7 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), game2.ID, active.GameID)
 
-	// game1 should no longer be active
+	// game1 больше не активна
 	isActive, err := s.repo.IsGameActive(ctx, tournament.ID, game1.ID)
 	require.NoError(s.T(), err)
 	assert.False(s.T(), isActive)
@@ -632,7 +602,7 @@ func (s *GameRepositorySuite) TestIsGameActive_True() {
 func (s *GameRepositorySuite) TestIsGameActive_NoLink() {
 	ctx := context.Background()
 
-	// When the tournament-game link does not exist, IsGameActive returns false (not an error)
+	// связки турнир-игра нет - возвращаем false, а не ошибку
 	isActive, err := s.repo.IsGameActive(ctx, uuid.New(), uuid.New())
 	require.NoError(s.T(), err)
 	assert.False(s.T(), isActive)
@@ -655,7 +625,7 @@ func (s *GameRepositorySuite) TestDeactivateAllGames() {
 	assert.Error(s.T(), err)
 	assert.True(s.T(), errors.IsNotFound(err))
 
-	// Verify both are inactive
+	// обе неактивны
 	a1, err := s.repo.IsGameActive(ctx, tournament.ID, game1.ID)
 	require.NoError(s.T(), err)
 	assert.False(s.T(), a1)

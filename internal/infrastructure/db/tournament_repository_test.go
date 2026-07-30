@@ -25,7 +25,7 @@ type TournamentRepositorySuite struct {
 	teamRepo    *db.TeamRepository
 	gameRepo    *db.GameRepository
 	matchRepo   *db.MatchRepository
-	// track created IDs for cleanup
+	// айдишники для очистки
 	participantIDs []uuid.UUID
 	matchIDs       []uuid.UUID
 	programIDs     []uuid.UUID
@@ -51,7 +51,7 @@ func TestTournamentRepositorySuite(t *testing.T) {
 
 func (s *TournamentRepositorySuite) TearDownTest() {
 	ctx := context.Background()
-	// Delete in FK order: matches -> rating_history -> tournament_participants -> programs -> teams -> tournaments -> games -> users
+	// порядок FK: matches -> rating_history -> tournament_participants -> programs -> teams -> tournaments -> games -> users
 	for _, id := range s.matchIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", id)
 	}
@@ -64,7 +64,7 @@ func (s *TournamentRepositorySuite) TearDownTest() {
 	for _, id := range s.teamIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM teams WHERE id = $1", id)
 	}
-	// Also cleanup by code pattern for legacy tests
+	// заодно чистим по паттерну кода - для старых тестов
 	_, _ = s.database.ExecContext(ctx, "DELETE FROM tournaments WHERE code LIKE 'TEST%'")
 	for _, id := range s.tournamentIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM tournaments WHERE id = $1", id)
@@ -85,26 +85,23 @@ func (s *TournamentRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-// createTrackedUser creates a test user and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedUser(suffix string) *domain.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-// createTrackedTournament creates a test tournament and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedTournament(code string, creatorID uuid.UUID) *domain.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo(), code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-// tournamentRepo returns the tournament repository (convenience alias).
+// алиас чтобы не путаться - это тот же s.repo
 func (s *TournamentRepositorySuite) tournamentRepo() *db.TournamentRepository {
 	return s.repo
 }
 
-// createTrackedGame creates a test game and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedGame(name string) *domain.Game {
 	ctx := context.Background()
 	game := &domain.Game{
@@ -119,7 +116,6 @@ func (s *TournamentRepositorySuite) createTrackedGame(name string) *domain.Game 
 	return game
 }
 
-// createTrackedTeam creates a test team and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedTeam(tournamentID, leaderID uuid.UUID, code string) *domain.Team {
 	ctx := context.Background()
 	team := &domain.Team{
@@ -135,7 +131,6 @@ func (s *TournamentRepositorySuite) createTrackedTeam(tournamentID, leaderID uui
 	return team
 }
 
-// createTrackedProgram creates a test program with team/tournament/game references and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *domain.Program {
 	ctx := context.Background()
 	program := &domain.Program{
@@ -156,7 +151,6 @@ func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamI
 	return program
 }
 
-// createTestParticipant adds a tournament participant and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programID uuid.UUID, rating int) *domain.TournamentParticipant {
 	ctx := context.Background()
 	participant := &domain.TournamentParticipant{
@@ -171,7 +165,6 @@ func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programI
 	return participant
 }
 
-// createTrackedMatch creates a match and tracks it for cleanup.
 func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID, program2ID uuid.UUID, gameType string, status domain.MatchStatus) *domain.Match {
 	ctx := context.Background()
 	match := &domain.Match{
@@ -191,8 +184,7 @@ func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID,
 	return match
 }
 
-// setupParticipantPrerequisites creates user, tournament, team, game, program, and participant.
-// Returns tournament, program, and participant for use in tests.
+// готовит юзера, турнир, прогу и участника - типовой сетап для тестов участников
 func (s *TournamentRepositorySuite) setupParticipantPrerequisites(suffix string, rating int) (*domain.Tournament, *domain.Program, *domain.TournamentParticipant) {
 	user := s.createTrackedUser("tp_" + suffix)
 	tournament := s.createTrackedTournament("TP"+suffix, user.ID)
@@ -224,6 +216,7 @@ func (s *TournamentRepositorySuite) TestCreate() {
 
 	assert.NotZero(s.T(), tournament.CreatedAt)
 	assert.NotZero(s.T(), tournament.UpdatedAt)
+	// version стартует с 0, не с 1
 	assert.Equal(s.T(), 0, tournament.Version)
 }
 
@@ -326,7 +319,7 @@ func (s *TournamentRepositorySuite) TestDelete() {
 	assert.Error(s.T(), err)
 }
 
-// --- Participant tests ---
+// --- участники ---
 
 func (s *TournamentRepositorySuite) TestAddParticipant_Success() {
 	user := s.createTrackedUser("tp_add")
@@ -362,7 +355,7 @@ func (s *TournamentRepositorySuite) TestGetParticipants_Multiple() {
 	user := s.createTrackedUser("tp_gpm")
 	tournament := s.createTrackedTournament("TPGPM1", user.ID)
 
-	// Create 3 programs and add them as participants
+	// три проги как участники
 	for i := 0; i < 3; i++ {
 		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotGPM%d", i), 1)
 		s.createTestParticipant(tournament.ID, prog.ID, 1500+i*100)
@@ -373,7 +366,7 @@ func (s *TournamentRepositorySuite) TestGetParticipants_Multiple() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), participants, 3)
 
-	// Verify all belong to the same tournament
+	// все в одном турнире
 	for _, p := range participants {
 		assert.Equal(s.T(), tournament.ID, p.TournamentID)
 	}
@@ -393,7 +386,6 @@ func (s *TournamentRepositorySuite) TestGetParticipantsCount_AfterAdding() {
 	user := s.createTrackedUser("tp_gca")
 	tournament := s.createTrackedTournament("TPGCA1", user.ID)
 
-	// Add 5 participants
 	for i := 0; i < 5; i++ {
 		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotGCA%d", i), 1)
 		s.createTestParticipant(tournament.ID, prog.ID, 1500)
@@ -409,10 +401,8 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	user := s.createTrackedUser("tp_lbo")
 	tournament := s.createTrackedTournament("TPLBO1", user.ID)
 
-	// Create 3 participants with different ratings.
-	// GetLeaderboard uses score from completed matches; however with no matches,
-	// the leaderboard should still return all participants (with total_score=0).
-	// We test that the result set is complete.
+	// лидерборд считает score по завершённым матчам. матчей нет -
+	// значит у всех total_score=0, но все участники в выборке остаются.
 	var progIDs []uuid.UUID
 	for i := 0; i < 3; i++ {
 		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotLBO%d", i), 1)
@@ -425,7 +415,7 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), leaderboard, 3)
 
-	// With no matches, all scores are 0 and rank is assigned by row_number
+	// без матчей все score=0, rank раздаётся через row_number
 	for _, entry := range leaderboard {
 		assert.GreaterOrEqual(s.T(), entry.Rank, 1)
 	}
@@ -435,7 +425,6 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_LimitEnforced() {
 	user := s.createTrackedUser("tp_lbl")
 	tournament := s.createTrackedTournament("TPLBL1", user.ID)
 
-	// Create 5 participants
 	for i := 0; i < 5; i++ {
 		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotLBL%d", i), 1)
 		s.createTestParticipant(tournament.ID, prog.ID, 1500+i*50)
@@ -451,17 +440,14 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	user := s.createTrackedUser("tp_cgl")
 	tournament := s.createTrackedTournament("TPCGL1", user.ID)
 
-	// Cross-game leaderboard requires programs with team_id and game_id,
-	// plus completed matches. Without completed matches, it returns empty.
-	// We test graceful handling of the empty case.
+	// кросс-игровому лидерборду нужны проги с team_id/game_id и завершённые
+	// матчи. без матчей выборка пустая - проверяем что не падает.
 	ctx := context.Background()
 	entries, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
 	require.NoError(s.T(), err)
-
-	// With no programs/matches, the result should be empty (nil or empty slice)
 	assert.Empty(s.T(), entries)
 
-	// Now set up a full scenario: team + game + program + match
+	// теперь полный сценарий: команда + игра + прога + матч
 	game := s.createTrackedGame("cgl_game1")
 	team := s.createTrackedTeam(tournament.ID, user.ID, "TCGL01")
 	prog1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotCGL1", 1)
@@ -470,11 +456,10 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	team2 := s.createTrackedTeam(tournament.ID, user2.ID, "TCGL02")
 	prog2 := s.createTrackedProgram(user2.ID, &team2.ID, &tournament.ID, &game.ID, "BotCGL2", 1)
 
-	// Add participants
 	s.createTestParticipant(tournament.ID, prog1.ID, 1500)
 	s.createTestParticipant(tournament.ID, prog2.ID, 1500)
 
-	// Create a completed match so there is data to aggregate
+	// завершённый матч чтобы было что агрегировать
 	match := s.createTrackedMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, domain.MatchRunning)
 	score1 := 10
 	score2 := 5
@@ -485,10 +470,10 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 
 	entries, err = s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
 	require.NoError(s.T(), err)
-	// Should have 2 entries (one per team)
+	// две записи - по одной на команду
 	assert.Len(s.T(), entries, 2)
 
-	// The team with higher score should be ranked first
+	// команда с большим счётом должна быть выше
 	if len(entries) >= 2 {
 		assert.GreaterOrEqual(s.T(), entries[0].TotalRating, entries[1].TotalRating)
 	}
@@ -500,7 +485,7 @@ func (s *TournamentRepositorySuite) TestGetLatestParticipants() {
 	game := s.createTrackedGame("glp_game")
 	team := s.createTrackedTeam(tournament.ID, user.ID, "TGLP01")
 
-	// Create a program with full references (needed for the INNER JOIN on programs)
+	// проге нужны полные ссылки - иначе не пройдёт INNER JOIN по programs
 	prog := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotGLP1", 1)
 	s.createTestParticipant(tournament.ID, prog.ID, 1500)
 
@@ -515,29 +500,26 @@ func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 	user := s.createTrackedUser("tp_lpg")
 	tournament := s.createTrackedTournament("TPLPG1", user.ID)
 
-	// Create two games
 	game1 := s.createTrackedGame("lpg_game1")
 	game2 := s.createTrackedGame("lpg_game2")
 
 	team := s.createTrackedTeam(tournament.ID, user.ID, "TLPG01")
 
-	// Create programs for each game
 	prog1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game1.ID, "BotLPG1", 1)
 	prog2 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game2.ID, "BotLPG2", 1)
 
-	// Add participants for both programs
 	s.createTestParticipant(tournament.ID, prog1.ID, 1500)
 	s.createTestParticipant(tournament.ID, prog2.ID, 1600)
 
 	ctx := context.Background()
 
-	// Filter by game1 name - should return only the participant with prog1
+	// фильтр по game1 - только участник с prog1
 	participants1, err := s.repo.GetLatestParticipantsByGame(ctx, tournament.ID, game1.Name)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), participants1, 1)
 	assert.Equal(s.T(), prog1.ID, participants1[0].ProgramID)
 
-	// Filter by game2 name - should return only the participant with prog2
+	// фильтр по game2 - только участник с prog2
 	participants2, err := s.repo.GetLatestParticipantsByGame(ctx, tournament.ID, game2.Name)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), participants2, 1)

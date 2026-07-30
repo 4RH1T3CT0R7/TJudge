@@ -25,7 +25,7 @@ type ProgramRepositorySuite struct {
 	tournamentRepo *db.TournamentRepository
 	teamRepo       *db.TeamRepository
 	gameRepo       *db.GameRepository
-	// track created IDs for cleanup
+	// айдишники для очистки
 	programIDs    []uuid.UUID
 	teamIDs       []uuid.UUID
 	tournamentIDs []uuid.UUID
@@ -48,7 +48,7 @@ func TestProgramRepositorySuite(t *testing.T) {
 
 func (s *ProgramRepositorySuite) TearDownTest() {
 	ctx := context.Background()
-	// Delete in reverse FK order: programs -> tournament_participants -> teams -> tournaments -> games -> users
+	// в обратном порядке FK: programs -> teams -> tournaments -> games -> users
 	for _, id := range s.programIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", id)
 	}
@@ -71,21 +71,18 @@ func (s *ProgramRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-// createUser creates a test user and tracks it for cleanup.
 func (s *ProgramRepositorySuite) createUser(suffix string) *domain.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-// createTournament creates a test tournament and tracks it for cleanup.
 func (s *ProgramRepositorySuite) createTournament(code string, creatorID uuid.UUID) *domain.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-// createGame creates a test game and tracks it for cleanup.
 func (s *ProgramRepositorySuite) createGame(name string) *domain.Game {
 	ctx := context.Background()
 	game := &domain.Game{
@@ -100,7 +97,6 @@ func (s *ProgramRepositorySuite) createGame(name string) *domain.Game {
 	return game
 }
 
-// createTeam creates a test team and tracks it for cleanup.
 func (s *ProgramRepositorySuite) createTeam(tournamentID, leaderID uuid.UUID, code string) *domain.Team {
 	ctx := context.Background()
 	team := &domain.Team{
@@ -116,7 +112,6 @@ func (s *ProgramRepositorySuite) createTeam(tournamentID, leaderID uuid.UUID, co
 	return team
 }
 
-// createProgram creates a test program and tracks it for cleanup.
 func (s *ProgramRepositorySuite) createProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *domain.Program {
 	ctx := context.Background()
 	program := &domain.Program{
@@ -207,7 +202,7 @@ func (s *ProgramRepositorySuite) TestGetByUserID() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), programs, 2)
 
-	// Verify ordering by created_at DESC
+	// сортировка created_at DESC
 	assert.True(s.T(), !programs[0].CreatedAt.Before(programs[1].CreatedAt),
 		"programs should be ordered by created_at DESC")
 }
@@ -229,11 +224,11 @@ func (s *ProgramRepositorySuite) TestGetByTournamentAndGame() {
 	user2 := s.createUser("prog_tourngame2")
 	team2 := s.createTeam(tournament.ID, user2.ID, "PGTM02")
 
-	// Create two versions for team1 (should only return latest)
+	// две версии для team1 - вернуться должна только последняя
 	s.createProgram(user.ID, &team1.ID, &tournament.ID, &game.ID, "Team1 Bot v1", 1)
 	p1v2 := s.createProgram(user.ID, &team1.ID, &tournament.ID, &game.ID, "Team1 Bot v2", 2)
 
-	// Create one version for team2
+	// одна версия для team2
 	p2 := s.createProgram(user2.ID, &team2.ID, &tournament.ID, &game.ID, "Team2 Bot v1", 1)
 
 	ctx := context.Background()
@@ -241,7 +236,7 @@ func (s *ProgramRepositorySuite) TestGetByTournamentAndGame() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), programs, 2)
 
-	// Verify only latest versions are returned
+	// в выборке только последние версии
 	foundIDs := map[uuid.UUID]bool{}
 	for _, p := range programs {
 		foundIDs[p.ID] = true
@@ -265,7 +260,7 @@ func (s *ProgramRepositorySuite) TestGetAllVersionsByTeamAndGame() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), programs, 3)
 
-	// Verify ordering by version DESC
+	// сортировка version DESC
 	assert.Equal(s.T(), 3, programs[0].Version)
 	assert.Equal(s.T(), 2, programs[1].Version)
 	assert.Equal(s.T(), 1, programs[2].Version)
@@ -316,7 +311,7 @@ func (s *ProgramRepositorySuite) TestDelete() {
 	err := s.repo.Delete(ctx, program.ID)
 	require.NoError(s.T(), err)
 
-	// Remove from tracked IDs since it is already deleted
+	// убираем из трекинга, он уже удалён
 	for i, id := range s.programIDs {
 		if id == program.ID {
 			s.programIDs = append(s.programIDs[:i], s.programIDs[i+1:]...)
@@ -343,12 +338,12 @@ func (s *ProgramRepositorySuite) TestCheckOwnership() {
 
 	ctx := context.Background()
 
-	// Correct owner
+	// свой владелец
 	owned, err := s.repo.CheckOwnership(ctx, program.ID, user.ID)
 	require.NoError(s.T(), err)
 	assert.True(s.T(), owned)
 
-	// Wrong owner
+	// чужой
 	owned, err = s.repo.CheckOwnership(ctx, program.ID, uuid.New())
 	require.NoError(s.T(), err)
 	assert.False(s.T(), owned)
@@ -358,7 +353,7 @@ func (s *ProgramRepositorySuite) TestClearErrorMessages() {
 	user := s.createUser("prog_clearerr")
 	tournament := s.createTournament("TESTCE1", user.ID)
 
-	// Create programs with error messages
+	// проги с записанными ошибками
 	ctx := context.Background()
 	errMsg := "some error"
 	for i := 0; i < 3; i++ {
@@ -382,7 +377,7 @@ func (s *ProgramRepositorySuite) TestClearErrorMessages() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(3), affected)
 
-	// Second call should return 0 since errors are already cleared
+	// второй вызов - уже 0, ошибки затёрты
 	affected, err = s.repo.ClearErrorMessages(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(0), affected)
@@ -396,12 +391,11 @@ func (s *ProgramRepositorySuite) TestGetLatestVersion() {
 
 	ctx := context.Background()
 
-	// No versions yet
+	// версий ещё нет
 	ver, err := s.repo.GetLatestVersion(ctx, team.ID, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, ver)
 
-	// Create versions
 	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v1", 1)
 	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v2", 2)
 
@@ -416,7 +410,7 @@ func (s *ProgramRepositorySuite) TestGetByUserIDAndGameType() {
 	s.createProgram(user.ID, nil, nil, nil, "PD Bot 1", 1)
 	s.createProgram(user.ID, nil, nil, nil, "PD Bot 2", 1)
 
-	// Create a program with a different game type
+	// прога с другой игрой
 	ctx := context.Background()
 	otherProg := &domain.Program{
 		ID:       uuid.New(),
@@ -453,6 +447,7 @@ func (s *ProgramRepositorySuite) TestGetByTournamentAndGame_Empty() {
 	assert.Empty(s.T(), programs)
 }
 
+// TZ-чувствительный: зелёный только когда Go-процесс и PG в одной таймзоне (в харнессе TZ=UTC)
 func (s *ProgramRepositorySuite) TestCreate_Timestamps() {
 	user := s.createUser("prog_timestamps")
 
