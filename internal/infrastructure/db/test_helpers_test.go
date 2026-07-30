@@ -12,14 +12,14 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestDB creates a database connection for integration tests.
-// It reads connection parameters from environment variables with sensible defaults.
+// setupTestDB поднимает коннект к БД для интеграционных тестов.
+// параметры берём из env, с дефолтами под локальный docker-compose.
 func setupTestDB(t *testing.T) *db.DB {
 	t.Helper()
 
@@ -52,7 +52,7 @@ func setupTestDB(t *testing.T) *db.DB {
 	return database
 }
 
-// cleanupTable removes all rows from the given table that match the WHERE clause.
+// cleanupTable сносит строки таблицы по условию where
 func cleanupTable(t *testing.T, database *db.DB, table, where string, args ...interface{}) {
 	t.Helper()
 	ctx := context.Background()
@@ -63,7 +63,7 @@ func cleanupTable(t *testing.T, database *db.DB, table, where string, args ...in
 	}
 }
 
-// createTestUser creates a user in the database for testing.
+// createTestUser создаёт юзера для теста
 func createTestUser(t *testing.T, repo *db.UserRepository, suffix string) *domain.User {
 	t.Helper()
 	ctx := context.Background()
@@ -81,8 +81,7 @@ func createTestUser(t *testing.T, repo *db.UserRepository, suffix string) *domai
 	return user
 }
 
-// createTestTournament creates a tournament in the database for testing.
-// The creatorID must reference an existing user in the database.
+// createTestTournament создаёт турнир. creatorID должен ссылаться на существующего юзера.
 func createTestTournament(t *testing.T, repo *db.TournamentRepository, code string, creatorID uuid.UUID) *domain.Tournament {
 	t.Helper()
 	ctx := context.Background()
@@ -106,8 +105,7 @@ func createTestTournament(t *testing.T, repo *db.TournamentRepository, code stri
 	return tournament
 }
 
-// createTestTournamentWithUser creates a user and a tournament in the database for testing.
-// It ensures the creator exists in the users table to satisfy FK constraints.
+// createTestTournamentWithUser создаёт и юзера, и турнир - чтобы не ловить FK по creator_id
 func createTestTournamentWithUser(t *testing.T, tournamentRepo *db.TournamentRepository, userRepo *db.UserRepository, code string) (*domain.Tournament, *domain.User) {
 	t.Helper()
 	ctx := context.Background()
@@ -133,7 +131,7 @@ func createTestTournamentWithUser(t *testing.T, tournamentRepo *db.TournamentRep
 	return tournament, user
 }
 
-// Helper functions for reading environment variables.
+// чтение env с дефолтом
 
 func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {

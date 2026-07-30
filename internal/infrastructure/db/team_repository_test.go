@@ -42,17 +42,14 @@ func (s *TeamRepositorySuite) TearDownTest() {
 	_, _ = s.database.ExecContext(ctx, "DELETE FROM users WHERE username LIKE 'testuser_team%'")
 }
 
-// createTeamUser creates a test user with a team-specific suffix.
 func (s *TeamRepositorySuite) createTeamUser(suffix string) *domain.User {
 	return createTestUser(s.T(), s.userRepo, "team_"+suffix)
 }
 
-// createTeamTournament creates a test tournament with a team-specific code.
 func (s *TeamRepositorySuite) createTeamTournament(code string, creatorID uuid.UUID) *domain.Tournament {
 	return createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 }
 
-// createTeam creates a team in the database using the repository.
 func (s *TeamRepositorySuite) createTeam(name, code string, tournamentID, leaderID uuid.UUID) *domain.Team {
 	s.T().Helper()
 	ctx := context.Background()
@@ -71,7 +68,6 @@ func (s *TeamRepositorySuite) createTeam(name, code string, tournamentID, leader
 	return team
 }
 
-// addMember adds a user as a member of the team.
 func (s *TeamRepositorySuite) addMember(teamID, userID uuid.UUID) *domain.TeamMember {
 	s.T().Helper()
 	ctx := context.Background()
@@ -376,7 +372,7 @@ func (s *TeamRepositorySuite) TestRemoveMember() {
 	err := s.repo.RemoveMember(ctx, team.ID, member.ID)
 	require.NoError(s.T(), err)
 
-	// Verify the member was removed.
+	// участника больше нет в списке
 	members, err := s.repo.GetMembers(ctx, team.ID)
 	require.NoError(s.T(), err)
 	for _, m := range members {
@@ -564,7 +560,7 @@ func (s *TeamRepositorySuite) TestGenerateUniqueCode_Uniqueness() {
 		codes[code] = true
 	}
 
-	// All generated codes should be unique.
+	// все коды должны быть разными
 	assert.Len(s.T(), codes, 10)
 }
 

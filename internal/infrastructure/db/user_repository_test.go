@@ -173,20 +173,18 @@ func (s *UserRepositorySuite) TestDelete_NotFound() {
 	assert.Error(s.T(), err)
 }
 
-func (s *UserRepositorySuite) TestExists_ByUsername() {
-	createTestUser(s.T(), s.repo, "exists_name")
+func (s *UserRepositorySuite) TestExists() {
+	createTestUser(s.T(), s.repo, "exists")
 
 	ctx := context.Background()
-	exists, err := s.repo.Exists(ctx, "testuser_exists_name", "nonexistent@test.com")
+
+	// совпадение по username
+	exists, err := s.repo.Exists(ctx, "testuser_exists", "nonexistent@test.com")
 	require.NoError(s.T(), err)
 	assert.True(s.T(), exists)
-}
 
-func (s *UserRepositorySuite) TestExists_ByEmail() {
-	createTestUser(s.T(), s.repo, "exists_email")
-
-	ctx := context.Background()
-	exists, err := s.repo.Exists(ctx, "nonexistent_user", "testuser_exists_email@test.com")
+	// совпадение по email
+	exists, err = s.repo.Exists(ctx, "nonexistent_user", "testuser_exists@test.com")
 	require.NoError(s.T(), err)
 	assert.True(s.T(), exists)
 }

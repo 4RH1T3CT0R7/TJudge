@@ -26,7 +26,7 @@ type RatingRepositorySuite struct {
 	tournamentRepo *db.TournamentRepository
 	programRepo    *db.ProgramRepository
 	gameRepo       *db.GameRepository
-	// track created IDs for cleanup
+	// айдишники для очистки
 	ratingHistoryIDs []uuid.UUID
 	participantIDs   []uuid.UUID
 	programIDs       []uuid.UUID
@@ -50,7 +50,7 @@ func TestRatingRepositorySuite(t *testing.T) {
 
 func (s *RatingRepositorySuite) TearDownTest() {
 	ctx := context.Background()
-	// Delete in FK order: rating_history -> tournament_participants -> programs -> tournaments -> games -> users
+	// порядок FK: rating_history -> tournament_participants -> programs -> tournaments -> games -> users
 	for _, id := range s.ratingHistoryIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE id = $1", id)
 	}
@@ -77,21 +77,18 @@ func (s *RatingRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-// createUser creates a test user and tracks it for cleanup.
 func (s *RatingRepositorySuite) createUser(suffix string) *domain.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-// createTournament creates a test tournament and tracks it for cleanup.
 func (s *RatingRepositorySuite) createTournament(code string, creatorID uuid.UUID) *domain.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-// createProgram creates a minimal test program and tracks it for cleanup.
 func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *domain.Program {
 	ctx := context.Background()
 	program := &domain.Program{
@@ -109,7 +106,6 @@ func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *do
 	return program
 }
 
-// addParticipant adds a program as a tournament participant and tracks it for cleanup.
 func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID, rating int) *domain.TournamentParticipant {
 	ctx := context.Background()
 	participant := &domain.TournamentParticipant{
@@ -124,7 +120,6 @@ func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID
 	return participant
 }
 
-// createRatingHistory creates a rating history entry and tracks it for cleanup.
 func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid.UUID, oldRating, newRating, change int, matchID *uuid.UUID) *domain.RatingHistory {
 	ctx := context.Background()
 	history := &domain.RatingHistory{
@@ -143,7 +138,7 @@ func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid
 	return history
 }
 
-// setupRatingPrerequisites creates a user, tournament, and program for rating tests.
+// готовит юзера, турнир и прогу - типовой сетап для тестов рейтинга
 func (s *RatingRepositorySuite) setupRatingPrerequisites(suffix string) (tournament *domain.Tournament, program *domain.Program) {
 	user := s.createUser("rating_" + suffix)
 	tournament = s.createTournament("TR"+suffix, user.ID)
@@ -180,7 +175,6 @@ func (s *RatingRepositorySuite) TestCreate_WithMatchID() {
 func (s *RatingRepositorySuite) TestGetByProgramID() {
 	tournament, program := s.setupRatingPrerequisites("gbpid")
 
-	// Create multiple rating history entries
 	s.createRatingHistory(program.ID, tournament.ID, 1500, 1520, 20, nil)
 	s.createRatingHistory(program.ID, tournament.ID, 1520, 1510, -10, nil)
 	s.createRatingHistory(program.ID, tournament.ID, 1510, 1540, 30, nil)
@@ -190,7 +184,7 @@ func (s *RatingRepositorySuite) TestGetByProgramID() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), history, 3)
 
-	// Verify ordering by created_at DESC
+	// сортировка created_at DESC
 	for i := 0; i < len(history)-1; i++ {
 		assert.True(s.T(), !history[i].CreatedAt.Before(history[i+1].CreatedAt),
 			"history should be ordered by created_at DESC")
@@ -210,7 +204,7 @@ func (s *RatingRepositorySuite) TestGetByTournamentID() {
 	user2 := s.createUser("rating_gbtid2")
 	program2 := s.createProgram(user2.ID, "RatingBot_gbtid2")
 
-	// Create history for both programs
+	// история по обеим прогам
 	s.createRatingHistory(program.ID, tournament.ID, 1500, 1520, 20, nil)
 	s.createRatingHistory(program2.ID, tournament.ID, 1500, 1480, -20, nil)
 
@@ -219,7 +213,6 @@ func (s *RatingRepositorySuite) TestGetByTournamentID() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), history, 2)
 
-	// Verify all entries belong to this tournament
 	for _, h := range history {
 		assert.Equal(s.T(), tournament.ID, h.TournamentID)
 	}
@@ -230,11 +223,10 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating() {
 	s.addParticipant(tournament.ID, program.ID, 1500)
 
 	ctx := context.Background()
-	// Delta-based: +100 from 1500 = 1600
+	// дельта-апдейт: +100 от 1500 = 1600
 	err := s.repo.UpdateParticipantRating(ctx, tournament.ID, program.ID, 100)
 	require.NoError(s.T(), err)
 
-	// Verify the rating was updated
 	rating, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1600, rating)
@@ -254,15 +246,13 @@ func (s *RatingRepositorySuite) TestUpdateParticipantStats_Win() {
 
 	ctx := context.Background()
 
-	// Record a win
+	// две победы подряд
 	err := s.repo.UpdateParticipantStats(ctx, tournament.ID, program.ID, true, false)
 	require.NoError(s.T(), err)
-
-	// Record another win
 	err = s.repo.UpdateParticipantStats(ctx, tournament.ID, program.ID, true, false)
 	require.NoError(s.T(), err)
 
-	// Verify stats via direct query (no getter for full stats in the repo)
+	// геттера полной статы в репо нет, читаем напрямую
 	var wins, losses, draws int
 	err = s.database.QueryRowContext(ctx,
 		"SELECT wins, losses, draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
@@ -375,7 +365,6 @@ func (s *RatingRepositorySuite) TestGetParticipantRatings_Program2NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-// createGame creates a test game and tracks it for cleanup.
 func (s *RatingRepositorySuite) createGame(name string) *domain.Game {
 	ctx := context.Background()
 	game := &domain.Game{
@@ -390,7 +379,6 @@ func (s *RatingRepositorySuite) createGame(name string) *domain.Game {
 	return game
 }
 
-// createProgramWithGame creates a program linked to a game and tracks it for cleanup.
 func (s *RatingRepositorySuite) createProgramWithGame(userID uuid.UUID, gameID *uuid.UUID, name string) *domain.Program {
 	ctx := context.Background()
 	program := &domain.Program{
@@ -432,10 +420,9 @@ func (s *RatingRepositorySuite) TestRatingHistoryFields() {
 	assert.NotZero(s.T(), result.CreatedAt)
 }
 
-// --- ProcessMatchResultAtomic, UpdateParticipantRatingAndStats, ResetParticipantsForGame ---
-
+// ProcessMatchResultAtomic должен в одной транзакции обновить рейтинг+стату
+// обоим участникам. проверяем zero-sum: сколько один выиграл, столько другой потерял.
 func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
-	// Setup two participants
 	tournament, program1 := s.setupRatingPrerequisites("pmat1")
 	user2 := s.createUser("rating_pmat2")
 	program2 := s.createProgram(user2.ID, "RatingBot_pmat2")
@@ -448,7 +435,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	matchID := uuid.New()
 	now := time.Now()
 
-	// Program1 wins: gets +32 delta, Program2 loses: gets -32 delta
+	// program1 победил: +32, program2 проиграл: -32
 	update1 := &rating.ParticipantUpdate{
 		ProgramID:    program1.ID,
 		TournamentID: tournament.ID,
@@ -488,7 +475,6 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
 	require.NoError(s.T(), err)
 
-	// Verify ratings are updated
 	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1532, r1)
@@ -497,10 +483,10 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1468, r2)
 
-	// Verify zero-sum: total change is 0
+	// zero-sum: суммарное изменение = 0
 	assert.Equal(s.T(), 0, (r1-1500)+(r2-1500))
 
-	// Verify stats: program1 has 1 win, program2 has 1 loss
+	// стата: program1 - 1 победа, program2 - 1 поражение
 	var wins1, losses1, wins2, losses2 int
 	err = s.database.QueryRowContext(ctx,
 		"SELECT wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
@@ -530,7 +516,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
 	matchID := uuid.New()
 	now := time.Now()
 
-	// Draw: both get 0 delta
+	// ничья: у обоих дельта 0
 	update1 := &rating.ParticipantUpdate{
 		ProgramID:    program1.ID,
 		TournamentID: tournament.ID,
@@ -570,7 +556,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
 	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
 	require.NoError(s.T(), err)
 
-	// Both ratings unchanged
+	// рейтинги не поменялись
 	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1500, r1)
@@ -579,7 +565,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1500, r2)
 
-	// Both should have 1 draw
+	// у обоих по одной ничьей
 	var draws1, draws2 int
 	err = s.database.QueryRowContext(ctx,
 		"SELECT draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
@@ -603,7 +589,7 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRatingAndStats_Win() {
 	err := s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, program.ID, 50, true, false)
 	require.NoError(s.T(), err)
 
-	// Verify rating updated atomically with stats
+	// рейтинг и стата обновились одной операцией
 	rating, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1550, rating)
@@ -623,33 +609,32 @@ func (s *RatingRepositorySuite) TestResetParticipantsForGame() {
 	tournament := s.createTournament("TRRST1", user.ID)
 	game := s.createGame("rstg_game")
 
-	// Create programs linked to the game
+	// проги привязаны к игре
 	prog1 := s.createProgramWithGame(user.ID, &game.ID, "RstBot1")
 	prog2 := s.createProgramWithGame(user.ID, &game.ID, "RstBot2")
 
-	// Add participants
 	s.addParticipant(tournament.ID, prog1.ID, 1500)
 	s.addParticipant(tournament.ID, prog2.ID, 1500)
 
 	ctx := context.Background()
 
-	// Update ratings and stats so they differ from defaults
+	// уводим рейтинг и стату от дефолтов
 	err := s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog1.ID, 200, true, false)
 	require.NoError(s.T(), err)
 	err = s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog2.ID, -100, false, false)
 	require.NoError(s.T(), err)
 
-	// Verify non-default values before reset
+	// перед сбросом значения не дефолтные
 	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, prog1.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1700, r1)
 
-	// Reset all participants for this game
+	// сброс всех участников этой игры
 	affected, err := s.repo.ResetParticipantsForGame(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(2), affected)
 
-	// Verify reset to defaults: rating=1500, wins=0, losses=0, draws=0
+	// вернулись к дефолтам: rating=1500, wins=0, losses=0, draws=0
 	r1After, err := s.repo.GetParticipantRating(ctx, tournament.ID, prog1.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1500, r1After)
@@ -675,15 +660,14 @@ func (s *RatingRepositorySuite) TestResetParticipantsForGame_Empty() {
 
 	ctx := context.Background()
 
-	// No participants for this game - should succeed with 0 affected
+	// участников этой игры нет - 0 затронуто, но без ошибки
 	affected, err := s.repo.ResetParticipantsForGame(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(0), affected)
 }
 
-// TestUpdateParticipantRating_ConcurrentDeltas - регрессия на concurrent-deltas.
-// Запускает N goroutine, каждая делает +1 к рейтингу через delta-based UPDATE.
-// Правильный результат: rating = baseline + N (никаких потерянных обновлений).
+// регрессия на concurrent-deltas: N goroutine, каждая делает +1 через delta-based UPDATE.
+// правильный результат: rating = baseline + N (никаких потерянных обновлений).
 func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
 	tournament, program := s.setupRatingPrerequisites("crace")
 	baseline := 1500
@@ -711,8 +695,8 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
 
 	final, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
 	require.NoError(s.T(), err)
-	// Корректность: каждый из N concurrent UPDATE добавил +1, итого +N.
-	// Если БД не сериализует корректно, получим final меньше baseline+N (lost update).
+	// каждый из N параллельных UPDATE добавил +1, итого +N.
+	// если БД не сериализует корректно, получим меньше baseline+N (lost update).
 	assert.Equal(s.T(), baseline+n, final,
 		"concurrent delta-based UPDATE must not lose updates (MVCC row-lock invariant)")
 }
