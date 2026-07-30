@@ -7,8 +7,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
@@ -20,7 +20,7 @@ import (
 type MatchRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error)
 	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
-	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*db.MatchStatistics, error)
+	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error)
 }
 
@@ -257,7 +257,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Tags matches
 // @Produce json
 // @Param tournament_id query string false "Фильтр по турниру" format(uuid)
-// @Success 200 {object} db.MatchStatistics
+// @Success 200 {object} storage.MatchStatistics
 // @Failure 400 {object} object{error=string}
 // @Router /matches/statistics [get]
 func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {

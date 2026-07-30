@@ -8,8 +8,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -22,7 +22,7 @@ type SystemStatusRepository interface {
 	SchemaVersion(ctx context.Context) (int64, bool, error)
 	MatchCountsByStatus(ctx context.Context) (map[string]int64, error)
 	ProgramCountsByStatus(ctx context.Context) (map[string]int64, error)
-	OutboxStats(ctx context.Context) (*db.OutboxStatus, error)
+	OutboxStats(ctx context.Context) (*storage.OutboxStatus, error)
 	LastCompletedMatchAt(ctx context.Context) (*time.Time, error)
 	StuckRunningCount(ctx context.Context, olderThan time.Duration) (int64, error)
 	ConnectionStats() sql.DBStats
@@ -54,14 +54,14 @@ type StatusRedisPinger interface {
 // admin-панель, make status и внешние проверки читают его из
 // GET /api/v1/system/status.
 type FullSystemStatus struct {
-	App       AppStatus        `json:"app"`
-	Database  DatabaseStatus   `json:"database"`
-	Redis     RedisStatus      `json:"redis"`
-	Queues    QueueStatus      `json:"queues"`
-	Matches   MatchesStatus    `json:"matches"`
-	Programs  map[string]int64 `json:"programs"`
-	Outbox    *db.OutboxStatus `json:"outbox,omitempty"`
-	WebSocket map[string]any   `json:"websocket"`
+	App       AppStatus             `json:"app"`
+	Database  DatabaseStatus        `json:"database"`
+	Redis     RedisStatus           `json:"redis"`
+	Queues    QueueStatus           `json:"queues"`
+	Matches   MatchesStatus         `json:"matches"`
+	Programs  map[string]int64      `json:"programs"`
+	Outbox    *storage.OutboxStatus `json:"outbox,omitempty"`
+	WebSocket map[string]any        `json:"websocket"`
 }
 
 // AppStatus - версия и аптайм процесса API.

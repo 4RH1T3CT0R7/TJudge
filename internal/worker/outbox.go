@@ -6,7 +6,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -14,7 +14,7 @@ import (
 
 // OutboxStore - доступ к таблице match_outbox.
 type OutboxStore interface {
-	ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*db.OutboxEntry, error)
+	ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*storage.OutboxEntry, error)
 	MarkDone(ctx context.Context, id int64) error
 	MarkFailed(ctx context.Context, id int64, errMsg string) error
 }
@@ -142,8 +142,8 @@ func (d *OutboxDispatcher) RunOnce(ctx context.Context) int {
 	return processed
 }
 
-func (d *OutboxDispatcher) processEntry(ctx context.Context, entry *db.OutboxEntry) error {
-	if entry.Kind != db.OutboxKindRatingUpdate {
+func (d *OutboxDispatcher) processEntry(ctx context.Context, entry *storage.OutboxEntry) error {
+	if entry.Kind != storage.OutboxKindRatingUpdate {
 		d.log.Warn("Outbox: unknown entry kind, skipping",
 			zap.String("kind", entry.Kind),
 			zap.Int64("outbox_id", entry.ID),

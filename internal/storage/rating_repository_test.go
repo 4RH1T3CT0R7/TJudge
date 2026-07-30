@@ -1,6 +1,6 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -20,12 +20,12 @@ import (
 
 type RatingRepositorySuite struct {
 	suite.Suite
-	database       *db.DB
-	repo           *db.RatingRepository
-	userRepo       *db.UserRepository
-	tournamentRepo *db.TournamentRepository
-	programRepo    *db.ProgramRepository
-	gameRepo       *db.GameRepository
+	database       *storage.DB
+	repo           *storage.RatingRepository
+	userRepo       *storage.UserRepository
+	tournamentRepo *storage.TournamentRepository
+	programRepo    *storage.ProgramRepository
+	gameRepo       *storage.GameRepository
 	// айдишники для очистки
 	ratingHistoryIDs []uuid.UUID
 	participantIDs   []uuid.UUID
@@ -39,11 +39,11 @@ func TestRatingRepositorySuite(t *testing.T) {
 	database := setupTestDB(t)
 	s := &RatingRepositorySuite{
 		database:       database,
-		repo:           db.NewRatingRepository(database),
-		userRepo:       db.NewUserRepository(database),
-		tournamentRepo: db.NewTournamentRepository(database),
-		programRepo:    db.NewProgramRepository(database),
-		gameRepo:       db.NewGameRepository(database),
+		repo:           storage.NewRatingRepository(database),
+		userRepo:       storage.NewUserRepository(database),
+		tournamentRepo: storage.NewTournamentRepository(database),
+		programRepo:    storage.NewProgramRepository(database),
+		gameRepo:       storage.NewGameRepository(database),
 	}
 	suite.Run(t, s)
 }

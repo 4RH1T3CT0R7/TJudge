@@ -1,6 +1,6 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
@@ -19,11 +19,11 @@ import (
 
 type MatchRepositorySuite struct {
 	suite.Suite
-	database       *db.DB
-	repo           *db.MatchRepository
-	userRepo       *db.UserRepository
-	tournamentRepo *db.TournamentRepository
-	programRepo    *db.ProgramRepository
+	database       *storage.DB
+	repo           *storage.MatchRepository
+	userRepo       *storage.UserRepository
+	tournamentRepo *storage.TournamentRepository
+	programRepo    *storage.ProgramRepository
 	// айдишники того что создали - чтобы прибрать за собой
 	matchIDs      []uuid.UUID
 	programIDs    []uuid.UUID
@@ -35,10 +35,10 @@ func TestMatchRepositorySuite(t *testing.T) {
 	database := setupTestDB(t)
 	s := &MatchRepositorySuite{
 		database:       database,
-		repo:           db.NewMatchRepository(database),
-		userRepo:       db.NewUserRepository(database),
-		tournamentRepo: db.NewTournamentRepository(database),
-		programRepo:    db.NewProgramRepository(database),
+		repo:           storage.NewMatchRepository(database),
+		userRepo:       storage.NewUserRepository(database),
+		tournamentRepo: storage.NewTournamentRepository(database),
+		programRepo:    storage.NewProgramRepository(database),
 	}
 	suite.Run(t, s)
 }

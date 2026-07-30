@@ -1,13 +1,13 @@
 //go:build integration
 
-package db_test
+package storage_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -17,19 +17,19 @@ import (
 
 type TeamRepositorySuite struct {
 	suite.Suite
-	database       *db.DB
-	repo           *db.TeamRepository
-	userRepo       *db.UserRepository
-	tournamentRepo *db.TournamentRepository
+	database       *storage.DB
+	repo           *storage.TeamRepository
+	userRepo       *storage.UserRepository
+	tournamentRepo *storage.TournamentRepository
 }
 
 func TestTeamRepositorySuite(t *testing.T) {
 	database := setupTestDB(t)
 	s := &TeamRepositorySuite{
 		database:       database,
-		repo:           db.NewTeamRepository(database),
-		userRepo:       db.NewUserRepository(database),
-		tournamentRepo: db.NewTournamentRepository(database),
+		repo:           storage.NewTeamRepository(database),
+		userRepo:       storage.NewUserRepository(database),
+		tournamentRepo: storage.NewTournamentRepository(database),
 	}
 	suite.Run(t, s)
 }

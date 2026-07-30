@@ -8,7 +8,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
-	"github.com/bmstu-itstech/tjudge/internal/infrastructure/db"
+	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -22,12 +22,12 @@ type MockOutboxStore struct {
 	mock.Mock
 }
 
-func (m *MockOutboxStore) ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*db.OutboxEntry, error) {
+func (m *MockOutboxStore) ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*storage.OutboxEntry, error) {
 	args := m.Called(ctx, olderThan, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*db.OutboxEntry), args.Error(1)
+	return args.Get(0).([]*storage.OutboxEntry), args.Error(1)
 }
 
 func (m *MockOutboxStore) MarkDone(ctx context.Context, id int64) error {
@@ -109,10 +109,10 @@ func completedMatch() *domain.Match {
 func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
 	d, outbox, matchRepo, ratingRepo, ratingService, _ := newTestDispatcher(t)
 	match := completedMatch()
-	entry := &db.OutboxEntry{ID: 1, MatchID: match.ID, Kind: db.OutboxKindRatingUpdate, Attempts: 1}
+	entry := &storage.OutboxEntry{ID: 1, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{entry}, nil)
+		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
 	// Рейтинг ещё не применялся - history пустая.
 	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*domain.RatingHistory{}, nil)
@@ -130,7 +130,7 @@ func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
 func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
 	d, outbox, matchRepo, ratingRepo, ratingService, bus := newTestDispatcher(t)
 	match := completedMatch()
-	entry := &db.OutboxEntry{ID: 2, MatchID: match.ID, Kind: db.OutboxKindRatingUpdate, Attempts: 1}
+	entry := &storage.OutboxEntry{ID: 2, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	history := []*domain.RatingHistory{
 		{ProgramID: match.Program1ID, NewRating: 1216, MatchID: &match.ID},
@@ -138,7 +138,7 @@ func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
 	}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{entry}, nil)
+		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
 	// Рейтинг уже применён (краш после коммита) - повторять нельзя.
 	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return(history, nil)
@@ -161,10 +161,10 @@ func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
 func TestOutboxDispatcher_RunOnce_MatchDeleted(t *testing.T) {
 	d, outbox, matchRepo, _, _, _ := newTestDispatcher(t)
 	matchID := uuid.New()
-	entry := &db.OutboxEntry{ID: 3, MatchID: matchID, Kind: db.OutboxKindRatingUpdate, Attempts: 1}
+	entry := &storage.OutboxEntry{ID: 3, MatchID: matchID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{entry}, nil)
+		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, matchID).Return(nil, errors.ErrNotFound)
 	// Матч удалён - задача закрывается как неактуальная.
 	outbox.On("MarkDone", mock.Anything, int64(3)).Return(nil)
@@ -177,10 +177,10 @@ func TestOutboxDispatcher_RunOnce_MatchDeleted(t *testing.T) {
 func TestOutboxDispatcher_RunOnce_ErrorMarksFailed(t *testing.T) {
 	d, outbox, matchRepo, ratingRepo, ratingService, _ := newTestDispatcher(t)
 	match := completedMatch()
-	entry := &db.OutboxEntry{ID: 4, MatchID: match.ID, Kind: db.OutboxKindRatingUpdate, Attempts: 3}
+	entry := &storage.OutboxEntry{ID: 4, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 3}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{entry}, nil)
+		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
 	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*domain.RatingHistory{}, nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
@@ -199,10 +199,10 @@ func TestOutboxDispatcher_RunOnce_FailedMatchSkipped(t *testing.T) {
 	d, outbox, matchRepo, _, ratingService, _ := newTestDispatcher(t)
 	match := completedMatch()
 	match.Status = domain.MatchFailed
-	entry := &db.OutboxEntry{ID: 5, MatchID: match.ID, Kind: db.OutboxKindRatingUpdate, Attempts: 1}
+	entry := &storage.OutboxEntry{ID: 5, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{entry}, nil)
+		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
 	outbox.On("MarkDone", mock.Anything, int64(5)).Return(nil)
 
@@ -216,7 +216,7 @@ func TestOutboxDispatcher_StartStop(t *testing.T) {
 	d.interval = 10 * time.Millisecond
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*db.OutboxEntry{}, nil).Maybe()
+		Return([]*storage.OutboxEntry{}, nil).Maybe()
 
 	d.Start()
 	time.Sleep(35 * time.Millisecond)
