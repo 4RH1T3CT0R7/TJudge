@@ -7,15 +7,14 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// newTestDBWithPing creates a test DB with MonitorPingsOption enabled so
-// ExpectPing expectations are actually enforced by sqlmock.
+// с MonitorPingsOption sqlmock реально проверяет ExpectPing, без него - игнорит
 func newTestDBWithPing(t *testing.T) (*DB, sqlmock.Sqlmock) {
 	t.Helper()
 	mockDB, mock, err := sqlmock.NewWithDSN("sqlmock", sqlmock.MonitorPingsOption(true))
@@ -149,7 +148,7 @@ func TestDB_QueryRowWithMetrics_Success(t *testing.T) {
 func TestDB_QueryRowWithMetrics_NoRows(t *testing.T) {
 	db, mock := newTestDB(t)
 
-	rows := sqlmock.NewRows([]string{"id", "name"}) // empty result set
+	rows := sqlmock.NewRows([]string{"id", "name"}) // пустой результат
 
 	mock.ExpectQuery("SELECT id, name FROM users WHERE id").WillReturnRows(rows)
 
@@ -177,7 +176,7 @@ func TestDB_BeginTx_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 
-	// Rollback so mock expectations are clean
+	// откатываем, чтобы ожидания мока остались чистыми
 	mock.ExpectRollback()
 	_ = tx.Rollback()
 
