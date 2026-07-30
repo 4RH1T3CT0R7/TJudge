@@ -24,7 +24,7 @@ type MatchRepositorySuite struct {
 	userRepo       *db.UserRepository
 	tournamentRepo *db.TournamentRepository
 	programRepo    *db.ProgramRepository
-	// track created IDs for cleanup
+	// айдишники того что создали - чтобы прибрать за собой
 	matchIDs      []uuid.UUID
 	programIDs    []uuid.UUID
 	tournamentIDs []uuid.UUID
@@ -45,7 +45,7 @@ func TestMatchRepositorySuite(t *testing.T) {
 
 func (s *MatchRepositorySuite) TearDownTest() {
 	ctx := context.Background()
-	// Delete in FK order: matches -> programs -> tournaments -> users
+	// порядок важен из-за FK: matches -> programs -> tournaments -> users
 	for _, id := range s.matchIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", id)
 	}
@@ -64,21 +64,18 @@ func (s *MatchRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-// createUser creates a test user and tracks it for cleanup.
 func (s *MatchRepositorySuite) createUser(suffix string) *domain.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-// createTournament creates a test tournament and tracks it for cleanup.
 func (s *MatchRepositorySuite) createTournament(code string, creatorID uuid.UUID) *domain.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-// createProgram creates a minimal test program and tracks it for cleanup.
 func (s *MatchRepositorySuite) createProgram(userID uuid.UUID, name string) *domain.Program {
 	ctx := context.Background()
 	program := &domain.Program{
@@ -96,7 +93,6 @@ func (s *MatchRepositorySuite) createProgram(userID uuid.UUID, name string) *dom
 	return program
 }
 
-// createMatch creates a test match and tracks it for cleanup.
 func (s *MatchRepositorySuite) createMatch(tournamentID, program1ID, program2ID uuid.UUID, gameType string, status domain.MatchStatus, priority domain.MatchPriority, roundNumber int) *domain.Match {
 	ctx := context.Background()
 	match := &domain.Match{
@@ -116,7 +112,7 @@ func (s *MatchRepositorySuite) createMatch(tournamentID, program1ID, program2ID 
 	return match
 }
 
-// setupMatchPrerequisites creates a user, tournament, and two programs for match tests.
+// готовит юзера, турнир и две проги - типовой сетап почти для всех тестов матчей
 func (s *MatchRepositorySuite) setupMatchPrerequisites(suffix string) (tournament *domain.Tournament, prog1, prog2 *domain.Program) {
 	user := s.createUser("match_" + suffix)
 	tournament = s.createTournament("TM"+suffix, user.ID)
@@ -145,7 +141,7 @@ func (s *MatchRepositorySuite) TestCreate() {
 	require.NoError(s.T(), err)
 	s.matchIDs = append(s.matchIDs, match.ID)
 
-	// Verify by fetching
+	// перечитываем и сверяем
 	result, err := s.repo.GetByID(ctx, match.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), match.ID, result.ID)
@@ -200,7 +196,7 @@ func (s *MatchRepositorySuite) TestCreateBatch() {
 		s.matchIDs = append(s.matchIDs, m.ID)
 	}
 
-	// Verify both were created
+	// оба должны создаться
 	for _, m := range matches {
 		result, err := s.repo.GetByID(ctx, m.ID)
 		require.NoError(s.T(), err)
@@ -226,7 +222,7 @@ func (s *MatchRepositorySuite) TestGetByTournamentID() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 2)
 
-	// Verify ordering: round_number DESC, created_at DESC
+	// сортировка round_number DESC, created_at DESC
 	assert.GreaterOrEqual(s.T(), matches[0].RoundNumber, matches[1].RoundNumber)
 }
 
@@ -239,12 +235,12 @@ func (s *MatchRepositorySuite) TestGetByTournamentID_Pagination() {
 
 	ctx := context.Background()
 
-	// First page
+	// первая страница
 	matches, err := s.repo.GetByTournamentID(ctx, tournament.ID, 3, 0)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 3)
 
-	// Second page
+	// вторая страница
 	matches, err = s.repo.GetByTournamentID(ctx, tournament.ID, 3, 3)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 2)
@@ -253,10 +249,10 @@ func (s *MatchRepositorySuite) TestGetByTournamentID_Pagination() {
 func (s *MatchRepositorySuite) TestGetPendingByTournamentID() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("pndtid")
 
-	// Create pending matches with different priorities
+	// pending с разными приоритетами
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityLow, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityHigh, 1)
-	// Create a completed match that should NOT appear
+	// completed попасть в выборку не должен
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchCompleted, domain.PriorityMedium, 1)
 
 	ctx := context.Background()
@@ -264,11 +260,10 @@ func (s *MatchRepositorySuite) TestGetPendingByTournamentID() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 2)
 
-	// Verify ordering: high priority first
+	// high приоритет первым
 	assert.Equal(s.T(), domain.PriorityHigh, matches[0].Priority)
 	assert.Equal(s.T(), domain.PriorityLow, matches[1].Priority)
 
-	// Verify all are pending
 	for _, m := range matches {
 		assert.Equal(s.T(), domain.MatchPending, m.Status)
 	}
@@ -277,7 +272,7 @@ func (s *MatchRepositorySuite) TestGetPendingByTournamentID() {
 func (s *MatchRepositorySuite) TestGetPendingByTournamentAndGame() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("pndgm")
 
-	// Create pending matches for two different game types
+	// pending под две разные игры
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityHigh, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", domain.MatchPending, domain.PriorityMedium, 1)
@@ -292,7 +287,7 @@ func (s *MatchRepositorySuite) TestGetPendingByTournamentAndGame() {
 		assert.Equal(s.T(), domain.MatchPending, m.Status)
 	}
 
-	// Check the other game type
+	// вторая игра
 	matches, err = s.repo.GetPendingByTournamentAndGame(ctx, tournament.ID, "tug_of_war")
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 1)
@@ -304,7 +299,7 @@ func (s *MatchRepositorySuite) TestUpdateStatus() {
 
 	ctx := context.Background()
 
-	// Update to running (should set started_at)
+	// перевод в running должен проставить started_at
 	err := s.repo.UpdateStatus(ctx, match.ID, domain.MatchRunning)
 	require.NoError(s.T(), err)
 
@@ -326,14 +321,23 @@ func (s *MatchRepositorySuite) TestUpdateStatus_ToCompleted() {
 	result, err := s.repo.GetByID(ctx, match.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), domain.MatchCompleted, result.Status)
-	// started_at should not be set when going directly to completed
+	// сразу в completed - started_at не трогаем
 	assert.Nil(s.T(), result.StartedAt)
 }
 
+// перевод в running атомарно уводит матч из pending. если матча нет или он
+// уже не pending - это НЕ not found, а защита от двойной обработки
+// (ErrMatchAlreadyProcessed). а вот обычный статус по несуществующему id - not found.
 func (s *MatchRepositorySuite) TestUpdateStatus_NotFound() {
 	ctx := context.Background()
 
+	// running по несуществующему id: 0 строк -> already processed, не not found
 	err := s.repo.UpdateStatus(ctx, uuid.New(), domain.MatchRunning)
+	assert.Error(s.T(), err)
+	assert.ErrorIs(s.T(), err, domain.ErrMatchAlreadyProcessed)
+
+	// а не-running статус по несуществующему id - это уже not found
+	err = s.repo.UpdateStatus(ctx, uuid.New(), domain.MatchCompleted)
 	assert.Error(s.T(), err)
 	assert.True(s.T(), errors.IsNotFound(err))
 }
@@ -397,10 +401,10 @@ func (s *MatchRepositorySuite) TestUpdateResult_WithError() {
 func (s *MatchRepositorySuite) TestResetFailedMatches() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("rstfld")
 
-	// Create failed matches
+	// два зафейленных
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchFailed, domain.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchFailed, domain.PriorityMedium, 1)
-	// Create a pending match that should NOT be affected
+	// pending трогать нельзя
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 
 	ctx := context.Background()
@@ -408,7 +412,7 @@ func (s *MatchRepositorySuite) TestResetFailedMatches() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(2), affected)
 
-	// Verify all matches are now pending
+	// после сброса все pending
 	matches, err := s.repo.GetByTournamentID(ctx, tournament.ID, 10, 0)
 	require.NoError(s.T(), err)
 	for _, m := range matches {
@@ -431,12 +435,12 @@ func (s *MatchRepositorySuite) TestGetNextRoundNumber() {
 
 	ctx := context.Background()
 
-	// No matches yet - should return 1
+	// матчей ещё нет - ждём 1
 	nextRound, err := s.repo.GetNextRoundNumber(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1, nextRound)
 
-	// Create matches in round 1
+	// раунд 1
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 
@@ -444,7 +448,7 @@ func (s *MatchRepositorySuite) TestGetNextRoundNumber() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 2, nextRound)
 
-	// Create a match in round 3 (skipping round 2)
+	// раунд 3 (второй пропустили) - следующий должен быть 4
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 3)
 
 	nextRound, err = s.repo.GetNextRoundNumber(ctx, tournament.ID)
@@ -457,12 +461,12 @@ func (s *MatchRepositorySuite) TestGetNextRoundNumberByGame() {
 
 	ctx := context.Background()
 
-	// No matches for this game type
+	// для этой игры матчей нет
 	nextRound, err := s.repo.GetNextRoundNumberByGame(ctx, tournament.ID, "prisoners_dilemma")
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1, nextRound)
 
-	// Create matches for different game types
+	// матчи под разные игры
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 2)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", domain.MatchPending, domain.PriorityMedium, 1)
 
@@ -478,7 +482,7 @@ func (s *MatchRepositorySuite) TestGetNextRoundNumberByGame() {
 func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("mbrnd")
 
-	// Create matches across multiple rounds and game types
+	// матчи по нескольким раундам и играм
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchCompleted, domain.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", domain.MatchCompleted, domain.PriorityMedium, 1)
@@ -488,10 +492,9 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 
-	// Should have 3 groups: (round 1, prisoners_dilemma), (round 1, tug_of_war), (round 2, prisoners_dilemma)
+	// три группы: (раунд 1, prisoners_dilemma), (раунд 1, tug_of_war), (раунд 2, prisoners_dilemma)
 	assert.Len(s.T(), rounds, 3)
 
-	// Verify each round has its matches populated
 	for _, round := range rounds {
 		assert.NotEmpty(s.T(), round.Matches, "round %d/%s should have matches", round.RoundNumber, round.GameType)
 		assert.Equal(s.T(), round.TotalMatches, len(round.Matches))
@@ -520,18 +523,18 @@ func (s *MatchRepositorySuite) TestHasStartedMatches() {
 
 	ctx := context.Background()
 
-	// No started matches
+	// стартовавших нет
 	has, err := s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
 	require.NoError(s.T(), err)
 	assert.False(s.T(), has)
 
-	// Add pending match (should not count as started)
+	// pending не считается стартовавшим
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	has, err = s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
 	require.NoError(s.T(), err)
 	assert.False(s.T(), has)
 
-	// Add completed match
+	// а completed - уже да
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchCompleted, domain.PriorityMedium, 1)
 	has, err = s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
 	require.NoError(s.T(), err)
@@ -543,18 +546,18 @@ func (s *MatchRepositorySuite) TestHasAnyRunningMatches() {
 
 	ctx := context.Background()
 
-	// No matches at all
+	// вообще матчей нет
 	has, err := s.repo.HasAnyRunningMatches(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.False(s.T(), has)
 
-	// Add completed match (should not count)
+	// completed не в счёт
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchCompleted, domain.PriorityMedium, 1)
 	has, err = s.repo.HasAnyRunningMatches(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.False(s.T(), has)
 
-	// Add pending match
+	// pending уже считается "есть незавершённые"
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	has, err = s.repo.HasAnyRunningMatches(ctx, tournament.ID)
 	require.NoError(s.T(), err)
@@ -566,12 +569,11 @@ func (s *MatchRepositorySuite) TestGetActiveGameType() {
 
 	ctx := context.Background()
 
-	// No active matches
+	// активных матчей нет
 	gameType, err := s.repo.GetActiveGameType(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Empty(s.T(), gameType)
 
-	// Add pending match
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	gameType, err = s.repo.GetActiveGameType(ctx, tournament.ID)
 	require.NoError(s.T(), err)
@@ -590,11 +592,11 @@ func (s *MatchRepositorySuite) TestDeleteMatchesForGame() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(2), affected)
 
-	// Remove deleted match IDs from tracking
+	// удалённые убираем из трекинга
 	s.matchIDs = []uuid.UUID{m3.ID}
-	_ = m1 // already deleted via DeleteMatchesForGame
+	_ = m1 // уже снесён через DeleteMatchesForGame
 
-	// tug_of_war match should still exist
+	// матч tug_of_war должен остаться
 	result, err := s.repo.GetByID(ctx, m3.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "tug_of_war", result.GameType)
@@ -609,7 +611,7 @@ func (s *MatchRepositorySuite) TestList_WithFilters() {
 
 	ctx := context.Background()
 
-	// Filter by status
+	// фильтр по статусу
 	matches, err := s.repo.List(ctx, domain.MatchFilter{
 		TournamentID: &tournament.ID,
 		Status:       domain.MatchPending,
@@ -618,7 +620,7 @@ func (s *MatchRepositorySuite) TestList_WithFilters() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 2)
 
-	// Filter by game type
+	// фильтр по игре
 	matches, err = s.repo.List(ctx, domain.MatchFilter{
 		TournamentID: &tournament.ID,
 		GameType:     "tug_of_war",
@@ -627,7 +629,7 @@ func (s *MatchRepositorySuite) TestList_WithFilters() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), matches, 1)
 
-	// Filter by program
+	// фильтр по проге
 	matches, err = s.repo.List(ctx, domain.MatchFilter{
 		ProgramID: &prog1.ID,
 		Limit:     10,
@@ -647,16 +649,13 @@ func (s *MatchRepositorySuite) TestGetPending() {
 	matches, err := s.repo.GetPending(ctx, 10)
 	require.NoError(s.T(), err)
 
-	// Should have at least 2 pending matches (may have more from other tests)
+	// минимум 2 pending (могут быть ещё от других тестов)
 	assert.GreaterOrEqual(s.T(), len(matches), 2)
 
-	// Verify they are all pending
 	for _, m := range matches {
 		assert.Equal(s.T(), domain.MatchPending, m.Status)
 	}
 }
-
-// --- GetByID_Success, GetStuckRunning, BatchUpdateStatus, BatchUpdateResults, ListWithCursor ---
 
 func (s *MatchRepositorySuite) TestGetByID_Success() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("gbids")
@@ -674,6 +673,7 @@ func (s *MatchRepositorySuite) TestGetByID_Success() {
 	assert.Equal(s.T(), domain.MatchPending, result.Status)
 	assert.Equal(s.T(), domain.PriorityHigh, result.Priority)
 	assert.Equal(s.T(), 3, result.RoundNumber)
+	// опциональные поля у свежего матча должны быть nil
 	assert.Nil(s.T(), result.Score1)
 	assert.Nil(s.T(), result.Score2)
 	assert.Nil(s.T(), result.Winner)
@@ -689,30 +689,28 @@ func (s *MatchRepositorySuite) TestGetStuckRunning() {
 
 	ctx := context.Background()
 
-	// Create a running match with started_at set far in the past
+	// running с давним started_at - это и есть "зависший"
 	stuckMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
-	// Set status to running with an old started_at
 	oldTime := time.Now().Add(-2 * time.Hour)
 	_, err := s.database.ExecContext(ctx,
 		"UPDATE matches SET status = $2, started_at = $3 WHERE id = $1",
 		stuckMatch.ID, domain.MatchRunning, oldTime)
 	require.NoError(s.T(), err)
 
-	// Create a recently-started running match (should NOT be stuck)
+	// running, но стартанул только что - зависшим не считается
 	recentMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	_, err = s.database.ExecContext(ctx,
 		"UPDATE matches SET status = $2, started_at = NOW() WHERE id = $1",
 		recentMatch.ID, domain.MatchRunning)
 	require.NoError(s.T(), err)
 
-	// Create a pending match (should NOT be returned)
+	// pending возвращать не должны
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 
-	// Get stuck matches with 1-hour threshold
+	// порог зависания - 1 час
 	stuckMatches, err := s.repo.GetStuckRunning(ctx, 1*time.Hour, 10)
 	require.NoError(s.T(), err)
 
-	// Should find at least the stuck match
 	var foundStuck bool
 	var foundRecent bool
 	for _, m := range stuckMatches {
@@ -730,7 +728,6 @@ func (s *MatchRepositorySuite) TestGetStuckRunning() {
 func (s *MatchRepositorySuite) TestBatchUpdateStatus() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("batus")
 
-	// Create 3 pending matches
 	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
@@ -738,11 +735,10 @@ func (s *MatchRepositorySuite) TestBatchUpdateStatus() {
 	ctx := context.Background()
 	matchIDs := []uuid.UUID{m1.ID, m2.ID, m3.ID}
 
-	// Batch update to completed
 	err := s.repo.BatchUpdateStatus(ctx, matchIDs, domain.MatchCompleted)
 	require.NoError(s.T(), err)
 
-	// Verify all 3 are now completed
+	// все три должны стать completed
 	for _, id := range matchIDs {
 		result, err := s.repo.GetByID(ctx, id)
 		require.NoError(s.T(), err)
@@ -753,7 +749,6 @@ func (s *MatchRepositorySuite) TestBatchUpdateStatus() {
 func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("batur")
 
-	// Create 3 running matches
 	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
 	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
 	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchRunning, domain.PriorityMedium, 1)
@@ -769,7 +764,7 @@ func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 	err := s.repo.BatchUpdateResults(ctx, results)
 	require.NoError(s.T(), err)
 
-	// Verify m1: completed with scores
+	// m1 - completed со счётом
 	r1, err := s.repo.GetByID(ctx, m1.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), domain.MatchCompleted, r1.Status)
@@ -781,14 +776,14 @@ func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 	assert.Equal(s.T(), 1, *r1.Winner)
 	assert.NotNil(s.T(), r1.CompletedAt)
 
-	// Verify m2: completed draw
+	// m2 - ничья
 	r2, err := s.repo.GetByID(ctx, m2.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), domain.MatchCompleted, r2.Status)
 	require.NotNil(s.T(), r2.Winner)
 	assert.Equal(s.T(), 0, *r2.Winner)
 
-	// Verify m3: failed with error
+	// m3 - failed с ошибкой
 	r3, err := s.repo.GetByID(ctx, m3.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), domain.MatchFailed, r3.Status)
@@ -801,14 +796,14 @@ func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 func (s *MatchRepositorySuite) TestListWithCursor() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("lstcr")
 
-	// Create 5 matches with slight time gaps to ensure distinct created_at values
+	// 5 матчей, created_at у всех чуть разный
 	for i := 0; i < 5; i++ {
 		s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", domain.MatchPending, domain.PriorityMedium, 1)
 	}
 
 	ctx := context.Background()
 
-	// First page: get first 2
+	// первая страница - первые 2
 	first := 2
 	pageReq := &pagination.PageRequest{First: &first}
 	matches, hasMore, err := s.repo.ListWithCursor(ctx, domain.MatchFilter{
@@ -818,13 +813,13 @@ func (s *MatchRepositorySuite) TestListWithCursor() {
 	assert.Len(s.T(), matches, 2)
 	assert.True(s.T(), hasMore, "should have more pages with 5 total items and limit 2")
 
-	// Use the created_at of the last result as cursor for the next page
+	// created_at последнего результата - курсор для следующей страницы
 	lastMatch := matches[len(matches)-1]
 	cursor := pagination.NewTimestampCursor(lastMatch.CreatedAt)
 	cursorStr, err := cursor.Encode()
 	require.NoError(s.T(), err)
 
-	// Second page
+	// вторая страница
 	pageReq2 := &pagination.PageRequest{First: &first, After: &cursorStr}
 	matches2, hasMore2, err := s.repo.ListWithCursor(ctx, domain.MatchFilter{
 		TournamentID: &tournament.ID,
@@ -833,7 +828,7 @@ func (s *MatchRepositorySuite) TestListWithCursor() {
 	assert.Len(s.T(), matches2, 2)
 	assert.True(s.T(), hasMore2, "should have one more page")
 
-	// Verify no overlap between pages
+	// страницы не должны пересекаться
 	for _, m1 := range matches {
 		for _, m2 := range matches2 {
 			assert.NotEqual(s.T(), m1.ID, m2.ID, "pages should not overlap")
