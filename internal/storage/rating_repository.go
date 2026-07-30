@@ -132,8 +132,7 @@ func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID u
 // UpdateParticipantRating прибавляет дельту к рейтингу участника.
 // важно: rating + $3 считается в самой бд под row-lock, поэтому
 // параллельные апдейты не теряют дельты (mvcc сериализует и суммирует).
-// строгая сериализация через advisory lock на (tournament_id, program_id)
-// пока отложена, см. план
+// TODO: строгая сериализация через advisory lock на (tournament_id, program_id), пока и так норм
 func (r *RatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
 	query := `
 		UPDATE tournament_participants

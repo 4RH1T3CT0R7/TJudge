@@ -113,29 +113,26 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 	args := []any{}
 	argCount := 1
 
-	// Фильтр по статусу
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, filter.Status)
 		argCount++
 	}
 
-	// Фильтр по типу игры
 	if filter.GameType != "" {
 		query += fmt.Sprintf(" AND game_type = $%d", argCount)
 		args = append(args, filter.GameType)
 		argCount++
 	}
 
-	// Сортировка
 	query += orderByCreatedAtDesc
 
-	// Пагинация
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argCount)
 		args = append(args, filter.Limit)
 		argCount++
 	}
+	// FIXME: оффсет медленный на болших списках, есть ListWithCursor
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argCount)
 		args = append(args, filter.Offset)
@@ -192,7 +189,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 
 // Update обновляет турнир с optimistic lock: апдейт проходит только если version
 // в базе совпала с прочитанной, иначе кто-то успел обновить раньше нас и мы
-// отдаём ErrConcurrentUpdate. version инкрементится тем же запросом.
+// отдаём ErrConcurrentUpdate. version инкрементится тем же запросом
 func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
@@ -277,18 +274,15 @@ func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 // ListWithCursor - список турниров с курсорной пагинацией
 func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain.TournamentFilter, pageReq *pagination.PageRequest) ([]*domain.Tournament, bool, error) {
-	// Валидация запроса пагинации
 	if err := pageReq.Validate(); err != nil {
 		return nil, false, errors.Wrap(err, "invalid pagination request")
 	}
 
-	// Получаем курсор
 	cursor, err := pageReq.GetCursor()
 	if err != nil {
 		return nil, false, errors.Wrap(err, "failed to decode cursor")
 	}
 
-	// Базовый запрос
 	query := `
 		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
 		       metadata, version, created_at, updated_at
@@ -298,21 +292,19 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 	args := []any{}
 	argCount := 1
 
-	// Фильтр по статусу
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, filter.Status)
 		argCount++
 	}
 
-	// Фильтр по типу игры
 	if filter.GameType != "" {
 		query += fmt.Sprintf(" AND game_type = $%d", argCount)
 		args = append(args, filter.GameType)
 		argCount++
 	}
 
-	// Применяем курсор для пагинации
+	// двигаем окно от курсора
 	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
 		if pageReq.IsForward() {
 			// вперёд: записи после курсора
@@ -325,14 +317,14 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 		argCount++
 	}
 
-	// Сортировка (по умолчанию - от новых к старым)
+	// по умолчанию от новых к старым
 	if pageReq.IsBackward() {
 		query += " ORDER BY created_at ASC" // обратный порядок для пагинации назад
 	} else {
 		query += orderByCreatedAtDesc
 	}
 
-	// Добавляем +1 к лимиту для определения hasNextPage
+	// +1 к лимиту, чтобы понять есть ли ещё страница
 	limit := pageReq.GetLimit() + 1
 	query += fmt.Sprintf(" LIMIT $%d", argCount)
 	args = append(args, limit)
@@ -383,10 +375,10 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 		return nil, false, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// Определяем, есть ли ещё страницы
+	// есть ли ещё страницы
 	hasMore := len(tournaments) > pageReq.GetLimit()
 	if hasMore {
-		// Удаляем последний элемент (он был добавлен только для проверки hasMore)
+		// убираем лишний, он был добавлен только для проверки hasMore
 		tournaments = tournaments[:len(tournaments)-1]
 	}
 
@@ -491,7 +483,7 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error) {
 	var participants []*domain.TournamentParticipant
 
-	// Выбираем только участников с последней версией программы для каждой команды и игры
+	// выбираем только участников с последней версией программы для каждой команды и игры
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
 		FROM tournament_participants tp
@@ -547,10 +539,10 @@ type ParticipantWithGameType struct {
 
 // GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)
 func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
-	// Выбираем участников с последней ГОТОВОЙ версией программы и их game_type.
-	// Только status='ready': compiling ещё не собралась, failed не собралась
-	// вообще. Если новая версия сломана, команда продолжает играть предыдущей
-	// рабочей версией (MAX(version) берётся среди ready).
+	// выбираем участников с последней ГОТОВОЙ версией программы и их game_type
+	// только status='ready', тк compiling ещё не собралась, failed не собралась
+	// вообще. если новая версия сломана, команда продолжает играть предыдущей
+	// рабочей версией (MAX(version) берётся среди ready)
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at, g.name as game_type
 		FROM tournament_participants tp

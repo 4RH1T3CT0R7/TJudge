@@ -103,6 +103,7 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 
 // GetCrossGameLeaderboard - агрегированный рейтинг по всем играм турнира.
 // рейтинг команды это сумма очков из всех матчей, очки масштабируются на score_multiplier игры
+// TODO: тяжёлый запрос, закэшировать бы
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
 	// Получаем все команды и программы в турнире со статистикой по каждой игре
 	// Используем team_id для связи матчей (чтобы учитывать все версии программ команды)

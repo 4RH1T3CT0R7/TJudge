@@ -202,8 +202,7 @@ func (db *DB) Health(ctx context.Context) error {
 	return db.PingContext(ctx)
 }
 
-// EnsureMatchPartitions создаёт партиции таблицы matches для текущего и следующего месяца.
-// Вызывается при старте приложения для гарантии наличия партиций.
+// EnsureMatchPartitions досоздаёт партиции matches на текущий и следующий месяц
 func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	_, err := db.ExecContext(ctx, "SELECT create_matches_partition_if_needed()")
 	if err != nil {
@@ -213,8 +212,7 @@ func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	return nil
 }
 
-// EnsureRatingHistoryPartitions создаёт партиции таблицы rating_history для текущего и следующего месяца.
-// Вызывается при старте приложения для гарантии наличия партиций.
+// EnsureRatingHistoryPartitions тоже самое для rating_history, зовём на старте
 func (db *DB) EnsureRatingHistoryPartitions(ctx context.Context) error {
 	_, err := db.ExecContext(ctx, "SELECT create_rating_history_partition_if_needed()")
 	if err != nil {
@@ -224,9 +222,8 @@ func (db *DB) EnsureRatingHistoryPartitions(ctx context.Context) error {
 	return nil
 }
 
-// DropOldPartitions удаляет партиции matches/rating_history старше
-// retentionMonths месяцев (функция drop_old_partitions, миграция 000041).
-// При retentionMonths <= 0 ничего не делает.
+// DropOldPartitions сносит партиции matches/rating_history старше retentionMonths месяцев
+// (drop_old_partitions, миграция 000041). при retentionMonths <= 0 ничего не делает
 func (db *DB) DropOldPartitions(ctx context.Context, retentionMonths int) error {
 	if retentionMonths <= 0 {
 		return nil
@@ -255,6 +252,7 @@ func (db *DB) DropOldPartitions(ctx context.Context, retentionMonths int) error 
 // следующий месяц (иначе при долгой работе без рестарта ловим
 // partition-not-found). retentionMonths > 0 ещё и удаляет партиции старше
 // этого числа месяцев (DB_PARTITION_RETENTION_MONTHS; 0 - выключено)
+// TODO: интервал в сутки захардкожен, мб тоже в конфиг вынести
 func (db *DB) StartPartitionMaintenance(retentionMonths int) {
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
