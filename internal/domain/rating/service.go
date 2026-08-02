@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ParticipantUpdate содержит данные для обновления рейтинга и статистики одного участника
+// ParticipantUpdate - данные для обновления рейтинга и статы одного участника
 type ParticipantUpdate struct {
 	ProgramID    uuid.UUID
 	TournamentID uuid.UUID
@@ -22,19 +22,16 @@ type ParticipantUpdate struct {
 	Draw         bool
 }
 
-// RatingRepository интерфейс для работы с рейтингами в БД
 type RatingRepository interface {
 	Create(ctx context.Context, history *domain.RatingHistory) error
 	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error)
 	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
 	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
-	// ProcessMatchResultAtomic выполняет все обновления рейтингов и статистики для обоих участников
-	// матча в одной транзакции. Это гарантирует ELO-инвариант (нулевую сумму).
+	// оба участника в одной транзакции - иначе рейтинг разъедется
 	ProcessMatchResultAtomic(ctx context.Context, update1, update2 *ParticipantUpdate) error
 }
 
-// Service - сервис для работы с рейтингами
 type Service struct {
 	calculator *EloCalculator
 	repo       RatingRepository
@@ -42,7 +39,6 @@ type Service struct {
 	log        *logger.Logger
 }
 
-// NewService создаёт новый сервис рейтингов
 func NewService(repo RatingRepository, eventBus events.Bus, log *logger.Logger) *Service {
 	return &Service{
 		calculator: NewDefaultEloCalculator(),
@@ -52,13 +48,12 @@ func NewService(repo RatingRepository, eventBus events.Bus, log *logger.Logger) 
 	}
 }
 
-// ProcessMatchResult обрабатывает результат матча и обновляет рейтинги
+// ProcessMatchResult считает новые рейтинги и обновляет обоих участников
 func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, rating1, rating2 int) error {
 	if match.Winner == nil {
 		return errors.ErrValidation.WithMessage("match has no winner")
 	}
 
-	// Вычисляем новые рейтинги
 	newRating1, newRating2, change1, change2 := s.calculator.ProcessMatch(rating1, rating2, *match.Winner)
 
 	s.log.Info("Processing match result",
@@ -73,7 +68,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 
 	winner := *match.Winner
 
-	// Определяем статистику для каждого участника
+	// раскладываем результат: 1 - выиграл первый, 0 - ничья обоим, 2 - выиграл второй
 	var won1, draw1, won2, draw2 bool
 	if winner == 1 {
 		won1 = true
@@ -85,9 +80,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 		won2 = true
 	}
 
-	// Обновляем рейтинг и статистику обоих участников атомарно в одной транзакции.
-	// Это гарантирует ELO-инвариант: если обновление одного участника упадёт,
-	// обновление другого тоже откатится.
+	// оба апдейта в одной транзакции: если один упадёт - второй откатится
 	update1 := &ParticipantUpdate{
 		ProgramID:    match.Program1ID,
 		TournamentID: match.TournamentID,
@@ -128,6 +121,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 		return err
 	}
 
+	// событие шлём ТОЛЬКО после успешного апдейта, от него зависит кэш и вебсокет
 	s.eventBus.Publish(ctx, events.MatchResultProcessed{
 		Version:      1,
 		TournamentID: match.TournamentID,
@@ -142,12 +136,10 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	return nil
 }
 
-// GetRatingHistory получает историю рейтинга программы
 func (s *Service) GetRatingHistory(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error) {
 	return s.repo.GetByProgramID(ctx, programID)
 }
 
-// CalculateExpectedScore вычисляет ожидаемый результат матча
 func (s *Service) CalculateExpectedScore(rating1, rating2 int) float64 {
 	return s.calculator.CalculateExpectedScore(rating1, rating2)
 }
