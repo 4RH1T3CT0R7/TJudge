@@ -6,17 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// Game представляет игру в системе
 type Game struct {
 	ID          uuid.UUID `json:"id" db:"id"`
-	Name        string    `json:"name" db:"name"`                 // Уникальное название [a-z0-9_]+
-	DisplayName string    `json:"display_name" db:"display_name"` // Название для отображения
-	Rules       string    `json:"rules" db:"rules"`               // Правила в формате Markdown
+	Name        string    `json:"name" db:"name"`                 // уникальное имя [a-z0-9_]+
+	DisplayName string    `json:"display_name" db:"display_name"` // для отображения
+	Rules       string    `json:"rules" db:"rules"`               // markdown
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
 
-// TournamentGame - связь турнира с игрой
+// связка турнир-игра
 type TournamentGame struct {
 	TournamentID          uuid.UUID  `json:"tournament_id" db:"tournament_id"`
 	GameID                uuid.UUID  `json:"game_id" db:"game_id"`
@@ -30,7 +29,7 @@ type TournamentGame struct {
 	CreatedAt             time.Time  `json:"created_at" db:"created_at"`
 }
 
-// TournamentGameWithDetails содержит данные связи турнир-игра вместе с информацией об игре
+// то же самое, но с именем игры (для апи)
 type TournamentGameWithDetails struct {
 	TournamentID          uuid.UUID  `json:"tournament_id" db:"tournament_id"`
 	GameID                uuid.UUID  `json:"game_id" db:"game_id"`
@@ -45,7 +44,7 @@ type TournamentGameWithDetails struct {
 	AutoRoundLastRunAt    *time.Time `json:"auto_round_last_run_at,omitempty" db:"auto_round_last_run_at"`
 }
 
-// AutoRoundGameInfo содержит информацию для планировщика авто-раундов
+// инфа для планировщика авто-раундов
 type AutoRoundGameInfo struct {
 	TournamentID    uuid.UUID  `db:"tournament_id"`
 	GameID          uuid.UUID  `db:"game_id"`
@@ -54,7 +53,6 @@ type AutoRoundGameInfo struct {
 	LastRunAt       *time.Time `db:"auto_round_last_run_at"`
 }
 
-// GameFilter - фильтр для списка игр
 type GameFilter struct {
 	Name   string
 	Limit  int
