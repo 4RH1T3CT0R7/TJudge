@@ -6,15 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// Role - роль пользователя в системе
+// роль юзера
 type Role string
 
 const (
-	RoleUser  Role = "user"  // Обычный пользователь
-	RoleAdmin Role = "admin" // Администратор
+	RoleUser  Role = "user"  // обычный юзер
+	RoleAdmin Role = "admin" // админ
 )
 
-// User представляет пользователя системы
 type User struct {
 	ID           uuid.UUID `json:"id" db:"id"`
 	Username     string    `json:"username" db:"username"`

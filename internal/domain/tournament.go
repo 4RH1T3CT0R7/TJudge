@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TournamentStatus - статус турнира
 type TournamentStatus string
 
 const (
@@ -16,11 +15,10 @@ const (
 	TournamentCancelled TournamentStatus = "cancelled"
 )
 
-// Tournament представляет турнир
 type Tournament struct {
 	ID              uuid.UUID        `json:"id" db:"id"`
 	Name            string           `json:"name" db:"name"`
-	Code            string           `json:"code" db:"code"` // 6-8 символов уникальный код
+	Code            string           `json:"code" db:"code"` // уникальный код, 6-8 символов
 	Description     string           `json:"description" db:"description"`
 	GameType        string           `json:"game_type" db:"game_type"`
 	Status          TournamentStatus `json:"status" db:"status"`
@@ -36,13 +34,11 @@ type Tournament struct {
 	UpdatedAt       time.Time        `json:"updated_at" db:"updated_at"`
 }
 
-// TournamentWithGames - турнир с играми для API ответов
 type TournamentWithGames struct {
 	Tournament
 	Games []Game `json:"games"`
 }
 
-// TournamentParticipant представляет участника турнира
 type TournamentParticipant struct {
 	ID           uuid.UUID `json:"id" db:"id"`
 	TournamentID uuid.UUID `json:"tournament_id" db:"tournament_id"`
@@ -54,7 +50,6 @@ type TournamentParticipant struct {
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
-// TournamentFilter фильтр для списка турниров
 type TournamentFilter struct {
 	Status   TournamentStatus
 	GameType string

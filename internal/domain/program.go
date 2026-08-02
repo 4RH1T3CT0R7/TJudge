@@ -6,21 +6,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// ProgramStatus - статус жизненного цикла программы.
+// статус программы
 type ProgramStatus string
 
 const (
-	// ProgramCompiling - программа в очереди на компиляцию или компилируется
-	// в Docker-песочнице worker'а.
+	// в очереди на компиляцию или уже компилится в песочнице воркера
 	ProgramCompiling ProgramStatus = "compiling"
-	// ProgramReady - программа готова к участию в матчах.
+	// готова к матчам
 	ProgramReady ProgramStatus = "ready"
-	// ProgramFailed - компиляция или проверка синтаксиса не прошла
-	// (подробности в ErrorMessage).
+	// компиляция или проверка синтаксиса упала, подробности елси есть в ErrorMessage
 	ProgramFailed ProgramStatus = "failed"
 )
 
-// Program представляет программу-бота пользователя
 type Program struct {
 	ID           uuid.UUID     `json:"id" db:"id"`
 	UserID       uuid.UUID     `json:"user_id" db:"user_id"`

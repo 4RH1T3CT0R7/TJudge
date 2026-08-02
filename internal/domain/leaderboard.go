@@ -2,7 +2,6 @@ package domain
 
 import "github.com/google/uuid"
 
-// LeaderboardEntry - запись в таблице лидеров
 type LeaderboardEntry struct {
 	Rank        int        `json:"rank" db:"rank"`
 	ProgramID   uuid.UUID  `json:"program_id" db:"program_id"`
@@ -16,12 +15,11 @@ type LeaderboardEntry struct {
 	TotalGames  int        `json:"total_games" db:"total_games"`
 }
 
-// TeamLeaderboardEntry - запись в таблице лидеров для команд
 type TeamLeaderboardEntry struct {
 	Rank       int       `json:"rank"`
 	TeamID     uuid.UUID `json:"team_id"`
 	TeamName   string    `json:"team_name"`
-	TotalScore int       `json:"total_score"` // Сумма позиций по всем играм
+	TotalScore int       `json:"total_score"` // сумма позиций по всем играм
 	GameScores []struct {
 		GameID   uuid.UUID `json:"game_id"`
 		GameName string    `json:"game_name"`
@@ -30,7 +28,7 @@ type TeamLeaderboardEntry struct {
 	} `json:"game_scores"`
 }
 
-// CrossGameLeaderboardEntry - кросс-игровой рейтинг (команда - рейтинг по каждой игре - позиция)
+// кросс-игровой рейтинг: команда и её рейтинг/позиция по каждой игре
 type CrossGameLeaderboardEntry struct {
 	Rank        int                       `json:"rank"`
 	TeamID      *uuid.UUID                `json:"team_id,omitempty"`
@@ -44,7 +42,6 @@ type CrossGameLeaderboardEntry struct {
 	TotalGames  int                       `json:"total_games"`
 }
 
-// GameRatingInfo - информация о рейтинге в конкретной игре
 type GameRatingInfo struct {
 	GameID     uuid.UUID `json:"game_id"`
 	GameName   string    `json:"game_name"`
@@ -55,9 +52,9 @@ type GameRatingInfo struct {
 	TotalGames int       `json:"total_games"`
 }
 
-// HeadToHeadCell - агрегат личных встреч пары команд в конкретной игре
-// турнира. Обе ориентации матчей (AB и BA) уже слиты: wins - победы
-// team_id над opponent_id независимо от того, кто был первым игроком.
+// личные встречи пары команд в одной игре турнира.
+// обе ориентации (AB и BA) уже слиты: wins это победы team_id
+// над opponent_id, неважно кто ходил первым
 type HeadToHeadCell struct {
 	TeamID       uuid.UUID `json:"team_id" db:"team_id"`
 	TeamName     string    `json:"team_name" db:"team_name"`
