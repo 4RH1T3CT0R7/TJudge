@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// AutoRoundScheduler периодически проверяет игры с включённым авто-раундом
-// и запускает новые раунды матчей после завершения предыдущих.
+// AutoRoundScheduler - раз в N секунд смотрит игры с включённым авто-раундом
+// и запускает новый раунд, когда предыдущий доигран
 type AutoRoundScheduler struct {
 	schedulingService *SchedulingService
 	gameRepo          GameRepository
@@ -24,7 +24,6 @@ type AutoRoundScheduler struct {
 	stopOnce     sync.Once
 }
 
-// NewAutoRoundScheduler создаёт новый планировщик авто-раундов
 func NewAutoRoundScheduler(
 	schedulingService *SchedulingService,
 	gameRepo GameRepository,
@@ -45,7 +44,7 @@ func NewAutoRoundScheduler(
 	}
 }
 
-// Start запускает планировщик в фоновой горутине
+// Start - поднимает планировщик в фоновой горутине
 func (s *AutoRoundScheduler) Start(ctx context.Context) {
 	s.log.Info("Starting auto-round scheduler",
 		zap.Duration("poll_interval", s.pollInterval),
@@ -53,7 +52,7 @@ func (s *AutoRoundScheduler) Start(ctx context.Context) {
 	go s.run(ctx)
 }
 
-// Stop останавливает планировщик (безопасно вызывать несколько раз)
+// Stop - гасит планировщик, безопасно звать несколько раз (sync.Once)
 func (s *AutoRoundScheduler) Stop() {
 	s.stopOnce.Do(func() {
 		s.log.Info("Stopping auto-round scheduler...")
@@ -79,7 +78,7 @@ func (s *AutoRoundScheduler) run(ctx context.Context) {
 	}
 }
 
-// tick - одна итерация проверки всех авто-раунд игр
+// tick - один проход по всем авто-раунд играм
 func (s *AutoRoundScheduler) tick(ctx context.Context) {
 	games, err := s.gameRepo.GetAutoRoundEnabledGames(ctx)
 	if err != nil {
@@ -87,14 +86,16 @@ func (s *AutoRoundScheduler) tick(ctx context.Context) {
 		return
 	}
 
+	// TODO: дёргаем все игры по очереди, при большом кол-ве стоило бы пачками
 	for _, g := range games {
 		s.processGame(ctx, g)
 	}
 }
 
-// processGame обрабатывает одну игру с включённым авто-раундом
+// processGame - обрабатывает одну игру с авто-раундом.
+// порядок проверок важен, не переставлять
 func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoundGameInfo) {
-	// 1. Есть ли active (pending/running) матчи для этой игры?
+	// 1. есть ли активные (pending/running) матчи по этой игре?
 	hasActive, err := s.gameRepo.HasActiveMatchesForGame(ctx, g.TournamentID, g.GameType)
 	if err != nil {
 		s.log.Error("Auto-round: failed to check active matches",
@@ -105,19 +106,19 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 		return
 	}
 	if hasActive {
-		return // матчи ещё выполняются, ждём
+		return // ещё крутятся, ждём
 	}
 
-	// 2. Прошло ли достаточно времени с последнего раунда (cooldown)?
+	// 2. прошёл ли cooldown с прошлого раунда?
 	if g.LastRunAt != nil {
 		elapsed := time.Since(*g.LastRunAt)
 		if elapsed < time.Duration(g.IntervalSeconds)*time.Second {
-			return // cooldown ещё не прошёл
+			return // рано ещё
 		}
 	}
 
-	// 3. Есть ли новые программы с последнего раунда?
-	since := time.Time{} // начало времён при первом запуске
+	// 3. появились ли новые проги после прошлого раунда?
+	since := time.Time{} // на первом запуске - от начала времён
 	if g.LastRunAt != nil {
 		since = *g.LastRunAt
 	}
@@ -131,10 +132,10 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 		return
 	}
 	if !hasNew && g.LastRunAt != nil {
-		return // нет новых программ, нечего перезапускать
+		return // новых прог нет, перезапускать нечего
 	}
 
-	// 4. Запускаем раунд через существующий RunGameMatches (он сам берёт distributed lock)
+	// 4. запускаем раунд через RunGameMatches (он сам возьмёт свой лок)
 	lockKey := fmt.Sprintf("tournament:autoround:%s:%s", g.TournamentID.String(), g.GameType)
 	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
 		enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
@@ -142,7 +143,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 			return err
 		}
 
-		// Обновляем timestamp последнего запуска
+		// обновляем время послднего запуска
 		if updateErr := s.gameRepo.UpdateAutoRoundLastRun(ctx, g.TournamentID, g.GameID); updateErr != nil {
 			s.log.Error("Auto-round: failed to update last run timestamp",
 				zap.Error(updateErr),
@@ -160,7 +161,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoun
 	})
 
 	if lockErr != nil {
-		// Lock не получен или ошибка - это нормально (другой процесс уже обрабатывает)
+		// лок не взяли или ошибка - это норм, другой процесс уже обрабатывает
 		s.log.Debug("Auto-round: skipped (lock or error)",
 			zap.Error(lockErr),
 			zap.String("tournament_id", g.TournamentID.String()),
