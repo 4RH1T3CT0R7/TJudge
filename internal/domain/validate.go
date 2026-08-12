@@ -1,4 +1,4 @@
-package validator
+package domain
 
 import (
 	"fmt"
@@ -8,17 +8,17 @@ import (
 	"unicode"
 )
 
+// TODO: вынести magic-числа лимитов в конфиг
+
 var (
-	// Более мягкий email regex, поддерживает:
-	// - Стандартные локальные части с буквами, цифрами, точками, подчёркиваниями, процентами, плюсами, дефисами
-	// - Доменные части с буквами, цифрами, дефисами
-	// - TLD из 2+ символов (только буквы)
-	// - Поддомены
+	// email regex помягче, чем rfc. получем большинство нормальных адресов:
+	// локальная часть с буквами/цифрами/точками/подчёркиваниями/процентами/плюсами/дефисами,
+	// домен с буквами/цифрами/дефисами, tld из 2+ букв, поддомены
 	emailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`)
 	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,50}$`)
 )
 
-// ValidationError представляет ошибку валидации
+// ValidationError - ошибка валидации одного поля
 type ValidationError struct {
 	Field   string
 	Message string
@@ -28,7 +28,7 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-// ValidationErrors список ошибок валидации
+// ValidationErrors - пачка ошибок валидации
 type ValidationErrors []*ValidationError
 
 func (e ValidationErrors) Error() string {
@@ -43,12 +43,10 @@ func (e ValidationErrors) Error() string {
 	return msg.String()
 }
 
-// HasErrors проверяет наличие ошибок
 func (e ValidationErrors) HasErrors() bool {
 	return len(e) > 0
 }
 
-// Add добавляет ошибку валидации
 func (e *ValidationErrors) Add(field, message string) {
 	*e = append(*e, &ValidationError{
 		Field:   field,
@@ -56,7 +54,6 @@ func (e *ValidationErrors) Add(field, message string) {
 	})
 }
 
-// ValidateEmail проверяет email
 func ValidateEmail(email string) error {
 	if email == "" {
 		return &ValidationError{Field: "email", Message: "email is required"}
@@ -70,7 +67,6 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// ValidateUsername проверяет username
 func ValidateUsername(username string) error {
 	if username == "" {
 		return &ValidationError{Field: "username", Message: "username is required"}
@@ -87,7 +83,6 @@ func ValidateUsername(username string) error {
 	return nil
 }
 
-// ValidatePassword проверяет пароль
 func ValidatePassword(password string) error {
 	if password == "" {
 		return &ValidationError{Field: "password", Message: "password is required"}
@@ -99,7 +94,7 @@ func ValidatePassword(password string) error {
 		return &ValidationError{Field: "password", Message: "password is too long (max 128 characters)"}
 	}
 
-	// Проверка на наличие букв, цифр и спецсимволов
+	// пароль должен содержать буквы разного регистра и цифру
 	var hasUpper, hasLower, hasDigit bool
 	for _, ch := range password {
 		switch {
@@ -122,7 +117,6 @@ func ValidatePassword(password string) error {
 	return nil
 }
 
-// ValidateRequired проверяет обязательное поле
 func ValidateRequired(field, value string) error {
 	if value == "" {
 		return &ValidationError{Field: field, Message: fmt.Sprintf("%s is required", field)}
@@ -130,7 +124,6 @@ func ValidateRequired(field, value string) error {
 	return nil
 }
 
-// ValidateLength проверяет длину строки
 func ValidateLength(field, value string, min, max int) error {
 	length := len(value)
 	if length < min {
@@ -148,24 +141,6 @@ func ValidateLength(field, value string, min, max int) error {
 	return nil
 }
 
-// ValidateRange проверяет числовой диапазон
-func ValidateRange(field string, value, min, max int) error {
-	if value < min {
-		return &ValidationError{
-			Field:   field,
-			Message: fmt.Sprintf("%s must be at least %d", field, min),
-		}
-	}
-	if max > 0 && value > max {
-		return &ValidationError{
-			Field:   field,
-			Message: fmt.Sprintf("%s must be at most %d", field, max),
-		}
-	}
-	return nil
-}
-
-// ValidateEnum проверяет значение из списка
 func ValidateEnum(field, value string, allowedValues []string) error {
 	if slices.Contains(allowedValues, value) {
 		return nil
