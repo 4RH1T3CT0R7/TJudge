@@ -1,21 +1,17 @@
 package domain
 
-import (
-	"github.com/bmstu-itstech/tjudge/pkg/validator"
-)
-
-// Validate валидирует User
+// проверяет юзера перед сохранением
 func (u *User) Validate() error {
-	errs := validator.ValidationErrors{}
+	errs := ValidationErrors{}
 
-	if err := validator.ValidateUsername(u.Username); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateUsername(u.Username); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	if err := validator.ValidateEmail(u.Email); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateEmail(u.Email); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
@@ -26,47 +22,43 @@ func (u *User) Validate() error {
 	return nil
 }
 
-// ValidatePassword валидирует пароль при регистрации
-func ValidatePassword(password string) error {
-	return validator.ValidatePassword(password)
-}
-
 // Validate валидирует Program
 func (p *Program) Validate() error {
-	errs := validator.ValidationErrors{}
+	errs := ValidationErrors{}
 
-	if err := validator.ValidateRequired("name", p.Name); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	// TODO: одинаковые лимиты длины раскиданы по всем Validate, вынести бы в константы
+	if err := ValidateRequired("name", p.Name); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
-	} else if err := validator.ValidateLength("name", p.Name, 1, 100); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	} else if err := ValidateLength("name", p.Name, 1, 100); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	if err := validator.ValidateRequired("game_type", p.GameType); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateRequired("game_type", p.GameType); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
-	} else if err := validator.ValidateLength("game_type", p.GameType, 1, 50); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
-			errs = append(errs, ve)
-		}
-	}
-
-	if err := validator.ValidateRequired("code_path", p.CodePath); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	} else if err := ValidateLength("game_type", p.GameType, 1, 50); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	if err := validator.ValidateRequired("language", p.Language); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateRequired("code_path", p.CodePath); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
-	} else if err := validator.ValidateLength("language", p.Language, 1, 50); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	}
+
+	if err := ValidateRequired("language", p.Language); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
+			errs = append(errs, ve)
+		}
+	} else if err := ValidateLength("language", p.Language, 1, 50); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
@@ -79,42 +71,42 @@ func (p *Program) Validate() error {
 
 // Validate валидирует Tournament
 func (t *Tournament) Validate() error {
-	errs := validator.ValidationErrors{}
+	errs := ValidationErrors{}
 
-	if err := validator.ValidateRequired("name", t.Name); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateRequired("name", t.Name); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
-	} else if err := validator.ValidateLength("name", t.Name, 1, 255); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	} else if err := ValidateLength("name", t.Name, 1, 255); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	if err := validator.ValidateRequired("game_type", t.GameType); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateRequired("game_type", t.GameType); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
-	} else if err := validator.ValidateLength("game_type", t.GameType, 1, 50); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	} else if err := ValidateLength("game_type", t.GameType, 1, 50); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	// Валидация статуса
+	// проверка статуса
 	validStatuses := []string{
 		string(TournamentPending),
 		string(TournamentActive),
 		string(TournamentCompleted),
 		string(TournamentCancelled),
 	}
-	if err := validator.ValidateEnum("status", string(t.Status), validStatuses); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateEnum("status", string(t.Status), validStatuses); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	// Валидация max_participants (минимум 2, т.к. турнир требует ≥2 участников)
+	// min 2, тк турниру нужно хотя бы 2 участника
 	if t.MaxParticipants != nil && *t.MaxParticipants < 2 {
 		errs.Add("max_participants", "max_participants must be at least 2")
 	}
@@ -125,11 +117,12 @@ func (t *Tournament) Validate() error {
 	return nil
 }
 
-// Validate валидирует Match
+// Validate валидирует Match.
+// правила тут дёргает планировщик, так что руками не трогаем поведение
 func (m *Match) Validate() error {
-	errs := validator.ValidationErrors{}
+	errs := ValidationErrors{}
 
-	// Валидация статуса
+	// проверка статуса
 	validStatuses := []string{
 		string(MatchPending),
 		string(MatchRunning),
@@ -137,30 +130,30 @@ func (m *Match) Validate() error {
 		string(MatchFailed),
 		string(MatchCancelled),
 	}
-	if err := validator.ValidateEnum("status", string(m.Status), validStatuses); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateEnum("status", string(m.Status), validStatuses); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	// Валидация приоритета
+	// проверка приоритета
 	validPriorities := []string{
 		string(PriorityHigh),
 		string(PriorityMedium),
 		string(PriorityLow),
 	}
-	if err := validator.ValidateEnum("priority", string(m.Priority), validPriorities); err != nil {
-		if ve, ok := err.(*validator.ValidationError); ok {
+	if err := ValidateEnum("priority", string(m.Priority), validPriorities); err != nil {
+		if ve, ok := err.(*ValidationError); ok {
 			errs = append(errs, ve)
 		}
 	}
 
-	// Программы не должны быть одинаковыми
+	// программы не должны совпадать
 	if m.Program1ID == m.Program2ID {
 		errs.Add("program2_id", "program1 and program2 must be different")
 	}
 
-	// Валидация winner
+	// winner: 0 ничья, 1 или 2 - победитель
 	if m.Winner != nil && (*m.Winner < 0 || *m.Winner > 2) {
 		errs.Add("winner", "winner must be 0 (draw), 1 (program1) or 2 (program2)")
 	}
@@ -173,7 +166,7 @@ func (m *Match) Validate() error {
 
 // Validate валидирует TournamentParticipant
 func (tp *TournamentParticipant) Validate() error {
-	errs := validator.ValidationErrors{}
+	errs := ValidationErrors{}
 
 	if tp.Rating < 0 {
 		errs.Add("rating", "rating cannot be negative")
