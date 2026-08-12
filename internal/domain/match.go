@@ -7,11 +7,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// ErrMatchAlreadyProcessed означает, что матч уже не в статусе pending
-// и не может быть взят в обработку (защита от дублирования)
+// матч уже не pending, второй раз в обработку не берём (защита от дублей)
 var ErrMatchAlreadyProcessed = errors.New("match already processed or in progress")
 
-// MatchFilter фильтр для списка матчей
 type MatchFilter struct {
 	TournamentID *uuid.UUID
 	ProgramID    *uuid.UUID
@@ -21,7 +19,6 @@ type MatchFilter struct {
 	Offset       int
 }
 
-// MatchStatus - статус матча
 type MatchStatus string
 
 const (
@@ -32,7 +29,6 @@ const (
 	MatchCancelled MatchStatus = "cancelled"
 )
 
-// MatchPriority - приоритет матча
 type MatchPriority string
 
 const (
@@ -41,7 +37,6 @@ const (
 	PriorityLow    MatchPriority = "low"
 )
 
-// Match представляет матч между двумя программами
 type Match struct {
 	ID           uuid.UUID     `json:"id" db:"id"`
 	TournamentID uuid.UUID     `json:"tournament_id" db:"tournament_id"`
@@ -50,7 +45,7 @@ type Match struct {
 	GameType     string        `json:"game_type" db:"game_type"`
 	Status       MatchStatus   `json:"status" db:"status"`
 	Priority     MatchPriority `json:"priority" db:"priority"`
-	RoundNumber  int           `json:"round_number" db:"round_number"` // Номер раунда для группировки
+	RoundNumber  int           `json:"round_number" db:"round_number"` // номер раунда для группировки
 	Score1       *int          `json:"score1,omitempty" db:"score1"`
 	Score2       *int          `json:"score2,omitempty" db:"score2"`
 	Winner       *int          `json:"winner,omitempty" db:"winner"`
@@ -61,7 +56,7 @@ type Match struct {
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
 }
 
-// MatchRound представляет группу матчей одного раунда для конкретной игры
+// группа матчей одного раунда по конкретной игре
 type MatchRound struct {
 	RoundNumber    int       `json:"round_number"`
 	GameType       string    `json:"game_type"`
@@ -74,7 +69,6 @@ type MatchRound struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-// RatingHistory представляет историю изменения рейтинга
 type RatingHistory struct {
 	ID           uuid.UUID  `json:"id" db:"id"`
 	ProgramID    uuid.UUID  `json:"program_id" db:"program_id"`
@@ -86,7 +80,7 @@ type RatingHistory struct {
 	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
 }
 
-// MatchResult - результат матча для обработки воркером
+// результат матча, воркер потом его разбирает
 type MatchResult struct {
 	MatchID      uuid.UUID
 	Score1       int
