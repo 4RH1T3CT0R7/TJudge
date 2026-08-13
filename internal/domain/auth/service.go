@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserRepository интерфейс для работы с пользователями
+// UserRepository — получем и пишем юзеров в базу, обычный fat-репозиторий
 type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
@@ -23,16 +23,15 @@ type UserRepository interface {
 	Update(ctx context.Context, user *domain.User) error
 }
 
-// TokenBlacklist интерфейс для работы с чёрным списком токенов
+// TokenBlacklist — чёрный список токенов (лежит в редисе)
 type TokenBlacklist interface {
 	Add(ctx context.Context, token string, ttl time.Duration) error
 	IsBlacklisted(ctx context.Context, token string) (bool, error)
-	// AddIfNotExists атомарно добавляет токен, возвращает true если новый.
-	// Предотвращает TOCTOU race condition при token rotation.
+	// AddIfNotExists кладёт токен атомарно (setnx) и говорит, был ли он новым.
+	// это нужно чтобы не словить TOCTOU при ротации рефреш-токенов
 	AddIfNotExists(ctx context.Context, token string, ttl time.Duration) (bool, error)
 }
 
-// Service - сервис аутентификации
 type Service struct {
 	userRepo       UserRepository
 	jwtManager     *JWTManager
@@ -40,7 +39,6 @@ type Service struct {
 	log            *logger.Logger
 }
 
-// NewService создаёт новый сервис аутентификации
 func NewService(userRepo UserRepository, jwtManager *JWTManager, tokenBlacklist TokenBlacklist, log *logger.Logger) *Service {
 	return &Service{
 		userRepo:       userRepo,
@@ -50,43 +48,37 @@ func NewService(userRepo UserRepository, jwtManager *JWTManager, tokenBlacklist 
 	}
 }
 
-// RegisterRequest - запрос на регистрацию
 type RegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// LoginRequest - запрос на вход
-// Можно указать username ИЛИ email для входа
+// LoginRequest — на вход можно дать либо username, либо email
 type LoginRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// UpdateProfileRequest - запрос на обновление профиля
 type UpdateProfileRequest struct {
 	Email           string `json:"email,omitempty"`
 	Password        string `json:"password,omitempty"`
 	CurrentPassword string `json:"current_password,omitempty"`
 }
 
-// AuthResponse - ответ с токенами
 type AuthResponse struct {
 	AccessToken  string       `json:"access_token"`
 	RefreshToken string       `json:"refresh_token"`
 	User         *domain.User `json:"user"`
 }
 
-// Register регистрирует нового пользователя
+// Register регистрирует нового юзера и сразу выдаёт токены
 func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResponse, error) {
-	// Валидация входных данных
 	if err := domain.ValidatePassword(req.Password); err != nil {
 		return nil, errors.ErrValidation.WithError(err)
 	}
 
-	// Проверяем существование пользователя
 	exists, err := s.userRepo.Exists(ctx, req.Username, req.Email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check user existence: %w", err)
@@ -95,27 +87,23 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		return nil, errors.ErrAlreadyExists.WithMessage("username or email already exists")
 	}
 
-	// Хешируем пароль
 	passwordHash, err := s.hashPassword(req.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Создаём пользователя
 	user := &domain.User{
 		ID:           uuid.New(),
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
-		Role:         domain.RoleUser, // По умолчанию роль user
+		Role:         domain.RoleUser, // по умолчанию обычный юзер
 	}
 
-	// Валидируем пользователя
 	if err := user.Validate(); err != nil {
 		return nil, errors.ErrValidation.WithError(err)
 	}
 
-	// Сохраняем в БД
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -125,7 +113,6 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		zap.String("username", user.Username),
 	)
 
-	// Генерируем токены
 	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -136,7 +123,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Скрываем пароль
+	// пароль наружу не отдаём
 	user.PasswordHash = ""
 
 	return &AuthResponse{
@@ -146,12 +133,12 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 	}, nil
 }
 
-// Login выполняет вход пользователя
+// Login проверяет логин/пароль и выдаёт токены
 func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
 	var user *domain.User
 	var err error
 
-	// Получаем пользователя по username или email
+	// достаём юзера по email или по username, что дали
 	if req.Email != "" {
 		user, err = s.userRepo.GetByEmail(ctx, req.Email)
 	} else if req.Username != "" {
@@ -162,7 +149,8 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 
 	if err != nil {
 		if errors.IsAppError(err) && errors.GetAppError(err).Code == 404 {
-			// Фиктивное сравнение bcrypt для защиты от timing-based user enumeration
+			// фейковый компейр чтобы по времени ответа не палить есть юзер или нет.
+			// без этого ответ на несуществующий логин приходил бы заметно быстрее
 			_ = bcrypt.CompareHashAndPassword(
 				[]byte("$2a$12$000000000000000000000uGVYlKMFeX7iKOQKZ3d2fXxqFaE6D.e"),
 				[]byte(req.Password),
@@ -172,10 +160,9 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Проверяем пароль
 	if err := s.comparePassword(user.PasswordHash, req.Password); err != nil {
-		// PII (username/email) намеренно не логируем - только user_id.
-		// Это предотвращает enumeration через анализ логов.
+		// логируем только user_id, без ника и почты — иначе по логам можно
+		// перебором вычислять кто вообще есть в базе
 		s.log.Info("Invalid password attempt",
 			zap.String("user_id", user.ID.String()),
 		)
@@ -187,7 +174,6 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 		zap.String("username", user.Username),
 	)
 
-	// Генерируем токены
 	accessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -198,7 +184,6 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Скрываем пароль
 	user.PasswordHash = ""
 
 	return &AuthResponse{
@@ -208,33 +193,33 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	}, nil
 }
 
-// RefreshTokens обновляет access token используя refresh token
-// Реализует token rotation: старый refresh token инвалидируется
+// RefreshTokens меняет пару токенов на новую.
+// делаем ротацию: старый рефреш после этого невалиден
 func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*AuthResponse, error) {
-	// Валидируем refresh token (дешёвая операция, без побочных эффектов)
+	// сначала проверяем сам токен, это дёшево и без побочек
 	userID, err := s.jwtManager.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		return nil, errors.ErrInvalidToken.WithError(err)
 	}
 
-	// Проверяем существование пользователя ДО потребления токена.
-	// Если GetByID упадёт после AddIfNotExists, пользователь потеряет
-	// refresh token без получения нового (lockout).
+	// юзера достаём ДО того как погасим токен. если сходить в базу после
+	// AddIfNotExists и там упасть, человек останется без рефреша и залогиниться
+	// заново не сможет (lockout)
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Token Rotation: атомарно проверяем и добавляем в blacklist (SETNX).
-	// Это предотвращает TOCTOU race condition - только один из конкурентных
-	// запросов с тем же refresh token сможет пройти.
-	// Fail-closed: при ошибке Redis отклоняем запрос.
+	// token rotation: атомарно кладём старый рефреш в блеклист через setnx.
+	// это защита от TOCTOU — если прилетело два запроса с одним токеном,
+	// пройдёт только первый. на ошибке редиса fail-closed, запрос отклоняем
 	wasNew, err := s.tokenBlacklist.AddIfNotExists(ctx, refreshToken, s.jwtManager.RefreshTokenTTL())
 	if err != nil {
 		s.log.LogError("Failed to atomically blacklist refresh token", err)
 		return nil, fmt.Errorf("failed to blacklist refresh token: %w", err)
 	}
 	if !wasNew {
+		// токен уже использовали, второй раз не пускаем
 		s.log.Warn("Attempt to reuse already-consumed refresh token")
 		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
 	}
@@ -243,7 +228,6 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 		zap.String("user_id", user.ID.String()),
 	)
 
-	// Генерируем новые токены
 	newAccessToken, err := s.jwtManager.GenerateAccessToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -254,7 +238,6 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Скрываем пароль
 	user.PasswordHash = ""
 
 	return &AuthResponse{
@@ -264,14 +247,13 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	}, nil
 }
 
-// Logout выполняет выход пользователя, добавляя токены в чёрный список
+// Logout гасит токены через блеклист
 func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) error {
-	// Добавляем access token в blacklist.
-	// Fail-closed: если не удалось занести токены в blacklist, возвращаем
-	// ошибку, чтобы клиент знал, что logout не был полностью завершён.
+	// fail-closed: если не смогли занести токен в блеклист — возвращаем ошибку,
+	// чтобы клиент понял что logout прошёл не до конца
 	claims, err := s.jwtManager.ValidateToken(accessToken)
 	if err != nil {
-		// Access token может быть уже истёкшим, это OK
+		// access мог уже протухнуть, это норм
 		s.log.Info("Access token validation failed during logout", zap.Error(err))
 	} else {
 		ttl := time.Until(claims.ExpiresAt.Time)
@@ -283,9 +265,8 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 		}
 	}
 
-	// Добавляем refresh token в blacklist (если предоставлен)
 	if refreshToken != "" {
-		// Refresh token добавляем с полным TTL, т.к. его expiry может быть позже
+		// рефреш кладём на полный ttl, тк его срок может быть позже чем у access
 		if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
 			s.log.LogError("Failed to blacklist refresh token", err)
 			return fmt.Errorf("failed to blacklist refresh token: %w", err)
@@ -301,20 +282,19 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 	return nil
 }
 
-// UpdateProfile обновляет профиль пользователя
+// UpdateProfile меняет email и/или пароль
 func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*domain.User, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, errors.ErrInvalidInput.WithMessage("invalid user ID")
 	}
 
-	// Получаем текущего пользователя
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Обновляем email если указан
+	// email трогаем только если он реально другой
 	if req.Email != "" && req.Email != user.Email {
 		existingUser, existErr := s.userRepo.GetByEmail(ctx, req.Email)
 		if existErr != nil && !errors.IsNotFound(existErr) {
@@ -326,9 +306,9 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 		user.Email = req.Email
 	}
 
-	// Обновляем пароль если указан
 	if req.Password != "" {
-		// Требуем текущий пароль для смены пароля
+		// пароль меняем только вместе с текущим паролем, иначе угнанный access
+		// токен позволил бы сменить пароль без знания старого
 		if req.CurrentPassword == "" {
 			return nil, errors.ErrValidation.WithMessage("current password is required to change password")
 		}
@@ -347,7 +327,6 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 		user.PasswordHash = passwordHash
 	}
 
-	// Сохраняем изменения
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
@@ -356,23 +335,20 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 		zap.String("user_id", user.ID.String()),
 	)
 
-	// Скрываем пароль
 	user.PasswordHash = ""
 
 	return user, nil
 }
 
-// IsTokenBlacklisted проверяет, находится ли токен в чёрном списке
 func (s *Service) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {
 	return s.tokenBlacklist.IsBlacklisted(ctx, token)
 }
 
-// ValidateToken валидирует access token
 func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	return s.jwtManager.ValidateToken(tokenString)
 }
 
-// GetUserByToken получает пользователя по токену
+// GetUserByToken достаёт юзера по access токену
 func (s *Service) GetUserByToken(ctx context.Context, tokenString string) (*domain.User, error) {
 	claims, err := s.jwtManager.ValidateToken(tokenString)
 	if err != nil {
@@ -384,22 +360,21 @@ func (s *Service) GetUserByToken(ctx context.Context, tokenString string) (*doma
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Скрываем пароль
 	user.PasswordHash = ""
 
 	return user, nil
 }
 
-// GetUserFromToken - алиас для GetUserByToken
+// GetUserFromToken — алиас для GetUserByToken
 func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) {
 	return s.GetUserByToken(ctx, tokenString)
 }
 
-// BcryptCost стоимость хеширования bcrypt (12 для production security)
+// BcryptCost — стоимость bcrypt. 12 для прода, менять нельзя: иначе все старые хеши станут невалидными
 const BcryptCost = 12
 
-// hashPassword хеширует пароль используя bcrypt с повышенной стоимостью.
-// bcrypt молча обрезает ввод длиннее 72 байт, поэтому явно отклоняем такие пароли.
+// hashPassword хеширует пароль. bcrypt молча режет всё что длиннее 72 байт,
+// поэтому такие пароли отбиваем сами, а не даём ему тихо обрезать
 func (s *Service) hashPassword(password string) (string, error) {
 	if len([]byte(password)) > 72 {
 		return "", errors.ErrValidation.WithMessage("password is too long")
@@ -411,8 +386,8 @@ func (s *Service) hashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-// comparePassword сравнивает пароль с хешом.
-// Отклоняет пароли > 72 байт, чтобы избежать коллизий обрезания bcrypt.
+// comparePassword сверяет пароль с хешом.
+// те же >72 байта режем заранее, чтобы не поймать коллизию обрезки bcrypt
 func (s *Service) comparePassword(hash, password string) error {
 	if len([]byte(password)) > 72 {
 		return errors.ErrInvalidCredentials.WithMessage("invalid credentials")
