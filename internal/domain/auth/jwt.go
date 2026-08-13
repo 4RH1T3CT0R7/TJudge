@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Claims - JWT claims с дополнительными полями
+// Claims — то что лежит в access токене помимо стандартных полей: id юзера, ник и роль
 type Claims struct {
 	UserID   uuid.UUID   `json:"user_id"`
 	Username string      `json:"username"`
@@ -17,14 +17,13 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// JWTManager управляет JWT токенами
+// JWTManager подписывает и проверяет токены
 type JWTManager struct {
 	secretKey  []byte
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 }
 
-// NewJWTManager создаёт новый менеджер JWT
 func NewJWTManager(secretKey string, accessTTL, refreshTTL time.Duration) *JWTManager {
 	return &JWTManager{
 		secretKey:  []byte(secretKey),
@@ -33,7 +32,7 @@ func NewJWTManager(secretKey string, accessTTL, refreshTTL time.Duration) *JWTMa
 	}
 }
 
-// GenerateAccessToken генерирует access token
+// GenerateAccessToken делает access токен, внутри роль, живёт accessTTL
 func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, role domain.Role) (string, error) {
 	now := time.Now()
 	claims := &Claims{
@@ -52,7 +51,7 @@ func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, rol
 	return token.SignedString(jm.secretKey)
 }
 
-// GenerateRefreshToken генерирует refresh token
+// GenerateRefreshToken делает refresh токен, тут только id юзера, живёт дольше access
 func (jm *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 	now := time.Now()
 	claims := &jwt.RegisteredClaims{
@@ -60,17 +59,18 @@ func (jm *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 		IssuedAt:  jwt.NewNumericDate(now),
 		NotBefore: jwt.NewNumericDate(now),
 		Subject:   userID.String(),
-		ID:        uuid.New().String(), // Уникальный ID для refresh token
+		ID:        uuid.New().String(), // jti, чтобы каждый рефреш был уникальным
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jm.secretKey)
 }
 
-// ValidateToken валидирует токен и возвращает claims
+// ValidateToken проверяет подпись и достаёт claims
 func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		// Проверяем алгоритм подписи
+		// обязательно проверяем что алгоритм именно HMAC. если этого не делать,
+		// можно подсунуть токен подписанный другим методом (alg confusion) и пролезть
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -86,8 +86,8 @@ func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("invalid token claims")
 	}
 
-	// Backward compatibility: tokens issued before the Role field was added
-	// will have an empty Role. Default to RoleUser to avoid silent access loss.
+	// старые токены выписаны ещё до того как появилось поле Role, у них роль пустая.
+	// ставим RoleUser чтобы человек не потерял доступ после выката
 	if claims.Role == "" {
 		claims.Role = domain.RoleUser
 	}
@@ -95,9 +95,10 @@ func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// ValidateRefreshToken валидирует refresh token
+// ValidateRefreshToken проверяет refresh токен и возвращает id юзера
 func (jm *JWTManager) ValidateRefreshToken(tokenString string) (uuid.UUID, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
+		// тут тоже проверям HMAC, та же защита от alg confusion
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -121,12 +122,10 @@ func (jm *JWTManager) ValidateRefreshToken(tokenString string) (uuid.UUID, error
 	return userID, nil
 }
 
-// RefreshTokenTTL возвращает время жизни refresh token
 func (jm *JWTManager) RefreshTokenTTL() time.Duration {
 	return jm.refreshTTL
 }
 
-// AccessTokenTTL возвращает время жизни access token
 func (jm *JWTManager) AccessTokenTTL() time.Duration {
 	return jm.accessTTL
 }
