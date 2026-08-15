@@ -1,7 +1,7 @@
 package game
 
-// GamePlugin describes a game type's metadata and configuration.
-// Plugins are registered at startup and used to validate game creation.
+// GamePlugin — метаданные игрового типа
+// плагины регистрируются на старте, по ним валидируем создание игр
 type GamePlugin struct {
 	Name              string
 	DisplayName       string

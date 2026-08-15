@@ -5,22 +5,21 @@ import (
 	"sort"
 )
 
-// Registry holds all registered game plugins.
-// It is NOT safe for concurrent use. All Register calls must complete
-// before any Get/List/Has calls (typically during initialization).
+// Registry — реестр игровых плагинов
+// НЕ потокобезопасен: все Register должны отработать до первого Get/List/Has
+// (обычно на старте, при инициализации)
 type Registry struct {
 	plugins map[string]*GamePlugin
 }
 
-// NewRegistry creates a new empty plugin registry.
+// NewRegistry — пустой реестр
 func NewRegistry() *Registry {
 	return &Registry{
 		plugins: make(map[string]*GamePlugin),
 	}
 }
 
-// Register adds a game plugin to the registry.
-// Returns an error if a plugin with the same name is already registered.
+// Register добавляет плагин, ошибка если имя уже занято
 func (r *Registry) Register(plugin *GamePlugin) error {
 	if plugin == nil {
 		return fmt.Errorf("plugin must not be nil")
@@ -35,13 +34,13 @@ func (r *Registry) Register(plugin *GamePlugin) error {
 	return nil
 }
 
-// Get returns the plugin with the given name and a boolean indicating whether it was found.
+// Get — плагин по имени, плюс флаг нашли/нет
 func (r *Registry) Get(name string) (*GamePlugin, bool) {
 	p, ok := r.plugins[name]
 	return p, ok
 }
 
-// List returns all registered plugins sorted alphabetically by name.
+// List отдаёт все плагины, отсортированы по имени
 func (r *Registry) List() []*GamePlugin {
 	result := make([]*GamePlugin, 0, len(r.plugins))
 	for _, p := range r.plugins {
@@ -53,7 +52,7 @@ func (r *Registry) List() []*GamePlugin {
 	return result
 }
 
-// Has returns true if a plugin with the given name is registered.
+// Has — есть ли плагин с таким именем
 func (r *Registry) Has(name string) bool {
 	_, ok := r.plugins[name]
 	return ok
