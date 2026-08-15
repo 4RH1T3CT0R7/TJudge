@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// GameRepository определяет интерфейс репозитория игр
+// GameRepository — игры в бд
 type GameRepository interface {
 	Create(ctx context.Context, game *domain.Game) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
@@ -25,26 +25,25 @@ type GameRepository interface {
 	Exists(ctx context.Context, name string) (bool, error)
 }
 
-// CreateRequest - запрос на создание игры
+// CreateRequest — тело запроса на создание игры
 type CreateRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=50"`
 	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
 	Rules       string `json:"rules"`
 }
 
-// UpdateRequest - запрос на обновление игры
+// UpdateRequest — тело запроса на обновление
 type UpdateRequest struct {
 	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
 	Rules       string `json:"rules"`
 }
 
-// Service предоставляет бизнес-логику для работы с играми
+// Service — бизнес-логика игр
 type Service struct {
 	gameRepo GameRepository
 	log      *logger.Logger
 }
 
-// NewService создаёт новый сервис игр
 func NewService(gameRepo GameRepository, log *logger.Logger) *Service {
 	return &Service{
 		gameRepo: gameRepo,
@@ -52,17 +51,17 @@ func NewService(gameRepo GameRepository, log *logger.Logger) *Service {
 	}
 }
 
-// nameRegex - регулярное выражение для проверки имени игры
+// nameRegex — имя игры: только буквы в нижнем регистре, цифры и подчёркивание
 var nameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
-// Create создаёт новую игру
+// Create создаёт игру
 func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Game, error) {
-	// Валидация имени
+	// проверяем имя, елси кривое — сразу отказ
 	if !nameRegex.MatchString(req.Name) {
 		return nil, errors.ErrValidation.WithMessage("game name must contain only lowercase letters, digits and underscores")
 	}
 
-	// Проверяем уникальность имени
+	// имя должно быть уникальным
 	exists, err := s.gameRepo.Exists(ctx, req.Name)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to check game existence")
@@ -87,7 +86,6 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Game,
 	return game, nil
 }
 
-// GetByID получает игру по ID
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
 	game, err := s.gameRepo.GetByID(ctx, id)
 	if err != nil {
@@ -96,7 +94,6 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, erro
 	return game, nil
 }
 
-// GetByName получает игру по имени
 func (s *Service) GetByName(ctx context.Context, name string) (*domain.Game, error) {
 	game, err := s.gameRepo.GetByName(ctx, name)
 	if err != nil {
@@ -105,9 +102,9 @@ func (s *Service) GetByName(ctx context.Context, name string) (*domain.Game, err
 	return game, nil
 }
 
-// List получает список игр
 func (s *Service) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
-	// Применяем дефолтные значения
+	// лимит по дефолту, тк пагинации пока нет
+	// TODO: пагинация игр, пока просто лимит
 	if filter.Limit <= 0 || filter.Limit > 100 {
 		filter.Limit = 50
 	}
@@ -120,7 +117,6 @@ func (s *Service) List(ctx context.Context, filter domain.GameFilter) ([]*domain
 	return games, nil
 }
 
-// Update обновляет игру
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req *UpdateRequest) (*domain.Game, error) {
 	game, err := s.gameRepo.GetByID(ctx, id)
 	if err != nil {
@@ -139,7 +135,6 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req *UpdateRequest) 
 	return game, nil
 }
 
-// Delete удаляет игру
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := s.gameRepo.Delete(ctx, id); err != nil {
 		return err
@@ -150,7 +145,6 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// GetByTournamentID получает игры турнира
 func (s *Service) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
 	games, err := s.gameRepo.GetByTournamentID(ctx, tournamentID)
 	if err != nil {
@@ -159,9 +153,9 @@ func (s *Service) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID)
 	return games, nil
 }
 
-// AddToTournament добавляет игру к турниру
+// AddToTournament цепляет игру к турниру
 func (s *Service) AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
-	// Проверяем что игра существует
+	// проверяем что игра есть
 	_, err := s.gameRepo.GetByID(ctx, gameID)
 	if err != nil {
 		return err
@@ -176,7 +170,6 @@ func (s *Service) AddToTournament(ctx context.Context, tournamentID, gameID uuid
 	return nil
 }
 
-// RemoveFromTournament удаляет игру из турнира
 func (s *Service) RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	if err := s.gameRepo.RemoveFromTournament(ctx, tournamentID, gameID); err != nil {
 		return err
