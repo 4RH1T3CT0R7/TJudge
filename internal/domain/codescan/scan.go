@@ -1,20 +1,8 @@
-// Package codescan реализует lightweight проверку загружаемого кода
-// на "подозрительные" API-вызовы.
-//
-// Это НЕ замена Docker-sandbox'а; это defense-in-depth: если песочница
-// будет скомпрометирована, регекс-скан ловит большинство явных попыток
-// выйти в систему (subprocess, socket, child_process).
-//
-// Ограничения:
-//   - Regex-based: не понимает obfuscation (getattr, динамическая загрузка из строки).
-//   - False-positives: имя переменной может совпасть с именем опасного API.
-//   - Только для интерпретируемых языков (Python, JS, Ruby, PHP, Lua).
-//     Для компилируемых (C, C++, Go, Rust, Java) не применяется - они
-//     всё равно запускаются в sandbox после compile-step'а.
-//
-// Политика по-умолчанию: warning-only (не блокирует upload). Для strict-mode
-// используйте `CODESCAN_STRICT=true` - тогда findings с level=forbidden
-// приводят к отказу на upload'е.
+// Package codescan — лёгкая проверка загружаемого кода на подозрительные вызовы.
+// это не замена docker-песочнице, а defense-in-depth: если песочницу пробьют,
+// регекс-скан ловит явные попытки выйти в систему (subprocess, socket, child_process).
+// regex не видит обфускацию и даёт ложные срабатывания — с этим живём.
+// только для интерпретируемых языков, компилируемые всё равно гоняются в sandbox.
 package codescan
 
 import (
@@ -22,7 +10,7 @@ import (
 	"strings"
 )
 
-// Level - серьёзность находки.
+// Level — серьёзность находки
 type Level string
 
 const (
@@ -31,7 +19,7 @@ const (
 	LevelForbidden Level = "forbidden"
 )
 
-// Finding - одна срабатка сканера.
+// Finding — одно срабатывание сканера
 type Finding struct {
 	Line    int
 	Level   Level
@@ -46,12 +34,12 @@ type rule struct {
 	message string
 }
 
-// Scanner - конфигурируемый сканер для конкретного языка.
+// Scanner — сканер под конкретный язык
 type Scanner struct {
 	rules []rule
 }
 
-// Scan возвращает список findings.
+// Scan возвращает findings
 func (s *Scanner) Scan(source string) []Finding {
 	var out []Finding
 	for lineIdx, line := range strings.Split(source, "\n") {
@@ -69,7 +57,7 @@ func (s *Scanner) Scan(source string) []Finding {
 	return out
 }
 
-// HasForbidden возвращает true если в findings есть хотя бы одна forbidden-уровня.
+// HasForbidden — есть ли хоть один forbidden
 func HasForbidden(findings []Finding) bool {
 	for _, f := range findings {
 		if f.Level == LevelForbidden {
@@ -79,9 +67,8 @@ func HasForbidden(findings []Finding) bool {
 	return false
 }
 
-// Списки запрещённых имён формируются как константы, чтобы
-// избежать длинных литералов в regex и обойти IDE-security-linter'ы,
-// которые реагируют на наличие keyword-ов в исходнике буквально.
+// опасные имена держим отдельными списками, чтобы не тащить длинные литералы в regex
+// и заодно не триггерить ide-шные security-линтеры, они реагируют на голые keyword-ы
 var (
 	pyDangerousModules = []string{
 		"subprocess", "os", "socket", "sys", "ctypes",
@@ -96,8 +83,7 @@ var (
 
 func alt(names []string) string { return "(" + strings.Join(names, "|") + ")" }
 
-// openParen - вынесенный фрагмент "\\s*\\(" чтобы сократить длину regex-строки
-// и не хранить длинные литералы dangerous calls в исходнике.
+// op — вынесенный кусок "\s*\(", чтобы regex-строки были покороче
 const op = `\s*\(`
 
 var pythonScanner = &Scanner{
@@ -115,7 +101,7 @@ var pythonScanner = &Scanner{
 			message: "from-import dangerous module",
 		},
 		{
-			// exec/{e}val/__import__/compile - динамическое выполнение кода.
+			// exec/eval/__import__/compile — динамическое выполнение кода
 			re:      regexp.MustCompile(`\b(` + "exec|" + "eva" + `l|__import__|compile)` + op),
 			level:   LevelForbidden,
 			pattern: "dynamic code execution",
