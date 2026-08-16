@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockGameRepository implements GameRepository
+// MockGameRepository - ручной мок GameRepository
 type MockGameRepository struct {
 	mock.Mock
 }
@@ -106,6 +106,7 @@ func TestService_Create_InvalidNames(t *testing.T) {
 	svc, _ := newTestGameService(t)
 	ctx := context.Background()
 
+	// невалидне имена не должны проходить nameRegex
 	invalidNames := []struct {
 		name string
 		val  string

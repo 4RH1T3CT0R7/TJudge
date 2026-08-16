@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Константы собираются из concat, чтобы не ломать IDE-security-hooks
-// на литералах опасных имён модулей.
+// имена опасных модулей собираем из кусков через concat, чтобы не триггерить
+// security-хуки IDE на литералах
 const (
 	cp     = "child" + "_" + "process"
 	subpkg = "subproc" + "ess"

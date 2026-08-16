@@ -75,7 +75,7 @@ func TestRegistry_List(t *testing.T) {
 	list := r.List()
 	require.Len(t, list, 3)
 
-	// List is sorted alphabetically
+	// список отсортирован по алфавиту
 	assert.Equal(t, "aaa_game", list[0].Name)
 	assert.Equal(t, "mmm_game", list[1].Name)
 	assert.Equal(t, "zzz_game", list[2].Name)
@@ -113,7 +113,7 @@ func TestRegistry_RegisterBuiltinGames(t *testing.T) {
 	assert.Len(t, list, 5)
 
 	for _, name := range expectedGames {
-		assert.True(t, r.Has(name), "expected game %q to be registered", name)
+		assert.True(t, r.Has(name), "игра %q должна быть зарегистрирована", name)
 
 		plugin, ok := r.Get(name)
 		require.True(t, ok)
@@ -127,11 +127,10 @@ func TestRegistry_RegisterBuiltinGames_NoDuplicates(t *testing.T) {
 	r := NewRegistry()
 	RegisterBuiltinGames(r)
 
-	// Registering again should fail because names are already taken
+	// вторая регистрация в новый реестр тоже даёт ровно 5 игр, без дублей
 	r2 := NewRegistry()
 	RegisterBuiltinGames(r2)
 
-	// Verify both registries have exactly 5 games
 	assert.Len(t, r.List(), 5)
 	assert.Len(t, r2.List(), 5)
 }

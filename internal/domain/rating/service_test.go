@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockRatingRepository implements RatingRepository
+// MockRatingRepository - ручной мок RatingRepository
 type MockRatingRepository struct {
 	mock.Mock
 }
@@ -46,6 +46,14 @@ func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Conte
 func (m *MockRatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *ParticipantUpdate) error {
 	return m.Called(ctx, update1, update2).Error(0)
 }
+
+// capturingBus запоминает опубликованные события, чтобы проверить их в тесте
+type capturingBus struct {
+	events []any
+}
+
+func (b *capturingBus) Publish(_ context.Context, event any) { b.events = append(b.events, event) }
+func (b *capturingBus) Subscribe(events.Handler, ...any)     {}
 
 func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 	repo := new(MockRatingRepository)
@@ -88,20 +96,17 @@ func TestService_CalculateExpectedScore_EqualRatings(t *testing.T) {
 	assert.InDelta(t, 0.5, score, 0.001)
 }
 
-func TestService_CalculateExpectedScore_HigherRating(t *testing.T) {
+func TestService_CalculateExpectedScore_Asymmetric(t *testing.T) {
 	svc, _ := newTestRatingService(t)
 
-	score := svc.CalculateExpectedScore(1800, 1500)
-	assert.Greater(t, score, 0.5)
-	assert.Less(t, score, 1.0)
-}
+	// у кого рейтинг выше - ожидание больше 0.5, у кого ниже - меньше
+	higher := svc.CalculateExpectedScore(1800, 1500)
+	assert.Greater(t, higher, 0.5)
+	assert.Less(t, higher, 1.0)
 
-func TestService_CalculateExpectedScore_LowerRating(t *testing.T) {
-	svc, _ := newTestRatingService(t)
-
-	score := svc.CalculateExpectedScore(1200, 1500)
-	assert.Less(t, score, 0.5)
-	assert.Greater(t, score, 0.0)
+	lower := svc.CalculateExpectedScore(1200, 1500)
+	assert.Less(t, lower, 0.5)
+	assert.Greater(t, lower, 0.0)
 }
 
 func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
@@ -110,22 +115,19 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 	scoreA := svc.CalculateExpectedScore(1600, 1400)
 	scoreB := svc.CalculateExpectedScore(1400, 1600)
 
-	// Expected scores should sum to ~1.0
+	// два ожидания в сумме дают ~1.0
 	assert.InDelta(t, 1.0, scoreA+scoreB, 0.001)
-
-	// 200 point difference -> ~0.76
+	// разница в 200 очков -> ~0.76
 	assert.InDelta(t, 0.76, scoreA, 0.01)
 }
 
 // --- ProcessMatchResult ---
 
-func newTestRatingServiceWithCache(t *testing.T) (*Service, *MockRatingRepository) {
-	t.Helper()
-	return newTestRatingService(t)
-}
-
 func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
-	svc, repo := newTestRatingServiceWithCache(t)
+	repo := new(MockRatingRepository)
+	log, _ := logger.New("error", "json")
+	bus := &capturingBus{}
+	svc := NewService(repo, bus, log)
 	ctx := context.Background()
 
 	tID := uuid.New()
@@ -139,7 +141,7 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings (1500 vs 1500), p1 wins: delta1=+16, delta2=-16
+	// равные рейтинги (1500 vs 1500), выиграл первый: delta1=+16, delta2=-16
 	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
 		return u.ProgramID == p1 && u.RatingDelta == 16 && u.Won && !u.Draw
 	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
@@ -147,13 +149,20 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
-
 	require.NoError(t, err)
 	repo.AssertExpectations(t)
+
+	// после успешного апдейта должно уйти событие с версией 1
+	require.Len(t, bus.events, 1)
+	evt, ok := bus.events[0].(events.MatchResultProcessed)
+	require.True(t, ok)
+	assert.Equal(t, 1, evt.Version)
+	assert.Equal(t, match.ID, evt.MatchID)
+	assert.Equal(t, 1, evt.Winner)
 }
 
 func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
-	svc, repo := newTestRatingServiceWithCache(t)
+	svc, repo := newTestRatingService(t)
 	ctx := context.Background()
 
 	tID := uuid.New()
@@ -167,7 +176,7 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings (1500 vs 1500), p2 wins: delta1=-16, delta2=+16
+	// равные рейтинги, выиграл второй: delta1=-16, delta2=+16
 	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
 		return u.ProgramID == p1 && u.RatingDelta == -16 && !u.Won && !u.Draw
 	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
@@ -175,13 +184,12 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
-
 	require.NoError(t, err)
 	repo.AssertExpectations(t)
 }
 
 func TestService_ProcessMatchResult_Draw(t *testing.T) {
-	svc, repo := newTestRatingServiceWithCache(t)
+	svc, repo := newTestRatingService(t)
 	ctx := context.Background()
 
 	tID := uuid.New()
@@ -195,7 +203,7 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// Equal ratings, draw: no change (delta=0)
+	// равные рейтинги, ничья: изменения нет, у обоих Draw=true
 	repo.On("ProcessMatchResultAtomic", ctx, mock.MatchedBy(func(u *ParticipantUpdate) bool {
 		return u.ProgramID == p1 && u.RatingDelta == 0 && !u.Won && u.Draw
 	}), mock.MatchedBy(func(u *ParticipantUpdate) bool {
@@ -203,13 +211,12 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 	})).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
-
 	require.NoError(t, err)
 	repo.AssertExpectations(t)
 }
 
 func TestService_ProcessMatchResult_AtomicError(t *testing.T) {
-	svc, repo := newTestRatingServiceWithCache(t)
+	svc, repo := newTestRatingService(t)
 	ctx := context.Background()
 
 	tID := uuid.New()
@@ -223,25 +230,24 @@ func TestService_ProcessMatchResult_AtomicError(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// ProcessMatchResultAtomic fails - both updates should be rolled back
+	// атомарный апдейт падает - оба измеенния откатываются
 	repo.On("ProcessMatchResultAtomic", ctx,
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
 	).Return(errors.ErrInternal)
 
 	err := svc.ProcessMatchResult(ctx, match, 1500, 1500)
-
 	assert.Error(t, err)
 	repo.AssertExpectations(t)
 }
 
 func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
-	svc, repo := newTestRatingServiceWithCache(t)
+	svc, repo := newTestRatingService(t)
 	ctx := context.Background()
 
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
-	winner := 1 // Higher rated wins - small change expected
+	winner := 1 // фаворит выигрывает - изменение маленькое
 	match := &domain.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
@@ -250,20 +256,19 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 		Winner:       &winner,
 	}
 
-	// 2800 vs 400: expected score for 2800 ≈ 1.0, so change ≈ 0
+	// 2800 vs 400: ожидание для 2800 ≈ 1.0, значит изменение ≈ 0
 	repo.On("ProcessMatchResultAtomic", ctx,
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
 		mock.AnythingOfType("*rating.ParticipantUpdate"),
 	).Return(nil)
 
 	err := svc.ProcessMatchResult(ctx, match, 2800, 400)
-
 	require.NoError(t, err)
 	repo.AssertExpectations(t)
 }
 
 func TestService_ProcessMatchResult_NilWinner(t *testing.T) {
-	svc, _ := newTestRatingServiceWithCache(t)
+	svc, _ := newTestRatingService(t)
 	ctx := context.Background()
 
 	match := &domain.Match{
