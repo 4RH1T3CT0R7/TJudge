@@ -452,4 +452,3 @@ func TestValidatePassword_NoLowercase(t *testing.T) {
 	err := ValidatePassword("UPPERCASE123")
 	assert.Error(t, err)
 }
-
