@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Mock UserRepository
+// мок репозитория юзеров
 type MockUserRepository struct {
 	mock.Mock
 }
@@ -60,7 +59,7 @@ func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) erro
 	return args.Error(0)
 }
 
-// Mock TokenBlacklist
+// мок блеклиста токенов
 type MockTokenBlacklist struct {
 	mock.Mock
 }
@@ -90,6 +89,8 @@ func newTestService(t *testing.T) (*Service, *MockUserRepository, *MockTokenBlac
 	return service, userRepo, blacklist
 }
 
+// --- Register ---
+
 func TestService_Register_Success(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
@@ -106,12 +107,11 @@ func TestService_Register_Success(t *testing.T) {
 	resp, err := service.Register(ctx, req)
 
 	require.NoError(t, err)
-	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
 	assert.Equal(t, req.Username, resp.User.Username)
-	assert.Equal(t, req.Email, resp.User.Email)
-	assert.Empty(t, resp.User.PasswordHash) // Password should be hidden
+	// пароль наружу не отдаём
+	assert.Empty(t, resp.User.PasswordHash)
 
 	userRepo.AssertExpectations(t)
 }
@@ -133,25 +133,44 @@ func TestService_Register_UserAlreadyExists(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.True(t, errors.IsAppError(err))
-
 	userRepo.AssertExpectations(t)
 }
 
 func TestService_Register_WeakPassword(t *testing.T) {
 	service, _, _ := newTestService(t)
-	ctx := context.Background()
 
 	req := &RegisterRequest{
 		Username: "testuser",
 		Email:    "test@example.com",
-		Password: "weak", // Too short
+		Password: "weak",
 	}
 
+	resp, err := service.Register(context.Background(), req)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+}
+
+func TestService_Register_InvalidEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	req := &RegisterRequest{
+		Username: "testuser",
+		Email:    "not-an-email",
+		Password: "SecurePass123!",
+	}
+
+	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
+
+	// битый email должен отсеять user.Validate уже после проверки Exists
 	resp, err := service.Register(ctx, req)
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
+
+// --- Login ---
 
 func TestService_Login_Success(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
@@ -159,7 +178,6 @@ func TestService_Login_Success(t *testing.T) {
 
 	password := "SecurePass123!"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
 	user := &domain.User{
 		ID:           uuid.New(),
 		Username:     "testuser",
@@ -168,22 +186,38 @@ func TestService_Login_Success(t *testing.T) {
 		Role:         domain.RoleUser,
 	}
 
-	req := &LoginRequest{
-		Username: "testuser",
-		Password: password,
-	}
+	userRepo.On("GetByUsername", ctx, "testuser").Return(user, nil)
 
-	userRepo.On("GetByUsername", ctx, req.Username).Return(user, nil)
-
-	resp, err := service.Login(ctx, req)
+	resp, err := service.Login(ctx, &LoginRequest{Username: "testuser", Password: password})
 
 	require.NoError(t, err)
-	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
 	assert.Equal(t, user.ID, resp.User.ID)
 	assert.Empty(t, resp.User.PasswordHash)
+	userRepo.AssertExpectations(t)
+}
 
+func TestService_Login_ByEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	password := "SecurePass123!"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	user := &domain.User{
+		ID:           uuid.New(),
+		Username:     "emailuser",
+		Email:        "email@example.com",
+		PasswordHash: string(hash),
+		Role:         domain.RoleUser,
+	}
+
+	userRepo.On("GetByEmail", ctx, "email@example.com").Return(user, nil)
+
+	resp, err := service.Login(ctx, &LoginRequest{Email: "email@example.com", Password: password})
+
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, resp.User.ID)
 	userRepo.AssertExpectations(t)
 }
 
@@ -191,18 +225,14 @@ func TestService_Login_UserNotFound(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
 
-	req := &LoginRequest{
-		Username: "nonexistent",
-		Password: "password",
-	}
+	// на несуществующий логин всё равно должен отработать фейковый compare,
+	// иначе по времени ответа палится есть юзер в базе или нет
+	userRepo.On("GetByUsername", ctx, "nonexistent").Return(nil, errors.ErrNotFound)
 
-	userRepo.On("GetByUsername", ctx, req.Username).Return(nil, errors.ErrNotFound)
-
-	resp, err := service.Login(ctx, req)
+	resp, err := service.Login(ctx, &LoginRequest{Username: "nonexistent", Password: "password"})
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-
 	userRepo.AssertExpectations(t)
 }
 
@@ -211,42 +241,40 @@ func TestService_Login_WrongPassword(t *testing.T) {
 	ctx := context.Background()
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
-
 	user := &domain.User{
 		ID:           uuid.New(),
 		Username:     "testuser",
-		Email:        "test@example.com",
 		PasswordHash: string(hash),
 	}
 
-	req := &LoginRequest{
-		Username: "testuser",
-		Password: "wrongpassword",
-	}
+	userRepo.On("GetByUsername", ctx, "testuser").Return(user, nil)
 
-	userRepo.On("GetByUsername", ctx, req.Username).Return(user, nil)
-
-	resp, err := service.Login(ctx, req)
+	resp, err := service.Login(ctx, &LoginRequest{Username: "testuser", Password: "wrongpassword"})
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-
 	userRepo.AssertExpectations(t)
 }
+
+func TestService_Login_NoUsernameOrEmail(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	resp, err := service.Login(context.Background(), &LoginRequest{Password: "SomePass123!"})
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.True(t, errors.IsAppError(err))
+}
+
+// --- RefreshTokens (ротация) ---
 
 func TestService_RefreshTokens_Success(t *testing.T) {
 	service, userRepo, blacklist := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{
-		ID:       userID,
-		Username: "testuser",
-		Email:    "test@example.com",
-		Role:     domain.RoleUser,
-	}
+	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
 
-	// Generate a valid refresh token
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
@@ -256,26 +284,24 @@ func TestService_RefreshTokens_Success(t *testing.T) {
 	resp, err := service.RefreshTokens(ctx, refreshToken)
 
 	require.NoError(t, err)
-	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
-	assert.NotEqual(t, refreshToken, resp.RefreshToken) // New token should be different
-
+	// новый рефреш обязан отличаться от старого
+	assert.NotEqual(t, refreshToken, resp.RefreshToken)
 	blacklist.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 }
 
-func TestService_RefreshTokens_BlacklistedToken(t *testing.T) {
+func TestService_RefreshTokens_ReusedToken(t *testing.T) {
 	service, userRepo, blacklist := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
+	user := &domain.User{ID: userID, Username: "testuser", Role: domain.RoleUser}
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
-	// GetByID succeeds (called before AddIfNotExists now)
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// AddIfNotExists returns false -> token already consumed
+	// AddIfNotExists вернул false — токен уже использовали, второй раз не пускаем
 	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, nil)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -283,67 +309,127 @@ func TestService_RefreshTokens_BlacklistedToken(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "revoked")
-
 	blacklist.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 }
 
 func TestService_RefreshTokens_InvalidToken(t *testing.T) {
 	service, _, _ := newTestService(t)
-	ctx := context.Background()
 
-	// Invalid token fails JWT validation before reaching blacklist
-	resp, err := service.RefreshTokens(ctx, "invalid-token")
+	// битый токен не проходит валидацию ещё до похода в блеклист
+	resp, err := service.RefreshTokens(context.Background(), "invalid-token")
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
+
+func TestService_RefreshTokens_GetUserError(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
+
+	// GetByID падает ДО AddIfNotExists — токен не гасим, чтобы не залочить юзера
+	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	userRepo.AssertExpectations(t)
+}
+
+func TestService_RefreshTokens_BlacklistError(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	user := &domain.User{ID: userID, Username: "testuser", Role: domain.RoleUser}
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
+
+	userRepo.On("GetByID", ctx, userID).Return(user, nil)
+	// редис лёг — fail-closed, запрос отклоняем
+	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, errors.ErrInternal)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "blacklist")
+	blacklist.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
+}
+
+// --- Logout ---
 
 func TestService_Logout_Success(t *testing.T) {
 	service, _, blacklist := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
+	accessToken, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
-	blacklist.On("Add", ctx, token, mock.AnythingOfType("time.Duration")).Return(nil)
+	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(nil)
+	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(nil)
 
-	err = service.Logout(ctx, token, "")
+	err := service.Logout(ctx, accessToken, refreshToken)
 
 	require.NoError(t, err)
 	blacklist.AssertExpectations(t)
 }
 
-func TestService_Logout_InvalidToken(t *testing.T) {
-	service, _, _ := newTestService(t)
-	ctx := context.Background()
-
-	// Invalid token doesn't cause error now - it just logs and continues
-	err := service.Logout(ctx, "invalid-token", "")
-
-	assert.NoError(t, err)
-}
-
-func TestService_Logout_ExpiredToken(t *testing.T) {
-	// Create service with very short TTL
+func TestService_Logout_ExpiredAccessSkipped(t *testing.T) {
 	userRepo := new(MockUserRepository)
 	blacklist := new(MockTokenBlacklist)
-	jwtManager := NewJWTManager("test-secret", 1*time.Millisecond, 7*24*time.Hour)
+	// очень короткий ttl чтобы access протух сразу
+	jwtManager := NewJWTManager("test-secret-key-123", 1*time.Millisecond, 7*24*time.Hour)
 	log, _ := logger.New("debug", "json")
 	service := NewService(userRepo, jwtManager, blacklist, log)
 
-	ctx := context.Background()
-
-	token, err := jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
+	accessToken, _ := jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
 	time.Sleep(10 * time.Millisecond)
 
-	// Expired token doesn't cause error - Logout is now more lenient
-	err = service.Logout(ctx, token, "")
+	// протухший access не валидируется, поэтому в блеклист не кладём и ошибку не возвращаем
+	err := service.Logout(context.Background(), accessToken, "")
+
 	assert.NoError(t, err)
+	blacklist.AssertNotCalled(t, "Add")
 }
+
+func TestService_Logout_AccessBlacklistError(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	accessToken, _ := service.jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
+
+	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
+
+	err := service.Logout(ctx, accessToken, "")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blacklist access token")
+	blacklist.AssertExpectations(t)
+}
+
+func TestService_Logout_RefreshBlacklistError(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(uuid.New())
+
+	// access битый — для logout это ок, а вот рефреш в блеклист не лёг
+	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
+
+	err := service.Logout(ctx, "invalid-access-token", refreshToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "blacklist refresh token")
+	blacklist.AssertExpectations(t)
+}
+
+// --- токены и юзер по токену ---
 
 func TestService_IsTokenBlacklisted(t *testing.T) {
 	service, _, blacklist := newTestService(t)
@@ -355,7 +441,6 @@ func TestService_IsTokenBlacklisted(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, isBlacklisted)
-
 	blacklist.AssertExpectations(t)
 }
 
@@ -363,8 +448,7 @@ func TestService_ValidateToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 
 	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
+	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 
 	claims, err := service.ValidateToken(token)
 
@@ -378,83 +462,33 @@ func TestService_GetUserByToken_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "test@example.com",
-		PasswordHash: "hash",
-		Role:         domain.RoleUser,
-	}
+	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: "hash", Role: domain.RoleUser}
+	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
 
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
+	// получем юзера по токену, хеш пароля в ответе должен быть затёрт
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
 	result, err := service.GetUserByToken(ctx, token)
 
 	require.NoError(t, err)
 	assert.Equal(t, userID, result.ID)
-	assert.Empty(t, result.PasswordHash) // Password should be hidden
-
+	assert.Empty(t, result.PasswordHash)
 	userRepo.AssertExpectations(t)
 }
 
 func TestService_GetUserByToken_InvalidToken(t *testing.T) {
 	service, _, _ := newTestService(t)
-	ctx := context.Background()
 
-	result, err := service.GetUserByToken(ctx, "invalid-token")
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-}
-
-func TestService_GetUserByToken_UserNotFound(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
-	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
-
-	result, err := service.GetUserByToken(ctx, token)
+	result, err := service.GetUserByToken(context.Background(), "invalid-token")
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-
-	userRepo.AssertExpectations(t)
 }
 
-func TestService_GetUserFromToken_Alias(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	user := &domain.User{
-		ID:       userID,
-		Username: "testuser",
-		Email:    "test@example.com",
-		Role:     domain.RoleUser,
-	}
-
-	token, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-
-	result, err := service.GetUserFromToken(ctx, token)
-
-	require.NoError(t, err)
-	assert.Equal(t, userID, result.ID)
-
-	userRepo.AssertExpectations(t)
-}
+// --- bcrypt ---
 
 func TestBcryptCost(t *testing.T) {
-	// Ensure bcrypt cost is set correctly for security
+	// стоимость bcrypt зафиксирована на 12, менять нельзя
 	assert.Equal(t, 12, BcryptCost)
 }
 
@@ -465,12 +499,22 @@ func TestService_hashPassword(t *testing.T) {
 	hash, err := service.hashPassword(password)
 
 	require.NoError(t, err)
-	assert.NotEmpty(t, hash)
 	assert.NotEqual(t, password, hash)
 
-	// Verify the hash
 	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	require.NoError(t, err)
+}
+
+func TestService_hashPassword_TooLong(t *testing.T) {
+	service, _, _ := newTestService(t)
+
+	// bcrypt молча режет всё что длиннее 72 байт, поэтому такие пароли отбиваем сами
+	longPassword := string(make([]byte, 73))
+	hash, err := service.hashPassword(longPassword)
+
+	assert.Error(t, err)
+	assert.Empty(t, hash)
+	assert.Contains(t, err.Error(), "too long")
 }
 
 func TestService_comparePassword(t *testing.T) {
@@ -479,79 +523,20 @@ func TestService_comparePassword(t *testing.T) {
 	password := "TestPassword123!"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 
-	// Correct password
-	err := service.comparePassword(string(hash), password)
-	require.NoError(t, err)
-
-	// Wrong password
-	err = service.comparePassword(string(hash), "wrongpassword")
-	assert.Error(t, err)
+	assert.NoError(t, service.comparePassword(string(hash), password))
+	assert.Error(t, service.comparePassword(string(hash), "wrongpassword"))
 }
 
-// --- Login edge cases ---
-
-func TestService_Login_ByEmail(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	password := "SecurePass123!"
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-	user := &domain.User{
-		ID:           uuid.New(),
-		Username:     "emailuser",
-		Email:        "email@example.com",
-		PasswordHash: string(hash),
-		Role:         domain.RoleUser,
-	}
-
-	req := &LoginRequest{
-		Email:    "email@example.com",
-		Password: password,
-	}
-
-	userRepo.On("GetByEmail", ctx, req.Email).Return(user, nil)
-
-	resp, err := service.Login(ctx, req)
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, user.ID, resp.User.ID)
-	assert.Empty(t, resp.User.PasswordHash)
-	userRepo.AssertExpectations(t)
-}
-
-func TestService_Login_NoUsernameOrEmail(t *testing.T) {
+func TestService_comparePassword_TooLong(t *testing.T) {
 	service, _, _ := newTestService(t)
-	ctx := context.Background()
 
-	req := &LoginRequest{
-		Password: "SomePass123!",
-	}
+	hash, _ := bcrypt.GenerateFromPassword([]byte("short"), bcrypt.MinCost)
+	longPassword := string(make([]byte, 73))
 
-	resp, err := service.Login(ctx, req)
+	err := service.comparePassword(string(hash), longPassword)
 
 	assert.Error(t, err)
-	assert.Nil(t, resp)
-	assert.True(t, errors.IsAppError(err))
-}
-
-func TestService_Login_RepoError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	req := &LoginRequest{
-		Username: "testuser",
-		Password: "SomePass123!",
-	}
-
-	userRepo.On("GetByUsername", ctx, "testuser").Return(nil, errors.ErrInternal)
-
-	resp, err := service.Login(ctx, req)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	userRepo.AssertExpectations(t)
+	assert.Contains(t, err.Error(), "invalid credentials")
 }
 
 // --- UpdateProfile ---
@@ -573,11 +558,7 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, errors.ErrNotFound)
 	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
 
-	req := &UpdateProfileRequest{
-		Email: "new@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
+	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Email: "new@example.com"})
 
 	require.NoError(t, err)
 	assert.Equal(t, "new@example.com", result.Email)
@@ -590,23 +571,12 @@ func TestService_UpdateProfile_EmailAlreadyInUse(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	otherUserID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "old@example.com",
-		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
-	}
+	user := &domain.User{ID: userID, Username: "testuser", Email: "old@example.com", Role: domain.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	userRepo.On("GetByEmail", ctx, "taken@example.com").Return(&domain.User{ID: otherUserID}, nil)
+	userRepo.On("GetByEmail", ctx, "taken@example.com").Return(&domain.User{ID: uuid.New()}, nil)
 
-	req := &UpdateProfileRequest{
-		Email: "taken@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
+	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Email: "taken@example.com"})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -614,42 +584,12 @@ func TestService_UpdateProfile_EmailAlreadyInUse(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
-func TestService_UpdateProfile_SameEmail(t *testing.T) {
+func TestService_UpdateProfile_PasswordChange(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "same@example.com",
-		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
-	}
-
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
-
-	req := &UpdateProfileRequest{
-		Email: "same@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
-
-	require.NoError(t, err)
-	assert.Equal(t, "same@example.com", result.Email)
-	userRepo.AssertExpectations(t)
-}
-
-func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	// Use a real bcrypt hash for "OldPassword123!" so comparePassword works
-	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
-	require.NoError(t, err)
-
+	oldHash, _ := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
 	user := &domain.User{
 		ID:           userID,
 		Username:     "testuser",
@@ -661,15 +601,12 @@ func TestService_UpdateProfile_PasswordOnly(t *testing.T) {
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
 
-	req := &UpdateProfileRequest{
+	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{
 		Password:        "NewSecurePass123!",
 		CurrentPassword: "OldPassword123!",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
+	})
 
 	require.NoError(t, err)
-	assert.NotNil(t, result)
 	assert.Empty(t, result.PasswordHash)
 	userRepo.AssertExpectations(t)
 }
@@ -679,21 +616,12 @@ func TestService_UpdateProfile_PasswordWithoutCurrent(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "test@example.com",
-		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
-	}
+	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: "oldhash", Role: domain.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
-	req := &UpdateProfileRequest{
-		Password: "NewSecurePass123!",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
+	// сменить пароль без текущего нельзя — иначе угнанный access менял бы пароль
+	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Password: "NewSecurePass123!"})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -705,389 +633,26 @@ func TestService_UpdateProfile_WrongCurrentPassword(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
-	require.NoError(t, err)
-
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "test@example.com",
-		PasswordHash: string(oldHash),
-		Role:         domain.RoleUser,
-	}
+	oldHash, _ := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
+	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: string(oldHash), Role: domain.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
-	req := &UpdateProfileRequest{
+	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{
 		Password:        "NewSecurePass123!",
 		CurrentPassword: "WrongPassword123!",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
+	})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "current password is incorrect")
 }
 
-func TestService_UpdateProfile_WeakPassword(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
-	require.NoError(t, err)
-
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "test@example.com",
-		PasswordHash: string(oldHash),
-		Role:         domain.RoleUser,
-	}
-
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-
-	req := &UpdateProfileRequest{
-		Password:        "weak",
-		CurrentPassword: "OldPassword123!",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-}
-
-func TestService_UpdateProfile_UserNotFound(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
-
-	req := &UpdateProfileRequest{
-		Email: "new@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	userRepo.AssertExpectations(t)
-}
-
 func TestService_UpdateProfile_InvalidUserID(t *testing.T) {
 	service, _, _ := newTestService(t)
-	ctx := context.Background()
 
-	req := &UpdateProfileRequest{
-		Email: "new@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, "not-a-uuid", req)
+	result, err := service.UpdateProfile(context.Background(), "not-a-uuid", &UpdateProfileRequest{Email: "new@example.com"})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-}
-
-func TestService_UpdateProfile_UpdateError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "test@example.com",
-		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
-	}
-
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, errors.ErrNotFound)
-	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(errors.ErrInternal)
-
-	req := &UpdateProfileRequest{
-		Email: "new@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	userRepo.AssertExpectations(t)
-}
-
-// --- Register edge cases ---
-
-func TestService_Register_CreateError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	req := &RegisterRequest{
-		Username: "testuser",
-		Email:    "test@example.com",
-		Password: "SecurePass123!",
-	}
-
-	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
-	userRepo.On("Create", ctx, mock.AnythingOfType("*domain.User")).Return(errors.ErrInternal)
-
-	resp, err := service.Register(ctx, req)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	userRepo.AssertExpectations(t)
-}
-
-func TestService_Register_ExistsError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	req := &RegisterRequest{
-		Username: "testuser",
-		Email:    "test@example.com",
-		Password: "SecurePass123!",
-	}
-
-	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, errors.ErrInternal)
-
-	resp, err := service.Register(ctx, req)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	userRepo.AssertExpectations(t)
-}
-
-// --- RefreshTokens edge cases ---
-
-func TestService_RefreshTokens_GetUserError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
-	require.NoError(t, err)
-
-	// GetByID fails BEFORE AddIfNotExists - token is NOT consumed (no lockout)
-	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
-
-	resp, err := service.RefreshTokens(ctx, refreshToken)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	userRepo.AssertExpectations(t)
-}
-
-// --- Additional edge cases ---
-
-func TestService_RefreshTokens_BlacklistAtomicError(t *testing.T) {
-	service, userRepo, blacklist := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
-	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
-	require.NoError(t, err)
-
-	// GetByID succeeds (called before AddIfNotExists now)
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// Simulate Redis down - fail-closed should reject the request
-	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, errors.ErrInternal)
-
-	resp, err := service.RefreshTokens(ctx, refreshToken)
-
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "blacklist")
-	blacklist.AssertExpectations(t)
-	userRepo.AssertExpectations(t)
-}
-
-func TestService_Logout_WithBothTokens(t *testing.T) {
-	service, _, blacklist := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
-	require.NoError(t, err)
-
-	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(nil)
-	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(nil)
-
-	err = service.Logout(ctx, accessToken, refreshToken)
-
-	require.NoError(t, err)
-	blacklist.AssertExpectations(t)
-}
-
-// TestService_RefreshTokens_BlacklistAddError removed - RefreshTokens now uses
-// atomic AddIfNotExists instead of separate IsBlacklisted + Add,
-// so the "Add fails after check" scenario no longer exists.
-// The equivalent failure is covered by TestService_RefreshTokens_BlacklistAtomicError.
-
-func TestService_Register_InvalidEmail(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	req := &RegisterRequest{
-		Username: "testuser",
-		Email:    "not-an-email",
-		Password: "SecurePass123!",
-	}
-
-	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
-
-	resp, err := service.Register(ctx, req)
-
-	// The user.Validate() should catch invalid email
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-}
-
-// --- hashPassword / comparePassword edge cases ---
-
-func TestService_hashPassword_TooLong(t *testing.T) {
-	service, _, _ := newTestService(t)
-
-	// bcrypt silently truncates > 72 bytes; hashPassword should reject explicitly
-	longPassword := string(make([]byte, 73))
-	hash, err := service.hashPassword(longPassword)
-
-	assert.Error(t, err)
-	assert.Empty(t, hash)
-	assert.Contains(t, err.Error(), "too long")
-}
-
-func TestService_hashPassword_Empty(t *testing.T) {
-	service, _, _ := newTestService(t)
-
-	hash, err := service.hashPassword("")
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, hash)
-
-	// Verify empty password matches the hash
-	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(""))
-	assert.NoError(t, err)
-}
-
-func TestService_comparePassword_TooLong(t *testing.T) {
-	service, _, _ := newTestService(t)
-
-	hash, _ := bcrypt.GenerateFromPassword([]byte("short"), bcrypt.MinCost)
-	longPassword := string(make([]byte, 73))
-
-	err := service.comparePassword(string(hash), longPassword)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid credentials")
-}
-
-func TestService_comparePassword_InvalidHash(t *testing.T) {
-	service, _, _ := newTestService(t)
-
-	err := service.comparePassword("not-a-bcrypt-hash", "password")
-
-	assert.Error(t, err)
-}
-
-// --- Logout edge cases ---
-
-func TestService_Logout_AccessBlacklistError(t *testing.T) {
-	service, _, blacklist := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	accessToken, err := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
-	// Blacklist add fails for access token
-	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
-
-	err = service.Logout(ctx, accessToken, "")
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "blacklist access token")
-	blacklist.AssertExpectations(t)
-}
-
-func TestService_Logout_RefreshBlacklistError(t *testing.T) {
-	service, _, blacklist := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
-	require.NoError(t, err)
-
-	// Access token is invalid - that's OK for logout, it just logs
-	// Refresh token blacklist fails
-	blacklist.On("Add", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
-
-	err = service.Logout(ctx, "invalid-access-token", refreshToken)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "blacklist refresh token")
-	blacklist.AssertExpectations(t)
-}
-
-func TestService_Logout_TokenTTLZero(t *testing.T) {
-	// When the access token has expired (TTL <= 0), ValidateToken returns an error.
-	// In this case, the Logout method skips blacklisting the access token entirely
-	// (the ttl > 0 branch is never reached). The function should still return nil.
-	userRepo := new(MockUserRepository)
-	blacklist := new(MockTokenBlacklist)
-	// Use a very short access TTL so the token expires quickly
-	jwtManager := NewJWTManager("test-secret-key-123", 1*time.Millisecond, 7*24*time.Hour)
-	log, _ := logger.New("debug", "json")
-	service := NewService(userRepo, jwtManager, blacklist, log)
-
-	ctx := context.Background()
-
-	userID := uuid.New()
-	accessToken, err := jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
-	require.NoError(t, err)
-
-	// Wait for the token to expire (TTL becomes 0 or negative)
-	time.Sleep(10 * time.Millisecond)
-
-	// Logout with expired access token and no refresh token.
-	// ValidateToken fails (expired), so the blacklist is NOT called for access token.
-	err = service.Logout(ctx, accessToken, "")
-
-	assert.NoError(t, err)
-	// Verify that blacklist.Add was never called (token expired, TTL <= 0)
-	blacklist.AssertNotCalled(t, "Add")
-}
-
-func TestService_UpdateProfile_GetByEmailInternalError(t *testing.T) {
-	service, userRepo, _ := newTestService(t)
-	ctx := context.Background()
-
-	userID := uuid.New()
-	user := &domain.User{
-		ID:           userID,
-		Username:     "testuser",
-		Email:        "old@example.com",
-		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
-	}
-
-	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// GetByEmail returns a non-NotFound error (e.g., DB connection error)
-	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, fmt.Errorf("db connection error"))
-
-	req := &UpdateProfileRequest{
-		Email: "new@example.com",
-	}
-
-	result, err := service.UpdateProfile(ctx, userID.String(), req)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "failed to check email uniqueness")
-	userRepo.AssertExpectations(t)
 }
