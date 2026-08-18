@@ -13,12 +13,12 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/internal/service/rating"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/internal/worker"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
