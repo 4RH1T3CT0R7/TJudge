@@ -231,7 +231,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament
 
 func (s *Service) List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error) {
 	// лимит по дефолту, чтобы не тащить всё
-	// TODO: вынести лимиты в конфиг
+	// TODO: дефолт 50 и потолок 100 захардкожены, по-хорошему из конфига
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
@@ -472,7 +472,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 // GetLeaderboard — таблица лидеров
 func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	// сначала полный json-кэш (короткий ttl)
-	// TODO: пагинация лидерборда, пока топ отдаём
+	// TODO: лидерборд без пагинации, отдаём весь топ как есть
 	cached, err := s.leaderboardCache.GetFullLeaderboard(ctx, tournamentID, limit)
 	if err != nil {
 		s.log.Error("Failed to get full leaderboard cache", zap.Error(err))
@@ -482,6 +482,7 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 	}
 
 	// промах кэша: singleflight чтобы не долбить бд толпой (thundering herd)
+	// FIXME: формат sfKey руками повторяет ключ кэша, разъедутся - схлопывать перестанет
 	sfKey := fmt.Sprintf("leaderboard:%s:%d", tournamentID, limit)
 	val, err, _ := s.leaderboardSF.Do(sfKey, func() (any, error) {
 		leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)

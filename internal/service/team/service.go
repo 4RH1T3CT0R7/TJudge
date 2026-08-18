@@ -367,7 +367,7 @@ func (s *Service) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*mo
 	return s.teamRepo.GetTeamWithMembers(ctx, teamID)
 }
 
-// TODO: пагинация, пока отдаём все команды турнира сразу
+// TODO: отдаём все команды турнира скопом, на большом турнире понадобится limit/offset
 func (s *Service) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	return s.teamRepo.GetByTournamentID(ctx, tournamentID)
 }
