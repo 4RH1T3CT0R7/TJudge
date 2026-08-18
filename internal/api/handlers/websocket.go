@@ -9,10 +9,10 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/websocket"
+	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	ws "github.com/gorilla/websocket"
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +67,7 @@ func checkWebSocketOrigin(r *http.Request) bool {
 	return false
 }
 
-var upgrader = ws.Upgrader{
+var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin:     checkWebSocketOrigin,
@@ -75,12 +75,12 @@ var upgrader = ws.Upgrader{
 
 // WebSocketHandler обрабатывает WebSocket подключения
 type WebSocketHandler struct {
-	hub *websocket.Hub
+	hub *ws.Hub
 	log *logger.Logger
 }
 
 // NewWebSocketHandler создаёт новый WebSocket handler
-func NewWebSocketHandler(hub *websocket.Hub, log *logger.Logger) *WebSocketHandler {
+func NewWebSocketHandler(hub *ws.Hub, log *logger.Logger) *WebSocketHandler {
 	return &WebSocketHandler{
 		hub: hub,
 		log: log,
@@ -150,7 +150,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 	)
 
 	// Создаём клиента
-	client := websocket.NewClient(h.hub, conn, tournamentID, userID, h.log)
+	client := ws.NewClient(h.hub, conn, tournamentID, userID, h.log)
 
 	// Регистрируем клиента в hub
 	client.Register()

@@ -24,7 +24,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/service/team"
 	"github.com/bmstu-itstech/tjudge/internal/service/tournament"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
-	"github.com/bmstu-itstech/tjudge/internal/websocket"
+	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -152,7 +152,7 @@ func main() {
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
 	// Инициализируем WebSocket hub
-	wsHub := websocket.NewHub(log)
+	wsHub := ws.NewHub(log)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
