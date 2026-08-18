@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -29,12 +29,12 @@ func (m *MockAuthService) ValidateToken(tokenString string) (*auth.Claims, error
 	return args.Get(0).(*auth.Claims), args.Error(1)
 }
 
-func (m *MockAuthService) GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) {
+func (m *MockAuthService) GetUserFromToken(ctx context.Context, tokenString string) (*models.User, error) {
 	args := m.Called(ctx, tokenString)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
 func (m *MockAuthService) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {
@@ -52,13 +52,13 @@ func TestAuth_ValidToken(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser}
 
 	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
 
 	var capturedUserID uuid.UUID
-	var capturedRole domain.Role
+	var capturedRole models.Role
 	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedUserID, _ = middleware.GetUserID(r.Context())
 		capturedRole, _ = middleware.RequireRoleValue(r.Context())
@@ -73,7 +73,7 @@ func TestAuth_ValidToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, userID, capturedUserID)
-	assert.Equal(t, domain.RoleUser, capturedRole)
+	assert.Equal(t, models.RoleUser, capturedRole)
 	mockAuth.AssertExpectations(t)
 }
 
@@ -160,7 +160,7 @@ func TestAuth_TokenFromWebSocketProtocol(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser}
 
 	mockAuth.On("ValidateToken", "ws-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "ws-token").Return(false, nil)
@@ -185,12 +185,12 @@ func TestAuth_AdminRole(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleAdmin}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleAdmin}
 
 	mockAuth.On("ValidateToken", "admin-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "admin-token").Return(false, nil)
 
-	var capturedRole domain.Role
+	var capturedRole models.Role
 	handler := middleware.Auth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedRole, _ = middleware.RequireRoleValue(r.Context())
 		w.WriteHeader(http.StatusOK)
@@ -203,7 +203,7 @@ func TestAuth_AdminRole(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, domain.RoleAdmin, capturedRole)
+	assert.Equal(t, models.RoleAdmin, capturedRole)
 	mockAuth.AssertExpectations(t)
 }
 
@@ -230,7 +230,7 @@ func TestOptionalAuth_ValidToken(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser}
 
 	mockAuth.On("ValidateToken", "valid-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "valid-token").Return(false, nil)
@@ -359,7 +359,7 @@ func TestOptionalAuth_BlacklistCheckError(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser}
 
 	mockAuth.On("ValidateToken", "some-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, assert.AnError)
@@ -369,7 +369,7 @@ func TestOptionalAuth_BlacklistCheckError(t *testing.T) {
 		_, ok := middleware.GetUserID(r.Context())
 		assert.False(t, ok, "User ID should not be in context when blacklist check fails")
 
-		_, roleOk := r.Context().Value(middleware.RoleKey).(domain.Role)
+		_, roleOk := r.Context().Value(middleware.RoleKey).(models.Role)
 		assert.False(t, roleOk, "Role should not be in context when blacklist check fails")
 
 		w.WriteHeader(http.StatusOK)
@@ -440,7 +440,7 @@ func TestAuth_WebSocket_MultipleProtocols(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Username: "wsuser", Role: domain.RoleUser}
+	claims := &auth.Claims{UserID: userID, Username: "wsuser", Role: models.RoleUser}
 
 	// Middleware разбивает protocols через запятую и находит "access_token.validtoken123"
 	mockAuth.On("ValidateToken", "validtoken123").Return(claims, nil)

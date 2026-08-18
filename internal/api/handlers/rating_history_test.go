@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -19,12 +19,12 @@ type MockRatingHistoryRepository struct {
 	mock.Mock
 }
 
-func (m *MockRatingHistoryRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*domain.RatingHistory, error) {
+func (m *MockRatingHistoryRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*models.RatingHistory, error) {
 	args := m.Called(ctx, programID, tournamentID, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.RatingHistory), args.Error(1)
+	return args.Get(0).([]*models.RatingHistory), args.Error(1)
 }
 
 func newTestRatingHistoryHandler(t *testing.T) (*RatingHistoryHandler, *MockRatingHistoryRepository) {
@@ -48,7 +48,7 @@ func TestRatingHistoryHandler_Success(t *testing.T) {
 	programID := uuid.New()
 
 	repo.On("GetByProgramAndTournament", mock.Anything, programID, tournamentID, 200).
-		Return([]*domain.RatingHistory{
+		Return([]*models.RatingHistory{
 			{ProgramID: programID, TournamentID: tournamentID, OldRating: 1500, NewRating: 1516, Change: 16},
 			{ProgramID: programID, TournamentID: tournamentID, OldRating: 1516, NewRating: 1508, Change: -8},
 		}, nil)
@@ -57,7 +57,7 @@ func TestRatingHistoryHandler_Success(t *testing.T) {
 	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(tournamentID.String(), programID.String()))
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.RatingHistory
+	var result []*models.RatingHistory
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 2)
 	assert.Equal(t, 16, result[0].Change)
@@ -100,9 +100,9 @@ func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
 	teamA, teamB := uuid.New(), uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
 	leaderboardRepo.On("GetHeadToHead", mock.Anything, tournamentID, "dilemma").
-		Return([]*domain.HeadToHeadCell{
+		Return([]*models.HeadToHeadCell{
 			{TeamID: teamA, TeamName: "alpha", OpponentID: teamB, OpponentName: "beta", Wins: 2, Losses: 1, Draws: 1},
 		}, nil)
 
@@ -116,7 +116,7 @@ func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
 	handler.GetHeadToHead(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.HeadToHeadCell
+	var result []*models.HeadToHeadCell
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	assert.Equal(t, "alpha", result[0].TeamName)

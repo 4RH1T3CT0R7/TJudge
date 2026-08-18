@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -20,33 +20,33 @@ type MockUserRepository struct {
 	mock.Mock
 }
 
-func (m *MockUserRepository) Create(ctx context.Context, user *domain.User) error {
+func (m *MockUserRepository) Create(ctx context.Context, user *models.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+func (m *MockUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
+func (m *MockUserRepository) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	args := m.Called(ctx, username)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
 func (m *MockUserRepository) Exists(ctx context.Context, username, email string) (bool, error) {
@@ -54,7 +54,7 @@ func (m *MockUserRepository) Exists(ctx context.Context, username, email string)
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {
+func (m *MockUserRepository) Update(ctx context.Context, user *models.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
@@ -102,7 +102,7 @@ func TestService_Register_Success(t *testing.T) {
 	}
 
 	userRepo.On("Exists", ctx, req.Username, req.Email).Return(false, nil)
-	userRepo.On("Create", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+	userRepo.On("Create", ctx, mock.AnythingOfType("*models.User")).Return(nil)
 
 	resp, err := service.Register(ctx, req)
 
@@ -178,12 +178,12 @@ func TestService_Login_Success(t *testing.T) {
 
 	password := "SecurePass123!"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "testuser",
 		Email:        "test@example.com",
 		PasswordHash: string(hash),
-		Role:         domain.RoleUser,
+		Role:         models.RoleUser,
 	}
 
 	userRepo.On("GetByUsername", ctx, "testuser").Return(user, nil)
@@ -204,12 +204,12 @@ func TestService_Login_ByEmail(t *testing.T) {
 
 	password := "SecurePass123!"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "emailuser",
 		Email:        "email@example.com",
 		PasswordHash: string(hash),
-		Role:         domain.RoleUser,
+		Role:         models.RoleUser,
 	}
 
 	userRepo.On("GetByEmail", ctx, "email@example.com").Return(user, nil)
@@ -241,7 +241,7 @@ func TestService_Login_WrongPassword(t *testing.T) {
 	ctx := context.Background()
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "testuser",
 		PasswordHash: string(hash),
@@ -273,7 +273,7 @@ func TestService_RefreshTokens_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", Email: "test@example.com", Role: models.RoleUser}
 
 	refreshToken, err := service.jwtManager.GenerateRefreshToken(userID)
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestService_RefreshTokens_ReusedToken(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", Role: models.RoleUser}
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
@@ -345,7 +345,7 @@ func TestService_RefreshTokens_BlacklistError(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", Role: models.RoleUser}
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
@@ -368,7 +368,7 @@ func TestService_Logout_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	accessToken, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
+	accessToken, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", models.RoleUser)
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
 	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(nil)
@@ -388,7 +388,7 @@ func TestService_Logout_ExpiredAccessSkipped(t *testing.T) {
 	log, _ := logger.New("debug", "json")
 	service := NewService(userRepo, jwtManager, blacklist, log)
 
-	accessToken, _ := jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
+	accessToken, _ := jwtManager.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
 	time.Sleep(10 * time.Millisecond)
 
 	// протухший access не валидируется, поэтому в блеклист не кладём и ошибку не возвращаем
@@ -402,7 +402,7 @@ func TestService_Logout_AccessBlacklistError(t *testing.T) {
 	service, _, blacklist := newTestService(t)
 	ctx := context.Background()
 
-	accessToken, _ := service.jwtManager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
+	accessToken, _ := service.jwtManager.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
 
 	blacklist.On("Add", ctx, accessToken, mock.AnythingOfType("time.Duration")).Return(errors.ErrInternal)
 
@@ -448,7 +448,7 @@ func TestService_ValidateToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 
 	userID := uuid.New()
-	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
+	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", models.RoleUser)
 
 	claims, err := service.ValidateToken(token)
 
@@ -462,8 +462,8 @@ func TestService_GetUserByToken_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: "hash", Role: domain.RoleUser}
-	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", domain.RoleUser)
+	user := &models.User{ID: userID, Username: "testuser", PasswordHash: "hash", Role: models.RoleUser}
+	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", models.RoleUser)
 
 	// получем юзера по токену, хеш пароля в ответе должен быть затёрт
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
@@ -546,17 +546,17 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{
+	user := &models.User{
 		ID:           userID,
 		Username:     "testuser",
 		Email:        "old@example.com",
 		PasswordHash: "oldhash",
-		Role:         domain.RoleUser,
+		Role:         models.RoleUser,
 	}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 	userRepo.On("GetByEmail", ctx, "new@example.com").Return(nil, errors.ErrNotFound)
-	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*models.User")).Return(nil)
 
 	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Email: "new@example.com"})
 
@@ -571,10 +571,10 @@ func TestService_UpdateProfile_EmailAlreadyInUse(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", Email: "old@example.com", Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", Email: "old@example.com", Role: models.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	userRepo.On("GetByEmail", ctx, "taken@example.com").Return(&domain.User{ID: uuid.New()}, nil)
+	userRepo.On("GetByEmail", ctx, "taken@example.com").Return(&models.User{ID: uuid.New()}, nil)
 
 	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Email: "taken@example.com"})
 
@@ -590,16 +590,16 @@ func TestService_UpdateProfile_PasswordChange(t *testing.T) {
 
 	userID := uuid.New()
 	oldHash, _ := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
-	user := &domain.User{
+	user := &models.User{
 		ID:           userID,
 		Username:     "testuser",
 		Email:        "test@example.com",
 		PasswordHash: string(oldHash),
-		Role:         domain.RoleUser,
+		Role:         models.RoleUser,
 	}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+	userRepo.On("Update", ctx, mock.AnythingOfType("*models.User")).Return(nil)
 
 	result, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{
 		Password:        "NewSecurePass123!",
@@ -616,7 +616,7 @@ func TestService_UpdateProfile_PasswordWithoutCurrent(t *testing.T) {
 	ctx := context.Background()
 
 	userID := uuid.New()
-	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: "oldhash", Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", PasswordHash: "oldhash", Role: models.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
@@ -634,7 +634,7 @@ func TestService_UpdateProfile_WrongCurrentPassword(t *testing.T) {
 
 	userID := uuid.New()
 	oldHash, _ := bcrypt.GenerateFromPassword([]byte("OldPassword123!"), bcrypt.MinCost)
-	user := &domain.User{ID: userID, Username: "testuser", PasswordHash: string(oldHash), Role: domain.RoleUser}
+	user := &models.User{ID: userID, Username: "testuser", PasswordHash: string(oldHash), Role: models.RoleUser}
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 

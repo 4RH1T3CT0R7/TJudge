@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -18,35 +18,35 @@ type MockGameRepository struct {
 	mock.Mock
 }
 
-func (m *MockGameRepository) Create(ctx context.Context, game *domain.Game) error {
+func (m *MockGameRepository) Create(ctx context.Context, game *models.Game) error {
 	return m.Called(ctx, game).Error(0)
 }
 
-func (m *MockGameRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
+func (m *MockGameRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
-func (m *MockGameRepository) GetByName(ctx context.Context, name string) (*domain.Game, error) {
+func (m *MockGameRepository) GetByName(ctx context.Context, name string) (*models.Game, error) {
 	args := m.Called(ctx, name)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
-func (m *MockGameRepository) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
+func (m *MockGameRepository) List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Game), args.Error(1)
+	return args.Get(0).([]*models.Game), args.Error(1)
 }
 
-func (m *MockGameRepository) Update(ctx context.Context, game *domain.Game) error {
+func (m *MockGameRepository) Update(ctx context.Context, game *models.Game) error {
 	return m.Called(ctx, game).Error(0)
 }
 
@@ -54,12 +54,12 @@ func (m *MockGameRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.Called(ctx, id).Error(0)
 }
 
-func (m *MockGameRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
+func (m *MockGameRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Game), args.Error(1)
+	return args.Get(0).([]*models.Game), args.Error(1)
 }
 
 func (m *MockGameRepository) AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -88,7 +88,7 @@ func TestService_Create_Success(t *testing.T) {
 	ctx := context.Background()
 
 	repo.On("Exists", ctx, "chess").Return(false, nil)
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.Game")).Return(nil)
+	repo.On("Create", ctx, mock.AnythingOfType("*models.Game")).Return(nil)
 
 	g, err := svc.Create(ctx, &CreateRequest{
 		Name:        "chess",
@@ -136,7 +136,7 @@ func TestService_Create_ValidNames(t *testing.T) {
 			ctx := context.Background()
 
 			repo.On("Exists", ctx, name).Return(false, nil)
-			repo.On("Create", ctx, mock.AnythingOfType("*domain.Game")).Return(nil)
+			repo.On("Create", ctx, mock.AnythingOfType("*models.Game")).Return(nil)
 
 			g, err := svc.Create(ctx, &CreateRequest{Name: name, DisplayName: "Display"})
 			require.NoError(t, err)
@@ -173,7 +173,7 @@ func TestService_Create_RepoError(t *testing.T) {
 	ctx := context.Background()
 
 	repo.On("Exists", ctx, "chess").Return(false, nil)
-	repo.On("Create", ctx, mock.AnythingOfType("*domain.Game")).Return(errors.ErrInternal)
+	repo.On("Create", ctx, mock.AnythingOfType("*models.Game")).Return(errors.ErrInternal)
 
 	_, err := svc.Create(ctx, &CreateRequest{Name: "chess", DisplayName: "Chess"})
 	assert.Error(t, err)
@@ -201,11 +201,11 @@ func TestService_List_LimitClamping(t *testing.T) {
 			svc, repo := newTestGameService(t)
 			ctx := context.Background()
 
-			repo.On("List", ctx, mock.MatchedBy(func(f domain.GameFilter) bool {
+			repo.On("List", ctx, mock.MatchedBy(func(f models.GameFilter) bool {
 				return f.Limit == tc.expected
-			})).Return([]*domain.Game{}, nil)
+			})).Return([]*models.Game{}, nil)
 
-			_, err := svc.List(ctx, domain.GameFilter{Limit: tc.input})
+			_, err := svc.List(ctx, models.GameFilter{Limit: tc.input})
 			require.NoError(t, err)
 			repo.AssertExpectations(t)
 		})
@@ -218,7 +218,7 @@ func TestService_List_RepoError(t *testing.T) {
 
 	repo.On("List", ctx, mock.Anything).Return(nil, errors.ErrInternal)
 
-	_, err := svc.List(ctx, domain.GameFilter{})
+	_, err := svc.List(ctx, models.GameFilter{})
 	assert.Error(t, err)
 }
 
@@ -229,9 +229,9 @@ func TestService_Update_Success(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.New()
 
-	existing := &domain.Game{ID: id, Name: "chess", DisplayName: "Old"}
+	existing := &models.Game{ID: id, Name: "chess", DisplayName: "Old"}
 	repo.On("GetByID", ctx, id).Return(existing, nil)
-	repo.On("Update", ctx, mock.AnythingOfType("*domain.Game")).Return(nil)
+	repo.On("Update", ctx, mock.AnythingOfType("*models.Game")).Return(nil)
 
 	g, err := svc.Update(ctx, id, &UpdateRequest{DisplayName: "New", Rules: "new rules"})
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestService_Update_RepoError(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.New()
 
-	existing := &domain.Game{ID: id, Name: "chess"}
+	existing := &models.Game{ID: id, Name: "chess"}
 	repo.On("GetByID", ctx, id).Return(existing, nil)
 	repo.On("Update", ctx, mock.Anything).Return(errors.ErrInternal)
 
@@ -296,7 +296,7 @@ func TestService_GetByID_Success(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.New()
 
-	expected := &domain.Game{ID: id, Name: "chess"}
+	expected := &models.Game{ID: id, Name: "chess"}
 	repo.On("GetByID", ctx, id).Return(expected, nil)
 
 	g, err := svc.GetByID(ctx, id)
@@ -319,7 +319,7 @@ func TestService_GetByName_Success(t *testing.T) {
 	svc, repo := newTestGameService(t)
 	ctx := context.Background()
 
-	expected := &domain.Game{Name: "chess"}
+	expected := &models.Game{Name: "chess"}
 	repo.On("GetByName", ctx, "chess").Return(expected, nil)
 
 	g, err := svc.GetByName(ctx, "chess")
@@ -344,7 +344,7 @@ func TestService_AddToTournament_Success(t *testing.T) {
 	ctx := context.Background()
 	tID, gID := uuid.New(), uuid.New()
 
-	repo.On("GetByID", ctx, gID).Return(&domain.Game{ID: gID}, nil)
+	repo.On("GetByID", ctx, gID).Return(&models.Game{ID: gID}, nil)
 	repo.On("AddToTournament", ctx, tID, gID).Return(nil)
 
 	err := svc.AddToTournament(ctx, tID, gID)
@@ -368,7 +368,7 @@ func TestService_AddToTournament_RepoError(t *testing.T) {
 	ctx := context.Background()
 	tID, gID := uuid.New(), uuid.New()
 
-	repo.On("GetByID", ctx, gID).Return(&domain.Game{ID: gID}, nil)
+	repo.On("GetByID", ctx, gID).Return(&models.Game{ID: gID}, nil)
 	repo.On("AddToTournament", ctx, tID, gID).Return(errors.ErrInternal)
 
 	err := svc.AddToTournament(ctx, tID, gID)
@@ -406,7 +406,7 @@ func TestService_GetByTournamentID_Success(t *testing.T) {
 	ctx := context.Background()
 	tID := uuid.New()
 
-	expected := []*domain.Game{{Name: "chess"}}
+	expected := []*models.Game{{Name: "chess"}}
 	repo.On("GetByTournamentID", ctx, tID).Return(expected, nil)
 
 	games, err := svc.GetByTournamentID(ctx, tID)

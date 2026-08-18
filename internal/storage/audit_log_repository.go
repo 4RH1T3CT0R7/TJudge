@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
@@ -16,7 +16,7 @@ func NewAuditLogRepository(db *DB) *AuditLogRepository {
 }
 
 // Insert пишет одну запись, дёргается асинхронно из middleware
-func (r *AuditLogRepository) Insert(ctx context.Context, e *domain.AuditLogEntry) error {
+func (r *AuditLogRepository) Insert(ctx context.Context, e *models.AuditLogEntry) error {
 	const query = `
 		INSERT INTO audit_log (id, actor_id, actor_role, action, target_type, target_id,
 		                      method, path, status_code, ip, user_agent, created_at)
@@ -33,7 +33,7 @@ func (r *AuditLogRepository) Insert(ctx context.Context, e *domain.AuditLogEntry
 }
 
 // List отдаёт последние N записей для /admin/audit
-func (r *AuditLogRepository) List(ctx context.Context, limit int) ([]*domain.AuditLogEntry, error) {
+func (r *AuditLogRepository) List(ctx context.Context, limit int) ([]*models.AuditLogEntry, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -44,7 +44,7 @@ func (r *AuditLogRepository) List(ctx context.Context, limit int) ([]*domain.Aud
 		ORDER BY created_at DESC
 		LIMIT $1
 	`
-	var entries []*domain.AuditLogEntry
+	var entries []*models.AuditLogEntry
 	if err := r.db.QueryWithMetrics(ctx, "audit_log_list", &entries, query, limit); err != nil {
 		return nil, errors.Wrap(err, "failed to list audit log")
 	}

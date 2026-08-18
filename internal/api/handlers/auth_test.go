@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -52,20 +52,20 @@ func (m *MockAuthService) Logout(ctx context.Context, accessToken, refreshToken 
 	return args.Error(0)
 }
 
-func (m *MockAuthService) UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*domain.User, error) {
+func (m *MockAuthService) UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*models.User, error) {
 	args := m.Called(ctx, userID, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
-func (m *MockAuthService) GetUserFromToken(ctx context.Context, token string) (*domain.User, error) {
+func (m *MockAuthService) GetUserFromToken(ctx context.Context, token string) (*models.User, error) {
 	args := m.Called(ctx, token)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
 func (m *MockAuthService) ValidateToken(token string) (*auth.Claims, error) {
@@ -89,11 +89,11 @@ func TestAuthHandler_Register(t *testing.T) {
 			Password: "password123",
 		}
 
-		testUser := &domain.User{
+		testUser := &models.User{
 			ID:       uuid.New(),
 			Username: "testuser",
 			Email:    "test@example.com",
-			Role:     domain.RoleUser,
+			Role:     models.RoleUser,
 		}
 
 		expectedResponse := &auth.AuthResponse{
@@ -195,11 +195,11 @@ func TestAuthHandler_Login(t *testing.T) {
 			Password: "password123",
 		}
 
-		testUser := &domain.User{
+		testUser := &models.User{
 			ID:       uuid.New(),
 			Username: "testuser",
 			Email:    "test@example.com",
-			Role:     domain.RoleUser,
+			Role:     models.RoleUser,
 		}
 
 		expectedResponse := &auth.AuthResponse{
@@ -284,11 +284,11 @@ func TestAuthHandler_Refresh(t *testing.T) {
 			"refresh_token": "valid_refresh_token",
 		}
 
-		testUser := &domain.User{
+		testUser := &models.User{
 			ID:       uuid.New(),
 			Username: "testuser",
 			Email:    "test@example.com",
-			Role:     domain.RoleUser,
+			Role:     models.RoleUser,
 		}
 
 		expectedResponse := &auth.AuthResponse{
@@ -434,11 +434,11 @@ func TestAuthHandler_Me(t *testing.T) {
 		handler := NewAuthHandler(mockService, log)
 
 		userID := uuid.New()
-		expectedUser := &domain.User{
+		expectedUser := &models.User{
 			ID:       userID,
 			Username: "testuser",
 			Email:    "test@example.com",
-			Role:     domain.RoleUser,
+			Role:     models.RoleUser,
 		}
 
 		token := "valid_access_token"
@@ -452,7 +452,7 @@ func TestAuthHandler_Me(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.User
+		var response models.User
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedUser.ID, response.ID)
 		assert.Equal(t, expectedUser.Username, response.Username)
@@ -506,11 +506,11 @@ func TestAuthHandler_UpdateProfile(t *testing.T) {
 			Password: "newpassword123",
 		}
 
-		expectedUser := &domain.User{
+		expectedUser := &models.User{
 			ID:       userID,
 			Username: "testuser",
 			Email:    "newemail@example.com",
-			Role:     domain.RoleUser,
+			Role:     models.RoleUser,
 		}
 
 		mockService.On("UpdateProfile", mock.Anything, userID.String(), &updateReq).Return(expectedUser, nil)
@@ -527,7 +527,7 @@ func TestAuthHandler_UpdateProfile(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.User
+		var response models.User
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedUser.ID, response.ID)
 		assert.Equal(t, expectedUser.Email, response.Email)

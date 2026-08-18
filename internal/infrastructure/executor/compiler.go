@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -56,7 +56,7 @@ const matchContainerPath = "/programs"
 // в program.error_message и показываемого пользователю.
 const compileLogLimit = 1500
 
-// langJava - имя языка Java в domain.Program.Language (goconst).
+// langJava - имя языка Java в models.Program.Language (goconst).
 const langJava = "java"
 
 // javaClassNameRe допускает только валидные Java-идентификаторы (allowlist
@@ -177,7 +177,7 @@ func buildCompilePlan(language, className string) (*compilePlan, error) {
 // различаются полем OK. Ошибка возвращается только при инфраструктурных
 // проблемах (Docker недоступен, образ отсутствует): такие задачи безопасно
 // повторить позже, программа остаётся в compiling.
-func (c *Compiler) Compile(ctx context.Context, program *domain.Program) (*CompileResult, error) {
+func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*CompileResult, error) {
 	sourcePath := program.CodePath
 	if program.FilePath != nil && *program.FilePath != "" {
 		sourcePath = *program.FilePath
@@ -241,7 +241,7 @@ func (c *Compiler) Compile(ctx context.Context, program *domain.Program) (*Compi
 
 // installArtifact переносит результат сборки из buildDir на постоянное место
 // и возвращает путь к исполняемому файлу.
-func (c *Compiler) installArtifact(program *domain.Program, plan *compilePlan, buildDir, sourcePath, className string) (string, error) {
+func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, buildDir, sourcePath, className string) (string, error) {
 	// Интерпретируемые языки: артефакта нет, исполняется исходник.
 	if plan.ArtifactName == "" {
 		return sourcePath, nil

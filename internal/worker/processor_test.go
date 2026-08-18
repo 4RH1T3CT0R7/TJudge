@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -19,17 +19,17 @@ type MockMatchRepository struct {
 	mock.Mock
 }
 
-func (m *MockMatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MatchStatus) error {
+func (m *MockMatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)
 }
 
-func (m *MockMatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
+func (m *MockMatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
 	args := m.Called(ctx, id, result)
 	return args.Error(0)
 }
 
-func (m *MockMatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
+func (m *MockMatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
 	args := m.Called(ctx, id, result)
 	return args.Error(0)
 }
@@ -59,7 +59,7 @@ type MockProcessorRatingService struct {
 	mock.Mock
 }
 
-func (m *MockProcessorRatingService) ProcessMatchResult(ctx context.Context, match *domain.Match, rating1, rating2 int) error {
+func (m *MockProcessorRatingService) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
 	args := m.Called(ctx, match, rating1, rating2)
 	return args.Error(0)
 }
@@ -69,12 +69,12 @@ type MockExecutor struct {
 	mock.Mock
 }
 
-func (m *MockExecutor) Execute(ctx context.Context, match *domain.Match, program1Path, program2Path string) (*domain.MatchResult, error) {
+func (m *MockExecutor) Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error) {
 	args := m.Called(ctx, match, program1Path, program2Path)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.MatchResult), args.Error(1)
+	return args.Get(0).(*models.MatchResult), args.Error(1)
 }
 
 // MockProcessorProgramRepository - мок ProgramRepository
@@ -82,20 +82,20 @@ type MockProcessorProgramRepository struct {
 	mock.Mock
 }
 
-func (m *MockProcessorProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
+func (m *MockProcessorProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Program), args.Error(1)
+	return args.Get(0).(*models.Program), args.Error(1)
 }
 
-func (m *MockProcessorProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error) {
+func (m *MockProcessorProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, ids)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
 func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProcessorRatingRepository, *MockProcessorProgramRepository, *MockProcessorRatingService, *MockExecutor) {
@@ -122,7 +122,7 @@ func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProc
 
 func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
 	p, matchRepo, _, _, _, _ := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
@@ -130,8 +130,8 @@ func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
 	}
 
 	// UpdateStatus возвращает ErrMatchAlreadyProcessed - дубликат из очереди
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).
-		Return(domain.ErrMatchAlreadyProcessed)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).
+		Return(models.ErrMatchAlreadyProcessed)
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err) // должен быть тихо пропущен, а не считаться ошибкой
@@ -140,14 +140,14 @@ func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
 
 func TestProcessor_Process_UpdateStatusNotFound(t *testing.T) {
 	p, matchRepo, _, _, _, _ := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).
 		Return(errors.ErrNotFound)
 
 	err := p.Process(context.Background(), match)
@@ -157,14 +157,14 @@ func TestProcessor_Process_UpdateStatusNotFound(t *testing.T) {
 
 func TestProcessor_Process_UpdateStatusFatalError(t *testing.T) {
 	p, matchRepo, _, _, _, _ := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).
 		Return(fmt.Errorf("connection refused"))
 
 	err := p.Process(context.Background(), match)
@@ -175,14 +175,14 @@ func TestProcessor_Process_UpdateStatusFatalError(t *testing.T) {
 
 func TestProcessor_Process_GetProgramsError(t *testing.T) {
 	p, matchRepo, _, programRepo, _, _ := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
 		Return(nil, errors.ErrNotFound)
 
@@ -195,7 +195,7 @@ func TestProcessor_Process_GetProgramsError(t *testing.T) {
 
 func TestProcessor_Process_Program2NotInResults(t *testing.T) {
 	p, matchRepo, _, programRepo, _, _ := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
@@ -203,9 +203,9 @@ func TestProcessor_Process_Program2NotInResults(t *testing.T) {
 	}
 
 	// GetByIDs возвращает только program1 - program2 отсутствует
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{{ID: match.Program1ID, CodePath: "/path/p1"}}, nil)
+		Return([]*models.Program{{ID: match.Program1ID, CodePath: "/path/p1"}}, nil)
 
 	err := p.Process(context.Background(), match)
 	assert.Error(t, err)
@@ -217,22 +217,22 @@ func TestProcessor_Process_Program2NotInResults(t *testing.T) {
 
 func TestProcessor_Process_ExecutorFailure(t *testing.T) {
 	p, matchRepo, _, programRepo, _, executor := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
 		Return(nil, fmt.Errorf("invalid output format"))
-	matchRepo.On("UpdateResult", mock.Anything, match.ID, mock.AnythingOfType("*domain.MatchResult")).Return(nil)
+	matchRepo.On("UpdateResult", mock.Anything, match.ID, mock.AnythingOfType("*models.MatchResult")).Return(nil)
 
 	err := p.Process(context.Background(), match)
 	assert.Error(t, err)
@@ -245,16 +245,16 @@ func TestProcessor_Process_ExecutorFailure(t *testing.T) {
 
 func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
 	p, matchRepo, _, programRepo, _, executorMock := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
@@ -275,21 +275,21 @@ func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
 
 func TestProcessor_Process_UpdateResultFailure(t *testing.T) {
 	p, matchRepo, _, programRepo, _, executor := newTestProcessor(t)
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID: match.ID,
 		Winner:  1,
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
@@ -309,13 +309,13 @@ func TestProcessor_Process_UpdateResultFailure(t *testing.T) {
 func TestProcessor_UpdateRatings_Success(t *testing.T) {
 	p, _, ratingRepo, _, ratingService, _ := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID: match.ID,
 		Winner:  1,
 	}
@@ -333,13 +333,13 @@ func TestProcessor_UpdateRatings_Success(t *testing.T) {
 func TestProcessor_UpdateRatings_GetRatingsError(t *testing.T) {
 	p, _, ratingRepo, _, _, _ := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
-	result := &domain.MatchResult{MatchID: match.ID, Winner: 1}
+	result := &models.MatchResult{MatchID: match.ID, Winner: 1}
 
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(0, 0, fmt.Errorf("db error"))
@@ -352,13 +352,13 @@ func TestProcessor_UpdateRatings_GetRatingsError(t *testing.T) {
 func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
 	p, _, ratingRepo, _, ratingService, _ := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
-	result := &domain.MatchResult{MatchID: match.ID, Winner: 1}
+	result := &models.MatchResult{MatchID: match.ID, Winner: 1}
 
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(1200, 1000, nil)
@@ -375,22 +375,22 @@ func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
 func TestProcessor_Process_Success(t *testing.T) {
 	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID:   match.ID,
 		Winner:    1,
 		ErrorCode: 0,
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
@@ -414,22 +414,22 @@ func TestProcessor_Process_Success(t *testing.T) {
 func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
 	p, matchRepo, ratingRepo, programRepo, _, executor := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID:   match.ID,
 		Winner:    1,
 		ErrorCode: 0,
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)
@@ -449,23 +449,23 @@ func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
 func TestProcessor_Process_ErrorCode_SkipsRatings(t *testing.T) {
 	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 	}
 
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID:      match.ID,
 		Winner:       0,
 		ErrorCode:    1,
 		ErrorMessage: "timeout",
 	}
 
-	matchRepo.On("UpdateStatus", mock.Anything, match.ID, domain.MatchRunning).Return(nil)
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
 	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
-		Return([]*domain.Program{
+		Return([]*models.Program{
 			{ID: match.Program1ID, CodePath: "/path/p1"},
 			{ID: match.Program2ID, CodePath: "/path/p2"},
 		}, nil)

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -21,13 +21,13 @@ type OutboxStore interface {
 
 // OutboxMatchRepository - чтение матча для пост-обработки.
 type OutboxMatchRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
 }
 
 // OutboxRatingRepository - данные рейтингов для пост-обработки.
 type OutboxRatingRepository interface {
 	GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error)
-	GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*domain.RatingHistory, error)
+	GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error)
 }
 
 // OutboxDispatcher доводит до конца зависшие outbox-задачи: обновления
@@ -161,7 +161,7 @@ func (d *OutboxDispatcher) processEntry(ctx context.Context, entry *storage.Outb
 	}
 
 	// Рейтинг применяется только к успешно завершённым матчам с победителем.
-	if match.Status != domain.MatchCompleted || match.Winner == nil || *match.Winner < 0 {
+	if match.Status != models.MatchCompleted || match.Winner == nil || *match.Winner < 0 {
 		return nil
 	}
 
@@ -189,7 +189,7 @@ func (d *OutboxDispatcher) processEntry(ctx context.Context, entry *storage.Outb
 
 // republishEvent восстанавливает потерянное событие MatchResultProcessed
 // из уже записанной rating_history.
-func (d *OutboxDispatcher) republishEvent(ctx context.Context, match *domain.Match, history []*domain.RatingHistory) {
+func (d *OutboxDispatcher) republishEvent(ctx context.Context, match *models.Match, history []*models.RatingHistory) {
 	var newRating1, newRating2 int
 	for _, h := range history {
 		switch h.ProgramID {

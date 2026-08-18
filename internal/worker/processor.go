@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -25,11 +25,11 @@ var ErrProgramFailed = stderrors.New("match failed: program error")
 
 // MatchRepository интерфейс для работы с матчами
 type MatchRepository interface {
-	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MatchStatus) error
-	UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error
+	UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
 	// UpdateResultWithOutbox записывает результат и outbox-задачу рейтинга
 	// в одной транзакции - гарантия, что рейтинг не потеряется при сбое.
-	UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error
+	UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
 	// MarkRatingApplied закрывает outbox-задачу после успешного fast-path
 	// обновления рейтинга.
 	MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error
@@ -45,18 +45,18 @@ type RatingRepository interface {
 
 // RatingService интерфейс для обновления рейтингов
 type RatingService interface {
-	ProcessMatchResult(ctx context.Context, match *domain.Match, rating1, rating2 int) error
+	ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error
 }
 
 // Executor интерфейс для выполнения матчей
 type Executor interface {
-	Execute(ctx context.Context, match *domain.Match, program1Path, program2Path string) (*domain.MatchResult, error)
+	Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error)
 }
 
 // ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
-	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error)
 }
 
 // Processor обрабатывает матчи
@@ -92,16 +92,16 @@ func NewProcessor(
 }
 
 // Process обрабатывает матч
-func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
+func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	p.log.Info("Processing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("tournament_id", match.TournamentID.String()),
 	)
 
 	// Обновляем статус на "running" (только из pending - идемпотентная защита)
-	if err := p.matchRepo.UpdateStatus(ctx, match.ID, domain.MatchRunning); err != nil {
+	if err := p.matchRepo.UpdateStatus(ctx, match.ID, models.MatchRunning); err != nil {
 		// Матч уже обрабатывается или обработан - пропускаем (дубликат из очереди)
-		if stderrors.Is(err, domain.ErrMatchAlreadyProcessed) {
+		if stderrors.Is(err, models.ErrMatchAlreadyProcessed) {
 			p.log.Info("Match already processed or in progress, skipping duplicate",
 				zap.String("match_id", match.ID.String()),
 			)
@@ -123,7 +123,7 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 		return fmt.Errorf("failed to get programs: %w", err)
 	}
 
-	programMap := make(map[uuid.UUID]*domain.Program, len(programs))
+	programMap := make(map[uuid.UUID]*models.Program, len(programs))
 	for _, prog := range programs {
 		programMap[prog.ID] = prog
 	}
@@ -155,7 +155,7 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 		}
 
 		// Ошибка программы (exit-code, формат вывода, таймаут) - терминальна.
-		errorResult := &domain.MatchResult{
+		errorResult := &models.MatchResult{
 			MatchID:      match.ID,
 			ErrorCode:    1,
 			ErrorMessage: err.Error(),
@@ -207,7 +207,7 @@ func (p *Processor) Process(ctx context.Context, match *domain.Match) error {
 }
 
 // updateRatings обновляет рейтинги участников после матча
-func (p *Processor) updateRatings(ctx context.Context, match *domain.Match, result *domain.MatchResult) error {
+func (p *Processor) updateRatings(ctx context.Context, match *models.Match, result *models.MatchResult) error {
 	// Получаем текущие рейтинги участников
 	rating1, rating2, err := p.ratingRepo.GetParticipantRatings(
 		ctx,

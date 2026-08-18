@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -32,7 +32,7 @@ func (tc *TournamentCache) getStatsKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("tournament:%s:stats", tournamentID.String())
 }
 
-func (tc *TournamentCache) Set(ctx context.Context, tournament *domain.Tournament) error {
+func (tc *TournamentCache) Set(ctx context.Context, tournament *models.Tournament) error {
 	data, err := json.Marshal(tournament)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tournament: %w", err)
@@ -42,7 +42,7 @@ func (tc *TournamentCache) Set(ctx context.Context, tournament *domain.Tournamen
 	return tc.cache.Set(ctx, key, data, tc.ttl)
 }
 
-func (tc *TournamentCache) Get(ctx context.Context, tournamentID uuid.UUID) (*domain.Tournament, error) {
+func (tc *TournamentCache) Get(ctx context.Context, tournamentID uuid.UUID) (*models.Tournament, error) {
 	key := tc.getKey(tournamentID)
 	data, err := tc.cache.Get(ctx, key)
 	if err != nil {
@@ -53,7 +53,7 @@ func (tc *TournamentCache) Get(ctx context.Context, tournamentID uuid.UUID) (*do
 		return nil, nil // промах
 	}
 
-	var tournament domain.Tournament
+	var tournament models.Tournament
 	if err := json.Unmarshal([]byte(data), &tournament); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal tournament: %w", err)
 	}
@@ -149,7 +149,7 @@ func (tc *TournamentCache) Exists(ctx context.Context, tournamentID uuid.UUID) (
 	return tc.cache.Exists(ctx, key)
 }
 
-func (tc *TournamentCache) SetList(ctx context.Context, filter string, tournaments []*domain.Tournament) error {
+func (tc *TournamentCache) SetList(ctx context.Context, filter string, tournaments []*models.Tournament) error {
 	data, err := json.Marshal(tournaments)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tournaments list: %w", err)
@@ -160,7 +160,7 @@ func (tc *TournamentCache) SetList(ctx context.Context, filter string, tournamen
 	return tc.cache.Set(ctx, key, data, 5*time.Minute)
 }
 
-func (tc *TournamentCache) GetList(ctx context.Context, filter string) ([]*domain.Tournament, error) {
+func (tc *TournamentCache) GetList(ctx context.Context, filter string) ([]*models.Tournament, error) {
 	key := fmt.Sprintf("tournaments:list:%s", filter)
 	data, err := tc.cache.Get(ctx, key)
 	if err != nil {
@@ -171,7 +171,7 @@ func (tc *TournamentCache) GetList(ctx context.Context, filter string) ([]*domai
 		return nil, nil // промах
 	}
 
-	var tournaments []*domain.Tournament
+	var tournaments []*models.Tournament
 	if err := json.Unmarshal([]byte(data), &tournaments); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal tournaments list: %w", err)
 	}

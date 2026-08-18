@@ -12,8 +12,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -147,11 +147,11 @@ func (s *RedisTestSuite) TestCache_Exists() {
 // =============================================================================
 
 func (s *RedisTestSuite) TestMatchCache_SetGetMatch() {
-	match := &domain.Match{
+	match := &models.Match{
 		ID:       uuid.New(),
-		Status:   domain.MatchPending,
+		Status:   models.MatchPending,
 		GameType: "tictactoe",
-		Priority: domain.PriorityMedium,
+		Priority: models.PriorityMedium,
 	}
 
 	err := s.matchCache.SetMatch(s.ctx, match)
@@ -166,7 +166,7 @@ func (s *RedisTestSuite) TestMatchCache_SetGetMatch() {
 
 func (s *RedisTestSuite) TestMatchCache_SetGetResult() {
 	matchID := uuid.New()
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		MatchID:  matchID,
 		Winner:   1,
 		Score1:   10,
@@ -186,9 +186,9 @@ func (s *RedisTestSuite) TestMatchCache_SetGetResult() {
 }
 
 func (s *RedisTestSuite) TestMatchCache_Delete() {
-	match := &domain.Match{
+	match := &models.Match{
 		ID:       uuid.New(),
-		Status:   domain.MatchPending,
+		Status:   models.MatchPending,
 		GameType: "tictactoe",
 	}
 
@@ -210,9 +210,9 @@ func (s *RedisTestSuite) TestMatchCache_Exists() {
 	require.NoError(s.T(), err)
 	assert.False(s.T(), exists)
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:       matchID,
-		Status:   domain.MatchPending,
+		Status:   models.MatchPending,
 		GameType: "tictactoe",
 	}
 	err = s.matchCache.SetMatch(s.ctx, match)

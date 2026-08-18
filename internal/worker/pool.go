@@ -9,21 +9,21 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
 
 // QueueManager интерфейс для работы с очередями
 type QueueManager interface {
-	Dequeue(ctx context.Context) (*domain.Match, error)
+	Dequeue(ctx context.Context) (*models.Match, error)
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }
 
 // MatchProcessor интерфейс для обработки матчей
 type MatchProcessor interface {
-	Process(ctx context.Context, match *domain.Match) error
+	Process(ctx context.Context, match *models.Match) error
 }
 
 // Pool - пул воркеров для обработки матчей
@@ -324,7 +324,7 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 }
 
 // processWithRetry обрабатывает матч с повторными попытками
-func (p *Pool) processWithRetry(ctx context.Context, match *domain.Match) error {
+func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error {
 	var lastErr error
 
 	const maxRetryDelay = 30 * time.Second

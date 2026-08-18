@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 )
 
 // AuditLogReader описывает то, что нужно эндпоинту от репозитория.
 type AuditLogReader interface {
-	List(ctx context.Context, limit int) ([]*domain.AuditLogEntry, error)
+	List(ctx context.Context, limit int) ([]*models.AuditLogEntry, error)
 }
 
 // AuditHandler отдаёт записи admin audit log'а.
@@ -32,7 +32,7 @@ func NewAuditHandler(repo AuditLogReader, log *logger.Logger) *AuditHandler {
 // @Tags admin
 // @Produce json
 // @Param limit query int false "Лимит записей (1-500, default 100)"
-// @Success 200 {array} domain.AuditLogEntry
+// @Success 200 {array} models.AuditLogEntry
 // @Security BearerAuth
 // @Router /admin/audit [get]
 func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {

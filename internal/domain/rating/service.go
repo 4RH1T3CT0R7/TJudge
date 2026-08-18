@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -16,15 +16,15 @@ import (
 type ParticipantUpdate struct {
 	ProgramID    uuid.UUID
 	TournamentID uuid.UUID
-	History      *domain.RatingHistory
+	History      *models.RatingHistory
 	RatingDelta  int
 	Won          bool
 	Draw         bool
 }
 
 type RatingRepository interface {
-	Create(ctx context.Context, history *domain.RatingHistory) error
-	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error)
+	Create(ctx context.Context, history *models.RatingHistory) error
+	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error)
 	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
 	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
@@ -49,7 +49,7 @@ func NewService(repo RatingRepository, eventBus events.Bus, log *logger.Logger) 
 }
 
 // ProcessMatchResult считает новые рейтинги и обновляет обоих участников
-func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, rating1, rating2 int) error {
+func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
 	if match.Winner == nil {
 		return errors.ErrValidation.WithMessage("match has no winner")
 	}
@@ -84,7 +84,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	update1 := &ParticipantUpdate{
 		ProgramID:    match.Program1ID,
 		TournamentID: match.TournamentID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    match.Program1ID,
 			TournamentID: match.TournamentID,
@@ -102,7 +102,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	update2 := &ParticipantUpdate{
 		ProgramID:    match.Program2ID,
 		TournamentID: match.TournamentID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    match.Program2ID,
 			TournamentID: match.TournamentID,
@@ -136,7 +136,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *domain.Match, r
 	return nil
 }
 
-func (s *Service) GetRatingHistory(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error) {
+func (s *Service) GetRatingHistory(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error) {
 	return s.repo.GetByProgramID(ctx, programID)
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,7 +102,7 @@ func TestLeaderboardCache_Clear(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	full := []*domain.LeaderboardEntry{{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", Rating: 2000}}
+	full := []*models.LeaderboardEntry{{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", Rating: 2000}}
 	for i := range 5 {
 		require.NoError(t, lc.UpdateRating(ctx, tournamentID, uuid.New(), 1000+i*100))
 	}
@@ -130,7 +130,7 @@ func TestLeaderboardCache_FullLeaderboard(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	entries := []*domain.LeaderboardEntry{
+	entries := []*models.LeaderboardEntry{
 		{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", Rating: 2000, Wins: 10, Losses: 2},
 		{Rank: 2, ProgramID: uuid.New(), ProgramName: "Beta", Rating: 1800, Wins: 8, Losses: 4},
 	}
@@ -168,7 +168,7 @@ func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	entries := []*domain.CrossGameLeaderboardEntry{
+	entries := []*models.CrossGameLeaderboardEntry{
 		{Rank: 1, ProgramID: uuid.New(), ProgramName: "Alpha", TotalRating: 3500, TotalWins: 15},
 	}
 

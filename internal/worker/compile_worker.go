@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -22,14 +22,14 @@ type CompileQueue interface {
 
 // CompileProgramRepository - доступ к программам для compile-worker'а.
 type CompileProgramRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
-	UpdateCompileResult(ctx context.Context, id uuid.UUID, status domain.ProgramStatus, codePath string, errorMessage *string) error
-	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
+	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error
+	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
 // ProgramCompiler компилирует программу в песочнице.
 type ProgramCompiler interface {
-	Compile(ctx context.Context, program *domain.Program) (*executor.CompileResult, error)
+	Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error)
 }
 
 // CompileWorker обрабатывает очередь компиляции: забирает задачи, компилирует
@@ -151,7 +151,7 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 	}
 
 	// Дубликат задачи (stuck-recovery + оригинал) - программа уже обработана.
-	if program.Status != domain.ProgramCompiling {
+	if program.Status != models.ProgramCompiling {
 		return
 	}
 
@@ -170,11 +170,11 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 		return
 	}
 
-	status := domain.ProgramReady
+	status := models.ProgramReady
 	codePath := result.ExecPath
 	var errMsg *string
 	if !result.OK {
-		status = domain.ProgramFailed
+		status = models.ProgramFailed
 		codePath = program.CodePath
 		errMsg = &result.Log
 	}
@@ -195,7 +195,7 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 }
 
 // publishCompiled отправляет событие ProgramCompiled (best-effort).
-func (w *CompileWorker) publishCompiled(ctx context.Context, program *domain.Program, status domain.ProgramStatus, errMsg *string) {
+func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Program, status models.ProgramStatus, errMsg *string) {
 	evt := events.ProgramCompiled{
 		Version:      1,
 		ProgramID:    program.ID,

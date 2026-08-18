@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -19,16 +19,16 @@ type MockRatingRepository struct {
 	mock.Mock
 }
 
-func (m *MockRatingRepository) Create(ctx context.Context, history *domain.RatingHistory) error {
+func (m *MockRatingRepository) Create(ctx context.Context, history *models.RatingHistory) error {
 	return m.Called(ctx, history).Error(0)
 }
 
-func (m *MockRatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error) {
+func (m *MockRatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error) {
 	args := m.Called(ctx, programID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.RatingHistory), args.Error(1)
+	return args.Get(0).([]*models.RatingHistory), args.Error(1)
 }
 
 func (m *MockRatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
@@ -68,7 +68,7 @@ func TestService_GetRatingHistory_Success(t *testing.T) {
 	ctx := context.Background()
 	programID := uuid.New()
 
-	expected := []*domain.RatingHistory{{ID: uuid.New(), ProgramID: programID}}
+	expected := []*models.RatingHistory{{ID: uuid.New(), ProgramID: programID}}
 	repo.On("GetByProgramID", ctx, programID).Return(expected, nil)
 
 	result, err := svc.GetRatingHistory(ctx, programID)
@@ -133,7 +133,7 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
 	winner := 1
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
 		Program1ID:   p1,
@@ -168,7 +168,7 @@ func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
 	winner := 2
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
 		Program1ID:   p1,
@@ -195,7 +195,7 @@ func TestService_ProcessMatchResult_Draw(t *testing.T) {
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
 	winner := 0
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
 		Program1ID:   p1,
@@ -222,7 +222,7 @@ func TestService_ProcessMatchResult_AtomicError(t *testing.T) {
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
 	winner := 1
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
 		Program1ID:   p1,
@@ -248,7 +248,7 @@ func TestService_ProcessMatchResult_ExtremeRatings(t *testing.T) {
 	tID := uuid.New()
 	p1, p2 := uuid.New(), uuid.New()
 	winner := 1 // фаворит выигрывает - изменение маленькое
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tID,
 		Program1ID:   p1,
@@ -271,7 +271,7 @@ func TestService_ProcessMatchResult_NilWinner(t *testing.T) {
 	svc, _ := newTestRatingService(t)
 	ctx := context.Background()
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),

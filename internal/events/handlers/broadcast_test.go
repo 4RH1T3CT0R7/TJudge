@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -32,12 +32,12 @@ func TestBroadcastHandler_TournamentStarted(t *testing.T) {
 	now := time.Now()
 	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p any) bool {
 		m, ok := p.(map[string]any)
-		return ok && m["status"] == domain.TournamentActive
+		return ok && m["status"] == models.TournamentActive
 	})).Return()
 
 	err := h.Handle(context.Background(), events.TournamentStarted{
 		TournamentID: id,
-		Status:       domain.TournamentActive,
+		Status:       models.TournamentActive,
 		StartTime:    &now,
 	})
 	assert.NoError(t, err)
@@ -52,12 +52,12 @@ func TestBroadcastHandler_TournamentCompleted(t *testing.T) {
 	now := time.Now()
 	bc.On("Broadcast", id, "tournament_update", mock.MatchedBy(func(p any) bool {
 		m, ok := p.(map[string]any)
-		return ok && m["status"] == domain.TournamentCompleted
+		return ok && m["status"] == models.TournamentCompleted
 	})).Return()
 
 	err := h.Handle(context.Background(), events.TournamentCompleted{
 		TournamentID: id,
-		Status:       domain.TournamentCompleted,
+		Status:       models.TournamentCompleted,
 		EndTime:      &now,
 	})
 	assert.NoError(t, err)

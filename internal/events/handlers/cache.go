@@ -6,15 +6,15 @@ import (
 	"fmt"
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 )
 
 // TournamentCacheWriter - подмножество кэша турниров, используемое обработчиками событий.
 type TournamentCacheWriter interface {
-	Set(ctx context.Context, tournament *domain.Tournament) error
+	Set(ctx context.Context, tournament *models.Tournament) error
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 

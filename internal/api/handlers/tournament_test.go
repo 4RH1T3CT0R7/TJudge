@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -23,28 +23,28 @@ type MockTournamentService struct {
 	mock.Mock
 }
 
-func (m *MockTournamentService) Create(ctx context.Context, req *tournament.CreateRequest) (*domain.Tournament, error) {
+func (m *MockTournamentService) Create(ctx context.Context, req *tournament.CreateRequest) (*models.Tournament, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Tournament), args.Error(1)
+	return args.Get(0).(*models.Tournament), args.Error(1)
 }
 
-func (m *MockTournamentService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
+func (m *MockTournamentService) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Tournament), args.Error(1)
+	return args.Get(0).(*models.Tournament), args.Error(1)
 }
 
-func (m *MockTournamentService) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
+func (m *MockTournamentService) List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Tournament), args.Error(1)
+	return args.Get(0).([]*models.Tournament), args.Error(1)
 }
 
 func (m *MockTournamentService) Join(ctx context.Context, req *tournament.JoinRequest) error {
@@ -62,28 +62,28 @@ func (m *MockTournamentService) Complete(ctx context.Context, tournamentID uuid.
 	return args.Error(0)
 }
 
-func (m *MockTournamentService) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+func (m *MockTournamentService) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	args := m.Called(ctx, tournamentID, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
+	return args.Get(0).([]*models.LeaderboardEntry), args.Error(1)
 }
 
-func (m *MockTournamentService) CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error) {
+func (m *MockTournamentService) CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error) {
 	args := m.Called(ctx, tournamentID, program1ID, program2ID, priority)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Match), args.Error(1)
+	return args.Get(0).(*models.Match), args.Error(1)
 }
 
-func (m *MockTournamentService) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
+func (m *MockTournamentService) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error) {
 	args := m.Called(ctx, tournamentID, limit, offset)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Match), args.Error(1)
+	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
 func (m *MockTournamentService) Delete(ctx context.Context, tournamentID uuid.UUID) error {
@@ -91,20 +91,20 @@ func (m *MockTournamentService) Delete(ctx context.Context, tournamentID uuid.UU
 	return args.Error(0)
 }
 
-func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.CrossGameLeaderboardEntry), args.Error(1)
+	return args.Get(0).([]*models.CrossGameLeaderboardEntry), args.Error(1)
 }
 
-func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
+func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.MatchRound), args.Error(1)
+	return args.Get(0).([]*models.MatchRound), args.Error(1)
 }
 
 // MockSchedulingService - мок scheduling-сервиса
@@ -141,11 +141,11 @@ func TestTournamentHandler_Create(t *testing.T) {
 			MaxParticipants: &maxParticipants,
 		}
 
-		expectedTournament := &domain.Tournament{
+		expectedTournament := &models.Tournament{
 			ID:              uuid.New(),
 			Name:            reqBody.Name,
 			GameType:        reqBody.GameType,
-			Status:          domain.TournamentPending,
+			Status:          models.TournamentPending,
 			MaxParticipants: &maxParticipants,
 		}
 
@@ -160,7 +160,7 @@ func TestTournamentHandler_Create(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 
-		var response domain.Tournament
+		var response models.Tournament
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedTournament.ID, response.ID)
 		assert.Equal(t, expectedTournament.Name, response.Name)
@@ -200,11 +200,11 @@ func TestTournamentHandler_Get(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedTournament := &domain.Tournament{
+		expectedTournament := &models.Tournament{
 			ID:       tournamentID,
 			Name:     "Test Tournament",
 			GameType: "chess",
-			Status:   domain.TournamentActive,
+			Status:   models.TournamentActive,
 		}
 
 		mockService.On("GetByID", mock.Anything, tournamentID).Return(expectedTournament, nil)
@@ -222,7 +222,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Tournament
+		var response models.Tournament
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedTournament.ID, response.ID)
 
@@ -277,22 +277,22 @@ func TestTournamentHandler_List(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
-		expectedTournaments := []*domain.Tournament{
+		expectedTournaments := []*models.Tournament{
 			{
 				ID:       uuid.New(),
 				Name:     "Tournament 1",
 				GameType: "chess",
-				Status:   domain.TournamentActive,
+				Status:   models.TournamentActive,
 			},
 			{
 				ID:       uuid.New(),
 				Name:     "Tournament 2",
 				GameType: "chess",
-				Status:   domain.TournamentPending,
+				Status:   models.TournamentPending,
 			},
 		}
 
-		mockService.On("List", mock.Anything, mock.AnythingOfType("domain.TournamentFilter")).Return(expectedTournaments, nil)
+		mockService.On("List", mock.Anything, mock.AnythingOfType("models.TournamentFilter")).Return(expectedTournaments, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments", nil)
 		w := httptest.NewRecorder()
@@ -301,7 +301,7 @@ func TestTournamentHandler_List(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Tournament
+		var response []*models.Tournament
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
@@ -312,17 +312,17 @@ func TestTournamentHandler_List(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
-		expectedTournaments := []*domain.Tournament{
+		expectedTournaments := []*models.Tournament{
 			{
 				ID:       uuid.New(),
 				Name:     "Tournament 1",
 				GameType: "chess",
-				Status:   domain.TournamentActive,
+				Status:   models.TournamentActive,
 			},
 		}
 
-		mockService.On("List", mock.Anything, mock.MatchedBy(func(filter domain.TournamentFilter) bool {
-			return filter.Status == domain.TournamentActive && filter.GameType == "chess"
+		mockService.On("List", mock.Anything, mock.MatchedBy(func(filter models.TournamentFilter) bool {
+			return filter.Status == models.TournamentActive && filter.GameType == "chess"
 		})).Return(expectedTournaments, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments?status=active&game_type=chess", nil)
@@ -508,7 +508,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedLeaderboard := []*domain.LeaderboardEntry{
+		expectedLeaderboard := []*models.LeaderboardEntry{
 			{
 				ProgramID: uuid.New(),
 				Rating:    1800,
@@ -539,7 +539,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.LeaderboardEntry
+		var response []*models.LeaderboardEntry
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 1800, response[0].Rating)
@@ -552,7 +552,7 @@ func TestTournamentHandler_GetLeaderboard(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedLeaderboard := []*domain.LeaderboardEntry{
+		expectedLeaderboard := []*models.LeaderboardEntry{
 			{
 				ProgramID: uuid.New(),
 				Rating:    1800,
@@ -944,7 +944,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedEntries := []*domain.CrossGameLeaderboardEntry{
+		expectedEntries := []*models.CrossGameLeaderboardEntry{
 			{
 				Rank:        1,
 				TeamName:    "Team Alpha",
@@ -981,7 +981,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.CrossGameLeaderboardEntry
+		var response []*models.CrossGameLeaderboardEntry
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 3600, response[0].TotalRating)
@@ -1039,14 +1039,14 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedMatches := []*domain.Match{
+		expectedMatches := []*models.Match{
 			{
 				ID:           uuid.New(),
 				TournamentID: tournamentID,
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "prisoners_dilemma",
-				Status:       domain.MatchCompleted,
+				Status:       models.MatchCompleted,
 			},
 			{
 				ID:           uuid.New(),
@@ -1054,7 +1054,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "prisoners_dilemma",
-				Status:       domain.MatchPending,
+				Status:       models.MatchPending,
 			},
 		}
 
@@ -1072,7 +1072,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Match
+		var response []*models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
@@ -1084,14 +1084,14 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedMatches := []*domain.Match{
+		expectedMatches := []*models.Match{
 			{
 				ID:           uuid.New(),
 				TournamentID: tournamentID,
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "tug_of_war",
-				Status:       domain.MatchCompleted,
+				Status:       models.MatchCompleted,
 			},
 		}
 
@@ -1109,7 +1109,7 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Match
+		var response []*models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 1)
 
@@ -1142,7 +1142,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
-		expectedRounds := []*domain.MatchRound{
+		expectedRounds := []*models.MatchRound{
 			{
 				RoundNumber:    1,
 				GameType:       "prisoners_dilemma",
@@ -1151,12 +1151,12 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 				PendingCount:   0,
 				RunningCount:   0,
 				FailedCount:    0,
-				Matches: []*domain.Match{
+				Matches: []*models.Match{
 					{
 						ID:           uuid.New(),
 						TournamentID: tournamentID,
 						RoundNumber:  1,
-						Status:       domain.MatchCompleted,
+						Status:       models.MatchCompleted,
 					},
 				},
 			},
@@ -1168,12 +1168,12 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 				PendingCount:   2,
 				RunningCount:   1,
 				FailedCount:    0,
-				Matches: []*domain.Match{
+				Matches: []*models.Match{
 					{
 						ID:           uuid.New(),
 						TournamentID: tournamentID,
 						RoundNumber:  2,
-						Status:       domain.MatchRunning,
+						Status:       models.MatchRunning,
 					},
 				},
 			},
@@ -1193,7 +1193,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.MatchRound
+		var response []*models.MatchRound
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, 1, response[0].RoundNumber)
@@ -1232,15 +1232,15 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 
-		expectedMatch := &domain.Match{
+		expectedMatch := &models.Match{
 			ID:           uuid.New(),
 			TournamentID: tournamentID,
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
-			Priority:     domain.PriorityHigh,
+			Priority:     models.PriorityHigh,
 		}
 
-		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityHigh).Return(expectedMatch, nil)
+		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, models.PriorityHigh).Return(expectedMatch, nil)
 
 		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,
@@ -1260,7 +1260,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedMatch.ID, response.ID)
 		assert.Equal(t, expectedMatch.TournamentID, response.TournamentID)
@@ -1278,15 +1278,15 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 
-		expectedMatch := &domain.Match{
+		expectedMatch := &models.Match{
 			ID:           uuid.New(),
 			TournamentID: tournamentID,
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
-			Priority:     domain.PriorityMedium,
+			Priority:     models.PriorityMedium,
 		}
 
-		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityMedium).Return(expectedMatch, nil)
+		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, models.PriorityMedium).Return(expectedMatch, nil)
 
 		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,
@@ -1305,10 +1305,10 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedMatch.ID, response.ID)
-		assert.Equal(t, domain.PriorityMedium, response.Priority)
+		assert.Equal(t, models.PriorityMedium, response.Priority)
 
 		mockService.AssertExpectations(t)
 	})
@@ -1364,7 +1364,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 
-		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, domain.PriorityMedium).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
+		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, models.PriorityMedium).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
 
 		body, _ := json.Marshal(map[string]any{
 			"program1_id": program1ID,

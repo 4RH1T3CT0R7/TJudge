@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
@@ -23,7 +23,7 @@ func NewMatchRepository(db *DB) *MatchRepository {
 	return &MatchRepository{db: db}
 }
 
-func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error {
+func (r *MatchRepository) Create(ctx context.Context, match *models.Match) error {
 	query := `
 		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -50,7 +50,7 @@ func (r *MatchRepository) Create(ctx context.Context, match *domain.Match) error
 
 // CreateBatch вставляет пачку матчей в одной транзакции.
 // prepared statement переиспользуем, чтобы не парсить один и тот же запрос на каждый матч
-func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*domain.Match) error {
+func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*models.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
@@ -115,8 +115,8 @@ func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) erro
 	return nil
 }
 
-func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error) {
-	var match domain.Match
+func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
+	var match models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -154,8 +154,8 @@ func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ma
 	return &match, nil
 }
 
-func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error) {
+	var matches []*models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -173,7 +173,7 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	defer rows.Close()
 
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -205,8 +205,8 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	return matches, nil
 }
 
-func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error) {
+	var matches []*models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -222,14 +222,14 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 			created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, tournamentID, domain.MatchPending)
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, models.MatchPending)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get pending matches by tournament id")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -261,8 +261,8 @@ func (r *MatchRepository) GetPendingByTournamentID(ctx context.Context, tourname
 	return matches, nil
 }
 
-func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error) {
+	var matches []*models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -278,14 +278,14 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 			created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType, domain.MatchPending)
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType, models.MatchPending)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get pending matches by tournament and game")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -349,7 +349,7 @@ func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentI
 	return pairs, nil
 }
 
-func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
+func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
 	query := `
 		SELECT
 			round_number,
@@ -372,9 +372,9 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 	}
 	defer rows.Close()
 
-	var rounds []*domain.MatchRound
+	var rounds []*models.MatchRound
 	for rows.Next() {
-		var round domain.MatchRound
+		var round models.MatchRound
 		err := rows.Scan(
 			&round.RoundNumber,
 			&round.GameType,
@@ -415,13 +415,13 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		roundNumber int
 		gameType    string
 	}
-	roundIndex := make(map[roundKey]*domain.MatchRound, len(rounds))
+	roundIndex := make(map[roundKey]*models.MatchRound, len(rounds))
 	for _, round := range rounds {
 		roundIndex[roundKey{round.RoundNumber, round.GameType}] = round
 	}
 
 	for matchRows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := matchRows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -455,7 +455,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 	return rounds, nil
 }
 
-func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
+func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error) {
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
@@ -508,9 +508,9 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 	}
 	defer rows.Close()
 
-	var matches []*domain.Match
+	var matches []*models.Match
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -542,9 +542,9 @@ func (r *MatchRepository) List(ctx context.Context, filter domain.MatchFilter) (
 	return matches, nil
 }
 
-func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error) {
+func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error) {
 	if len(ids) == 0 {
-		return []*domain.Match{}, nil
+		return []*models.Match{}, nil
 	}
 
 	query := `
@@ -561,9 +561,9 @@ func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*dom
 	}
 	defer rows.Close()
 
-	var matches []*domain.Match
+	var matches []*models.Match
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -595,8 +595,8 @@ func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*dom
 	return matches, nil
 }
 
-func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*models.Match, error) {
+	var matches []*models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -613,14 +613,14 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 		LIMIT $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, domain.MatchPending, limit)
+	rows, err := r.db.QueryContext(ctx, query, models.MatchPending, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get pending matches")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -653,7 +653,7 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*domain.
 }
 
 // ListWithCursor - список матчей через cursor-пагинацию (курсор по created_at)
-func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.MatchFilter, pageReq *pagination.PageRequest) ([]*domain.Match, bool, error) {
+func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.MatchFilter, pageReq *pagination.PageRequest) ([]*models.Match, bool, error) {
 	if err := pageReq.Validate(); err != nil {
 		return nil, false, errors.Wrap(err, "invalid pagination request")
 	}
@@ -724,9 +724,9 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 	}
 	defer rows.Close()
 
-	var matches []*domain.Match
+	var matches []*models.Match
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -771,8 +771,8 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter domain.Matc
 }
 
 // GetStuckRunning - матчи, зависшие в running дольше stuckDuration (воркер умер посреди матча)
-func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error) {
+	var matches []*models.Match
 
 	query := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
@@ -785,14 +785,14 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 
 	threshold := time.Now().Add(-stuckDuration)
 
-	rows, err := r.db.QueryContext(ctx, query, domain.MatchRunning, threshold, limit)
+	rows, err := r.db.QueryContext(ctx, query, models.MatchRunning, threshold, limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get stuck running matches")
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var match domain.Match
+		var match models.Match
 		err := rows.Scan(
 			&match.ID,
 			&match.TournamentID,
@@ -845,7 +845,7 @@ func (r *MatchRepository) HasStartedMatches(ctx context.Context, tournamentID uu
 	`
 
 	var exists bool
-	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType, domain.MatchRunning, domain.MatchCompleted).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType, models.MatchRunning, models.MatchCompleted).Scan(&exists)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to check started matches")
 	}
@@ -865,7 +865,7 @@ func (r *MatchRepository) HasAnyRunningMatches(ctx context.Context, tournamentID
 	`
 
 	var exists bool
-	err := r.db.QueryRowContext(ctx, query, tournamentID, domain.MatchRunning, domain.MatchPending).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, query, tournamentID, models.MatchRunning, models.MatchPending).Scan(&exists)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to check running matches")
 	}
@@ -890,7 +890,7 @@ func (r *MatchRepository) GetActiveGameType(ctx context.Context, tournamentID uu
 	`
 
 	var gameType string
-	err := r.db.QueryRowContext(ctx, query, tournamentID, domain.MatchRunning, domain.MatchPending).Scan(&gameType)
+	err := r.db.QueryRowContext(ctx, query, tournamentID, models.MatchRunning, models.MatchPending).Scan(&gameType)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get active game type")
 	}
@@ -964,10 +964,10 @@ func (r *MatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.
 	return &stats, nil
 }
 
-func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MatchStatus) error {
+func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error {
 	var query string
 
-	if status == domain.MatchRunning {
+	if status == models.MatchRunning {
 		// в running переходим только из pending - защита от двойной обработки,
 		// если матч случайно оказался в очереди дважды (retry)
 		query = `
@@ -995,8 +995,8 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 
 	if rows == 0 {
 		// строк 0 при running = матч уже не pending, кто-то его увёл (не not found!)
-		if status == domain.MatchRunning {
-			return domain.ErrMatchAlreadyProcessed
+		if status == models.MatchRunning {
+			return models.ErrMatchAlreadyProcessed
 		}
 		return errors.ErrNotFound.WithMessage("match not found")
 	}
@@ -1004,7 +1004,7 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	return nil
 }
 
-func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
+func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
 	query := `
 		UPDATE matches
 		SET status = $2, score1 = $3, score2 = $4, winner = $5,
@@ -1012,9 +1012,9 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 		WHERE id = $1
 	`
 
-	status := domain.MatchCompleted
+	status := models.MatchCompleted
 	if result.ErrorCode != 0 {
-		status = domain.MatchFailed
+		status = models.MatchFailed
 	}
 
 	var errorCode *int
@@ -1047,10 +1047,10 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 // UpdateResultWithOutbox пишет результат матча и в той же транзакции кладёт
 // outbox-задачу на пересчёт рейтинга. смысл: если результат сохранён, рейтинг
 // точно посчитается - сразу воркером или потом аутбокс-диспетчером после сбоя
-func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *domain.MatchResult) error {
-	status := domain.MatchCompleted
+func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
+	status := models.MatchCompleted
 	if result.ErrorCode != 0 {
-		status = domain.MatchFailed
+		status = models.MatchFailed
 	}
 
 	var errorCode *int
@@ -1077,7 +1077,7 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 		}
 
 		// outbox только для успешных матчей с победителем/ничьёй (winner>=0)
-		if status == domain.MatchCompleted && result.Winner >= 0 {
+		if status == models.MatchCompleted && result.Winner >= 0 {
 			outboxQuery := `INSERT INTO match_outbox (match_id, kind) VALUES ($1, $2)`
 			if _, err := tx.ExecContext(ctx, outboxQuery, id, OutboxKindRatingUpdate); err != nil {
 				return errors.Wrap(err, "failed to insert outbox entry")
@@ -1124,7 +1124,7 @@ func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID u
 		WHERE tournament_id = $2 AND status = $3
 	`
 
-	result, err := r.db.ExecContext(ctx, query, domain.MatchPending, tournamentID, domain.MatchFailed)
+	result, err := r.db.ExecContext(ctx, query, models.MatchPending, tournamentID, models.MatchFailed)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to reset failed matches")
 	}
@@ -1137,7 +1137,7 @@ func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID u
 	return rows, nil
 }
 
-func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status domain.MatchStatus) error {
+func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error {
 	if len(matchIDs) == 0 {
 		return nil
 	}
@@ -1149,7 +1149,7 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 	defer func() { _ = tx.Rollback() }()
 
 	var query string
-	if status == domain.MatchRunning {
+	if status == models.MatchRunning {
 		// тот же guard что в UpdateStatus, только пачкой
 		query = `
 			UPDATE matches
@@ -1176,7 +1176,7 @@ func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid
 	return nil
 }
 
-func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*domain.MatchResult) error {
+func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*models.MatchResult) error {
 	if len(results) == 0 {
 		return nil
 	}
@@ -1201,9 +1201,9 @@ func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uu
 	defer stmt.Close()
 
 	for matchID, result := range results {
-		status := domain.MatchCompleted
+		status := models.MatchCompleted
 		if result.ErrorCode != 0 {
-			status = domain.MatchFailed
+			status = models.MatchFailed
 		}
 
 		var errorCode *int

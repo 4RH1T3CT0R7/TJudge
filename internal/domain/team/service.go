@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -14,22 +14,22 @@ import (
 
 // TeamRepository — всё что умеет хранилище команд
 type TeamRepository interface {
-	Create(ctx context.Context, team *domain.Team) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, error)
-	GetByCode(ctx context.Context, code string) (*domain.Team, error)
-	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error)
-	List(ctx context.Context, filter domain.TeamFilter) ([]*domain.Team, error)
-	Update(ctx context.Context, team *domain.Team) error
+	Create(ctx context.Context, team *models.Team) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Team, error)
+	GetByCode(ctx context.Context, code string) (*models.Team, error)
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error)
+	List(ctx context.Context, filter models.TeamFilter) ([]*models.Team, error)
+	Update(ctx context.Context, team *models.Team) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	AddMember(ctx context.Context, member *domain.TeamMember) error
+	AddMember(ctx context.Context, member *models.TeamMember) error
 	RemoveMember(ctx context.Context, teamID, userID uuid.UUID) error
-	GetMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error)
+	GetMembers(ctx context.Context, teamID uuid.UUID) ([]*models.TeamMember, error)
 	GetMemberCount(ctx context.Context, teamID uuid.UUID) (int, error)
 	IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error)
 	IsUserInAnyTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (bool, error)
-	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error)
+	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error)
 	GenerateUniqueCode(ctx context.Context) (string, error)
-	GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error)
+	GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error)
 	DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (matchesDeleted, matchesCancelled, ratingHistoryDeleted int64, err error)
 	RestoreTeam(ctx context.Context, teamID uuid.UUID) error
 	IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error)
@@ -37,7 +37,7 @@ type TeamRepository interface {
 
 // TournamentRepository нужен только чтобы проверить статус турнира
 type TournamentRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
 type CreateTeamRequest struct {
@@ -79,19 +79,19 @@ func NewService(teamRepo TeamRepository, tournamentRepo TournamentRepository, lo
 // CreateTeam создаёт команду в турнире.
 // под локом на юзера+турнир, чтобы параллельными запросами один человек
 // не наплодил две команды в одном турнире
-func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*domain.Team, error) {
+func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*models.Team, error) {
 	tournament, err := s.tournamentRepo.GetByID(ctx, req.TournamentID)
 	if err != nil {
 		return nil, err
 	}
 
 	// в активный или завершённый турнир команду уже не заведёшь
-	if tournament.Status != domain.TournamentPending {
+	if tournament.Status != models.TournamentPending {
 		return nil, errors.ErrBadRequest.WithMessage("cannot create team in active or completed tournament")
 	}
 
 	lockKey := fmt.Sprintf("team:create:%s:%s", req.TournamentID.String(), req.UserID.String())
-	var result *domain.Team
+	var result *models.Team
 
 	// TODO: 10 секунд на лок захардкожено, вынести бы в конфиг
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
@@ -109,7 +109,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 			return errors.Wrap(err, "failed to generate team code")
 		}
 
-		team := &domain.Team{
+		team := &models.Team{
 			ID:           uuid.New(),
 			TournamentID: req.TournamentID,
 			Name:         req.Name,
@@ -122,7 +122,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 		}
 
 		// создатель сразу становится участником своей команды
-		member := &domain.TeamMember{
+		member := &models.TeamMember{
 			ID:     uuid.New(),
 			TeamID: team.ID,
 			UserID: req.UserID,
@@ -147,7 +147,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*doma
 
 // JoinTeamByCode добавляет юзера в команду по коду.
 // лок нужен чтобы параллельные вступления не пробили лимит участников
-func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*domain.Team, error) {
+func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*models.Team, error) {
 	team, err := s.teamRepo.GetByCode(ctx, req.Code)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 	}
 
 	// вступать можно только пока турнир pending
-	if tournament.Status != domain.TournamentPending {
+	if tournament.Status != models.TournamentPending {
 		return nil, errors.ErrBadRequest.WithMessage("cannot join team in active or completed tournament")
 	}
 
@@ -167,7 +167,7 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 	// - параллельные join'ы не перепрыгнут MaxTeamSize
 	// - юзер не влезет сразу в несколько команд одного турнира
 	lockKey := fmt.Sprintf("team:join:%s:%s", team.TournamentID.String(), req.UserID.String())
-	var result *domain.Team
+	var result *models.Team
 
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
 		// лимит считаем под локом, поэтому он честный
@@ -188,7 +188,7 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*do
 			return errors.ErrConflict.WithMessage("user already in a team in this tournament")
 		}
 
-		member := &domain.TeamMember{
+		member := &models.TeamMember{
 			ID:     uuid.New(),
 			TeamID: team.ID,
 			UserID: req.UserID,
@@ -239,7 +239,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 			if tErr != nil {
 				return errors.Wrap(tErr, "failed to check tournament status")
 			}
-			if tournament.Status == domain.TournamentActive {
+			if tournament.Status == models.TournamentActive {
 				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
 			}
 
@@ -277,7 +277,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 			if tErr != nil {
 				return errors.Wrap(tErr, "failed to check tournament status")
 			}
-			if tournament.Status == domain.TournamentActive {
+			if tournament.Status == models.TournamentActive {
 				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
 			}
 
@@ -334,7 +334,7 @@ func (s *Service) RemoveMember(ctx context.Context, teamID, memberUserID, leader
 }
 
 // UpdateTeamName — лидер меняет название команды
-func (s *Service) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*domain.Team, error) {
+func (s *Service) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error) {
 	team, err := s.teamRepo.GetByID(ctx, teamID)
 	if err != nil {
 		return nil, err
@@ -355,24 +355,24 @@ func (s *Service) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name str
 	return team, nil
 }
 
-func (s *Service) GetTeamByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
+func (s *Service) GetTeamByID(ctx context.Context, id uuid.UUID) (*models.Team, error) {
 	return s.teamRepo.GetByID(ctx, id)
 }
 
-func (s *Service) GetTeamByCode(ctx context.Context, code string) (*domain.Team, error) {
+func (s *Service) GetTeamByCode(ctx context.Context, code string) (*models.Team, error) {
 	return s.teamRepo.GetByCode(ctx, code)
 }
 
-func (s *Service) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error) {
+func (s *Service) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error) {
 	return s.teamRepo.GetTeamWithMembers(ctx, teamID)
 }
 
 // TODO: пагинация, пока отдаём все команды турнира сразу
-func (s *Service) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
+func (s *Service) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	return s.teamRepo.GetByTournamentID(ctx, tournamentID)
 }
 
-func (s *Service) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error) {
+func (s *Service) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error) {
 	return s.teamRepo.GetUserTeamInTournament(ctx, tournamentID, userID)
 }
 
@@ -403,7 +403,7 @@ func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
 	}
 
 	// из идущего или завершённого турнира команды не удаляем
-	if tournament.Status == domain.TournamentActive || tournament.Status == domain.TournamentCompleted {
+	if tournament.Status == models.TournamentActive || tournament.Status == models.TournamentCompleted {
 		return errors.ErrBadRequest.WithMessage("cannot delete team from active or completed tournament")
 	}
 
@@ -438,7 +438,7 @@ func (s *Service) DisqualifyTeam(ctx context.Context, teamID uuid.UUID) (*Disqua
 		return nil, err
 	}
 
-	if tournament.Status != domain.TournamentActive {
+	if tournament.Status != models.TournamentActive {
 		return nil, errors.ErrBadRequest.WithMessage("can only disqualify teams in active tournaments")
 	}
 

@@ -6,23 +6,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestTournament() *domain.Tournament {
+func newTestTournament() *models.Tournament {
 	creatorID := uuid.New()
 	maxPart := 16
 	now := time.Now().Truncate(time.Second)
-	return &domain.Tournament{
+	return &models.Tournament{
 		ID:              uuid.New(),
 		Name:            "Test Tournament",
 		Code:            "TEST01",
 		Description:     "A test tournament",
 		GameType:        "prisoners_dilemma",
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: &maxPart,
 		MaxTeamSize:     3,
 		CreatorID:       &creatorID,
@@ -182,7 +182,7 @@ func TestTournamentCache_List(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got)
 
-	tournaments := []*domain.Tournament{newTestTournament(), newTestTournament()}
+	tournaments := []*models.Tournament{newTestTournament(), newTestTournament()}
 	tournaments[0].Name = "Alpha"
 	tournaments[1].Name = "Beta"
 

@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
@@ -19,9 +19,9 @@ type AuthService interface {
 	Login(ctx context.Context, req *auth.LoginRequest) (*auth.AuthResponse, error)
 	RefreshTokens(ctx context.Context, refreshToken string) (*auth.AuthResponse, error)
 	Logout(ctx context.Context, accessToken, refreshToken string) error
-	GetUserFromToken(ctx context.Context, token string) (*domain.User, error)
+	GetUserFromToken(ctx context.Context, token string) (*models.User, error)
 	ValidateToken(token string) (*auth.Claims, error)
-	UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*domain.User, error)
+	UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*models.User, error)
 }
 
 // AuthHandler обрабатывает запросы аутентификации
@@ -196,7 +196,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Tags auth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} domain.User
+// @Success 200 {object} models.User
 // @Failure 401 {object} object{error=string}
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +226,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param request body auth.UpdateProfileRequest true "Данные для обновления профиля"
 // @Security BearerAuth
-// @Success 200 {object} domain.User
+// @Success 200 {object} models.User
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Router /auth/profile [put]

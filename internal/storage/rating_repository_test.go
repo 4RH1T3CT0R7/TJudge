@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -77,21 +77,21 @@ func (s *RatingRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-func (s *RatingRepositorySuite) createUser(suffix string) *domain.User {
+func (s *RatingRepositorySuite) createUser(suffix string) *models.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-func (s *RatingRepositorySuite) createTournament(code string, creatorID uuid.UUID) *domain.Tournament {
+func (s *RatingRepositorySuite) createTournament(code string, creatorID uuid.UUID) *models.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *domain.Program {
+func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *models.Program {
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		UserID:   userID,
 		Name:     name,
@@ -106,9 +106,9 @@ func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *do
 	return program
 }
 
-func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID, rating int) *domain.TournamentParticipant {
+func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID, rating int) *models.TournamentParticipant {
 	ctx := context.Background()
-	participant := &domain.TournamentParticipant{
+	participant := &models.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		ProgramID:    programID,
@@ -120,9 +120,9 @@ func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID
 	return participant
 }
 
-func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid.UUID, oldRating, newRating, change int, matchID *uuid.UUID) *domain.RatingHistory {
+func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid.UUID, oldRating, newRating, change int, matchID *uuid.UUID) *models.RatingHistory {
 	ctx := context.Background()
-	history := &domain.RatingHistory{
+	history := &models.RatingHistory{
 		ID:           uuid.New(),
 		ProgramID:    programID,
 		TournamentID: tournamentID,
@@ -139,7 +139,7 @@ func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid
 }
 
 // готовит юзера, турнир и прогу - типовой сетап для тестов рейтинга
-func (s *RatingRepositorySuite) setupRatingPrerequisites(suffix string) (tournament *domain.Tournament, program *domain.Program) {
+func (s *RatingRepositorySuite) setupRatingPrerequisites(suffix string) (tournament *models.Tournament, program *models.Program) {
 	user := s.createUser("rating_" + suffix)
 	tournament = s.createTournament("TR"+suffix, user.ID)
 	program = s.createProgram(user.ID, "RatingBot_"+suffix)
@@ -150,7 +150,7 @@ func (s *RatingRepositorySuite) TestCreate() {
 	tournament, program := s.setupRatingPrerequisites("crt")
 
 	ctx := context.Background()
-	history := &domain.RatingHistory{
+	history := &models.RatingHistory{
 		ID:           uuid.New(),
 		ProgramID:    program.ID,
 		TournamentID: tournament.ID,
@@ -365,9 +365,9 @@ func (s *RatingRepositorySuite) TestGetParticipantRatings_Program2NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-func (s *RatingRepositorySuite) createGame(name string) *domain.Game {
+func (s *RatingRepositorySuite) createGame(name string) *models.Game {
 	ctx := context.Background()
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        name,
 		DisplayName: "Test Game " + name,
@@ -379,9 +379,9 @@ func (s *RatingRepositorySuite) createGame(name string) *domain.Game {
 	return game
 }
 
-func (s *RatingRepositorySuite) createProgramWithGame(userID uuid.UUID, gameID *uuid.UUID, name string) *domain.Program {
+func (s *RatingRepositorySuite) createProgramWithGame(userID uuid.UUID, gameID *uuid.UUID, name string) *models.Program {
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		UserID:   userID,
 		GameID:   gameID,
@@ -439,7 +439,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	update1 := &rating.ParticipantUpdate{
 		ProgramID:    program1.ID,
 		TournamentID: tournament.ID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    program1.ID,
 			TournamentID: tournament.ID,
@@ -456,7 +456,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	update2 := &rating.ParticipantUpdate{
 		ProgramID:    program2.ID,
 		TournamentID: tournament.ID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    program2.ID,
 			TournamentID: tournament.ID,
@@ -520,7 +520,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
 	update1 := &rating.ParticipantUpdate{
 		ProgramID:    program1.ID,
 		TournamentID: tournament.ID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    program1.ID,
 			TournamentID: tournament.ID,
@@ -537,7 +537,7 @@ func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
 	update2 := &rating.ParticipantUpdate{
 		ProgramID:    program2.ID,
 		TournamentID: tournament.ID,
-		History: &domain.RatingHistory{
+		History: &models.RatingHistory{
 			ID:           uuid.New(),
 			ProgramID:    program2.ID,
 			TournamentID: tournament.ID,

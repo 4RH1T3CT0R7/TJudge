@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -54,7 +54,7 @@ func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath strin
 }
 
 // Execute выполняет матч через tjudge-cli
-func (e *Executor) Execute(ctx context.Context, match *domain.Match, program1Path, program2Path string) (*domain.MatchResult, error) {
+func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error) {
 	e.log.Info("Executing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("game_type", match.GameType),
@@ -101,7 +101,7 @@ func (e *Executor) Execute(ctx context.Context, match *domain.Match, program1Pat
 }
 
 // runInDocker запускает матч в Docker контейнере
-func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string) (*domain.MatchResult, error) {
+func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string) (*models.MatchResult, error) {
 	// Формируем команду для tjudge-cli
 	// Формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
@@ -319,14 +319,14 @@ func sanitizeStderr(raw string) string {
 }
 
 // parseResult парсит результат выполнения tjudge-cli
-func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*domain.MatchResult, error) {
+func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.MatchResult, error) {
 	e.log.Info("Parsing result",
 		zap.Int64("exit_code", exitCode),
 		zap.String("stdout", stdout),
 		zap.String("stderr", stderr),
 	)
 
-	result := &domain.MatchResult{
+	result := &models.MatchResult{
 		ErrorCode: int(exitCode),
 	}
 

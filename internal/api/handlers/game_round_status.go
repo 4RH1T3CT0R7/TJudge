@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
@@ -210,7 +210,7 @@ func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request)
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param gameId path string true "Game ID" format(uuid)
 // @Param limit query int false "Лимит записей" default(100)
-// @Success 200 {array} domain.LeaderboardEntry
+// @Success 200 {array} models.LeaderboardEntry
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games/{gameId}/leaderboard [get]
 func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +254,7 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param gameId path string true "Game ID" format(uuid)
-// @Success 200 {array} domain.HeadToHeadCell
+// @Success 200 {array} models.HeadToHeadCell
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games/{gameId}/head-to-head [get]
 func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +298,7 @@ func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request)
 // @Param status query string false "Фильтр по статусу (pending, running, completed, failed, cancelled)"
 // @Param limit query int false "Лимит записей" default(50)
 // @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} domain.Match
+// @Success 200 {array} models.Match
 // @Failure 400 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games/{gameId}/matches [get]
@@ -320,15 +320,15 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	filter := domain.MatchFilter{
+	filter := models.MatchFilter{
 		TournamentID: &tournamentID,
 		GameType:     g.Name,
 	}
 
 	if status := r.URL.Query().Get("status"); status != "" {
-		s := domain.MatchStatus(status)
+		s := models.MatchStatus(status)
 		switch s {
-		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed, domain.MatchCancelled:
+		case models.MatchPending, models.MatchRunning, models.MatchCompleted, models.MatchFailed, models.MatchCancelled:
 			filter.Status = s
 		default:
 			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed, cancelled"))
@@ -362,7 +362,7 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param gameId path string true "Game ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {array} domain.Program
+// @Success 200 {array} models.Program
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
 // @Failure 404 {object} object{error=string}

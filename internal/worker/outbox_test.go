@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -44,12 +44,12 @@ type MockOutboxMatchRepo struct {
 	mock.Mock
 }
 
-func (m *MockOutboxMatchRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error) {
+func (m *MockOutboxMatchRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Match), args.Error(1)
+	return args.Get(0).(*models.Match), args.Error(1)
 }
 
 type MockOutboxRatingRepo struct {
@@ -61,12 +61,12 @@ func (m *MockOutboxRatingRepo) GetParticipantRatings(ctx context.Context, tourna
 	return args.Int(0), args.Int(1), args.Error(2)
 }
 
-func (m *MockOutboxRatingRepo) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*domain.RatingHistory, error) {
+func (m *MockOutboxRatingRepo) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
 	args := m.Called(ctx, matchID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.RatingHistory), args.Error(1)
+	return args.Get(0).([]*models.RatingHistory), args.Error(1)
 }
 
 // capturingBus собирает опубликованные события.
@@ -92,14 +92,14 @@ func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *Mock
 	return d, outbox, matchRepo, ratingRepo, ratingService, bus
 }
 
-func completedMatch() *domain.Match {
+func completedMatch() *models.Match {
 	winner := 1
-	return &domain.Match{
+	return &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
-		Status:       domain.MatchCompleted,
+		Status:       models.MatchCompleted,
 		Winner:       &winner,
 	}
 }
@@ -115,7 +115,7 @@ func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
 	// Рейтинг ещё не применялся - history пустая.
-	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*domain.RatingHistory{}, nil)
+	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*models.RatingHistory{}, nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(1200, 1000, nil)
 	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).Return(nil)
@@ -132,7 +132,7 @@ func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
 	match := completedMatch()
 	entry := &storage.OutboxEntry{ID: 2, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
-	history := []*domain.RatingHistory{
+	history := []*models.RatingHistory{
 		{ProgramID: match.Program1ID, NewRating: 1216, MatchID: &match.ID},
 		{ProgramID: match.Program2ID, NewRating: 984, MatchID: &match.ID},
 	}
@@ -182,7 +182,7 @@ func TestOutboxDispatcher_RunOnce_ErrorMarksFailed(t *testing.T) {
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*domain.RatingHistory{}, nil)
+	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*models.RatingHistory{}, nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(1200, 1000, nil)
 	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).
@@ -198,7 +198,7 @@ func TestOutboxDispatcher_RunOnce_ErrorMarksFailed(t *testing.T) {
 func TestOutboxDispatcher_RunOnce_FailedMatchSkipped(t *testing.T) {
 	d, outbox, matchRepo, _, ratingService, _ := newTestDispatcher(t)
 	match := completedMatch()
-	match.Status = domain.MatchFailed
+	match.Status = models.MatchFailed
 	entry := &storage.OutboxEntry{ID: 5, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).

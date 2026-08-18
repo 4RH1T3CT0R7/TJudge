@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -27,44 +27,44 @@ type MockGameService struct {
 	mock.Mock
 }
 
-func (m *MockGameService) Create(ctx context.Context, req *game.CreateRequest) (*domain.Game, error) {
+func (m *MockGameService) Create(ctx context.Context, req *game.CreateRequest) (*models.Game, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
-func (m *MockGameService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
+func (m *MockGameService) GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
-func (m *MockGameService) GetByName(ctx context.Context, name string) (*domain.Game, error) {
+func (m *MockGameService) GetByName(ctx context.Context, name string) (*models.Game, error) {
 	args := m.Called(ctx, name)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
-func (m *MockGameService) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
+func (m *MockGameService) List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Game), args.Error(1)
+	return args.Get(0).([]*models.Game), args.Error(1)
 }
 
-func (m *MockGameService) Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*domain.Game, error) {
+func (m *MockGameService) Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*models.Game, error) {
 	args := m.Called(ctx, id, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
 func (m *MockGameService) Delete(ctx context.Context, id uuid.UUID) error {
@@ -72,12 +72,12 @@ func (m *MockGameService) Delete(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
-func (m *MockGameService) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
+func (m *MockGameService) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Game), args.Error(1)
+	return args.Get(0).([]*models.Game), args.Error(1)
 }
 
 func (m *MockGameService) AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -95,12 +95,12 @@ type MockGameTournamentRepository struct {
 	mock.Mock
 }
 
-func (m *MockGameTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
+func (m *MockGameTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Tournament), args.Error(1)
+	return args.Get(0).(*models.Tournament), args.Error(1)
 }
 
 func newTestGameHandler(t *testing.T) (*GameHandler, *MockGameService) {
@@ -126,7 +126,7 @@ func TestGameHandler_Create_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("Create", mock.Anything, mock.AnythingOfType("*game.CreateRequest")).
-		Return(&domain.Game{ID: gameID, Name: "chess", DisplayName: "Chess"}, nil)
+		Return(&models.Game{ID: gameID, Name: "chess", DisplayName: "Chess"}, nil)
 
 	body, _ := json.Marshal(game.CreateRequest{Name: "chess", DisplayName: "Chess"})
 	req := httptest.NewRequest("POST", "/api/v1/games", bytes.NewReader(body))
@@ -136,7 +136,7 @@ func TestGameHandler_Create_Success(t *testing.T) {
 	handler.Create(rr, req)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
-	var result domain.Game
+	var result models.Game
 	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, gameID, result.ID)
 	assert.Equal(t, "chess", result.Name)
@@ -193,11 +193,11 @@ func TestGameHandler_Create_Conflict(t *testing.T) {
 func TestGameHandler_List_NoFilters(t *testing.T) {
 	handler, svc := newTestGameHandler(t)
 
-	games := []*domain.Game{
+	games := []*models.Game{
 		{ID: uuid.New(), Name: "chess"},
 		{ID: uuid.New(), Name: "tictactoe"},
 	}
-	svc.On("List", mock.Anything, domain.GameFilter{Limit: 50, Offset: 0}).
+	svc.On("List", mock.Anything, models.GameFilter{Limit: 50, Offset: 0}).
 		Return(games, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/games", nil)
@@ -206,7 +206,7 @@ func TestGameHandler_List_NoFilters(t *testing.T) {
 	handler.List(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.Game
+	var result []*models.Game
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 2)
 	svc.AssertExpectations(t)
@@ -215,8 +215,8 @@ func TestGameHandler_List_NoFilters(t *testing.T) {
 func TestGameHandler_List_WithPagination(t *testing.T) {
 	handler, svc := newTestGameHandler(t)
 
-	svc.On("List", mock.Anything, domain.GameFilter{Limit: 10, Offset: 20}).
-		Return([]*domain.Game{}, nil)
+	svc.On("List", mock.Anything, models.GameFilter{Limit: 10, Offset: 20}).
+		Return([]*models.Game{}, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/games?limit=10&offset=20", nil)
 	rr := httptest.NewRecorder()
@@ -230,8 +230,8 @@ func TestGameHandler_List_WithPagination(t *testing.T) {
 func TestGameHandler_List_WithNameFilter(t *testing.T) {
 	handler, svc := newTestGameHandler(t)
 
-	svc.On("List", mock.Anything, domain.GameFilter{Name: "chess", Limit: 50, Offset: 0}).
-		Return([]*domain.Game{{ID: uuid.New(), Name: "chess"}}, nil)
+	svc.On("List", mock.Anything, models.GameFilter{Name: "chess", Limit: 50, Offset: 0}).
+		Return([]*models.Game{{ID: uuid.New(), Name: "chess"}}, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/games?name=chess", nil)
 	rr := httptest.NewRecorder()
@@ -264,7 +264,7 @@ func TestGameHandler_Get_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "chess"}, nil)
+		Return(&models.Game{ID: gameID, Name: "chess"}, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/games/"+gameID.String(), nil)
 	rctx := chi.NewRouteContext()
@@ -275,7 +275,7 @@ func TestGameHandler_Get_Success(t *testing.T) {
 	handler.Get(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result domain.Game
+	var result models.Game
 	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, gameID, result.ID)
 	svc.AssertExpectations(t)
@@ -321,7 +321,7 @@ func TestGameHandler_GetByName_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByName", mock.Anything, "chess").
-		Return(&domain.Game{ID: gameID, Name: "chess"}, nil)
+		Return(&models.Game{ID: gameID, Name: "chess"}, nil)
 
 	req := httptest.NewRequest("GET", "/api/v1/games/name/chess", nil)
 	rctx := chi.NewRouteContext()
@@ -374,7 +374,7 @@ func TestGameHandler_Update_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("Update", mock.Anything, gameID, mock.AnythingOfType("*game.UpdateRequest")).
-		Return(&domain.Game{ID: gameID, Name: "chess", DisplayName: "Chess Updated"}, nil)
+		Return(&models.Game{ID: gameID, Name: "chess", DisplayName: "Chess Updated"}, nil)
 
 	body, _ := json.Marshal(game.UpdateRequest{DisplayName: "Chess Updated"})
 	req := httptest.NewRequest("PUT", "/api/v1/games/"+gameID.String(), bytes.NewReader(body))
@@ -387,7 +387,7 @@ func TestGameHandler_Update_Success(t *testing.T) {
 	handler.Update(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result domain.Game
+	var result models.Game
 	decodeJSONData(t, rr.Body, &result)
 	assert.Equal(t, "Chess Updated", result.DisplayName)
 	svc.AssertExpectations(t)
@@ -502,7 +502,7 @@ func TestGameHandler_GetTournamentGames_Success(t *testing.T) {
 	handler, svc := newTestGameHandler(t)
 	tournamentID := uuid.New()
 
-	games := []*domain.Game{
+	games := []*models.Game{
 		{ID: uuid.New(), Name: "chess"},
 	}
 	svc.On("GetByTournamentID", mock.Anything, tournamentID).Return(games, nil)
@@ -516,7 +516,7 @@ func TestGameHandler_GetTournamentGames_Success(t *testing.T) {
 	handler.GetTournamentGames(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.Game
+	var result []*models.Game
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	svc.AssertExpectations(t)
@@ -553,7 +553,7 @@ func TestGameHandler_AddGameToTournament_AdminSuccess(t *testing.T) {
 	rctx.URLParams.Add("id", tournamentID.String())
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-	ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleAdmin)
+	ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleAdmin)
 	req = req.WithContext(ctx)
 	rr := httptest.NewRecorder()
 
@@ -570,7 +570,7 @@ func TestGameHandler_AddGameToTournament_CreatorSuccess(t *testing.T) {
 	userID := uuid.New()
 
 	tournamentRepo.On("GetByID", mock.Anything, tournamentID).
-		Return(&domain.Tournament{ID: tournamentID, CreatorID: &userID}, nil)
+		Return(&models.Tournament{ID: tournamentID, CreatorID: &userID}, nil)
 	svc.On("AddToTournament", mock.Anything, tournamentID, gameID).Return(nil)
 
 	body, _ := json.Marshal(AddGameToTournamentRequest{GameID: gameID})
@@ -598,7 +598,7 @@ func TestGameHandler_AddGameToTournament_Forbidden(t *testing.T) {
 	otherUserID := uuid.New()
 
 	tournamentRepo.On("GetByID", mock.Anything, tournamentID).
-		Return(&domain.Tournament{ID: tournamentID, CreatorID: &otherUserID}, nil)
+		Return(&models.Tournament{ID: tournamentID, CreatorID: &otherUserID}, nil)
 
 	body, _ := json.Marshal(AddGameToTournamentRequest{GameID: uuid.New()})
 	req := httptest.NewRequest("POST", "/api/v1/tournaments/"+tournamentID.String()+"/games", bytes.NewReader(body))
@@ -1023,56 +1023,56 @@ type MockGameLeaderboardRepository struct {
 	mock.Mock
 }
 
-func (m *MockGameLeaderboardRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
+func (m *MockGameLeaderboardRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*models.LeaderboardEntry, error) {
 	args := m.Called(ctx, tournamentID, gameType, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.LeaderboardEntry), args.Error(1)
+	return args.Get(0).([]*models.LeaderboardEntry), args.Error(1)
 }
 
-func (m *MockGameLeaderboardRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
+func (m *MockGameLeaderboardRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.HeadToHeadCell, error) {
 	args := m.Called(ctx, tournamentID, gameType)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.HeadToHeadCell), args.Error(1)
+	return args.Get(0).([]*models.HeadToHeadCell), args.Error(1)
 }
 
 type MockGameMatchRepository struct {
 	mock.Mock
 }
 
-func (m *MockGameMatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
+func (m *MockGameMatchRepository) List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Match), args.Error(1)
+	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
 type MockGameProgramRepository struct {
 	mock.Mock
 }
 
-func (m *MockGameProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+func (m *MockGameProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, tournamentID, gameID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
 type MockTournamentGameStatusRepository struct {
 	mock.Mock
 }
 
-func (m *MockTournamentGameStatusRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.TournamentGame), args.Error(1)
+	return args.Get(0).([]*models.TournamentGame), args.Error(1)
 }
 
 func (m *MockTournamentGameStatusRepository) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -1083,12 +1083,12 @@ func (m *MockTournamentGameStatusRepository) SetActiveGame(ctx context.Context, 
 	return m.Called(ctx, tournamentID, gameID).Error(0)
 }
 
-func (m *MockTournamentGameStatusRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
 func (m *MockTournamentGameStatusRepository) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -1100,12 +1100,12 @@ func (m *MockTournamentGameStatusRepository) ResetGameRoundFull(ctx context.Cont
 	return args.Get(0).(int64), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
 }
 
-func (m *MockTournamentGameStatusRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error) {
+func (m *MockTournamentGameStatusRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGameWithDetails, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.TournamentGameWithDetails), args.Error(1)
+	return args.Get(0).([]*models.TournamentGameWithDetails), args.Error(1)
 }
 
 func (m *MockTournamentGameStatusRepository) DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error {
@@ -1116,12 +1116,12 @@ func (m *MockTournamentGameStatusRepository) SetAutoRound(ctx context.Context, t
 	return m.Called(ctx, tournamentID, gameID, enabled, intervalSecs).Error(0)
 }
 
-func (m *MockTournamentGameStatusRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID, gameID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
 func newGameHandlerWithAllRepos(t *testing.T) (
@@ -1153,9 +1153,9 @@ func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
 	leaderboardRepo.On("GetLeaderboardByGameType", mock.Anything, tournamentID, "dilemma", 100).
-		Return([]*domain.LeaderboardEntry{{Rank: 1, Rating: 1500}}, nil)
+		Return([]*models.LeaderboardEntry{{Rank: 1, Rating: 1500}}, nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	rctx := chi.NewRouteContext()
@@ -1167,7 +1167,7 @@ func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
 	handler.GetGameLeaderboard(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.LeaderboardEntry
+	var result []*models.LeaderboardEntry
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 	svc.AssertExpectations(t)
@@ -1201,10 +1201,10 @@ func TestGameHandler_GetGameMatches_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
-	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f domain.MatchFilter) bool {
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
+	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f models.MatchFilter) bool {
 		return f.GameType == "dilemma" && *f.TournamentID == tournamentID
-	})).Return([]*domain.Match{{ID: uuid.New()}}, nil)
+	})).Return([]*models.Match{{ID: uuid.New()}}, nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	rctx := chi.NewRouteContext()
@@ -1216,7 +1216,7 @@ func TestGameHandler_GetGameMatches_Success(t *testing.T) {
 	handler.GetGameMatches(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.Match
+	var result []*models.Match
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 }
@@ -1227,10 +1227,10 @@ func TestGameHandler_GetGameMatches_WithStatusFilter(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
-	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f domain.MatchFilter) bool {
-		return f.Status == domain.MatchStatus("completed")
-	})).Return([]*domain.Match{}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
+	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f models.MatchFilter) bool {
+		return f.Status == models.MatchStatus("completed")
+	})).Return([]*models.Match{}, nil)
 
 	req := httptest.NewRequest("GET", "/?status=completed", nil)
 	rctx := chi.NewRouteContext()
@@ -1252,7 +1252,7 @@ func TestGameHandler_GetGamePrograms_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	programRepo.On("GetByTournamentAndGame", mock.Anything, tournamentID, gameID).
-		Return([]*domain.Program{{ID: uuid.New(), Name: "solution.py"}}, nil)
+		Return([]*models.Program{{ID: uuid.New(), Name: "solution.py"}}, nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	rctx := chi.NewRouteContext()
@@ -1264,7 +1264,7 @@ func TestGameHandler_GetGamePrograms_Success(t *testing.T) {
 	handler.GetGamePrograms(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	var result []*domain.Program
+	var result []*models.Program
 	decodeJSONData(t, rr.Body, &result)
 	assert.Len(t, result, 1)
 }
@@ -1297,7 +1297,7 @@ func TestGameHandler_GetTournamentGamesWithStatus_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	tgsRepo.On("GetTournamentGamesWithDetails", mock.Anything, tournamentID).
-		Return([]*domain.TournamentGameWithDetails{{
+		Return([]*models.TournamentGameWithDetails{{
 			TournamentID:    tournamentID,
 			GameID:          gameID,
 			GameName:        "dilemma",
@@ -1445,9 +1445,9 @@ func TestGameHandler_GetActiveGame_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	tgsRepo.On("GetActiveGame", mock.Anything, tournamentID).
-		Return(&domain.TournamentGame{TournamentID: tournamentID, GameID: gameID, IsActive: true}, nil)
+		Return(&models.TournamentGame{TournamentID: tournamentID, GameID: gameID, IsActive: true}, nil)
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma", DisplayName: "Prisoner's Dilemma"}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma", DisplayName: "Prisoner's Dilemma"}, nil)
 
 	req := httptest.NewRequest("GET", "/", nil)
 	rctx := chi.NewRouteContext()
@@ -1491,7 +1491,7 @@ func TestGameHandler_ResetGameRound_Success(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
 	tgsRepo.On("ResetGameRoundFull", mock.Anything, tournamentID, gameID, "dilemma").
 		Return(int64(10), int64(3), int64(5), nil)
 
@@ -1518,7 +1518,7 @@ func TestGameHandler_ResetGameRound_TransactionError(t *testing.T) {
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
-		Return(&domain.Game{ID: gameID, Name: "dilemma"}, nil)
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
 	tgsRepo.On("ResetGameRoundFull", mock.Anything, tournamentID, gameID, "dilemma").
 		Return(int64(0), int64(0), int64(0), fmt.Errorf("transaction failed"))
 

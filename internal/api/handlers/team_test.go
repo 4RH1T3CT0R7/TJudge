@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -24,20 +24,20 @@ type MockTeamService struct {
 	mock.Mock
 }
 
-func (m *MockTeamService) CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*domain.Team, error) {
+func (m *MockTeamService) CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*models.Team, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamService) JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*domain.Team, error) {
+func (m *MockTeamService) JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
 func (m *MockTeamService) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error {
@@ -48,52 +48,52 @@ func (m *MockTeamService) RemoveMember(ctx context.Context, teamID, memberUserID
 	return m.Called(ctx, teamID, memberUserID, leaderID).Error(0)
 }
 
-func (m *MockTeamService) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*domain.Team, error) {
+func (m *MockTeamService) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error) {
 	args := m.Called(ctx, teamID, name, leaderID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamService) GetTeamByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
+func (m *MockTeamService) GetTeamByID(ctx context.Context, id uuid.UUID) (*models.Team, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamService) GetTeamByCode(ctx context.Context, code string) (*domain.Team, error) {
+func (m *MockTeamService) GetTeamByCode(ctx context.Context, code string) (*models.Team, error) {
 	args := m.Called(ctx, code)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamService) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error) {
+func (m *MockTeamService) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error) {
 	args := m.Called(ctx, teamID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TeamWithMembers), args.Error(1)
+	return args.Get(0).(*models.TeamWithMembers), args.Error(1)
 }
 
-func (m *MockTeamService) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
+func (m *MockTeamService) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Team), args.Error(1)
+	return args.Get(0).([]*models.Team), args.Error(1)
 }
 
-func (m *MockTeamService) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error) {
+func (m *MockTeamService) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error) {
 	args := m.Called(ctx, tournamentID, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
 func (m *MockTeamService) GetInviteLink(ctx context.Context, teamID, leaderID uuid.UUID, baseURL string) (string, error) {
@@ -148,7 +148,7 @@ func TestTeamHandler_Create_Success(t *testing.T) {
 
 	svc.On("CreateTeam", mock.Anything, mock.MatchedBy(func(r *team.CreateTeamRequest) bool {
 		return r.UserID == userID && r.Name == "My Team"
-	})).Return(&domain.Team{ID: teamID, Name: "My Team"}, nil)
+	})).Return(&models.Team{ID: teamID, Name: "My Team"}, nil)
 
 	rr := httptest.NewRecorder()
 	h.Create(rr, req)
@@ -207,7 +207,7 @@ func TestTeamHandler_JoinByCode_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/teams/join", bytes.NewReader(body))
 	req = withUserID(req, userID)
 
-	svc.On("JoinTeamByCode", mock.Anything, mock.Anything).Return(&domain.Team{ID: uuid.New()}, nil)
+	svc.On("JoinTeamByCode", mock.Anything, mock.Anything).Return(&models.Team{ID: uuid.New()}, nil)
 
 	rr := httptest.NewRecorder()
 	h.JoinByCode(rr, req)
@@ -263,8 +263,8 @@ func TestTeamHandler_Get_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/teams/"+teamID.String(), nil)
 	req = withChiParam(req, "id", teamID.String())
 
-	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&domain.TeamWithMembers{
-		Team: domain.Team{ID: teamID, Name: "Test"},
+	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&models.TeamWithMembers{
+		Team: models.Team{ID: teamID, Name: "Test"},
 	}, nil)
 
 	rr := httptest.NewRecorder()
@@ -312,7 +312,7 @@ func TestTeamHandler_UpdateName_Success(t *testing.T) {
 	req = withUserID(req, userID)
 	req = withChiParam(req, "id", teamID.String())
 
-	svc.On("UpdateTeamName", mock.Anything, teamID, "New Name", userID).Return(&domain.Team{Name: "New Name"}, nil)
+	svc.On("UpdateTeamName", mock.Anything, teamID, "New Name", userID).Return(&models.Team{Name: "New Name"}, nil)
 
 	rr := httptest.NewRecorder()
 	h.UpdateName(rr, req)
@@ -513,7 +513,7 @@ func TestTeamHandler_GetInviteLink_Success(t *testing.T) {
 	req = withChiParam(req, "id", teamID.String())
 
 	svc.On("GetInviteLink", mock.Anything, teamID, userID, "http://localhost:8080").Return("http://localhost:8080/join/CODE", nil)
-	svc.On("GetTeamByID", mock.Anything, teamID).Return(&domain.Team{ID: teamID, Code: "CODE"}, nil)
+	svc.On("GetTeamByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, Code: "CODE"}, nil)
 
 	rr := httptest.NewRecorder()
 	h.GetInviteLink(rr, req)
@@ -560,7 +560,7 @@ func TestTeamHandler_GetTournamentTeams_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req = withChiParam(req, "id", tID.String())
 
-	svc.On("GetTeamsByTournament", mock.Anything, tID).Return([]*domain.Team{{Name: "A"}}, nil)
+	svc.On("GetTeamsByTournament", mock.Anything, tID).Return([]*models.Team{{Name: "A"}}, nil)
 
 	rr := httptest.NewRecorder()
 	h.GetTournamentTeams(rr, req)
@@ -591,7 +591,7 @@ func TestTeamHandler_GetMyTeam_Success(t *testing.T) {
 	req = withUserID(req, userID)
 	req = withChiParam(req, "id", tID.String())
 
-	svc.On("GetUserTeamInTournament", mock.Anything, tID, userID).Return(&domain.Team{Name: "My"}, nil)
+	svc.On("GetUserTeamInTournament", mock.Anything, tID, userID).Return(&models.Team{Name: "My"}, nil)
 
 	rr := httptest.NewRecorder()
 	h.GetMyTeam(rr, req)
@@ -683,9 +683,9 @@ func TestTeamHandler_GetMembers_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req = withChiParam(req, "id", teamID.String())
 
-	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&domain.TeamWithMembers{
-		Team: domain.Team{ID: teamID, Name: "Test"},
-		Members: []domain.User{
+	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&models.TeamWithMembers{
+		Team: models.Team{ID: teamID, Name: "Test"},
+		Members: []models.User{
 			{ID: userID, Username: "alice"},
 		},
 	}, nil)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -13,7 +13,7 @@ import (
 type Claims struct {
 	UserID   uuid.UUID   `json:"user_id"`
 	Username string      `json:"username"`
-	Role     domain.Role `json:"role"`
+	Role     models.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -33,7 +33,7 @@ func NewJWTManager(secretKey string, accessTTL, refreshTTL time.Duration) *JWTMa
 }
 
 // GenerateAccessToken делает access токен, внутри роль, живёт accessTTL
-func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, role domain.Role) (string, error) {
+func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, role models.Role) (string, error) {
 	now := time.Now()
 	claims := &Claims{
 		UserID:   userID,
@@ -89,7 +89,7 @@ func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	// старые токены выписаны ещё до того как появилось поле Role, у них роль пустая.
 	// ставим RoleUser чтобы человек не потерял доступ после выката
 	if claims.Role == "" {
-		claims.Role = domain.RoleUser
+		claims.Role = models.RoleUser
 	}
 
 	return claims, nil

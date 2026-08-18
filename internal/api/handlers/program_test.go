@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -25,33 +25,33 @@ type MockProgramRepository struct {
 	mock.Mock
 }
 
-func (m *MockProgramRepository) Create(ctx context.Context, program *domain.Program) error {
+func (m *MockProgramRepository) Create(ctx context.Context, program *models.Program) error {
 	args := m.Called(ctx, program)
 	return args.Error(0)
 }
 
-func (m *MockProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
+func (m *MockProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	args := m.Called(ctx, program)
 	return args.Error(0)
 }
 
-func (m *MockProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
+func (m *MockProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Program), args.Error(1)
+	return args.Get(0).(*models.Program), args.Error(1)
 }
 
-func (m *MockProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error) {
+func (m *MockProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func (m *MockProgramRepository) Update(ctx context.Context, program *domain.Program) error {
+func (m *MockProgramRepository) Update(ctx context.Context, program *models.Program) error {
 	args := m.Called(ctx, program)
 	return args.Error(0)
 }
@@ -71,12 +71,12 @@ func (m *MockProgramRepository) GetLatestVersion(ctx context.Context, teamID, ga
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error) {
+func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, teamID, gameID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
 func (m *MockProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
@@ -114,7 +114,7 @@ func TestProgramHandler_Create(t *testing.T) {
 			"language":  "python",
 		}
 
-		mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
+		mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
 			return p.UserID == userID && p.Name == reqBody["name"]
 		})).Return(nil)
 
@@ -132,7 +132,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 
-		var response domain.Program
+		var response models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, reqBody["name"], response.Name)
 		assert.Equal(t, userID, response.UserID)
@@ -216,7 +216,7 @@ func TestProgramHandler_List(t *testing.T) {
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
-		expectedPrograms := []*domain.Program{
+		expectedPrograms := []*models.Program{
 			{
 				ID:       uuid.New(),
 				UserID:   userID,
@@ -246,7 +246,7 @@ func TestProgramHandler_List(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Program
+		var response []*models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, expectedPrograms[0].Name, response[0].Name)
@@ -298,7 +298,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		userID := uuid.New()
 		programID := uuid.New()
-		expectedProgram := &domain.Program{
+		expectedProgram := &models.Program{
 			ID:       programID,
 			UserID:   userID,
 			Name:     "Chess AI",
@@ -322,7 +322,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Program
+		var response models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedProgram.ID, response.ID)
 
@@ -335,7 +335,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		userID := uuid.New()
 		programID := uuid.New()
-		expectedProgram := &domain.Program{
+		expectedProgram := &models.Program{
 			ID:       programID,
 			UserID:   uuid.New(), // different user
 			Name:     "Chess AI",
@@ -351,7 +351,7 @@ func TestProgramHandler_Get(t *testing.T) {
 		rctx.URLParams.Add("id", programID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleAdmin)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleAdmin)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -369,7 +369,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 		userID := uuid.New()
 		programID := uuid.New()
-		otherProgram := &domain.Program{
+		otherProgram := &models.Program{
 			ID:     programID,
 			UserID: uuid.New(), // different user
 		}
@@ -470,7 +470,7 @@ func TestProgramHandler_Update(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		existingProgram := &domain.Program{
+		existingProgram := &models.Program{
 			ID:       programID,
 			UserID:   userID,
 			Name:     "Old Name",
@@ -487,7 +487,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(existingProgram, nil)
-		mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
+		mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
 			return p.Name == reqBody["name"] && p.CodePath == reqBody["code_path"]
 		})).Return(nil)
 
@@ -507,7 +507,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Program
+		var response models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, reqBody["name"], response.Name)
 
@@ -559,7 +559,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		program := &domain.Program{
+		program := &models.Program{
 			ID:       programID,
 			Name:     "test-program",
 			UserID:   userID,
@@ -902,7 +902,7 @@ func TestProgramHandler_Delete_AdditionalCases(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		program := &domain.Program{
+		program := &models.Program{
 			ID:       programID,
 			Name:     "test-program",
 			UserID:   userID,
@@ -942,7 +942,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 		teamID := uuid.New()
 		gameID := uuid.New()
 
-		programs := []*domain.Program{
+		programs := []*models.Program{
 			{
 				ID:       uuid.New(),
 				UserID:   userID,
@@ -974,7 +974,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Program
+		var response []*models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 		assert.Equal(t, "v1", response[0].Name)
@@ -1068,7 +1068,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 		teamID := uuid.New()
 		gameID := uuid.New()
 
-		programs := []*domain.Program{
+		programs := []*models.Program{
 			{
 				ID:       uuid.New(),
 				UserID:   otherUserID,
@@ -1284,7 +1284,7 @@ func TestProgramHandler_Download(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		program := &domain.Program{
+		program := &models.Program{
 			ID:       programID,
 			UserID:   userID,
 			Name:     "test-program",
@@ -1682,7 +1682,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
 		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
-		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *domain.Program) bool {
+		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
 			return p.UserID == userID &&
 				p.Name == "My Strategy" &&
 				p.Language == "python" &&
@@ -1707,7 +1707,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 
-		var response domain.Program
+		var response models.Program
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "My Strategy", response.Name)
 		assert.Equal(t, "python", response.Language)
@@ -1804,7 +1804,7 @@ func TestProgramHandler_Download_Extra(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/bad-uuid/download", nil)
 
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", "bad-uuid")
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
@@ -1829,7 +1829,7 @@ func TestProgramHandler_Download_Extra(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
 
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", programID.String())
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
@@ -1857,7 +1857,7 @@ func TestProgramHandler_Download_Extra(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
 
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", programID.String())
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
@@ -1879,7 +1879,7 @@ func TestProgramHandler_Download_Extra(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		program := &domain.Program{
+		program := &models.Program{
 			ID:       programID,
 			UserID:   userID,
 			Name:     "test-program",
@@ -1892,7 +1892,7 @@ func TestProgramHandler_Download_Extra(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
 
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", programID.String())
 		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)

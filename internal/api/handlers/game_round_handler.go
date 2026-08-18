@@ -5,15 +5,15 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 )
 
 // GameRoundLookupService предоставляет lookup игр для round-related handler'ов.
 type GameRoundLookupService interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
 }
 
 // GameRoundHandler обрабатывает leaderboard, матчи, программы, статус и управление раундами игр.

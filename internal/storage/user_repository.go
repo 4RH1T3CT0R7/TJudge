@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	stderrors "errors"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 )
@@ -18,7 +18,7 @@ func NewUserRepository(db *DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
+func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
 		INSERT INTO users (id, username, email, password_hash)
 		VALUES ($1, $2, $3, $4)
@@ -39,8 +39,8 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
-func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
-	var user domain.User
+func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	var user models.User
 
 	query := `
 		SELECT id, username, email, password_hash, role, created_at, updated_at
@@ -59,8 +59,8 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Use
 	return &user, nil
 }
 
-func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
-	var user domain.User
+func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	var user models.User
 
 	query := `
 		SELECT id, username, email, password_hash, role, created_at, updated_at
@@ -79,8 +79,8 @@ func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*d
 	return &user, nil
 }
 
-func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	var user domain.User
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
 
 	query := `
 		SELECT id, username, email, password_hash, role, created_at, updated_at
@@ -99,7 +99,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	return &user, nil
 }
 
-func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
+func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
 		UPDATE users
 		SET username = $2, email = $3, password_hash = $4

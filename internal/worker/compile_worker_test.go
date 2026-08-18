@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -40,32 +40,32 @@ type MockCompileProgramRepo struct {
 	mock.Mock
 }
 
-func (m *MockCompileProgramRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
+func (m *MockCompileProgramRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Program), args.Error(1)
+	return args.Get(0).(*models.Program), args.Error(1)
 }
 
-func (m *MockCompileProgramRepo) UpdateCompileResult(ctx context.Context, id uuid.UUID, status domain.ProgramStatus, codePath string, errorMessage *string) error {
+func (m *MockCompileProgramRepo) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
 	args := m.Called(ctx, id, status, codePath, errorMessage)
 	return args.Error(0)
 }
 
-func (m *MockCompileProgramRepo) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error) {
+func (m *MockCompileProgramRepo) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {
 	args := m.Called(ctx, olderThan, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
 type MockProgramCompiler struct {
 	mock.Mock
 }
 
-func (m *MockProgramCompiler) Compile(ctx context.Context, program *domain.Program) (*executor.CompileResult, error) {
+func (m *MockProgramCompiler) Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error) {
 	args := m.Called(ctx, program)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -84,14 +84,14 @@ func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *Moc
 	return w, q, repo, compiler, bus
 }
 
-func compilingProgram() *domain.Program {
+func compilingProgram() *models.Program {
 	tournamentID := uuid.New()
 	teamID := uuid.New()
 	src := "/data/programs/abc.c"
-	return &domain.Program{
+	return &models.Program{
 		ID:           uuid.New(),
 		Language:     "c",
-		Status:       domain.ProgramCompiling,
+		Status:       models.ProgramCompiling,
 		CodePath:     src,
 		FilePath:     &src,
 		TournamentID: &tournamentID,
@@ -109,7 +109,7 @@ func TestCompileWorker_ProcessTask_Success(t *testing.T) {
 	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
 	compiler.On("Compile", mock.Anything, program).
 		Return(&executor.CompileResult{OK: true, ExecPath: "/data/programs/abc"}, nil)
-	repo.On("UpdateCompileResult", mock.Anything, program.ID, domain.ProgramReady, "/data/programs/abc", (*string)(nil)).
+	repo.On("UpdateCompileResult", mock.Anything, program.ID, models.ProgramReady, "/data/programs/abc", (*string)(nil)).
 		Return(nil)
 
 	w.processTask(context.Background(), 1, task)
@@ -133,7 +133,7 @@ func TestCompileWorker_ProcessTask_CompileError(t *testing.T) {
 	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
 	compiler.On("Compile", mock.Anything, program).
 		Return(&executor.CompileResult{OK: false, Log: "main.c:1: error: expected ';'"}, nil)
-	repo.On("UpdateCompileResult", mock.Anything, program.ID, domain.ProgramFailed, program.CodePath, mock.MatchedBy(func(msg *string) bool {
+	repo.On("UpdateCompileResult", mock.Anything, program.ID, models.ProgramFailed, program.CodePath, mock.MatchedBy(func(msg *string) bool {
 		return msg != nil && *msg == "main.c:1: error: expected ';'"
 	})).Return(nil)
 
@@ -166,7 +166,7 @@ func TestCompileWorker_ProcessTask_InfraErrorLeavesCompiling(t *testing.T) {
 func TestCompileWorker_ProcessTask_DuplicateSkipped(t *testing.T) {
 	w, _, repo, compiler, _ := newTestCompileWorker(t)
 	program := compilingProgram()
-	program.Status = domain.ProgramReady // уже обработана
+	program.Status = models.ProgramReady // уже обработана
 	task := &queue.CompileTask{ProgramID: program.ID}
 
 	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
@@ -194,7 +194,7 @@ func TestCompileWorker_RecoverStuck(t *testing.T) {
 	p2 := compilingProgram()
 
 	repo.On("GetStuckCompiling", mock.Anything, w.stuckOlderThan, w.stuckBatchSize).
-		Return([]*domain.Program{p1, p2}, nil)
+		Return([]*models.Program{p1, p2}, nil)
 	q.On("Enqueue", mock.Anything, p1.ID).Return(nil)
 	q.On("Enqueue", mock.Anything, p2.ID).Return(nil)
 
@@ -210,7 +210,7 @@ func TestCompileWorker_StartStop(t *testing.T) {
 
 	q.On("Dequeue", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	repo.On("GetStuckCompiling", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*domain.Program{}, nil).Maybe()
+		Return([]*models.Program{}, nil).Maybe()
 
 	w.Start()
 	time.Sleep(30 * time.Millisecond)

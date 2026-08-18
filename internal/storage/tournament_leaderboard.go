@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 )
@@ -15,7 +15,7 @@ import (
 // OR-join ломал index scan и читал партиции matches целиком, а с UNION ALL каждая ветка
 // идёт по индексу (tournament_id, game_type, status).
 // живой запрос, на больших турнирах тяжеловат но пока ок
-func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	query := `
 		WITH match_sides AS (
 			SELECT m.program1_id AS program_id,
@@ -91,7 +91,7 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 		LIMIT $2
 	`
 
-	var leaderboard []*domain.LeaderboardEntry
+	var leaderboard []*models.LeaderboardEntry
 
 	err := r.db.QueryWithMetrics(ctx, "tournament_leaderboard", &leaderboard, query, tournamentID, limit)
 	if err != nil {
@@ -104,7 +104,7 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 // GetCrossGameLeaderboard - агрегированный рейтинг по всем играм турнира.
 // рейтинг команды это сумма очков из всех матчей, очки масштабируются на score_multiplier игры
 // TODO: тяжёлый запрос, закэшировать бы
-func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	// Получаем все команды и программы в турнире со статистикой по каждой игре
 	// Используем team_id для связи матчей (чтобы учитывать все версии программ команды)
 	query := `
@@ -221,9 +221,9 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 	}
 	defer rows.Close()
 
-	var entries []*domain.CrossGameLeaderboardEntry
+	var entries []*models.CrossGameLeaderboardEntry
 	for rows.Next() {
-		var entry domain.CrossGameLeaderboardEntry
+		var entry models.CrossGameLeaderboardEntry
 		var gameRatingsJSON []byte
 
 		err := rows.Scan(
@@ -243,9 +243,9 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 		}
 
 		// разбираем game_ratings из json
-		entry.GameRatings = make(map[string]domain.GameRatingInfo)
+		entry.GameRatings = make(map[string]models.GameRatingInfo)
 		if gameRatingsJSON != nil {
-			var rawRatings map[string]domain.GameRatingInfo
+			var rawRatings map[string]models.GameRatingInfo
 			if err := json.Unmarshal(gameRatingsJSON, &rawRatings); err == nil {
 				entry.GameRatings = rawRatings
 			}
@@ -263,7 +263,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 
 // GetLeaderboardByGameType - лидерборд одной игры в турнире.
 // gameType это имя игры (game.name), по нему фильтруем матчи
-func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error) {
+func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*models.LeaderboardEntry, error) {
 	// Получаем рейтинг на основе результатов матчей для конкретной игры
 	// Используем team_id для агрегации (чтобы учитывать все версии программ команды)
 	query := `
@@ -348,9 +348,9 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 	}
 	defer rows.Close()
 
-	var leaderboard []*domain.LeaderboardEntry
+	var leaderboard []*models.LeaderboardEntry
 	for rows.Next() {
-		var entry domain.LeaderboardEntry
+		var entry models.LeaderboardEntry
 		err := rows.Scan(
 			&entry.Rank,
 			&entry.ProgramID,
@@ -379,7 +379,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 // GetHeadToHead - матрица личных встреч всех пар команд в игре турнира.
 // обе ориентации матча (AB и BA) сливаем через UNION ALL: одна встреча даёт
 // две перспективы, потом группируем по паре команд. дисквалифицированных исключаем.
-func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error) {
+func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.HeadToHeadCell, error) {
 	query := `
 		WITH sides AS (
 			SELECT p1.team_id AS team_id,
@@ -422,7 +422,7 @@ func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID u
 		ORDER BY team_name, opponent_name
 	`
 
-	var cells []*domain.HeadToHeadCell
+	var cells []*models.HeadToHeadCell
 	if err := r.db.QueryWithMetrics(ctx, "leaderboard_head_to_head", &cells, query, tournamentID, gameType); err != nil {
 		return nil, errors.Wrap(err, "failed to get head-to-head")
 	}

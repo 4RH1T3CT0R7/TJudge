@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -13,14 +13,14 @@ import (
 
 // RecoveryMatchRepository интерфейс для работы с матчами при восстановлении
 type RecoveryMatchRepository interface {
-	GetPending(ctx context.Context, limit int) ([]*domain.Match, error)
-	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error)
-	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status domain.MatchStatus) error
+	GetPending(ctx context.Context, limit int) ([]*models.Match, error)
+	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
+	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error
 }
 
 // RecoveryQueueManager интерфейс для добавления матчей в очередь
 type RecoveryQueueManager interface {
-	Enqueue(ctx context.Context, match *domain.Match) error
+	Enqueue(ctx context.Context, match *models.Match) error
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }
 
@@ -145,7 +145,7 @@ func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) 
 	}
 
 	// Сбрасываем статус в pending
-	if err := s.matchRepo.BatchUpdateStatus(ctx, matchIDs, domain.MatchPending); err != nil {
+	if err := s.matchRepo.BatchUpdateStatus(ctx, matchIDs, models.MatchPending); err != nil {
 		return 0, err
 	}
 

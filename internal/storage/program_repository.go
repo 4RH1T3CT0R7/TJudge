@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -21,9 +21,9 @@ func NewProgramRepository(db *DB) *ProgramRepository {
 	return &ProgramRepository{db: db}
 }
 
-func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program) error {
+func (r *ProgramRepository) Create(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
-		program.Status = domain.ProgramReady
+		program.Status = models.ProgramReady
 	}
 
 	query := `
@@ -59,9 +59,9 @@ func (r *ProgramRepository) Create(ctx context.Context, program *domain.Program)
 // COALESCE(MAX(version),0)+1 прямо внутри INSERT, без отдельного запроса.
 // если две загрузки прилетели одновременно — уникальный индекс ругнётся,
 // тогда повторяем с новым id, до 3 раз
-func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error {
+func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
-		program.Status = domain.ProgramReady
+		program.Status = models.ProgramReady
 	}
 
 	query := `
@@ -106,8 +106,8 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 	return errors.Wrap(fmt.Errorf("max retries exceeded"), "failed to create program with atomic version")
 }
 
-func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
-	var program domain.Program
+func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
+	var program models.Program
 
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
@@ -143,7 +143,7 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return &program, nil
 }
 
-func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -155,7 +155,7 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*d
 		WHERE id = ANY($1)
 	`
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	err := r.db.QueryWithMetrics(ctx, "program_get_by_ids", &programs, query, pq.Array(ids))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get programs by ids")
@@ -164,7 +164,7 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*d
 	return programs, nil
 }
 
-func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, status, error_message, version, created_at, updated_at
@@ -179,9 +179,9 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	}
 	defer rows.Close()
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	for rows.Next() {
-		var p domain.Program
+		var p models.Program
 		err := rows.Scan(
 			&p.ID,
 			&p.UserID,
@@ -212,7 +212,7 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	return programs, nil
 }
 
-func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID uuid.UUID, gameType string) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID uuid.UUID, gameType string) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, status, error_message, version, created_at, updated_at
@@ -227,9 +227,9 @@ func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID u
 	}
 	defer rows.Close()
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	for rows.Next() {
-		var p domain.Program
+		var p models.Program
 		err := rows.Scan(
 			&p.ID,
 			&p.UserID,
@@ -260,7 +260,7 @@ func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID u
 	return programs, nil
 }
 
-func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program) error {
+func (r *ProgramRepository) Update(ctx context.Context, program *models.Program) error {
 	query := `
 		UPDATE programs
 		SET name = $2, code_path = $3, language = $4, error_message = $5
@@ -289,7 +289,7 @@ func (r *ProgramRepository) Update(ctx context.Context, program *domain.Program)
 // UpdateCompileResult пишет итог компиляции: статус, путь к бинарю
 // (или к исходнику для интерпретируемых языков) и текст ошибки.
 // зовётся из compile-worker'а после сборки в докер-песочнице
-func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status domain.ProgramStatus, codePath string, errorMessage *string) error {
+func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
 	query := `
 		UPDATE programs
 		SET status = $2, code_path = $3, error_message = $4, updated_at = NOW()
@@ -315,7 +315,7 @@ func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUI
 // GetStuckCompiling достаёт программы, застрявшие в compiling дольше olderThan —
 // значит задача где-то потерялась (упали между созданием и enqueue, или редис лёг).
 // compile-worker периодически закидывает их обратно в очередь
-func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, status, error_message, version, created_at, updated_at
@@ -325,7 +325,7 @@ func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan tim
 		LIMIT $2
 	`
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	err := r.db.QueryWithMetrics(ctx, "program_get_stuck_compiling", &programs, query, olderThan.String(), limit)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get stuck compiling programs")
@@ -403,7 +403,7 @@ func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID
 }
 
 // GetByTournamentAndGame отдаёт только последние версии программ по каждой команде турнира
-func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error) {
 	// DISTINCT ON берёт только последнюю версию по каждой команде
 	query := `
 		SELECT DISTINCT ON (team_id)
@@ -420,9 +420,9 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	}
 	defer rows.Close()
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	for rows.Next() {
-		var p domain.Program
+		var p models.Program
 		err := rows.Scan(
 			&p.ID,
 			&p.UserID,
@@ -453,7 +453,7 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	return programs, nil
 }
 
-func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error) {
+func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, status, error_message, version, created_at, updated_at
@@ -468,9 +468,9 @@ func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, tea
 	}
 	defer rows.Close()
 
-	var programs []*domain.Program
+	var programs []*models.Program
 	for rows.Next() {
-		var p domain.Program
+		var p models.Program
 		err := rows.Scan(
 			&p.ID,
 			&p.UserID,

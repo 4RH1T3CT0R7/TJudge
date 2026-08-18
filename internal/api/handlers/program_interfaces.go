@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -12,26 +12,26 @@ import (
 
 // ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
-	Create(ctx context.Context, program *domain.Program) error
-	CreateWithAtomicVersion(ctx context.Context, program *domain.Program) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
-	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.Program, error)
-	Update(ctx context.Context, program *domain.Program) error
+	Create(ctx context.Context, program *models.Program) error
+	CreateWithAtomicVersion(ctx context.Context, program *models.Program) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
+	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error)
+	Update(ctx context.Context, program *models.Program) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
 	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
-	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*domain.Program, error)
+	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error)
 	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
 
 // TournamentParticipantAdder интерфейс для добавления участников в турнир
 type TournamentParticipantAdder interface {
-	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
+	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
 }
 
 // TournamentStatusChecker интерфейс для проверки статуса турнира
 type TournamentStatusChecker interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
 // MatchScheduler интерфейс для создания матчей
@@ -41,7 +41,7 @@ type MatchScheduler interface {
 
 // GameLookup интерфейс для получения информации об игре
 type GameLookup interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
 }
 
 // MatchExistenceChecker интерфейс для проверки существования матчей
