@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -43,11 +43,11 @@ func (s *GameRepositorySuite) TearDownTest() {
 }
 
 // createGame вставляет игру с уникальным именем по суффиксу
-func (s *GameRepositorySuite) createGame(suffix string) *domain.Game {
+func (s *GameRepositorySuite) createGame(suffix string) *models.Game {
 	s.T().Helper()
 	ctx := context.Background()
 
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        "test_" + suffix,
 		DisplayName: "Test Game " + suffix,
@@ -60,7 +60,7 @@ func (s *GameRepositorySuite) createGame(suffix string) *domain.Game {
 }
 
 // createTournamentForGame готовит юзера и турнир для тестов связки турнир-игра
-func (s *GameRepositorySuite) createTournamentForGame(code string) *domain.Tournament {
+func (s *GameRepositorySuite) createTournamentForGame(code string) *models.Tournament {
 	s.T().Helper()
 	user := createTestUser(s.T(), s.userRepo, "game_"+code)
 	return createTestTournament(s.T(), s.tournamentRepo, "GTEST"+code, user.ID)
@@ -71,7 +71,7 @@ func (s *GameRepositorySuite) createTournamentForGame(code string) *domain.Tourn
 func (s *GameRepositorySuite) TestCreate() {
 	ctx := context.Background()
 
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        "test_create",
 		DisplayName: "Test Create Game",
@@ -89,7 +89,7 @@ func (s *GameRepositorySuite) TestCreate_DuplicateName() {
 	s.createGame("dup")
 
 	ctx := context.Background()
-	duplicate := &domain.Game{
+	duplicate := &models.Game{
 		ID:          uuid.New(),
 		Name:        "test_dup",
 		DisplayName: "Different Display Name",
@@ -155,7 +155,7 @@ func (s *GameRepositorySuite) TestList() {
 	s.createGame("list_c")
 
 	ctx := context.Background()
-	games, err := s.repo.List(ctx, domain.GameFilter{Limit: 100})
+	games, err := s.repo.List(ctx, models.GameFilter{Limit: 100})
 	require.NoError(s.T(), err)
 
 	assert.GreaterOrEqual(s.T(), len(games), 3)
@@ -166,7 +166,7 @@ func (s *GameRepositorySuite) TestList_FilterByName() {
 	s.createGame("filter_other")
 
 	ctx := context.Background()
-	games, err := s.repo.List(ctx, domain.GameFilter{
+	games, err := s.repo.List(ctx, models.GameFilter{
 		Name:  "filter_target",
 		Limit: 100,
 	})
@@ -190,11 +190,11 @@ func (s *GameRepositorySuite) TestList_Pagination() {
 
 	ctx := context.Background()
 
-	page1, err := s.repo.List(ctx, domain.GameFilter{Limit: 1})
+	page1, err := s.repo.List(ctx, models.GameFilter{Limit: 1})
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), page1, 1)
 
-	page2, err := s.repo.List(ctx, domain.GameFilter{Limit: 1, Offset: 1})
+	page2, err := s.repo.List(ctx, models.GameFilter{Limit: 1, Offset: 1})
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), page2, 1)
 
@@ -227,7 +227,7 @@ func (s *GameRepositorySuite) TestUpdate() {
 
 func (s *GameRepositorySuite) TestUpdate_NotFound() {
 	ctx := context.Background()
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		DisplayName: "Ghost",
 		Rules:       "No rules",

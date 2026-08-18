@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
@@ -22,44 +22,44 @@ type MockGameRoundLookupService struct {
 	mock.Mock
 }
 
-func (m *MockGameRoundLookupService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
+func (m *MockGameRoundLookupService) GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Game), args.Error(1)
+	return args.Get(0).(*models.Game), args.Error(1)
 }
 
 type MockGameMatchRepo struct {
 	mock.Mock
 }
 
-func (m *MockGameMatchRepo) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
+func (m *MockGameMatchRepo) List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Match), args.Error(1)
+	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
 type MockTournamentGameStatusRepo struct {
 	mock.Mock
 }
 
-func (m *MockTournamentGameStatusRepo) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepo) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.TournamentGame), args.Error(1)
+	return args.Get(0).([]*models.TournamentGame), args.Error(1)
 }
 
-func (m *MockTournamentGameStatusRepo) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error) {
+func (m *MockTournamentGameStatusRepo) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGameWithDetails, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.TournamentGameWithDetails), args.Error(1)
+	return args.Get(0).([]*models.TournamentGameWithDetails), args.Error(1)
 }
 
 func (m *MockTournamentGameStatusRepo) MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -70,12 +70,12 @@ func (m *MockTournamentGameStatusRepo) SetActiveGame(ctx context.Context, tourna
 	return m.Called(ctx, tournamentID, gameID).Error(0)
 }
 
-func (m *MockTournamentGameStatusRepo) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepo) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
 func (m *MockTournamentGameStatusRepo) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
@@ -95,12 +95,12 @@ func (m *MockTournamentGameStatusRepo) SetAutoRound(ctx context.Context, tournam
 	return m.Called(ctx, tournamentID, gameID, enabled, intervalSecs).Error(0)
 }
 
-func (m *MockTournamentGameStatusRepo) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
+func (m *MockTournamentGameStatusRepo) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*models.TournamentGame, error) {
 	args := m.Called(ctx, tournamentID, gameID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TournamentGame), args.Error(1)
+	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
 // --- Helpers ---
@@ -147,14 +147,14 @@ func TestGameRoundHandler_GetGameMatches_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req = withTwoChiParams(req, "id", tournamentID.String(), "gameId", gameID.String())
 
-	gameSvc.On("GetByID", mock.Anything, gameID).Return(&domain.Game{
+	gameSvc.On("GetByID", mock.Anything, gameID).Return(&models.Game{
 		ID:   gameID,
 		Name: "prisoners_dilemma",
 	}, nil)
 
-	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f domain.MatchFilter) bool {
+	matchRepo.On("List", mock.Anything, mock.MatchedBy(func(f models.MatchFilter) bool {
 		return f.TournamentID != nil && *f.TournamentID == tournamentID && f.GameType == "prisoners_dilemma"
-	})).Return([]*domain.Match{
+	})).Return([]*models.Match{
 		{ID: matchID, TournamentID: tournamentID, GameType: "prisoners_dilemma"},
 	}, nil)
 
@@ -244,14 +244,14 @@ func TestGameRoundHandler_GetActiveGame_Success(t *testing.T) {
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 	req = req.WithContext(ctx)
 
-	statusRepo.On("GetActiveGame", mock.Anything, tournamentID).Return(&domain.TournamentGame{
+	statusRepo.On("GetActiveGame", mock.Anything, tournamentID).Return(&models.TournamentGame{
 		TournamentID: tournamentID,
 		GameID:       gameID,
 		IsActive:     true,
 		CurrentRound: 1,
 	}, nil)
 
-	gameSvc.On("GetByID", mock.Anything, gameID).Return(&domain.Game{
+	gameSvc.On("GetByID", mock.Anything, gameID).Return(&models.Game{
 		ID:          gameID,
 		Name:        "tug_of_war",
 		DisplayName: "Tug of War",

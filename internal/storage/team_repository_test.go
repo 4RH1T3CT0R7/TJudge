@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -42,19 +42,19 @@ func (s *TeamRepositorySuite) TearDownTest() {
 	_, _ = s.database.ExecContext(ctx, "DELETE FROM users WHERE username LIKE 'testuser_team%'")
 }
 
-func (s *TeamRepositorySuite) createTeamUser(suffix string) *domain.User {
+func (s *TeamRepositorySuite) createTeamUser(suffix string) *models.User {
 	return createTestUser(s.T(), s.userRepo, "team_"+suffix)
 }
 
-func (s *TeamRepositorySuite) createTeamTournament(code string, creatorID uuid.UUID) *domain.Tournament {
+func (s *TeamRepositorySuite) createTeamTournament(code string, creatorID uuid.UUID) *models.Tournament {
 	return createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 }
 
-func (s *TeamRepositorySuite) createTeam(name, code string, tournamentID, leaderID uuid.UUID) *domain.Team {
+func (s *TeamRepositorySuite) createTeam(name, code string, tournamentID, leaderID uuid.UUID) *models.Team {
 	s.T().Helper()
 	ctx := context.Background()
 
-	team := &domain.Team{
+	team := &models.Team{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Name:         name,
@@ -68,11 +68,11 @@ func (s *TeamRepositorySuite) createTeam(name, code string, tournamentID, leader
 	return team
 }
 
-func (s *TeamRepositorySuite) addMember(teamID, userID uuid.UUID) *domain.TeamMember {
+func (s *TeamRepositorySuite) addMember(teamID, userID uuid.UUID) *models.TeamMember {
 	s.T().Helper()
 	ctx := context.Background()
 
-	member := &domain.TeamMember{
+	member := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: teamID,
 		UserID: userID,
@@ -91,7 +91,7 @@ func (s *TeamRepositorySuite) TestCreate() {
 	tournament := s.createTeamTournament("TTEAM01", user.ID)
 
 	ctx := context.Background()
-	team := &domain.Team{
+	team := &models.Team{
 		ID:           uuid.New(),
 		TournamentID: tournament.ID,
 		Name:         "Test Team Create",
@@ -200,7 +200,7 @@ func (s *TeamRepositorySuite) TestList_FilterByTournament() {
 	s.createTeam("Test Team List 2", "LIST02", tournament.ID, user.ID)
 
 	ctx := context.Background()
-	filter := domain.TeamFilter{
+	filter := models.TeamFilter{
 		TournamentID: &tournament.ID,
 		Limit:        10,
 	}
@@ -222,7 +222,7 @@ func (s *TeamRepositorySuite) TestList_FilterByLeader() {
 	s.createTeam("Test Team Leader2", "LLDR02", tournament.ID, user2.ID)
 
 	ctx := context.Background()
-	filter := domain.TeamFilter{
+	filter := models.TeamFilter{
 		LeaderID: &user1.ID,
 		Limit:    10,
 	}
@@ -244,7 +244,7 @@ func (s *TeamRepositorySuite) TestList_LimitOffset() {
 	s.createTeam("Test Team Page 3", "PAGE03", tournament.ID, user.ID)
 
 	ctx := context.Background()
-	filter := domain.TeamFilter{
+	filter := models.TeamFilter{
 		TournamentID: &tournament.ID,
 		Limit:        2,
 		Offset:       0,
@@ -284,7 +284,7 @@ func (s *TeamRepositorySuite) TestUpdate() {
 func (s *TeamRepositorySuite) TestUpdate_NotFound() {
 	ctx := context.Background()
 
-	team := &domain.Team{
+	team := &models.Team{
 		ID:       uuid.New(),
 		Name:     "Test Team Nonexistent",
 		LeaderID: uuid.New(),
@@ -328,7 +328,7 @@ func (s *TeamRepositorySuite) TestAddMember() {
 	team := s.createTeam("Test Team AddMember", "ADMB01", tournament.ID, leader.ID)
 
 	ctx := context.Background()
-	tm := &domain.TeamMember{
+	tm := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: team.ID,
 		UserID: member.ID,
@@ -348,7 +348,7 @@ func (s *TeamRepositorySuite) TestAddMember_Duplicate() {
 	s.addMember(team.ID, member.ID)
 
 	ctx := context.Background()
-	duplicate := &domain.TeamMember{
+	duplicate := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: team.ID,
 		UserID: member.ID,

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -15,7 +15,7 @@ import (
 
 // ProgramRepository - чтобы достать программы турнира по конкретной игре
 type ProgramRepository interface {
-	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error)
+	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error)
 }
 
 type ScheduleNewProgramMatchesRequest struct {
@@ -38,7 +38,7 @@ type SchedulingService struct {
 }
 
 // matchIDs - вытаскивает id матчей для отката (компенсация при ошибке очереди)
-func matchIDs(matches []*domain.Match) []uuid.UUID {
+func matchIDs(matches []*models.Match) []uuid.UUID {
 	ids := make([]uuid.UUID, 0, len(matches))
 	for _, m := range matches {
 		ids = append(ids, m.ID)
@@ -80,7 +80,7 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 		}
 
 		// для завершённого турнира матчи уже не планируем
-		if tournament.Status != domain.TournamentActive && tournament.Status != domain.TournamentPending {
+		if tournament.Status != models.TournamentActive && tournament.Status != models.TournamentPending {
 			return errors.ErrConflict.WithMessage("cannot schedule matches for completed tournament")
 		}
 
@@ -91,7 +91,7 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 		}
 
 		// матчи только против чужих программ (свою команду пропускаем)
-		var matches []*domain.Match
+		var matches []*models.Match
 		now := time.Now()
 
 		for _, prog := range programs {
@@ -104,14 +104,14 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 			}
 
 			// матч 1: новая прога первым игроком, существующая вторым
-			match1 := &domain.Match{
+			match1 := &models.Match{
 				ID:           uuid.New(),
 				TournamentID: req.TournamentID,
 				Program1ID:   req.NewProgramID,
 				Program2ID:   prog.ID,
 				GameType:     tournament.GameType,
-				Status:       domain.MatchPending,
-				Priority:     domain.PriorityHigh, // новые матчи в приоритете
+				Status:       models.MatchPending,
+				Priority:     models.PriorityHigh, // новые матчи в приоритете
 				CreatedAt:    now,
 			}
 
@@ -125,14 +125,14 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 			}
 
 			// матч 2: наоборот, старая прога первым а новая вторым (важно для несимметричных игр)
-			match2 := &domain.Match{
+			match2 := &models.Match{
 				ID:           uuid.New(),
 				TournamentID: req.TournamentID,
 				Program1ID:   prog.ID,
 				Program2ID:   req.NewProgramID,
 				GameType:     tournament.GameType,
-				Status:       domain.MatchPending,
-				Priority:     domain.PriorityHigh, // новые матчи в приоритете
+				Status:       models.MatchPending,
+				Priority:     models.PriorityHigh, // новые матчи в приоритете
 				CreatedAt:    now,
 			}
 
@@ -234,7 +234,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 		}
 
 		// раунд гоняем только для активного турнира
-		if tournament.Status != domain.TournamentActive {
+		if tournament.Status != models.TournamentActive {
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
@@ -268,7 +268,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 
 			roundNumber := 1
 
-			gameMatches, err := ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityMedium, nil)
+			gameMatches, err := ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, models.PriorityMedium, nil)
 			if err != nil {
 				return 0, fmt.Errorf("failed to generate matches for game %s: %w", gameType, err)
 			}
@@ -365,7 +365,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		}
 
 		// турнир должен быть активен
-		if tournament.Status != domain.TournamentActive {
+		if tournament.Status != models.TournamentActive {
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
@@ -389,7 +389,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		roundNumber := 1
 
 		// ручной запуск - высокий приоритет
-		matches, err = ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, domain.PriorityHigh, nil)
+		matches, err = ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, models.PriorityHigh, nil)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate matches: %w", err)
 		}
@@ -439,14 +439,14 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 	return len(matches), nil
 }
 
-func (ss *SchedulingService) getLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
+func (ss *SchedulingService) getLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error) {
 	return ss.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)
 }
 
 // generateRoundRobinMatchesForGame - собирает матчи для одной игры.
 // playedPairs это уже сыгранные пары "program1_id|program2_id", их пропускаем
-func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *domain.Tournament, participants []*domain.TournamentParticipant, gameType string, roundNumber int, priority domain.MatchPriority, playedPairs map[string]struct{}) ([]*domain.Match, error) {
-	var matches []*domain.Match
+func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models.Tournament, participants []*models.TournamentParticipant, gameType string, roundNumber int, priority models.MatchPriority, playedPairs map[string]struct{}) ([]*models.Match, error) {
+	var matches []*models.Match
 	now := time.Now()
 
 	// каждый с каждым, обе стороны играют (AB и BA) -
@@ -465,13 +465,13 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *domain
 				continue
 			}
 
-			match := &domain.Match{
+			match := &models.Match{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
 				Program1ID:   participants[i].ProgramID,
 				Program2ID:   participants[j].ProgramID,
 				GameType:     gameType,
-				Status:       domain.MatchPending,
+				Status:       models.MatchPending,
 				Priority:     priority,
 				RoundNumber:  roundNumber,
 				CreatedAt:    now,

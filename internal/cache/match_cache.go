@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -38,7 +38,7 @@ func (mc *MatchCache) getKey(matchID uuid.UUID) string {
 	return fmt.Sprintf("match:%s", matchID.String())
 }
 
-func (mc *MatchCache) Set(ctx context.Context, matchID uuid.UUID, result *domain.MatchResult) error {
+func (mc *MatchCache) Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error {
 	data, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("failed to marshal match result: %w", err)
@@ -49,7 +49,7 @@ func (mc *MatchCache) Set(ctx context.Context, matchID uuid.UUID, result *domain
 }
 
 // SetMatch кладёт сам матч, а не его результат
-func (mc *MatchCache) SetMatch(ctx context.Context, match *domain.Match) error {
+func (mc *MatchCache) SetMatch(ctx context.Context, match *models.Match) error {
 	data, err := json.Marshal(match)
 	if err != nil {
 		return fmt.Errorf("failed to marshal match: %w", err)
@@ -58,13 +58,13 @@ func (mc *MatchCache) SetMatch(ctx context.Context, match *domain.Match) error {
 	key := mc.getKey(match.ID)
 	// активный матч ещё поменяется, поэтому держим недолго
 	ttl := 5 * time.Minute
-	if match.Status == domain.MatchCompleted {
+	if match.Status == models.MatchCompleted {
 		ttl = mc.ttl // завершённый уже не изменится, храним сутки
 	}
 	return mc.cache.Set(ctx, key, data, ttl)
 }
 
-func (mc *MatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*domain.Match, error) {
+func (mc *MatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*models.Match, error) {
 	key := mc.getKey(matchID)
 	data, err := mc.cache.Get(ctx, key)
 	if err != nil {
@@ -83,7 +83,7 @@ func (mc *MatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*domain.
 		mc.metrics.RecordCacheHit("match")
 	}
 
-	var match domain.Match
+	var match models.Match
 	if err := json.Unmarshal([]byte(data), &match); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
 	}
@@ -91,7 +91,7 @@ func (mc *MatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*domain.
 	return &match, nil
 }
 
-func (mc *MatchCache) Get(ctx context.Context, matchID uuid.UUID) (*domain.MatchResult, error) {
+func (mc *MatchCache) Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error) {
 	key := mc.getKey(matchID)
 	data, err := mc.cache.Get(ctx, key)
 	if err != nil {
@@ -109,7 +109,7 @@ func (mc *MatchCache) Get(ctx context.Context, matchID uuid.UUID) (*domain.Match
 		mc.metrics.RecordCacheHit("match_result")
 	}
 
-	var result domain.MatchResult
+	var result models.MatchResult
 	if err := json.Unmarshal([]byte(data), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal match result: %w", err)
 	}

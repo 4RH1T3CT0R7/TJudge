@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -30,7 +30,7 @@ const (
 // AuthService интерфейс для работы с аутентификацией
 type AuthService interface {
 	ValidateToken(tokenString string) (*auth.Claims, error)
-	GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error)
+	GetUserFromToken(ctx context.Context, tokenString string) (*models.User, error)
 	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 

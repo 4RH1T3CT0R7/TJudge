@@ -1,4 +1,4 @@
-package domain
+package models
 
 // проверяет юзера перед сохранением
 func (u *User) Validate() error {

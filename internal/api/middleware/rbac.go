@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 )
 
 // RequireRole middleware проверяет, что у пользователя есть требуемая роль
-func RequireRole(requiredRoles ...domain.Role) func(http.Handler) http.Handler {
+func RequireRole(requiredRoles ...models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Получаем роль из контекста
-			role, ok := r.Context().Value(RoleKey).(domain.Role)
+			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok {
 				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
 				return
@@ -37,19 +37,19 @@ func RequireRole(requiredRoles ...domain.Role) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAdmin middleware - shortcut для RequireRole(domain.RoleAdmin)
+// RequireAdmin middleware - shortcut для RequireRole(models.RoleAdmin)
 func RequireAdmin() func(http.Handler) http.Handler {
-	return RequireRole(domain.RoleAdmin)
+	return RequireRole(models.RoleAdmin)
 }
 
 // WithRole добавляет роль в контекст запроса
-func WithRole(ctx context.Context, role domain.Role) context.Context {
+func WithRole(ctx context.Context, role models.Role) context.Context {
 	return context.WithValue(ctx, RoleKey, role)
 }
 
 // RequireRoleValue извлекает роль из контекста
-func RequireRoleValue(ctx context.Context) (domain.Role, error) {
-	role, ok := ctx.Value(RoleKey).(domain.Role)
+func RequireRoleValue(ctx context.Context) (models.Role, error) {
+	role, ok := ctx.Value(RoleKey).(models.Role)
 	if !ok {
 		return "", errors.ErrUnauthorized.WithMessage("role not found in context")
 	}
@@ -58,12 +58,12 @@ func RequireRoleValue(ctx context.Context) (domain.Role, error) {
 
 // UserRoleChecker интерфейс для проверки актуальной роли пользователя из БД
 type UserRoleChecker interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 }
 
 // roleCacheEntry хранит кешированную роль с временем добавления
 type roleCacheEntry struct {
-	role      domain.Role
+	role      models.Role
 	expiresAt time.Time
 }
 
@@ -91,8 +91,8 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Сначала быстрая проверка из JWT
-			role, ok := r.Context().Value(RoleKey).(domain.Role)
-			if !ok || role != domain.RoleAdmin {
+			role, ok := r.Context().Value(RoleKey).(models.Role)
+			if !ok || role != models.RoleAdmin {
 				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
@@ -109,7 +109,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			v.mu.RUnlock()
 
 			if cached && time.Now().Before(entry.expiresAt) {
-				if entry.role != domain.RoleAdmin {
+				if entry.role != models.RoleAdmin {
 					httputil.WriteError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
 					return
 				}
@@ -140,7 +140,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			}
 			v.mu.Unlock()
 
-			if user.Role != domain.RoleAdmin {
+			if user.Role != models.RoleAdmin {
 				httputil.WriteError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
 				return
 			}

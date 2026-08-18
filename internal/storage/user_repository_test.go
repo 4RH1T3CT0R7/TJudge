@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +45,7 @@ func (s *UserRepositorySuite) TestCreate_DuplicateUsername() {
 	createTestUser(s.T(), s.repo, "dup_user")
 
 	ctx := context.Background()
-	duplicate := &domain.User{
+	duplicate := &models.User{
 		ID:           uuid.New(),
 		Username:     "testuser_dup_user",
 		Email:        "different@test.com",
@@ -60,7 +60,7 @@ func (s *UserRepositorySuite) TestCreate_DuplicateEmail() {
 	createTestUser(s.T(), s.repo, "dup_email")
 
 	ctx := context.Background()
-	duplicate := &domain.User{
+	duplicate := &models.User{
 		ID:           uuid.New(),
 		Username:     "different_user",
 		Email:        "testuser_dup_email@test.com",
@@ -144,7 +144,7 @@ func (s *UserRepositorySuite) TestUpdate() {
 
 func (s *UserRepositorySuite) TestUpdate_NotFound() {
 	ctx := context.Background()
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "nonexistent",
 		Email:        "nonexistent@test.com",

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -22,7 +22,7 @@ type RecoveryOutboxRepo interface {
 
 // RecoveryProgramRepo - программы, зависшие в компиляции.
 type RecoveryProgramRepo interface {
-	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Program, error)
+	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
 // RecoveryCompileQueue - постановка программ в очередь компиляции.
@@ -32,13 +32,13 @@ type RecoveryCompileQueue interface {
 
 // RecoveryMatchRepo - зависшие матчи.
 type RecoveryMatchRepo interface {
-	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*domain.Match, error)
+	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
 	ResetToPending(ctx context.Context, id uuid.UUID) error
 }
 
 // RecoveryQueueManager - возврат матчей в очередь и чистка dead-letter.
 type RecoveryQueueManager interface {
-	Enqueue(ctx context.Context, match *domain.Match) error
+	Enqueue(ctx context.Context, match *models.Match) error
 	ClearDeadLetter(ctx context.Context) (int64, error)
 }
 
@@ -144,7 +144,7 @@ func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http
 			h.log.LogError("recovery: reset match", err, zap.String("match_id", m.ID.String()))
 			continue
 		}
-		m.Status = domain.MatchPending
+		m.Status = models.MatchPending
 		if err := h.queueManager.Enqueue(r.Context(), m); err != nil {
 			// Не страшно: pending-матч подберёт периодический recovery воркера.
 			h.log.LogError("recovery: enqueue match", err, zap.String("match_id", m.ID.String()))

@@ -10,7 +10,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -21,7 +21,7 @@ import (
 // @Tags programs
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} domain.Program
+// @Success 200 {array} models.Program
 // @Failure 401 {object} object{error=string}
 // @Router /programs [get]
 func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Program ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {object} domain.Program
+// @Success 200 {object} models.Program
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
@@ -77,8 +77,8 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Админы могут просматривать любую программу; остальные только свои
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-	if userRole != domain.RoleAdmin && program.UserID != userID {
+	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
+	if userRole != models.RoleAdmin && program.UserID != userID {
 		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
 		return
 	}
@@ -111,8 +111,8 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Админы могут скачивать любую программу
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-	if userRole != domain.RoleAdmin {
+	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
+	if userRole != models.RoleAdmin {
 		// Проверяем владение программой
 		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
 		if err != nil {
@@ -223,7 +223,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 // @Param team_id query string true "Team ID" format(uuid)
 // @Param game_id query string true "Game ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {array} domain.Program
+// @Success 200 {array} models.Program
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}

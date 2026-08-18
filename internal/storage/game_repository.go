@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -22,7 +22,7 @@ func NewGameRepository(db *DB) *GameRepository {
 	return &GameRepository{db: db}
 }
 
-func (r *GameRepository) Create(ctx context.Context, game *domain.Game) error {
+func (r *GameRepository) Create(ctx context.Context, game *models.Game) error {
 	query := `
 		INSERT INTO games (id, name, display_name, rules)
 		VALUES ($1, $2, $3, $4)
@@ -43,8 +43,8 @@ func (r *GameRepository) Create(ctx context.Context, game *domain.Game) error {
 	return nil
 }
 
-func (r *GameRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
-	var game domain.Game
+func (r *GameRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error) {
+	var game models.Game
 
 	query := `
 		SELECT id, name, display_name, rules, created_at, updated_at
@@ -72,8 +72,8 @@ func (r *GameRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Gam
 }
 
 // GetByName получает игру по имени
-func (r *GameRepository) GetByName(ctx context.Context, name string) (*domain.Game, error) {
-	var game domain.Game
+func (r *GameRepository) GetByName(ctx context.Context, name string) (*models.Game, error) {
+	var game models.Game
 
 	query := `
 		SELECT id, name, display_name, rules, created_at, updated_at
@@ -100,7 +100,7 @@ func (r *GameRepository) GetByName(ctx context.Context, name string) (*domain.Ga
 	return &game, nil
 }
 
-func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
+func (r *GameRepository) List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error) {
 	query := `
 		SELECT id, name, display_name, rules, created_at, updated_at
 		FROM games
@@ -134,9 +134,9 @@ func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]
 	}
 	defer rows.Close()
 
-	var games []*domain.Game
+	var games []*models.Game
 	for rows.Next() {
-		var game domain.Game
+		var game models.Game
 
 		err := rows.Scan(
 			&game.ID,
@@ -160,7 +160,7 @@ func (r *GameRepository) List(ctx context.Context, filter domain.GameFilter) ([]
 	return games, nil
 }
 
-func (r *GameRepository) Update(ctx context.Context, game *domain.Game) error {
+func (r *GameRepository) Update(ctx context.Context, game *models.Game) error {
 	query := `
 		UPDATE games
 		SET display_name = $2, rules = $3
@@ -204,7 +204,7 @@ func (r *GameRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
+func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error) {
 	query := `
 		SELECT g.id, g.name, g.display_name, g.rules, g.created_at, g.updated_at
 		FROM games g
@@ -219,9 +219,9 @@ func (r *GameRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 	}
 	defer rows.Close()
 
-	var games []*domain.Game
+	var games []*models.Game
 	for rows.Next() {
-		var game domain.Game
+		var game models.Game
 
 		err := rows.Scan(
 			&game.ID,
@@ -293,8 +293,8 @@ func (r *GameRepository) Exists(ctx context.Context, name string) (bool, error) 
 	return exists, nil
 }
 
-func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error) {
-	var tg domain.TournamentGame
+func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*models.TournamentGame, error) {
+	var tg models.TournamentGame
 
 	query := `
 		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
@@ -326,7 +326,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	return &tg, nil
 }
 
-func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error) {
+func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error) {
 	query := `
 		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0),
 		       COALESCE(tg.auto_round_enabled, false), COALESCE(tg.auto_round_interval_seconds, 60), tg.auto_round_last_run_at, tg.created_at
@@ -342,9 +342,9 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 	}
 	defer rows.Close()
 
-	var tgs []*domain.TournamentGame
+	var tgs []*models.TournamentGame
 	for rows.Next() {
-		var tg domain.TournamentGame
+		var tg models.TournamentGame
 
 		err := rows.Scan(
 			&tg.TournamentID,
@@ -374,7 +374,7 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 
 // GetTournamentGamesWithDetails - связи турнира с играми вместе с данными игр,
 // одним JOIN-запросом чтобы не плодить N+1
-func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error) {
+func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGameWithDetails, error) {
 	query := `
 		SELECT tg.tournament_id, tg.game_id,
 		       g.name AS game_name, g.display_name AS game_display_name,
@@ -397,9 +397,9 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 	}
 	defer rows.Close()
 
-	var results []*domain.TournamentGameWithDetails
+	var results []*models.TournamentGameWithDetails
 	for rows.Next() {
-		var d domain.TournamentGameWithDetails
+		var d models.TournamentGameWithDetails
 		err := rows.Scan(
 			&d.TournamentID,
 			&d.GameID,
@@ -546,8 +546,8 @@ func (r *GameRepository) DeactivateAllGames(ctx context.Context, tournamentID uu
 	return nil
 }
 
-func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error) {
-	var tg domain.TournamentGame
+func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error) {
+	var tg models.TournamentGame
 
 	query := `
 		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
@@ -767,7 +767,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 
 // GetAutoRoundEnabledGames возвращает все игры с включённым авто-раундом в активных турнирах
 // TODO: зовётся каждый тик планировщиком, мб индекс по auto_round_enabled добавить
-func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error) {
+func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*models.AutoRoundGameInfo, error) {
 	query := `
 		SELECT tg.tournament_id, tg.game_id, g.name AS game_type,
 		       tg.auto_round_interval_seconds, tg.auto_round_last_run_at
@@ -783,9 +783,9 @@ func (r *GameRepository) GetAutoRoundEnabledGames(ctx context.Context) ([]*domai
 	}
 	defer rows.Close()
 
-	var results []*domain.AutoRoundGameInfo
+	var results []*models.AutoRoundGameInfo
 	for rows.Next() {
-		var g domain.AutoRoundGameInfo
+		var g models.AutoRoundGameInfo
 		if err := rows.Scan(&g.TournamentID, &g.GameID, &g.GameType, &g.IntervalSeconds, &g.LastRunAt); err != nil {
 			return nil, errors.Wrap(err, "failed to scan auto-round game info")
 		}

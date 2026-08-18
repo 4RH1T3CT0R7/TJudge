@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -18,12 +18,12 @@ import (
 
 type mockAuditReader struct{ mock.Mock }
 
-func (m *mockAuditReader) List(ctx context.Context, limit int) ([]*domain.AuditLogEntry, error) {
+func (m *mockAuditReader) List(ctx context.Context, limit int) ([]*models.AuditLogEntry, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.AuditLogEntry), args.Error(1)
+	return args.Get(0).([]*models.AuditLogEntry), args.Error(1)
 }
 
 func newAuditHandlerFixture(t *testing.T) (*AuditHandler, *mockAuditReader) {
@@ -35,8 +35,8 @@ func newAuditHandlerFixture(t *testing.T) (*AuditHandler, *mockAuditReader) {
 
 func TestAuditHandler_List_DefaultLimit(t *testing.T) {
 	h, repo := newAuditHandlerFixture(t)
-	entry := &domain.AuditLogEntry{ID: uuid.New(), Action: "POST /tournaments", CreatedAt: time.Now()}
-	repo.On("List", mock.Anything, 100).Return([]*domain.AuditLogEntry{entry}, nil)
+	entry := &models.AuditLogEntry{ID: uuid.New(), Action: "POST /tournaments", CreatedAt: time.Now()}
+	repo.On("List", mock.Anything, 100).Return([]*models.AuditLogEntry{entry}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/audit", nil)
 	rec := httptest.NewRecorder()
@@ -44,7 +44,7 @@ func TestAuditHandler_List_DefaultLimit(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	var envelope struct {
-		Data []domain.AuditLogEntry `json:"data"`
+		Data []models.AuditLogEntry `json:"data"`
 	}
 	assert.NoError(t, json.NewDecoder(rec.Body).Decode(&envelope))
 	assert.Len(t, envelope.Data, 1)
@@ -53,7 +53,7 @@ func TestAuditHandler_List_DefaultLimit(t *testing.T) {
 
 func TestAuditHandler_List_CustomLimit(t *testing.T) {
 	h, repo := newAuditHandlerFixture(t)
-	repo.On("List", mock.Anything, 50).Return([]*domain.AuditLogEntry{}, nil)
+	repo.On("List", mock.Anything, 50).Return([]*models.AuditLogEntry{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/audit?limit=50", nil)
 	rec := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestAuditHandler_List_CustomLimit(t *testing.T) {
 
 func TestAuditHandler_List_CapsLimitAt500(t *testing.T) {
 	h, repo := newAuditHandlerFixture(t)
-	repo.On("List", mock.Anything, 500).Return([]*domain.AuditLogEntry{}, nil)
+	repo.On("List", mock.Anything, 500).Return([]*models.AuditLogEntry{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/audit?limit=99999", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestAuditHandler_List_CapsLimitAt500(t *testing.T) {
 
 func TestAuditHandler_List_IgnoresInvalidLimit(t *testing.T) {
 	h, repo := newAuditHandlerFixture(t)
-	repo.On("List", mock.Anything, 100).Return([]*domain.AuditLogEntry{}, nil)
+	repo.On("List", mock.Anything, 100).Return([]*models.AuditLogEntry{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/audit?limit=garbage", nil)
 	rec := httptest.NewRecorder()

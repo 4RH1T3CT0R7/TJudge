@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
@@ -18,11 +18,11 @@ import (
 
 // GameCRUDService - минимальный интерфейс для CRUD-операций над играми.
 type GameCRUDService interface {
-	Create(ctx context.Context, req *game.CreateRequest) (*domain.Game, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
-	GetByName(ctx context.Context, name string) (*domain.Game, error)
-	List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error)
-	Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*domain.Game, error)
+	Create(ctx context.Context, req *game.CreateRequest) (*models.Game, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
+	GetByName(ctx context.Context, name string) (*models.Game, error)
+	List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error)
+	Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*models.Game, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -48,7 +48,7 @@ func NewGameCRUDHandler(gameService GameCRUDService, log *logger.Logger) *GameCR
 // @Produce json
 // @Param request body game.CreateRequest true "Данные игры"
 // @Security BearerAuth
-// @Success 201 {object} domain.Game
+// @Success 201 {object} models.Game
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
@@ -84,10 +84,10 @@ func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Param name query string false "Фильтр по имени"
 // @Param limit query int false "Лимит записей" default(50)
 // @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} domain.Game
+// @Success 200 {array} models.Game
 // @Router /games [get]
 func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
-	filter := domain.GameFilter{}
+	filter := models.GameFilter{}
 	filter.Name = r.URL.Query().Get("name")
 
 	pg := pagination.ParseLimitOffset(r, 50, 0)
@@ -110,7 +110,7 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Tags games
 // @Produce json
 // @Param id path string true "Game ID" format(uuid)
-// @Success 200 {object} domain.Game
+// @Success 200 {object} models.Game
 // @Failure 404 {object} object{error=string}
 // @Router /games/{id} [get]
 func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Tags games
 // @Produce json
 // @Param name path string true "Имя игры"
-// @Success 200 {object} domain.Game
+// @Success 200 {object} models.Game
 // @Failure 400 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
 // @Router /games/name/{name} [get]
@@ -163,7 +163,7 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 // @Param id path string true "Game ID" format(uuid)
 // @Param request body game.UpdateRequest true "Данные для обновления"
 // @Security BearerAuth
-// @Success 200 {object} domain.Game
+// @Success 200 {object} models.Game
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}

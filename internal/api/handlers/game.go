@@ -3,9 +3,9 @@ package handlers
 import (
 	"context"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 )
@@ -13,51 +13,51 @@ import (
 // GameService - полный интерфейс domain-сервиса игр.
 // Удовлетворяет GameCRUDService, TournamentGameService и GameRoundLookupService.
 type GameService interface {
-	Create(ctx context.Context, req *game.CreateRequest) (*domain.Game, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
-	GetByName(ctx context.Context, name string) (*domain.Game, error)
-	List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error)
-	Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*domain.Game, error)
+	Create(ctx context.Context, req *game.CreateRequest) (*models.Game, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
+	GetByName(ctx context.Context, name string) (*models.Game, error)
+	List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error)
+	Update(ctx context.Context, id uuid.UUID, req *game.UpdateRequest) (*models.Game, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error)
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error)
 	AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 }
 
 // GameLeaderboardRepository - интерфейс для leaderboard конкретной игры.
 type GameLeaderboardRepository interface {
-	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*domain.LeaderboardEntry, error)
-	GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.HeadToHeadCell, error)
+	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*models.LeaderboardEntry, error)
+	GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.HeadToHeadCell, error)
 }
 
 // GameMatchRepository - интерфейс для листинга матчей игры.
 type GameMatchRepository interface {
-	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
+	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
 }
 
 // GameTournamentRepository - интерфейс для проверки владения турниром.
 type GameTournamentRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
 // GameProgramRepository - интерфейс для получения программ по турниру и игре.
 type GameProgramRepository interface {
-	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*domain.Program, error)
+	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error)
 }
 
 // TournamentGameStatusRepository - интерфейс управления статусом игр и раундами.
 type TournamentGameStatusRepository interface {
-	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
-	GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGameWithDetails, error)
+	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
+	GetTournamentGamesWithDetails(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGameWithDetails, error)
 	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
-	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*domain.TournamentGame, error)
+	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error)
 	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
 	// Авто-раунд
 	SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error
-	GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*domain.TournamentGame, error)
+	GetTournamentGame(ctx context.Context, tournamentID, gameID uuid.UUID) (*models.TournamentGame, error)
 }
 
 // GameHandler - фасад, встраивающий три специализированных sub-handler'а:

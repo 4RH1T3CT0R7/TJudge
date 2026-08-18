@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -14,7 +14,7 @@ import (
 
 // AuditLogSink принимает записи audit-лога. Реализуется репозиторием БД.
 type AuditLogSink interface {
-	Insert(ctx context.Context, e *domain.AuditLogEntry) error
+	Insert(ctx context.Context, e *models.AuditLogEntry) error
 }
 
 // AuditLogger обёртывает AuditLogSink асинхронным буфером: HTTP-обработчик
@@ -24,7 +24,7 @@ type AuditLogSink interface {
 // "audit log buffer full" вместо блокировки запроса.
 type AuditLogger struct {
 	sink    AuditLogSink
-	ch      chan *domain.AuditLogEntry
+	ch      chan *models.AuditLogEntry
 	log     *logger.Logger
 	dropped atomic.Int64
 }
@@ -37,7 +37,7 @@ func NewAuditLogger(sink AuditLogSink, bufferSize int, log *logger.Logger) *Audi
 	}
 	return &AuditLogger{
 		sink: sink,
-		ch:   make(chan *domain.AuditLogEntry, bufferSize),
+		ch:   make(chan *models.AuditLogEntry, bufferSize),
 		log:  log,
 	}
 }
@@ -66,7 +66,7 @@ func (a *AuditLogger) Close() { close(a.ch) }
 func (a *AuditLogger) Dropped() int64 { return a.dropped.Load() }
 
 // enqueue неблокирующе помещает запись в канал; при переполнении - drop.
-func (a *AuditLogger) enqueue(e *domain.AuditLogEntry) {
+func (a *AuditLogger) enqueue(e *models.AuditLogEntry) {
 	select {
 	case a.ch <- e:
 	default:
@@ -105,8 +105,8 @@ func Audit(a *AuditLogger) func(http.Handler) http.Handler {
 			}
 
 			// Только админы (остальные действия и так лимитированы rbac).
-			role, _ := r.Context().Value(RoleKey).(domain.Role)
-			if role != domain.RoleAdmin {
+			role, _ := r.Context().Value(RoleKey).(models.Role)
+			if role != models.RoleAdmin {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -120,7 +120,7 @@ func Audit(a *AuditLogger) func(http.Handler) http.Handler {
 			aw := &auditResponseWriter{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(aw, r)
 
-			entry := &domain.AuditLogEntry{
+			entry := &models.AuditLogEntry{
 				ID:         uuid.New(),
 				ActorID:    userID,
 				ActorRole:  string(role),

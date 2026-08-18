@@ -7,8 +7,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
@@ -18,18 +18,18 @@ import (
 
 // TournamentService интерфейс для tournament service
 type TournamentService interface {
-	Create(ctx context.Context, req *tournament.CreateRequest) (*domain.Tournament, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
-	List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error)
+	Create(ctx context.Context, req *tournament.CreateRequest) (*models.Tournament, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
+	List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error)
 	Join(ctx context.Context, req *tournament.JoinRequest) error
 	Start(ctx context.Context, tournamentID uuid.UUID) error
 	Complete(ctx context.Context, tournamentID uuid.UUID) error
 	Delete(ctx context.Context, tournamentID uuid.UUID) error
-	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
-	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
-	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error)
-	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
-	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
+	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
+	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
+	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error)
+	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
 }
 
 // SchedulingService интерфейс для сервиса планирования матчей
@@ -63,7 +63,7 @@ func NewTournamentHandler(tournamentService TournamentService, schedulingService
 // @Produce json
 // @Param request body tournament.CreateRequest true "Данные турнира"
 // @Security BearerAuth
-// @Success 201 {object} domain.Tournament
+// @Success 201 {object} models.Tournament
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
@@ -106,18 +106,18 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Param game_type query string false "Фильтр по типу игры"
 // @Param limit query int false "Лимит записей" default(50)
 // @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} domain.Tournament
+// @Success 200 {array} models.Tournament
 // @Failure 400 {object} object{error=string}
 // @Router /tournaments [get]
 func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
-	filter := domain.TournamentFilter{}
+	filter := models.TournamentFilter{}
 
 	// Фильтр по статусу
 	if status := r.URL.Query().Get("status"); status != "" {
-		s := domain.TournamentStatus(status)
+		s := models.TournamentStatus(status)
 		switch s {
-		case domain.TournamentPending, domain.TournamentActive, domain.TournamentCompleted, domain.TournamentCancelled:
+		case models.TournamentPending, models.TournamentActive, models.TournamentCompleted, models.TournamentCancelled:
 			filter.Status = s
 		default:
 			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, active, completed, cancelled"))
@@ -150,7 +150,7 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Tags tournaments
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {object} domain.Tournament
+// @Success 200 {object} models.Tournament
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id} [get]
 func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +340,7 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param limit query int false "Лимит записей" default(100)
-// @Success 200 {array} domain.LeaderboardEntry
+// @Success 200 {array} models.LeaderboardEntry
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/leaderboard [get]
 func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -375,7 +375,7 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param request body object{program1_id=string,program2_id=string,priority=string} true "Данные матча"
 // @Security BearerAuth
-// @Success 201 {object} domain.Match
+// @Success 201 {object} models.Match
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
@@ -391,7 +391,7 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		Program1ID uuid.UUID            `json:"program1_id"`
 		Program2ID uuid.UUID            `json:"program2_id"`
-		Priority   domain.MatchPriority `json:"priority"`
+		Priority   models.MatchPriority `json:"priority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Info("Invalid request body", zap.Error(err))
@@ -401,7 +401,7 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 
 	// Устанавливаем приоритет по умолчанию, если не указан
 	if req.Priority == "" {
-		req.Priority = domain.PriorityMedium
+		req.Priority = models.PriorityMedium
 	}
 
 	// Создаём матч
@@ -441,7 +441,7 @@ type CrossGameLeaderboardEntry struct {
 // @Tags tournaments
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} domain.CrossGameLeaderboardEntry
+// @Success 200 {array} models.CrossGameLeaderboardEntry
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/cross-game-leaderboard [get]
 func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -471,7 +471,7 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param limit query int false "Лимит записей" default(50)
 // @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} domain.Match
+// @Success 200 {array} models.Match
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/matches [get]
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
@@ -503,7 +503,7 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 // @Tags tournaments
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} domain.MatchRound
+// @Success 200 {array} models.MatchRound
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/matches/rounds [get]
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {

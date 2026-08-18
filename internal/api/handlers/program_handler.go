@@ -11,7 +11,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -29,7 +29,7 @@ import (
 // @Param game_id formData string false "Game ID" format(uuid)
 // @Param name formData string false "Название программы"
 // @Security BearerAuth
-// @Success 201 {object} domain.Program
+// @Success 201 {object} models.Program
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
@@ -88,7 +88,7 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		req.CodePath = cleaned
 	}
 
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		UserID:   userID,
 		Name:     req.Name,
@@ -127,7 +127,7 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 // @Param id path string true "Program ID" format(uuid)
 // @Param request body object{name=string,code_path=string,language=string} true "Данные для обновления"
 // @Security BearerAuth
-// @Success 200 {object} domain.Program
+// @Success 200 {object} models.Program
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}

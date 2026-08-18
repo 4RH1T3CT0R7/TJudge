@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +27,7 @@ type mockTournamentCache struct {
 	mock.Mock
 }
 
-func (m *mockTournamentCache) Set(ctx context.Context, tournament *domain.Tournament) error {
+func (m *mockTournamentCache) Set(ctx context.Context, tournament *models.Tournament) error {
 	args := m.Called(ctx, tournament)
 	return args.Error(0)
 }
@@ -70,7 +70,7 @@ func TestTournamentCacheHandler_TournamentCreated(t *testing.T) {
 	lc := &mockLeaderboardCache{}
 	h := NewTournamentCacheHandler(tc, lc, newTestLogger(t))
 
-	tournament := &domain.Tournament{ID: uuid.New(), Name: "Test"}
+	tournament := &models.Tournament{ID: uuid.New(), Name: "Test"}
 	tc.On("Set", mock.Anything, tournament).Return(nil)
 
 	err := h.Handle(context.Background(), events.TournamentCreated{Tournament: tournament})

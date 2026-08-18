@@ -7,8 +7,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/team"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -18,16 +18,16 @@ import (
 
 // TeamService интерфейс для team service
 type TeamService interface {
-	CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*domain.Team, error)
-	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*domain.Team, error)
+	CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*models.Team, error)
+	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error)
 	LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 	RemoveMember(ctx context.Context, teamID, memberUserID, leaderID uuid.UUID) error
-	UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*domain.Team, error)
-	GetTeamByID(ctx context.Context, id uuid.UUID) (*domain.Team, error)
-	GetTeamByCode(ctx context.Context, code string) (*domain.Team, error)
-	GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error)
-	GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error)
-	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error)
+	UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error)
+	GetTeamByID(ctx context.Context, id uuid.UUID) (*models.Team, error)
+	GetTeamByCode(ctx context.Context, code string) (*models.Team, error)
+	GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error)
+	GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error)
+	GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error)
 	GetInviteLink(ctx context.Context, teamID, leaderID uuid.UUID, baseURL string) (string, error)
 	DeleteTeam(ctx context.Context, teamID uuid.UUID) error
 	DisqualifyTeam(ctx context.Context, teamID uuid.UUID) (*team.DisqualifyResult, error)
@@ -64,7 +64,7 @@ type CreateTeamRequest struct {
 // @Produce json
 // @Param request body CreateTeamRequest true "Данные команды"
 // @Security BearerAuth
-// @Success 201 {object} domain.Team
+// @Success 201 {object} models.Team
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Router /teams [post]
@@ -117,7 +117,7 @@ type JoinByCodeRequest struct {
 // @Produce json
 // @Param request body JoinByCodeRequest true "Код приглашения"
 // @Security BearerAuth
-// @Success 200 {object} domain.Team
+// @Success 200 {object} models.Team
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
@@ -163,7 +163,7 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Team ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {object} domain.TeamWithMembers
+// @Success 200 {object} models.TeamWithMembers
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id} [get]
 func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +188,7 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Produce json
 // @Param id path string true "Team ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {array} domain.User
+// @Success 200 {array} models.User
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id}/members [get]
 func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +220,7 @@ type UpdateNameRequest struct {
 // @Param id path string true "Team ID" format(uuid)
 // @Param request body UpdateNameRequest true "Новое название"
 // @Security BearerAuth
-// @Success 200 {object} domain.Team
+// @Success 200 {object} models.Team
 // @Failure 400 {object} object{error=string}
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
@@ -396,7 +396,7 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 // @Tags teams
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} domain.Team
+// @Success 200 {array} models.Team
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/teams [get]
 func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request) {
@@ -422,7 +422,7 @@ func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request)
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
 // @Security BearerAuth
-// @Success 200 {object} domain.Team
+// @Success 200 {object} models.Team
 // @Failure 401 {object} object{error=string}
 // @Router /tournaments/{id}/my-team [get]
 func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {

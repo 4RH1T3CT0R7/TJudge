@@ -7,7 +7,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -16,14 +16,14 @@ import (
 
 // TournamentGameService - интерфейс для связывания игр с турнирами.
 type TournamentGameService interface {
-	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error)
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error)
 	AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 }
 
 // TournamentGameOwnerRepo проверяет владельца турнира для авторизации.
 type TournamentGameOwnerRepo interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
 // TournamentGameHandler обрабатывает привязку/отвязку игр к турнирам.
@@ -52,7 +52,7 @@ func NewTournamentGameHandler(
 // @Tags games
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} domain.Game
+// @Success 200 {array} models.Game
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games [get]
 func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *http.Request) {
@@ -100,9 +100,9 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
+	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 
-	isAdmin := userRole == domain.RoleAdmin
+	isAdmin := userRole == models.RoleAdmin
 	isCreator := false
 
 	if !isAdmin && h.tournamentRepo != nil {

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -24,20 +24,20 @@ type MockMatchRepository struct {
 	mock.Mock
 }
 
-func (m *MockMatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error) {
+func (m *MockMatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Match), args.Error(1)
+	return args.Get(0).(*models.Match), args.Error(1)
 }
 
-func (m *MockMatchRepository) List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error) {
+func (m *MockMatchRepository) List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Match), args.Error(1)
+	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
 func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error) {
@@ -48,12 +48,12 @@ func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *u
 	return args.Get(0).(*storage.MatchStatistics), args.Error(1)
 }
 
-func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error) {
+func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error) {
 	args := m.Called(ctx, ids)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Match), args.Error(1)
+	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
 // MockMatchCache - мок match-кэша
@@ -61,28 +61,28 @@ type MockMatchCache struct {
 	mock.Mock
 }
 
-func (m *MockMatchCache) Get(ctx context.Context, matchID uuid.UUID) (*domain.MatchResult, error) {
+func (m *MockMatchCache) Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error) {
 	args := m.Called(ctx, matchID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.MatchResult), args.Error(1)
+	return args.Get(0).(*models.MatchResult), args.Error(1)
 }
 
-func (m *MockMatchCache) Set(ctx context.Context, matchID uuid.UUID, result *domain.MatchResult) error {
+func (m *MockMatchCache) Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error {
 	args := m.Called(ctx, matchID, result)
 	return args.Error(0)
 }
 
-func (m *MockMatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*domain.Match, error) {
+func (m *MockMatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*models.Match, error) {
 	args := m.Called(ctx, matchID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Match), args.Error(1)
+	return args.Get(0).(*models.Match), args.Error(1)
 }
 
-func (m *MockMatchCache) SetMatch(ctx context.Context, match *domain.Match) error {
+func (m *MockMatchCache) SetMatch(ctx context.Context, match *models.Match) error {
 	args := m.Called(ctx, match)
 	return args.Error(0)
 }
@@ -96,13 +96,13 @@ func TestMatchHandler_Get(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
-		cachedMatch := &domain.Match{
+		cachedMatch := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "chess",
-			Status:       domain.MatchCompleted,
+			Status:       models.MatchCompleted,
 		}
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(cachedMatch, nil)
@@ -119,7 +119,7 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, cachedMatch.ID, response.ID)
 
@@ -134,13 +134,13 @@ func TestMatchHandler_Get(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		matchID := uuid.New()
-		dbMatch := &domain.Match{
+		dbMatch := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "chess",
-			Status:       domain.MatchRunning,
+			Status:       models.MatchRunning,
 		}
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
@@ -158,7 +158,7 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, dbMatch.ID, response.ID)
 
@@ -219,14 +219,14 @@ func TestMatchHandler_List(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
-		expectedMatches := []*domain.Match{
+		expectedMatches := []*models.Match{
 			{
 				ID:           uuid.New(),
 				TournamentID: uuid.New(),
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "chess",
-				Status:       domain.MatchCompleted,
+				Status:       models.MatchCompleted,
 			},
 			{
 				ID:           uuid.New(),
@@ -234,11 +234,11 @@ func TestMatchHandler_List(t *testing.T) {
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "chess",
-				Status:       domain.MatchPending,
+				Status:       models.MatchPending,
 			},
 		}
 
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter domain.MatchFilter) bool {
+		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
 			return filter.Limit == 50 && filter.Offset == 0
 		})).Return(expectedMatches, nil)
 
@@ -249,7 +249,7 @@ func TestMatchHandler_List(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response []*domain.Match
+		var response []*models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Len(t, response, 2)
 
@@ -262,18 +262,18 @@ func TestMatchHandler_List(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		tournamentID := uuid.New()
-		expectedMatches := []*domain.Match{
+		expectedMatches := []*models.Match{
 			{
 				ID:           uuid.New(),
 				TournamentID: tournamentID,
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "chess",
-				Status:       domain.MatchCompleted,
+				Status:       models.MatchCompleted,
 			},
 		}
 
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter domain.MatchFilter) bool {
+		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
 			return filter.TournamentID != nil && *filter.TournamentID == tournamentID
 		})).Return(expectedMatches, nil)
 
@@ -292,19 +292,19 @@ func TestMatchHandler_List(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
-		expectedMatches := []*domain.Match{
+		expectedMatches := []*models.Match{
 			{
 				ID:           uuid.New(),
 				TournamentID: uuid.New(),
 				Program1ID:   uuid.New(),
 				Program2ID:   uuid.New(),
 				GameType:     "chess",
-				Status:       domain.MatchCompleted,
+				Status:       models.MatchCompleted,
 			},
 		}
 
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter domain.MatchFilter) bool {
-			return filter.Status == domain.MatchCompleted
+		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
+			return filter.Status == models.MatchCompleted
 		})).Return(expectedMatches, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?status=completed", nil)
@@ -322,9 +322,9 @@ func TestMatchHandler_List(t *testing.T) {
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
-		expectedMatches := []*domain.Match{}
+		expectedMatches := []*models.Match{}
 
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter domain.MatchFilter) bool {
+		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
 			return filter.Limit == 10 && filter.Offset == 20
 		})).Return(expectedMatches, nil)
 
@@ -487,12 +487,12 @@ type MockMatchProgramLookup struct {
 	mock.Mock
 }
 
-func (m *MockMatchProgramLookup) GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error) {
+func (m *MockMatchProgramLookup) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Program), args.Error(1)
+	return args.Get(0).(*models.Program), args.Error(1)
 }
 
 func TestMatchHandler_GetQueueStats(t *testing.T) {
@@ -720,13 +720,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchCompleted,
+			Status:       models.MatchCompleted,
 			ErrorMessage: nil,
 		}
 
@@ -739,7 +739,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -748,7 +748,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		assert.Nil(t, response.ErrorMessage)
 
@@ -765,13 +765,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		matchID := uuid.New()
 		emptyErr := ""
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			ErrorMessage: &emptyErr,
 		}
 
@@ -784,7 +784,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -793,7 +793,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		// Пустое сообщение об ошибке трактуется как отсутствие ошибки - возвращается как есть
 		require.NotNil(t, response.ErrorMessage)
@@ -813,13 +813,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		matchID := uuid.New()
 		errorMsg := "runtime error: index out of bounds at line 42"
 		winner := 1
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
@@ -833,7 +833,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, adminID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleAdmin)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleAdmin)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -842,7 +842,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
@@ -865,19 +865,19 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		errorMsg := "segfault in user code at line 15"
 		winner := 1 // Program1 won, so Program2 failed
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
 
 		// Упавшая программа - program2 (winner=1 значит победил program1)
-		failedProgram := &domain.Program{
+		failedProgram := &models.Program{
 			ID:     program2ID,
 			UserID: ownerID,
 			Name:   "my-bot",
@@ -892,7 +892,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, ownerID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -901,7 +901,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
@@ -926,20 +926,20 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		errorMsg := "segfault in user code at line 15"
 		winner := 1 // Program1 won, so Program2 failed
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
 
 		// Упавшая программа - program2 (winner=1 значит победил program1).
 		// Владелец program2 - programOwnerID, но запрашивающий пользователь - otherUserID.
-		failedProgram := &domain.Program{
+		failedProgram := &models.Program{
 			ID:     program2ID,
 			UserID: programOwnerID,
 			Name:   "opponent-bot",
@@ -954,7 +954,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, otherUserID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -963,7 +963,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "Программа оппонента завершилась с ошибкой", *response.ErrorMessage)
@@ -987,19 +987,19 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		errorMsg := "timeout exceeded"
 		winner := 2 // Program2 won, so Program1 failed
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
 
 		// Упавшая программа - program1 (winner=2 значит победил program2)
-		failedProgram := &domain.Program{
+		failedProgram := &models.Program{
 			ID:     program1ID,
 			UserID: ownerID,
 			Name:   "my-bot",
@@ -1014,7 +1014,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, ownerID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -1023,7 +1023,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
@@ -1044,13 +1044,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		userID := uuid.New()
 		errorMsg := "both programs crashed"
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       nil, // No winner - cannot determine failed program
 			ErrorMessage: &errorMsg,
 		}
@@ -1063,7 +1063,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -1072,7 +1072,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		// Без winner нельзя определить упавшую программу, поэтому ошибка скрыта
@@ -1096,13 +1096,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		errorMsg := "internal error details"
 		winner := 1 // Program1 won, so Program2 failed
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   program1ID,
 			Program2ID:   program2ID,
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
@@ -1117,7 +1117,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -1126,7 +1126,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
@@ -1147,13 +1147,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		errorMsg := "detailed error message"
 		winner := 1
 
-		match := &domain.Match{
+		match := &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
 			Program1ID:   uuid.New(),
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
-			Status:       domain.MatchFailed,
+			Status:       models.MatchFailed,
 			Winner:       &winner,
 			ErrorMessage: &errorMsg,
 		}
@@ -1167,7 +1167,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		rctx.URLParams.Add("id", matchID.String())
 		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
 		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, domain.RoleUser)
+		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -1176,7 +1176,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response domain.Match
+		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
 		// Без program lookup filterMatchError возвращает match как есть

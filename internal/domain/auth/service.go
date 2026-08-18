@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -15,12 +15,12 @@ import (
 
 // UserRepository — получем и пишем юзеров в базу, обычный fat-репозиторий
 type UserRepository interface {
-	Create(ctx context.Context, user *domain.User) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
-	GetByUsername(ctx context.Context, username string) (*domain.User, error)
-	GetByEmail(ctx context.Context, email string) (*domain.User, error)
+	Create(ctx context.Context, user *models.User) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GetByUsername(ctx context.Context, username string) (*models.User, error)
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Exists(ctx context.Context, username, email string) (bool, error)
-	Update(ctx context.Context, user *domain.User) error
+	Update(ctx context.Context, user *models.User) error
 }
 
 // TokenBlacklist — чёрный список токенов (лежит в редисе)
@@ -70,12 +70,12 @@ type UpdateProfileRequest struct {
 type AuthResponse struct {
 	AccessToken  string       `json:"access_token"`
 	RefreshToken string       `json:"refresh_token"`
-	User         *domain.User `json:"user"`
+	User         *models.User `json:"user"`
 }
 
 // Register регистрирует нового юзера и сразу выдаёт токены
 func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResponse, error) {
-	if err := domain.ValidatePassword(req.Password); err != nil {
+	if err := models.ValidatePassword(req.Password); err != nil {
 		return nil, errors.ErrValidation.WithError(err)
 	}
 
@@ -92,12 +92,12 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     req.Username,
 		Email:        req.Email,
 		PasswordHash: passwordHash,
-		Role:         domain.RoleUser, // по умолчанию обычный юзер
+		Role:         models.RoleUser, // по умолчанию обычный юзер
 	}
 
 	if err := user.Validate(); err != nil {
@@ -135,7 +135,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 
 // Login проверяет логин/пароль и выдаёт токены
 func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
-	var user *domain.User
+	var user *models.User
 	var err error
 
 	// достаём юзера по email или по username, что дали
@@ -283,7 +283,7 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 }
 
 // UpdateProfile меняет email и/или пароль
-func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*domain.User, error) {
+func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*models.User, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, errors.ErrInvalidInput.WithMessage("invalid user ID")
@@ -316,7 +316,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 			return nil, errors.ErrInvalidCredentials.WithMessage("current password is incorrect")
 		}
 
-		if err := domain.ValidatePassword(req.Password); err != nil {
+		if err := models.ValidatePassword(req.Password); err != nil {
 			return nil, errors.ErrValidation.WithError(err)
 		}
 
@@ -349,7 +349,7 @@ func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 }
 
 // GetUserByToken достаёт юзера по access токену
-func (s *Service) GetUserByToken(ctx context.Context, tokenString string) (*domain.User, error) {
+func (s *Service) GetUserByToken(ctx context.Context, tokenString string) (*models.User, error) {
 	claims, err := s.jwtManager.ValidateToken(tokenString)
 	if err != nil {
 		return nil, errors.ErrInvalidToken.WithError(err)
@@ -366,7 +366,7 @@ func (s *Service) GetUserByToken(ctx context.Context, tokenString string) (*doma
 }
 
 // GetUserFromToken — алиас для GetUserByToken
-func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*domain.User, error) {
+func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*models.User, error) {
 	return s.GetUserByToken(ctx, tokenString)
 }
 

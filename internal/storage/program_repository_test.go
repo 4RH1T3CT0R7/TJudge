@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -71,21 +71,21 @@ func (s *ProgramRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-func (s *ProgramRepositorySuite) createUser(suffix string) *domain.User {
+func (s *ProgramRepositorySuite) createUser(suffix string) *models.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-func (s *ProgramRepositorySuite) createTournament(code string, creatorID uuid.UUID) *domain.Tournament {
+func (s *ProgramRepositorySuite) createTournament(code string, creatorID uuid.UUID) *models.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo, code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
 }
 
-func (s *ProgramRepositorySuite) createGame(name string) *domain.Game {
+func (s *ProgramRepositorySuite) createGame(name string) *models.Game {
 	ctx := context.Background()
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        name,
 		DisplayName: "Test Game " + name,
@@ -97,9 +97,9 @@ func (s *ProgramRepositorySuite) createGame(name string) *domain.Game {
 	return game
 }
 
-func (s *ProgramRepositorySuite) createTeam(tournamentID, leaderID uuid.UUID, code string) *domain.Team {
+func (s *ProgramRepositorySuite) createTeam(tournamentID, leaderID uuid.UUID, code string) *models.Team {
 	ctx := context.Background()
-	team := &domain.Team{
+	team := &models.Team{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Name:         "Test Team " + code,
@@ -112,9 +112,9 @@ func (s *ProgramRepositorySuite) createTeam(tournamentID, leaderID uuid.UUID, co
 	return team
 }
 
-func (s *ProgramRepositorySuite) createProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *domain.Program {
+func (s *ProgramRepositorySuite) createProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *models.Program {
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:           uuid.New(),
 		UserID:       userID,
 		TeamID:       teamID,
@@ -136,7 +136,7 @@ func (s *ProgramRepositorySuite) TestCreate() {
 	user := s.createUser("prog_create")
 
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		UserID:   user.ID,
 		Name:     "Test Bot",
@@ -291,7 +291,7 @@ func (s *ProgramRepositorySuite) TestUpdate() {
 
 func (s *ProgramRepositorySuite) TestUpdate_NotFound() {
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		Name:     "Ghost",
 		CodePath: "/ghost",
@@ -357,7 +357,7 @@ func (s *ProgramRepositorySuite) TestClearErrorMessages() {
 	ctx := context.Background()
 	errMsg := "some error"
 	for i := 0; i < 3; i++ {
-		p := &domain.Program{
+		p := &models.Program{
 			ID:           uuid.New(),
 			UserID:       user.ID,
 			TournamentID: &tournament.ID,
@@ -412,7 +412,7 @@ func (s *ProgramRepositorySuite) TestGetByUserIDAndGameType() {
 
 	// прога с другой игрой
 	ctx := context.Background()
-	otherProg := &domain.Program{
+	otherProg := &models.Program{
 		ID:       uuid.New(),
 		UserID:   user.ID,
 		Name:     "Other Bot",

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
@@ -14,7 +14,7 @@ import (
 
 // RatingHistoryRepository - доступ к истории рейтинга для графиков.
 type RatingHistoryRepository interface {
-	GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*domain.RatingHistory, error)
+	GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*models.RatingHistory, error)
 }
 
 // RatingHistoryHandler отдаёт историю рейтинга программы в турнире -
@@ -36,7 +36,7 @@ func NewRatingHistoryHandler(repo RatingHistoryRepository, log *logger.Logger) *
 // @Param id path string true "Tournament ID" format(uuid)
 // @Param programId path string true "Program ID" format(uuid)
 // @Param limit query int false "Максимум последних точек" default(200)
-// @Success 200 {array} domain.RatingHistory
+// @Success 200 {array} models.RatingHistory
 // @Failure 400 {object} object{error=string}
 // @Router /tournaments/{id}/programs/{programId}/rating-history [get]
 func (h *RatingHistoryHandler) GetProgramRatingHistory(w http.ResponseWriter, r *http.Request) {

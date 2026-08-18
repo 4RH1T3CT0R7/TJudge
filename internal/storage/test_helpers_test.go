@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -64,11 +64,11 @@ func cleanupTable(t *testing.T, database *storage.DB, table, where string, args 
 }
 
 // createTestUser создаёт юзера для теста
-func createTestUser(t *testing.T, repo *storage.UserRepository, suffix string) *domain.User {
+func createTestUser(t *testing.T, repo *storage.UserRepository, suffix string) *models.User {
 	t.Helper()
 	ctx := context.Background()
 
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "testuser_" + suffix,
 		Email:        "testuser_" + suffix + "@test.com",
@@ -82,17 +82,17 @@ func createTestUser(t *testing.T, repo *storage.UserRepository, suffix string) *
 }
 
 // createTestTournament создаёт турнир. creatorID должен ссылаться на существующего юзера.
-func createTestTournament(t *testing.T, repo *storage.TournamentRepository, code string, creatorID uuid.UUID) *domain.Tournament {
+func createTestTournament(t *testing.T, repo *storage.TournamentRepository, code string, creatorID uuid.UUID) *models.Tournament {
 	t.Helper()
 	ctx := context.Background()
 
-	tournament := &domain.Tournament{
+	tournament := &models.Tournament{
 		ID:              uuid.New(),
 		Code:            code,
 		Name:            "Test Tournament " + code,
 		Description:     "Test Description",
 		GameType:        "prisoners_dilemma",
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: intPtr(100),
 		MaxTeamSize:     3,
 		IsPermanent:     false,
@@ -106,19 +106,19 @@ func createTestTournament(t *testing.T, repo *storage.TournamentRepository, code
 }
 
 // createTestTournamentWithUser создаёт и юзера, и турнир - чтобы не ловить FK по creator_id
-func createTestTournamentWithUser(t *testing.T, tournamentRepo *storage.TournamentRepository, userRepo *storage.UserRepository, code string) (*domain.Tournament, *domain.User) {
+func createTestTournamentWithUser(t *testing.T, tournamentRepo *storage.TournamentRepository, userRepo *storage.UserRepository, code string) (*models.Tournament, *models.User) {
 	t.Helper()
 	ctx := context.Background()
 
 	user := createTestUser(t, userRepo, "tourney_"+code)
 
-	tournament := &domain.Tournament{
+	tournament := &models.Tournament{
 		ID:              uuid.New(),
 		Code:            code,
 		Name:            "Test Tournament " + code,
 		Description:     "Test Description",
 		GameType:        "prisoners_dilemma",
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: intPtr(100),
 		MaxTeamSize:     3,
 		IsPermanent:     false,

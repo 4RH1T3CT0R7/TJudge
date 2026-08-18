@@ -5,22 +5,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestMatch(status domain.MatchStatus) *domain.Match {
+func newTestMatch(status models.MatchStatus) *models.Match {
 	score1, score2, winner := 10, 5, 1
-	return &domain.Match{
+	return &models.Match{
 		ID:           uuid.New(),
 		TournamentID: uuid.New(),
 		Program1ID:   uuid.New(),
 		Program2ID:   uuid.New(),
 		GameType:     "prisoners_dilemma",
 		Status:       status,
-		Priority:     domain.PriorityMedium,
+		Priority:     models.PriorityMedium,
 		RoundNumber:  1,
 		Score1:       &score1,
 		Score2:       &score2,
@@ -29,8 +29,8 @@ func newTestMatch(status domain.MatchStatus) *domain.Match {
 	}
 }
 
-func newTestMatchResult() *domain.MatchResult {
-	return &domain.MatchResult{
+func newTestMatchResult() *models.MatchResult {
+	return &models.MatchResult{
 		MatchID:  uuid.New(),
 		Score1:   10,
 		Score2:   5,
@@ -76,7 +76,7 @@ func TestMatchCache_SetGetMatch(t *testing.T) {
 
 	mc := NewMatchCache(c)
 	ctx := context.Background()
-	match := newTestMatch(domain.MatchCompleted)
+	match := newTestMatch(models.MatchCompleted)
 
 	require.NoError(t, mc.SetMatch(ctx, match))
 
@@ -111,7 +111,7 @@ func TestMatchCache_SetGetStatus(t *testing.T) {
 	mc := NewMatchCache(c)
 	ctx := context.Background()
 
-	for _, st := range []domain.MatchStatus{domain.MatchPending, domain.MatchRunning, domain.MatchFailed} {
+	for _, st := range []models.MatchStatus{models.MatchPending, models.MatchRunning, models.MatchFailed} {
 		match := newTestMatch(st)
 		require.NoError(t, mc.SetMatch(ctx, match))
 

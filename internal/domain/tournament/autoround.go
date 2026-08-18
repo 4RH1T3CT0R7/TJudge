@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -94,7 +94,7 @@ func (s *AutoRoundScheduler) tick(ctx context.Context) {
 
 // processGame - обрабатывает одну игру с авто-раундом.
 // порядок проверок важен, не переставлять
-func (s *AutoRoundScheduler) processGame(ctx context.Context, g *domain.AutoRoundGameInfo) {
+func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoundGameInfo) {
 	// 1. есть ли активные (pending/running) матчи по этой игре?
 	hasActive, err := s.gameRepo.HasActiveMatchesForGame(ctx, g.TournamentID, g.GameType)
 	if err != nil {

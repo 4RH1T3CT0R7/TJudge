@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -79,7 +79,7 @@ func (lc *LeaderboardCache) IncrementRating(ctx context.Context, tournamentID, p
 // GetTop отдаёт топ N из sorted set.
 // данные неполные: заполнены только Rank, ProgramID и Rating,
 // остальное (имя, команда, w/l/d) нулевое — кому надо, дотянет из бд
-func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	key := lc.getKey(tournamentID)
 	results, err := lc.cache.ZRevRangeWithScores(ctx, key, 0, int64(limit-1))
 	if err != nil {
@@ -98,7 +98,7 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 		lc.metrics.RecordCacheHit("leaderboard")
 	}
 
-	entries := make([]*domain.LeaderboardEntry, 0, len(results))
+	entries := make([]*models.LeaderboardEntry, 0, len(results))
 	for i, result := range results {
 		memberStr, ok := result.Member.(string)
 		if !ok {
@@ -112,7 +112,7 @@ func (lc *LeaderboardCache) GetTop(ctx context.Context, tournamentID uuid.UUID, 
 			continue
 		}
 
-		entries = append(entries, &domain.LeaderboardEntry{
+		entries = append(entries, &models.LeaderboardEntry{
 			Rank:      i + 1,
 			ProgramID: programID,
 			Rating:    int(result.Score),
@@ -147,7 +147,7 @@ func (lc *LeaderboardCache) getCrossGameKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("leaderboard:crossgame:%s", tournamentID.String())
 }
 
-func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
 	data, err := lc.cache.Get(ctx, key)
 	if err != nil {
@@ -159,7 +159,7 @@ func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID
 		}
 		return nil, nil
 	}
-	var entries []*domain.LeaderboardEntry
+	var entries []*models.LeaderboardEntry
 	if err := json.Unmarshal([]byte(data), &entries); err != nil {
 		// битый json проще удалить и посчитать заново
 		lc.cache.log.Warn("leaderboard cache: corrupt full leaderboard JSON, deleting key",
@@ -173,7 +173,7 @@ func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID
 	return entries, nil
 }
 
-func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error {
+func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*models.LeaderboardEntry) error {
 	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
 	data, err := json.Marshal(entries)
 	if err != nil {
@@ -182,7 +182,7 @@ func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID
 	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
 }
 
-func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	key := lc.getCrossGameKey(tournamentID)
 	data, err := lc.cache.Get(ctx, key)
 	if err != nil {
@@ -194,7 +194,7 @@ func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tou
 		}
 		return nil, nil
 	}
-	var entries []*domain.CrossGameLeaderboardEntry
+	var entries []*models.CrossGameLeaderboardEntry
 	if err := json.Unmarshal([]byte(data), &entries); err != nil {
 		lc.cache.log.Warn("leaderboard cache: corrupt cross-game leaderboard JSON, deleting key",
 			zap.String("key", key), zap.String("tournament_id", tournamentID.String()), zap.Error(err))
@@ -207,7 +207,7 @@ func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tou
 	return entries, nil
 }
 
-func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error {
+func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*models.CrossGameLeaderboardEntry) error {
 	key := lc.getCrossGameKey(tournamentID)
 	data, err := json.Marshal(entries)
 	if err != nil {

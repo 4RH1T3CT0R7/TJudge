@@ -13,8 +13,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -80,14 +80,14 @@ func (s *QueueProcessingSuite) TestQueueProcessing_EnqueueDequeue() {
 	program1ID := uuid.New()
 	program2ID := uuid.New()
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           matchID,
 		TournamentID: tournamentID,
 		Program1ID:   program1ID,
 		Program2ID:   program2ID,
 		GameType:     "prisoners_dilemma",
-		Status:       domain.MatchPending,
-		Priority:     domain.PriorityMedium,
+		Status:       models.MatchPending,
+		Priority:     models.PriorityMedium,
 	}
 
 	// Enqueue the match
@@ -105,29 +105,29 @@ func (s *QueueProcessingSuite) TestQueueProcessing_EnqueueDequeue() {
 	assert.Equal(s.T(), program1ID, dequeued.Program1ID)
 	assert.Equal(s.T(), program2ID, dequeued.Program2ID)
 	assert.Equal(s.T(), "prisoners_dilemma", dequeued.GameType)
-	assert.Equal(s.T(), domain.MatchPending, dequeued.Status)
-	assert.Equal(s.T(), domain.PriorityMedium, dequeued.Priority)
+	assert.Equal(s.T(), models.MatchPending, dequeued.Status)
+	assert.Equal(s.T(), models.PriorityMedium, dequeued.Priority)
 }
 
 func (s *QueueProcessingSuite) TestQueueProcessing_PriorityOrdering() {
 	// Enqueue matches with different priorities in mixed order
-	lowMatch := &domain.Match{
+	lowMatch := &models.Match{
 		ID:       uuid.New(),
 		GameType: "low_priority_game",
-		Status:   domain.MatchPending,
-		Priority: domain.PriorityLow,
+		Status:   models.MatchPending,
+		Priority: models.PriorityLow,
 	}
-	mediumMatch := &domain.Match{
+	mediumMatch := &models.Match{
 		ID:       uuid.New(),
 		GameType: "medium_priority_game",
-		Status:   domain.MatchPending,
-		Priority: domain.PriorityMedium,
+		Status:   models.MatchPending,
+		Priority: models.PriorityMedium,
 	}
-	highMatch := &domain.Match{
+	highMatch := &models.Match{
 		ID:       uuid.New(),
 		GameType: "high_priority_game",
-		Status:   domain.MatchPending,
-		Priority: domain.PriorityHigh,
+		Status:   models.MatchPending,
+		Priority: models.PriorityHigh,
 	}
 
 	// Enqueue in order: low, medium, high
@@ -143,21 +143,21 @@ func (s *QueueProcessingSuite) TestQueueProcessing_PriorityOrdering() {
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), first)
 	assert.Equal(s.T(), highMatch.ID, first.ID, "first dequeued match should be high priority")
-	assert.Equal(s.T(), domain.PriorityHigh, first.Priority)
+	assert.Equal(s.T(), models.PriorityHigh, first.Priority)
 
 	// Then medium
 	second, err := s.qm.Dequeue(s.ctx)
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), second)
 	assert.Equal(s.T(), mediumMatch.ID, second.ID, "second dequeued match should be medium priority")
-	assert.Equal(s.T(), domain.PriorityMedium, second.Priority)
+	assert.Equal(s.T(), models.PriorityMedium, second.Priority)
 
 	// Then low
 	third, err := s.qm.Dequeue(s.ctx)
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), third)
 	assert.Equal(s.T(), lowMatch.ID, third.ID, "third dequeued match should be low priority")
-	assert.Equal(s.T(), domain.PriorityLow, third.Priority)
+	assert.Equal(s.T(), models.PriorityLow, third.Priority)
 }
 
 func (s *QueueProcessingSuite) TestQueueProcessing_QueueSize() {
@@ -167,45 +167,45 @@ func (s *QueueProcessingSuite) TestQueueProcessing_QueueSize() {
 	lowMatches := 2
 
 	for i := 0; i < highMatches; i++ {
-		err := s.qm.Enqueue(s.ctx, &domain.Match{
+		err := s.qm.Enqueue(s.ctx, &models.Match{
 			ID:       uuid.New(),
 			GameType: "size_test",
-			Status:   domain.MatchPending,
-			Priority: domain.PriorityHigh,
+			Status:   models.MatchPending,
+			Priority: models.PriorityHigh,
 		})
 		require.NoError(s.T(), err)
 	}
 
 	for i := 0; i < mediumMatches; i++ {
-		err := s.qm.Enqueue(s.ctx, &domain.Match{
+		err := s.qm.Enqueue(s.ctx, &models.Match{
 			ID:       uuid.New(),
 			GameType: "size_test",
-			Status:   domain.MatchPending,
-			Priority: domain.PriorityMedium,
+			Status:   models.MatchPending,
+			Priority: models.PriorityMedium,
 		})
 		require.NoError(s.T(), err)
 	}
 
 	for i := 0; i < lowMatches; i++ {
-		err := s.qm.Enqueue(s.ctx, &domain.Match{
+		err := s.qm.Enqueue(s.ctx, &models.Match{
 			ID:       uuid.New(),
 			GameType: "size_test",
-			Status:   domain.MatchPending,
-			Priority: domain.PriorityLow,
+			Status:   models.MatchPending,
+			Priority: models.PriorityLow,
 		})
 		require.NoError(s.T(), err)
 	}
 
 	// Verify individual queue sizes
-	highSize, err := s.qm.GetQueueSize(s.ctx, domain.PriorityHigh)
+	highSize, err := s.qm.GetQueueSize(s.ctx, models.PriorityHigh)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(highMatches), highSize)
 
-	mediumSize, err := s.qm.GetQueueSize(s.ctx, domain.PriorityMedium)
+	mediumSize, err := s.qm.GetQueueSize(s.ctx, models.PriorityMedium)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(mediumMatches), mediumSize)
 
-	lowSize, err := s.qm.GetQueueSize(s.ctx, domain.PriorityLow)
+	lowSize, err := s.qm.GetQueueSize(s.ctx, models.PriorityLow)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(lowMatches), lowSize)
 
@@ -218,7 +218,7 @@ func (s *QueueProcessingSuite) TestQueueProcessing_QueueSize() {
 	_, err = s.qm.Dequeue(s.ctx)
 	require.NoError(s.T(), err)
 
-	highSizeAfter, err := s.qm.GetQueueSize(s.ctx, domain.PriorityHigh)
+	highSizeAfter, err := s.qm.GetQueueSize(s.ctx, models.PriorityHigh)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(highMatches-1), highSizeAfter)
 }
@@ -256,11 +256,11 @@ func (s *QueueProcessingSuite) TestQueueProcessing_ConcurrentEnqueueDequeue() {
 			defer wg.Done()
 			for m := 0; m < matchesPerProducer; m++ {
 				idx := producerIdx*matchesPerProducer + m
-				match := &domain.Match{
+				match := &models.Match{
 					ID:       enqueuedIDs[idx],
 					GameType: "concurrent_test",
-					Status:   domain.MatchPending,
-					Priority: domain.PriorityMedium,
+					Status:   models.MatchPending,
+					Priority: models.PriorityMedium,
 				}
 				err := s.qm.Enqueue(s.ctx, match)
 				assert.NoError(s.T(), err)

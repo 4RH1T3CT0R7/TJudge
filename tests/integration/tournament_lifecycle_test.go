@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -98,9 +98,9 @@ func (s *TournamentLifecycleSuite) cleanupTestData() {
 // Helper methods for creating test entities
 // =============================================================================
 
-func (s *TournamentLifecycleSuite) createTestUser(suffix string) *domain.User {
+func (s *TournamentLifecycleSuite) createTestUser(suffix string) *models.User {
 	s.T().Helper()
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     fmt.Sprintf("lifecycle_test_user_%s_%s", suffix, uuid.New().String()[:8]),
 		Email:        fmt.Sprintf("lifecycle_%s_%s@test.com", suffix, uuid.New().String()[:8]),
@@ -111,16 +111,16 @@ func (s *TournamentLifecycleSuite) createTestUser(suffix string) *domain.User {
 	return user
 }
 
-func (s *TournamentLifecycleSuite) createTestTournament(suffix string, creatorID *uuid.UUID) *domain.Tournament {
+func (s *TournamentLifecycleSuite) createTestTournament(suffix string, creatorID *uuid.UUID) *models.Tournament {
 	s.T().Helper()
 	maxParticipants := 32
-	tournament := &domain.Tournament{
+	tournament := &models.Tournament{
 		ID:              uuid.New(),
 		Name:            fmt.Sprintf("lifecycle_test_tournament_%s", suffix),
 		Code:            uuid.New().String()[:6],
 		Description:     "Integration test tournament",
 		GameType:        "lifecycle_test_game",
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: &maxParticipants,
 		MaxTeamSize:     4,
 		IsPermanent:     false,
@@ -131,9 +131,9 @@ func (s *TournamentLifecycleSuite) createTestTournament(suffix string, creatorID
 	return tournament
 }
 
-func (s *TournamentLifecycleSuite) createTestGame(suffix string) *domain.Game {
+func (s *TournamentLifecycleSuite) createTestGame(suffix string) *models.Game {
 	s.T().Helper()
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        fmt.Sprintf("lifecycle_test_%s_%s", suffix, uuid.New().String()[:8]),
 		DisplayName: fmt.Sprintf("Lifecycle Test Game %s", suffix),
@@ -144,9 +144,9 @@ func (s *TournamentLifecycleSuite) createTestGame(suffix string) *domain.Game {
 	return game
 }
 
-func (s *TournamentLifecycleSuite) createTestTeam(suffix string, tournamentID, leaderID uuid.UUID) *domain.Team {
+func (s *TournamentLifecycleSuite) createTestTeam(suffix string, tournamentID, leaderID uuid.UUID) *models.Team {
 	s.T().Helper()
-	team := &domain.Team{
+	team := &models.Team{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Name:         fmt.Sprintf("lifecycle_test_team_%s_%s", suffix, uuid.New().String()[:8]),
@@ -158,9 +158,9 @@ func (s *TournamentLifecycleSuite) createTestTeam(suffix string, tournamentID, l
 	return team
 }
 
-func (s *TournamentLifecycleSuite) createTestProgram(user *domain.User, team *domain.Team, tournament *domain.Tournament, game *domain.Game, suffix string) *domain.Program {
+func (s *TournamentLifecycleSuite) createTestProgram(user *models.User, team *models.Team, tournament *models.Tournament, game *models.Game, suffix string) *models.Program {
 	s.T().Helper()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:           uuid.New(),
 		UserID:       user.ID,
 		TeamID:       &team.ID,
@@ -194,7 +194,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_CreateTournament() {
 	assert.Equal(s.T(), tournament.Code, found.Code)
 	assert.Equal(s.T(), tournament.Description, found.Description)
 	assert.Equal(s.T(), tournament.GameType, found.GameType)
-	assert.Equal(s.T(), domain.TournamentPending, found.Status)
+	assert.Equal(s.T(), models.TournamentPending, found.Status)
 	assert.Equal(s.T(), *tournament.MaxParticipants, *found.MaxParticipants)
 	assert.Equal(s.T(), tournament.MaxTeamSize, found.MaxTeamSize)
 	assert.Equal(s.T(), tournament.IsPermanent, found.IsPermanent)
@@ -250,7 +250,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_RegisterTeam() {
 	team := s.createTestTeam("regteam", tournament.ID, leader.ID)
 
 	// Add leader and member to team
-	leaderMember := &domain.TeamMember{
+	leaderMember := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: team.ID,
 		UserID: leader.ID,
@@ -258,7 +258,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_RegisterTeam() {
 	err := s.teamRepo.AddMember(s.ctx, leaderMember)
 	require.NoError(s.T(), err)
 
-	teamMember := &domain.TeamMember{
+	teamMember := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: team.ID,
 		UserID: member.ID,
@@ -314,7 +314,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_UploadProgram() {
 	// Create team
 	leader := s.createTestUser("upload_leader")
 	team := s.createTestTeam("upload", tournament.ID, leader.ID)
-	leaderMember := &domain.TeamMember{
+	leaderMember := &models.TeamMember{
 		ID:     uuid.New(),
 		TeamID: team.ID,
 		UserID: leader.ID,
@@ -394,7 +394,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 		{team2.ID, leader2.ID},
 		{team3.ID, leader3.ID},
 	} {
-		err = s.teamRepo.AddMember(s.ctx, &domain.TeamMember{
+		err = s.teamRepo.AddMember(s.ctx, &models.TeamMember{
 			ID:     uuid.New(),
 			TeamID: pair.teamID,
 			UserID: pair.leaderID,
@@ -408,16 +408,16 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	require.Len(s.T(), teams, 3)
 
 	// Step 4: Upload programs for each team for each game
-	programs := make([]*domain.Program, 0, 6)
+	programs := make([]*models.Program, 0, 6)
 	for i, teamInfo := range []struct {
-		leader *domain.User
-		team   *domain.Team
+		leader *models.User
+		team   *models.Team
 	}{
 		{leader1, team1},
 		{leader2, team2},
 		{leader3, team3},
 	} {
-		for j, game := range []*domain.Game{game1, game2} {
+		for j, game := range []*models.Game{game1, game2} {
 			prog := s.createTestProgram(
 				teamInfo.leader,
 				teamInfo.team,
@@ -428,7 +428,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 			programs = append(programs, prog)
 
 			// Add as tournament participant
-			participant := &domain.TournamentParticipant{
+			participant := &models.TournamentParticipant{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
 				ProgramID:    prog.ID,
@@ -445,13 +445,13 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	assert.Len(s.T(), participants, 6) // 3 teams * 2 games
 
 	// Step 5: Activate tournament
-	err = s.tournamentRepo.UpdateStatus(s.ctx, tournament.ID, domain.TournamentActive)
+	err = s.tournamentRepo.UpdateStatus(s.ctx, tournament.ID, models.TournamentActive)
 	require.NoError(s.T(), err)
 
 	// Verify tournament is active
 	updatedTournament, err := s.tournamentRepo.GetByID(s.ctx, tournament.ID)
 	require.NoError(s.T(), err)
-	assert.Equal(s.T(), domain.TournamentActive, updatedTournament.Status)
+	assert.Equal(s.T(), models.TournamentActive, updatedTournament.Status)
 
 	// Step 6: Verify participants count
 	count, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)
@@ -516,7 +516,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 	errs := make(chan error, numTeams*3) // team creation + member + participant
 
 	// Create users first (sequentially to avoid conflicts)
-	leaders := make([]*domain.User, numTeams)
+	leaders := make([]*models.User, numTeams)
 	for i := 0; i < numTeams; i++ {
 		leaders[i] = s.createTestUser(fmt.Sprintf("concurrent_%d", i))
 	}
@@ -530,7 +530,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 			leader := leaders[idx]
 
 			// Create team
-			team := &domain.Team{
+			team := &models.Team{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
 				Name:         fmt.Sprintf("lifecycle_test_team_concurrent_%d_%s", idx, uuid.New().String()[:8]),
@@ -543,7 +543,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 			}
 
 			// Add member
-			member := &domain.TeamMember{
+			member := &models.TeamMember{
 				ID:     uuid.New(),
 				TeamID: team.ID,
 				UserID: leader.ID,
@@ -554,7 +554,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 			}
 
 			// Create program
-			program := &domain.Program{
+			program := &models.Program{
 				ID:           uuid.New(),
 				UserID:       leader.ID,
 				TeamID:       &team.ID,
@@ -572,7 +572,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 			}
 
 			// Add as participant
-			participant := &domain.TournamentParticipant{
+			participant := &models.TournamentParticipant{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
 				ProgramID:    program.ID,

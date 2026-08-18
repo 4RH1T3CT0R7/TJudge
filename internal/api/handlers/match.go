@@ -6,7 +6,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -18,10 +18,10 @@ import (
 
 // MatchRepository интерфейс для работы с матчами
 type MatchRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Match, error)
-	List(ctx context.Context, filter domain.MatchFilter) ([]*domain.Match, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
+	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
 	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error)
-	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*domain.Match, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error)
 }
 
 // MatchQueueManager интерфейс для работы с очередью матчей
@@ -33,15 +33,15 @@ type MatchQueueManager interface {
 
 // MatchCache интерфейс для кэширования матчей
 type MatchCache interface {
-	Get(ctx context.Context, matchID uuid.UUID) (*domain.MatchResult, error)
-	Set(ctx context.Context, matchID uuid.UUID, result *domain.MatchResult) error
-	GetMatch(ctx context.Context, matchID uuid.UUID) (*domain.Match, error)
-	SetMatch(ctx context.Context, match *domain.Match) error
+	Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error)
+	Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error
+	GetMatch(ctx context.Context, matchID uuid.UUID) (*models.Match, error)
+	SetMatch(ctx context.Context, match *models.Match) error
 }
 
 // MatchProgramLookup интерфейс для получения владельца программы
 type MatchProgramLookup interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Program, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 }
 
 // MatchHandler обрабатывает запросы матчей
@@ -68,7 +68,7 @@ func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLo
 // filterMatchError фильтрует сообщение об ошибке матча в зависимости от прав пользователя
 // Если пользователь владеет программой, которая вызвала ошибку, или является админом - показываем полную ошибку
 // Иначе показываем "Программа оппонента завершилась с ошибкой"
-func (h *MatchHandler) filterMatchError(ctx context.Context, match *domain.Match, userID uuid.UUID, isAdmin bool) *domain.Match {
+func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match, userID uuid.UUID, isAdmin bool) *models.Match {
 	// Если нет ошибки или нет program lookup - возвращаем как есть
 	if match.ErrorMessage == nil || *match.ErrorMessage == "" || h.programLookup == nil {
 		return match
@@ -119,7 +119,7 @@ func (h *MatchHandler) filterMatchError(ctx context.Context, match *domain.Match
 }
 
 // filterMatchesErrors применяет фильтрацию ошибок к списку матчей
-func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*domain.Match, userID uuid.UUID, isAdmin bool) []*domain.Match {
+func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*models.Match, userID uuid.UUID, isAdmin bool) []*models.Match {
 	for i, match := range matches {
 		matches[i] = h.filterMatchError(ctx, match, userID, isAdmin)
 	}
@@ -132,7 +132,7 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*domai
 // @Tags matches
 // @Produce json
 // @Param id path string true "Match ID" format(uuid)
-// @Success 200 {object} domain.Match
+// @Success 200 {object} models.Match
 // @Failure 404 {object} object{error=string}
 // @Router /matches/{id} [get]
 func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -150,8 +150,8 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		)
 		// Фильтруем сообщение об ошибке в зависимости от прав пользователя
 		userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-		userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-		isAdmin := userRole == domain.RoleAdmin
+		userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
+		isAdmin := userRole == models.RoleAdmin
 		cachedMatch = h.filterMatchError(r.Context(), cachedMatch, userID, isAdmin)
 		writeJSON(w, http.StatusOK, cachedMatch)
 		return
@@ -169,8 +169,8 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Фильтруем сообщение об ошибке в зависимости от прав пользователя
 	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-	isAdmin := userRole == domain.RoleAdmin
+	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
+	isAdmin := userRole == models.RoleAdmin
 	match = h.filterMatchError(r.Context(), match, userID, isAdmin)
 
 	writeJSON(w, http.StatusOK, match)
@@ -187,12 +187,12 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param game_type query string false "Фильтр по типу игры"
 // @Param limit query int false "Лимит записей" default(50)
 // @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} domain.Match
+// @Success 200 {array} models.Match
 // @Failure 400 {object} object{error=string}
 // @Router /matches [get]
 func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Получаем параметры фильтрации
-	filter := domain.MatchFilter{}
+	filter := models.MatchFilter{}
 
 	// Фильтр по Tournament ID
 	if tournamentIDStr := r.URL.Query().Get("tournament_id"); tournamentIDStr != "" {
@@ -216,9 +216,9 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Фильтр по статусу
 	if status := r.URL.Query().Get("status"); status != "" {
-		s := domain.MatchStatus(status)
+		s := models.MatchStatus(status)
 		switch s {
-		case domain.MatchPending, domain.MatchRunning, domain.MatchCompleted, domain.MatchFailed, domain.MatchCancelled:
+		case models.MatchPending, models.MatchRunning, models.MatchCompleted, models.MatchFailed, models.MatchCancelled:
 			filter.Status = s
 		default:
 			writeError(w, errors.ErrInvalidInput.WithMessage("invalid status filter, must be one of: pending, running, completed, failed, cancelled"))
@@ -244,8 +244,8 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Фильтруем сообщения об ошибках в зависимости от прав пользователя
 	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	userRole, _ := r.Context().Value(middleware.RoleKey).(domain.Role)
-	isAdmin := userRole == domain.RoleAdmin
+	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
+	isAdmin := userRole == models.RoleAdmin
 	matches = h.filterMatchesErrors(r.Context(), matches, userID, isAdmin)
 
 	writeJSON(w, http.StatusOK, matches)

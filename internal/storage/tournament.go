@@ -7,7 +7,7 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ func NewTournamentRepository(db *DB) *TournamentRepository {
 	return &TournamentRepository{db: db}
 }
 
-func (r *TournamentRepository) Create(ctx context.Context, tournament *domain.Tournament) error {
+func (r *TournamentRepository) Create(ctx context.Context, tournament *models.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal metadata")
@@ -57,8 +57,8 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *domain.To
 	return nil
 }
 
-func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
-	var tournament domain.Tournament
+func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
+	var tournament models.Tournament
 	var metadataJSON []byte
 
 	query := `
@@ -103,7 +103,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*doma
 	return &tournament, nil
 }
 
-func (r *TournamentRepository) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
+func (r *TournamentRepository) List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error) {
 	query := `
 		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
 		       metadata, version, created_at, updated_at
@@ -144,9 +144,9 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 	}
 	defer rows.Close()
 
-	var tournaments []*domain.Tournament
+	var tournaments []*models.Tournament
 	for rows.Next() {
-		var tournament domain.Tournament
+		var tournament models.Tournament
 		var metadataJSON []byte
 
 		err := rows.Scan(
@@ -190,7 +190,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter domain.Tournamen
 // Update обновляет турнир с optimistic lock: апдейт проходит только если version
 // в базе совпала с прочитанной, иначе кто-то успел обновить раньше нас и мы
 // отдаём ErrConcurrentUpdate. version инкрементится тем же запросом
-func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.Tournament) error {
+func (r *TournamentRepository) Update(ctx context.Context, tournament *models.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal metadata")
@@ -228,7 +228,7 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *domain.To
 	return nil
 }
 
-func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error {
+func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error {
 	query := `
 		UPDATE tournaments
 		SET status = $2, version = version + 1
@@ -273,7 +273,7 @@ func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // ListWithCursor - список турниров с курсорной пагинацией
-func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain.TournamentFilter, pageReq *pagination.PageRequest) ([]*domain.Tournament, bool, error) {
+func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter models.TournamentFilter, pageReq *pagination.PageRequest) ([]*models.Tournament, bool, error) {
 	if err := pageReq.Validate(); err != nil {
 		return nil, false, errors.Wrap(err, "invalid pagination request")
 	}
@@ -335,9 +335,9 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter domain
 	}
 	defer rows.Close()
 
-	var tournaments []*domain.Tournament
+	var tournaments []*models.Tournament
 	for rows.Next() {
-		var tournament domain.Tournament
+		var tournament models.Tournament
 		var metadataJSON []byte
 
 		err := rows.Scan(
@@ -418,7 +418,7 @@ func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID u
 	return count, nil
 }
 
-func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error {
+func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error {
 	query := `
 		INSERT INTO tournament_participants (id, tournament_id, program_id, rating)
 		VALUES ($1, $2, $3, $4)
@@ -439,8 +439,8 @@ func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *
 	return nil
 }
 
-func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error) {
-	var participants []*domain.TournamentParticipant
+func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error) {
+	var participants []*models.TournamentParticipant
 
 	query := `
 		SELECT id, tournament_id, program_id, rating, wins, losses, draws, created_at
@@ -456,7 +456,7 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 	defer rows.Close()
 
 	for rows.Next() {
-		var p domain.TournamentParticipant
+		var p models.TournamentParticipant
 		err := rows.Scan(
 			&p.ID,
 			&p.TournamentID,
@@ -480,8 +480,8 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 	return participants, nil
 }
 
-func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error) {
-	var participants []*domain.TournamentParticipant
+func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error) {
+	var participants []*models.TournamentParticipant
 
 	// выбираем только участников с последней версией программы для каждой команды и игры
 	query := `
@@ -507,7 +507,7 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 	defer rows.Close()
 
 	for rows.Next() {
-		var p domain.TournamentParticipant
+		var p models.TournamentParticipant
 		err := rows.Scan(
 			&p.ID,
 			&p.TournamentID,
@@ -533,12 +533,12 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 
 // ParticipantWithGameType - участник с типом игры для группировки
 type ParticipantWithGameType struct {
-	domain.TournamentParticipant
+	models.TournamentParticipant
 	GameType string `json:"game_type" db:"game_type"`
 }
 
 // GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)
-func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error) {
+func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error) {
 	// выбираем участников с последней ГОТОВОЙ версией программы и их game_type
 	// только status='ready', тк compiling ещё не собралась, failed не собралась
 	// вообще. если новая версия сломана, команда продолжает играть предыдущей
@@ -568,9 +568,9 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 	}
 	defer rows.Close()
 
-	result := make(map[string][]*domain.TournamentParticipant)
+	result := make(map[string][]*models.TournamentParticipant)
 	for rows.Next() {
-		var p domain.TournamentParticipant
+		var p models.TournamentParticipant
 		var gameType string
 		err := rows.Scan(
 			&p.ID,
@@ -596,8 +596,8 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 	return result, nil
 }
 
-func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error) {
-	var participants []*domain.TournamentParticipant
+func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error) {
+	var participants []*models.TournamentParticipant
 
 	// Выбираем только участников с программами для конкретной игры (последняя версия)
 	query := `
@@ -625,7 +625,7 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 	defer rows.Close()
 
 	for rows.Next() {
-		var p domain.TournamentParticipant
+		var p models.TournamentParticipant
 		err := rows.Scan(
 			&p.ID,
 			&p.TournamentID,
@@ -651,9 +651,9 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 
 // GetParticipantsByTournamentIDs тянет участников сразу для нескольких турниров одним запросом,
 // чтобы не ловить N+1 при загрузке списка турниров с участниками
-func (r *TournamentRepository) GetParticipantsByTournamentIDs(ctx context.Context, tournamentIDs []uuid.UUID) (map[uuid.UUID][]*domain.TournamentParticipant, error) {
+func (r *TournamentRepository) GetParticipantsByTournamentIDs(ctx context.Context, tournamentIDs []uuid.UUID) (map[uuid.UUID][]*models.TournamentParticipant, error) {
 	if len(tournamentIDs) == 0 {
-		return make(map[uuid.UUID][]*domain.TournamentParticipant), nil
+		return make(map[uuid.UUID][]*models.TournamentParticipant), nil
 	}
 
 	query := `
@@ -669,10 +669,10 @@ func (r *TournamentRepository) GetParticipantsByTournamentIDs(ctx context.Contex
 	}
 	defer rows.Close()
 
-	result := make(map[uuid.UUID][]*domain.TournamentParticipant)
+	result := make(map[uuid.UUID][]*models.TournamentParticipant)
 
 	for rows.Next() {
-		var p domain.TournamentParticipant
+		var p models.TournamentParticipant
 		err := rows.Scan(
 			&p.ID,
 			&p.TournamentID,

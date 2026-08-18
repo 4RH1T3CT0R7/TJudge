@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +28,7 @@ func TestJWTManager_AccessTokenRoundtrip(t *testing.T) {
 	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
 	userID := uuid.New()
 
-	token, err := manager.GenerateAccessToken(userID, "testuser", domain.RoleAdmin)
+	token, err := manager.GenerateAccessToken(userID, "testuser", models.RoleAdmin)
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
@@ -36,7 +36,7 @@ func TestJWTManager_AccessTokenRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, userID, claims.UserID)
 	assert.Equal(t, "testuser", claims.Username)
-	assert.Equal(t, domain.RoleAdmin, claims.Role)
+	assert.Equal(t, models.RoleAdmin, claims.Role)
 	assert.Equal(t, userID.String(), claims.Subject)
 }
 
@@ -85,14 +85,14 @@ func TestJWTManager_ValidateToken_EmptyRoleDefaultsToUser(t *testing.T) {
 
 	got, err := manager.ValidateToken(signed)
 	require.NoError(t, err)
-	assert.Equal(t, domain.RoleUser, got.Role)
+	assert.Equal(t, models.RoleUser, got.Role)
 }
 
 func TestJWTManager_ValidateToken_WrongSecret(t *testing.T) {
 	manager1 := NewJWTManager("secret-1", 15*time.Minute, 7*24*time.Hour)
 	manager2 := NewJWTManager("secret-2", 15*time.Minute, 7*24*time.Hour)
 
-	token, err := manager1.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
+	token, err := manager1.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
 	require.NoError(t, err)
 
 	// чужим секретом валидировать нельзя
@@ -104,7 +104,7 @@ func TestJWTManager_ValidateToken_WrongSecret(t *testing.T) {
 func TestJWTManager_ValidateToken_Expired(t *testing.T) {
 	manager := NewJWTManager("test-secret", 1*time.Millisecond, 7*24*time.Hour)
 
-	token, err := manager.GenerateAccessToken(uuid.New(), "testuser", domain.RoleUser)
+	token, err := manager.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)

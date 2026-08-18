@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -17,11 +17,11 @@ import (
 // stubSink накапливает audit entries для проверки в тестах.
 type stubSink struct {
 	mu      sync.Mutex
-	entries []*domain.AuditLogEntry
+	entries []*models.AuditLogEntry
 	err     error
 }
 
-func (s *stubSink) Insert(_ context.Context, e *domain.AuditLogEntry) error {
+func (s *stubSink) Insert(_ context.Context, e *models.AuditLogEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
@@ -37,7 +37,7 @@ func (s *stubSink) len() int {
 	return len(s.entries)
 }
 
-func (s *stubSink) last() *domain.AuditLogEntry {
+func (s *stubSink) last() *models.AuditLogEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.entries) == 0 {
@@ -72,7 +72,7 @@ func TestAudit_RecordsAdminMutation(t *testing.T) {
 	req.RemoteAddr = "10.0.0.5:12345"
 	req.Header.Set("User-Agent", "ci-test/1.0")
 	ctx := context.WithValue(req.Context(), UserIDKey, adminID)
-	ctx = context.WithValue(ctx, RoleKey, domain.RoleAdmin)
+	ctx = context.WithValue(ctx, RoleKey, models.RoleAdmin)
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
@@ -83,7 +83,7 @@ func TestAudit_RecordsAdminMutation(t *testing.T) {
 	assert.Eventually(t, func() bool { return sink.len() == 1 }, time.Second, 10*time.Millisecond)
 	e := sink.last()
 	assert.Equal(t, adminID, e.ActorID)
-	assert.Equal(t, string(domain.RoleAdmin), e.ActorRole)
+	assert.Equal(t, string(models.RoleAdmin), e.ActorRole)
 	assert.Equal(t, "POST /api/v1/tournaments", e.Action)
 	assert.Equal(t, http.StatusCreated, e.StatusCode)
 	assert.Equal(t, "10.0.0.5", e.IP)
@@ -100,7 +100,7 @@ func TestAudit_IgnoresGETRequests(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments", nil)
 	ctx := context.WithValue(req.Context(), UserIDKey, uuid.New())
-	ctx = context.WithValue(ctx, RoleKey, domain.RoleAdmin)
+	ctx = context.WithValue(ctx, RoleKey, models.RoleAdmin)
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
@@ -120,7 +120,7 @@ func TestAudit_IgnoresNonAdmin(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/teams", nil)
 	ctx := context.WithValue(req.Context(), UserIDKey, uuid.New())
-	ctx = context.WithValue(ctx, RoleKey, domain.RoleUser)
+	ctx = context.WithValue(ctx, RoleKey, models.RoleUser)
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
@@ -147,7 +147,7 @@ func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/x", nil)
 		req.RemoteAddr = "1.2.3.4:99"
 		c := context.WithValue(req.Context(), UserIDKey, uuid.New())
-		c = context.WithValue(c, RoleKey, domain.RoleAdmin)
+		c = context.WithValue(c, RoleKey, models.RoleAdmin)
 		req = req.WithContext(c)
 		handler.ServeHTTP(httptest.NewRecorder(), req)
 	}
@@ -160,7 +160,7 @@ type blockingSink struct {
 	start chan struct{}
 }
 
-func (b *blockingSink) Insert(ctx context.Context, _ *domain.AuditLogEntry) error {
+func (b *blockingSink) Insert(ctx context.Context, _ *models.AuditLogEntry) error {
 	select {
 	case <-b.start:
 		return nil

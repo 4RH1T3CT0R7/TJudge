@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 )
@@ -24,7 +24,7 @@ func NewTeamRepository(db *DB) *TeamRepository {
 	return &TeamRepository{db: db}
 }
 
-func (r *TeamRepository) Create(ctx context.Context, team *domain.Team) error {
+func (r *TeamRepository) Create(ctx context.Context, team *models.Team) error {
 	query := `
 		INSERT INTO teams (id, tournament_id, name, code, leader_id)
 		VALUES ($1, $2, $3, $4, $5)
@@ -46,8 +46,8 @@ func (r *TeamRepository) Create(ctx context.Context, team *domain.Team) error {
 	return nil
 }
 
-func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
-	var team domain.Team
+func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Team, error) {
+	var team models.Team
 
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
@@ -77,8 +77,8 @@ func (r *TeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tea
 	return &team, nil
 }
 
-func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Team, error) {
-	var team domain.Team
+func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*models.Team, error) {
+	var team models.Team
 
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
@@ -108,7 +108,7 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*domain.Te
 	return &team, nil
 }
 
-func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
+func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
@@ -122,9 +122,9 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 	}
 	defer rows.Close()
 
-	var teams []*domain.Team
+	var teams []*models.Team
 	for rows.Next() {
-		var team domain.Team
+		var team models.Team
 
 		err := rows.Scan(
 			&team.ID,
@@ -151,7 +151,7 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 	return teams, nil
 }
 
-func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]*domain.Team, error) {
+func (r *TeamRepository) List(ctx context.Context, filter models.TeamFilter) ([]*models.Team, error) {
 	query := `
 		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
 		FROM teams
@@ -190,9 +190,9 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 	}
 	defer rows.Close()
 
-	var teams []*domain.Team
+	var teams []*models.Team
 	for rows.Next() {
-		var team domain.Team
+		var team models.Team
 
 		err := rows.Scan(
 			&team.ID,
@@ -219,7 +219,7 @@ func (r *TeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]
 	return teams, nil
 }
 
-func (r *TeamRepository) Update(ctx context.Context, team *domain.Team) error {
+func (r *TeamRepository) Update(ctx context.Context, team *models.Team) error {
 	query := `
 		UPDATE teams
 		SET name = $2, leader_id = $3
@@ -263,7 +263,7 @@ func (r *TeamRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *TeamRepository) AddMember(ctx context.Context, member *domain.TeamMember) error {
+func (r *TeamRepository) AddMember(ctx context.Context, member *models.TeamMember) error {
 	query := `
 		INSERT INTO team_members (id, team_id, user_id)
 		VALUES ($1, $2, $3)
@@ -303,7 +303,7 @@ func (r *TeamRepository) RemoveMember(ctx context.Context, teamID, userID uuid.U
 	return nil
 }
 
-func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
+func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*models.TeamMember, error) {
 	query := `
 		SELECT id, team_id, user_id, joined_at
 		FROM team_members
@@ -317,9 +317,9 @@ func (r *TeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*d
 	}
 	defer rows.Close()
 
-	var members []*domain.TeamMember
+	var members []*models.TeamMember
 	for rows.Next() {
-		var member domain.TeamMember
+		var member models.TeamMember
 
 		err := rows.Scan(
 			&member.ID,
@@ -383,8 +383,8 @@ func (r *TeamRepository) IsUserInAnyTeamInTournament(ctx context.Context, tourna
 	return exists, nil
 }
 
-func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error) {
-	var team domain.Team
+func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error) {
+	var team models.Team
 
 	query := `
 		SELECT t.id, t.tournament_id, t.name, t.code, t.leader_id, t.is_disqualified, t.disqualified_at, t.created_at, t.updated_at
@@ -448,7 +448,7 @@ func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error)
 	return "", errors.ErrInternal.WithMessage("failed to generate unique code after max attempts")
 }
 
-func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error) {
+func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error) {
 	team, err := r.GetByID(ctx, teamID)
 	if err != nil {
 		return nil, err
@@ -469,9 +469,9 @@ func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUI
 	}
 	defer rows.Close()
 
-	var members []domain.User
+	var members []models.User
 	for rows.Next() {
-		var user domain.User
+		var user models.User
 		err := rows.Scan(
 			&user.ID,
 			&user.Username,
@@ -490,7 +490,7 @@ func (r *TeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUI
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	return &domain.TeamWithMembers{
+	return &models.TeamWithMembers{
 		Team:    *team,
 		Members: members,
 	}, nil

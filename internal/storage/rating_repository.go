@@ -6,8 +6,8 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/rating"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -21,7 +21,7 @@ func NewRatingRepository(db *DB) *RatingRepository {
 	return &RatingRepository{db: db}
 }
 
-func (r *RatingRepository) Create(ctx context.Context, history *domain.RatingHistory) error {
+func (r *RatingRepository) Create(ctx context.Context, history *models.RatingHistory) error {
 	query := `
 		INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -45,8 +45,8 @@ func (r *RatingRepository) Create(ctx context.Context, history *domain.RatingHis
 	return nil
 }
 
-func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*domain.RatingHistory, error) {
-	var history []*domain.RatingHistory
+func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error) {
+	var history []*models.RatingHistory
 
 	query := `
 		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
@@ -66,8 +66,8 @@ func (r *RatingRepository) GetByProgramID(ctx context.Context, programID uuid.UU
 
 // GetByProgramAndTournament - история рейтинга программы в турнире в
 // хронологии, для графика. limit ограничивает число последних точек
-func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*domain.RatingHistory, error) {
-	var history []*domain.RatingHistory
+func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*models.RatingHistory, error) {
+	var history []*models.RatingHistory
 
 	// последние limit записей, развёрнутые в хронологию
 	query := `
@@ -93,8 +93,8 @@ func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, progra
 // GetByMatchID - записи истории рейтинга по матчу. OutboxDispatcher юзает
 // как идемпотентный guard: если по матчу уже есть rating_history значит
 // рейтинг посчитан, второй раз применять нельзя (иначе задвоится)
-func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*domain.RatingHistory, error) {
-	var history []*domain.RatingHistory
+func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
+	var history []*models.RatingHistory
 
 	query := `
 		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
@@ -110,8 +110,8 @@ func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) 
 	return history, nil
 }
 
-func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.RatingHistory, error) {
-	var history []*domain.RatingHistory
+func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.RatingHistory, error) {
+	var history []*models.RatingHistory
 
 	query := `
 		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at

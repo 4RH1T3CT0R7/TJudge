@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -21,9 +21,9 @@ type stubRecoveryOutbox struct{ retried int64 }
 
 func (s *stubRecoveryOutbox) RetryErrors(_ context.Context) (int64, error) { return s.retried, nil }
 
-type stubRecoveryPrograms struct{ programs []*domain.Program }
+type stubRecoveryPrograms struct{ programs []*models.Program }
 
-func (s *stubRecoveryPrograms) GetStuckCompiling(_ context.Context, _ time.Duration, _ int) ([]*domain.Program, error) {
+func (s *stubRecoveryPrograms) GetStuckCompiling(_ context.Context, _ time.Duration, _ int) ([]*models.Program, error) {
 	return s.programs, nil
 }
 
@@ -35,11 +35,11 @@ func (s *stubRecoveryCompileQueue) Enqueue(_ context.Context, id uuid.UUID) erro
 }
 
 type stubRecoveryMatches struct {
-	stuck []*domain.Match
+	stuck []*models.Match
 	reset []uuid.UUID
 }
 
-func (s *stubRecoveryMatches) GetStuckRunning(_ context.Context, _ time.Duration, _ int) ([]*domain.Match, error) {
+func (s *stubRecoveryMatches) GetStuckRunning(_ context.Context, _ time.Duration, _ int) ([]*models.Match, error) {
 	return s.stuck, nil
 }
 
@@ -53,7 +53,7 @@ type stubRecoveryQueue struct {
 	cleared  int64
 }
 
-func (s *stubRecoveryQueue) Enqueue(_ context.Context, m *domain.Match) error {
+func (s *stubRecoveryQueue) Enqueue(_ context.Context, m *models.Match) error {
 	s.enqueued = append(s.enqueued, m.ID)
 	return nil
 }
@@ -86,7 +86,7 @@ func TestRecovery_RetryOutboxErrors(t *testing.T) {
 
 func TestRecovery_RequeueCompiling(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	programs := []*domain.Program{{ID: uuid.New()}, {ID: uuid.New()}}
+	programs := []*models.Program{{ID: uuid.New()}, {ID: uuid.New()}}
 	cq := &stubRecoveryCompileQueue{}
 	h := NewSystemRecoveryHandler(nil, &stubRecoveryPrograms{programs: programs}, cq, nil, nil, log)
 
@@ -97,9 +97,9 @@ func TestRecovery_RequeueCompiling(t *testing.T) {
 
 func TestRecovery_ResetStuckMatches(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	stuck := []*domain.Match{
-		{ID: uuid.New(), Status: domain.MatchRunning},
-		{ID: uuid.New(), Status: domain.MatchRunning},
+	stuck := []*models.Match{
+		{ID: uuid.New(), Status: models.MatchRunning},
+		{ID: uuid.New(), Status: models.MatchRunning},
 	}
 	mr := &stubRecoveryMatches{stuck: stuck}
 	qm := &stubRecoveryQueue{}
@@ -111,7 +111,7 @@ func TestRecovery_ResetStuckMatches(t *testing.T) {
 	// Матчи возвращены в очередь со статусом pending.
 	assert.Len(t, qm.enqueued, 2)
 	for _, m := range stuck {
-		assert.Equal(t, domain.MatchPending, m.Status)
+		assert.Equal(t, models.MatchPending, m.Status)
 	}
 }
 

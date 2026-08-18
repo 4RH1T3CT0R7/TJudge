@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -20,43 +20,43 @@ type MockTeamRepository struct {
 	mock.Mock
 }
 
-func (m *MockTeamRepository) Create(ctx context.Context, team *domain.Team) error {
+func (m *MockTeamRepository) Create(ctx context.Context, team *models.Team) error {
 	return m.Called(ctx, team).Error(0)
 }
 
-func (m *MockTeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
+func (m *MockTeamRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Team, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamRepository) GetByCode(ctx context.Context, code string) (*domain.Team, error) {
+func (m *MockTeamRepository) GetByCode(ctx context.Context, code string) (*models.Team, error) {
 	args := m.Called(ctx, code)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
-func (m *MockTeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Team, error) {
+func (m *MockTeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Team), args.Error(1)
+	return args.Get(0).([]*models.Team), args.Error(1)
 }
 
-func (m *MockTeamRepository) List(ctx context.Context, filter domain.TeamFilter) ([]*domain.Team, error) {
+func (m *MockTeamRepository) List(ctx context.Context, filter models.TeamFilter) ([]*models.Team, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Team), args.Error(1)
+	return args.Get(0).([]*models.Team), args.Error(1)
 }
 
-func (m *MockTeamRepository) Update(ctx context.Context, team *domain.Team) error {
+func (m *MockTeamRepository) Update(ctx context.Context, team *models.Team) error {
 	return m.Called(ctx, team).Error(0)
 }
 
@@ -64,7 +64,7 @@ func (m *MockTeamRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.Called(ctx, id).Error(0)
 }
 
-func (m *MockTeamRepository) AddMember(ctx context.Context, member *domain.TeamMember) error {
+func (m *MockTeamRepository) AddMember(ctx context.Context, member *models.TeamMember) error {
 	return m.Called(ctx, member).Error(0)
 }
 
@@ -72,12 +72,12 @@ func (m *MockTeamRepository) RemoveMember(ctx context.Context, teamID, userID uu
 	return m.Called(ctx, teamID, userID).Error(0)
 }
 
-func (m *MockTeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
+func (m *MockTeamRepository) GetMembers(ctx context.Context, teamID uuid.UUID) ([]*models.TeamMember, error) {
 	args := m.Called(ctx, teamID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.TeamMember), args.Error(1)
+	return args.Get(0).([]*models.TeamMember), args.Error(1)
 }
 
 func (m *MockTeamRepository) GetMemberCount(ctx context.Context, teamID uuid.UUID) (int, error) {
@@ -95,12 +95,12 @@ func (m *MockTeamRepository) IsUserInAnyTeamInTournament(ctx context.Context, to
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockTeamRepository) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*domain.Team, error) {
+func (m *MockTeamRepository) GetUserTeamInTournament(ctx context.Context, tournamentID, userID uuid.UUID) (*models.Team, error) {
 	args := m.Called(ctx, tournamentID, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Team), args.Error(1)
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
 func (m *MockTeamRepository) GenerateUniqueCode(ctx context.Context) (string, error) {
@@ -108,12 +108,12 @@ func (m *MockTeamRepository) GenerateUniqueCode(ctx context.Context) (string, er
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockTeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*domain.TeamWithMembers, error) {
+func (m *MockTeamRepository) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*models.TeamWithMembers, error) {
 	args := m.Called(ctx, teamID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.TeamWithMembers), args.Error(1)
+	return args.Get(0).(*models.TeamWithMembers), args.Error(1)
 }
 
 func (m *MockTeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournamentID uuid.UUID) (int64, int64, int64, error) {
@@ -134,12 +134,12 @@ type MockTournamentRepository struct {
 	mock.Mock
 }
 
-func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
+func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Tournament), args.Error(1)
+	return args.Get(0).(*models.Tournament), args.Error(1)
 }
 
 // noopLock просто выполняет функцию без реального лока — для юнитов сойдёт
@@ -163,11 +163,11 @@ func TestService_CreateTeam_Success(t *testing.T) {
 	ctx := context.Background()
 	tID, userID := uuid.New(), uuid.New()
 
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(false, nil)
 	teamRepo.On("GenerateUniqueCode", ctx).Return("ABC123", nil)
-	teamRepo.On("Create", ctx, mock.AnythingOfType("*domain.Team")).Return(nil)
-	teamRepo.On("AddMember", ctx, mock.AnythingOfType("*domain.TeamMember")).Return(nil)
+	teamRepo.On("Create", ctx, mock.AnythingOfType("*models.Team")).Return(nil)
+	teamRepo.On("AddMember", ctx, mock.AnythingOfType("*models.TeamMember")).Return(nil)
 
 	team, err := svc.CreateTeam(ctx, &CreateTeamRequest{TournamentID: tID, Name: "My Team", UserID: userID})
 
@@ -191,13 +191,13 @@ func TestService_CreateTeam_TournamentNotFound(t *testing.T) {
 
 // команду можно завести только в pending-турнире
 func TestService_CreateTeam_TournamentNotPending(t *testing.T) {
-	for _, status := range []domain.TournamentStatus{domain.TournamentActive, domain.TournamentCompleted, domain.TournamentCancelled} {
+	for _, status := range []models.TournamentStatus{models.TournamentActive, models.TournamentCompleted, models.TournamentCancelled} {
 		t.Run(string(status), func(t *testing.T) {
 			svc, _, tournamentRepo := newTestTeamService(t)
 			ctx := context.Background()
 			tID := uuid.New()
 
-			tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: status}, nil)
+			tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: status}, nil)
 
 			_, err := svc.CreateTeam(ctx, &CreateTeamRequest{TournamentID: tID, Name: "T", UserID: uuid.New()})
 			assert.Error(t, err)
@@ -210,7 +210,7 @@ func TestService_CreateTeam_UserAlreadyInTeam(t *testing.T) {
 	ctx := context.Background()
 	tID, userID := uuid.New(), uuid.New()
 
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(true, nil)
 
 	_, err := svc.CreateTeam(ctx, &CreateTeamRequest{TournamentID: tID, Name: "T", UserID: userID})
@@ -224,11 +224,11 @@ func TestService_JoinTeamByCode_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByCode", ctx, "ABC123").Return(&domain.Team{ID: teamID, TournamentID: tID, Code: "ABC123"}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 5}, nil)
+	teamRepo.On("GetByCode", ctx, "ABC123").Return(&models.Team{ID: teamID, TournamentID: tID, Code: "ABC123"}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 5}, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
 	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(false, nil)
-	teamRepo.On("AddMember", ctx, mock.AnythingOfType("*domain.TeamMember")).Return(nil)
+	teamRepo.On("AddMember", ctx, mock.AnythingOfType("*models.TeamMember")).Return(nil)
 
 	result, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "ABC123", UserID: userID})
 
@@ -251,8 +251,8 @@ func TestService_JoinTeamByCode_TournamentNotPending(t *testing.T) {
 	ctx := context.Background()
 	tID := uuid.New()
 
-	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&models.Team{TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
 
 	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "CODE", UserID: uuid.New()})
 	assert.Error(t, err)
@@ -263,8 +263,8 @@ func TestService_JoinTeamByCode_TeamFull(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 3}, nil)
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&models.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 3}, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(3, nil)
 
 	_, err := svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "CODE", UserID: uuid.New()})
@@ -278,8 +278,8 @@ func TestService_JoinTeamByCode_UnlimitedTeamSize(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 0}, nil)
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&models.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 0}, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(100, nil)
 	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(false, nil)
 	teamRepo.On("AddMember", ctx, mock.Anything).Return(nil)
@@ -295,8 +295,8 @@ func TestService_JoinTeamByCode_UserAlreadyInTeam(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByCode", ctx, "CODE").Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending, MaxTeamSize: 5}, nil)
+	teamRepo.On("GetByCode", ctx, "CODE").Return(&models.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 5}, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
 	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(true, nil)
 
@@ -311,7 +311,7 @@ func TestService_LeaveTeam_RegularMember(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, memberID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, memberID).Return(true, nil)
 	teamRepo.On("RemoveMember", ctx, teamID, memberID).Return(nil)
 
@@ -326,10 +326,10 @@ func TestService_LeaveTeam_LeaderLastMember(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, teamID).Return(nil)
 
 	err := svc.LeaveTeam(ctx, teamID, leaderID)
@@ -343,10 +343,10 @@ func TestService_LeaveTeam_LeaderLastMember_ActiveTournament(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
 
 	err := svc.LeaveTeam(ctx, teamID, leaderID)
 	assert.Error(t, err)
@@ -360,11 +360,11 @@ func TestService_LeaveTeam_LeaderTransfersLeadership(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, member1ID, member2ID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 
-	team := &domain.Team{ID: teamID, LeaderID: leaderID}
+	team := &models.Team{ID: teamID, LeaderID: leaderID}
 	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(3, nil)
-	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*models.TeamMember{
 		{TeamID: teamID, UserID: leaderID},
 		{TeamID: teamID, UserID: member1ID},
 		{TeamID: teamID, UserID: member2ID},
@@ -384,7 +384,7 @@ func TestService_LeaveTeam_UserNotInTeam(t *testing.T) {
 	ctx := context.Background()
 	teamID, userID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: uuid.New()}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: uuid.New()}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, userID).Return(false, nil)
 
 	err := svc.LeaveTeam(ctx, teamID, userID)
@@ -398,12 +398,12 @@ func TestService_LeaveTeam_OnlyLeaderLeft(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
 
-	team := &domain.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}
+	team := &models.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}
 	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
-	teamRepo.On("GetMembers", ctx, teamID).Return([]*domain.TeamMember{{UserID: leaderID}}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	teamRepo.On("GetMembers", ctx, teamID).Return([]*models.TeamMember{{UserID: leaderID}}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, teamID).Return(nil)
 
 	err := svc.LeaveTeam(ctx, teamID, leaderID)
@@ -421,7 +421,7 @@ func TestService_RemoveMember_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, memberID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, memberID).Return(true, nil)
 	teamRepo.On("RemoveMember", ctx, teamID, memberID).Return(nil)
 
@@ -434,7 +434,7 @@ func TestService_RemoveMember_NotLeader(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, notLeader := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
 
 	err := svc.RemoveMember(ctx, teamID, uuid.New(), notLeader)
 	assert.Error(t, err)
@@ -446,7 +446,7 @@ func TestService_RemoveMember_SelfRemoval(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
 
 	err := svc.RemoveMember(ctx, teamID, leaderID, leaderID)
 	assert.Error(t, err)
@@ -457,7 +457,7 @@ func TestService_RemoveMember_TargetNotInTeam(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID, memberID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, memberID).Return(false, nil)
 
 	err := svc.RemoveMember(ctx, teamID, memberID, leaderID)
@@ -471,8 +471,8 @@ func TestService_UpdateTeamName_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, Name: "Old"}, nil)
-	teamRepo.On("Update", ctx, mock.MatchedBy(func(t *domain.Team) bool {
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, Name: "Old"}, nil)
+	teamRepo.On("Update", ctx, mock.MatchedBy(func(t *models.Team) bool {
 		return t.Name == "New Name"
 	})).Return(nil)
 
@@ -486,7 +486,7 @@ func TestService_UpdateTeamName_NotLeader(t *testing.T) {
 	ctx := context.Background()
 	teamID := uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: uuid.New()}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: uuid.New()}, nil)
 
 	_, err := svc.UpdateTeamName(ctx, teamID, "New", uuid.New())
 	assert.Error(t, err)
@@ -499,7 +499,7 @@ func TestService_GetInviteLink_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, leaderID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: leaderID, Code: "ABC123"}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, Code: "ABC123"}, nil)
 
 	link, err := svc.GetInviteLink(ctx, teamID, leaderID, "http://localhost:8080")
 	require.NoError(t, err)
@@ -511,7 +511,7 @@ func TestService_GetInviteLink_NotLeader(t *testing.T) {
 	ctx := context.Background()
 	teamID := uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, LeaderID: uuid.New()}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: uuid.New()}, nil)
 
 	_, err := svc.GetInviteLink(ctx, teamID, uuid.New(), "http://localhost")
 	assert.Error(t, err)
@@ -524,7 +524,7 @@ func TestService_GetTeamByID_Success(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.New()
 
-	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id}, nil)
+	teamRepo.On("GetByID", ctx, id).Return(&models.Team{ID: id}, nil)
 
 	team, err := svc.GetTeamByID(ctx, id)
 	require.NoError(t, err)
@@ -538,8 +538,8 @@ func TestService_DeleteTeam_Success(t *testing.T) {
 	ctx := context.Background()
 	id, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	teamRepo.On("GetByID", ctx, id).Return(&models.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 	teamRepo.On("Delete", ctx, id).Return(nil)
 
 	err := svc.DeleteTeam(ctx, id)
@@ -551,8 +551,8 @@ func TestService_DeleteTeam_ActiveTournament(t *testing.T) {
 	ctx := context.Background()
 	id, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, id).Return(&domain.Team{ID: id, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+	teamRepo.On("GetByID", ctx, id).Return(&models.Team{ID: id, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
 
 	err := svc.DeleteTeam(ctx, id)
 	assert.Error(t, err)
@@ -566,8 +566,8 @@ func TestService_DisqualifyTeam_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, TournamentID: tID, IsDisqualified: false}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentActive}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, IsDisqualified: false}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
 	// вся чистка идёт одной транзакцией в репозитории, тут просто отдаём счётчики
 	teamRepo.On("DisqualifyTeamFull", ctx, teamID, tID).Return(int64(5), int64(3), int64(2), nil)
 
@@ -585,7 +585,7 @@ func TestService_DisqualifyTeam_AlreadyDisqualified(t *testing.T) {
 	ctx := context.Background()
 	teamID := uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, IsDisqualified: true}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, IsDisqualified: true}, nil)
 
 	res, err := svc.DisqualifyTeam(ctx, teamID)
 	assert.Error(t, err)
@@ -599,8 +599,8 @@ func TestService_DisqualifyTeam_NotActiveTournament(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, TournamentID: tID}, nil)
-	tournamentRepo.On("GetByID", ctx, tID).Return(&domain.Tournament{ID: tID, Status: domain.TournamentPending}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending}, nil)
 
 	res, err := svc.DisqualifyTeam(ctx, teamID)
 	assert.Error(t, err)
@@ -612,7 +612,7 @@ func TestService_RestoreTeam_Success(t *testing.T) {
 	ctx := context.Background()
 	teamID, tID := uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, TournamentID: tID, IsDisqualified: true}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, IsDisqualified: true}, nil)
 	teamRepo.On("RestoreTeam", ctx, teamID).Return(nil)
 
 	err := svc.RestoreTeam(ctx, teamID)
@@ -626,7 +626,7 @@ func TestService_RestoreTeam_NotDisqualified(t *testing.T) {
 	ctx := context.Background()
 	teamID := uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&domain.Team{ID: teamID, IsDisqualified: false}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, IsDisqualified: false}, nil)
 
 	err := svc.RestoreTeam(ctx, teamID)
 	assert.Error(t, err)

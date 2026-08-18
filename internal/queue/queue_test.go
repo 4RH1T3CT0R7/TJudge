@@ -10,8 +10,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -36,11 +36,11 @@ func testLogger() *logger.Logger {
 	return log
 }
 
-func testMatch(priority domain.MatchPriority) *domain.Match {
-	return &domain.Match{
+func testMatch(priority models.MatchPriority) *models.Match {
+	return &models.Match{
 		ID:       uuid.New(),
 		Priority: priority,
-		Status:   domain.MatchPending,
+		Status:   models.MatchPending,
 		GameType: "tictactoe",
 	}
 }
@@ -74,12 +74,12 @@ func TestQueueManager_GetQueueKey(t *testing.T) {
 	qm := NewQueueManager(nil, testLogger(), testMetrics())
 
 	tests := []struct {
-		priority domain.MatchPriority
+		priority models.MatchPriority
 		want     string
 	}{
-		{domain.PriorityHigh, "queue:high"},
-		{domain.PriorityMedium, "queue:medium"},
-		{domain.PriorityLow, "queue:low"},
+		{models.PriorityHigh, "queue:high"},
+		{models.PriorityMedium, "queue:medium"},
+		{models.PriorityLow, "queue:low"},
 	}
 
 	for _, tc := range tests {
@@ -92,9 +92,9 @@ func TestQueueManager_EnqueueDequeue_PriorityOrdering(t *testing.T) {
 	ctx := context.Background()
 
 	// кладём в обратном порядке: low, medium, high
-	lowMatch := testMatch(domain.PriorityLow)
-	medMatch := testMatch(domain.PriorityMedium)
-	highMatch := testMatch(domain.PriorityHigh)
+	lowMatch := testMatch(models.PriorityLow)
+	medMatch := testMatch(models.PriorityMedium)
+	highMatch := testMatch(models.PriorityHigh)
 
 	require.NoError(t, qm.Enqueue(ctx, lowMatch))
 	require.NoError(t, qm.Enqueue(ctx, medMatch))
@@ -126,9 +126,9 @@ func TestQueueManager_FIFO_WithinSamePriority(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	first := testMatch(domain.PriorityMedium)
-	second := testMatch(domain.PriorityMedium)
-	third := testMatch(domain.PriorityMedium)
+	first := testMatch(models.PriorityMedium)
+	second := testMatch(models.PriorityMedium)
+	third := testMatch(models.PriorityMedium)
 
 	require.NoError(t, qm.Enqueue(ctx, first))
 	require.NoError(t, qm.Enqueue(ctx, second))
@@ -156,25 +156,25 @@ func TestQueueManager_GetQueueSize(t *testing.T) {
 	ctx := context.Background()
 
 	// пока пусто
-	for _, p := range []domain.MatchPriority{domain.PriorityHigh, domain.PriorityMedium, domain.PriorityLow} {
+	for _, p := range []models.MatchPriority{models.PriorityHigh, models.PriorityMedium, models.PriorityLow} {
 		size, err := qm.GetQueueSize(ctx, p)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), size)
 	}
 
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
 
-	high, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	high, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), high)
 
-	med, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	med, err := qm.GetQueueSize(ctx, models.PriorityMedium)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), med)
 
-	low, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	low, err := qm.GetQueueSize(ctx, models.PriorityLow)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), low)
 }
@@ -183,9 +183,9 @@ func TestQueueManager_GetTotalQueueSize(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
 
 	total, err := qm.GetTotalQueueSize(ctx)
 	require.NoError(t, err)
@@ -197,12 +197,12 @@ func TestQueueManager_GetStats(t *testing.T) {
 	ctx := context.Background()
 
 	for range 3 {
-		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
 	}
 	for range 2 {
-		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
 	}
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
 
 	stats, err := qm.GetStats(ctx)
 	require.NoError(t, err)
@@ -218,9 +218,9 @@ func TestQueueManager_Clear(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
-	require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
 
 	require.NoError(t, qm.Clear(ctx))
 
@@ -238,24 +238,24 @@ func TestQueueManager_EnqueueBatch(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	matches := []*domain.Match{
-		testMatch(domain.PriorityHigh),
-		testMatch(domain.PriorityHigh),
-		testMatch(domain.PriorityMedium),
-		testMatch(domain.PriorityLow),
+	matches := []*models.Match{
+		testMatch(models.PriorityHigh),
+		testMatch(models.PriorityHigh),
+		testMatch(models.PriorityMedium),
+		testMatch(models.PriorityLow),
 	}
 
 	require.NoError(t, qm.EnqueueBatch(ctx, matches))
 
-	high, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	high, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), high)
 
-	med, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	med, err := qm.GetQueueSize(ctx, models.PriorityMedium)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), med)
 
-	low, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	low, err := qm.GetQueueSize(ctx, models.PriorityLow)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), low)
 }
@@ -264,17 +264,17 @@ func TestQueueManager_EnqueueBatch_DedupSkipsDuplicates(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	match1 := testMatch(domain.PriorityHigh)
-	match2 := testMatch(domain.PriorityHigh)
+	match1 := testMatch(models.PriorityHigh)
+	match2 := testMatch(models.PriorityHigh)
 
 	// match1 сначала ставим по одиночке
 	require.NoError(t, qm.Enqueue(ctx, match1))
 
 	// батчем кладём и дубль match1, и новый match2
-	require.NoError(t, qm.EnqueueBatch(ctx, []*domain.Match{match1, match2}))
+	require.NoError(t, qm.EnqueueBatch(ctx, []*models.Match{match1, match2}))
 
 	// в очереди должно быть 2 (match1 + match2), а не 3
-	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	size, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), size)
 }
@@ -284,7 +284,7 @@ func TestQueueManager_EnqueueBatch_Empty(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, qm.EnqueueBatch(ctx, nil))
-	require.NoError(t, qm.EnqueueBatch(ctx, []*domain.Match{}))
+	require.NoError(t, qm.EnqueueBatch(ctx, []*models.Match{}))
 
 	total, err := qm.GetTotalQueueSize(ctx)
 	require.NoError(t, err)
@@ -297,13 +297,13 @@ func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
 
 	// наполняем все три очереди по 20 матчей
 	for range 20 {
-		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityHigh)))
-		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityMedium)))
-		require.NoError(t, qm.Enqueue(ctx, testMatch(domain.PriorityLow)))
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
 	}
 
 	// достаём все 60 и считаем по приоритетам, low не должна остаться голодной
-	counts := map[domain.MatchPriority]int{}
+	counts := map[models.MatchPriority]int{}
 	for i := range 60 {
 		match, err := qm.Dequeue(ctx)
 		require.NoError(t, err)
@@ -311,17 +311,17 @@ func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
 		counts[match.Priority]++
 	}
 
-	assert.Equal(t, 20, counts[domain.PriorityHigh])
-	assert.Equal(t, 20, counts[domain.PriorityMedium])
-	assert.Equal(t, 20, counts[domain.PriorityLow])
+	assert.Equal(t, 20, counts[models.PriorityHigh])
+	assert.Equal(t, 20, counts[models.PriorityMedium])
+	assert.Equal(t, 20, counts[models.PriorityLow])
 }
 
 func TestQueueManager_WeightedQueueKeys_Cycle(t *testing.T) {
 	qm := NewQueueManager(nil, testLogger(), testMetrics())
 
-	high := qm.getQueueKey(domain.PriorityHigh)
-	medium := qm.getQueueKey(domain.PriorityMedium)
-	low := qm.getQueueKey(domain.PriorityLow)
+	high := qm.getQueueKey(models.PriorityHigh)
+	medium := qm.getQueueKey(models.PriorityMedium)
+	low := qm.getQueueKey(models.PriorityLow)
 
 	// 9-шаговый цикл ротации 5:3:1
 	expected := [][]string{
@@ -353,7 +353,7 @@ func TestQueueManager_Dequeue_MalformedJSON_DeadLetter(t *testing.T) {
 	ctx := context.Background()
 
 	// пихаем битый json прямо в high очередь
-	queueKey := qm.getQueueKey(domain.PriorityHigh)
+	queueKey := qm.getQueueKey(models.PriorityHigh)
 	require.NoError(t, qm.cache.LPush(ctx, queueKey, "not-valid-json{{{"))
 
 	// dequeue должен вернуть ошибку и переложить запись в dead-letter
@@ -371,18 +371,18 @@ func TestQueueManager_Enqueue_Dedup_SkipsDuplicate(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	match := testMatch(domain.PriorityHigh)
+	match := testMatch(models.PriorityHigh)
 
 	require.NoError(t, qm.Enqueue(ctx, match))
 
-	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	size, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size)
 
 	// повторный enqueue того же матча пропускается по дедупу (setnx)
 	require.NoError(t, qm.Enqueue(ctx, match))
 
-	size, err = qm.GetQueueSize(ctx, domain.PriorityHigh)
+	size, err = qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size) // всё ещё 1, не 2
 }
@@ -391,7 +391,7 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	match := testMatch(domain.PriorityHigh)
+	match := testMatch(models.PriorityHigh)
 	require.NoError(t, qm.Enqueue(ctx, match))
 
 	dequeued, err := qm.Dequeue(ctx)
@@ -402,7 +402,7 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	// после dequeue дедуп очищен, тот же матч можно поставить заново
 	require.NoError(t, qm.Enqueue(ctx, match))
 
-	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	size, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size)
 }
@@ -411,8 +411,8 @@ func TestQueueManager_PurgeInvalidMatches_SomeInvalid(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	validMatch := testMatch(domain.PriorityMedium)
-	invalidMatch := testMatch(domain.PriorityMedium)
+	validMatch := testMatch(models.PriorityMedium)
+	invalidMatch := testMatch(models.PriorityMedium)
 	require.NoError(t, qm.Enqueue(ctx, validMatch))
 	require.NoError(t, qm.Enqueue(ctx, invalidMatch))
 
@@ -423,7 +423,7 @@ func TestQueueManager_PurgeInvalidMatches_SomeInvalid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), purged)
 
-	size, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	size, err := qm.GetQueueSize(ctx, models.PriorityMedium)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size)
 }
@@ -433,10 +433,10 @@ func TestQueueManager_PurgeInvalidMatches_MalformedJSON(t *testing.T) {
 	ctx := context.Background()
 
 	// битый json + один валидный матч
-	queueKey := qm.getQueueKey(domain.PriorityHigh)
+	queueKey := qm.getQueueKey(models.PriorityHigh)
 	require.NoError(t, qm.cache.LPush(ctx, queueKey, "invalid-json"))
 
-	validMatch := testMatch(domain.PriorityHigh)
+	validMatch := testMatch(models.PriorityHigh)
 	require.NoError(t, qm.Enqueue(ctx, validMatch))
 
 	// все настоящие матчи валидны, вычистится только битый json
@@ -446,7 +446,7 @@ func TestQueueManager_PurgeInvalidMatches_MalformedJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), purged)
 
-	size, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	size, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size) // валидный матч остался
 }
@@ -468,7 +468,7 @@ func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {
 		go func() {
 			defer enqueueWg.Done()
 			for range matchesPerGoroutine {
-				match := testMatch(domain.PriorityMedium)
+				match := testMatch(models.PriorityMedium)
 				assert.NoError(t, qm.Enqueue(ctx, match))
 				enqueuedIDs <- match.ID
 			}

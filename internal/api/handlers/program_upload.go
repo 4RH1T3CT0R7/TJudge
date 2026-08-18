@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/codescan"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -242,7 +242,7 @@ func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http
 		writeError(w, errors.ErrInternal.WithMessage("failed to verify tournament status"))
 		return false
 	}
-	if t.Status != domain.TournamentActive {
+	if t.Status != models.TournamentActive {
 		writeError(w, errors.ErrForbidden.WithMessage("загрузка программ запрещена: турнир ещё не начался"))
 		return false
 	}
@@ -439,13 +439,13 @@ func (h *ProgramHandler) validateProgramSource(language, filePath string) *strin
 
 // registerTournamentParticipant регистрирует программу как участника турнира.
 // Ошибки логируются, но не проваливают upload.
-func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, program *domain.Program, tournamentID uuid.UUID) {
+func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, program *models.Program, tournamentID uuid.UUID) {
 	if h.tournamentRepo == nil {
 		return
 	}
 
 	// Используем program.ID (а не локальный programID), т.к. CreateWithAtomicVersion может перегенерировать его при retry.
-	participant := &domain.TournamentParticipant{
+	participant := &models.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		ProgramID:    program.ID,
@@ -521,14 +521,14 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// синтаксиса выполняются асинхронно в Docker-песочнице worker'а.
 	scanError := h.validateProgramSource(language, filePath)
 
-	status := domain.ProgramCompiling
+	status := models.ProgramCompiling
 	if scanError != nil {
 		// Запрещённые API при CODESCAN_STRICT: компилировать нечего.
-		status = domain.ProgramFailed
+		status = models.ProgramFailed
 	}
 
 	// Создаём запись в БД с атомарным назначением версии
-	program := &domain.Program{
+	program := &models.Program{
 		ID:           programID,
 		UserID:       userID,
 		TeamID:       &form.teamID,
@@ -557,7 +557,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// Ставим программу в очередь компиляции. При ошибке enqueue ничего не
 	// теряется: compile-worker периодически возвращает в очередь программы,
 	// зависшие в статусе compiling.
-	if status == domain.ProgramCompiling && h.compileQueue != nil {
+	if status == models.ProgramCompiling && h.compileQueue != nil {
 		if err := h.compileQueue.Enqueue(r.Context(), program.ID); err != nil {
 			h.log.LogError("Failed to enqueue compile task, stuck-recovery will retry", err,
 				zap.String("program_id", program.ID.String()),

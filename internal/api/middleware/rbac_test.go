@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/domain/auth"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -21,43 +21,43 @@ type MockUserRoleChecker struct {
 	mock.Mock
 }
 
-func (m *MockUserRoleChecker) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+func (m *MockUserRoleChecker) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.User), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
 func TestRequireRole_HasRole(t *testing.T) {
 	testCases := []struct {
 		name          string
-		userRole      domain.Role
-		requiredRoles []domain.Role
+		userRole      models.Role
+		requiredRoles []models.Role
 		shouldPass    bool
 	}{
 		{
 			name:          "User has exact role",
-			userRole:      domain.RoleAdmin,
-			requiredRoles: []domain.Role{domain.RoleAdmin},
+			userRole:      models.RoleAdmin,
+			requiredRoles: []models.Role{models.RoleAdmin},
 			shouldPass:    true,
 		},
 		{
 			name:          "User has one of multiple roles",
-			userRole:      domain.RoleUser,
-			requiredRoles: []domain.Role{domain.RoleAdmin, domain.RoleUser},
+			userRole:      models.RoleUser,
+			requiredRoles: []models.Role{models.RoleAdmin, models.RoleUser},
 			shouldPass:    true,
 		},
 		{
 			name:          "User does not have required role",
-			userRole:      domain.RoleUser,
-			requiredRoles: []domain.Role{domain.RoleAdmin},
+			userRole:      models.RoleUser,
+			requiredRoles: []models.Role{models.RoleAdmin},
 			shouldPass:    false,
 		},
 		{
 			name:          "Admin accessing user route",
-			userRole:      domain.RoleAdmin,
-			requiredRoles: []domain.Role{domain.RoleUser, domain.RoleAdmin},
+			userRole:      models.RoleAdmin,
+			requiredRoles: []models.Role{models.RoleUser, models.RoleAdmin},
 			shouldPass:    true,
 		},
 	}
@@ -89,7 +89,7 @@ func TestRequireRole_HasRole(t *testing.T) {
 }
 
 func TestRequireRole_NoRoleInContext(t *testing.T) {
-	handler := middleware.RequireRole(domain.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequireRole(models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("Handler should not be called")
 	}))
 
@@ -105,17 +105,17 @@ func TestRequireRole_NoRoleInContext(t *testing.T) {
 func TestRequireAdmin(t *testing.T) {
 	testCases := []struct {
 		name       string
-		userRole   domain.Role
+		userRole   models.Role
 		shouldPass bool
 	}{
 		{
 			name:       "Admin user",
-			userRole:   domain.RoleAdmin,
+			userRole:   models.RoleAdmin,
 			shouldPass: true,
 		},
 		{
 			name:       "Regular user",
-			userRole:   domain.RoleUser,
+			userRole:   models.RoleUser,
 			shouldPass: false,
 		},
 	}
@@ -148,23 +148,23 @@ func TestRequireAdmin(t *testing.T) {
 
 func TestWithRole(t *testing.T) {
 	ctx := context.Background()
-	role := domain.RoleAdmin
+	role := models.RoleAdmin
 
 	newCtx := middleware.WithRole(ctx, role)
 
-	gotRole, ok := newCtx.Value(middleware.RoleKey).(domain.Role)
+	gotRole, ok := newCtx.Value(middleware.RoleKey).(models.Role)
 	assert.True(t, ok)
 	assert.Equal(t, role, gotRole)
 }
 
 func TestRequireRoleValue(t *testing.T) {
 	t.Run("Role in context", func(t *testing.T) {
-		ctx := middleware.WithRole(context.Background(), domain.RoleAdmin)
+		ctx := middleware.WithRole(context.Background(), models.RoleAdmin)
 
 		role, err := middleware.RequireRoleValue(ctx)
 
 		assert.NoError(t, err)
-		assert.Equal(t, domain.RoleAdmin, role)
+		assert.Equal(t, models.RoleAdmin, role)
 	})
 
 	t.Run("No role in context", func(t *testing.T) {
@@ -182,7 +182,7 @@ func TestMiddlewareChain(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleAdmin}
+	claims := &auth.Claims{UserID: userID, Role: models.RoleAdmin}
 
 	mockAuth.On("ValidateToken", "admin-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "admin-token").Return(false, nil)
@@ -191,7 +191,7 @@ func TestMiddlewareChain(t *testing.T) {
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, _ := middleware.RequireRoleValue(r.Context())
 		userID, _ := middleware.GetUserID(r.Context())
-		assert.Equal(t, domain.RoleAdmin, role)
+		assert.Equal(t, models.RoleAdmin, role)
 		assert.NotEqual(t, uuid.UUID{}, userID)
 		w.WriteHeader(http.StatusOK)
 	})
@@ -215,7 +215,7 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: domain.RoleUser} // Regular user, not admin
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser} // Regular user, not admin
 
 	mockAuth.On("ValidateToken", "user-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "user-token").Return(false, nil)
@@ -241,7 +241,7 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 // --- VerifiedAdminChecker tests ---
 
 // helper: build request context with role and userID
-func verifiedAdminCtx(role domain.Role, userID uuid.UUID, setRole, setUserID bool) context.Context {
+func verifiedAdminCtx(role models.Role, userID uuid.UUID, setRole, setUserID bool) context.Context {
 	ctx := context.Background()
 	if setRole {
 		ctx = context.WithValue(ctx, middleware.RoleKey, role)
@@ -257,9 +257,9 @@ func TestVerifiedAdminChecker_AdminVerifiedInDB(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
 
 	userID := uuid.New()
-	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
-		Role: domain.RoleAdmin,
+		Role: models.RoleAdmin,
 	}, nil)
 
 	handlerCalled := false
@@ -269,7 +269,7 @@ func TestVerifiedAdminChecker_AdminVerifiedInDB(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req = req.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -285,9 +285,9 @@ func TestVerifiedAdminChecker_AdminRevokedInDB(t *testing.T) {
 
 	userID := uuid.New()
 	// JWT говорит admin, но БД говорит user (admin отозван)
-	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
-		Role: domain.RoleUser,
+		Role: models.RoleUser,
 	}, nil)
 
 	handlerCalled := false
@@ -296,7 +296,7 @@ func TestVerifiedAdminChecker_AdminRevokedInDB(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req = req.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -320,7 +320,7 @@ func TestVerifiedAdminChecker_NonAdminJWT(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/admin", nil)
 	// JWT role - user, не admin
-	req = req.WithContext(verifiedAdminCtx(domain.RoleUser, userID, true, true))
+	req = req.WithContext(verifiedAdminCtx(models.RoleUser, userID, true, true))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -346,7 +346,7 @@ func TestVerifiedAdminChecker_DBError(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/admin", nil)
-	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req = req.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -362,9 +362,9 @@ func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
 
 	userID := uuid.New()
-	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
-		Role: domain.RoleAdmin,
+		Role: models.RoleAdmin,
 	}, nil).Once() // Ожидаем ровно один вызов БД
 
 	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -373,14 +373,14 @@ func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
 
 	// Первый запрос - идёт в БД, наполняет кэш
 	req1 := httptest.NewRequest("GET", "/admin", nil)
-	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req1 = req1.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 	assert.Equal(t, http.StatusOK, rr1.Code)
 
 	// Второй запрос - должен использовать кэш, без вызова БД
 	req2 := httptest.NewRequest("GET", "/admin", nil)
-	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req2 = req2.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
@@ -395,9 +395,9 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 	checker := middleware.NewVerifiedAdminChecker(mockRepo, cacheTTL)
 
 	userID := uuid.New()
-	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
-		Role: domain.RoleAdmin,
+		Role: models.RoleAdmin,
 	}, nil)
 
 	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -406,7 +406,7 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 
 	// Первый запрос - идёт в БД
 	req1 := httptest.NewRequest("GET", "/admin", nil)
-	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req1 = req1.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 	assert.Equal(t, http.StatusOK, rr1.Code)
@@ -417,7 +417,7 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 
 	// Второй запрос - кэш истёк, снова идёт в БД
 	req2 := httptest.NewRequest("GET", "/admin", nil)
-	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req2 = req2.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
@@ -458,7 +458,7 @@ func TestVerifiedAdminChecker_NoUserIDInContext(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/admin", nil)
 	// Роль admin, но нет UserIDKey
-	req = req.WithContext(verifiedAdminCtx(domain.RoleAdmin, uuid.UUID{}, true, false))
+	req = req.WithContext(verifiedAdminCtx(models.RoleAdmin, uuid.UUID{}, true, false))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -474,9 +474,9 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 
 	userID := uuid.New()
 	// БД возвращает роль user (admin отозван)
-	mockRepo.On("GetByID", mock.Anything, userID).Return(&domain.User{
+	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
-		Role: domain.RoleUser,
+		Role: models.RoleUser,
 	}, nil).Once()
 
 	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -485,7 +485,7 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 
 	// Первый запрос - идёт в БД, кэширует роль как "user"
 	req1 := httptest.NewRequest("GET", "/admin", nil)
-	req1 = req1.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req1 = req1.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 	assert.Equal(t, http.StatusForbidden, rr1.Code)
@@ -493,7 +493,7 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 
 	// Второй запрос - использует закэшированную "user" роль, всё ещё forbidden
 	req2 := httptest.NewRequest("GET", "/admin", nil)
-	req2 = req2.WithContext(verifiedAdminCtx(domain.RoleAdmin, userID, true, true))
+	req2 = req2.WithContext(verifiedAdminCtx(models.RoleAdmin, userID, true, true))
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusForbidden, rr2.Code)

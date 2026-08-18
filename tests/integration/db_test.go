@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -91,7 +91,7 @@ func (s *DBTestSuite) cleanupTestData() {
 // =============================================================================
 
 func (s *DBTestSuite) TestUserRepository_Create() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -106,7 +106,7 @@ func (s *DBTestSuite) TestUserRepository_Create() {
 
 func (s *DBTestSuite) TestUserRepository_GetByID() {
 	// Create user first
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -129,7 +129,7 @@ func (s *DBTestSuite) TestUserRepository_GetByID_NotFound() {
 }
 
 func (s *DBTestSuite) TestUserRepository_GetByUsername() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -144,7 +144,7 @@ func (s *DBTestSuite) TestUserRepository_GetByUsername() {
 }
 
 func (s *DBTestSuite) TestUserRepository_GetByEmail() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -159,7 +159,7 @@ func (s *DBTestSuite) TestUserRepository_GetByEmail() {
 }
 
 func (s *DBTestSuite) TestUserRepository_Update() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -180,7 +180,7 @@ func (s *DBTestSuite) TestUserRepository_Update() {
 }
 
 func (s *DBTestSuite) TestUserRepository_Delete() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -199,7 +199,7 @@ func (s *DBTestSuite) TestUserRepository_Delete() {
 }
 
 func (s *DBTestSuite) TestUserRepository_Exists() {
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -223,7 +223,7 @@ func (s *DBTestSuite) TestUserRepository_Exists() {
 
 func (s *DBTestSuite) TestProgramRepository_CRUD() {
 	// Create user first
-	user := &domain.User{
+	user := &models.User{
 		ID:           uuid.New(),
 		Username:     "integration_test_user_" + uuid.New().String()[:8],
 		Email:        "integration_" + uuid.New().String()[:8] + "@test.com",
@@ -233,7 +233,7 @@ func (s *DBTestSuite) TestProgramRepository_CRUD() {
 	require.NoError(s.T(), err)
 
 	// Create program
-	program := &domain.Program{
+	program := &models.Program{
 		ID:       uuid.New(),
 		UserID:   user.ID,
 		Name:     "Test Program",
@@ -280,11 +280,11 @@ func (s *DBTestSuite) TestProgramRepository_CRUD() {
 
 func (s *DBTestSuite) TestConcurrentCreates() {
 	const numUsers = 10
-	users := make([]*domain.User, numUsers)
+	users := make([]*models.User, numUsers)
 	errs := make(chan error, numUsers)
 
 	for i := 0; i < numUsers; i++ {
-		users[i] = &domain.User{
+		users[i] = &models.User{
 			ID:           uuid.New(),
 			Username:     "integration_test_concurrent_" + uuid.New().String()[:8],
 			Email:        "concurrent_" + uuid.New().String()[:8] + "@test.com",
@@ -294,7 +294,7 @@ func (s *DBTestSuite) TestConcurrentCreates() {
 
 	// Create users concurrently
 	for i := 0; i < numUsers; i++ {
-		go func(user *domain.User) {
+		go func(user *models.User) {
 			errs <- s.userRepo.Create(s.ctx, user)
 		}(users[i])
 	}

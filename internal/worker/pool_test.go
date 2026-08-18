@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -27,16 +27,16 @@ var (
 type MockQueueManager struct {
 	mock.Mock
 	mu      sync.Mutex
-	matches []*domain.Match
+	matches []*models.Match
 }
 
 func NewMockQueueManager() *MockQueueManager {
 	return &MockQueueManager{
-		matches: make([]*domain.Match, 0),
+		matches: make([]*models.Match, 0),
 	}
 }
 
-func (m *MockQueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
+func (m *MockQueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -44,7 +44,7 @@ func (m *MockQueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Match), args.Error(1)
+	return args.Get(0).(*models.Match), args.Error(1)
 }
 
 func (m *MockQueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
@@ -52,7 +52,7 @@ func (m *MockQueueManager) GetTotalQueueSize(ctx context.Context) (int64, error)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockQueueManager) EnqueueMatch(match *domain.Match) {
+func (m *MockQueueManager) EnqueueMatch(match *models.Match) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.matches = append(m.matches, match)
@@ -69,7 +69,7 @@ func NewMockMatchProcessor() *MockMatchProcessor {
 	return &MockMatchProcessor{}
 }
 
-func (m *MockMatchProcessor) Process(ctx context.Context, match *domain.Match) error {
+func (m *MockMatchProcessor) Process(ctx context.Context, match *models.Match) error {
 	args := m.Called(ctx, match)
 	if args.Error(0) == nil {
 		m.processedMatches.Add(1)
@@ -113,11 +113,11 @@ func testLogger() *logger.Logger {
 }
 
 // testMatch создаёт тестовый матч
-func testMatch() *domain.Match {
-	return &domain.Match{
+func testMatch() *models.Match {
+	return &models.Match{
 		ID:       uuid.New(),
-		Priority: domain.PriorityMedium,
-		Status:   domain.MatchPending,
+		Priority: models.PriorityMedium,
+		Status:   models.MatchPending,
 		GameType: "tictactoe",
 	}
 }
@@ -287,7 +287,7 @@ func TestPool_ConcurrentProcessing(t *testing.T) {
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
 	// Processor должен обработать все матчи
-	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Return(nil)
+	processor.On("Process", mock.Anything, mock.AnythingOfType("*models.Match")).Return(nil)
 
 	pool.Start()
 
@@ -618,7 +618,7 @@ func TestPool_PanicRecovery_Respawns(t *testing.T) {
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
 	// Первый вызов паникует, последующие - успешные.
-	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Run(func(args mock.Arguments) {
+	processor.On("Process", mock.Anything, mock.AnythingOfType("*models.Match")).Run(func(args mock.Arguments) {
 		n := callCount.Add(1)
 		if n == 1 {
 			panic("test panic for recovery")
@@ -699,7 +699,7 @@ func TestPool_GetMatchesProcessed(t *testing.T) {
 	queue.On("Dequeue", mock.Anything).Return(nil, nil)
 	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
 
-	processor.On("Process", mock.Anything, mock.AnythingOfType("*domain.Match")).Return(nil)
+	processor.On("Process", mock.Anything, mock.AnythingOfType("*models.Match")).Return(nil)
 
 	pool.Start()
 

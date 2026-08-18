@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -85,13 +85,13 @@ func (s *TournamentRepositorySuite) TearDownTest() {
 	s.userIDs = nil
 }
 
-func (s *TournamentRepositorySuite) createTrackedUser(suffix string) *domain.User {
+func (s *TournamentRepositorySuite) createTrackedUser(suffix string) *models.User {
 	user := createTestUser(s.T(), s.userRepo, suffix)
 	s.userIDs = append(s.userIDs, user.ID)
 	return user
 }
 
-func (s *TournamentRepositorySuite) createTrackedTournament(code string, creatorID uuid.UUID) *domain.Tournament {
+func (s *TournamentRepositorySuite) createTrackedTournament(code string, creatorID uuid.UUID) *models.Tournament {
 	tournament := createTestTournament(s.T(), s.tournamentRepo(), code, creatorID)
 	s.tournamentIDs = append(s.tournamentIDs, tournament.ID)
 	return tournament
@@ -102,9 +102,9 @@ func (s *TournamentRepositorySuite) tournamentRepo() *storage.TournamentReposito
 	return s.repo
 }
 
-func (s *TournamentRepositorySuite) createTrackedGame(name string) *domain.Game {
+func (s *TournamentRepositorySuite) createTrackedGame(name string) *models.Game {
 	ctx := context.Background()
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        name,
 		DisplayName: "Test Game " + name,
@@ -116,9 +116,9 @@ func (s *TournamentRepositorySuite) createTrackedGame(name string) *domain.Game 
 	return game
 }
 
-func (s *TournamentRepositorySuite) createTrackedTeam(tournamentID, leaderID uuid.UUID, code string) *domain.Team {
+func (s *TournamentRepositorySuite) createTrackedTeam(tournamentID, leaderID uuid.UUID, code string) *models.Team {
 	ctx := context.Background()
-	team := &domain.Team{
+	team := &models.Team{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Name:         "Test Team " + code,
@@ -131,9 +131,9 @@ func (s *TournamentRepositorySuite) createTrackedTeam(tournamentID, leaderID uui
 	return team
 }
 
-func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *domain.Program {
+func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamID, tournamentID, gameID *uuid.UUID, name string, version int) *models.Program {
 	ctx := context.Background()
-	program := &domain.Program{
+	program := &models.Program{
 		ID:           uuid.New(),
 		UserID:       userID,
 		TeamID:       teamID,
@@ -151,9 +151,9 @@ func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamI
 	return program
 }
 
-func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programID uuid.UUID, rating int) *domain.TournamentParticipant {
+func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programID uuid.UUID, rating int) *models.TournamentParticipant {
 	ctx := context.Background()
-	participant := &domain.TournamentParticipant{
+	participant := &models.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		ProgramID:    programID,
@@ -165,16 +165,16 @@ func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programI
 	return participant
 }
 
-func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID, program2ID uuid.UUID, gameType string, status domain.MatchStatus) *domain.Match {
+func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID, program2ID uuid.UUID, gameType string, status models.MatchStatus) *models.Match {
 	ctx := context.Background()
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Program1ID:   program1ID,
 		Program2ID:   program2ID,
 		GameType:     gameType,
 		Status:       status,
-		Priority:     domain.PriorityMedium,
+		Priority:     models.PriorityMedium,
 		RoundNumber:  1,
 		CreatedAt:    time.Now(),
 	}
@@ -185,7 +185,7 @@ func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID,
 }
 
 // готовит юзера, турнир, прогу и участника - типовой сетап для тестов участников
-func (s *TournamentRepositorySuite) setupParticipantPrerequisites(suffix string, rating int) (*domain.Tournament, *domain.Program, *domain.TournamentParticipant) {
+func (s *TournamentRepositorySuite) setupParticipantPrerequisites(suffix string, rating int) (*models.Tournament, *models.Program, *models.TournamentParticipant) {
 	user := s.createTrackedUser("tp_" + suffix)
 	tournament := s.createTrackedTournament("TP"+suffix, user.ID)
 	program := s.createTrackedProgram(user.ID, nil, nil, nil, "Bot_"+suffix, 1)
@@ -197,13 +197,13 @@ func (s *TournamentRepositorySuite) TestCreate() {
 	ctx := context.Background()
 	creator := createTestUser(s.T(), s.userRepo, "creator_"+uuid.New().String()[:8])
 
-	tournament := &domain.Tournament{
+	tournament := &models.Tournament{
 		ID:              uuid.New(),
 		Code:            "TEST001",
 		Name:            "Test Tournament",
 		Description:     "Test Description",
 		GameType:        "prisoners_dilemma",
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: intPtr(100),
 		MaxTeamSize:     3,
 		IsPermanent:     false,
@@ -247,7 +247,7 @@ func (s *TournamentRepositorySuite) TestList() {
 	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST004")
 	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST005")
 
-	filter := domain.TournamentFilter{Limit: 10}
+	filter := models.TournamentFilter{Limit: 10}
 	tournaments, err := s.repo.List(ctx, filter)
 	require.NoError(s.T(), err)
 
@@ -260,11 +260,11 @@ func (s *TournamentRepositorySuite) TestList_FilterByStatus() {
 	t1, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST006")
 	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST007")
 
-	err := s.repo.UpdateStatus(ctx, t1.ID, domain.TournamentActive)
+	err := s.repo.UpdateStatus(ctx, t1.ID, models.TournamentActive)
 	require.NoError(s.T(), err)
 
-	filter := domain.TournamentFilter{
-		Status: domain.TournamentActive,
+	filter := models.TournamentFilter{
+		Status: models.TournamentActive,
 		Limit:  10,
 	}
 	tournaments, err := s.repo.List(ctx, filter)
@@ -284,12 +284,12 @@ func (s *TournamentRepositorySuite) TestUpdateStatus() {
 	ctx := context.Background()
 	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST008")
 
-	err := s.repo.UpdateStatus(ctx, tournament.ID, domain.TournamentActive)
+	err := s.repo.UpdateStatus(ctx, tournament.ID, models.TournamentActive)
 	require.NoError(s.T(), err)
 
 	result, err := s.repo.GetByID(ctx, tournament.ID)
 	require.NoError(s.T(), err)
-	assert.Equal(s.T(), domain.TournamentActive, result.Status)
+	assert.Equal(s.T(), models.TournamentActive, result.Status)
 }
 
 func (s *TournamentRepositorySuite) TestUpdate() {
@@ -327,7 +327,7 @@ func (s *TournamentRepositorySuite) TestAddParticipant_Success() {
 	program := s.createTrackedProgram(user.ID, nil, nil, nil, "BotAdd", 1)
 
 	ctx := context.Background()
-	participant := &domain.TournamentParticipant{
+	participant := &models.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournament.ID,
 		ProgramID:    program.ID,
@@ -460,7 +460,7 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	s.createTestParticipant(tournament.ID, prog2.ID, 1500)
 
 	// завершённый матч чтобы было что агрегировать
-	match := s.createTrackedMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, domain.MatchRunning)
+	match := s.createTrackedMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, models.MatchRunning)
 	score1 := 10
 	score2 := 5
 	winner := 1

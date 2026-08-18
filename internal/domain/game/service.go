@@ -4,7 +4,7 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -13,13 +13,13 @@ import (
 
 // GameRepository — игры в бд
 type GameRepository interface {
-	Create(ctx context.Context, game *domain.Game) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error)
-	GetByName(ctx context.Context, name string) (*domain.Game, error)
-	List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error)
-	Update(ctx context.Context, game *domain.Game) error
+	Create(ctx context.Context, game *models.Game) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
+	GetByName(ctx context.Context, name string) (*models.Game, error)
+	List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error)
+	Update(ctx context.Context, game *models.Game) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error)
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error)
 	AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	RemoveFromTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	Exists(ctx context.Context, name string) (bool, error)
@@ -55,7 +55,7 @@ func NewService(gameRepo GameRepository, log *logger.Logger) *Service {
 var nameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 // Create создаёт игру
-func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Game, error) {
+func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Game, error) {
 	// проверяем имя, елси кривое — сразу отказ
 	if !nameRegex.MatchString(req.Name) {
 		return nil, errors.ErrValidation.WithMessage("game name must contain only lowercase letters, digits and underscores")
@@ -70,7 +70,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Game,
 		return nil, errors.ErrConflict.WithMessage("game with this name already exists")
 	}
 
-	game := &domain.Game{
+	game := &models.Game{
 		ID:          uuid.New(),
 		Name:        req.Name,
 		DisplayName: req.DisplayName,
@@ -86,7 +86,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Game,
 	return game, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error) {
 	game, err := s.gameRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Game, erro
 	return game, nil
 }
 
-func (s *Service) GetByName(ctx context.Context, name string) (*domain.Game, error) {
+func (s *Service) GetByName(ctx context.Context, name string) (*models.Game, error) {
 	game, err := s.gameRepo.GetByName(ctx, name)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (s *Service) GetByName(ctx context.Context, name string) (*domain.Game, err
 	return game, nil
 }
 
-func (s *Service) List(ctx context.Context, filter domain.GameFilter) ([]*domain.Game, error) {
+func (s *Service) List(ctx context.Context, filter models.GameFilter) ([]*models.Game, error) {
 	// лимит по дефолту, тк пагинации пока нет
 	// TODO: пагинация игр, пока просто лимит
 	if filter.Limit <= 0 || filter.Limit > 100 {
@@ -117,7 +117,7 @@ func (s *Service) List(ctx context.Context, filter domain.GameFilter) ([]*domain
 	return games, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, req *UpdateRequest) (*domain.Game, error) {
+func (s *Service) Update(ctx context.Context, id uuid.UUID, req *UpdateRequest) (*models.Game, error) {
 	game, err := s.gameRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Game, error) {
+func (s *Service) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Game, error) {
 	games, err := s.gameRepo.GetByTournamentID(ctx, tournamentID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get tournament games")

@@ -3,21 +3,21 @@ package events
 import (
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
 )
 
 // TournamentCreated is published when a new tournament is created.
 type TournamentCreated struct {
 	Version    int // Event schema version
-	Tournament *domain.Tournament
+	Tournament *models.Tournament
 }
 
 // TournamentStarted is published when a tournament transitions to active.
 type TournamentStarted struct {
 	Version      int // Event schema version
 	TournamentID uuid.UUID
-	Status       domain.TournamentStatus
+	Status       models.TournamentStatus
 	StartTime    *time.Time
 }
 
@@ -25,7 +25,7 @@ type TournamentStarted struct {
 type TournamentCompleted struct {
 	Version      int // Event schema version
 	TournamentID uuid.UUID
-	Status       domain.TournamentStatus
+	Status       models.TournamentStatus
 	EndTime      *time.Time
 }
 
@@ -59,7 +59,7 @@ type ProgramCompiled struct {
 	TournamentID uuid.UUID
 	ProgramID    uuid.UUID
 	TeamID       uuid.UUID
-	Status       string  // domain.ProgramStatus: ready | failed
+	Status       string  // models.ProgramStatus: ready | failed
 	ErrorMessage *string // компиляционная ошибка при status=failed
 }
 

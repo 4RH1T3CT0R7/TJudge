@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -18,64 +18,64 @@ import (
 
 // TournamentCacher — кэш турниров
 type TournamentCacher interface {
-	Set(ctx context.Context, tournament *domain.Tournament) error
-	Get(ctx context.Context, tournamentID uuid.UUID) (*domain.Tournament, error)
+	Set(ctx context.Context, tournament *models.Tournament) error
+	Get(ctx context.Context, tournamentID uuid.UUID) (*models.Tournament, error)
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 
 // LeaderboardCacher — кэш лидерборда
 // читаем cache-aside в GetLeaderboard/GetCrossGameLeaderboard
 type LeaderboardCacher interface {
-	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
+	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
 	Clear(ctx context.Context, tournamentID uuid.UUID) error
 
 	// полный json лидерборда: короткий ttl, готовый ответ для api
-	GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
-	SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*domain.LeaderboardEntry) error
-	GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
-	SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*domain.CrossGameLeaderboardEntry) error
+	GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
+	SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*models.LeaderboardEntry) error
+	GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
+	SetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID, entries []*models.CrossGameLeaderboardEntry) error
 	InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error
 }
 
 // TournamentRepository — турниры в бд
 type TournamentRepository interface {
-	Create(ctx context.Context, tournament *domain.Tournament) error
-	GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error)
-	List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error)
-	Update(ctx context.Context, tournament *domain.Tournament) error
-	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.TournamentStatus) error
+	Create(ctx context.Context, tournament *models.Tournament) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
+	List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error)
+	Update(ctx context.Context, tournament *models.Tournament) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
-	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
-	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentParticipant, error)
-	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*domain.TournamentParticipant, error)
-	GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.TournamentParticipant, error)
-	AddParticipant(ctx context.Context, participant *domain.TournamentParticipant) error
-	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error)
-	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error)
+	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error)
+	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error)
+	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error)
+	GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error)
+	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
+	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
+	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
 }
 
 // MatchRepository — матчи в бд
 type MatchRepository interface {
-	Create(ctx context.Context, match *domain.Match) error
-	CreateBatch(ctx context.Context, matches []*domain.Match) error
+	Create(ctx context.Context, match *models.Match) error
+	CreateBatch(ctx context.Context, matches []*models.Match) error
 	DeleteBatch(ctx context.Context, ids []uuid.UUID) error
-	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error)
-	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*domain.Match, error)
-	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*domain.Match, error)
+	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
+	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
+	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 	GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
-	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
 	GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error)
 }
 
 // QueueManager кладёт матчи в очередь
 type QueueManager interface {
-	Enqueue(ctx context.Context, match *domain.Match) error
-	EnqueueBatch(ctx context.Context, matches []*domain.Match) error
+	Enqueue(ctx context.Context, match *models.Match) error
+	EnqueueBatch(ctx context.Context, matches []*models.Match) error
 }
 
 // DistributedLock — распределённый лок (редис)
@@ -85,11 +85,11 @@ type DistributedLock interface {
 
 // GameRepository — игры внутри турнира
 type GameRepository interface {
-	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*domain.TournamentGame, error)
+	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error
 	// авто-раунд
-	GetAutoRoundEnabledGames(ctx context.Context) ([]*domain.AutoRoundGameInfo, error)
+	GetAutoRoundEnabledGames(ctx context.Context) ([]*models.AutoRoundGameInfo, error)
 	UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error)
 	HasActiveMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error)
@@ -164,20 +164,20 @@ func generateCode() string {
 }
 
 // Create создаёт турнир
-func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tournament, error) {
+func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Tournament, error) {
 	// дефолты
 	maxTeamSize := req.MaxTeamSize
 	if maxTeamSize <= 0 {
 		maxTeamSize = 1
 	}
 
-	tournament := &domain.Tournament{
+	tournament := &models.Tournament{
 		ID:              uuid.New(),
 		Code:            generateCode(),
 		Name:            req.Name,
 		Description:     req.Description,
 		GameType:        req.GameType,
-		Status:          domain.TournamentPending,
+		Status:          models.TournamentPending,
 		MaxParticipants: req.MaxParticipants,
 		MaxTeamSize:     maxTeamSize,
 		IsPermanent:     req.IsPermanent,
@@ -208,7 +208,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*domain.Tourn
 	return tournament, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	// сначала кэш
 	cached, err := s.tournamentCache.Get(ctx, id)
 	if err == nil && cached != nil {
@@ -229,7 +229,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tournament
 	return tournament, nil
 }
 
-func (s *Service) List(ctx context.Context, filter domain.TournamentFilter) ([]*domain.Tournament, error) {
+func (s *Service) List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error) {
 	// лимит по дефолту, чтобы не тащить всё
 	// TODO: вынести лимиты в конфиг
 	if filter.Limit <= 0 {
@@ -266,7 +266,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 		}
 
 		// турнир должен быть ещё pending
-		if tournament.Status != domain.TournamentPending {
+		if tournament.Status != models.TournamentPending {
 			return errors.ErrTournamentStarted
 		}
 
@@ -283,7 +283,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 		}
 
 		// добавляем участника
-		participant := &domain.TournamentParticipant{
+		participant := &models.TournamentParticipant{
 			ID:           uuid.New(),
 			TournamentID: req.TournamentID,
 			ProgramID:    req.ProgramID,
@@ -326,7 +326,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		}
 
 		// статус
-		if tournament.Status != domain.TournamentPending {
+		if tournament.Status != models.TournamentPending {
 			return errors.ErrConflict.WithMessage("tournament already started or completed")
 		}
 
@@ -341,7 +341,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 
 		// меняем статус
 		now := time.Now()
-		tournament.Status = domain.TournamentActive
+		tournament.Status = models.TournamentActive
 		tournament.StartTime = &now
 
 		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
@@ -404,12 +404,12 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 			return err
 		}
 
-		if tournament.Status != domain.TournamentActive {
+		if tournament.Status != models.TournamentActive {
 			return errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
 		now := time.Now()
-		tournament.Status = domain.TournamentCompleted
+		tournament.Status = models.TournamentCompleted
 		tournament.EndTime = &now
 
 		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
@@ -450,7 +450,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 	}
 
 	// активный турнир удалять нельзя
-	if tournament.Status == domain.TournamentActive {
+	if tournament.Status == models.TournamentActive {
 		return errors.ErrConflict.WithMessage("cannot delete active tournament")
 	}
 
@@ -470,7 +470,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 }
 
 // GetLeaderboard — таблица лидеров
-func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*domain.LeaderboardEntry, error) {
+func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	// сначала полный json-кэш (короткий ttl)
 	// TODO: пагинация лидерборда, пока топ отдаём
 	cached, err := s.leaderboardCache.GetFullLeaderboard(ctx, tournamentID, limit)
@@ -506,25 +506,25 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 	if err != nil {
 		return nil, err
 	}
-	entries, _ := val.([]*domain.LeaderboardEntry)
+	entries, _ := val.([]*models.LeaderboardEntry)
 	return entries, nil
 }
 
 // CreateMatch создаёт матч и добавляет в очередь
-func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority domain.MatchPriority) (*domain.Match, error) {
+func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error) {
 	// турнир нужен ради game_type
 	tournament, err := s.GetByID(ctx, tournamentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tournament: %w", err)
 	}
 
-	match := &domain.Match{
+	match := &models.Match{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
 		Program1ID:   program1ID,
 		Program2ID:   program2ID,
 		GameType:     tournament.GameType,
-		Status:       domain.MatchPending,
+		Status:       models.MatchPending,
 		Priority:     priority,
 		CreatedAt:    time.Now(),
 	}
@@ -558,17 +558,17 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 	return match, nil
 }
 
-func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*domain.Match, error) {
+func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error) {
 	return s.matchRepo.GetByTournamentID(ctx, tournamentID, limit, offset)
 }
 
-func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*domain.MatchRound, error) {
+func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
 	return s.matchRepo.GetMatchesByRounds(ctx, tournamentID)
 }
 
 // GetCrossGameLeaderboard — кросс-игровой рейтинг
 // команда, рейтинги по каждой игре, итоговая позиция
-func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*domain.CrossGameLeaderboardEntry, error) {
+func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	// сначала кэш
 	cached, err := s.leaderboardCache.GetFullCrossGameLeaderboard(ctx, tournamentID)
 	if err != nil {
@@ -596,6 +596,6 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 	if err != nil {
 		return nil, err
 	}
-	entries, _ := val.([]*domain.CrossGameLeaderboardEntry)
+	entries, _ := val.([]*models.CrossGameLeaderboardEntry)
 	return entries, nil
 }

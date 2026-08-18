@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
-	"github.com/bmstu-itstech/tjudge/internal/domain"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -38,7 +38,7 @@ func NewQueueManager(cache *cache.Cache, log *logger.Logger, m *metrics.Metrics)
 }
 
 // getQueueKey возвращает ключ для очереди по приоритету
-func (qm *QueueManager) getQueueKey(priority domain.MatchPriority) string {
+func (qm *QueueManager) getQueueKey(priority models.MatchPriority) string {
 	return fmt.Sprintf("queue:%s", priority)
 }
 
@@ -54,7 +54,7 @@ func dedupKeyFor(matchID string) string {
 }
 
 // Enqueue кладёт матч в очередь по его приоритету
-func (qm *QueueManager) Enqueue(ctx context.Context, match *domain.Match) error {
+func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error {
 	// setnx создаёт ключ дедупа только если его ещё нет
 	matchIDStr := match.ID.String()
 	isNew, err := qm.cache.SetNX(ctx, dedupKeyFor(matchIDStr), "1", dedupTTL)
@@ -104,9 +104,9 @@ func (qm *QueueManager) weightedQueueKeys() []string {
 	qm.dequeueCount++
 	qm.dequeueMu.Unlock()
 
-	high := qm.getQueueKey(domain.PriorityHigh)
-	medium := qm.getQueueKey(domain.PriorityMedium)
-	low := qm.getQueueKey(domain.PriorityLow)
+	high := qm.getQueueKey(models.PriorityHigh)
+	medium := qm.getQueueKey(models.PriorityMedium)
+	low := qm.getQueueKey(models.PriorityLow)
 
 	switch {
 	case pos < 5:
@@ -119,7 +119,7 @@ func (qm *QueueManager) weightedQueueKeys() []string {
 }
 
 // EnqueueBatch - то же самое но пачкой, дедуп и lpush одним пайплайном
-func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Match) error {
+func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
@@ -199,7 +199,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*domain.Matc
 }
 
 // Dequeue достаёт матч с учётом ротации 5:3:1
-func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
+func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	queueKeys := qm.weightedQueueKeys()
 
 	// таймаут 2с (не 1) чтобы реже дёргать редис на пустой очереди.
@@ -216,7 +216,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 	}
 
 	// result[0] - имя очереди, result[1] - данные
-	var match domain.Match
+	var match models.Match
 	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
 		// битый json - в dead-letter, разберёмся руками потом
 		deadLetterKey := "queue:dead_letter"
@@ -273,7 +273,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*domain.Match, error) {
 }
 
 // GetQueueSize получает размер очереди по приоритету
-func (qm *QueueManager) GetQueueSize(ctx context.Context, priority domain.MatchPriority) (int64, error) {
+func (qm *QueueManager) GetQueueSize(ctx context.Context, priority models.MatchPriority) (int64, error) {
 	queueKey := qm.getQueueKey(priority)
 	return qm.cache.LLen(ctx, queueKey)
 }
@@ -282,10 +282,10 @@ func (qm *QueueManager) GetQueueSize(ctx context.Context, priority domain.MatchP
 func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 	var total int64
 
-	priorities := []domain.MatchPriority{
-		domain.PriorityHigh,
-		domain.PriorityMedium,
-		domain.PriorityLow,
+	priorities := []models.MatchPriority{
+		models.PriorityHigh,
+		models.PriorityMedium,
+		models.PriorityLow,
 	}
 
 	for _, priority := range priorities {
@@ -309,10 +309,10 @@ func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 	qm.lastMetricsUpdate = time.Now()
 	qm.metricsMu.Unlock()
 
-	priorities := []domain.MatchPriority{
-		domain.PriorityHigh,
-		domain.PriorityMedium,
-		domain.PriorityLow,
+	priorities := []models.MatchPriority{
+		models.PriorityHigh,
+		models.PriorityMedium,
+		models.PriorityLow,
 	}
 
 	for _, priority := range priorities {
@@ -334,10 +334,10 @@ func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 
 // Clear - снести все очереди (админка)
 func (qm *QueueManager) Clear(ctx context.Context) error {
-	priorities := []domain.MatchPriority{
-		domain.PriorityHigh,
-		domain.PriorityMedium,
-		domain.PriorityLow,
+	priorities := []models.MatchPriority{
+		models.PriorityHigh,
+		models.PriorityMedium,
+		models.PriorityLow,
 	}
 
 	for _, priority := range priorities {
@@ -400,19 +400,19 @@ type QueueStats struct {
 func (qm *QueueManager) GetStats(ctx context.Context) (*QueueStats, error) {
 	stats := &QueueStats{}
 
-	high, err := qm.GetQueueSize(ctx, domain.PriorityHigh)
+	high, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	if err != nil {
 		return nil, err
 	}
 	stats.High = high
 
-	medium, err := qm.GetQueueSize(ctx, domain.PriorityMedium)
+	medium, err := qm.GetQueueSize(ctx, models.PriorityMedium)
 	if err != nil {
 		return nil, err
 	}
 	stats.Medium = medium
 
-	low, err := qm.GetQueueSize(ctx, domain.PriorityLow)
+	low, err := qm.GetQueueSize(ctx, models.PriorityLow)
 	if err != nil {
 		return nil, err
 	}
@@ -443,10 +443,10 @@ func (qm *QueueManager) ClearDeadLetter(ctx context.Context) (int64, error) {
 func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error) {
 	var purged int64
 
-	priorities := []domain.MatchPriority{
-		domain.PriorityHigh,
-		domain.PriorityMedium,
-		domain.PriorityLow,
+	priorities := []models.MatchPriority{
+		models.PriorityHigh,
+		models.PriorityMedium,
+		models.PriorityLow,
 	}
 
 	for _, priority := range priorities {
@@ -470,7 +470,7 @@ func (qm *QueueManager) PurgeInvalidMatches(ctx context.Context, validator func(
 // purgeQueueInvalidMatches чистит одну очередь.
 // между LRange и ReplaceList есть окно где новые элементы могут потеряться,
 // но purge это админка и не гоняется во время активной обработки, так что ок
-func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority domain.MatchPriority, validator func(matchID string) bool) (int64, error) {
+func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority models.MatchPriority, validator func(matchID string) bool) (int64, error) {
 	queueKey := qm.getQueueKey(priority)
 
 	items, err := qm.cache.LRange(ctx, queueKey, 0, -1)
@@ -487,7 +487,7 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority d
 	var purgedCount int64
 
 	for _, item := range items {
-		var match domain.Match
+		var match models.Match
 		if err := json.Unmarshal([]byte(item), &match); err != nil {
 			// Невалидный JSON - пропускаем
 			purgedCount++
