@@ -164,7 +164,6 @@ func (m *Match) Validate() error {
 	return nil
 }
 
-// Validate валидирует TournamentParticipant
 func (tp *TournamentParticipant) Validate() error {
 	errs := ValidationErrors{}
 
