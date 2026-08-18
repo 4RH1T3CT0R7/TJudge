@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/websocket"
+	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -16,7 +16,7 @@ import (
 func newTestWebSocketHandler(t *testing.T) *WebSocketHandler {
 	t.Helper()
 	log, _ := logger.New("error", "json")
-	hub := websocket.NewHub(log)
+	hub := ws.NewHub(log)
 	return NewWebSocketHandler(hub, log)
 }
 
