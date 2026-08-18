@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/domain/game"
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/internal/service/game"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"

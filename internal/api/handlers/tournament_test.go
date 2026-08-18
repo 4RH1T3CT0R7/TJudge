@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/internal/service/tournament"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"

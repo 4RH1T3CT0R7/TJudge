@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain/team"
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/internal/service/team"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"

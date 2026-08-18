@@ -7,8 +7,8 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
-	"github.com/bmstu-itstech/tjudge/internal/domain/tournament"
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/internal/service/tournament"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
