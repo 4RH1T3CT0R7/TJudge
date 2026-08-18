@@ -80,13 +80,13 @@ func NewGameHandler(
 	tournamentRepo GameTournamentRepository,
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
 ) *GameHandler {
 	return &GameHandler{
 		GameCRUDHandler:       NewGameCRUDHandler(gameService, log),
 		TournamentGameHandler: NewTournamentGameHandler(gameService, tournamentRepo, log),
-		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, eventBus, uploadDir, log),
+		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, notifier, uploadDir, log),
 	}
 }

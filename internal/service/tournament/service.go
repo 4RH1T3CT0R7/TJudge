@@ -103,7 +103,7 @@ type Service struct {
 	gameRepo         GameRepository
 	tournamentCache  TournamentCacher
 	leaderboardCache LeaderboardCacher
-	eventBus         events.Bus
+	notifier         events.Notifier
 	distributedLock  DistributedLock
 	log              *logger.Logger
 	leaderboardSF    singleflight.Group
@@ -116,7 +116,7 @@ func NewService(
 	gameRepo GameRepository,
 	tournamentCache TournamentCacher,
 	leaderboardCache LeaderboardCacher,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	distributedLock DistributedLock,
 	log *logger.Logger,
 ) *Service {
@@ -127,7 +127,7 @@ func NewService(
 		gameRepo:         gameRepo,
 		tournamentCache:  tournamentCache,
 		leaderboardCache: leaderboardCache,
-		eventBus:         eventBus,
+		notifier:         notifier,
 		distributedLock:  distributedLock,
 		log:              log,
 	}
@@ -203,7 +203,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Tourn
 	)
 
 	// шлём событие, кэш чистится в обработчиках
-	s.eventBus.Publish(ctx, events.TournamentCreated{Version: 1, Tournament: tournament})
+	s.notifier.TournamentCreated(ctx, events.TournamentCreated{Version: 1, Tournament: tournament})
 
 	return tournament, nil
 }
@@ -300,7 +300,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 		)
 
 		// событие: лидерборд и кэш обновятся в обработчиках
-		s.eventBus.Publish(ctx, events.ParticipantJoined{
+		s.notifier.ParticipantJoined(ctx, events.ParticipantJoined{
 			Version:       1,
 			TournamentID:  req.TournamentID,
 			ProgramID:     req.ProgramID,
@@ -371,7 +371,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		}
 
 		// событие: кэш и broadcast в обработчиках
-		s.eventBus.Publish(ctx, events.TournamentStarted{
+		s.notifier.TournamentStarted(ctx, events.TournamentStarted{
 			Version:      1,
 			TournamentID: tournamentID,
 			Status:       tournament.Status,
@@ -421,7 +421,7 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 		)
 
 		// событие: кэш и broadcast в обработчиках
-		s.eventBus.Publish(ctx, events.TournamentCompleted{
+		s.notifier.TournamentCompleted(ctx, events.TournamentCompleted{
 			Version:      1,
 			TournamentID: tournamentID,
 			Status:       tournament.Status,
@@ -464,7 +464,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 	)
 
 	// событие, кэш чистится в обработчиках
-	s.eventBus.Publish(ctx, events.TournamentDeleted{Version: 1, TournamentID: tournamentID})
+	s.notifier.TournamentDeleted(ctx, events.TournamentDeleted{Version: 1, TournamentID: tournamentID})
 
 	return nil
 }

@@ -69,23 +69,28 @@ func (m *MockOutboxRatingRepo) GetByMatchID(ctx context.Context, matchID uuid.UU
 	return args.Get(0).([]*models.RatingHistory), args.Error(1)
 }
 
-// capturingBus собирает опубликованные события.
-type capturingBus struct {
+// capturingNotifier собирает опубликованные события (и результаты матчей, и компиляцию),
+// тесты дальше сами разбирают их по типу
+type capturingNotifier struct {
+	events.NoopNotifier
 	published []any
 }
 
-func (b *capturingBus) Publish(_ context.Context, event any) {
-	b.published = append(b.published, event)
+func (n *capturingNotifier) MatchResultProcessed(_ context.Context, e events.MatchResultProcessed) {
+	n.published = append(n.published, e)
 }
-func (b *capturingBus) Subscribe(_ events.Handler, _ ...any) {}
 
-func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockOutboxMatchRepo, *MockOutboxRatingRepo, *MockProcessorRatingService, *capturingBus) {
+func (n *capturingNotifier) ProgramCompiled(_ context.Context, e events.ProgramCompiled) {
+	n.published = append(n.published, e)
+}
+
+func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockOutboxMatchRepo, *MockOutboxRatingRepo, *MockProcessorRatingService, *capturingNotifier) {
 	t.Helper()
 	outbox := new(MockOutboxStore)
 	matchRepo := new(MockOutboxMatchRepo)
 	ratingRepo := new(MockOutboxRatingRepo)
 	ratingService := new(MockProcessorRatingService)
-	bus := &capturingBus{}
+	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
 
 	d := NewOutboxDispatcher(outbox, matchRepo, ratingRepo, ratingService, bus, log)

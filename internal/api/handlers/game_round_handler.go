@@ -23,7 +23,7 @@ type GameRoundHandler struct {
 	matchRepo                GameMatchRepository
 	programRepo              GameProgramRepository
 	tournamentGameStatusRepo TournamentGameStatusRepository
-	eventBus                 events.Bus
+	notifier                 events.Notifier
 	uploadDir                string
 	log                      *logger.Logger
 }
@@ -35,7 +35,7 @@ func NewGameRoundHandler(
 	matchRepo GameMatchRepository,
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
 ) *GameRoundHandler {
@@ -45,7 +45,7 @@ func NewGameRoundHandler(
 		matchRepo:                matchRepo,
 		programRepo:              programRepo,
 		tournamentGameStatusRepo: tournamentGameStatusRepo,
-		eventBus:                 eventBus,
+		notifier:                 notifier,
 		uploadDir:                uploadDir,
 		log:                      log,
 	}

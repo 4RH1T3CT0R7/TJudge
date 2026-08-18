@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/redis/go-redis/v9"
@@ -29,33 +28,15 @@ type redisSubscriber interface {
 	Subscribe(ctx context.Context, channels ...string) *redis.PubSub
 }
 
-// eventTypeRegistry сопоставляет имя типа с reflect.Type для десериализации.
-var eventTypeRegistry = map[string]reflect.Type{}
-
-func init() {
-	// Регистрируем все типы событий, которые проходят через Redis bridge.
-	registerType(MatchResultProcessed{})
-	registerType(TournamentStarted{})
-	registerType(TournamentCompleted{})
-	registerType(MatchesCreated{})
-	registerType(ProgramCompiled{})
-}
-
-func registerType(v any) {
-	t := reflect.TypeOf(v)
-	eventTypeRegistry[t.Name()] = t
-}
-
-// RedisEventPublisher - Handler событий, пересылающий их в Redis Pub/Sub канал.
-// Подключается к SyncBus, чтобы события, возникшие в одном процессе (например, worker),
-// пересылались в другие процессы (например, API), подписанные на тот же канал Redis.
+// RedisEventPublisher отправляет события в Redis Pub/Sub канал, чтобы события одного
+// процесса (воркер) доходили до другого (API), подписанного на тот же канал.
 type RedisEventPublisher struct {
 	pub     redisPublisher
 	channel string
 	log     *logger.Logger
 }
 
-// NewRedisEventPublisher создаёт publisher, отправляющий события в указанный Redis-канал.
+// NewRedisEventPublisher создаёт publisher, пишущий в общий канал.
 func NewRedisEventPublisher(pub redisPublisher, log *logger.Logger) *RedisEventPublisher {
 	return &RedisEventPublisher{
 		pub:     pub,
@@ -64,10 +45,9 @@ func NewRedisEventPublisher(pub redisPublisher, log *logger.Logger) *RedisEventP
 	}
 }
 
-// Handle сериализует событие и публикует его в Redis.
-func (p *RedisEventPublisher) Handle(ctx context.Context, event any) error {
-	typeName := reflect.TypeOf(event).Name()
-
+// Publish сериализует событие и кладёт его в редис. typeName - имя типа, оно уходит
+// в envelope и по нему подписчик на той стороне разберёт что пришло.
+func (p *RedisEventPublisher) Publish(ctx context.Context, typeName string, event any) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("redis publisher: marshal %s: %w", typeName, err)
@@ -90,24 +70,24 @@ func (p *RedisEventPublisher) Handle(ctx context.Context, event any) error {
 	return nil
 }
 
-// RedisEventSubscriber слушает Redis Pub/Sub канал и перепубликовывает
-// полученные события в локальную шину (обычно в процессе API).
+// RedisEventSubscriber слушает Redis-канал и отдаёт полученные события локальному
+// нотифаеру (обычно в процессе API - там он только рассылает по вебсокету).
 type RedisEventSubscriber struct {
-	sub     redisSubscriber
-	bus     Bus
-	channel string
-	log     *logger.Logger
-	stopCh  chan struct{}
+	sub      redisSubscriber
+	notifier Notifier
+	channel  string
+	log      *logger.Logger
+	stopCh   chan struct{}
 }
 
-// NewRedisEventSubscriber создаёт подписчика, слушающего Redis и передающего события в локальную шину.
-func NewRedisEventSubscriber(sub redisSubscriber, bus Bus, log *logger.Logger) *RedisEventSubscriber {
+// NewRedisEventSubscriber создаёт подписчика, слушающего Redis.
+func NewRedisEventSubscriber(sub redisSubscriber, notifier Notifier, log *logger.Logger) *RedisEventSubscriber {
 	return &RedisEventSubscriber{
-		sub:     sub,
-		bus:     bus,
-		channel: defaultChannel,
-		log:     log,
-		stopCh:  make(chan struct{}),
+		sub:      sub,
+		notifier: notifier,
+		channel:  defaultChannel,
+		log:      log,
+		stopCh:   make(chan struct{}),
 	}
 }
 
@@ -145,7 +125,7 @@ func (s *RedisEventSubscriber) Start(ctx context.Context) {
 func (s *RedisEventSubscriber) Stop() {
 	select {
 	case <-s.stopCh:
-		// Уже остановлен.
+		// уже остановлен
 	default:
 		close(s.stopCh)
 	}
@@ -161,25 +141,35 @@ func (s *RedisEventSubscriber) handleMessage(ctx context.Context, msg *redis.Mes
 		return
 	}
 
-	typ, ok := eventTypeRegistry[env.Type]
-	if !ok {
+	// из редиса реально приходят только эти два типа (см. что подписан публиковать
+	// воркер), остальное - unknown. имена строк обязаны совпадать с тем что кладёт publisher.
+	switch env.Type {
+	case "MatchResultProcessed":
+		var e MatchResultProcessed
+		if err := json.Unmarshal(env.Data, &e); err != nil {
+			s.log.Error("Redis event subscriber: unmarshal event data",
+				zap.Error(err),
+				zap.String("type", env.Type),
+			)
+			return
+		}
+		s.notifier.MatchResultProcessed(ctx, e)
+	case "ProgramCompiled":
+		var e ProgramCompiled
+		if err := json.Unmarshal(env.Data, &e); err != nil {
+			s.log.Error("Redis event subscriber: unmarshal event data",
+				zap.Error(err),
+				zap.String("type", env.Type),
+			)
+			return
+		}
+		s.notifier.ProgramCompiled(ctx, e)
+	default:
 		s.log.Warn("Redis event subscriber: unknown event type",
 			zap.String("type", env.Type),
 		)
 		return
 	}
-
-	eventPtr := reflect.New(typ).Interface()
-	if err := json.Unmarshal(env.Data, eventPtr); err != nil {
-		s.log.Error("Redis event subscriber: unmarshal event data",
-			zap.Error(err),
-			zap.String("type", env.Type),
-		)
-		return
-	}
-
-	event := reflect.ValueOf(eventPtr).Elem().Interface()
-	s.bus.Publish(ctx, event)
 
 	s.log.Debug("Event received from Redis and re-published",
 		zap.String("type", env.Type),

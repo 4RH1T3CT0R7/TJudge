@@ -15,7 +15,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/events"
-	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
@@ -159,35 +158,23 @@ func main() {
 	// Запускаем hub в отдельной горутине
 	go wsHub.Run(ctx)
 
-	// Инициализируем event bus
-	eventBus := events.NewSyncBus(log)
-
-	eventBus.Subscribe(
-		eventhandlers.NewTournamentCacheHandler(tournamentCache, leaderboardCache, log),
-		events.TournamentCreated{}, events.TournamentStarted{},
-		events.TournamentCompleted{}, events.TournamentDeleted{},
-		events.ParticipantJoined{}, events.GameRoundReset{},
-	)
-	eventBus.Subscribe(
-		eventhandlers.NewLeaderboardCacheHandler(leaderboardCache, log),
-		events.ParticipantJoined{}, events.MatchResultProcessed{},
-		events.GameRoundReset{},
-	)
-	eventBus.Subscribe(
-		eventhandlers.NewBroadcastHandler(wsHub, log),
-		events.TournamentStarted{}, events.TournamentCompleted{},
-		events.MatchesCreated{}, events.MatchResultProcessed{},
-	)
+	// нотифаер апи: обновляет кэш турниров и лидерборда, рассылает по вебсокету.
+	// в редис наружу отсюда ничего не публикуем (Redis не задаём) - это дело воркера
+	notifier := &events.SyncNotifier{
+		TournamentCache: tournamentCache,
+		Leaderboard:     leaderboardCache,
+		Broadcaster:     wsHub,
+		Log:             log,
+	}
 
 	// Мост Redis Pub/Sub: принимает события из процесса воркера для рассылки по WebSocket.
-	// Используется отдельная шина, чтобы события от воркера триггерили только рассылку
-	// и не приводили к повторному обновлению кэша (воркер уже обновил свой кэш).
-	wsBus := events.NewSyncBus(log)
-	wsBus.Subscribe(
-		eventhandlers.NewBroadcastHandler(wsHub, log),
-		events.MatchResultProcessed{}, events.ProgramCompiled{},
-	)
-	redisEventSub := events.NewRedisEventSubscriber(redisCache, wsBus, log)
+	// у отдельного нотифаера только broadcaster - события от воркера должны только
+	// рассылаться, а не повторно дёргать кэш (воркер уже обновил свой)
+	wsNotifier := &events.SyncNotifier{
+		Broadcaster: wsHub,
+		Log:         log,
+	}
+	redisEventSub := events.NewRedisEventSubscriber(redisCache, wsNotifier, log)
 	go redisEventSub.Start(ctx)
 
 	// Инициализируем сервисы
@@ -201,7 +188,7 @@ func main() {
 		gameRepo, // game repository for setting active game
 		tournamentCache,
 		leaderboardCache,
-		eventBus,
+		notifier,
 		distributedLock,
 		log,
 	)
@@ -212,7 +199,7 @@ func main() {
 		queueManager,
 		gameRepo,
 		distributedLock,
-		eventBus,
+		notifier,
 		log,
 	)
 
@@ -257,7 +244,7 @@ func main() {
 	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandler(
 		gameService, tournamentRepo, matchRepo, tournamentRepo,
-		programRepo, gameRepo, eventBus, cfg.Storage.ProgramsPath, log,
+		programRepo, gameRepo, notifier, cfg.Storage.ProgramsPath, log,
 	)
 	teamHandler := handlers.NewTeamHandler(teamService, cfg.Server.BaseURL, log)
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)

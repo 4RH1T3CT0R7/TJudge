@@ -73,12 +73,12 @@ func (m *MockProgramCompiler) Compile(ctx context.Context, program *models.Progr
 	return args.Get(0).(*executor.CompileResult), args.Error(1)
 }
 
-func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *MockCompileProgramRepo, *MockProgramCompiler, *capturingBus) {
+func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *MockCompileProgramRepo, *MockProgramCompiler, *capturingNotifier) {
 	t.Helper()
 	q := new(MockCompileQueue)
 	repo := new(MockCompileProgramRepo)
 	compiler := new(MockProgramCompiler)
-	bus := &capturingBus{}
+	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
 	w := NewCompileWorker(q, repo, compiler, bus, log)
 	return w, q, repo, compiler, bus

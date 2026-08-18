@@ -33,7 +33,7 @@ type SchedulingService struct {
 	queueManager    QueueManager
 	gameRepo        GameRepository
 	distributedLock DistributedLock
-	eventBus        events.Bus
+	notifier        events.Notifier
 	log             *logger.Logger
 }
 
@@ -52,7 +52,7 @@ func NewSchedulingService(
 	queueManager QueueManager,
 	gameRepo GameRepository,
 	distributedLock DistributedLock,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	log *logger.Logger,
 ) *SchedulingService {
 	return &SchedulingService{
@@ -61,7 +61,7 @@ func NewSchedulingService(
 		queueManager:    queueManager,
 		gameRepo:        gameRepo,
 		distributedLock: distributedLock,
-		eventBus:        eventBus,
+		notifier:        notifier,
 		log:             log,
 	}
 }
@@ -183,7 +183,7 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 		)
 
 		// шлём событие, дальше broadcast разрулят обработчики
-		ss.eventBus.Publish(ctx, events.MatchesCreated{
+		ss.notifier.MatchesCreated(ctx, events.MatchesCreated{
 			Version:      1,
 			TournamentID: req.TournamentID,
 			ProgramID:    req.NewProgramID,
