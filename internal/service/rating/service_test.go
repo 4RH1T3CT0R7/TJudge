@@ -47,18 +47,21 @@ func (m *MockRatingRepository) ProcessMatchResultAtomic(ctx context.Context, upd
 	return m.Called(ctx, update1, update2).Error(0)
 }
 
-// capturingBus запоминает опубликованные события, чтобы проверить их в тесте
-type capturingBus struct {
-	events []any
+// capturingNotifier запоминает события результата матча, чтобы проверить их в тесте.
+// остальные методы берём из NoopNotifier - они тут не нужны
+type capturingNotifier struct {
+	events.NoopNotifier
+	events []events.MatchResultProcessed
 }
 
-func (b *capturingBus) Publish(_ context.Context, event any) { b.events = append(b.events, event) }
-func (b *capturingBus) Subscribe(events.Handler, ...any)     {}
+func (n *capturingNotifier) MatchResultProcessed(_ context.Context, e events.MatchResultProcessed) {
+	n.events = append(n.events, e)
+}
 
 func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 	repo := new(MockRatingRepository)
 	log, _ := logger.New("error", "json")
-	return NewService(repo, events.NoopBus{}, log), repo
+	return NewService(repo, events.NoopNotifier{}, log), repo
 }
 
 // --- GetRatingHistory ---
@@ -126,7 +129,7 @@ func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
 func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 	repo := new(MockRatingRepository)
 	log, _ := logger.New("error", "json")
-	bus := &capturingBus{}
+	bus := &capturingNotifier{}
 	svc := NewService(repo, bus, log)
 	ctx := context.Background()
 
@@ -154,8 +157,7 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 
 	// после успешного апдейта должно уйти событие с версией 1
 	require.Len(t, bus.events, 1)
-	evt, ok := bus.events[0].(events.MatchResultProcessed)
-	require.True(t, ok)
+	evt := bus.events[0]
 	assert.Equal(t, 1, evt.Version)
 	assert.Equal(t, match.ID, evt.MatchID)
 	assert.Equal(t, 1, evt.Winner)

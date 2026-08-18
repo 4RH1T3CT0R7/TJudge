@@ -114,7 +114,7 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 		zap.Int64("rating_history_reset", ratingHistoryDeleted),
 	)
 
-	h.eventBus.Publish(r.Context(), events.GameRoundReset{
+	h.notifier.GameRoundReset(r.Context(), events.GameRoundReset{
 		Version:      1,
 		TournamentID: tournamentID,
 		GameID:       gameID,

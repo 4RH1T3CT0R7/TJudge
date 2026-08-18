@@ -8,11 +8,19 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestLogger(t *testing.T) *logger.Logger {
+	t.Helper()
+	log, err := logger.New("error", "json")
+	require.NoError(t, err)
+	return log
+}
 
 func newTestRedisClient(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 	t.Helper()
@@ -61,7 +69,7 @@ func TestRedisEventPublisher_Handle(t *testing.T) {
 		Winner:       1,
 	}
 
-	err = pub.Handle(ctx, event)
+	err = pub.Publish(ctx, "MatchResultProcessed", event)
 	require.NoError(t, err)
 
 	// Читаем опубликованное сообщение.
@@ -93,7 +101,7 @@ func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 	// Создаём шину, записывающую опубликованные события.
 	var mu sync.Mutex
 	var receivedEvents []any
-	recordingBus := &recordingBus{
+	recordingBus := &recordingNotifier{
 		onPublish: func(event any) {
 			mu.Lock()
 			receivedEvents = append(receivedEvents, event)
@@ -155,7 +163,7 @@ func TestRedisEventSubscriber_UnknownTypeIgnored(t *testing.T) {
 
 	var mu sync.Mutex
 	var receivedEvents []any
-	recordingBus := &recordingBus{
+	recordingBus := &recordingNotifier{
 		onPublish: func(event any) {
 			mu.Lock()
 			receivedEvents = append(receivedEvents, event)
@@ -189,7 +197,7 @@ func TestRedisEventSubscriber_Stop(t *testing.T) {
 	log := newTestLogger(t)
 	adapter := &redisCacheAdapter{client: client}
 
-	sub := NewRedisEventSubscriber(adapter, NoopBus{}, log)
+	sub := NewRedisEventSubscriber(adapter, NoopNotifier{}, log)
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -216,7 +224,7 @@ func TestRedisEndToEnd_PublisherToSubscriber(t *testing.T) {
 
 	var mu sync.Mutex
 	var receivedEvents []any
-	recordingBus := &recordingBus{
+	recordingBus := &recordingNotifier{
 		onPublish: func(event any) {
 			mu.Lock()
 			receivedEvents = append(receivedEvents, event)
@@ -244,7 +252,7 @@ func TestRedisEndToEnd_PublisherToSubscriber(t *testing.T) {
 		Winner:       1,
 	}
 
-	err := pub.Handle(ctx, event)
+	err := pub.Publish(ctx, "MatchResultProcessed", event)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -269,7 +277,7 @@ func TestRedisEventSubscriber_InvalidEnvelopeJSON(t *testing.T) {
 
 	var mu sync.Mutex
 	var receivedEvents []any
-	recordingBus := &recordingBus{
+	recordingBus := &recordingNotifier{
 		onPublish: func(event any) {
 			mu.Lock()
 			receivedEvents = append(receivedEvents, event)
@@ -303,7 +311,7 @@ func TestRedisEventSubscriber_InvalidEventData(t *testing.T) {
 
 	var mu sync.Mutex
 	var receivedEvents []any
-	recordingBus := &recordingBus{
+	recordingBus := &recordingNotifier{
 		onPublish: func(event any) {
 			mu.Lock()
 			receivedEvents = append(receivedEvents, event)
@@ -344,7 +352,7 @@ func TestRedisEventPublisher_Handle_PublishError(t *testing.T) {
 		MatchID:      uuid.New(),
 	}
 
-	err := pub.Handle(context.Background(), event)
+	err := pub.Publish(context.Background(), "MatchResultProcessed", event)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "redis publisher: publish")
 }
@@ -354,7 +362,7 @@ func TestRedisEventSubscriber_DoubleStop(t *testing.T) {
 	log := newTestLogger(t)
 	adapter := &redisCacheAdapter{client: client}
 
-	sub := NewRedisEventSubscriber(adapter, NoopBus{}, log)
+	sub := NewRedisEventSubscriber(adapter, NoopNotifier{}, log)
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -383,15 +391,21 @@ func (f *failingPublisher) Publish(_ context.Context, _ string, _ any) error {
 	return assert.AnError
 }
 
-// recordingBus - тестовый Bus, записывающий все опубликованные события.
-type recordingBus struct {
+// recordingNotifier - тестовый Notifier, отдаёт полученные события в колбэк.
+// остальные методы берём из NoopNotifier
+type recordingNotifier struct {
+	NoopNotifier
 	onPublish func(event any)
 }
 
-func (b *recordingBus) Publish(_ context.Context, event any) {
-	if b.onPublish != nil {
-		b.onPublish(event)
+func (n *recordingNotifier) MatchResultProcessed(_ context.Context, e MatchResultProcessed) {
+	if n.onPublish != nil {
+		n.onPublish(e)
 	}
 }
 
-func (b *recordingBus) Subscribe(Handler, ...any) {}
+func (n *recordingNotifier) ProgramCompiled(_ context.Context, e ProgramCompiled) {
+	if n.onPublish != nil {
+		n.onPublish(e)
+	}
+}

@@ -44,7 +44,7 @@ type OutboxDispatcher struct {
 	matchRepo     OutboxMatchRepository
 	ratingRepo    OutboxRatingRepository
 	ratingService RatingService
-	eventBus      events.Bus
+	notifier      events.Notifier
 	log           *logger.Logger
 
 	interval  time.Duration
@@ -63,7 +63,7 @@ func NewOutboxDispatcher(
 	matchRepo OutboxMatchRepository,
 	ratingRepo OutboxRatingRepository,
 	ratingService RatingService,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	log *logger.Logger,
 ) *OutboxDispatcher {
 	return &OutboxDispatcher{
@@ -71,7 +71,7 @@ func NewOutboxDispatcher(
 		matchRepo:     matchRepo,
 		ratingRepo:    ratingRepo,
 		ratingService: ratingService,
-		eventBus:      eventBus,
+		notifier:      notifier,
 		log:           log,
 		interval:      15 * time.Second,
 		olderThan:     10 * time.Second,
@@ -200,7 +200,7 @@ func (d *OutboxDispatcher) republishEvent(ctx context.Context, match *models.Mat
 		}
 	}
 
-	d.eventBus.Publish(ctx, events.MatchResultProcessed{
+	d.notifier.MatchResultProcessed(ctx, events.MatchResultProcessed{
 		Version:      1,
 		TournamentID: match.TournamentID,
 		MatchID:      match.ID,

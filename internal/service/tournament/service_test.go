@@ -243,7 +243,7 @@ func newTestService(t *testing.T) (*Service, *MockTournamentRepository, *MockMat
 	service := NewService(
 		tournamentRepo, matchRepo, queueManager, gameRepo,
 		cache.NewTournamentCache(testCache), cache.NewLeaderboardCache(testCache),
-		events.NoopBus{}, distributedLock, log,
+		events.NoopNotifier{}, distributedLock, log,
 	)
 	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
 }
@@ -258,7 +258,7 @@ func newTestSchedulingService(t *testing.T) (*SchedulingService, *MockTournament
 	gameRepo := new(MockGameRepository)
 
 	log, _ := logger.New("error", "json")
-	service := NewSchedulingService(tournamentRepo, matchRepo, queueManager, gameRepo, distributedLock, events.NoopBus{}, log)
+	service := NewSchedulingService(tournamentRepo, matchRepo, queueManager, gameRepo, distributedLock, events.NoopNotifier{}, log)
 	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
 }
 
@@ -1423,7 +1423,7 @@ func TestConcurrentJoin(t *testing.T) {
 	service := NewService(
 		tournamentRepo, new(MockMatchRepository), new(MockQueueManager), nil,
 		cache.NewTournamentCache(testCache), cache.NewLeaderboardCache(testCache),
-		events.NoopBus{}, cache.NewDistributedLock(testCache), log,
+		events.NoopNotifier{}, cache.NewDistributedLock(testCache), log,
 	)
 
 	var wg sync.WaitGroup
@@ -1486,7 +1486,7 @@ func TestConcurrentStart(t *testing.T) {
 	service := NewService(
 		tournamentRepo, new(MockMatchRepository), new(MockQueueManager), nil,
 		cache.NewTournamentCache(testCache), cache.NewLeaderboardCache(testCache),
-		events.NoopBus{}, cache.NewDistributedLock(testCache), log,
+		events.NoopNotifier{}, cache.NewDistributedLock(testCache), log,
 	)
 
 	var wg sync.WaitGroup

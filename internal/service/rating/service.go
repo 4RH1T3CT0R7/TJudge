@@ -35,15 +35,15 @@ type RatingRepository interface {
 type Service struct {
 	calculator *EloCalculator
 	repo       RatingRepository
-	eventBus   events.Bus
+	notifier   events.Notifier
 	log        *logger.Logger
 }
 
-func NewService(repo RatingRepository, eventBus events.Bus, log *logger.Logger) *Service {
+func NewService(repo RatingRepository, notifier events.Notifier, log *logger.Logger) *Service {
 	return &Service{
 		calculator: NewDefaultEloCalculator(),
 		repo:       repo,
-		eventBus:   eventBus,
+		notifier:   notifier,
 		log:        log,
 	}
 }
@@ -122,7 +122,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, r
 	}
 
 	// событие шлём ТОЛЬКО после успешного апдейта, от него зависит кэш и вебсокет
-	s.eventBus.Publish(ctx, events.MatchResultProcessed{
+	s.notifier.MatchResultProcessed(ctx, events.MatchResultProcessed{
 		Version:      1,
 		TournamentID: match.TournamentID,
 		MatchID:      match.ID,

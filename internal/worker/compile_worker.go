@@ -42,7 +42,7 @@ type CompileWorker struct {
 	queue       CompileQueue
 	programRepo CompileProgramRepository
 	compiler    ProgramCompiler
-	eventBus    events.Bus
+	notifier    events.Notifier
 	log         *logger.Logger
 
 	workers          int
@@ -60,14 +60,14 @@ func NewCompileWorker(
 	q CompileQueue,
 	programRepo CompileProgramRepository,
 	compiler ProgramCompiler,
-	eventBus events.Bus,
+	notifier events.Notifier,
 	log *logger.Logger,
 ) *CompileWorker {
 	return &CompileWorker{
 		queue:            q,
 		programRepo:      programRepo,
 		compiler:         compiler,
-		eventBus:         eventBus,
+		notifier:         notifier,
 		log:              log,
 		workers:          2,
 		stuckInterval:    60 * time.Second,
@@ -208,7 +208,7 @@ func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Pro
 	if program.TeamID != nil {
 		evt.TeamID = *program.TeamID
 	}
-	w.eventBus.Publish(ctx, evt)
+	w.notifier.ProgramCompiled(ctx, evt)
 }
 
 // runStuckRecovery периодически возвращает зависшие compiling-программы в очередь.

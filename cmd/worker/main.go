@@ -14,7 +14,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/events"
-	eventhandlers "github.com/bmstu-itstech/tjudge/internal/events/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
@@ -106,22 +105,17 @@ func main() {
 	// Инициализируем queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
-	// Инициализируем event bus для worker
-	eventBus := events.NewSyncBus(log)
-	eventBus.Subscribe(
-		eventhandlers.NewLeaderboardCacheHandler(leaderboardCache, log),
-		events.MatchResultProcessed{},
-	)
-
-	// Мост Redis Pub/Sub: пересылает события в процесс API для рассылки по WebSocket.
+	// нотифаер воркера: результат матча кладём в кэш лидерборда, и заодно пробрасываем
+	// событие в редис чтобы апи разослал его по вебсокету. кэш турниров и вебсокет тут не нужны
 	redisEventPub := events.NewRedisEventPublisher(redisCache, log)
-	eventBus.Subscribe(
-		redisEventPub,
-		events.MatchResultProcessed{}, events.ProgramCompiled{},
-	)
+	notifier := &events.SyncNotifier{
+		Leaderboard: leaderboardCache,
+		Redis:       redisEventPub,
+		Log:         log,
+	}
 
 	// Инициализируем rating service
-	ratingService := rating.NewService(ratingRepo, eventBus, log)
+	ratingService := rating.NewService(ratingRepo, notifier, log)
 
 	// Проверяем наличие образа tjudge-cli
 	checkTJudgeCLIImage(log)
@@ -198,7 +192,7 @@ func main() {
 		matchRepo,
 		ratingRepo,
 		ratingService,
-		eventBus,
+		notifier,
 		log,
 	)
 	outboxDispatcher.Start()
@@ -218,7 +212,7 @@ func main() {
 	defer compiler.Close()
 
 	compileQueue := queue.NewCompileQueue(redisCache, log)
-	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler, eventBus, log)
+	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler, notifier, log)
 	compileWorker.Start()
 
 	// Запускаем worker pool
