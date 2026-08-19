@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/websocket"
+	websocket "github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
