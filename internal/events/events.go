@@ -7,55 +7,51 @@ import (
 	"github.com/google/uuid"
 )
 
-// TournamentCreated is published when a new tournament is created.
+// доменные события. поле Version - версия схемы, ставим 1; пригодится если формат
+// сообщения в редисе когда-нибудь поменяется и надо будет различать старое/новое
+
 type TournamentCreated struct {
-	Version    int // Event schema version
+	Version    int
 	Tournament *models.Tournament
 }
 
-// TournamentStarted is published when a tournament transitions to active.
 type TournamentStarted struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 	Status       models.TournamentStatus
 	StartTime    *time.Time
 }
 
-// TournamentCompleted is published when a tournament finishes.
 type TournamentCompleted struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 	Status       models.TournamentStatus
 	EndTime      *time.Time
 }
 
-// TournamentDeleted is published when a tournament is removed.
 type TournamentDeleted struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 }
 
-// ParticipantJoined is published when a program joins a tournament.
 type ParticipantJoined struct {
-	Version       int // Event schema version
+	Version       int
 	TournamentID  uuid.UUID
 	ProgramID     uuid.UUID
 	InitialRating int
 }
 
-// MatchesCreated is published when new matches are scheduled.
 type MatchesCreated struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
-	ProgramID    uuid.UUID // the program matches were created for (zero if bulk)
+	ProgramID    uuid.UUID // для какой программы создали матчи (ноль если пачкой)
 	MatchCount   int
 }
 
-// ProgramCompiled is published when async compilation of an uploaded program
-// finishes (successfully or not). Carries everything the WebSocket layer needs
-// to notify the team without extra DB reads.
+// ProgramCompiled - асинхронная компиляция загруженной программы завершилась (успешно или нет).
+// тащит с собой всё что нужно вебсокету, чтобы не лезть лишний раз в базу
 type ProgramCompiled struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 	ProgramID    uuid.UUID
 	TeamID       uuid.UUID
@@ -63,16 +59,16 @@ type ProgramCompiled struct {
 	ErrorMessage *string // компиляционная ошибка при status=failed
 }
 
-// GameRoundReset is published when a game round is reset (matches deleted, ratings reverted to 1500).
+// GameRoundReset - раунд игры сброшен (матчи удалены, рейтинги откачены к 1500)
 type GameRoundReset struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 	GameID       uuid.UUID
 }
 
-// MatchResultProcessed is published after ELO ratings are updated for a match.
+// MatchResultProcessed - рейтинги ело после матча пересчитаны
 type MatchResultProcessed struct {
-	Version      int // Event schema version
+	Version      int
 	TournamentID uuid.UUID
 	MatchID      uuid.UUID
 	Program1ID   uuid.UUID
