@@ -11,27 +11,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// Hub управляет WebSocket подключениями
+// hub держит вебсокет-подключения, разложенные по турнирам
 type Hub struct {
-	// Клиенты по турнирам
+	// клиенты по турнирам
 	tournaments map[uuid.UUID]map[*Client]bool
 
-	// Канал для регистрации клиентов
-	register chan *Client
-
-	// Канал для отмены регистрации клиентов
+	register   chan *Client
 	unregister chan *Client
+	broadcast  chan *Message
 
-	// Канал для broadcast сообщений
-	broadcast chan *Message
-
-	// Mutex для защиты tournaments map
+	// защищает tournaments
 	mu sync.RWMutex
 
 	log *logger.Logger
 }
 
-// Message представляет WebSocket сообщение
+// Message - вебсокет сообщение
 type Message struct {
 	TournamentID uuid.UUID   `json:"tournament_id"`
 	Type         MessageType `json:"type"`
@@ -42,21 +37,17 @@ type Message struct {
 type MessageType string
 
 const (
-	// MessageTypeTournamentUpdate обновление турнира
-	MessageTypeTournamentUpdate MessageType = "tournament_update"
-	// MessageTypeMatchUpdate обновление матча
-	MessageTypeMatchUpdate MessageType = "match_update"
-	// MessageTypeLeaderboardUpdate обновление таблицы лидеров
+	MessageTypeTournamentUpdate  MessageType = "tournament_update"
+	MessageTypeMatchUpdate       MessageType = "match_update"
 	MessageTypeLeaderboardUpdate MessageType = "leaderboard_update"
-	// MessageTypeError ошибка
-	MessageTypeError MessageType = "error"
-	// MessageTypePing ping
-	MessageTypePing MessageType = "ping"
-	// MessageTypePong pong
-	MessageTypePong MessageType = "pong"
+	MessageTypeError             MessageType = "error"
+	MessageTypePing              MessageType = "ping"
+	MessageTypePong              MessageType = "pong"
 )
 
-// NewHub создаёт новый WebSocket hub
+// NewHub создаёт новый вебсокет hub.
+// буферы каналов подобраны на глаз, вроде хватает
+// TODO: вынести размеры буферов в конфиг?
 func NewHub(log *logger.Logger) *Hub {
 	return &Hub{
 		tournaments: make(map[uuid.UUID]map[*Client]bool),
@@ -67,7 +58,7 @@ func NewHub(log *logger.Logger) *Hub {
 	}
 }
 
-// Run запускает hub в отдельной горутине
+// Run крутит hub в отдельной горутине - только она трогает tournaments map
 func (h *Hub) Run(ctx context.Context) {
 	for {
 		select {
@@ -88,13 +79,12 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 }
 
-// registerClient регистрирует клиента
 func (h *Hub) registerClient(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Если клиент уже закрыт (unregister пришёл до register из-за буферизованных
-	// каналов), не добавляем мёртвого клиента в map.
+	// если клиент уже закрыт (unregister прилетел раньше register из-за буферов),
+	// не добавляем мёртвого клиента в map
 	if client.IsClosed() {
 		h.log.Info("Client already closed, skipping registration",
 			zap.String("tournament_id", client.tournamentID.String()),
@@ -115,7 +105,6 @@ func (h *Hub) registerClient(client *Client) {
 	)
 }
 
-// unregisterClient отменяет регистрацию клиента
 func (h *Hub) unregisterClient(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -124,7 +113,7 @@ func (h *Hub) unregisterClient(client *Client) {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
 
-			// Удаляем пустую map турнира
+			// пустую map турнира выкидываем
 			if len(clients) == 0 {
 				delete(h.tournaments, client.tournamentID)
 			}
@@ -136,14 +125,12 @@ func (h *Hub) unregisterClient(client *Client) {
 		}
 	}
 
-	// Всегда помечаем клиента как закрытого и закрываем send-канал, даже если
-	// клиент ещё не был в map (register всё ещё висит в буферизованном канале).
-	// Это позволит registerClient обнаружить запоздалое прибытие.
-	// CloseSend идемпотентен через sync.Once.
+	// всегда закрываем клиента, даже если его ещё не было в map (register висит
+	// в буфере) - тогда registerClient увидит закрытого и пропустит.
+	// CloseSend идемпотентен через sync.Once
 	client.CloseSend()
 }
 
-// broadcastMessage отправляет сообщение всем клиентам турнира
 func (h *Hub) broadcastMessage(message *Message) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -153,16 +140,15 @@ func (h *Hub) broadcastMessage(message *Message) {
 		return
 	}
 
-	// Сериализуем сообщение один раз
+	// маршалим один раз
 	data, err := json.Marshal(message)
 	if err != nil {
 		h.log.LogError("Failed to marshal message", err)
 		return
 	}
 
-	// Отправляем всем клиентам
 	for client := range clients {
-		// Пропускаем уже закрытых клиентов (идемпотентность против буферизованных register/unregister).
+		// уже закрытых пропускаем (защита от буферизованных register/unregister)
 		if client.IsClosed() {
 			delete(clients, client)
 			continue
@@ -170,7 +156,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 		select {
 		case client.send <- data:
 		default:
-			// Канал заблокирован, отключаем клиента
+			// буфер забит - рубим клиента, ждать не будем
 			h.log.Info("Client send buffer full, disconnecting",
 				zap.String("tournament_id", client.tournamentID.String()),
 				zap.String("user_id", client.userID.String()),
@@ -187,7 +173,8 @@ func (h *Hub) broadcastMessage(message *Message) {
 	)
 }
 
-// Broadcast отправляет сообщение в канал broadcast
+// Broadcast кладёт сообщение в канал рассылки.
+// FIXME: если клиентов на турнир соберётся под сотни, рассылка под mu начнёт подтормаживать
 func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload any) {
 	message := &Message{
 		TournamentID: tournamentID,
@@ -198,7 +185,7 @@ func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload any)
 	select {
 	case h.broadcast <- message:
 	default:
-		// Канал полон, пробуем с таймаутом перед отбрасыванием
+		// канал полон, пробуем ещё разок с таймаутом, потом дропаем
 		timer := time.NewTimer(time.Second)
 		defer timer.Stop()
 		select {
@@ -212,12 +199,11 @@ func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload any)
 	}
 }
 
-// shutdown корректно завершает работу hub
 func (h *Hub) shutdown() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Закрываем все подключения (idempotent через sync.Once)
+	// закрываем все подключения (idempotent через sync.Once)
 	for tournamentID, clients := range h.tournaments {
 		for client := range clients {
 			client.CloseSend()
@@ -229,7 +215,7 @@ func (h *Hub) shutdown() {
 	h.log.Info("WebSocket hub shutdown complete")
 }
 
-// GetStats возвращает статистику hub
+// GetStats отдаёт статистику hub
 func (h *Hub) GetStats() map[string]any {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
