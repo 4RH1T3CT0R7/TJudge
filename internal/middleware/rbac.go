@@ -13,18 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
-// RequireRole middleware проверяет, что у пользователя есть требуемая роль
+// RequireRole пускает дальше только если роль юзера из списка разрешённых
 func RequireRole(requiredRoles ...models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Получаем роль из контекста
+			// роль положил в контекст Auth, если её нет - значит Auth не отработал
 			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok {
 				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
 				return
 			}
 
-			// Проверяем, есть ли роль в списке разрешённых
 			hasRole := slices.Contains(requiredRoles, role)
 
 			if !hasRole {
@@ -37,17 +36,17 @@ func RequireRole(requiredRoles ...models.Role) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAdmin middleware - shortcut для RequireRole(models.RoleAdmin)
+// RequireAdmin - сокращение для RequireRole(admin)
 func RequireAdmin() func(http.Handler) http.Handler {
 	return RequireRole(models.RoleAdmin)
 }
 
-// WithRole добавляет роль в контекст запроса
+// WithRole кладёт роль в контекст (в основном для тестов)
 func WithRole(ctx context.Context, role models.Role) context.Context {
 	return context.WithValue(ctx, RoleKey, role)
 }
 
-// RequireRoleValue извлекает роль из контекста
+// RequireRoleValue достаёт роль из контекста
 func RequireRoleValue(ctx context.Context) (models.Role, error) {
 	role, ok := ctx.Value(RoleKey).(models.Role)
 	if !ok {
@@ -56,19 +55,19 @@ func RequireRoleValue(ctx context.Context) (models.Role, error) {
 	return role, nil
 }
 
-// UserRoleChecker интерфейс для проверки актуальной роли пользователя из БД
+// UserRoleChecker - актуальная роль юзера из базы
 type UserRoleChecker interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 }
 
-// roleCacheEntry хранит кешированную роль с временем добавления
 type roleCacheEntry struct {
 	role      models.Role
 	expiresAt time.Time
 }
 
-// VerifiedAdminChecker проверяет admin-роль из БД с кешированием.
-// Защищает от использования отозванных admin-прав через не-истёкший JWT.
+// VerifiedAdminChecker сверяет админскую роль с базой а не только с jwt.
+// смысл: jwt живёт сутки, и если у админа отобрали права, по одному jwt он
+// оставался бы админом до истечения токена. тут перепроверяем базу с кэшом
 type VerifiedAdminChecker struct {
 	userRepo UserRoleChecker
 	cacheTTL time.Duration
@@ -76,7 +75,7 @@ type VerifiedAdminChecker struct {
 	cache    map[uuid.UUID]roleCacheEntry
 }
 
-// NewVerifiedAdminChecker создаёт checker с указанным TTL кеша
+// NewVerifiedAdminChecker создаёт чекер, ttl кэша задаётся снаружи (в main 5 минут)
 func NewVerifiedAdminChecker(userRepo UserRoleChecker, cacheTTL time.Duration) *VerifiedAdminChecker {
 	return &VerifiedAdminChecker{
 		userRepo: userRepo,
@@ -85,12 +84,12 @@ func NewVerifiedAdminChecker(userRepo UserRoleChecker, cacheTTL time.Duration) *
 	}
 }
 
-// RequireVerifiedAdmin middleware проверяет admin-роль из БД (не только из JWT).
-// Кеширует результат на cacheTTL для уменьшения нагрузки на БД.
+// RequireVerifiedAdmin - как RequireAdmin, но с перепроверкой роли по базе
 func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Сначала быстрая проверка из JWT
+			// сначала дешёвая проверка по jwt - если в токене не админ,
+			// в базу даже не ходим
 			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok || role != models.RoleAdmin {
 				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
@@ -103,7 +102,6 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 				return
 			}
 
-			// Проверяем кеш
 			v.mu.RLock()
 			entry, cached := v.cache[userID]
 			v.mu.RUnlock()
@@ -117,14 +115,15 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 				return
 			}
 
-			// Проверяем в БД
+			// в кэше нет или протухло - идём в базу
 			user, err := v.userRepo.GetByID(r.Context(), userID)
 			if err != nil {
 				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
-			// Обновляем кеш с lazy eviction
+			// пишем в кэш. заодно ленивая чистка: когда записей за тысячу,
+			// выкидываем протухшие (отдельную горутину заводить лень, да и незачем)
 			v.mu.Lock()
 			v.cache[userID] = roleCacheEntry{
 				role:      user.Role,
