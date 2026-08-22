@@ -17,14 +17,13 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// RateLimiter интерфейс для rate limiting
+// RateLimiter - основной лимитер (живёт в редисе)
 type RateLimiter interface {
 	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
 }
 
-// fallbackLimiter обеспечивает in-memory rate limiting при недоступности Redis.
-// Использует token bucket per-IP. Порог строже основного:
-// когда Redis падает, злоумышленник не должен получать более мягкий лимит.
+// fallbackLimiter - запасной in-memory лимитер на случай падения редиса.
+// token bucket на каждый ip
 type fallbackLimiter struct {
 	mu       sync.Mutex
 	limiters map[string]*fallbackEntry
@@ -37,15 +36,12 @@ type fallbackEntry struct {
 	lastSeen time.Time
 }
 
-// fallbackLimitMultiplier определяет, насколько строже fallback-лимит
-// относительно основного. 0.5 = вдвое строже. Fallback не должен расширять
-// бюджет при падении Redis, иначе DDoS на Redis превращается в способ обойти
-// основной лимит.
+// запасной лимит СТРОЖЕ основного (0.5 = вдвое). если бы fallback был мягче,
+// уронить редис = способ обойти основной лимит
 const fallbackLimitMultiplier = 0.5
 
 func newFallbackLimiter(limit int, window time.Duration) *fallbackLimiter {
-	// Используем коэффициент 0.5 (строже основного) вместо 2.0.
-	// Минимум burst = 1, чтобы limit=1 не превратился в 0.
+	// минимум 1, чтобы limit=1 не превратился в ноль
 	fallbackLimit := max(int(float64(limit)*fallbackLimitMultiplier), 1)
 	r := rate.Limit(float64(fallbackLimit) / window.Seconds())
 
@@ -71,7 +67,7 @@ func (f *fallbackLimiter) allow(ip string) bool {
 	return entry.limiter.Allow()
 }
 
-// cleanup удаляет записи, которые не обновлялись дольше maxAge.
+// cleanup выкидывает ip которых не видели дольше maxAge
 func (f *fallbackLimiter) cleanup(maxAge time.Duration) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -84,15 +80,13 @@ func (f *fallbackLimiter) cleanup(maxAge time.Duration) {
 	}
 }
 
-// RateLimit middleware для ограничения количества запросов.
-// При ошибке основного лимитера (Redis) переключается на in-memory fallback
-// с порогом fallbackLimitMultiplier*limit (по умолчанию 0.5, то есть в два раза
-// строже основного), вместо полного fail-open.
+// RateLimit ограничивает число запросов с одного ip. при недоступном редисе
+// не открываемся нараспашку, а падаем на in-memory fallback (вдвое строже)
 func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
 	fallback := newFallbackLimiter(limit, window)
 
-	// Периодическая очистка устаревших записей fallback лимитера.
-	// Передайте stopCh для graceful shutdown (горутина завершится при закрытии канала).
+	// горутина периодически чистит fallback-мапу. stopCh нужен для graceful
+	// shutdown - без него горутина живёт вечно
 	var stop <-chan struct{}
 	if len(stopCh) > 0 && stopCh[0] != nil {
 		stop = stopCh[0]
@@ -102,7 +96,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 		defer ticker.Stop()
 		for {
 			select {
-			case <-stop: // чтение из nil-канала блокирует навсегда, поэтому cleanup работает бесконечно, если stop-канал не передан
+			case <-stop: // чтение из nil-канала висит вечно, так что без stopCh чистка просто крутится всегда
 				return
 			case <-ticker.C:
 				fallback.cleanup(10 * time.Minute)
@@ -112,11 +106,9 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Получаем IP адрес клиента
 			ip := getClientIP(r)
 
-			// Обходим rate limiting для localhost только вне production
-			// (удобно для локальной разработки и тестов).
+			// локалхост не лимитируем, но только вне прода (удобно для разработки)
 			if os.Getenv("ENVIRONMENT") != "production" && isLocalhost(ip) {
 				next.ServeHTTP(w, r)
 				return
@@ -124,7 +116,6 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 
 			key := fmt.Sprintf("ratelimit:%s", ip)
 
-			// Проверяем лимит
 			allowed, err := limiter.Allow(r.Context(), key, limit, window)
 			if err != nil {
 				log.Warn("Rate limit check failed, falling back to in-memory limiter",
@@ -132,9 +123,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 					zap.Error(err),
 				)
 
-				// Fallback: in-memory rate limiter с порогом fallbackLimitMultiplier*limit
-				// (по умолчанию 0.5, то есть в два раза строже основного).
-				// Защищает от DDoS при падении Redis, не блокируя легитимный трафик.
+				// редис лежит - работаем через запасной лимитер
 				if !fallback.allow(ip) {
 					log.Info("Rate limit exceeded (fallback)",
 						zap.String("ip", ip),
@@ -172,17 +161,14 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 	}
 }
 
-// isLocalhost проверяет, является ли IP localhost
 func isLocalhost(ip string) bool {
-	// Обрабатываем IPv4 localhost
 	if ip == "127.0.0.1" || ip == "localhost" {
 		return true
 	}
-	// Обрабатываем IPv6 localhost
 	if ip == "::1" || ip == "[::1]" {
 		return true
 	}
-	// Обрабатываем localhost с портом (например, "127.0.0.1:xxxxx" или "[::1]:xxxxx")
+	// варианты с портом типа "127.0.0.1:xxxxx" и "[::1]:xxxxx"
 	if len(ip) > 9 && ip[:9] == "127.0.0.1" {
 		return true
 	}
@@ -192,10 +178,9 @@ func isLocalhost(ip string) bool {
 	return false
 }
 
-// getClientIP извлекает IP адрес клиента из запроса.
-// Использует RemoteAddr, который уже выставлен chi RealIP middleware
-// из доверенных proxy-заголовков. Не перечитываем сырые заголовки,
-// чтобы избежать spoofing-обхода.
+// getClientIP берёт ip из RemoteAddr - его уже выставил RealIP из chi.
+// сырые заголовки типа X-Forwarded-For тут НЕ читаем, иначе их можно подделать
+// и обойти лимит
 func getClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
