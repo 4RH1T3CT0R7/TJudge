@@ -36,7 +36,7 @@ type RedisEventPublisher struct {
 	log     *logger.Logger
 }
 
-// NewRedisEventPublisher создаёт publisher, пишущий в общий канал.
+// NewRedisEventPublisher создаёт publisher, пишущий в общий канал
 func NewRedisEventPublisher(pub redisPublisher, log *logger.Logger) *RedisEventPublisher {
 	return &RedisEventPublisher{
 		pub:     pub,
@@ -91,8 +91,8 @@ func NewRedisEventSubscriber(sub redisSubscriber, notifier Notifier, log *logger
 	}
 }
 
-// Start начинает слушать события в Redis-канале.
-// Блокируется до вызова Stop или отмены контекста; вызывайте в goroutine.
+// Start слушает события в Redis-канале.
+// блокируется до Stop или отмены контекста, так что зовите в горутине
 func (s *RedisEventSubscriber) Start(ctx context.Context) {
 	pubsub := s.sub.Subscribe(ctx, s.channel)
 	ch := pubsub.Channel()
@@ -121,7 +121,7 @@ func (s *RedisEventSubscriber) Start(ctx context.Context) {
 	}
 }
 
-// Stop сигнализирует подписчику остановиться, заставляя Start вернуться.
+// Stop велит подписчику остановиться - Start после этого выйдет
 func (s *RedisEventSubscriber) Stop() {
 	select {
 	case <-s.stopCh:
