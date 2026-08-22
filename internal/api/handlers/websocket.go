@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"

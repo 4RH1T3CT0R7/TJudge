@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/team"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"

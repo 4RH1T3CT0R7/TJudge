@@ -11,7 +11,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/api"
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/events"
