@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/web"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/bmstu-itstech/tjudge/pkg/requestid"
 	"github.com/go-chi/chi/v5"
 
 	_ "github.com/bmstu-itstech/tjudge/docs/swagger"
@@ -191,7 +190,7 @@ func (s *Server) setupMiddleware() {
 			if reqID != "" {
 				w.Header().Set("X-Request-ID", reqID)
 			}
-			ctx := requestid.WithContext(r.Context(), reqID)
+			ctx := middleware.WithRequestID(r.Context(), reqID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
