@@ -14,43 +14,42 @@ import (
 	"go.uber.org/zap"
 )
 
-// ContextKey тип для ключей контекста
+// ContextKey - свой тип для ключей контекста чтобы не пересекаться со строками других пакетов
 type ContextKey string
 
 const (
-	// UserIDKey ключ для user ID в контексте
+	// UserIDKey - под этим ключом в контексте лежит uuid юзера
 	UserIDKey ContextKey = "user_id"
-	// RoleKey ключ для роли в контексте
+	// RoleKey - роль юзера (из jwt)
 	RoleKey ContextKey = "user_role"
 
-	// bearerPrefix - префикс схемы аутентификации Bearer
 	bearerPrefix = "Bearer"
 )
 
-// AuthService интерфейс для работы с аутентификацией
+// AuthService - что мидлварь спрашивает у сервиса авторизации
 type AuthService interface {
 	ValidateToken(tokenString string) (*auth.Claims, error)
 	GetUserFromToken(ctx context.Context, tokenString string) (*models.User, error)
 	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 
-// Auth middleware для проверки JWT токена
+// Auth проверяет jwt токен. без валидного токена дальше не пускаем
 func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var token string
 
-			// Сначала проверяем заголовок Authorization
+			// обычный путь - заголовок Authorization: Bearer <token>
 			authHeader := r.Header.Get("Authorization")
 			if authHeader != "" {
-				// Проверяем формат "Bearer <token>"
 				parts := strings.Split(authHeader, " ")
 				if len(parts) == 2 && parts[0] == bearerPrefix {
 					token = parts[1]
 				}
 			}
 
-			// Если токена нет в header, проверяем Sec-WebSocket-Protocol (для WebSocket)
+			// для вебсокета токен приезжает сабпротоколом access_token.<jwt>,
+			// потому что js-клиент не умеет ставить заголовки на ws-хендшейк
 			if token == "" {
 				if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
 					for p := range strings.SplitSeq(proto, ",") {
@@ -69,7 +68,6 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// Валидируем токен
 			claims, err := authService.ValidateToken(token)
 			if err != nil {
 				log.Info("Invalid token", zap.Error(err))
@@ -77,7 +75,8 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// Проверяем, не находится ли токен в чёрном списке
+			// чёрный список (разлогиненные токены). если редис упал - отдаём 500,
+			// НЕ пропускаем: иначе отозванный токен прошёл бы пока редис лежит
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.LogError("Failed to check token blacklist", err)
@@ -90,18 +89,18 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// Добавляем user ID и роль из JWT claims в контекст (без DB hit)
+			// айди и роль берём прямо из jwt, в базу не ходим
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, RoleKey, claims.Role)
 
-			// Передаём управление следующему обработчику
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// OptionalAuth middleware для опциональной аутентификации
-// Если токен есть - валидирует и добавляет в контекст (включая роль), если нет - пропускает
+// OptionalAuth - необязательная авторизация: есть валидный токен - положим юзера
+// в контекст, нет - пропустим как анонима. для публичных ручек где залогиненным
+// можно показать чуть больше
 func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,8 +123,8 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
-			// Проверяем чёрный список. При ошибке Redis не доверяем токену
-			// и продолжаем без аутентификации (пользователь становится анонимным).
+			// тут при ошибке блэклиста НЕ 500 как в Auth, а просто пропускаем анонимом:
+			// ручка публичная, ронять её из-за редиса глупо. токену при этом не доверяем
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.Warn("Blacklist check failed, proceeding without authentication",
@@ -140,7 +139,6 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
-			// Добавляем user ID и роль из JWT claims в контекст (без DB hit)
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, RoleKey, claims.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -148,13 +146,13 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 	}
 }
 
-// GetUserID извлекает user ID из контекста
+// GetUserID достаёт user id из контекста
 func GetUserID(ctx context.Context) (uuid.UUID, bool) {
 	userID, ok := ctx.Value(UserIDKey).(uuid.UUID)
 	return userID, ok
 }
 
-// RequireUserID извлекает user ID из контекста или возвращает ошибку
+// RequireUserID - то же самое но с ошибкой если юзера нет
 func RequireUserID(ctx context.Context) (uuid.UUID, error) {
 	userID, ok := GetUserID(ctx)
 	if !ok {
@@ -163,7 +161,7 @@ func RequireUserID(ctx context.Context) (uuid.UUID, error) {
 	return userID, nil
 }
 
-// ExtractToken извлекает токен из заголовка Authorization
+// ExtractToken вытаскивает голый токен из Authorization (нужен хендлеру logout)
 func ExtractToken(r *http.Request) string {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
