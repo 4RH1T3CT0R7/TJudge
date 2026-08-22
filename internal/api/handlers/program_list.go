@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
-	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"go.uber.org/zap"

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/api/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/web"
