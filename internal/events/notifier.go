@@ -27,13 +27,13 @@ type Notifier interface {
 	ProgramCompiled(ctx context.Context, e ProgramCompiled)
 }
 
-// TournamentCacheWriter - кусок кэша турниров, который нужен нотифаеру.
+// то что нотифаер дёргает у кэша турниров
 type TournamentCacheWriter interface {
 	Set(ctx context.Context, tournament *models.Tournament) error
 	Invalidate(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// LeaderboardCacheWriter - кусок кэша лидерборда для нотифаера.
+// а это методы лидерборда, которые тут нужны
 type LeaderboardCacheWriter interface {
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
 	UpdateRatingsBatch(ctx context.Context, updates []cache.RatingUpdate) error
@@ -41,7 +41,7 @@ type LeaderboardCacheWriter interface {
 	InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error
 }
 
-// Broadcaster шлёт сообщение вебсокет-клиентам турнира.
+// Broadcaster - разослать сообщение клиентам турнира по вебсокету
 type Broadcaster interface {
 	Broadcast(tournamentID uuid.UUID, messageType string, payload any)
 }
@@ -49,6 +49,7 @@ type Broadcaster interface {
 // SyncNotifier синхронно применяет побочные эффекты события. коллабораторы опциональны:
 // nil просто пропускается. так одна реализация покрывает три топологии (воркер, апи,
 // мост из редиса) - разница только в том что передать в поля.
+// TODO: не помешал бы счётчик отправленных/упавших событий, но пока не горит
 type SyncNotifier struct {
 	TournamentCache TournamentCacheWriter  // в воркере nil - кэш турниров там не трогаем
 	Leaderboard     LeaderboardCacheWriter // может быть nil
@@ -119,7 +120,7 @@ func (n *SyncNotifier) MatchesCreated(ctx context.Context, e MatchesCreated) {
 }
 
 func (n *SyncNotifier) GameRoundReset(ctx context.Context, e GameRoundReset) {
-	// раунд сбросили - инвалидируем турнир и целиком чистим лидерборд
+	// раунд сбросили - инвалидруем турнир и целиком чистим лидерборд
 	// (раньше Clear звался из двух хендлеров, но DEL идемпотентен так что хватает одного)
 	if n.TournamentCache != nil {
 		n.logErr("GameRoundReset", n.TournamentCache.Invalidate(ctx, e.TournamentID))
