@@ -13,12 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// IdempotencyStore хранит ответы по Idempotency-Key; реализуется Redis-cache'ом.
+// IdempotencyStore хранит ответы по Idempotency-Key поверх Redis-кэша
 //
-// SetNX (SET if Not eXists) критичен: гарантирует, что параллельные запросы
-// с одним ключом не создадут дублирующиеся ресурсы - только один "выиграет"
-// и пойдёт к handler'у, остальные получат 409 или кэшированный ответ
-// предыдущего (successful) вызова.
+// SetNX тут ключевой: если два запроса с одним ключом пришли разом, ключ
+// захватит только один и пойдёт в handler, остальные получат 409 или уже
+// сохранённый ответ прошлого удачного вызова
 type IdempotencyStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error)
@@ -26,14 +25,14 @@ type IdempotencyStore interface {
 	Del(ctx context.Context, keys ...string) error
 }
 
-// idempotencyEntry - сохраняемый снапшот ответа.
+// снапшот ответа для сохранения
 type idempotencyEntry struct {
 	Status int                 `json:"status"`
 	Header map[string][]string `json:"header"`
 	Body   string              `json:"body"`
 }
 
-// idempotencyRecorder - wrapper ResponseWriter для захвата ответа.
+// обёртка над ResponseWriter, перехватывает ответ
 type idempotencyRecorder struct {
 	http.ResponseWriter
 	buf    *bytes.Buffer
@@ -50,33 +49,25 @@ func (r *idempotencyRecorder) Write(p []byte) (int, error) {
 	return r.ResponseWriter.Write(p)
 }
 
-// Idempotency middleware реализует RFC-draft Idempotency-Key.
+// правила Idempotency-Key (RFC-draft):
+// только POST/PATCH, у остальных методов семантика и так идемпотентна;
+// первый запрос выполняется и ответ кладётся в store на idempotencyTTL,
+// повтор с тем же ключом отдаёт сохранённый ответ, конкурент ловит 409;
+// ключ скоупится по userID+method+path чтобы нельзя было переиграть чужой,
+// при не-2xx или панике in-flight маркер снимается - можно сразу ретраить
 //
-// Правила:
-//   - Применяется к POST/PATCH (не к GET/PUT/DELETE, где семантика уже идемпотентна).
-//   - Клиент посылает заголовок Idempotency-Key (не более 128 байт).
-//   - Для первого запроса handler исполняется обычно, ответ сохраняется в store
-//     под ключом на idempotencyTTL (24ч по умолчанию).
-//   - Повторный запрос с тем же ключом возвращает сохранённый ответ без
-//     пере-исполнения handler'а.
-//   - Конкурентный запрос с тем же ключом получает 409 Conflict - защита от
-//     двойного создания при параллельных ретраях.
-//   - Ключ скоупится по userID+method+path: чужой Idempotency-Key нельзя
-//     ни переиграть (replay чужого ответа), ни заблокировать.
-//   - При не-2xx ответе (или панике) in-flight маркер снимается - клиент
-//     может сразу повторить запрос с тем же ключом.
+// TODO: 24ч захардкожено, надо бы вынести TTL в конфиг
 const idempotencyTTL = 24 * time.Hour
 
-// inFlightTTL - страховочный TTL маркера "запрос выполняется": в нормальном
-// потоке маркер снимается явно (заменяется ответом или удаляется при ошибке),
-// TTL защищает только от падения процесса между SetNX и завершением handler'а.
+// страховочный TTL маркера "запрос выполняется": обычно маркер снимается явно,
+// а этот TTL спасает только если процесс упал между SetNX и концом handler'а
 const inFlightTTL = 2 * time.Minute
 
 const idempotencyKeyMax = 128
 const idempotencyKeyPrefix = "idempotency:"
 
-// Idempotency возвращает middleware, который использует store для дедубликации.
-// Если store == nil, middleware ведёт себя как no-op (удобно для тестов).
+// Idempotency возвращает middleware дедубликации по store
+// store == nil - no-op (удобно в тестах)
 func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,16 +90,15 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 
-			// Скоупим ключ по пользователю и маршруту: глобальный ключ позволял
-			// бы угадавшему чужой Idempotency-Key получить replay чужого ответа
-			// или заблокировать чужое создание 409-ми.
+			// скоупим ключ по юзеру и маршруту: иначе угадавший чужой ключ
+			// мог бы получить чужой ответ или заблокировать чужое создание
 			scope := "anon"
 			if userID, ok := GetUserID(r.Context()); ok {
 				scope = userID.String()
 			}
 			cacheKey := idempotencyKeyPrefix + scope + ":" + r.Method + ":" + r.URL.Path + ":" + rawKey
 
-			// 1. Проверяем, есть ли уже сохранённый ответ.
+			// 1. есть ли уже сохранённый ответ
 			if saved, err := store.Get(r.Context(), cacheKey); err == nil && saved != "" && saved != "in-flight" {
 				var entry idempotencyEntry
 				if err := json.Unmarshal([]byte(saved), &entry); err == nil {
@@ -124,7 +114,7 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				}
 			}
 
-			// 2. Концурентный запрос: пробуем захватить "in-flight" маркер через SetNX.
+			// 2. пробуем захватить in-flight маркер через SetNX
 			ok, err := store.SetNX(r.Context(), cacheKey, "in-flight", inFlightTTL)
 			if err != nil {
 				log.Warn("idempotency store error, bypassing", zap.Error(err))
@@ -132,16 +122,15 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 			if !ok {
-				// Чужой запрос захватил ключ - второй не должен пытаться создать.
-				// 409 Conflict сообщает клиенту: повторите попытку позже.
+				// ключ уже кем-то захвачен, второму создавать нельзя
+				// 409 говорит клиенту повторить позже
 				http.Error(w, `{"error":"duplicate request with same Idempotency-Key in progress"}`, http.StatusConflict)
 				return
 			}
 
-			// 3. Первый запрос - исполняем handler и сохраняем snapshot.
-			// Если ответ не сохранён (не-2xx, ошибка сериализации или паника
-			// handler'а), снимаем in-flight маркер: иначе честный ретрай с тем же
-			// ключом получал бы 409 до истечения TTL.
+			// 3. первый запрос - выполняем handler и сохраняем snapshot
+			// если ответ не сохранили (не-2xx, ошибка сериализации, паника),
+			// снимаем маркер - иначе честный ретрай ловил бы 409 до конца TTL
 			stored := false
 			defer func() {
 				if !stored {
@@ -156,11 +145,11 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 			}
 			next.ServeHTTP(rec, r)
 
-			// Сохраняем только успешные ответы (2xx); ошибки клиент может фикснуть и повторить.
+			// храним только успешные ответы (2xx), ошибку клиент починит и повторит
 			if rec.status >= 200 && rec.status < 300 {
 				headerSnapshot := map[string][]string{}
 				for k, v := range w.Header() {
-					// Пропускаем hop-by-hop / чувствительные заголовки.
+					// пропускаем чувствительные заголовки
 					if strings.EqualFold(k, "Set-Cookie") || strings.EqualFold(k, "Authorization") {
 						continue
 					}
