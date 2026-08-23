@@ -8,14 +8,14 @@ import (
 	"sync"
 )
 
-// gzipWriterPool пул gzip writers для переиспользования
+// пул gzip-writer'ов: создавать новый на каждый ответ дорого, поэтому переиспользуем
 var gzipWriterPool = sync.Pool{
 	New: func() any {
 		return gzip.NewWriter(io.Discard)
 	},
 }
 
-// gzipResponseWriter обёртка над http.ResponseWriter с gzip сжатием
+// обёртка над ResponseWriter, которая пишет тело через gzip
 type gzipResponseWriter struct {
 	io.Writer
 	http.ResponseWriter
@@ -37,28 +37,24 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-// Compress middleware для gzip сжатия ответов
 func Compress() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Проверяем, поддерживает ли клиент gzip
+			// клиент не умеет gzip — отдаём как есть
 			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Получаем gzip writer из пула
 			gz := gzipWriterPool.Get().(*gzip.Writer)
 			defer gzipWriterPool.Put(gz)
 
 			gz.Reset(w)
 			defer gz.Close()
 
-			// Устанавливаем заголовки для gzip
 			w.Header().Set("Content-Encoding", "gzip")
 			w.Header().Set("Vary", "Accept-Encoding")
 
-			// Оборачиваем ResponseWriter
 			gzw := &gzipResponseWriter{
 				Writer:         gz,
 				ResponseWriter: w,
