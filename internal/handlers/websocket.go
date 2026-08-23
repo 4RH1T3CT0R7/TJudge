@@ -15,23 +15,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// isProductionEnvLookup проверяет ENVIRONMENT=production|prod (lookup на каждом вызове,
-// чтобы тесты могли изменять env через t.Setenv).
+// прод определяем на каждом вызове а не кэшируем в переменную пакета -
+// тесты переключают окружение через t.Setenv
 func isProductionEnvLookup() bool {
 	env := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
 	return env == "production" || env == "prod"
 }
 
-// checkWebSocketOrigin реализует fail-closed проверку Origin для WebSocket handshake.
+// checkWebSocketOrigin - проверка Origin на ws-хендшейке, в проде fail-closed.
+// без неё чужой сайт, открытый у залогиненного юзера, мог бы подключиться
+// к нашему ws от его имени (CSWSH)
 //
-// Правила:
-//   - В production (ENVIRONMENT=production|prod) wildcard "*" и пустой origin-list
-//     запрещены. Origin-заголовок должен точно совпадать с одним из allowed.
-//     Пустой Origin разрешается только для не-браузерных клиентов (без Sec-Fetch-Site).
-//   - В development wildcard/пустой origin-list разрешает любой origin.
-//
-// Это закрывает CSWSH (Cross-Site WebSocket Hijacking), когда чужой сайт,
-// открытый в браузере авторизованного пользователя, подключается к WS.
+// правила:
+//   - в проде wildcard "*" и пустой список запрещены, Origin должен точно
+//     совпасть с одним из разрешённых. пустой Origin пропускаем только для
+//     не-браузерных клиентов (нет Sec-Fetch-Site)
+//   - в dev wildcard/пустой список разрешают всё, для локалки
 func checkWebSocketOrigin(r *http.Request) bool {
 	allowedOrigins := os.Getenv("WEBSOCKET_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
@@ -41,17 +40,15 @@ func checkWebSocketOrigin(r *http.Request) bool {
 
 	prod := isProductionEnvLookup()
 
-	// В dev wildcard и пустой список разрешают всё (legacy-поведение для локалки).
-	// В prod оба режима - fail-closed.
 	if trimmed == "" || trimmed == "*" {
 		return !prod
 	}
 
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		// Пустой Origin в браузерах не бывает при cross-origin; это либо same-origin,
-		// либо не-браузерный клиент (curl, bot). В prod пропускаем только если это
-		// явно не-браузерный клиент (нет Sec-Fetch-Site), иначе fail-closed.
+		// браузер при cross-origin всегда шлёт Origin, так что пустой - это
+		// same-origin или curl/бот. в проде отсекаем случай когда заголовок
+		// Sec-Fetch-Site есть (значит браузер), иначе пропускаем
 		if prod && r.Header.Get("Sec-Fetch-Site") != "" {
 			return false
 		}
@@ -72,13 +69,12 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     checkWebSocketOrigin,
 }
 
-// WebSocketHandler обрабатывает WebSocket подключения
+// WebSocketHandler - ws-подключения к турнирам
 type WebSocketHandler struct {
 	hub *ws.Hub
 	log *logger.Logger
 }
 
-// NewWebSocketHandler создаёт новый WebSocket handler
 func NewWebSocketHandler(hub *ws.Hub, log *logger.Logger) *WebSocketHandler {
 	return &WebSocketHandler{
 		hub: hub,
@@ -96,20 +92,20 @@ func NewWebSocketHandler(hub *ws.Hub, log *logger.Logger) *WebSocketHandler {
 // @Failure 401 {object} object{error=string}
 // @Router /ws/tournaments/{id} [get]
 func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Извлекаем user ID из контекста (должен быть установлен auth middleware)
+	// юзера в контекст положила auth-мидлварь
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		writeError(w, errors.ErrUnauthorized.WithMessage("authentication required"))
 		return
 	}
 
-	// Отражаем предложенный клиентом subprotocol дословно (RFC 6455, секция 4.2.2).
+	// отражаем клиентский сабпротокол с токеном обратно, так требует rfc 6455
+	// (иначе некоторые браузеры рвут соединение)
 	responseHeader := http.Header{}
 	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
 		for p := range strings.SplitSeq(proto, ",") {
@@ -121,7 +117,6 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// Upgrade HTTP соединения в WebSocket
 	conn, err := upgrader.Upgrade(w, r, responseHeader)
 	if err != nil {
 		h.log.Warn("Failed to upgrade WebSocket connection",
@@ -134,10 +129,8 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Включаем TCP keepalive для ранней детекции "мертвых" клиентов,
-	// которые не отвечают на WebSocket ping (например, замороженный laptop).
-	// OS-level probes отправляются чаще, чем WS ping, что уменьшает latency
-	// обнаружения разрыва с ~35s до ~10s.
+	// tcp keepalive чтобы быстрее замечать молча отвалившихся клиентов
+	// (заснувший ноутбук и тп) - os-пробы ходят чаще чем наш ws-пинг
 	if tcp, ok := conn.UnderlyingConn().(*net.TCPConn); ok {
 		_ = tcp.SetKeepAlive(true)
 		_ = tcp.SetKeepAlivePeriod(30 * time.Second)
@@ -148,13 +141,10 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		zap.String("user_id", userID.String()),
 	)
 
-	// Создаём клиента
 	client := ws.NewClient(h.hub, conn, tournamentID, userID, h.log)
 
-	// Регистрируем клиента в hub
 	client.Register()
 
-	// Запускаем горутины для чтения и записи
 	go client.WritePump()
 	go client.ReadPump()
 }
