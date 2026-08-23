@@ -4,9 +4,7 @@ import (
 	"net/http"
 )
 
-// MaxBodySize returns middleware that limits the size of request bodies.
-// Requests exceeding maxBytes will receive a 413 Request Entity Too Large response
-// when the handler attempts to read beyond the limit.
+// ограничивает размер тела запроса, при превышении чтение отдаст 413
 func MaxBodySize(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
