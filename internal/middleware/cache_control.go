@@ -8,18 +8,14 @@ import (
 	"strconv"
 )
 
-// CacheControl - middleware для идемпотентных GET-эндпоинтов,
-// который выставляет Cache-Control header и генерирует ETag из body.
+// CacheControl - middleware для GET, ставит Cache-Control и считает ETag по body
 //
-// Снижает нагрузку на backend для редко-меняющихся ресурсов
-// (справочники игр, список турниров). Клиент с валидным If-None-Match
-// получает 304 без повторной генерации тела.
-//
-// Использование:
+// разгружает бэкенд на редко меняющихся ресурсах (список игр, турниры):
+// клиент с валидным If-None-Match получает 304 без генерации тела
 //
 //	r.With(middleware.CacheControl(60)).Get("/games", handler)
 //
-// maxAgeSeconds - значение `max-age=`, 0 даёт no-store.
+// maxAgeSeconds - значение max-age, 0 = no-store
 func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 	directive := "no-store"
 	if maxAgeSeconds > 0 {
@@ -37,11 +33,11 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 				buf:            &bytes.Buffer{},
 				status:         http.StatusOK,
 			}
-			// Копируем headers, установленные handler'ом, в наш recorder.
+			// гоняем handler через recorder, ловим body и статус
 			next.ServeHTTP(rec, r)
 
-			// ETag и Cache-Control - только для 2xx (иначе кэшируем ошибку).
-			// Для не-2xx пробрасываем status и body без добавления заголовков.
+			// ETag и Cache-Control только для 2xx, иначе закэшируем ошибку
+			// не-2xx просто пробрасываем как есть
 			if rec.status < 200 || rec.status >= 300 {
 				w.WriteHeader(rec.status)
 				_, _ = w.Write(rec.buf.Bytes())
@@ -49,25 +45,25 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 			}
 
 			sum := sha256.Sum256(rec.buf.Bytes())
-			etag := `"` + hex.EncodeToString(sum[:16]) + `"` // 16 байт == 128 бит
+			etag := `"` + hex.EncodeToString(sum[:16]) + `"` // 16 байт = 128 бит
 
 			w.Header().Set("ETag", etag)
 			w.Header().Set("Cache-Control", directive)
 
-			// Conditional request: If-None-Match совпал, отдаём 304 без тела.
+			// If-None-Match совпал - отдаём 304 без тела
 			if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
 
-			// Записываем реальный статус и тело.
+			// пишем реальный статус и тело
 			w.WriteHeader(rec.status)
 			_, _ = w.Write(rec.buf.Bytes())
 		})
 	}
 }
 
-// etagRecorder захватывает body и status для пост-хэширования.
+// копит body и status, чтобы потом посчитать хэш
 type etagRecorder struct {
 	http.ResponseWriter
 	buf           *bytes.Buffer
