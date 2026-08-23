@@ -141,7 +141,7 @@ func NewSystemStatusHandler(
 // injectedVersion вшивается при сборке Docker-образа (тег релиза):
 // в контексте сборки нет .git, поэтому vcs.revision там недоступен.
 //
-//	go build -ldflags "-X github.com/bmstu-itstech/tjudge/internal/api/handlers.injectedVersion=v1.7.6"
+//	go build -ldflags "-X github.com/bmstu-itstech/tjudge/internal/handlers.injectedVersion=v1.7.6"
 var injectedVersion string
 
 // appVersion извлекает версию: тег из ldflags, иначе VCS-метаданные go build.

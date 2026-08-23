@@ -50,7 +50,7 @@ COPY --from=frontend-builder /internal/web/dist ./internal/web/dist
 ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags "-w -s -X github.com/bmstu-itstech/tjudge/internal/api/handlers.injectedVersion=${VERSION}" \
+    -ldflags "-w -s -X github.com/bmstu-itstech/tjudge/internal/handlers.injectedVersion=${VERSION}" \
     -o /app/api ./cmd/api
 
 # Final stage
