@@ -4,42 +4,35 @@ import (
 	"net/http"
 )
 
-// SecurityConfig конфигурация security middleware
+// SecurityConfig - настройки security-заголовков
 type SecurityConfig struct {
-	// XSSProtection включает X-XSS-Protection
+	// включает X-XSS-Protection, хотя новые браузеры на него давно забили
+	// и просто игнорят - оставил ради старых
 	XSSProtection bool
 
-	// ContentTypeNosniff включает X-Content-Type-Options: nosniff
+	// X-Content-Type-Options: nosniff
 	ContentTypeNosniff bool
 
-	// XFrameOptions значение заголовка X-Frame-Options
-	// Возможные значения: DENY, SAMEORIGIN, ALLOW-FROM uri
+	// значение X-Frame-Options: DENY, SAMEORIGIN, ALLOW-FROM uri
 	XFrameOptions string
 
-	// ContentSecurityPolicy значение заголовка CSP
+	// значение CSP
 	ContentSecurityPolicy string
 
-	// ReferrerPolicy значение заголовка Referrer-Policy
 	ReferrerPolicy string
 
-	// StrictTransportSecurity значение заголовка HSTS
+	// значение HSTS
 	StrictTransportSecurity string
 
-	// PermissionsPolicy значение заголовка Permissions-Policy
 	PermissionsPolicy string
 }
 
-// DefaultSecurityConfig возвращает конфигурацию по умолчанию.
+// DefaultSecurityConfig - конфиг по умолчанию
 //
-// Ужесточения CSP:
-//   - object-src 'none'              - блокирует Flash/Java-аплеты (XSS vector)
-//   - base-uri 'self'                - защита от base-tag injection
-//   - form-action 'self'             - отправка форм только на свой origin
-//   - frame-ancestors 'none'         - clickjacking защита
-//
-// 'unsafe-inline' временно остаётся в script-src до выноса inline-скрипта
-// из web/index.html; потом нужно перейти на nonce- или hash-based CSP.
-// 'unsafe-inline' в style-src нужен для Tailwind style-injection; риск ниже.
+// в CSP прикрыто лишнее: object-src 'none' (Flash/апплеты), base-uri 'self'
+// (base-tag injection), form-action 'self', frame-ancestors 'none' (кликджекинг)
+// 'unsafe-inline' в script-src пока держим из-за inline-скрипта в index.html,
+// потом надо уйти на nonce; в style-src он нужен Tailwind, риск меньше
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
 		XSSProtection:           true,
@@ -52,48 +45,40 @@ func DefaultSecurityConfig() SecurityConfig {
 	}
 }
 
-// SecurityHeaders добавляет security headers к ответам
+// SecurityHeaders добавляет security-заголовки в ответы
 func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Заголовок X-XSS-Protection
 			if config.XSSProtection {
 				w.Header().Set("X-XSS-Protection", "1; mode=block")
 			}
 
-			// Заголовок X-Content-Type-Options
 			if config.ContentTypeNosniff {
 				w.Header().Set("X-Content-Type-Options", "nosniff")
 			}
 
-			// Заголовок X-Frame-Options
 			if config.XFrameOptions != "" {
 				w.Header().Set("X-Frame-Options", config.XFrameOptions)
 			}
 
-			// Заголовок Content-Security-Policy
 			if config.ContentSecurityPolicy != "" {
 				w.Header().Set("Content-Security-Policy", config.ContentSecurityPolicy)
 			}
 
-			// Заголовок Referrer-Policy
 			if config.ReferrerPolicy != "" {
 				w.Header().Set("Referrer-Policy", config.ReferrerPolicy)
 			}
 
-			// Strict-Transport-Security (только для HTTPS).
-			// Также выставляем HSTS, когда за реверс-прокси, который терминирует TLS
-			// и передаёт протокол через X-Forwarded-Proto.
+			// HSTS ставим только когда соединение реально по TLS: напрямую это
+			// r.TLS, а за реверс-прокси TLS рвётся на нём, поэтому смотрим X-Forwarded-Proto
 			if config.StrictTransportSecurity != "" && (r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https") {
 				w.Header().Set("Strict-Transport-Security", config.StrictTransportSecurity)
 			}
 
-			// Заголовок Permissions-Policy
 			if config.PermissionsPolicy != "" {
 				w.Header().Set("Permissions-Policy", config.PermissionsPolicy)
 			}
 
-			// Дополнительные заголовки безопасности
 			w.Header().Set("X-Download-Options", "noopen")
 			w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
 
@@ -102,7 +87,7 @@ func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 	}
 }
 
-// SecureHeaders применяет security headers с конфигурацией по умолчанию
+// SecureHeaders - security-заголовки с дефолтным конфигом
 func SecureHeaders() func(http.Handler) http.Handler {
 	return SecurityHeaders(DefaultSecurityConfig())
 }
