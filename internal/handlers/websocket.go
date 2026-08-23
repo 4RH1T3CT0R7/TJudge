@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -98,7 +97,7 @@ func NewWebSocketHandler(hub *ws.Hub, log *logger.Logger) *WebSocketHandler {
 // @Router /ws/tournaments/{id} [get]
 func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}

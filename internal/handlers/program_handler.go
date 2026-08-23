@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -140,7 +139,7 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	id, ok := parseUUIDParam(w, r, "id", "program")
 	if !ok {
 		return
 	}
@@ -234,7 +233,7 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	id, ok := parseUUIDParam(w, r, "id", "program")
 	if !ok {
 		return
 	}
@@ -295,7 +294,7 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/programs/clear-errors [post]
 func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}

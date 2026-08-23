@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/tournament"
@@ -155,7 +154,7 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id} [get]
 func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -189,7 +188,7 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id}/join [post]
 func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -242,7 +241,7 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id}/start [post]
 func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -278,7 +277,7 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id}/complete [post]
 func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -312,7 +311,7 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id} [delete]
 func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -345,7 +344,7 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id}/leaderboard [get]
 func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -382,7 +381,7 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 // @Router /tournaments/{id}/matches [post]
 func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -445,7 +444,7 @@ type CrossGameLeaderboardEntry struct {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/cross-game-leaderboard [get]
 func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -476,7 +475,7 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 // @Router /tournaments/{id}/matches [get]
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -508,7 +507,7 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 // @Router /tournaments/{id}/matches/rounds [get]
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -540,7 +539,7 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 // @Router /tournaments/{id}/run-matches [post]
 func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID турнира из URL
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -581,7 +580,7 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 // @Failure 403 {object} object{error=string}
 // @Router /tournaments/{id}/run-game-matches [post]
 func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -638,7 +637,7 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/retry-matches [post]
 func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}

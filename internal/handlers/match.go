@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
@@ -137,7 +136,7 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*model
 // @Router /matches/{id} [get]
 func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем ID из URL
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "match")
+	id, ok := parseUUIDParam(w, r, "id", "match")
 	if !ok {
 		return
 	}

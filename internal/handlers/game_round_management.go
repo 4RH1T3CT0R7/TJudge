@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"go.uber.org/zap"
@@ -244,7 +243,7 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/programs/download-zip [get]
 func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -389,7 +388,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games/deactivate-all [post]
 func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}

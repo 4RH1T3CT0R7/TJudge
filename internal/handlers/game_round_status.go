@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
@@ -38,7 +37,7 @@ type TournamentGameWithDetails struct {
 // @Failure 500 {object} object{error=string}
 // @Router /tournaments/{id}/games/status [get]
 func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -94,7 +93,7 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 // @Failure 500 {object} object{error=string}
 // @Router /tournaments/{id}/active-game [get]
 func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -168,7 +167,7 @@ type SetActiveGameRequest struct {
 // @Failure 403 {object} object{error=string}
 // @Router /tournaments/{id}/active-game [post]
 func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}

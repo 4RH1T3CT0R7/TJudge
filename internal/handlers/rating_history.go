@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/bmstu-itstech/tjudge/pkg/pagination"
@@ -40,11 +39,11 @@ func NewRatingHistoryHandler(repo RatingHistoryRepository, log *logger.Logger) *
 // @Failure 400 {object} object{error=string}
 // @Router /tournaments/{id}/programs/{programId}/rating-history [get]
 func (h *RatingHistoryHandler) GetProgramRatingHistory(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
-	programID, ok := httputil.ParseUUIDParam(w, r, "programId", "program")
+	programID, ok := parseUUIDParam(w, r, "programId", "program")
 	if !ok {
 		return
 	}

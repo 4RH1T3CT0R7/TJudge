@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
@@ -134,7 +133,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 					w.Header().Set("X-RateLimit-Window", window.String())
 					w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
 
-					httputil.WriteError(w, errors.ErrRateLimitExceeded)
+					writeError(w, errors.ErrRateLimitExceeded)
 					return
 				}
 
@@ -152,7 +151,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 				w.Header().Set("X-RateLimit-Window", window.String())
 				w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
 
-				httputil.WriteError(w, errors.ErrRateLimitExceeded)
+				writeError(w, errors.ErrRateLimitExceeded)
 				return
 			}
 

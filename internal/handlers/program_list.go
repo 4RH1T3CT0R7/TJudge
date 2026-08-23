@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -62,7 +61,7 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	id, ok := parseUUIDParam(w, r, "id", "program")
 	if !ok {
 		return
 	}
@@ -105,7 +104,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "program")
+	id, ok := parseUUIDParam(w, r, "id", "program")
 	if !ok {
 		return
 	}
@@ -235,12 +234,12 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamID, ok := httputil.ParseQueryUUID(w, r, "team_id")
+	teamID, ok := parseQueryUUID(w, r, "team_id")
 	if !ok {
 		return
 	}
 
-	gameID, ok := httputil.ParseQueryUUID(w, r, "game_id")
+	gameID, ok := parseQueryUUID(w, r, "game_id")
 	if !ok {
 		return
 	}

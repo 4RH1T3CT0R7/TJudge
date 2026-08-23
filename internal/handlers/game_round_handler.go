@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -53,12 +52,12 @@ func NewGameRoundHandler(
 
 // parseTournamentGameIDs - хелпер для парсинга ID турнира и игры из URL-параметров.
 func (h *GameRoundHandler) parseTournamentGameIDs(w http.ResponseWriter, r *http.Request) (uuid.UUID, uuid.UUID, bool) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return uuid.Nil, uuid.Nil, false
 	}
 
-	gameID, ok := httputil.ParseUUIDParam(w, r, "gameId", "game")
+	gameID, ok := parseUUIDParam(w, r, "gameId", "game")
 	if !ok {
 		return uuid.Nil, uuid.Nil, false
 	}
