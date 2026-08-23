@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/auth"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -64,14 +63,14 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 
 			if token == "" {
 				log.Info("Missing authorization token")
-				httputil.WriteError(w, errors.ErrUnauthorized)
+				writeError(w, errors.ErrUnauthorized)
 				return
 			}
 
 			claims, err := authService.ValidateToken(token)
 			if err != nil {
 				log.Info("Invalid token", zap.Error(err))
-				httputil.WriteError(w, errors.ErrInvalidToken)
+				writeError(w, errors.ErrInvalidToken)
 				return
 			}
 
@@ -80,12 +79,12 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.LogError("Failed to check token blacklist", err)
-				httputil.WriteError(w, errors.ErrInternal)
+				writeError(w, errors.ErrInternal)
 				return
 			}
 			if blacklisted {
 				log.Info("Token is blacklisted", zap.String("user_id", claims.UserID.String()))
-				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("token has been revoked"))
+				writeError(w, errors.ErrUnauthorized.WithMessage("token has been revoked"))
 				return
 			}
 

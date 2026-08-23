@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -56,7 +55,7 @@ func NewTournamentGameHandler(
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games [get]
 func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -90,7 +89,7 @@ type AddGameToTournamentRequest struct {
 // @Failure 403 {object} object{error=string}
 // @Router /tournaments/{id}/games [post]
 func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -157,12 +156,12 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/games/{gameId} [delete]
 func (h *TournamentGameHandler) RemoveGameFromTournament(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	gameID, ok := httputil.ParseUUIDParam(w, r, "gameId", "game")
+	gameID, ok := parseUUIDParam(w, r, "gameId", "game")
 	if !ok {
 		return
 	}

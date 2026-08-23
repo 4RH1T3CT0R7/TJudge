@@ -1,4 +1,4 @@
-package httputil_test
+package handlers
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 )
 
 func TestParseUUIDParam_ValidUUID(t *testing.T) {
@@ -24,7 +22,7 @@ func TestParseUUIDParam_ValidUUID(t *testing.T) {
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 
 	assert.True(t, ok)
 	assert.Equal(t, expected, id)
@@ -38,7 +36,7 @@ func TestParseUUIDParam_InvalidUUID(t *testing.T) {
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
 
 	assert.False(t, ok)
 	assert.Equal(t, uuid.Nil, id)
@@ -57,7 +55,7 @@ func TestParseUUIDParam_EmptyParam(t *testing.T) {
 	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	id, ok := parseUUIDParam(w, r, "id", "game")
 
 	assert.False(t, ok)
 	assert.Equal(t, uuid.Nil, id)
@@ -74,7 +72,7 @@ func TestParseQueryUUID_ValidUUID(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/test?team_id="+expected.String(), nil)
 	w := httptest.NewRecorder()
 
-	id, ok := httputil.ParseQueryUUID(w, r, "team_id")
+	id, ok := parseQueryUUID(w, r, "team_id")
 
 	assert.True(t, ok)
 	assert.Equal(t, expected, id)
@@ -84,7 +82,7 @@ func TestParseQueryUUID_MissingParam(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
 
-	id, ok := httputil.ParseQueryUUID(w, r, "team_id")
+	id, ok := parseQueryUUID(w, r, "team_id")
 
 	assert.False(t, ok)
 	assert.Equal(t, uuid.Nil, id)
@@ -100,7 +98,7 @@ func TestParseQueryUUID_InvalidUUID(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/test?game_id=invalid", nil)
 	w := httptest.NewRecorder()
 
-	id, ok := httputil.ParseQueryUUID(w, r, "game_id")
+	id, ok := parseQueryUUID(w, r, "game_id")
 
 	assert.False(t, ok)
 	assert.Equal(t, uuid.Nil, id)

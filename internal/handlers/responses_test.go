@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +16,7 @@ import (
 // into the target. Use this for all handler tests that read successful responses.
 func decodeJSONData(t *testing.T, body *bytes.Buffer, target any) {
 	t.Helper()
-	var envelope httputil.Response
+	var envelope Response
 	err := json.NewDecoder(body).Decode(&envelope)
 	require.NoError(t, err, "failed to decode response envelope")
 	raw, err := json.Marshal(envelope.Data)
@@ -94,4 +93,48 @@ func TestWriteError_PlainError(t *testing.T) {
 	writeError(rr, assert.AnError)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestWriteJSON_NilSliceNormalizedToEmptyArray(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	var items []string // typed-nil слайс, наивный marshal дал бы null
+	writeJSON(rr, 200, items)
+
+	var body map[string]any
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].([]any)
+	require.True(t, ok, "ждали []interface{} для typed-nil слайса, получили %T (%v)", body["data"], body["data"])
+	assert.Empty(t, data)
+}
+
+func TestWriteJSON_NilMapNormalizedToEmptyObject(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	var items map[string]int
+	writeJSON(rr, 200, items)
+
+	var body map[string]any
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok, "ждали map для typed-nil мапы, получили %T", body["data"])
+	assert.Empty(t, data)
+}
+
+func TestWriteJSON_NonNilSliceUnchanged(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	writeJSON(rr, 200, []string{"a", "b"})
+
+	var body map[string]any
+	err := json.NewDecoder(rr.Body).Decode(&body)
+	require.NoError(t, err)
+
+	data, ok := body["data"].([]any)
+	require.True(t, ok)
+	assert.Equal(t, []any{"a", "b"}, data)
 }

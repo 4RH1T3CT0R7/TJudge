@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/team"
@@ -167,7 +166,7 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id} [get]
 func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	id, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -192,7 +191,7 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id}/members [get]
 func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	id, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -232,7 +231,7 @@ func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	id, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -276,7 +275,7 @@ func (h *TeamHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -314,12 +313,12 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
 
-	memberID, ok := httputil.ParseUUIDParam(w, r, "userId", "user")
+	memberID, ok := parseUUIDParam(w, r, "userId", "user")
 	if !ok {
 		return
 	}
@@ -364,7 +363,7 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -400,7 +399,7 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/teams [get]
 func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -432,7 +431,7 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tournamentID, ok := httputil.ParseUUIDParam(w, r, "id", "tournament")
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
@@ -464,7 +463,7 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id} [delete]
 func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -493,7 +492,7 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id}/disqualify [post]
 func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}
@@ -526,7 +525,7 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /teams/{id}/restore [post]
 func (h *TeamHandler) Restore(w http.ResponseWriter, r *http.Request) {
-	teamID, ok := httputil.ParseUUIDParam(w, r, "id", "team")
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
 	if !ok {
 		return
 	}

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
@@ -20,14 +19,14 @@ func RequireRole(requiredRoles ...models.Role) func(http.Handler) http.Handler {
 			// роль положил в контекст Auth, если её нет - значит Auth не отработал
 			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok {
-				httputil.WriteError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
+				writeError(w, errors.ErrUnauthorized.WithMessage("role not found in context"))
 				return
 			}
 
 			hasRole := slices.Contains(requiredRoles, role)
 
 			if !hasRole {
-				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
+				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
@@ -92,13 +91,13 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			// в базу даже не ходим
 			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok || role != models.RoleAdmin {
-				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
+				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
 			userID, ok := r.Context().Value(UserIDKey).(uuid.UUID)
 			if !ok {
-				httputil.WriteError(w, errors.ErrUnauthorized)
+				writeError(w, errors.ErrUnauthorized)
 				return
 			}
 
@@ -108,7 +107,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 
 			if cached && time.Now().Before(entry.expiresAt) {
 				if entry.role != models.RoleAdmin {
-					httputil.WriteError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
+					writeError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
 					return
 				}
 				next.ServeHTTP(w, r)
@@ -118,7 +117,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			// в кэше нет или протухло - идём в базу
 			user, err := v.userRepo.GetByID(r.Context(), userID)
 			if err != nil {
-				httputil.WriteError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
+				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
@@ -140,7 +139,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			v.mu.Unlock()
 
 			if user.Role != models.RoleAdmin {
-				httputil.WriteError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
+				writeError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
 				return
 			}
 

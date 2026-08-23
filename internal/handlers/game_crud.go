@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bmstu-itstech/tjudge/internal/api/httputil"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/game"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -114,7 +113,7 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /games/{id} [get]
 func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
 		return
 	}
@@ -170,7 +169,7 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /games/{id} [put]
 func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
 		return
 	}
@@ -206,7 +205,7 @@ func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /games/{id} [delete]
 func (h *GameCRUDHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, ok := httputil.ParseUUIDParam(w, r, "id", "game")
+	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
 		return
 	}
