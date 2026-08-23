@@ -10,13 +10,10 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
-// Metrics записывает Prometheus HTTP-метрики (счётчик запросов, длительность,
-// in-flight) для каждого запроса.
-//
-// Лейбл path берётся из chi RoutePattern (например "/tournaments/{id}"), а не
-// из сырого r.URL.Path — иначе идентификаторы в пути взорвали бы кардинальность
-// рядов в Prometheus. RoutePattern заполняется chi в процессе роутинга, поэтому
-// читаем его уже ПОСЛЕ обработки запроса.
+// Metrics пишет prometheus-метрики по каждому http-запросу: счётчик, длительность,
+// in-flight. лейбл пути берём из chi RoutePattern ("/tournaments/{id}"), а не из
+// сырого пути — иначе id в урле раздули бы кардинальнось метрик. паттерн chi
+// проставляет по ходу роутинга, так что читаем его уже после обработки
 func Metrics() func(http.Handler) http.Handler {
 	m := metrics.New()
 	return func(next http.Handler) http.Handler {
