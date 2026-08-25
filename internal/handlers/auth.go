@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// AuthService интерфейс для auth service
+// AuthService описывает методы сервиса аутентификации
 type AuthService interface {
 	Register(ctx context.Context, req *auth.RegisterRequest) (*auth.AuthResponse, error)
 	Login(ctx context.Context, req *auth.LoginRequest) (*auth.AuthResponse, error)
@@ -24,13 +24,13 @@ type AuthService interface {
 	UpdateProfile(ctx context.Context, userID string, req *auth.UpdateProfileRequest) (*models.User, error)
 }
 
-// AuthHandler обрабатывает запросы аутентификации
+// AuthHandler обрабатывает HTTP-запросы аутентификации
 type AuthHandler struct {
 	authService AuthService
 	log         *logger.Logger
 }
 
-// NewAuthHandler создаёт новый auth handler
+// NewAuthHandler создаёт хендлер аутентификации
 func NewAuthHandler(authService AuthService, log *logger.Logger) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
@@ -38,7 +38,6 @@ func NewAuthHandler(authService AuthService, log *logger.Logger) *AuthHandler {
 	}
 }
 
-// Register обрабатывает регистрацию пользователя
 // @Summary Регистрация пользователя
 // @Description Создаёт нового пользователя и возвращает JWT токены
 // @Tags auth
@@ -51,13 +50,13 @@ func NewAuthHandler(authService AuthService, log *logger.Logger) *AuthHandler {
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req auth.RegisterRequest
+	// TODO: разбор тела и writeError повторяются во всех хендлерах — вынести в общий хелпер
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.log.Info("Invalid request body", zap.Error(err))
 		writeError(w, errors.ErrInvalidInput.WithError(err))
 		return
 	}
 
-	// Регистрируем пользователя
 	resp, err := h.authService.Register(r.Context(), &req)
 	if err != nil {
 		h.log.LogError("Failed to register user", err)
@@ -73,7 +72,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// Login обрабатывает вход пользователя
 // @Summary Вход в систему
 // @Description Аутентификация по username/email и паролю, возвращает JWT токены
 // @Tags auth
@@ -92,10 +90,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Выполняем вход
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
-		// PII намеренно не логируется: предотвращаем user enumeration.
+		// логин и пароль намеренно не пишем в лог, иначе перебором можно узнать какие юзеры есть
 		h.log.LogError("Failed to login", err)
 		writeError(w, err)
 		return
@@ -109,7 +106,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Refresh обрабатывает обновление токена
 // @Summary Обновление токенов
 // @Description Обновляет access и refresh токены по refresh token
 // @Tags auth
@@ -130,7 +126,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обновляем токены
+	// тут ротация: старый refresh инвалидируется, в ответ уходит новая пара токенов
 	resp, err := h.authService.RefreshTokens(r.Context(), req.RefreshToken)
 	if err != nil {
 		h.log.LogError("Failed to refresh tokens", err)
@@ -145,7 +141,6 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// Logout обрабатывает выход пользователя
 // @Summary Выход из системы
 // @Description Инвалидирует access и refresh токены
 // @Tags auth
@@ -157,26 +152,23 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} object{error=string}
 // @Router /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем access token из заголовка
 	accessToken := middleware.ExtractToken(r)
 	if accessToken == "" {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
 
-	// Извлекаем refresh token из body (опционально)
+	// refresh в теле опционален, поэтому ошибку декодирования просто глотаем
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	// Игнорируем ошибки декодирования - refresh token опционален
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
-	// Выполняем выход (blacklist обоих токенов)
+	// оба токена уходят в blacklist, чтобы их нельзя было переиспользовать
 	if err := h.authService.Logout(r.Context(), accessToken, req.RefreshToken); err != nil {
-		// Для idempotency возвращаем success даже если токен уже в blacklist
+		// logout идемпотентен: токен мог быть уже инвалидроват — это не ошибка
 		appErr := errors.GetAppError(err)
 		if appErr != nil && appErr.Code == http.StatusUnauthorized {
-			// Token invalid or already in blacklist - это OK для logout
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -190,7 +182,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Me возвращает информацию о текущем пользователе
 // @Summary Текущий пользователь
 // @Description Возвращает информацию о текущем аутентифицированном пользователе
 // @Tags auth
@@ -200,14 +191,13 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} object{error=string}
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем токен из заголовка (middleware уже валидировал)
+	// токен уже проверен auth-middleware, здесь только достаём юзера
 	token := middleware.ExtractToken(r)
 	if token == "" {
 		writeError(w, errors.ErrUnauthorized)
 		return
 	}
 
-	// Получаем пользователя
 	user, err := h.authService.GetUserFromToken(r.Context(), token)
 	if err != nil {
 		h.log.LogError("Failed to get user by token", err)
@@ -218,7 +208,6 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
-// UpdateProfile обновляет профиль пользователя
 // @Summary Обновление профиля
 // @Description Обновляет профиль текущего пользователя (email, username)
 // @Tags auth
@@ -231,7 +220,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} object{error=string}
 // @Router /auth/profile [put]
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	// Получаем user ID из контекста (установлен auth middleware)
+	// userID кладёт в контекст auth-middleware
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
 		writeError(w, err)
@@ -245,7 +234,6 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обновляем профиль
 	user, err := h.authService.UpdateProfile(r.Context(), userID.String(), &req)
 	if err != nil {
 		h.log.LogError("Failed to update profile", err)
