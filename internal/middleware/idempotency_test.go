@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// stubStore - in-memory IdempotencyStore для тестов.
+// stubStore - IdempotencyStore в памяти для тестов
 type stubStore struct {
 	mu   sync.Mutex
 	data map[string]string
@@ -104,13 +104,13 @@ func TestIdempotency_RepeatReturnsCachedResponse(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"abc"}`))
 	}))
 
-	// Первый запрос
+	// первый запрос
 	req1 := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(""))
 	req1.Header.Set("Idempotency-Key", "same-key")
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req1)
 
-	// Повторный запрос с тем же ключом
+	// повтор с тем же ключом
 	req2 := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(""))
 	req2.Header.Set("Idempotency-Key", "same-key")
 	rec2 := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestIdempotency_NoKeyPassesThrough(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/x", nil)
-	// Без Idempotency-Key
+	// без Idempotency-Key
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -161,15 +161,15 @@ func TestIdempotency_FailedResponseNotCached(t *testing.T) {
 		_, _ = w.Write([]byte(`oops`))
 	}))
 
-	// Первый запрос - 500, не кэшируется, in-flight маркер снимается.
+	// первый запрос - 500, не кэшируется, in-flight маркер снимается
 	req := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req.Header.Set("Idempotency-Key", "retry-after-error")
 	rec1 := httptest.NewRecorder()
 	handler.ServeHTTP(rec1, req)
 	assert.Equal(t, http.StatusInternalServerError, rec1.Code)
 
-	// Честный ретрай с тем же ключом должен исполниться заново,
-	// а не упереться в осиротевший in-flight маркер (409 на сутки).
+	// честный ретрай должен исполниться заново, а не упереться
+	// в осиротевший in-flight маркер (иначе 409 на сутки)
 	req2 := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req2.Header.Set("Idempotency-Key", "retry-after-error")
 	rec2 := httptest.NewRecorder()
@@ -191,14 +191,13 @@ func TestIdempotency_KeyScopedByUser(t *testing.T) {
 	user1 := uuid.New()
 	user2 := uuid.New()
 
-	// Пользователь 1 создаёт ресурс со своим ключом.
+	// юзер 1 создаёт ресурс со своим ключом
 	req1 := httptest.NewRequest(http.MethodPost, "/programs", nil)
 	req1.Header.Set("Idempotency-Key", "shared-key")
 	req1 = req1.WithContext(context.WithValue(req1.Context(), UserIDKey, user1))
 	handler.ServeHTTP(httptest.NewRecorder(), req1)
 
-	// Пользователь 2 с тем же ключом НЕ должен получить replay чужого ответа -
-	// его запрос исполняется независимо.
+	// юзер 2 с тем же ключом не должен реплеить чужой ответ - исполняется сам по себе
 	req2 := httptest.NewRequest(http.MethodPost, "/programs", nil)
 	req2.Header.Set("Idempotency-Key", "shared-key")
 	req2 = req2.WithContext(context.WithValue(req2.Context(), UserIDKey, user2))
@@ -208,7 +207,7 @@ func TestIdempotency_KeyScopedByUser(t *testing.T) {
 	assert.Equal(t, int32(2), atomic.LoadInt32(&called), "ключ должен скоупиться по пользователю")
 	assert.Empty(t, rec2.Header().Get("Idempotency-Status"))
 
-	// А повтор того же пользователя - реплеится.
+	// а повтор того же юзера - реплеится
 	req3 := httptest.NewRequest(http.MethodPost, "/programs", nil)
 	req3.Header.Set("Idempotency-Key", "shared-key")
 	req3 = req3.WithContext(context.WithValue(req3.Context(), UserIDKey, user1))
@@ -233,7 +232,7 @@ func TestIdempotency_PanicReleasesInFlight(t *testing.T) {
 	req1.Header.Set("Idempotency-Key", "panic-key")
 	assert.Panics(t, func() { handler.ServeHTTP(httptest.NewRecorder(), req1) })
 
-	// После паники маркер снят - ретрай исполняется и завершается успешно.
+	// после паники маркер снят - ретрай проходит успешно
 	req2 := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req2.Header.Set("Idempotency-Key", "panic-key")
 	rec2 := httptest.NewRecorder()

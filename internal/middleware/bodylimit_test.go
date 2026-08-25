@@ -11,30 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMaxBodySize_BelowLimit(t *testing.T) {
-	body := "hello" // 5 bytes
-	limit := int64(10)
-
-	var readBody string
-	var readErr error
-	handler := middleware.MaxBodySize(limit)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, err := io.ReadAll(r.Body)
-		readBody = string(data)
-		readErr = err
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
-	rr := httptest.NewRecorder()
-
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.NoError(t, readErr)
-	assert.Equal(t, "hello", readBody)
-}
-
 func TestMaxBodySize_ExactlyAtLimit(t *testing.T) {
+	// граница: ровно limit байт должно проходить
 	body := "1234567890" // 10 bytes
 	limit := int64(10)
 

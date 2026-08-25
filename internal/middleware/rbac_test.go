@@ -215,7 +215,7 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 	log := newTestLogger()
 
 	userID := uuid.New()
-	claims := &auth.Claims{UserID: userID, Role: models.RoleUser} // Regular user, not admin
+	claims := &auth.Claims{UserID: userID, Role: models.RoleUser} // обычный юзер, не админ
 
 	mockAuth.On("ValidateToken", "user-token").Return(claims, nil)
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "user-token").Return(false, nil)
@@ -238,9 +238,9 @@ func TestMiddlewareChain_NonAdmin(t *testing.T) {
 	mockAuth.AssertExpectations(t)
 }
 
-// --- VerifiedAdminChecker tests ---
+// --- VerifiedAdminChecker ---
 
-// helper: build request context with role and userID
+// собирает контекст запроса с ролью и userID
 func verifiedAdminCtx(role models.Role, userID uuid.UUID, setRole, setUserID bool) context.Context {
 	ctx := context.Background()
 	if setRole {

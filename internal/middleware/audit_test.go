@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// stubSink накапливает audit entries для проверки в тестах.
+// stubSink копит audit-записи для проверок
 type stubSink struct {
 	mu      sync.Mutex
 	entries []*models.AuditLogEntry
@@ -132,7 +132,7 @@ func TestAudit_IgnoresNonAdmin(t *testing.T) {
 
 func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	// Маленький буфер + sink, который блокирует, должен приводить к drop, а не к deadlock.
+	// маленький буфер + блокирующий sink должны давать drop, а не deadlock
 	blockingSink := &blockingSink{start: make(chan struct{})}
 	al := NewAuditLogger(blockingSink, 2, log)
 	ctx := t.Context()
@@ -151,8 +151,8 @@ func TestAudit_BufferOverflow_DropsRatherThanBlocks(t *testing.T) {
 		req = req.WithContext(c)
 		handler.ServeHTTP(httptest.NewRecorder(), req)
 	}
-	// Хотя бы 1 запись должна быть отброшена при блокирующем sink и буфере 2.
-	// (1 в work, 2 в буфере, остальные drop)
+	// при буфере 2 и блокирующем sink часть записей обязана уйти в drop
+	// (1 в обработке, 2 в буфере, остальные - drop)
 	assert.Greater(t, al.Dropped(), int64(0), "при переполнении буфера дропы должны расти")
 }
 

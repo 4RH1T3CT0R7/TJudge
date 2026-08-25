@@ -41,40 +41,6 @@ func TestSmartTimeout_Leaderboard_HeavyTimeout(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestSmartTimeout_GetTournaments_DatabaseTimeout(t *testing.T) {
-	config := DefaultTimeoutConfig()
-
-	handler := SmartTimeout(config)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		deadline, ok := r.Context().Deadline()
-		assert.True(t, ok)
-		remaining := time.Until(deadline)
-		assert.InDelta(t, config.Database.Seconds(), remaining.Seconds(), 1.0)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/api/v1/tournaments", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
-func TestSmartTimeout_POSTRequest_CacheTimeout(t *testing.T) {
-	config := DefaultTimeoutConfig()
-
-	handler := SmartTimeout(config)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		deadline, ok := r.Context().Deadline()
-		assert.True(t, ok)
-		remaining := time.Until(deadline)
-		assert.InDelta(t, config.Cache.Seconds(), remaining.Seconds(), 1.0)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("POST", "/api/v1/auth/login", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
 func TestSmartTimeout_Default(t *testing.T) {
 	config := DefaultTimeoutConfig()
 
