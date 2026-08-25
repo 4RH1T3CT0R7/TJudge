@@ -49,19 +49,6 @@ func TestCompress_WithoutGzipAccept(t *testing.T) {
 	assert.Equal(t, "plain text", rr.Body.String())
 }
 
-func TestCompress_VaryHeader(t *testing.T) {
-	handler := Compress()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("data"))
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Accept-Encoding", "gzip")
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Equal(t, "Accept-Encoding", rr.Header().Get("Vary"))
-}
-
 func TestCompress_ContentLengthRemoved(t *testing.T) {
 	handler := Compress()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "100")

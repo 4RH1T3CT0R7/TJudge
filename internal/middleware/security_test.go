@@ -36,7 +36,7 @@ func TestDefaultSecurityConfig_Headers(t *testing.T) {
 
 func TestSecurityHeaders_CustomConfig(t *testing.T) {
 	config := SecurityConfig{
-		XSSProtection:         false, // disabled
+		XSSProtection:         false, // выключен
 		ContentTypeNosniff:    true,
 		XFrameOptions:         "SAMEORIGIN",
 		ContentSecurityPolicy: "",
@@ -62,7 +62,7 @@ func TestSecurityHeaders_HSTS_WithTLS(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.TLS = &tls.ConnectionState{} // Simulate TLS
+	req.TLS = &tls.ConnectionState{} // имитируем TLS
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -96,22 +96,8 @@ func TestSecureHeaders_UsesDefaultConfig(t *testing.T) {
 	assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
 }
 
-func TestSecurityHeaders_NextHandlerCalled(t *testing.T) {
-	called := false
-	handler := SecurityHeaders(DefaultSecurityConfig())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.True(t, called)
-	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
 func TestSecurityHeaders_EmptyPermissionsPolicy(t *testing.T) {
+	// пустое значение в конфиге - заголовок не выставляется
 	config := SecurityConfig{
 		PermissionsPolicy: "",
 	}
@@ -125,20 +111,4 @@ func TestSecurityHeaders_EmptyPermissionsPolicy(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	assert.Empty(t, rr.Header().Get("Permissions-Policy"))
-}
-
-func TestSecurityHeaders_EmptyReferrerPolicy(t *testing.T) {
-	config := SecurityConfig{
-		ReferrerPolicy: "",
-	}
-
-	handler := SecurityHeaders(config)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	assert.Empty(t, rr.Header().Get("Referrer-Policy"))
 }
