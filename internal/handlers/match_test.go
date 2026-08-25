@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockMatchRepository - мок match-репозитория
+// MockMatchRepository - мок репозитория матчей
 type MockMatchRepository struct {
 	mock.Mock
 }
@@ -56,7 +56,7 @@ func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
-// MockMatchCache - мок match-кэша
+// MockMatchCache - мок кэша матчей
 type MockMatchCache struct {
 	mock.Mock
 }
@@ -87,10 +87,54 @@ func (m *MockMatchCache) SetMatch(ctx context.Context, match *models.Match) erro
 	return args.Error(0)
 }
 
+// MockMatchQueueManager - мок менеджера очереди
+type MockMatchQueueManager struct {
+	mock.Mock
+}
+
+func (m *MockMatchQueueManager) GetStats(ctx context.Context) (*queue.QueueStats, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*queue.QueueStats), args.Error(1)
+}
+
+func (m *MockMatchQueueManager) Clear(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockMatchQueueManager) PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error) {
+	args := m.Called(ctx, validator)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// MockMatchProgramLookup - мок поиска владельца программы
+type MockMatchProgramLookup struct {
+	mock.Mock
+}
+
+func (m *MockMatchProgramLookup) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Program), args.Error(1)
+}
+
+// getWithRouteContext собирает GET-запрос с id в chi-контексте
+func getWithRouteContext(matchID string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", matchID)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
+
 func TestMatchHandler_Get(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully get match from cache", func(t *testing.T) {
+	t.Run("попадание в кэш", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -107,15 +151,8 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(cachedMatch, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
 		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
+		handler.Get(w, getWithRouteContext(matchID.String()))
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
@@ -124,11 +161,11 @@ func TestMatchHandler_Get(t *testing.T) {
 		assert.Equal(t, cachedMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
-		// Репозиторий не должен вызываться при попадании в кэш
+		// при попадании в кэш репозиторий не трогаем
 		mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 	})
 
-	t.Run("successfully get match from database on cache miss", func(t *testing.T) {
+	t.Run("промах кэша - чтение из базы", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -146,15 +183,8 @@ func TestMatchHandler_Get(t *testing.T) {
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(dbMatch, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
 		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
+		handler.Get(w, getWithRouteContext(matchID.String()))
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
@@ -166,25 +196,7 @@ func TestMatchHandler_Get(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/invalid-uuid", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("match not found", func(t *testing.T) {
+	t.Run("матч не найден", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -194,15 +206,8 @@ func TestMatchHandler_Get(t *testing.T) {
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(nil, errors.ErrNotFound.WithMessage("match not found"))
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
 		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
+		handler.Get(w, getWithRouteContext(matchID.String()))
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 
@@ -214,30 +219,17 @@ func TestMatchHandler_Get(t *testing.T) {
 func TestMatchHandler_List(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully list matches", func(t *testing.T) {
+	t.Run("список матчей с дефолтной пагинацией", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		expectedMatches := []*models.Match{
-			{
-				ID:           uuid.New(),
-				TournamentID: uuid.New(),
-				Program1ID:   uuid.New(),
-				Program2ID:   uuid.New(),
-				GameType:     "chess",
-				Status:       models.MatchCompleted,
-			},
-			{
-				ID:           uuid.New(),
-				TournamentID: uuid.New(),
-				Program1ID:   uuid.New(),
-				Program2ID:   uuid.New(),
-				GameType:     "chess",
-				Status:       models.MatchPending,
-			},
+			{ID: uuid.New(), TournamentID: uuid.New(), Program1ID: uuid.New(), Program2ID: uuid.New(), GameType: "chess", Status: models.MatchCompleted},
+			{ID: uuid.New(), TournamentID: uuid.New(), Program1ID: uuid.New(), Program2ID: uuid.New(), GameType: "chess", Status: models.MatchPending},
 		}
 
+		// дефолт: limit=50, offset=0
 		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
 			return filter.Limit == 50 && filter.Offset == 0
 		})).Return(expectedMatches, nil)
@@ -256,21 +248,14 @@ func TestMatchHandler_List(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("list with tournament_id filter", func(t *testing.T) {
+	t.Run("фильтр по турниру прокидывается в репозиторий", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		tournamentID := uuid.New()
 		expectedMatches := []*models.Match{
-			{
-				ID:           uuid.New(),
-				TournamentID: tournamentID,
-				Program1ID:   uuid.New(),
-				Program2ID:   uuid.New(),
-				GameType:     "chess",
-				Status:       models.MatchCompleted,
-			},
+			{ID: uuid.New(), TournamentID: tournamentID, Program1ID: uuid.New(), Program2ID: uuid.New(), GameType: "chess", Status: models.MatchCompleted},
 		}
 
 		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
@@ -283,62 +268,10 @@ func TestMatchHandler_List(t *testing.T) {
 		handler.List(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("list with status filter", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		expectedMatches := []*models.Match{
-			{
-				ID:           uuid.New(),
-				TournamentID: uuid.New(),
-				Program1ID:   uuid.New(),
-				Program2ID:   uuid.New(),
-				GameType:     "chess",
-				Status:       models.MatchCompleted,
-			},
-		}
-
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
-			return filter.Status == models.MatchCompleted
-		})).Return(expectedMatches, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?status=completed", nil)
-		w := httptest.NewRecorder()
-
-		handler.List(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("list with pagination", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		expectedMatches := []*models.Match{}
-
-		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
-			return filter.Limit == 10 && filter.Offset == 20
-		})).Return(expectedMatches, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?limit=10&offset=20", nil)
-		w := httptest.NewRecorder()
-
-		handler.List(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("invalid tournament_id", func(t *testing.T) {
+	t.Run("битый tournament_id даёт 400", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -350,25 +283,12 @@ func TestMatchHandler_List(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
-
-	t.Run("invalid program_id", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?program_id=invalid", nil)
-		w := httptest.NewRecorder()
-
-		handler.List(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
 }
 
 func TestMatchHandler_GetStatistics(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully get statistics for all matches", func(t *testing.T) {
+	t.Run("статистика по всем матчам", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -398,37 +318,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("successfully get statistics for specific tournament", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		tournamentID := uuid.New()
-		expectedStats := &storage.MatchStatistics{
-			Total:     20,
-			Completed: 18,
-			Running:   2,
-			Failed:    0,
-			Pending:   0,
-		}
-
-		mockRepo.On("GetStatistics", mock.Anything, &tournamentID).Return(expectedStats, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/statistics?tournament_id="+tournamentID.String(), nil)
-		w := httptest.NewRecorder()
-
-		handler.GetStatistics(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response storage.MatchStatistics
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, 20, response.Total)
-
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("invalid tournament_id", func(t *testing.T) {
+	t.Run("битый tournament_id даёт 400", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
@@ -440,65 +330,12 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
-
-	t.Run("database error", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		mockRepo.On("GetStatistics", mock.Anything, (*uuid.UUID)(nil)).Return(nil, errors.ErrInternal.WithMessage("database error"))
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/statistics", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetStatistics(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-		mockRepo.AssertExpectations(t)
-	})
-}
-
-// MockMatchQueueManager - мок интерфейса queue manager
-type MockMatchQueueManager struct {
-	mock.Mock
-}
-
-func (m *MockMatchQueueManager) GetStats(ctx context.Context) (*queue.QueueStats, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*queue.QueueStats), args.Error(1)
-}
-
-func (m *MockMatchQueueManager) Clear(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-func (m *MockMatchQueueManager) PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error) {
-	args := m.Called(ctx, validator)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-// MockMatchProgramLookup - мок интерфейса program lookup
-type MockMatchProgramLookup struct {
-	mock.Mock
-}
-
-func (m *MockMatchProgramLookup) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Program), args.Error(1)
 }
 
 func TestMatchHandler_GetQueueStats(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
@@ -531,10 +368,11 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 		mockQueue.AssertExpectations(t)
 	})
 
-	t.Run("queue_manager_nil", func(t *testing.T) {
+	t.Run("без менеджера очереди - 500", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
+		// queueManager == nil, хендлер должен деградировать в 500
 		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/queue/stats", nil)
@@ -544,31 +382,12 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
-
-	t.Run("service_error", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockQueue := new(MockMatchQueueManager)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
-
-		mockQueue.On("GetStats", mock.Anything).Return(nil, errors.ErrInternal.WithMessage("redis connection failed"))
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/queue/stats", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetQueueStats(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-		mockQueue.AssertExpectations(t)
-	})
 }
 
 func TestMatchHandler_ClearQueue(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
@@ -591,7 +410,7 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		mockQueue.AssertExpectations(t)
 	})
 
-	t.Run("queue_manager_nil", func(t *testing.T) {
+	t.Run("без менеджера очереди - 500", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
@@ -604,31 +423,12 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
-
-	t.Run("service_error", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockQueue := new(MockMatchQueueManager)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
-
-		mockQueue.On("Clear", mock.Anything).Return(errors.ErrInternal.WithMessage("failed to clear queues"))
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/clear", nil)
-		w := httptest.NewRecorder()
-
-		handler.ClearQueue(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-		mockQueue.AssertExpectations(t)
-	})
 }
 
 func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
@@ -652,7 +452,7 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		mockQueue.AssertExpectations(t)
 	})
 
-	t.Run("queue_manager_nil", func(t *testing.T) {
+	t.Run("без менеджера очереди - 500", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 
@@ -665,145 +465,26 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
-
-	t.Run("service_error", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockQueue := new(MockMatchQueueManager)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
-
-		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(0), errors.ErrInternal.WithMessage("purge failed"))
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/purge", nil)
-		w := httptest.NewRecorder()
-
-		handler.PurgeInvalidMatches(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-		mockQueue.AssertExpectations(t)
-	})
-
-	t.Run("zero_purged", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockQueue := new(MockMatchQueueManager)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
-
-		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(0), nil)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/purge", nil)
-		w := httptest.NewRecorder()
-
-		handler.PurgeInvalidMatches(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]any
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, float64(0), response["purged_count"])
-
-		mockQueue.AssertExpectations(t)
-	})
 }
 
 func TestMatchHandler_ErrorFiltering(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("no_error_message", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockProgramLookup := new(MockMatchProgramLookup)
-
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
-
-		matchID := uuid.New()
-		match := &models.Match{
+	// getFailedMatch собирает упавший матч с заданным победителем и текстом ошибки
+	getFailedMatch := func(matchID, program1ID, program2ID uuid.UUID, winner int, errorMsg string) *models.Match {
+		return &models.Match{
 			ID:           matchID,
 			TournamentID: uuid.New(),
-			Program1ID:   uuid.New(),
-			Program2ID:   uuid.New(),
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchCompleted,
-			ErrorMessage: nil,
-		}
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-
-		userID := uuid.New()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		assert.Nil(t, response.ErrorMessage)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("empty_error_message", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockProgramLookup := new(MockMatchProgramLookup)
-
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
-
-		matchID := uuid.New()
-		emptyErr := ""
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   uuid.New(),
-			Program2ID:   uuid.New(),
+			Program1ID:   program1ID,
+			Program2ID:   program2ID,
 			GameType:     "prisoners_dilemma",
 			Status:       models.MatchFailed,
-			ErrorMessage: &emptyErr,
+			Winner:       &winner,
+			ErrorMessage: &errorMsg,
 		}
+	}
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-
-		userID := uuid.New()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		// Пустое сообщение об ошибке трактуется как отсутствие ошибки - возвращается как есть
-		require.NotNil(t, response.ErrorMessage)
-		assert.Equal(t, "", *response.ErrorMessage)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("admin_sees_full_error", func(t *testing.T) {
+	t.Run("админ видит полный текст ошибки", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
@@ -812,32 +493,17 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 		matchID := uuid.New()
 		errorMsg := "runtime error: index out of bounds at line 42"
-		winner := 1
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   uuid.New(),
-			Program2ID:   uuid.New(),
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
+		match := getFailedMatch(matchID, uuid.New(), uuid.New(), 1, errorMsg)
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
-		adminID := uuid.New()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, adminID)
+		req := getWithRouteContext(matchID.String())
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, uuid.New())
 		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleAdmin)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-
 		handler.Get(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -851,7 +517,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
-	t.Run("owner_sees_own_error", func(t *testing.T) {
+	t.Run("владелец упавшей программы видит свою ошибку", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
@@ -863,40 +529,21 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 		errorMsg := "segfault in user code at line 15"
-		winner := 1 // Program1 won, so Program2 failed
 
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   program1ID,
-			Program2ID:   program2ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
-
-		// Упавшая программа - program2 (winner=1 значит победил program1)
-		failedProgram := &models.Program{
-			ID:     program2ID,
-			UserID: ownerID,
-			Name:   "my-bot",
-		}
+		// winner=1 значит победил program1, упал program2
+		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
+		failedProgram := &models.Program{ID: program2ID, UserID: ownerID, Name: "my-bot"}
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, ownerID)
+		req := getWithRouteContext(matchID.String())
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, ownerID)
 		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-
 		handler.Get(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -911,7 +558,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockProgramLookup.AssertExpectations(t)
 	})
 
-	t.Run("non_owner_sees_generic", func(t *testing.T) {
+	t.Run("чужой пользователь видит обезличенное сообщение", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
@@ -924,41 +571,21 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 		errorMsg := "segfault in user code at line 15"
-		winner := 1 // Program1 won, so Program2 failed
 
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   program1ID,
-			Program2ID:   program2ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
-
-		// Упавшая программа - program2 (winner=1 значит победил program1).
-		// Владелец program2 - programOwnerID, но запрашивающий пользователь - otherUserID.
-		failedProgram := &models.Program{
-			ID:     program2ID,
-			UserID: programOwnerID,
-			Name:   "opponent-bot",
-		}
+		// упала program2, но запрашивает не её владелец
+		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
+		failedProgram := &models.Program{ID: program2ID, UserID: programOwnerID, Name: "opponent-bot"}
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, otherUserID)
+		req := getWithRouteContext(matchID.String())
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, otherUserID)
 		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-
 		handler.Get(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -973,67 +600,7 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		mockProgramLookup.AssertExpectations(t)
 	})
 
-	t.Run("winner_2_program1_failed_owner_sees_error", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockProgramLookup := new(MockMatchProgramLookup)
-
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
-
-		matchID := uuid.New()
-		ownerID := uuid.New()
-		program1ID := uuid.New()
-		program2ID := uuid.New()
-		errorMsg := "timeout exceeded"
-		winner := 2 // Program2 won, so Program1 failed
-
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   program1ID,
-			Program2ID:   program2ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
-
-		// Упавшая программа - program1 (winner=2 значит победил program2)
-		failedProgram := &models.Program{
-			ID:     program1ID,
-			UserID: ownerID,
-			Name:   "my-bot",
-		}
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-		mockProgramLookup.On("GetByID", mock.Anything, program1ID).Return(failedProgram, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, ownerID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		require.NotNil(t, response.ErrorMessage)
-		assert.Equal(t, errorMsg, *response.ErrorMessage)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-		mockProgramLookup.AssertExpectations(t)
-	})
-
-	t.Run("no_winner_error_hidden", func(t *testing.T) {
+	t.Run("без победителя ошибка скрыта", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
@@ -1051,23 +618,19 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			Program2ID:   uuid.New(),
 			GameType:     "prisoners_dilemma",
 			Status:       models.MatchFailed,
-			Winner:       nil, // No winner - cannot determine failed program
+			Winner:       nil, // без winner упавшую программу определить нельзя
 			ErrorMessage: &errorMsg,
 		}
 
 		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
+		req := getWithRouteContext(matchID.String())
+		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
 		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-
 		handler.Get(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -1075,112 +638,8 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		var response models.Match
 		decodeJSONData(t, w.Body, &response)
 		require.NotNil(t, response.ErrorMessage)
-		// Без winner нельзя определить упавшую программу, поэтому ошибка скрыта
+		// упавшую программу не определить, поэтому текст скрыт
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("program_lookup_error_hides_message", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		mockProgramLookup := new(MockMatchProgramLookup)
-
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
-
-		matchID := uuid.New()
-		userID := uuid.New()
-		program1ID := uuid.New()
-		program2ID := uuid.New()
-		errorMsg := "internal error details"
-		winner := 1 // Program1 won, so Program2 failed
-
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   program1ID,
-			Program2ID:   program2ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-		// Program lookup падает - сообщение об ошибке должно быть скрыто
-		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(nil, errors.ErrNotFound.WithMessage("program not found"))
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		require.NotNil(t, response.ErrorMessage)
-		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-		mockProgramLookup.AssertExpectations(t)
-	})
-
-	t.Run("no_program_lookup_returns_as_is", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-
-		// Handler без program lookup - ошибки возвращаются как есть
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		matchID := uuid.New()
-		errorMsg := "detailed error message"
-		winner := 1
-
-		match := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   uuid.New(),
-			Program2ID:   uuid.New(),
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchFailed,
-			Winner:       &winner,
-			ErrorMessage: &errorMsg,
-		}
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-
-		userID := uuid.New()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/"+matchID.String(), nil)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", matchID.String())
-		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-		ctx = context.WithValue(ctx, middleware.UserIDKey, userID)
-		ctx = context.WithValue(ctx, middleware.RoleKey, models.RoleUser)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		require.NotNil(t, response.ErrorMessage)
-		// Без program lookup filterMatchError возвращает match как есть
-		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
 		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)

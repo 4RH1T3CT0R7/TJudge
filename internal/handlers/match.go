@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// MatchRepository интерфейс для работы с матчами
+// MatchRepository описывает доступ к матчам в хранилище
 type MatchRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
 	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
@@ -23,14 +23,13 @@ type MatchRepository interface {
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error)
 }
 
-// MatchQueueManager интерфейс для работы с очередью матчей
+// управление очередью матчей
 type MatchQueueManager interface {
 	GetStats(ctx context.Context) (*queue.QueueStats, error)
 	Clear(ctx context.Context) error
 	PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error)
 }
 
-// MatchCache интерфейс для кэширования матчей
 type MatchCache interface {
 	Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error)
 	Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error
@@ -38,12 +37,12 @@ type MatchCache interface {
 	SetMatch(ctx context.Context, match *models.Match) error
 }
 
-// MatchProgramLookup интерфейс для получения владельца программы
+// поиск владельца программы для фильтрации текста ошибок
 type MatchProgramLookup interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 }
 
-// MatchHandler обрабатывает запросы матчей
+// MatchHandler обслуживает запросы к матчам
 type MatchHandler struct {
 	matchRepo     MatchRepository
 	matchCache    MatchCache
@@ -52,8 +51,9 @@ type MatchHandler struct {
 	log           *logger.Logger
 }
 
-// NewMatchHandler создаёт match handler. Опциональные зависимости (programLookup,
-// queueManager) могут быть nil - handler корректно деградирует при их отсутствии.
+// NewMatchHandler собирает хендлер матчей. programLookup и queueManager
+// опциональны и могут быть nil - без них хендлер продолжает работать,
+// просто отключая связанные с ними возможности
 func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
 	return &MatchHandler{
 		matchRepo:     matchRepo,
@@ -64,23 +64,20 @@ func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLo
 	}
 }
 
-// filterMatchError фильтрует сообщение об ошибке матча в зависимости от прав пользователя
-// Если пользователь владеет программой, которая вызвала ошибку, или является админом - показываем полную ошибку
-// Иначе показываем "Программа оппонента завершилась с ошибкой"
+// filterMatchError прячет текст ошибки от чужих глаз: владелец упавшей
+// программы и админ видят полный текст, остальным отдаём обезличенное сообщение
 func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match, userID uuid.UUID, isAdmin bool) *models.Match {
-	// Если нет ошибки или нет program lookup - возвращаем как есть
+	// нет ошибки или некому проверять владельца - отдаём как есть
 	if match.ErrorMessage == nil || *match.ErrorMessage == "" || h.programLookup == nil {
 		return match
 	}
 
-	// Админы видят все ошибки
+	// админу показываем всё без фильтрации
 	if isAdmin {
 		return match
 	}
 
-	// Определяем, какая программа вызвала ошибку
-	// Winner = 1 означает что программа 1 выиграла (программа 2 упала)
-	// Winner = 2 означает что программа 2 выиграла (программа 1 упала)
+	// winner=1 значит упала вторая программа, winner=2 - первая
 	var failedProgramID uuid.UUID
 	if match.Winner != nil {
 		if *match.Winner == 1 {
@@ -90,14 +87,13 @@ func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match
 		}
 	}
 
-	// Если не можем определить упавшую программу - скрываем ошибку
+	// победителя нет - непонятно, чья программа упала, поэтому скрываем
 	if failedProgramID == uuid.Nil {
 		opponentError := "Ошибка выполнения матча"
 		match.ErrorMessage = &opponentError
 		return match
 	}
 
-	// Проверяем владельца упавшей программы
 	program, err := h.programLookup.GetByID(ctx, failedProgramID)
 	if err != nil {
 		h.log.Warn("Failed to get program for error filtering", zap.Error(err))
@@ -106,18 +102,17 @@ func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match
 		return match
 	}
 
-	// Если пользователь владеет упавшей программой - показываем полную ошибку
+	// свою ошибку пользователь видит целиком
 	if program.UserID == userID {
 		return match
 	}
 
-	// Иначе показываем обезличенное сообщение
+	// чужую - только общей формулировкой
 	opponentError := "Программа оппонента завершилась с ошибкой"
 	match.ErrorMessage = &opponentError
 	return match
 }
 
-// filterMatchesErrors применяет фильтрацию ошибок к списку матчей
 func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*models.Match, userID uuid.UUID, isAdmin bool) []*models.Match {
 	for i, match := range matches {
 		matches[i] = h.filterMatchError(ctx, match, userID, isAdmin)
@@ -125,7 +120,6 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*model
 	return matches
 }
 
-// Get обрабатывает получение матча
 // @Summary Получить матч
 // @Description Возвращает матч по ID с фильтрацией ошибок по правам
 // @Tags matches
@@ -135,19 +129,18 @@ func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*model
 // @Failure 404 {object} object{error=string}
 // @Router /matches/{id} [get]
 func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "match")
 	if !ok {
 		return
 	}
 
-	// Проверяем кэш матча
+	// сначала пробуем кэш - это дешевле похода в базу
 	cachedMatch, cacheErr := h.matchCache.GetMatch(r.Context(), id)
 	if cacheErr == nil && cachedMatch != nil {
 		h.log.Info("Match from cache",
 			zap.String("match_id", id.String()),
 		)
-		// Фильтруем сообщение об ошибке в зависимости от прав пользователя
+		// даже кэшированный матч прогоняем через фильтр ошибок по правам
 		userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 		userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 		isAdmin := userRole == models.RoleAdmin
@@ -156,7 +149,7 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем матч из БД
+	// промах кэша - идём за матчем в базу
 	match, err := h.matchRepo.GetByID(r.Context(), id)
 	if err != nil {
 		h.log.LogError("Failed to get match", err,
@@ -166,7 +159,6 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Фильтруем сообщение об ошибке в зависимости от прав пользователя
 	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 	isAdmin := userRole == models.RoleAdmin
@@ -175,7 +167,7 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, match)
 }
 
-// List обрабатывает получение списка матчей
+// List отдаёт матчи постранично с набором необязательных фильтров
 // @Summary Список матчей
 // @Description Возвращает список матчей с фильтрацией и пагинацией
 // @Tags matches
@@ -190,10 +182,9 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} object{error=string}
 // @Router /matches [get]
 func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Получаем параметры фильтрации
 	filter := models.MatchFilter{}
 
-	// Фильтр по Tournament ID
+	// фильтр по турниру: пустая строка означает "без фильтра"
 	if tournamentIDStr := r.URL.Query().Get("tournament_id"); tournamentIDStr != "" {
 		id, err := uuid.Parse(tournamentIDStr)
 		if err != nil {
@@ -203,7 +194,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.TournamentID = &id
 	}
 
-	// Фильтр по Program ID
+	// фильтр по програме, тоже опциональный
 	if programIDStr := r.URL.Query().Get("program_id"); programIDStr != "" {
 		id, err := uuid.Parse(programIDStr)
 		if err != nil {
@@ -213,7 +204,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.ProgramID = &id
 	}
 
-	// Фильтр по статусу
+	// статус берём только из белого списка, иначе отдаём 400
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := models.MatchStatus(status)
 		switch s {
@@ -225,15 +216,14 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Фильтр по типу игры
+	// тип игры принимаем как есть, без валидации значения
 	filter.GameType = r.URL.Query().Get("game_type")
 
-	// Пагинация
+	// TODO: вынести разбор фильтров из хендлера в отдельный парсер
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 	filter.Limit = pg.Limit
 	filter.Offset = pg.Offset
 
-	// Получаем список матчей
 	matches, err := h.matchRepo.List(r.Context(), filter)
 	if err != nil {
 		h.log.LogError("Failed to get matches list", err)
@@ -241,7 +231,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Фильтруем сообщения об ошибках в зависимости от прав пользователя
+	// скрываем чужие ошибки в каждом матче списка
 	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 	isAdmin := userRole == models.RoleAdmin
@@ -250,7 +240,6 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, matches)
 }
 
-// GetStatistics обрабатывает получение статистики матчей
 // @Summary Статистика матчей
 // @Description Возвращает агрегированную статистику матчей (опционально по турниру)
 // @Tags matches
@@ -260,7 +249,6 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} object{error=string}
 // @Router /matches/statistics [get]
 func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
-	// Получаем tournament_id из query параметров (опционально)
 	var tournamentID *uuid.UUID
 	if tournamentIDStr := r.URL.Query().Get("tournament_id"); tournamentIDStr != "" {
 		id, err := uuid.Parse(tournamentIDStr)
@@ -271,7 +259,6 @@ func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 		tournamentID = &id
 	}
 
-	// Получаем статистику
 	stats, err := h.matchRepo.GetStatistics(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get match statistics", err)
@@ -282,7 +269,6 @@ func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// GetQueueStats возвращает статистику очереди матчей (только для админов)
 // @Summary Статистика очереди матчей
 // @Description Возвращает статистику очереди матчей (только для админов)
 // @Tags matches
@@ -294,6 +280,7 @@ func (h *MatchHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} object{error=string}
 // @Router /matches/queue/stats [get]
 func (h *MatchHandler) GetQueueStats(w http.ResponseWriter, r *http.Request) {
+	// без менеджера очереди статистику отдать нечем
 	if h.queueManager == nil {
 		writeError(w, errors.ErrInternal.WithMessage("queue manager not configured"))
 		return
@@ -309,7 +296,6 @@ func (h *MatchHandler) GetQueueStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// ClearQueue очищает все очереди матчей (только для админов)
 // @Summary Очистить очередь матчей
 // @Description Очищает все очереди матчей (только для админов)
 // @Tags matches
@@ -339,7 +325,6 @@ func (h *MatchHandler) ClearQueue(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PurgeInvalidMatches удаляет из очереди матчи, которых нет в БД (только для админов)
 // @Summary Очистить невалидные матчи
 // @Description Удаляет из очереди матчи, которых нет в БД (только для админов)
 // @Tags matches
@@ -356,7 +341,7 @@ func (h *MatchHandler) PurgeInvalidMatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Создаём валидатор, который проверяет существование матча в БД
+	// матч считаем валидным, только если он ещё есть в базе
 	validator := func(matchIDStr string) bool {
 		matchID, err := uuid.Parse(matchIDStr)
 		if err != nil {
