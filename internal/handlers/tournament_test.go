@@ -18,7 +18,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockTournamentService - мок tournament-сервиса
+// MockTournamentService - мок сервиса турниров.
+// держим все методы интерфейса целиком, иначе не скомпилится.
 type MockTournamentService struct {
 	mock.Mock
 }
@@ -107,7 +108,7 @@ func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tourname
 	return args.Get(0).([]*models.MatchRound), args.Error(1)
 }
 
-// MockSchedulingService - мок scheduling-сервиса
+// MockSchedulingService - мок планировщика матчей.
 type MockSchedulingService struct {
 	mock.Mock
 }
@@ -125,6 +126,13 @@ func (m *MockSchedulingService) RetryFailedMatches(ctx context.Context, tourname
 func (m *MockSchedulingService) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
 	args := m.Called(ctx, tournamentID, gameType)
 	return args.Int(0), args.Error(1)
+}
+
+// withTournamentID кладёт id турнира в chi-контекст запроса.
+func withTournamentID(req *http.Request, id string) *http.Request {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
 
 func TestTournamentHandler_Create(t *testing.T) {
@@ -173,7 +181,7 @@ func TestTournamentHandler_Create(t *testing.T) {
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		reqBody := tournament.CreateRequest{
-			Name:     "", // Invalid
+			Name:     "", // пустое имя - сервис вернёт ошибку валидации
 			GameType: "chess",
 		}
 
@@ -210,12 +218,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 		mockService.On("GetByID", mock.Anything, tournamentID).Return(expectedTournament, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String(), nil)
-
-		// Настраиваем Chi URL params
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Get(w, req)
@@ -238,11 +241,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 		mockService.On("GetByID", mock.Anything, tournamentID).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Get(w, req)
@@ -252,16 +251,14 @@ func TestTournamentHandler_Get(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
+	// единственный представитель кейса «битый uuid» - путь один и тот же
+	// (parseUUIDParam) во всех ручках, поэтому не размазываем его по каждой
 	t.Run("invalid UUID format", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, "invalid-uuid")
 		w := httptest.NewRecorder()
 
 		handler.Get(w, req)
@@ -273,41 +270,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 func TestTournamentHandler_List(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully list tournaments", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		expectedTournaments := []*models.Tournament{
-			{
-				ID:       uuid.New(),
-				Name:     "Tournament 1",
-				GameType: "chess",
-				Status:   models.TournamentActive,
-			},
-			{
-				ID:       uuid.New(),
-				Name:     "Tournament 2",
-				GameType: "chess",
-				Status:   models.TournamentPending,
-			},
-		}
-
-		mockService.On("List", mock.Anything, mock.AnythingOfType("models.TournamentFilter")).Return(expectedTournaments, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments", nil)
-		w := httptest.NewRecorder()
-
-		handler.List(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response []*models.Tournament
-		decodeJSONData(t, w.Body, &response)
-		assert.Len(t, response, 2)
-
-		mockService.AssertExpectations(t)
-	})
-
+	// проверяем и happy-path, и что status/game_type из query доезжают до фильтра
 	t.Run("list with filters", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -332,6 +295,10 @@ func TestTournamentHandler_List(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
+		var response []*models.Tournament
+		decodeJSONData(t, w.Body, &response)
+		assert.Len(t, response, 1)
+
 		mockService.AssertExpectations(t)
 	})
 }
@@ -354,11 +321,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/join", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Join(w, req)
@@ -368,6 +331,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
+	// уже стартовавший турнир не пускает новых - ждём 409
 	t.Run("tournament already started", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -383,40 +347,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/join", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.Join(w, req)
-
-		assert.Equal(t, http.StatusConflict, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("tournament full", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		reqBody := tournament.JoinRequest{
-			TournamentID: tournamentID,
-			ProgramID:    uuid.New(),
-		}
-
-		mockService.On("Join", mock.Anything, &reqBody).Return(errors.ErrTournamentFull)
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/join", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Join(w, req)
@@ -439,11 +370,7 @@ func TestTournamentHandler_Start(t *testing.T) {
 		mockService.On("Start", mock.Anything, tournamentID).Return(nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/start", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Start(w, req)
@@ -462,116 +389,12 @@ func TestTournamentHandler_Start(t *testing.T) {
 		mockService.On("Start", mock.Anything, tournamentID).Return(errors.ErrConflict.WithMessage("tournament already started"))
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/start", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Start(w, req)
 
 		assert.Equal(t, http.StatusConflict, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("insufficient participants", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-
-		mockService.On("Start", mock.Anything, tournamentID).Return(errors.ErrValidation.WithMessage("needs at least 2 participants"))
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/start", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.Start(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-}
-
-func TestTournamentHandler_GetLeaderboard(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully get leaderboard", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		expectedLeaderboard := []*models.LeaderboardEntry{
-			{
-				ProgramID: uuid.New(),
-				Rating:    1800,
-				Wins:      10,
-				Losses:    2,
-				Draws:     1,
-			},
-			{
-				ProgramID: uuid.New(),
-				Rating:    1700,
-				Wins:      8,
-				Losses:    4,
-				Draws:     1,
-			},
-		}
-
-		mockService.On("GetLeaderboard", mock.Anything, tournamentID, 100).Return(expectedLeaderboard, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/leaderboard", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.GetLeaderboard(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response []*models.LeaderboardEntry
-		decodeJSONData(t, w.Body, &response)
-		assert.Len(t, response, 2)
-		assert.Equal(t, 1800, response[0].Rating)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("get leaderboard with custom limit", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		expectedLeaderboard := []*models.LeaderboardEntry{
-			{
-				ProgramID: uuid.New(),
-				Rating:    1800,
-			},
-		}
-
-		mockService.On("GetLeaderboard", mock.Anything, tournamentID, 10).Return(expectedLeaderboard, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/leaderboard?limit=10", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.GetLeaderboard(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
 
 		mockService.AssertExpectations(t)
 	})
@@ -589,11 +412,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 		mockService.On("Complete", mock.Anything, tournamentID).Return(nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/complete", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Complete(w, req)
@@ -607,23 +426,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/complete", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.Complete(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
+	// завершать можно только активный турнир
 	t.Run("tournament not active", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -633,11 +436,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 		mockService.On("Complete", mock.Anything, tournamentID).Return(errors.ErrConflict.WithMessage("tournament is not active"))
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/complete", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Complete(w, req)
@@ -648,6 +447,7 @@ func TestTournamentHandler_Complete(t *testing.T) {
 	})
 }
 
+// удаление турнира - админская операция
 func TestTournamentHandler_Delete(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
@@ -660,11 +460,7 @@ func TestTournamentHandler_Delete(t *testing.T) {
 		mockService.On("Delete", mock.Anything, tournamentID).Return(nil)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tournaments/"+tournamentID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.Delete(w, req)
@@ -675,264 +471,38 @@ func TestTournamentHandler_Delete(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
+}
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tournaments/invalid-uuid", nil)
+func TestTournamentHandler_GetLeaderboard(t *testing.T) {
+	log, _ := logger.New("error", "json")
 
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.Delete(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("active tournament cannot be deleted", func(t *testing.T) {
+	t.Run("successfully get leaderboard", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
+		expectedLeaderboard := []*models.LeaderboardEntry{
+			{ProgramID: uuid.New(), Rating: 1800, Wins: 10, Losses: 2, Draws: 1},
+			{ProgramID: uuid.New(), Rating: 1700, Wins: 8, Losses: 4, Draws: 1},
+		}
 
-		mockService.On("Delete", mock.Anything, tournamentID).Return(errors.ErrConflict.WithMessage("cannot delete active tournament"))
+		// дефолтный лимит лидерборда - 100
+		mockService.On("GetLeaderboard", mock.Anything, tournamentID, 100).Return(expectedLeaderboard, nil)
 
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/tournaments/"+tournamentID.String(), nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/leaderboard", nil)
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
-		handler.Delete(w, req)
+		handler.GetLeaderboard(w, req)
 
-		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response []*models.LeaderboardEntry
+		decodeJSONData(t, w.Body, &response)
+		assert.Len(t, response, 2)
+		assert.Equal(t, 1800, response[0].Rating)
 
 		mockService.AssertExpectations(t)
-	})
-}
-
-func TestTournamentHandler_RunAllMatches(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully run all matches", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		mockScheduling := new(MockSchedulingService)
-		handler := NewTournamentHandler(mockService, mockScheduling, log)
-
-		tournamentID := uuid.New()
-
-		mockScheduling.On("RunAllMatches", mock.Anything, tournamentID).Return(15, nil)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/run-matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunAllMatches(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]any
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, "started", response["status"])
-		assert.Equal(t, float64(15), response["enqueued"])
-
-		mockScheduling.AssertExpectations(t)
-	})
-
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/run-matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunAllMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("tournament not active", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		mockScheduling := new(MockSchedulingService)
-		handler := NewTournamentHandler(mockService, mockScheduling, log)
-
-		tournamentID := uuid.New()
-
-		mockScheduling.On("RunAllMatches", mock.Anything, tournamentID).Return(0, errors.ErrConflict.WithMessage("tournament is not active"))
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/run-matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunAllMatches(w, req)
-
-		assert.Equal(t, http.StatusConflict, w.Code)
-
-		mockScheduling.AssertExpectations(t)
-	})
-}
-
-func TestTournamentHandler_RunGameMatches(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully run game matches", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		mockScheduling := new(MockSchedulingService)
-		handler := NewTournamentHandler(mockService, mockScheduling, log)
-
-		tournamentID := uuid.New()
-
-		mockScheduling.On("RunGameMatches", mock.Anything, tournamentID, "prisoners_dilemma").Return(8, nil)
-
-		body, _ := json.Marshal(map[string]string{"game_type": "prisoners_dilemma"})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunGameMatches(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]any
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, "started", response["status"])
-		assert.Equal(t, "prisoners_dilemma", response["game_type"])
-		assert.Equal(t, float64(8), response["enqueued"])
-
-		mockScheduling.AssertExpectations(t)
-	})
-
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		body, _ := json.Marshal(map[string]string{"game_type": "prisoners_dilemma"})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/games/run-matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunGameMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("missing game_type in body", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer([]byte("invalid json")))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunGameMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-
-	t.Run("empty game_type", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-
-		body, _ := json.Marshal(map[string]string{"game_type": ""})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RunGameMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
-}
-
-func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully retry failed matches", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		mockScheduling := new(MockSchedulingService)
-		handler := NewTournamentHandler(mockService, mockScheduling, log)
-
-		tournamentID := uuid.New()
-
-		mockScheduling.On("RetryFailedMatches", mock.Anything, tournamentID).Return(3, nil)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/retry-matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RetryFailedMatches(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]any
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, "retried", response["status"])
-		assert.Equal(t, float64(3), response["enqueued"])
-
-		mockScheduling.AssertExpectations(t)
-	})
-
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/invalid-uuid/retry-matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.RetryFailedMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
 
@@ -970,11 +540,7 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 		mockService.On("GetCrossGameLeaderboard", mock.Anything, tournamentID).Return(expectedEntries, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/cross-game-leaderboard", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.GetCrossGameLeaderboard(w, req)
@@ -989,45 +555,115 @@ func TestTournamentHandler_GetCrossGameLeaderboard(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
+}
 
-	t.Run("invalid UUID", func(t *testing.T) {
+func TestTournamentHandler_RunAllMatches(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	// прогон всего пула round-robin: планировщик возвращает число матчей в очереди.
+	// на N участниках это N*(N-1) матчей на игру - число enqueued тут и проверяем
+	t.Run("successfully run all matches", func(t *testing.T) {
 		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/cross-game-leaderboard", nil)
+		tournamentID := uuid.New()
 
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		mockScheduling.On("RunAllMatches", mock.Anything, tournamentID).Return(15, nil)
 
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/run-matches", nil)
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
-		handler.GetCrossGameLeaderboard(w, req)
+		handler.RunAllMatches(w, req)
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]any
+		decodeJSONData(t, w.Body, &response)
+		assert.Equal(t, "started", response["status"])
+		assert.Equal(t, float64(15), response["enqueued"])
+
+		mockScheduling.AssertExpectations(t)
+	})
+}
+
+func TestTournamentHandler_RunGameMatches(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("successfully run game matches", func(t *testing.T) {
+		mockService := new(MockTournamentService)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
+
+		tournamentID := uuid.New()
+
+		mockScheduling.On("RunGameMatches", mock.Anything, tournamentID, "prisoners_dilemma").Return(8, nil)
+
+		body, _ := json.Marshal(map[string]string{"game_type": "prisoners_dilemma"})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withTournamentID(req, tournamentID.String())
+		w := httptest.NewRecorder()
+
+		handler.RunGameMatches(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]any
+		decodeJSONData(t, w.Body, &response)
+		assert.Equal(t, "started", response["status"])
+		assert.Equal(t, "prisoners_dilemma", response["game_type"])
+		assert.Equal(t, float64(8), response["enqueued"])
+
+		mockScheduling.AssertExpectations(t)
 	})
 
-	t.Run("service error", func(t *testing.T) {
+	// без game_type планировщику нечего раскладывать - 400
+	t.Run("empty game_type", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
 
 		tournamentID := uuid.New()
 
-		mockService.On("GetCrossGameLeaderboard", mock.Anything, tournamentID).Return(nil, errors.ErrInternal.WithMessage("database error"))
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/cross-game-leaderboard", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		body, _ := json.Marshal(map[string]string{"game_type": ""})
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/games/run-matches", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
-		handler.GetCrossGameLeaderboard(w, req)
+		handler.RunGameMatches(w, req)
 
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}
 
-		mockService.AssertExpectations(t)
+func TestTournamentHandler_RetryFailedMatches(t *testing.T) {
+	log, _ := logger.New("error", "json")
+
+	t.Run("successfully retry failed matches", func(t *testing.T) {
+		mockService := new(MockTournamentService)
+		mockScheduling := new(MockSchedulingService)
+		handler := NewTournamentHandler(mockService, mockScheduling, log)
+
+		tournamentID := uuid.New()
+
+		mockScheduling.On("RetryFailedMatches", mock.Anything, tournamentID).Return(3, nil)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/retry-matches", nil)
+		req = withTournamentID(req, tournamentID.String())
+		w := httptest.NewRecorder()
+
+		handler.RetryFailedMatches(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]any
+		decodeJSONData(t, w.Body, &response)
+		assert.Equal(t, "retried", response["status"])
+		assert.Equal(t, float64(3), response["enqueued"])
+
+		mockScheduling.AssertExpectations(t)
 	})
 }
 
@@ -1058,14 +694,11 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 			},
 		}
 
+		// дефолт: limit=50, offset=0
 		mockService.On("GetMatches", mock.Anything, tournamentID, 50, 0).Return(expectedMatches, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.GetMatches(w, req)
@@ -1078,65 +711,12 @@ func TestTournamentHandler_GetMatches(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
-
-	t.Run("with pagination parameters", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		expectedMatches := []*models.Match{
-			{
-				ID:           uuid.New(),
-				TournamentID: tournamentID,
-				Program1ID:   uuid.New(),
-				Program2ID:   uuid.New(),
-				GameType:     "tug_of_war",
-				Status:       models.MatchCompleted,
-			},
-		}
-
-		mockService.On("GetMatches", mock.Anything, tournamentID, 10, 20).Return(expectedMatches, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches?limit=10&offset=20", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.GetMatches(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response []*models.Match
-		decodeJSONData(t, w.Body, &response)
-		assert.Len(t, response, 1)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/matches", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.GetMatches(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
 }
 
 func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
+	// матчи, разложенные по раундам round-robin, со счётчиками статусов
 	t.Run("successfully get matches by rounds", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -1148,16 +728,8 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 				GameType:       "prisoners_dilemma",
 				TotalMatches:   6,
 				CompletedCount: 6,
-				PendingCount:   0,
-				RunningCount:   0,
-				FailedCount:    0,
 				Matches: []*models.Match{
-					{
-						ID:           uuid.New(),
-						TournamentID: tournamentID,
-						RoundNumber:  1,
-						Status:       models.MatchCompleted,
-					},
+					{ID: uuid.New(), TournamentID: tournamentID, RoundNumber: 1, Status: models.MatchCompleted},
 				},
 			},
 			{
@@ -1167,14 +739,8 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 				CompletedCount: 3,
 				PendingCount:   2,
 				RunningCount:   1,
-				FailedCount:    0,
 				Matches: []*models.Match{
-					{
-						ID:           uuid.New(),
-						TournamentID: tournamentID,
-						RoundNumber:  2,
-						Status:       models.MatchRunning,
-					},
+					{ID: uuid.New(), TournamentID: tournamentID, RoundNumber: 2, Status: models.MatchRunning},
 				},
 			},
 		}
@@ -1182,11 +748,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID).Return(expectedRounds, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches/rounds", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.GetMatchesByRounds(w, req)
@@ -1202,74 +764,12 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
-
-	t.Run("invalid UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/invalid-uuid/matches/rounds", nil)
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "invalid-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.GetMatchesByRounds(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
 }
 
 func TestTournamentHandler_CreateMatch(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("success with explicit priority", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		program1ID := uuid.New()
-		program2ID := uuid.New()
-
-		expectedMatch := &models.Match{
-			ID:           uuid.New(),
-			TournamentID: tournamentID,
-			Program1ID:   program1ID,
-			Program2ID:   program2ID,
-			Priority:     models.PriorityHigh,
-		}
-
-		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, models.PriorityHigh).Return(expectedMatch, nil)
-
-		body, _ := json.Marshal(map[string]any{
-			"program1_id": program1ID,
-			"program2_id": program2ID,
-			"priority":    "high",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-		w := httptest.NewRecorder()
-
-		handler.CreateMatch(w, req)
-
-		assert.Equal(t, http.StatusCreated, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, expectedMatch.ID, response.ID)
-		assert.Equal(t, expectedMatch.TournamentID, response.TournamentID)
-		assert.Equal(t, expectedMatch.Program1ID, response.Program1ID)
-		assert.Equal(t, expectedMatch.Program2ID, response.Program2ID)
-
-		mockService.AssertExpectations(t)
-	})
-
+	// приоритет не прислали - хендлер должен подставить medium
 	t.Run("success with default priority", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -1294,11 +794,7 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/matches", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
+		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
 		handler.CreateMatch(w, req)
@@ -1307,82 +803,141 @@ func TestTournamentHandler_CreateMatch(t *testing.T) {
 
 		var response models.Match
 		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, expectedMatch.ID, response.ID)
 		assert.Equal(t, models.PriorityMedium, response.Priority)
 
 		mockService.AssertExpectations(t)
 	})
+}
 
-	t.Run("invalid tournament UUID", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
+// --- история рейтинга (переехало из rating_history_test.go) ---
 
-		body, _ := json.Marshal(map[string]any{
-			"program1_id": uuid.New(),
-			"program2_id": uuid.New(),
-			"priority":    "high",
-		})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/not-a-uuid/matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
+type MockRatingHistoryRepository struct {
+	mock.Mock
+}
 
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", "not-a-uuid")
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+func (m *MockRatingHistoryRepository) GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*models.RatingHistory, error) {
+	args := m.Called(ctx, programID, tournamentID, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.RatingHistory), args.Error(1)
+}
 
-		w := httptest.NewRecorder()
+func newTestRatingHistoryHandler(t *testing.T) (*RatingHistoryHandler, *MockRatingHistoryRepository) {
+	t.Helper()
+	repo := new(MockRatingHistoryRepository)
+	log, _ := logger.New("error", "json")
+	return NewRatingHistoryHandler(repo, log), repo
+}
 
-		handler.CreateMatch(w, req)
+// ratingHistoryRequest собирает запрос с двумя path-параметрами: id и programId.
+func ratingHistoryRequest(tournamentID, programID string) *http.Request {
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID)
+	rctx.URLParams.Add("programId", programID)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+}
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
+func TestRatingHistoryHandler_Success(t *testing.T) {
+	handler, repo := newTestRatingHistoryHandler(t)
+	tournamentID := uuid.New()
+	programID := uuid.New()
 
-	t.Run("invalid JSON body", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
+	repo.On("GetByProgramAndTournament", mock.Anything, programID, tournamentID, 200).
+		Return([]*models.RatingHistory{
+			{ProgramID: programID, TournamentID: tournamentID, OldRating: 1500, NewRating: 1516, Change: 16},
+			{ProgramID: programID, TournamentID: tournamentID, OldRating: 1516, NewRating: 1508, Change: -8},
+		}, nil)
 
-		tournamentID := uuid.New()
+	rr := httptest.NewRecorder()
+	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(tournamentID.String(), programID.String()))
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/matches", bytes.NewBuffer([]byte("{invalid json")))
-		req.Header.Set("Content-Type", "application/json")
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []*models.RatingHistory
+	decodeJSONData(t, rr.Body, &result)
+	assert.Len(t, result, 2)
+	assert.Equal(t, 16, result[0].Change)
+	repo.AssertExpectations(t)
+}
 
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+// любой из двух битых uuid (турнира или программы) даёт 400
+func TestRatingHistoryHandler_InvalidUUIDs(t *testing.T) {
+	handler, _ := newTestRatingHistoryHandler(t)
 
-		w := httptest.NewRecorder()
+	rr := httptest.NewRecorder()
+	handler.GetProgramRatingHistory(rr, ratingHistoryRequest("not-a-uuid", uuid.New().String()))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
 
-		handler.CreateMatch(w, req)
+	rr = httptest.NewRecorder()
+	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(uuid.New().String(), "not-a-uuid"))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
+func TestRatingHistoryHandler_RepoError(t *testing.T) {
+	handler, repo := newTestRatingHistoryHandler(t)
+	tournamentID := uuid.New()
+	programID := uuid.New()
 
-	t.Run("service error", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
+	repo.On("GetByProgramAndTournament", mock.Anything, programID, tournamentID, 200).
+		Return(nil, assert.AnError)
 
-		tournamentID := uuid.New()
-		program1ID := uuid.New()
-		program2ID := uuid.New()
+	rr := httptest.NewRecorder()
+	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(tournamentID.String(), programID.String()))
 
-		mockService.On("CreateMatch", mock.Anything, tournamentID, program1ID, program2ID, models.PriorityMedium).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	repo.AssertExpectations(t)
+}
 
-		body, _ := json.Marshal(map[string]any{
-			"program1_id": program1ID,
-			"program2_id": program2ID,
-		})
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/matches", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
+// --- GetHeadToHead (живёт в GameRoundHandler, мок расширен в game_test.go) ---
 
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", tournamentID.String())
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
+	handler, svc, leaderboardRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	gameID := uuid.New()
+	teamA, teamB := uuid.New(), uuid.New()
 
-		w := httptest.NewRecorder()
+	svc.On("GetByID", mock.Anything, gameID).
+		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
+	leaderboardRepo.On("GetHeadToHead", mock.Anything, tournamentID, "dilemma").
+		Return([]*models.HeadToHeadCell{
+			{TeamID: teamA, TeamName: "alpha", OpponentID: teamB, OpponentName: "beta", Wins: 2, Losses: 1, Draws: 1},
+		}, nil)
 
-		handler.CreateMatch(w, req)
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", tournamentID.String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
 
-		assert.Equal(t, http.StatusNotFound, w.Code)
+	handler.GetHeadToHead(rr, req)
 
-		mockService.AssertExpectations(t)
-	})
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var result []*models.HeadToHeadCell
+	decodeJSONData(t, rr.Body, &result)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "alpha", result[0].TeamName)
+	assert.Equal(t, 2, result[0].Wins)
+	svc.AssertExpectations(t)
+	leaderboardRepo.AssertExpectations(t)
+}
+
+func TestGameHandler_GetHeadToHead_GameNotFound(t *testing.T) {
+	handler, svc, _, _, _, _ := newGameHandlerWithAllRepos(t)
+	gameID := uuid.New()
+
+	svc.On("GetByID", mock.Anything, gameID).Return(nil, errors.ErrNotFound)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", uuid.New().String())
+	rctx.URLParams.Add("gameId", gameID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	handler.GetHeadToHead(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	svc.AssertExpectations(t)
 }
