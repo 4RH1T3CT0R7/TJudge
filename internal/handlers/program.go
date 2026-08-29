@@ -34,13 +34,10 @@ type ProgramRepository interface {
 	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
 
-// TournamentParticipantAdder добавляет программу как участника турнира
-type TournamentParticipantAdder interface {
+// TournamentRepo - добавление участника и чтение турнира. это один и тот же
+// репозиторий, держать под него два интерфейса было незачем
+type TournamentRepo interface {
 	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
-}
-
-// TournamentStatusChecker проверяет статус турнира
-type TournamentStatusChecker interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
@@ -61,9 +58,10 @@ type MatchExistenceChecker interface {
 	GetActiveGameType(ctx context.Context, tournamentID uuid.UUID) (string, error)
 }
 
-// RoundCompletionChecker проверяет завершённость раунда игры
+// RoundCompletionChecker - состояние раунда игры (закрыт ли, включён ли авто-раунд)
 type RoundCompletionChecker interface {
 	IsRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
+	IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
 }
 
 // TeamMembershipChecker проверяет членство в команде и её дисквалификацию
@@ -72,49 +70,40 @@ type TeamMembershipChecker interface {
 	IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error)
 }
 
-// AutoRoundChecker проверяет, включён ли авто-раунд для игры
-type AutoRoundChecker interface {
-	IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
-}
-
 // CompileEnqueuer ставит загруженную программу в очередь асинхронной
 // компиляции (выполняется worker'ом в Docker-песочнице)
 type CompileEnqueuer interface {
 	Enqueue(ctx context.Context, programID uuid.UUID) error
 }
 
-// FIXME: файл-бог на ~1200 строк, а у NewProgramHandler аж 10 зависимостей —
+// FIXME: файл-бог на ~1200 строк, а у NewProgramHandler аж 8 зависимостей —
 // когда дойдут руки, стоит растащить загрузку/CRUD/листинг по под-сервисам
 // и собирать конструктор из более крупных бандлов, а не из десятка интерфейсов
 
 // ProgramHandler обрабатывает запросы программ
 type ProgramHandler struct {
-	programRepo      ProgramRepository
-	tournamentRepo   TournamentParticipantAdder
-	tournamentStatus TournamentStatusChecker
-	matchScheduler   MatchScheduler
-	gameLookup       GameLookup
-	matchChecker     MatchExistenceChecker
-	roundChecker     RoundCompletionChecker
-	teamChecker      TeamMembershipChecker
-	autoRoundChecker AutoRoundChecker
-	compileQueue     CompileEnqueuer
-	uploadDir        string
-	maxFileSize      int64
-	log              *logger.Logger
+	programRepo    ProgramRepository
+	tournamentRepo TournamentRepo
+	matchScheduler MatchScheduler
+	gameLookup     GameLookup
+	matchChecker   MatchExistenceChecker
+	roundChecker   RoundCompletionChecker
+	teamChecker    TeamMembershipChecker
+	compileQueue   CompileEnqueuer
+	uploadDir      string
+	maxFileSize    int64
+	log            *logger.Logger
 }
 
 // NewProgramHandler создаёт program handler и гарантирует наличие upload-директории
 func NewProgramHandler(
 	programRepo ProgramRepository,
-	tournamentRepo TournamentParticipantAdder,
-	tournamentStatus TournamentStatusChecker,
+	tournamentRepo TournamentRepo,
 	matchScheduler MatchScheduler,
 	gameLookup GameLookup,
 	matchChecker MatchExistenceChecker,
 	roundChecker RoundCompletionChecker,
 	teamChecker TeamMembershipChecker,
-	autoRoundChecker AutoRoundChecker,
 	compileQueue CompileEnqueuer,
 	uploadDir string,
 	log *logger.Logger,
@@ -128,19 +117,17 @@ func NewProgramHandler(
 	}
 
 	return &ProgramHandler{
-		programRepo:      programRepo,
-		tournamentRepo:   tournamentRepo,
-		tournamentStatus: tournamentStatus,
-		matchScheduler:   matchScheduler,
-		gameLookup:       gameLookup,
-		matchChecker:     matchChecker,
-		roundChecker:     roundChecker,
-		teamChecker:      teamChecker,
-		autoRoundChecker: autoRoundChecker,
-		compileQueue:     compileQueue,
-		uploadDir:        uploadDir,
-		maxFileSize:      10 * 1024 * 1024, // 10MB
-		log:              log,
+		programRepo:    programRepo,
+		tournamentRepo: tournamentRepo,
+		matchScheduler: matchScheduler,
+		gameLookup:     gameLookup,
+		matchChecker:   matchChecker,
+		roundChecker:   roundChecker,
+		teamChecker:    teamChecker,
+		compileQueue:   compileQueue,
+		uploadDir:      uploadDir,
+		maxFileSize:    10 * 1024 * 1024, // 10MB
+		log:            log,
 	}
 }
 
@@ -651,11 +638,11 @@ func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Reque
 
 // validateTournamentActive пускает загрузку только в активный турнир
 func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http.Request, tournamentID uuid.UUID) bool {
-	if h.tournamentStatus == nil {
+	if h.tournamentRepo == nil {
 		return true
 	}
 
-	t, err := h.tournamentStatus.GetByID(r.Context(), tournamentID)
+	t, err := h.tournamentRepo.GetByID(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get tournament status", err)
 		writeError(w, errors.ErrInternal.WithMessage("failed to verify tournament status"))
@@ -675,9 +662,9 @@ func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http
 func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	// проверяем, включён ли авто-раунд для этой игры
 	autoRoundEnabled := false
-	if h.autoRoundChecker != nil {
+	if h.roundChecker != nil {
 		var autoRoundErr error
-		autoRoundEnabled, autoRoundErr = h.autoRoundChecker.IsAutoRoundEnabled(r.Context(), tournamentID, gameID)
+		autoRoundEnabled, autoRoundErr = h.roundChecker.IsAutoRoundEnabled(r.Context(), tournamentID, gameID)
 		if autoRoundErr != nil {
 			h.log.Warn("Failed to check auto-round status, defaulting to manual mode",
 				zap.Error(autoRoundErr),

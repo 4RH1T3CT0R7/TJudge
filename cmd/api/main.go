@@ -234,10 +234,9 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
 	programHandler := handlers.NewProgramHandler(
-		programRepo, tournamentRepo, tournamentRepo,
+		programRepo, tournamentRepo,
 		matchScheduler, gameService, matchRepo, gameRepo,
 		teamRepo,
-		gameRepo, // autoRoundChecker
 		compileQueue,
 		cfg.Storage.ProgramsPath, log,
 	)
