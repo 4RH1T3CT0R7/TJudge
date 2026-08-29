@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// TournamentService интерфейс для tournament service
+// TournamentService - контракт сервиса турниров, всё что нужно хендлеру.
 type TournamentService interface {
 	Create(ctx context.Context, req *tournament.CreateRequest) (*models.Tournament, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
@@ -31,21 +31,26 @@ type TournamentService interface {
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
 }
 
-// SchedulingService интерфейс для сервиса планирования матчей
+// SchedulingService раскладывает пары round-robin и толкает матчи в очередь
+// (полный прогон, прогон по одной игре, ретрай упавших).
 type SchedulingService interface {
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
 
-// TournamentHandler обрабатывает запросы турниров
+// TournamentHandler - HTTP-ручки всего, что связано с турниром.
+//
+// файл раздулся до бога-обработчика: тут и CRUD турнира, и лидерборды, и запуск
+// матчей, и в конце ещё история рейтинга. по-хорошему давно просится распил на
+// несколько файлов, но пока живём так - каждый раз откладываю на потом.
 type TournamentHandler struct {
 	tournamentService TournamentService
 	schedulingService SchedulingService
 	log               *logger.Logger
 }
 
-// NewTournamentHandler создаёт новый tournament handler
+// NewTournamentHandler собирает хендлер из сервисов турниров и планировщика.
 func NewTournamentHandler(tournamentService TournamentService, schedulingService SchedulingService, log *logger.Logger) *TournamentHandler {
 	return &TournamentHandler{
 		tournamentService: tournamentService,
@@ -54,7 +59,7 @@ func NewTournamentHandler(tournamentService TournamentService, schedulingService
 	}
 }
 
-// Create обрабатывает создание турнира
+// Create создаёт турнир (доступно только админам).
 // @Summary Создать турнир
 // @Description Создаёт новый турнир (только для админов)
 // @Tags tournaments
@@ -75,12 +80,11 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем ID создателя из контекста
+	// id создателя достаём из контекста аутентификаци, если он там есть
 	if userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID); ok {
 		req.CreatorID = &userID
 	}
 
-	// Создаём турнир
 	t, err := h.tournamentService.Create(r.Context(), &req)
 	if err != nil {
 		h.log.LogError("Failed to create tournament", err)
@@ -96,7 +100,7 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, t)
 }
 
-// List обрабатывает получение списка турниров
+// List отдаёт турниры с фильтрами и постраничкой.
 // @Summary Список турниров
 // @Description Возвращает список турниров с фильтрацией и пагинацией
 // @Tags tournaments
@@ -109,10 +113,10 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} object{error=string}
 // @Router /tournaments [get]
 func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
-	// Получаем параметры фильтрации
 	filter := models.TournamentFilter{}
 
-	// Фильтр по статусу
+	// статус приходит строкой из query - прогоняем через whitelist, иначе 400,
+	// чтобы мусоный фильтр не улетал в БД
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := models.TournamentStatus(status)
 		switch s {
@@ -124,15 +128,12 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Фильтр по типу игры
 	filter.GameType = r.URL.Query().Get("game_type")
 
-	// Пагинация
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 	filter.Limit = pg.Limit
 	filter.Offset = pg.Offset
 
-	// Получаем список турниров
 	tournaments, err := h.tournamentService.List(r.Context(), filter)
 	if err != nil {
 		h.log.LogError("Failed to get tournaments list", err)
@@ -143,7 +144,7 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tournaments)
 }
 
-// Get обрабатывает получение турнира
+// Get возвращает один турнир по id.
 // @Summary Получить турнир
 // @Description Возвращает турнир по ID
 // @Tags tournaments
@@ -153,13 +154,11 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id} [get]
 func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Получаем турнир
 	t, err := h.tournamentService.GetByID(r.Context(), id)
 	if err != nil {
 		h.log.LogError("Failed to get tournament", err,
@@ -172,7 +171,6 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// Join обрабатывает присоединение к турниру
 // @Summary Присоединиться к турниру
 // @Description Присоединяет программу к турниру
 // @Tags tournaments
@@ -187,13 +185,11 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/join [post]
 func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Декодируем тело запроса
 	var req struct {
 		ProgramID uuid.UUID `json:"program_id"`
 	}
@@ -203,7 +199,6 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Присоединяемся
 	joinReq := &tournament.JoinRequest{
 		TournamentID: tournamentID,
 		ProgramID:    req.ProgramID,
@@ -226,7 +221,6 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "joined"})
 }
 
-// Start обрабатывает запуск турнира
 // @Summary Запустить турнир
 // @Description Переводит турнир в статус active (только для админов)
 // @Tags tournaments
@@ -240,13 +234,11 @@ func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/start [post]
 func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Запускаем турнир
 	if err := h.tournamentService.Start(r.Context(), id); err != nil {
 		h.log.LogError("Failed to start tournament", err,
 			zap.String("tournament_id", id.String()),
@@ -262,7 +254,6 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
-// Complete обрабатывает завершение турнира
 // @Summary Завершить турнир
 // @Description Переводит турнир в статус completed (только для админов)
 // @Tags tournaments
@@ -276,13 +267,11 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/complete [post]
 func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Завершаем турнир
 	if err := h.tournamentService.Complete(r.Context(), id); err != nil {
 		h.log.LogError("Failed to complete tournament", err,
 			zap.String("tournament_id", id.String()),
@@ -298,7 +287,7 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "completed"})
 }
 
-// Delete обрабатывает удаление турнира
+// Delete сносит турнир целиком (только админ).
 // @Summary Удалить турнир
 // @Description Удаляет турнир по ID (только для админов)
 // @Tags tournaments
@@ -310,13 +299,11 @@ func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id} [delete]
 func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Удаляем турнир
 	if err := h.tournamentService.Delete(r.Context(), id); err != nil {
 		h.log.LogError("Failed to delete tournament", err,
 			zap.String("tournament_id", id.String()),
@@ -332,7 +319,7 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetLeaderboard обрабатывает получение таблицы лидеров
+// GetLeaderboard - живой лидерборд турнира (limit из query).
 // @Summary Таблица лидеров турнира
 // @Description Возвращает таблицу лидеров для турнира
 // @Tags tournaments
@@ -343,16 +330,13 @@ func (h *TournamentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/leaderboard [get]
 func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID из URL
 	id, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Получаем limit из query параметров
 	pg := pagination.ParseLimitOffset(r, 100, 0)
 
-	// Получаем leaderboard
 	leaderboard, err := h.tournamentService.GetLeaderboard(r.Context(), id, pg.Limit)
 	if err != nil {
 		h.log.LogError("Failed to get leaderboard", err,
@@ -365,7 +349,6 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, leaderboard)
 }
 
-// CreateMatch обрабатывает создание матча
 // @Summary Создать матч
 // @Description Создаёт матч между двумя программами в турнире (только для админов)
 // @Tags tournaments
@@ -380,13 +363,11 @@ func (h *TournamentHandler) GetLeaderboard(w http.ResponseWriter, r *http.Reques
 // @Failure 403 {object} object{error=string}
 // @Router /tournaments/{id}/matches [post]
 func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Декодируем тело запроса
 	var req struct {
 		Program1ID uuid.UUID            `json:"program1_id"`
 		Program2ID uuid.UUID            `json:"program2_id"`
@@ -398,12 +379,11 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Устанавливаем приоритет по умолчанию, если не указан
+	// приоритет не обязателен: если не прислали - кладём medium
 	if req.Priority == "" {
 		req.Priority = models.PriorityMedium
 	}
 
-	// Создаём матч
 	match, err := h.tournamentService.CreateMatch(r.Context(), tournamentID, req.Program1ID, req.Program2ID, req.Priority)
 	if err != nil {
 		h.log.LogError("Failed to create match", err,
@@ -421,20 +401,19 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, match)
 }
 
-// CrossGameLeaderboardEntry представляет строку кросс-игрового рейтинга
+// CrossGameLeaderboardEntry - строка сводного рейтинга по всем играм турнира.
 type CrossGameLeaderboardEntry struct {
 	Rank        int            `json:"rank"`
 	TeamID      *uuid.UUID     `json:"team_id,omitempty"`
 	TeamName    string         `json:"team_name"`
 	ProgramName string         `json:"program_name"`
-	GameRatings map[string]int `json:"game_ratings"` // game_id -> rating
+	GameRatings map[string]int `json:"game_ratings"` // ключ - game_id, значение - рейтинг
 	TotalRating int            `json:"total_rating"`
 	TotalWins   int            `json:"total_wins"`
 	TotalLosses int            `json:"total_losses"`
 	TotalGames  int            `json:"total_games"`
 }
 
-// GetCrossGameLeaderboard получает кросс-игровой рейтинг турнира
 // @Summary Кросс-игровой рейтинг
 // @Description Возвращает общий рейтинг по всем играм турнира
 // @Tags tournaments
@@ -449,7 +428,6 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Получаем кросс-игровой рейтинг
 	entries, err := h.tournamentService.GetCrossGameLeaderboard(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get cross-game leaderboard", err,
@@ -462,7 +440,6 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 	writeJSON(w, http.StatusOK, entries)
 }
 
-// GetMatches обрабатывает получение списка матчей турнира
 // @Summary Матчи турнира
 // @Description Возвращает список матчей турнира с пагинацией
 // @Tags tournaments
@@ -474,16 +451,13 @@ func (h *TournamentHandler) GetCrossGameLeaderboard(w http.ResponseWriter, r *ht
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/matches [get]
 func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Получаем параметры пагинации
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 
-	// Получаем матчи
 	matches, err := h.tournamentService.GetMatches(r.Context(), tournamentID, pg.Limit, pg.Offset)
 	if err != nil {
 		h.log.LogError("Failed to get matches", err,
@@ -496,7 +470,7 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, matches)
 }
 
-// GetMatchesByRounds обрабатывает получение матчей турнира сгруппированных по раундам
+// GetMatchesByRounds группирует матчи турнира по раундам round-robin.
 // @Summary Матчи по раундам
 // @Description Возвращает матчи турнира, сгруппированные по раундам
 // @Tags tournaments
@@ -506,13 +480,11 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/matches/rounds [get]
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Получаем матчи по раундам
 	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get matches by rounds", err,
@@ -525,7 +497,12 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, rounds)
 }
 
-// RunAllMatches запускает все ожидающие матчи турнира
+// RunAllMatches ставит в очередь весь пул ожидающих матчей турнира.
+//
+// сам round-robin (все пары в обе ориентации AB/BA) раскладывает планировщик -
+// хендлер только дёргает его и отдаёт число поставленных в очередь матчей.
+// операция админская и потенциально тяжёлая: на N участниках это N*(N-1)
+// матчей на каждую игру турнира.
 // @Summary Запустить все матчи
 // @Description Добавляет все ожидающие матчи турнира в очередь (только для админов)
 // @Tags tournaments
@@ -538,13 +515,11 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/run-matches [post]
 func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем ID турнира из URL
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
 		return
 	}
 
-	// Запускаем все матчи
 	enqueued, err := h.schedulingService.RunAllMatches(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to run all matches", err,
@@ -565,7 +540,7 @@ func (h *TournamentHandler) RunAllMatches(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// RunGameMatches запускает матчи для конкретной игры в турнире
+// RunGameMatches запускает round-robin только для одной игры турнира.
 // @Summary Запустить матчи для игры
 // @Description Добавляет матчи конкретной игры в очередь (только для админов)
 // @Tags tournaments
@@ -585,7 +560,7 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Декодируем тело запроса для получения game_type
+	// game_type обязателен - без него планировщику нечего раскладывать
 	var req struct {
 		GameType string `json:"game_type"`
 	}
@@ -600,7 +575,6 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Запускаем матчи для игры
 	enqueued, err := h.schedulingService.RunGameMatches(r.Context(), tournamentID, req.GameType)
 	if err != nil {
 		h.log.LogError("Failed to run game matches", err,
@@ -624,7 +598,7 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// RetryFailedMatches перезапускает все неудачные матчи турнира
+// RetryFailedMatches перекидывает упавшие матчи (failed) обратно в очередь.
 // @Summary Перезапустить неудачные матчи
 // @Description Повторно добавляет в очередь все матчи со статусом failed (только для админов)
 // @Tags tournaments
@@ -660,4 +634,58 @@ func (h *TournamentHandler) RetryFailedMatches(w http.ResponseWriter, r *http.Re
 		"status":   "retried",
 		"enqueued": enqueued,
 	})
+}
+
+// --- история рейтинга (переехало из rating_history.go) ---
+
+// RatingHistoryRepository - доступ к истории рейтинга для графиков.
+type RatingHistoryRepository interface {
+	GetByProgramAndTournament(ctx context.Context, programID, tournamentID uuid.UUID, limit int) ([]*models.RatingHistory, error)
+}
+
+// RatingHistoryHandler отдаёт историю рейтинга программы в турнире -
+// данные для графика динамики (хронологический порядок).
+type RatingHistoryHandler struct {
+	repo RatingHistoryRepository
+	log  *logger.Logger
+}
+
+func NewRatingHistoryHandler(repo RatingHistoryRepository, log *logger.Logger) *RatingHistoryHandler {
+	return &RatingHistoryHandler{repo: repo, log: log}
+}
+
+// GetProgramRatingHistory возвращает историю рейтинга программы в турнире.
+// @Summary История рейтинга программы
+// @Description Хронология изменений ELO программы в турнире (для графика)
+// @Tags tournaments
+// @Produce json
+// @Param id path string true "Tournament ID" format(uuid)
+// @Param programId path string true "Program ID" format(uuid)
+// @Param limit query int false "Максимум последних точек" default(200)
+// @Success 200 {array} models.RatingHistory
+// @Failure 400 {object} object{error=string}
+// @Router /tournaments/{id}/programs/{programId}/rating-history [get]
+func (h *RatingHistoryHandler) GetProgramRatingHistory(w http.ResponseWriter, r *http.Request) {
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
+	if !ok {
+		return
+	}
+	programID, ok := parseUUIDParam(w, r, "programId", "program")
+	if !ok {
+		return
+	}
+
+	pg := pagination.ParseLimitOffset(r, 200, 0)
+
+	history, err := h.repo.GetByProgramAndTournament(r.Context(), programID, tournamentID, pg.Limit)
+	if err != nil {
+		h.log.LogError("Failed to get program rating history", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("program_id", programID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, history)
 }
