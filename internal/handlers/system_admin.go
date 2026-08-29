@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -11,38 +12,85 @@ import (
 	"go.uber.org/zap"
 )
 
-// recoveryStuckThreshold - матч считается зависшим в running после этого
-// времени (синхронизировано с RecoveryService воркера: 120s > worker timeout 90s).
+// recoveryStuckThreshold — после этого времени матч считается зависшим в running
+// (синхронизировано с RecoveryService воркера: 120s > worker timeout 90s)
 const recoveryStuckThreshold = 2 * time.Minute
 
-// RecoveryOutboxRepo - повтор ошибочных outbox-задач.
+// AuditLogReader описывает то, что нужно эндпоинту от репозитория
+type AuditLogReader interface {
+	List(ctx context.Context, limit int) ([]*models.AuditLogEntry, error)
+}
+
+// AuditHandler отдаёт записи admin audit log'а.
+// Эндпоинт GET /admin/audit доступен только админам (middleware в routes.go).
+type AuditHandler struct {
+	repo AuditLogReader
+	log  *logger.Logger
+}
+
+// NewAuditHandler создаёт handler чтения audit log'а
+func NewAuditHandler(repo AuditLogReader, log *logger.Logger) *AuditHandler {
+	return &AuditHandler{repo: repo, log: log}
+}
+
+// List возвращает последние N записей audit log'а
+// @Summary Получить audit log (admin-only)
+// @Description Возвращает последние записи admin-действий.
+// @Tags admin
+// @Produce json
+// @Param limit query int false "Лимит записей (1-500, default 100)"
+// @Success 200 {array} models.AuditLogEntry
+// @Security BearerAuth
+// @Router /admin/audit [get]
+func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	entries, err := h.repo.List(r.Context(), limit)
+	if err != nil {
+		h.log.LogError("Failed to list audit log", err)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, entries)
+}
+
+// повтор ошибочных outbox-задач
 type RecoveryOutboxRepo interface {
 	RetryErrors(ctx context.Context) (int64, error)
 }
 
-// RecoveryProgramRepo - программы, зависшие в компиляции.
+// программы, зависшие в компиляции
 type RecoveryProgramRepo interface {
 	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
-// RecoveryCompileQueue - постановка программ в очередь компиляции.
+// постановка программ в очередь компиляции
 type RecoveryCompileQueue interface {
 	Enqueue(ctx context.Context, programID uuid.UUID) error
 }
 
-// RecoveryMatchRepo - зависшие матчи.
+// зависшие матчи
 type RecoveryMatchRepo interface {
 	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
 	ResetToPending(ctx context.Context, id uuid.UUID) error
 }
 
-// RecoveryQueueManager - возврат матчей в очередь и чистка dead-letter.
+// возврат матчей в очередь и чистка dead-letter
 type RecoveryQueueManager interface {
 	Enqueue(ctx context.Context, match *models.Match) error
 	ClearDeadLetter(ctx context.Context) (int64, error)
 }
 
-// SystemRecoveryHandler - кнопки восстановления в админ-панели: прикладные
+// SystemRecoveryHandler — кнопки восстановления в админ-панели: прикладные
 // поломки (зависшие матчи/компиляция, ошибки outbox, dead-letter) чинятся
 // прямо из интерфейса, без SSH и ручного SQL.
 type SystemRecoveryHandler struct {
@@ -54,7 +102,7 @@ type SystemRecoveryHandler struct {
 	log          *logger.Logger
 }
 
-// NewSystemRecoveryHandler создаёт handler восстановления.
+// NewSystemRecoveryHandler создаёт handler восстановления
 func NewSystemRecoveryHandler(
 	outboxRepo RecoveryOutboxRepo,
 	programRepo RecoveryProgramRepo,
@@ -73,7 +121,7 @@ func NewSystemRecoveryHandler(
 	}
 }
 
-// RetryOutboxErrors возвращает ошибочные outbox-задачи в обработку.
+// RetryOutboxErrors возвращает ошибочные outbox-задачи в обработку
 // @Summary Повторить ошибочные outbox-задачи (admin)
 // @Tags system
 // @Produce json
@@ -92,7 +140,7 @@ func (h *SystemRecoveryHandler) RetryOutboxErrors(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, map[string]int64{"retried": retried})
 }
 
-// RequeueCompiling возвращает все compiling-программы в очередь компиляции.
+// RequeueCompiling возвращает все compiling-программы в очередь компиляции
 // @Summary Перезапустить зависшую компиляцию (admin)
 // @Tags system
 // @Produce json
@@ -100,7 +148,7 @@ func (h *SystemRecoveryHandler) RetryOutboxErrors(w http.ResponseWriter, r *http
 // @Success 200 {object} object{requeued=int}
 // @Router /system/recovery/requeue-compiling [post]
 func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.Request) {
-	// olderThan=0: берём ВСЕ compiling-программы - кнопка жмётся осознанно,
+	// olderThan=0: берём ВСЕ compiling-программы — кнопка жмётся осознанно,
 	// дедупликацию дублей обеспечивает идемпотентность compile-worker'а
 	// (статус-проверка перед компиляцией).
 	programs, err := h.programRepo.GetStuckCompiling(r.Context(), 0, 500)
@@ -123,7 +171,7 @@ func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]int64{"requeued": requeued})
 }
 
-// ResetStuckMatches сбрасывает зависшие running-матчи в pending и возвращает в очередь.
+// ResetStuckMatches сбрасывает зависшие running-матчи в pending и возвращает в очередь
 // @Summary Сбросить зависшие матчи (admin)
 // @Tags system
 // @Produce json
@@ -146,7 +194,7 @@ func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http
 		}
 		m.Status = models.MatchPending
 		if err := h.queueManager.Enqueue(r.Context(), m); err != nil {
-			// Не страшно: pending-матч подберёт периодический recovery воркера.
+			// не страшно: pending-матч подберёт периодический recovery воркера
 			h.log.LogError("recovery: enqueue match", err, zap.String("match_id", m.ID.String()))
 		}
 		reset++
@@ -156,7 +204,7 @@ func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, map[string]int64{"reset": reset})
 }
 
-// ClearDeadLetter очищает dead-letter очередь.
+// ClearDeadLetter очищает dead-letter очередь
 // @Summary Очистить dead-letter очередь (admin)
 // @Tags system
 // @Produce json
