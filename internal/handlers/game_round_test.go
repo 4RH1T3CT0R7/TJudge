@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// --- Mocks ---
+// --- моки ---
 
 type MockGameRoundLookupService struct {
 	mock.Mock
@@ -103,7 +103,7 @@ func (m *MockTournamentGameStatusRepo) GetTournamentGame(ctx context.Context, to
 	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
-// --- Helpers ---
+// --- хелперы ---
 
 func newTestGameRoundHandler(
 	gameSvc *MockGameRoundLookupService,
