@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// TeamService интерфейс для team service
+// TeamService — команды: создание, вступление, состав, дисквалификация
 type TeamService interface {
 	CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*models.Team, error)
 	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error)
@@ -33,14 +33,13 @@ type TeamService interface {
 	RestoreTeam(ctx context.Context, teamID uuid.UUID) error
 }
 
-// TeamHandler обрабатывает запросы команд
+// TeamHandler ручки команд
 type TeamHandler struct {
 	teamService TeamService
 	baseURL     string
 	log         *logger.Logger
 }
 
-// NewTeamHandler создаёт новый team handler
 func NewTeamHandler(teamService TeamService, baseURL string, log *logger.Logger) *TeamHandler {
 	return &TeamHandler{
 		teamService: teamService,
@@ -49,13 +48,11 @@ func NewTeamHandler(teamService TeamService, baseURL string, log *logger.Logger)
 	}
 }
 
-// CreateTeamRequest запрос на создание команды
 type CreateTeamRequest struct {
 	TournamentID uuid.UUID `json:"tournament_id"`
 	Name         string    `json:"name"`
 }
 
-// Create создаёт новую команду
 // @Summary Создать команду
 // @Description Создаёт новую команду в турнире
 // @Tags teams
@@ -103,12 +100,11 @@ func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, t)
 }
 
-// JoinByCodeRequest запрос на вступление в команду по коду
 type JoinByCodeRequest struct {
 	Code string `json:"code"`
 }
 
-// JoinByCode вступление в команду по коду
+// JoinByCode добавляет юзера в команду по инвайт-коду
 // @Summary Вступить в команду по коду
 // @Description Присоединяет текущего пользователя к команде по инвайт-коду
 // @Tags teams
@@ -135,11 +131,13 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// сам код лежит в теле, команду по нему уже ищет сервис
 	joinReq := &team.JoinTeamRequest{
 		Code:   req.Code,
 		UserID: userID,
 	}
 
+	// на кривой код вернётся not found, а если юзер уже где-то состоит — conflict
 	t, err := h.teamService.JoinTeamByCode(r.Context(), joinReq)
 	if err != nil {
 		h.log.LogError("Failed to join team", err)
@@ -155,7 +153,6 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// Get получает команду по ID
 // @Summary Получить команду
 // @Description Возвращает команду с участниками по ID
 // @Tags teams
@@ -180,7 +177,6 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// GetMembers получает участников команды
 // @Summary Участники команды
 // @Description Возвращает список участников команды
 // @Tags teams
@@ -205,12 +201,10 @@ func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t.Members)
 }
 
-// UpdateNameRequest запрос на обновление названия команды
 type UpdateNameRequest struct {
 	Name string `json:"name"`
 }
 
-// UpdateName обновляет название команды
 // @Summary Обновить название команды
 // @Description Обновляет название команды (только лидер команды)
 // @Tags teams
@@ -258,7 +252,6 @@ func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// Leave покидает команду
 // @Summary Покинуть команду
 // @Description Текущий пользователь покидает команду
 // @Tags teams
@@ -294,7 +287,7 @@ func (h *TeamHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// RemoveMember удаляет участника из команды
+// RemoveMember исключает участника из команды, доступно только лидеру
 // @Summary Удалить участника
 // @Description Удаляет участника из команды (только лидер команды)
 // @Tags teams
@@ -318,11 +311,13 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// memberID — тот, кого выкидываем; leaderID выше — кто выкидывает
 	memberID, ok := parseUUIDParam(w, r, "userId", "user")
 	if !ok {
 		return
 	}
 
+	// сервис сам проверит, что leaderID — лидер этой команды, иначе учасник останется (forbidden)
 	if err := h.teamService.RemoveMember(r.Context(), teamID, memberID, leaderID); err != nil {
 		h.log.LogError("Failed to remove team member", err)
 		writeError(w, err)
@@ -338,13 +333,11 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// InviteLinkResponse ответ с ссылкой приглашения
 type InviteLinkResponse struct {
 	Code string `json:"code"`
 	Link string `json:"link"`
 }
 
-// GetInviteLink получает ссылку приглашения в команду
 // @Summary Получить ссылку приглашения
 // @Description Возвращает инвайт-код и ссылку приглашения (только лидер команды)
 // @Tags teams
@@ -375,7 +368,7 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем команду для кода
+	// саму ссылку собрал сервис, а код тянем отдельным запросом за командой
 	t, err := h.teamService.GetTeamByID(r.Context(), teamID)
 	if err != nil {
 		h.log.LogError("Failed to get team", err)
@@ -389,7 +382,6 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetTournamentTeams получает все команды турнира
 // @Summary Команды турнира
 // @Description Возвращает все команды в турнире
 // @Tags teams
@@ -414,7 +406,7 @@ func (h *TeamHandler) GetTournamentTeams(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, teams)
 }
 
-// GetMyTeam получает команду текущего пользователя в турнире
+// GetMyTeam команда текущего юзера в турнире, либо null если он ни в одной
 // @Summary Моя команда в турнире
 // @Description Возвращает команду текущего пользователя в указанном турнире (null если нет)
 // @Tags teams
@@ -438,7 +430,7 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.teamService.GetUserTeamInTournament(r.Context(), tournamentID, userID)
 	if err != nil {
-		// Если команды нет - возвращаем null, не ошибку
+		// команды нет — отдаём null, а не 404
 		if errors.IsNotFound(err) {
 			writeJSON(w, http.StatusOK, nil)
 			return
@@ -451,7 +443,6 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-// Delete удаляет команду (админ)
 // @Summary Удалить команду
 // @Description Удаляет команду по ID (только для админов)
 // @Tags teams
@@ -479,7 +470,7 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Disqualify дисквалифицирует команду в турнире
+// Disqualify снимает команду с турнира и гасит её матчи в очереди
 // @Summary Дисквалифицировать команду
 // @Description Дисквалифицирует команду и отменяет её ожидающие матчи (только для админов)
 // @Tags teams
@@ -497,6 +488,7 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// сервис помечает команду и отменяет её pending-матчи, в result — сколько отменил
 	result, err := h.teamService.DisqualifyTeam(r.Context(), teamID)
 	if err != nil {
 		h.log.LogError("Failed to disqualify team", err)
@@ -504,6 +496,7 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// сюда доходят только админы (проверка в мидлвари), id берём для лога
 	adminID, _ := middleware.GetUserID(r.Context())
 	h.log.Info("Team disqualified",
 		zap.String("team_id", teamID.String()),
@@ -513,7 +506,6 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// Restore снимает дисквалификацию с команды
 // @Summary Восстановить команду
 // @Description Снимает дисквалификацию с команды (только для админов)
 // @Tags teams

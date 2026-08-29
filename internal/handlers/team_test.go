@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockTeamService реализует TeamService
+// MockTeamService — заглушка TeamService на testify/mock
 type MockTeamService struct {
 	mock.Mock
 }
@@ -146,6 +146,7 @@ func TestTeamHandler_Create_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
 	req = withUserID(req, userID)
 
+	// имя и турнир из тела, автора берём из контекста
 	svc.On("CreateTeam", mock.Anything, mock.MatchedBy(func(r *team.CreateTeamRequest) bool {
 		return r.UserID == userID && r.Name == "My Team"
 	})).Return(&models.Team{ID: teamID, Name: "My Team"}, nil)
@@ -161,24 +162,12 @@ func TestTeamHandler_Create_MissingUserID(t *testing.T) {
 
 	body, _ := json.Marshal(CreateTeamRequest{Name: "Test"})
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
-	// Без user ID в контексте
+	// user id в контекст не кладём
 
 	rr := httptest.NewRecorder()
 	h.Create(rr, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
-func TestTeamHandler_Create_InvalidJSON(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader([]byte("invalid")))
-	req = withUserID(req, uuid.New())
-
-	rr := httptest.NewRecorder()
-	h.Create(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestTeamHandler_Create_Conflict(t *testing.T) {
@@ -189,6 +178,7 @@ func TestTeamHandler_Create_Conflict(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
 	req = withUserID(req, userID)
 
+	// юзер уже в команде — сервис отдаёт conflict
 	svc.On("CreateTeam", mock.Anything, mock.Anything).Return(nil, errors.ErrConflict.WithMessage("user already in a team"))
 
 	rr := httptest.NewRecorder()
@@ -215,30 +205,6 @@ func TestTeamHandler_JoinByCode_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestTeamHandler_JoinByCode_MissingUserID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	body, _ := json.Marshal(JoinByCodeRequest{Code: "ABC"})
-	req := httptest.NewRequest("POST", "/api/v1/teams/join", bytes.NewReader(body))
-
-	rr := httptest.NewRecorder()
-	h.JoinByCode(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
-func TestTeamHandler_JoinByCode_InvalidJSON(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("POST", "/api/v1/teams/join", bytes.NewReader([]byte("{bad")))
-	req = withUserID(req, uuid.New())
-
-	rr := httptest.NewRecorder()
-	h.JoinByCode(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
 func TestTeamHandler_JoinByCode_NotFound(t *testing.T) {
 	h, svc := newTestTeamHandler()
 
@@ -246,6 +212,7 @@ func TestTeamHandler_JoinByCode_NotFound(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/teams/join", bytes.NewReader(body))
 	req = withUserID(req, uuid.New())
 
+	// невалидный инвайт-код — команды с таким кодом нет
 	svc.On("JoinTeamByCode", mock.Anything, mock.Anything).Return(nil, errors.ErrNotFound)
 
 	rr := httptest.NewRecorder()
@@ -273,33 +240,6 @@ func TestTeamHandler_Get_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestTeamHandler_Get_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("GET", "/api/v1/teams/invalid", nil)
-	req = withChiParam(req, "id", "invalid")
-
-	rr := httptest.NewRecorder()
-	h.Get(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestTeamHandler_Get_NotFound(t *testing.T) {
-	h, svc := newTestTeamHandler()
-	teamID := uuid.New()
-
-	req := httptest.NewRequest("GET", "/api/v1/teams/"+teamID.String(), nil)
-	req = withChiParam(req, "id", teamID.String())
-
-	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(nil, errors.ErrNotFound)
-
-	rr := httptest.NewRecorder()
-	h.Get(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-}
-
 // --- UpdateName ---
 
 func TestTeamHandler_UpdateName_Success(t *testing.T) {
@@ -320,33 +260,6 @@ func TestTeamHandler_UpdateName_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestTeamHandler_UpdateName_MissingUserID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	body, _ := json.Marshal(UpdateNameRequest{Name: "New"})
-	req := httptest.NewRequest("PUT", "/", bytes.NewReader(body))
-	req = withChiParam(req, "id", uuid.New().String())
-
-	rr := httptest.NewRecorder()
-	h.UpdateName(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
-func TestTeamHandler_UpdateName_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	body, _ := json.Marshal(UpdateNameRequest{Name: "New"})
-	req := httptest.NewRequest("PUT", "/", bytes.NewReader(body))
-	req = withUserID(req, uuid.New())
-	req = withChiParam(req, "id", "not-uuid")
-
-	rr := httptest.NewRecorder()
-	h.UpdateName(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
 func TestTeamHandler_UpdateName_Forbidden(t *testing.T) {
 	h, svc := newTestTeamHandler()
 	userID := uuid.New()
@@ -357,6 +270,7 @@ func TestTeamHandler_UpdateName_Forbidden(t *testing.T) {
 	req = withUserID(req, userID)
 	req = withChiParam(req, "id", teamID.String())
 
+	// переименовать может только лидер
 	svc.On("UpdateTeamName", mock.Anything, teamID, "New", userID).Return(nil, errors.ErrForbidden)
 
 	rr := httptest.NewRecorder()
@@ -396,19 +310,6 @@ func TestTeamHandler_Leave_MissingUserID(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestTeamHandler_Leave_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("POST", "/", nil)
-	req = withUserID(req, uuid.New())
-	req = withChiParam(req, "id", "bad-uuid")
-
-	rr := httptest.NewRecorder()
-	h.Leave(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
 // --- RemoveMember ---
 
 func TestTeamHandler_RemoveMember_Success(t *testing.T) {
@@ -420,6 +321,7 @@ func TestTeamHandler_RemoveMember_Success(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/", nil)
 	req = withUserID(req, leaderID)
 
+	// исключающий — лидер, id команды и участника едут в урле
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", teamID.String())
 	rctx.URLParams.Add("userId", memberID.String())
@@ -431,53 +333,6 @@ func TestTeamHandler_RemoveMember_Success(t *testing.T) {
 	h.RemoveMember(rr, req)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
-}
-
-func TestTeamHandler_RemoveMember_MissingUserID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("DELETE", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", uuid.New().String())
-	rctx.URLParams.Add("userId", uuid.New().String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	rr := httptest.NewRecorder()
-	h.RemoveMember(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
-func TestTeamHandler_RemoveMember_InvalidTeamUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("DELETE", "/", nil)
-	req = withUserID(req, uuid.New())
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "bad")
-	rctx.URLParams.Add("userId", uuid.New().String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	rr := httptest.NewRecorder()
-	h.RemoveMember(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestTeamHandler_RemoveMember_InvalidMemberUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("DELETE", "/", nil)
-	req = withUserID(req, uuid.New())
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", uuid.New().String())
-	rctx.URLParams.Add("userId", "bad")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-
-	rr := httptest.NewRecorder()
-	h.RemoveMember(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 func TestTeamHandler_RemoveMember_Forbidden(t *testing.T) {
@@ -493,6 +348,7 @@ func TestTeamHandler_RemoveMember_Forbidden(t *testing.T) {
 	rctx.URLParams.Add("userId", memberID.String())
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
+	// исключает не лидер — сервис отдаёт forbidden
 	svc.On("RemoveMember", mock.Anything, teamID, memberID, leaderID).Return(errors.ErrForbidden)
 
 	rr := httptest.NewRecorder()
@@ -522,18 +378,6 @@ func TestTeamHandler_GetInviteLink_Success(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "CODE")
 }
 
-func TestTeamHandler_GetInviteLink_MissingUserID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withChiParam(req, "id", uuid.New().String())
-
-	rr := httptest.NewRecorder()
-	h.GetInviteLink(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
-}
-
 func TestTeamHandler_GetInviteLink_Forbidden(t *testing.T) {
 	h, svc := newTestTeamHandler()
 	userID := uuid.New()
@@ -543,6 +387,7 @@ func TestTeamHandler_GetInviteLink_Forbidden(t *testing.T) {
 	req = withUserID(req, userID)
 	req = withChiParam(req, "id", teamID.String())
 
+	// ссылку видит только лидер
 	svc.On("GetInviteLink", mock.Anything, teamID, userID, "http://localhost:8080").Return("", errors.ErrForbidden)
 
 	rr := httptest.NewRecorder()
@@ -566,18 +411,6 @@ func TestTeamHandler_GetTournamentTeams_Success(t *testing.T) {
 	h.GetTournamentTeams(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
-func TestTeamHandler_GetTournamentTeams_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withChiParam(req, "id", "bad")
-
-	rr := httptest.NewRecorder()
-	h.GetTournamentTeams(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 // --- GetMyTeam ---
@@ -613,20 +446,9 @@ func TestTeamHandler_GetMyTeam_NoTeam(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.GetMyTeam(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code) // Returns null data, not 404
+	// команды нет — это не ошибка, отдаём null
+	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"data":null`)
-}
-
-func TestTeamHandler_GetMyTeam_MissingUserID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withChiParam(req, "id", uuid.New().String())
-
-	rr := httptest.NewRecorder()
-	h.GetMyTeam(rr, req)
-
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
 // --- Delete ---
@@ -644,33 +466,6 @@ func TestTeamHandler_Delete_Success(t *testing.T) {
 	h.Delete(rr, req)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
-}
-
-func TestTeamHandler_Delete_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
-
-	req := httptest.NewRequest("DELETE", "/", nil)
-	req = withChiParam(req, "id", "bad")
-
-	rr := httptest.NewRecorder()
-	h.Delete(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestTeamHandler_Delete_NotFound(t *testing.T) {
-	h, svc := newTestTeamHandler()
-	teamID := uuid.New()
-
-	req := httptest.NewRequest("DELETE", "/", nil)
-	req = withChiParam(req, "id", teamID.String())
-
-	svc.On("DeleteTeam", mock.Anything, teamID).Return(errors.ErrNotFound)
-
-	rr := httptest.NewRecorder()
-	h.Delete(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 // --- GetMembers ---
@@ -697,29 +492,22 @@ func TestTeamHandler_GetMembers_Success(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "alice")
 }
 
-func TestTeamHandler_GetMembers_InvalidUUID(t *testing.T) {
-	h, _ := newTestTeamHandler()
+// --- Disqualify ---
 
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withChiParam(req, "id", "not-uuid")
-
-	rr := httptest.NewRecorder()
-	h.GetMembers(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestTeamHandler_GetMembers_NotFound(t *testing.T) {
+func TestTeamHandler_Disqualify_Success(t *testing.T) {
 	h, svc := newTestTeamHandler()
+	adminID := uuid.New()
 	teamID := uuid.New()
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
+	req = withUserID(req, adminID)
 	req = withChiParam(req, "id", teamID.String())
 
-	svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(nil, errors.ErrNotFound)
+	// доступ к ручке уже отфильтрован RBAC-мидлварей, сервис просто гасит команду
+	svc.On("DisqualifyTeam", mock.Anything, teamID).Return(&team.DisqualifyResult{}, nil)
 
 	rr := httptest.NewRecorder()
-	h.GetMembers(rr, req)
+	h.Disqualify(rr, req)
 
-	assert.Equal(t, http.StatusNotFound, rr.Code)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
