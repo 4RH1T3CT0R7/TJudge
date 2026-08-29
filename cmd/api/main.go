@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/api"
-	"github.com/bmstu-itstech/tjudge/internal/handlers"
-	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/events"
+	"github.com/bmstu-itstech/tjudge/internal/handlers"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/observability"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/internal/service/auth"
@@ -263,43 +263,49 @@ func main() {
 	defer auditLogger.Close()
 	auditHandler := handlers.NewAuditHandler(auditRepo, log)
 
-	apiServer := api.NewServer(
-		authHandler,
-		tournamentHandler,
-		programHandler,
-		matchHandler,
-		gameHandler,
-		teamHandler,
-		wsHandler,
-		systemHandler,
-		authService,
-		rateLimiter,
-		cfg.CORS,
-		cfg.RateLimit,
+	statusHandler := handlers.NewSystemStatusHandler(
+		storage.NewSystemStatusRepository(database),
+		queueManager,
+		compileQueue,
+		wsHub,
+		redisCache,
 		log,
-	).WithAdminChecker(adminChecker).
-		WithIdempotency(redisCache).
-		WithAuditLog(auditLogger, auditHandler).
-		WithSystemStatus(handlers.NewSystemStatusHandler(
-			storage.NewSystemStatusRepository(database),
-			queueManager,
-			compileQueue,
-			wsHub,
-			redisCache,
-			log,
-		)).
-		WithSystemRecovery(handlers.NewSystemRecoveryHandler(
-			storage.NewOutboxRepository(database),
-			programRepo,
-			compileQueue,
-			matchRepo,
-			queueManager,
-			log,
-		)).
-		WithRatingHistory(handlers.NewRatingHistoryHandler(
-			storage.NewRatingRepository(database),
-			log,
-		))
+	)
+	recoveryHandler := handlers.NewSystemRecoveryHandler(
+		storage.NewOutboxRepository(database),
+		programRepo,
+		compileQueue,
+		matchRepo,
+		queueManager,
+		log,
+	)
+	ratingHistoryHandler := handlers.NewRatingHistoryHandler(
+		storage.NewRatingRepository(database),
+		log,
+	)
+
+	apiServer := api.NewServer(api.ServerDeps{
+		AuthHandler:          authHandler,
+		TournamentHandler:    tournamentHandler,
+		ProgramHandler:       programHandler,
+		MatchHandler:         matchHandler,
+		GameHandler:          gameHandler,
+		TeamHandler:          teamHandler,
+		WSHandler:            wsHandler,
+		SystemHandler:        systemHandler,
+		StatusHandler:        statusHandler,
+		RatingHistoryHandler: ratingHistoryHandler,
+		RecoveryHandler:      recoveryHandler,
+		AuditHandler:         auditHandler,
+		AuditLogger:          auditLogger,
+		IdempStore:           redisCache,
+		AuthService:          authService,
+		RateLimiter:          rateLimiter,
+		AdminChecker:         adminChecker,
+		CORS:                 cfg.CORS,
+		RateLimit:            cfg.RateLimit,
+		Log:                  log,
+	})
 
 	// Создаём HTTP сервер
 	srv := &http.Server{
