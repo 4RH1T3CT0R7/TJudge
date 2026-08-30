@@ -14,46 +14,37 @@ import (
 	"go.uber.org/zap"
 )
 
-// ErrMatchNotFound используется когда матч не найден в БД (был удалён)
-// Это не ошибка обработки - матч просто нужно пропустить
+// ErrMatchNotFound - матч удалили из базы, это не ошибка, матч просто пропускается
 var ErrMatchNotFound = stderrors.New("match not found in database")
 
-// ErrProgramFailed - терминальная ошибка программы участника (ненулевой
-// exit-code, мусорный вывод, превышение таймаута). Ретраи бессмысленны:
-// матч уже помечен failed, пул не должен повторять обработку.
+// ErrProgramFailed - терминальная ошибка программы участника (ненулевой exit,
+// мусорный вывод, таймаут). ретраить бессмысленно, матч уже помечен failed
 var ErrProgramFailed = stderrors.New("match failed: program error")
 
-// MatchRepository интерфейс для работы с матчами
+// MatchRepository - что процессору нужно от репозитория матчей
 type MatchRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error
 	UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
-	// UpdateResultWithOutbox записывает результат и outbox-задачу рейтинга
-	// в одной транзакции - гарантия, что рейтинг не потеряется при сбое.
+	// результат + outbox-задача рейтинга в одной транзакции, чтобы рейтинг
+	// не потерялся при падении
 	UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
-	// MarkRatingApplied закрывает outbox-задачу после успешного fast-path
-	// обновления рейтинга.
 	MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error
-	// ResetToPending возвращает матч в pending после транзиентной
-	// инфраструктурной ошибки executor'а.
 	ResetToPending(ctx context.Context, id uuid.UUID) error
 }
 
-// RatingRepository интерфейс для работы с рейтингами
 type RatingRepository interface {
 	GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error)
 }
 
-// RatingService интерфейс для обновления рейтингов
 type RatingService interface {
 	ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error
 }
 
-// Executor интерфейс для выполнения матчей
+// Executor гоняет матч в докере
 type Executor interface {
 	Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error)
 }
 
-// ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error)
@@ -70,7 +61,6 @@ type Processor struct {
 	log           *logger.Logger
 }
 
-// NewProcessor создаёт новый процессор матчей
 func NewProcessor(
 	matchRepo MatchRepository,
 	ratingRepo RatingRepository,
@@ -91,23 +81,22 @@ func NewProcessor(
 	}
 }
 
-// Process обрабатывает матч
+// Process обрабатывает один матч
 func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	p.log.Info("Processing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("tournament_id", match.TournamentID.String()),
 	)
 
-	// Обновляем статус на "running" (только из pending - идемпотентная защита)
+	// перевод в running, причём только из pending - если из очереди прилетел
+	// дубль, второй перевод не пройдёт и матч просто пропускается
 	if err := p.matchRepo.UpdateStatus(ctx, match.ID, models.MatchRunning); err != nil {
-		// Матч уже обрабатывается или обработан - пропускаем (дубликат из очереди)
 		if stderrors.Is(err, models.ErrMatchAlreadyProcessed) {
 			p.log.Info("Match already processed or in progress, skipping duplicate",
 				zap.String("match_id", match.ID.String()),
 			)
 			return nil
 		}
-		// Проверяем, не был ли матч удалён из БД
 		if isNotFoundError(err) {
 			p.log.Warn("Match not found in database, skipping (likely deleted)",
 				zap.String("match_id", match.ID.String()),
@@ -117,7 +106,7 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		return fmt.Errorf("failed to update match status: %w", err)
 	}
 
-	// Получаем обе программы одним запросом
+	// обе программы одним запросом
 	programs, err := p.programRepo.GetByIDs(ctx, []uuid.UUID{match.Program1ID, match.Program2ID})
 	if err != nil {
 		return fmt.Errorf("failed to get programs: %w", err)
@@ -137,13 +126,12 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		return fmt.Errorf("program2 %s not found", match.Program2ID)
 	}
 
-	// Выполняем матч через executor
 	result, err := p.executor.Execute(ctx, match, program1.CodePath, program2.CodePath)
 	if err != nil {
-		// Инфраструктурная ошибка (Docker daemon, образ, контейнер):
-		// программа участника не виновата - матч НЕ помечается failed,
-		// а возвращается в pending. Его повторит retry-цикл пула, а если
-		// попытки исчерпаются - периодический recovery-сервис.
+		// тут важно различать два вида ошибок. инфраструктурная (докер лёг,
+		// образа нет) - программа не виновата, матч возвращается в pending,
+		// его повторит ретрай пула или recovery. а ошибка самой программы
+		// (упала, мусор в выводе) - терминальная, матч помечается failed
 		if executor.IsInfraError(err) {
 			if resetErr := p.matchRepo.ResetToPending(ctx, match.ID); resetErr != nil {
 				p.log.Error("Failed to reset match to pending after infra error",
@@ -154,7 +142,6 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 			return fmt.Errorf("transient executor error: %w", err)
 		}
 
-		// Ошибка программы (exit-code, формат вывода, таймаут) - терминальна.
 		errorResult := &models.MatchResult{
 			MatchID:      match.ID,
 			ErrorCode:    1,
@@ -169,29 +156,27 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		return fmt.Errorf("%w: %s", ErrProgramFailed, err.Error())
 	}
 
-	// Обновляем результат в БД; для успешных матчей в той же транзакции
-	// создаётся outbox-задача «обновить рейтинг».
+	// результат + outbox-задача «обновить рейтинг» одной транзакцией
 	if err := p.matchRepo.UpdateResultWithOutbox(ctx, match.ID, result); err != nil {
 		return fmt.Errorf("failed to update match result: %w", err)
 	}
 
-	// Кэшируем результат
+	// кэш - best effort, ошибка только логируется
 	if p.matchCache != nil {
 		if err := p.matchCache.Set(ctx, match.ID, result); err != nil {
 			p.log.LogError("Failed to cache match result", err)
 		}
 	}
 
-	// Если матч успешно завершён, обновляем рейтинги (fast path).
-	// При ошибке ничего не теряется: outbox-задача осталась pending,
-	// её доведёт до конца OutboxDispatcher.
+	// fast-path рейтинга. если тут что-то упадёт - не страшно, outbox-задача
+	// осталась pending и диспетчер её добьёт
 	if result.ErrorCode == 0 && result.Winner >= 0 {
 		if err := p.updateRatings(ctx, match, result); err != nil {
 			p.log.LogError("Failed to update ratings, outbox dispatcher will retry", err,
 				zap.String("match_id", match.ID.String()),
 			)
 		} else if err := p.matchRepo.MarkRatingApplied(ctx, match.ID); err != nil {
-			// Не страшно: диспетчер увидит rating_history и закроет задачу сам.
+			// тоже не страшно - диспетчер увидит rating_history и закроет задачу
 			p.log.LogError("Failed to mark outbox entry done", err,
 				zap.String("match_id", match.ID.String()),
 			)
@@ -206,9 +191,7 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	return nil
 }
 
-// updateRatings обновляет рейтинги участников после матча
 func (p *Processor) updateRatings(ctx context.Context, match *models.Match, result *models.MatchResult) error {
-	// Получаем текущие рейтинги участников
 	rating1, rating2, err := p.ratingRepo.GetParticipantRatings(
 		ctx,
 		match.TournamentID,
@@ -219,7 +202,6 @@ func (p *Processor) updateRatings(ctx context.Context, match *models.Match, resu
 		return fmt.Errorf("failed to get participant ratings: %w", err)
 	}
 
-	// Обновляем рейтинги через сервис
 	match.Winner = &result.Winner
 	if err := p.ratingService.ProcessMatchResult(ctx, match, rating1, rating2); err != nil {
 		return fmt.Errorf("failed to process match result: %w", err)
@@ -228,17 +210,15 @@ func (p *Processor) updateRatings(ctx context.Context, match *models.Match, resu
 	return nil
 }
 
-// isNotFoundError проверяет, является ли ошибка типом "not found"
+// isNotFoundError - и AppError с 404, и локальный сентинел
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Проверяем через errors package (AppError с кодом 404)
 	if errors.IsNotFound(err) {
 		return true
 	}
 
-	// Проверяем sentinel error
 	return stderrors.Is(err, ErrMatchNotFound)
 }
