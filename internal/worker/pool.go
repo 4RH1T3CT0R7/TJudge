@@ -15,13 +15,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// QueueManager интерфейс для работы с очередями
+// QueueManager - очередь матчей
 type QueueManager interface {
 	Dequeue(ctx context.Context) (*models.Match, error)
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }
 
-// MatchProcessor интерфейс для обработки матчей
+// MatchProcessor обрабатывает один матч
 type MatchProcessor interface {
 	Process(ctx context.Context, match *models.Match) error
 }
@@ -35,32 +35,31 @@ type Pool struct {
 	metrics          *metrics.Metrics
 	ctx              context.Context
 	cancel           context.CancelFunc
-	shutdownCtx      context.Context    // жив во время graceful shutdown; отменяется по истечении grace period
-	shutdownCancel   context.CancelFunc // отменяет shutdownCtx
+	shutdownCtx      context.Context // живёт во время graceful shutdown, отменяется когда grace вышел
+	shutdownCancel   context.CancelFunc
 	wg               sync.WaitGroup
 	activeWorkers    atomic.Int32
 	totalWorkers     atomic.Int32
 	matchesProcessed atomic.Int64
 	matchesFailed    atomic.Int64
 
-	// Отмена отдельных воркеров для поддержки scale-down.
+	// отмена отдельных воркеров, нужна для scale-down
 	workerMu      sync.Mutex
 	workerCancels []context.CancelFunc
 
-	// scaleMu сериализует вызовы scale(): autoScaler тикает в одной
-	// горутине, но тесты и потенциальные будущие триггеры (например,
-	// kick-on-enqueue) могут вызывать scale параллельно, что даёт
-	// TOCTOU на чтении totalWorkers и выбрасывает пул за MaxWorkers.
+	// scaleMu сериализует scale(): автоскейлер тикает в одной горутине, но
+	// тесты (и возможные будущие триггеры) зовут scale параллельно - без
+	// мьютекса чтение totalWorkers гонится и пул вылетает за MaxWorkers
 	scaleMu sync.Mutex
 
-	// auxWg - отдельная группа для вспомогательных горутин пула
-	// (autoScaler, metricsMonitor). Их мы должны дождаться ПЕРЕД wg.Wait
-	// на воркерах, иначе autoScaler может вызвать scale()->spawnWorker
-	// одновременно с wg.Wait, что нарушает инварианты sync.WaitGroup.
+	// auxWg - отдельная группа для вспомогательных горутин (автоскейлер,
+	// монитор метрик). их надо дождаться раньше wg с воркерами, иначе
+	// автоскейлер может дёрнуть spawnWorker одновременно с wg.Wait -
+	// а это ломает инварианты sync.WaitGroup
 	auxWg sync.WaitGroup
 }
 
-// NewPool создаёт новый пул воркеров
+// NewPool создаёт пул воркеров
 func NewPool(
 	cfg config.WorkerConfig,
 	queue QueueManager,
@@ -84,26 +83,23 @@ func NewPool(
 	}
 }
 
-// Start запускает пул воркеров
+// Start запускает пул
 func (p *Pool) Start() {
 	p.log.Info("Starting worker pool",
 		zap.Int("min_workers", p.config.MinWorkers),
 		zap.Int("max_workers", p.config.MaxWorkers),
 	)
 
-	// Запускаем минимальное количество воркеров
 	for i := 0; i < p.config.MinWorkers; i++ {
 		p.spawnWorker()
 	}
 
-	// Запускаем автоскейлер. Первый tick сделаем немедленно, чтобы burst
-	// на старте (например, заполненная очередь после рестарта воркера)
-	// не ждал полного AutoScaleInterval до первого масштабирования.
+	// автоскейлер. первый тик у него мгновенный, чтобы полная очередь
+	// после рестарта не ждала целый интервал до масштабирования
 	p.auxWg.Go(func() {
 		p.autoScaler()
 	})
 
-	// Запускаем монитор метрик
 	p.auxWg.Go(func() {
 		p.metricsMonitor()
 	})
@@ -113,10 +109,8 @@ func (p *Pool) Start() {
 	)
 }
 
-// Stop останавливает пул воркеров.
-// Graceful drain с observability: фиксируем число in-flight матчей
-// на момент Stop и длительность drain. При превышении grace period
-// отменяем оставшиеся in-flight матчи через shutdownCtx.
+// Stop гасит пул. graceful: in-flight матчи получают grace period на
+// дообработку, потом принудительная отмена через shutdownCtx
 func (p *Pool) Stop() {
 	inFlight := int(p.activeWorkers.Load())
 	p.log.Info("Stopping worker pool (draining)",
@@ -131,31 +125,29 @@ func (p *Pool) Stop() {
 		p.metrics.RecordWorkerDrainDuration(time.Since(drainStart))
 	}()
 
-	// Отменяем dequeue-цикл, чтобы воркеры перестали брать новые матчи.
+	// отмена dequeue-цикла - воркеры перестают брать новые матчи
 	p.cancel()
 
-	// Дожидаемся auxiliary-горутин (autoScaler, metricsMonitor) до того, как
-	// смотреть на wg. Иначе autoScaler может вызвать scale->spawnWorker
-	// одновременно с wg.Wait(), что нарушит инварианты sync.WaitGroup.
+	// сначала дождаться автоскейлер и монитор, только потом смотреть на wg.
+	// иначе scale->spawnWorker гонится с wg.Wait и ломает WaitGroup
 	p.auxWg.Wait()
 
-	// Ждём завершения всех воркеров (включая in-flight матчи).
-	// In-flight матчи используют shutdownCtx, который здесь ещё жив,
-	// поэтому они продолжают работу до истечения собственного таймаута.
+	// дальше очередь за воркерами вместе с их in-flight матчами. shutdownCtx
+	// тут ещё жив, так что матчи спокойно доезжают до своего таймаута
 	done := make(chan struct{})
 	go func() {
 		p.wg.Wait()
 		close(done)
 	}()
 
-	// Даём in-flight матчам время до Timeout на завершение, затем форсируем отмену.
+	// in-flight матчам даётся grace до Timeout, дальше принудительная отмена
 	grace := p.config.Timeout
 	if grace == 0 {
 		grace = 30 * time.Second
 	}
 	select {
 	case <-done:
-		// Все воркеры завершились в пределах grace period
+		// все успели
 	case <-time.After(grace):
 		remaining := int(p.activeWorkers.Load())
 		p.log.Warn("Grace period expired, cancelling in-flight matches",
@@ -163,10 +155,10 @@ func (p *Pool) Stop() {
 			zap.Int("remaining_in_flight", remaining),
 		)
 		p.shutdownCancel()
-		<-done // Ждём реакции воркеров на отмену
+		<-done // и дождаться пока воркеры отреагируют на отмену
 	}
 
-	// Гарантируем, что shutdownCtx будет очищен в любом случае.
+	// на всякий случай, чтобы ctx точно был почищен
 	p.shutdownCancel()
 
 	p.log.Info("Worker pool stopped",
@@ -176,14 +168,11 @@ func (p *Pool) Stop() {
 	)
 }
 
-// spawnWorker создаёт нового воркера
+// spawnWorker поднимает нового воркера
 func (p *Pool) spawnWorker() {
-	// Создаём per-worker контекст, производный от контекста пула.
-	// Это позволяет отменять отдельных воркеров при scale-down,
-	// не останавливая весь пул.
-	// #nosec G118 -- workerCancel сохраняется в p.workerCancels и вызывается
-	// при scale-down (scale(): workerCancels[N:]) или Stop() (shutdownCancel);
-	// не leak, lifecycle привязан к worker-goroutine.
+	// у каждого воркера свой контекст от контекста пула - так scale-down
+	// может погасить отдельного воркера, не трогая остальных
+	// #nosec G118
 	workerCtx, workerCancel := context.WithCancel(p.ctx)
 
 	p.workerMu.Lock()
@@ -201,11 +190,12 @@ func (p *Pool) spawnWorker() {
 					zap.Any("panic", r),
 					zap.String("stack", string(debug.Stack())),
 				)
-				// Пересоздаём воркера, если пул всё ещё работает и число воркеров ниже минимума
+				// воркер упал - через секунду поднимается новый, если пул жив
+				// и воркеров стало меньше минимума
 				if p.ctx.Err() == nil {
 					time.AfterFunc(time.Second, func() {
 						if p.ctx.Err() != nil {
-							return // Пул остановлен, не пересоздаём
+							return // пул уже остановлен
 						}
 						if int(p.totalWorkers.Load()) < p.config.MinWorkers {
 							p.log.Info("Respawning worker after panic",
@@ -233,11 +223,10 @@ func (p *Pool) spawnWorker() {
 
 			idle := p.processNext(workerCtx, workerID)
 			if idle {
-				// Короткий backoff перед следующим опросом. В проде реальный
-				// BRPOP внутри Dequeue уже блокируется до 2 сек, так что этот
-				// sleep добавляет лишь ~10 мс к wake-up latency. В тестах с
-				// моками, где Dequeue возвращает nil без блокировки, этот
-				// backoff гасит busy-loop и не даёт сжигать CPU.
+				// короткий backoff перед следующим опросом. в проде BRPOP внутри
+				// Dequeue и так блокируется до 2 сек, так что тут добавляется
+				// всего ~10мс к задержке. а вот в тестах с моками без этого
+				// получался busy-loop и сжирался процессор
 				select {
 				case <-workerCtx.Done():
 					p.log.Debug("Worker stopped", zap.Int32("worker_id", workerID))
@@ -249,17 +238,15 @@ func (p *Pool) spawnWorker() {
 	})
 }
 
-// processNext обрабатывает следующий матч из очереди.
-// Возвращает true, когда очередь была пуста (воркер простаивает),
-// что позволяет вызывающему сделать back off перед следующим опросом.
+// processNext берёт следующий матч из очереди.
+// true = очередь была пуста, воркер простаивает (вызывающий сделает backoff)
 func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool) {
-	// Получаем матч из очереди
 	ctx, cancel := context.WithTimeout(workerCtx, 5*time.Second)
 	defer cancel()
 
 	match, err := p.queue.Dequeue(ctx)
 	if err != nil {
-		// Cancel родительского контекста = graceful shutdown пула - тихо выходим.
+		// отмена родительского контекста = graceful shutdown, выход без шума
 		if errors.Is(err, context.Canceled) && workerCtx.Err() != nil {
 			return true
 		}
@@ -268,18 +255,15 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 		return true
 	}
 
-	// Очередь пустая
 	if match == nil {
 		return true
 	}
 
-	// Матч получен из очереди - помечаем воркер как активно обрабатывающий.
-	// Воркеры считаются активными только при реальной обработке матча,
-	// а не при опросе пустой очереди.
+	// воркер считается активным только когда реально взял матч,
+	// опрос пустой очереди не в счёт - на этом строится scale-down
 	p.activeWorkers.Add(1)
 	defer p.activeWorkers.Add(-1)
 
-	// Обрабатываем матч
 	p.log.Info("Processing match",
 		zap.Int32("worker_id", workerID),
 		zap.String("match_id", match.ID.String()),
@@ -289,13 +273,12 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	start := time.Now()
 	p.metrics.RecordMatchStart()
 
-	// processCtx производим от shutdownCtx, чтобы scale-down (отмена workerCtx)
-	// НЕ убивал in-flight матчи, но shutdown пула МОГ их прервать после
-	// истечения grace period. У каждого матча также есть свой таймаут.
+	// processCtx производится от shutdownCtx, не от workerCtx: scale-down
+	// (отмена workerCtx) не должен убивать матч на середине, а вот shutdown
+	// пула после grace period - должен. плюс у матча свой таймаут
 	processCtx, processCancel := context.WithTimeout(p.shutdownCtx, p.config.Timeout)
 	defer processCancel()
 
-	// Обрабатываем с retry
 	err = p.processWithRetry(processCtx, match)
 
 	duration := time.Since(start)
@@ -323,7 +306,7 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	return false
 }
 
-// processWithRetry обрабатывает матч с повторными попытками
+// processWithRetry гоняет матч с повторами
 func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error {
 	var lastErr error
 
@@ -356,20 +339,18 @@ func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error 
 			return nil
 		}
 
-		// Если матч не найден в БД - пропускаем без retry
-		// Это означает, что матч или турнир был удалён
+		// матча нет в базе (удалили вместе с турниром) - пропуск без ретраев,
+		// и это не ошибка
 		if errors.Is(err, ErrMatchNotFound) {
 			p.log.Info("Match skipped (not found in database)",
 				zap.String("match_id", match.ID.String()),
 			)
-			return nil // Возвращаем nil чтобы не считать это ошибкой
+			return nil
 		}
 
-		// Терминальная ошибка программы участника: матч уже помечен failed,
-		// повторные попытки бессмысленны (и раньше всё равно отбивались
-		// guard'ом pending→running). Транзиентные инфра-ошибки сюда не
-		// попадают - для них Process возвращает матч в pending и retry
-		// действительно повторяет исполнение.
+		// терминальная ошибка программы: матч уже помечен failed, повторять
+		// нет смысла. транзиентные инфра-ошибки сюда не попадают - для них
+		// Process возвращает матч в pending и ретрай реально повторяет
 		if errors.Is(err, ErrProgramFailed) {
 			return err
 		}
@@ -384,16 +365,13 @@ func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error 
 	return lastErr
 }
 
-// autoScaler автоматически масштабирует количество воркеров.
-// Период по умолчанию 2 секунды; переопределяется через AutoScaleInterval.
-// Первый tick делается мгновенно - initial warmup под текущий queue-depth.
+// autoScaler крутит scale() раз в интервал (дефолт 2с), первый раз сразу
 func (p *Pool) autoScaler() {
 	interval := p.config.AutoScaleInterval
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
 
-	// Initial warmup.
 	p.scale()
 
 	ticker := time.NewTicker(interval)
@@ -409,15 +387,14 @@ func (p *Pool) autoScaler() {
 	}
 }
 
-// scale масштабирует количество воркеров.
-// Ramp-up быстрый и пропорциональный размеру очереди, scale-down намеренно
-// медленный (гистерезис), чтобы не дёргать пул при всплесках.
-//
-// Никогда не спавнит воркеров после отмены p.ctx: это исключает гонку
-// spawnWorker().wg.Add и Stop().wg.Wait при сценарии Start с последующим Stop в пределах
-// одного интервала autoScaler, а также гасит "spawn-шторм" во время
-// graceful drain (воркеры выходят, totalWorkers кратковременно падает ниже
-// MinWorkers, scale() раньше мог начать восстановление во время shutdown).
+// scale подгоняет число воркеров под очередь. вверх - быстро и
+// пропорционально очереди, вниз - нарочно медленно (по 2), чтобы пул
+// не дёргался на всплесках.
+// после отмены p.ctx спавнить нельзя ни при каких условиях: иначе
+// spawnWorker гонится со Stop/wg.Wait, плюс во время drain воркеры выходят,
+// totalWorkers проседает ниже минимума и scale начал бы «восстанавливать»
+// пул прямо посреди остановки
+// TODO: пороги масштабирования вынести в конфиг? пока захардкожены
 func (p *Pool) scale() {
 	if p.ctx.Err() != nil {
 		return
@@ -426,8 +403,8 @@ func (p *Pool) scale() {
 	p.scaleMu.Lock()
 	defer p.scaleMu.Unlock()
 
-	// Повторная проверка ctx после захвата mutex: между первой проверкой
-	// и Lock мог сработать Stop(), и нам больше нечего масштабировать.
+	// повторная проверка уже под мьютексом: между первой проверкой и Lock
+	// мог сработать Stop, тогда масштабировать больше нечего
 	if p.ctx.Err() != nil {
 		return
 	}
@@ -448,16 +425,16 @@ func (p *Pool) scale() {
 
 	switch {
 	case currentWorkers < p.config.MinWorkers:
-		// Ниже минимума (например, после паники) - восстанавливаем.
+		// ниже минимума (например после паники) - восстановление
 		targetWorkers = p.config.MinWorkers
 	case queueSize >= 10:
-		// Ramp-up: добавляем воркеров пропорционально очереди.
-		// queueSize/5 даёт +20 воркеров на 100 матчей в очереди, и ещё один тик
-		// утроит пул при необходимости. Минимум +2, чтобы никогда не "топтаться".
+		// ramp-up пропорционально очереди: queueSize/5 это +20 воркеров на
+		// 100 матчей, следующий тик утроит если надо. минимум +2 чтобы
+		// не топтаться на месте
 		grow := max(int(queueSize)/5, 2)
 		targetWorkers = currentWorkers + grow
 	case queueSize == 0 && activeWorkers*3 < currentWorkers:
-		// Scale-down: очередь пуста и простаивает >66% пула. Снимаем по 2 воркера.
+		// очередь пуста и простаивает больше 2/3 пула - снимается по 2
 		targetWorkers = currentWorkers - 2
 	default:
 		return
@@ -489,6 +466,7 @@ func (p *Pool) scale() {
 			zap.Int64("queue_size", queueSize),
 		)
 
+		// гасятся воркеры с хвоста списка
 		p.workerMu.Lock()
 		if toRemove > len(p.workerCancels) {
 			toRemove = len(p.workerCancels)
@@ -503,7 +481,6 @@ func (p *Pool) scale() {
 	}
 }
 
-// metricsMonitor обновляет метрики пула
 func (p *Pool) metricsMonitor() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -519,7 +496,7 @@ func (p *Pool) metricsMonitor() {
 	}
 }
 
-// GetStats возвращает статистику пула
+// GetStats отдаёт статистику пула
 func (p *Pool) GetStats() WorkerStats {
 	return WorkerStats{
 		TotalWorkers:     int(p.totalWorkers.Load()),
@@ -537,15 +514,13 @@ type WorkerStats struct {
 	MatchesFailed    int64
 }
 
-// Wait ожидает завершения всех воркеров и вспомогательных горутин пула.
-// Сначала auxWg (autoScaler, metricsMonitor), чтобы scale() точно не мог
-// вызвать spawnWorker в момент wg.Wait; затем сам wg (воркеры).
+// Wait ждёт всех: сперва вспомогательные горутины (чтобы scale точно не
+// дёрнул spawnWorker во время wg.Wait), потом самих воркеров
 func (p *Pool) Wait() {
 	p.auxWg.Wait()
 	p.wg.Wait()
 }
 
-// GetMatchesProcessed возвращает количество обработанных матчей
 func (p *Pool) GetMatchesProcessed() int64 {
 	return p.matchesProcessed.Load()
 }
