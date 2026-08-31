@@ -13,51 +13,10 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRecoveryMatchRepository - мок RecoveryMatchRepository
-type MockRecoveryMatchRepository struct {
-	mock.Mock
-}
-
-func (m *MockRecoveryMatchRepository) GetPending(ctx context.Context, limit int) ([]*models.Match, error) {
-	args := m.Called(ctx, limit)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Match), args.Error(1)
-}
-
-func (m *MockRecoveryMatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error) {
-	args := m.Called(ctx, stuckDuration, limit)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Match), args.Error(1)
-}
-
-func (m *MockRecoveryMatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error {
-	args := m.Called(ctx, matchIDs, status)
-	return args.Error(0)
-}
-
-// MockRecoveryQueueManager - мок RecoveryQueueManager
-type MockRecoveryQueueManager struct {
-	mock.Mock
-}
-
-func (m *MockRecoveryQueueManager) Enqueue(ctx context.Context, match *models.Match) error {
-	args := m.Called(ctx, match)
-	return args.Error(0)
-}
-
-func (m *MockRecoveryQueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
-	args := m.Called(ctx)
-	return args.Get(0).(int64), args.Error(1)
-}
-
-func newTestRecoveryService(t *testing.T, cfg RecoveryConfig) (*RecoveryService, *MockRecoveryMatchRepository, *MockRecoveryQueueManager) {
+func newTestRecoveryService(t *testing.T, cfg RecoveryConfig) (*RecoveryService, *MockMatchRepository, *MockQueueManager) {
 	t.Helper()
-	matchRepo := new(MockRecoveryMatchRepository)
-	queueMgr := new(MockRecoveryQueueManager)
+	matchRepo := new(MockMatchRepository)
+	queueMgr := new(MockQueueManager)
 	log, _ := logger.New("error", "json")
 	svc := NewRecoveryService(matchRepo, queueMgr, log, cfg)
 	return svc, matchRepo, queueMgr

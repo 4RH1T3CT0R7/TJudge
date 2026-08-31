@@ -8,7 +8,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -17,17 +16,6 @@ type OutboxStore interface {
 	ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*storage.OutboxEntry, error)
 	MarkDone(ctx context.Context, id int64) error
 	MarkFailed(ctx context.Context, id int64, errMsg string) error
-}
-
-// OutboxMatchRepository - чтение матча для пост-обработки
-type OutboxMatchRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
-}
-
-// OutboxRatingRepository - рейтинги для пост-обработки
-type OutboxRatingRepository interface {
-	GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error)
-	GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error)
 }
 
 // OutboxDispatcher добивает зависшие outbox-задачи - обновления рейтингов,
@@ -39,8 +27,8 @@ type OutboxRatingRepository interface {
 // оно могло потеряться вместе с процессом, а на нём висят кэш и вебсокет
 type OutboxDispatcher struct {
 	outbox        OutboxStore
-	matchRepo     OutboxMatchRepository
-	ratingRepo    OutboxRatingRepository
+	matchRepo     MatchRepository
+	ratingRepo    RatingRepository
 	ratingService RatingService
 	notifier      events.Notifier
 	log           *logger.Logger
@@ -58,8 +46,8 @@ type OutboxDispatcher struct {
 // не лезет чтобы не гоняться с ним за одну задачу
 func NewOutboxDispatcher(
 	outbox OutboxStore,
-	matchRepo OutboxMatchRepository,
-	ratingRepo OutboxRatingRepository,
+	matchRepo MatchRepository,
+	ratingRepo RatingRepository,
 	ratingService RatingService,
 	notifier events.Notifier,
 	log *logger.Logger,

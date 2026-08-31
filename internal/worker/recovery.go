@@ -11,25 +11,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// RecoveryMatchRepository - матчи для восстановления
-type RecoveryMatchRepository interface {
-	GetPending(ctx context.Context, limit int) ([]*models.Match, error)
-	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
-	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error
-}
-
-// RecoveryQueueManager - постановка матчей обратно в очередь
-type RecoveryQueueManager interface {
-	Enqueue(ctx context.Context, match *models.Match) error
-	GetTotalQueueSize(ctx context.Context) (int64, error)
-}
-
 // RecoveryService возвращает застрявшие матчи в работу: если воркер умер
 // посреди матча, матч навсегда остался бы running - этот сервис сбрасывает
 // такие обратно в pending и перезакидывает в очередь
 type RecoveryService struct {
-	matchRepo    RecoveryMatchRepository
-	queueManager RecoveryQueueManager
+	matchRepo    MatchRepository
+	queueManager QueueManager
 	log          *logger.Logger
 
 	stuckDuration    time.Duration // сколько running считается застрявшим
@@ -52,8 +39,8 @@ type RecoveryConfig struct {
 // NewRecoveryService создаёт сервис. реальные пороги задаются из main
 // (120с > таймаута воркера), дефолты тут скорее на всякий случай
 func NewRecoveryService(
-	matchRepo RecoveryMatchRepository,
-	queueManager RecoveryQueueManager,
+	matchRepo MatchRepository,
+	queueManager QueueManager,
 	log *logger.Logger,
 	cfg RecoveryConfig,
 ) *RecoveryService {

@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
@@ -21,9 +22,15 @@ var ErrMatchNotFound = stderrors.New("match not found in database")
 // мусорный вывод, таймаут). ретраить бессмысленно, матч уже помечен failed
 var ErrProgramFailed = stderrors.New("match failed: program error")
 
-// MatchRepository - что процессору нужно от репозитория матчей
+// MatchRepository - всё что воркеру нужно от репозитория матчей
+// (процессор, аутбокс и recovery смотрят на один и тот же *storage.MatchRepository,
+// раньше у каждого был свой интерфейс-огрызок - склеил)
 type MatchRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
+	GetPending(ctx context.Context, limit int) ([]*models.Match, error)
+	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error
+	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error
 	UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
 	// результат + outbox-задача рейтинга в одной транзакции, чтобы рейтинг
 	// не потерялся при падении
@@ -34,6 +41,7 @@ type MatchRepository interface {
 
 type RatingRepository interface {
 	GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error)
+	GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error)
 }
 
 type RatingService interface {
@@ -48,6 +56,8 @@ type Executor interface {
 type ProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error)
+	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error
+	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
 // Processor обрабатывает матчи

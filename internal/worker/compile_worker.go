@@ -20,13 +20,6 @@ type CompileQueue interface {
 	Dequeue(ctx context.Context, timeout time.Duration) (*queue.CompileTask, error)
 }
 
-// CompileProgramRepository - программы для compile-воркера
-type CompileProgramRepository interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
-	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error
-	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
-}
-
 // ProgramCompiler собирает программу в докер-песочнице
 type ProgramCompiler interface {
 	Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error)
@@ -39,7 +32,7 @@ type ProgramCompiler interface {
 // воркер перезапустился посреди сборки)
 type CompileWorker struct {
 	queue       CompileQueue
-	programRepo CompileProgramRepository
+	programRepo ProgramRepository
 	compiler    ProgramCompiler
 	notifier    events.Notifier
 	log         *logger.Logger
@@ -57,7 +50,7 @@ type CompileWorker struct {
 // NewCompileWorker создаёт обработчик очереди компиляции
 func NewCompileWorker(
 	q CompileQueue,
-	programRepo CompileProgramRepository,
+	programRepo ProgramRepository,
 	compiler ProgramCompiler,
 	notifier events.Notifier,
 	log *logger.Logger,
