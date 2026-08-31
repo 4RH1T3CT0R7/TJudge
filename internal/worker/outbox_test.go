@@ -40,35 +40,6 @@ func (m *MockOutboxStore) MarkFailed(ctx context.Context, id int64, errMsg strin
 	return args.Error(0)
 }
 
-type MockOutboxMatchRepo struct {
-	mock.Mock
-}
-
-func (m *MockOutboxMatchRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Match), args.Error(1)
-}
-
-type MockOutboxRatingRepo struct {
-	mock.Mock
-}
-
-func (m *MockOutboxRatingRepo) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error) {
-	args := m.Called(ctx, tournamentID, program1ID, program2ID)
-	return args.Int(0), args.Int(1), args.Error(2)
-}
-
-func (m *MockOutboxRatingRepo) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
-	args := m.Called(ctx, matchID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.RatingHistory), args.Error(1)
-}
-
 // capturingNotifier собирает опубликованные события (и результаты матчей, и компиляцию),
 // тесты дальше сами разбирают их по типу
 type capturingNotifier struct {
@@ -84,12 +55,12 @@ func (n *capturingNotifier) ProgramCompiled(_ context.Context, e events.ProgramC
 	n.published = append(n.published, e)
 }
 
-func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockOutboxMatchRepo, *MockOutboxRatingRepo, *MockProcessorRatingService, *capturingNotifier) {
+func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockMatchRepository, *MockRatingRepository, *MockRatingService, *capturingNotifier) {
 	t.Helper()
 	outbox := new(MockOutboxStore)
-	matchRepo := new(MockOutboxMatchRepo)
-	ratingRepo := new(MockOutboxRatingRepo)
-	ratingService := new(MockProcessorRatingService)
+	matchRepo := new(MockMatchRepository)
+	ratingRepo := new(MockRatingRepository)
+	ratingService := new(MockRatingService)
 	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
 

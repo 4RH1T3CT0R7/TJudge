@@ -36,6 +36,11 @@ func NewMockQueueManager() *MockQueueManager {
 	}
 }
 
+func (m *MockQueueManager) Enqueue(ctx context.Context, match *models.Match) error {
+	args := m.Called(ctx, match)
+	return args.Error(0)
+}
+
 func (m *MockQueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

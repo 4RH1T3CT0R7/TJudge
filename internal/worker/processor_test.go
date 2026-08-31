@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/infrastructure/executor"
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -17,6 +18,35 @@ import (
 // MockMatchRepository - мок MatchRepository
 type MockMatchRepository struct {
 	mock.Mock
+}
+
+func (m *MockMatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetPending(ctx context.Context, limit int) ([]*models.Match, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error) {
+	args := m.Called(ctx, stuckDuration, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error {
+	args := m.Called(ctx, matchIDs, status)
+	return args.Error(0)
 }
 
 func (m *MockMatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error {
@@ -44,22 +74,30 @@ func (m *MockMatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) 
 	return args.Error(0)
 }
 
-// MockProcessorRatingRepository - мок RatingRepository для processor
-type MockProcessorRatingRepository struct {
+// MockRatingRepository - мок RatingRepository
+type MockRatingRepository struct {
 	mock.Mock
 }
 
-func (m *MockProcessorRatingRepository) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error) {
+func (m *MockRatingRepository) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error) {
 	args := m.Called(ctx, tournamentID, program1ID, program2ID)
 	return args.Int(0), args.Int(1), args.Error(2)
 }
 
-// MockProcessorRatingService - мок RatingService
-type MockProcessorRatingService struct {
+func (m *MockRatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
+	args := m.Called(ctx, matchID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.RatingHistory), args.Error(1)
+}
+
+// MockRatingService - мок RatingService
+type MockRatingService struct {
 	mock.Mock
 }
 
-func (m *MockProcessorRatingService) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
+func (m *MockRatingService) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
 	args := m.Called(ctx, match, rating1, rating2)
 	return args.Error(0)
 }
@@ -77,12 +115,12 @@ func (m *MockExecutor) Execute(ctx context.Context, match *models.Match, program
 	return args.Get(0).(*models.MatchResult), args.Error(1)
 }
 
-// MockProcessorProgramRepository - мок ProgramRepository
-type MockProcessorProgramRepository struct {
+// MockProgramRepository - мок ProgramRepository
+type MockProgramRepository struct {
 	mock.Mock
 }
 
-func (m *MockProcessorProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
+func (m *MockProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -90,7 +128,7 @@ func (m *MockProcessorProgramRepository) GetByID(ctx context.Context, id uuid.UU
 	return args.Get(0).(*models.Program), args.Error(1)
 }
 
-func (m *MockProcessorProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error) {
+func (m *MockProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, ids)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -98,12 +136,25 @@ func (m *MockProcessorProgramRepository) GetByIDs(ctx context.Context, ids []uui
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProcessorRatingRepository, *MockProcessorProgramRepository, *MockProcessorRatingService, *MockExecutor) {
+func (m *MockProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
+	args := m.Called(ctx, id, status, codePath, errorMessage)
+	return args.Error(0)
+}
+
+func (m *MockProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {
+	args := m.Called(ctx, olderThan, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Program), args.Error(1)
+}
+
+func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockRatingRepository, *MockProgramRepository, *MockRatingService, *MockExecutor) {
 	t.Helper()
 	matchRepo := new(MockMatchRepository)
-	ratingRepo := new(MockProcessorRatingRepository)
-	programRepo := new(MockProcessorProgramRepository)
-	ratingService := new(MockProcessorRatingService)
+	ratingRepo := new(MockRatingRepository)
+	programRepo := new(MockProgramRepository)
+	ratingService := new(MockRatingService)
 	executor := new(MockExecutor)
 	log, _ := logger.New("error", "json")
 

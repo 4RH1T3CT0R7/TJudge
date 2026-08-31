@@ -36,31 +36,6 @@ func (m *MockCompileQueue) Dequeue(ctx context.Context, timeout time.Duration) (
 	return args.Get(0).(*queue.CompileTask), args.Error(1)
 }
 
-type MockCompileProgramRepo struct {
-	mock.Mock
-}
-
-func (m *MockCompileProgramRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Program), args.Error(1)
-}
-
-func (m *MockCompileProgramRepo) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
-	args := m.Called(ctx, id, status, codePath, errorMessage)
-	return args.Error(0)
-}
-
-func (m *MockCompileProgramRepo) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {
-	args := m.Called(ctx, olderThan, limit)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Program), args.Error(1)
-}
-
 type MockProgramCompiler struct {
 	mock.Mock
 }
@@ -73,10 +48,10 @@ func (m *MockProgramCompiler) Compile(ctx context.Context, program *models.Progr
 	return args.Get(0).(*executor.CompileResult), args.Error(1)
 }
 
-func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *MockCompileProgramRepo, *MockProgramCompiler, *capturingNotifier) {
+func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *MockProgramRepository, *MockProgramCompiler, *capturingNotifier) {
 	t.Helper()
 	q := new(MockCompileQueue)
-	repo := new(MockCompileProgramRepo)
+	repo := new(MockProgramRepository)
 	compiler := new(MockProgramCompiler)
 	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
