@@ -91,7 +91,7 @@ func TestCompileWorker_ProcessTask_Success(t *testing.T) {
 
 	repo.AssertExpectations(t)
 	compiler.AssertExpectations(t)
-	// Событие ProgramCompiled опубликовано со статусом ready.
+	// событие ProgramCompiled опубликовано со статусом ready
 	assert.Len(t, bus.published, 1)
 	evt, ok := bus.published[0].(events.ProgramCompiled)
 	assert.True(t, ok)
@@ -127,13 +127,13 @@ func TestCompileWorker_ProcessTask_InfraErrorLeavesCompiling(t *testing.T) {
 	task := &queue.CompileTask{ProgramID: program.ID}
 
 	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
-	// Docker недоступен: инфраструктурная ошибка.
+	// docker недоступен: инфраструктурная ошибка
 	compiler.On("Compile", mock.Anything, program).
 		Return(nil, fmt.Errorf("failed to create builder container: daemon unreachable"))
 
 	w.processTask(context.Background(), 1, task)
 
-	// Статус НЕ меняется - stuck-recovery повторит задачу позже.
+	// статус не меняется: stuck-recovery повторит задачу позже
 	repo.AssertNotCalled(t, "UpdateCompileResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	assert.Empty(t, bus.published)
 }
@@ -181,7 +181,7 @@ func TestCompileWorker_RecoverStuck(t *testing.T) {
 func TestCompileWorker_StartStop(t *testing.T) {
 	w, q, repo, _, _ := newTestCompileWorker(t)
 	w.dequeueWaitLimit = 10 * time.Millisecond
-	w.stuckInterval = time.Hour // recovery в этом тесте не дёргаем
+	w.stuckInterval = time.Hour // recovery в этом тесте не запускается
 
 	q.On("Dequeue", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	repo.On("GetStuckCompiling", mock.Anything, mock.Anything, mock.Anything).

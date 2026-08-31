@@ -90,7 +90,7 @@ func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	// Рейтинг ещё не применялся - history пустая.
+	// рейтинг ещё не применялся: history пустая
 	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*models.RatingHistory{}, nil)
 	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
 		Return(1200, 1000, nil)
@@ -116,16 +116,16 @@ func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	// Рейтинг уже применён (краш после коммита) - повторять нельзя.
+	// рейтинг уже применён (краш после коммита): повторять нельзя
 	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return(history, nil)
 	outbox.On("MarkDone", mock.Anything, int64(2)).Return(nil)
 
 	processed := d.RunOnce(context.Background())
 	assert.Equal(t, 1, processed)
 
-	// Рейтинг НЕ пересчитывается...
+	// рейтинг не пересчитывается...
 	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	// ...но потерянное событие переотправляется с точными рейтингами из history.
+	// ...но потерянное событие переотправляется с точными рейтингами из history
 	assert.Len(t, bus.published, 1)
 	evt, ok := bus.published[0].(events.MatchResultProcessed)
 	assert.True(t, ok)
@@ -142,7 +142,7 @@ func TestOutboxDispatcher_RunOnce_MatchDeleted(t *testing.T) {
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, matchID).Return(nil, errors.ErrNotFound)
-	// Матч удалён - задача закрывается как неактуальная.
+	// матч удалён: задача закрывается как неактуальная
 	outbox.On("MarkDone", mock.Anything, int64(3)).Return(nil)
 
 	processed := d.RunOnce(context.Background())
