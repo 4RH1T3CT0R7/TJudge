@@ -14,30 +14,29 @@ import (
 	"go.uber.org/zap"
 )
 
-// CompileQueue - очередь задач компиляции.
+// CompileQueue - очередь задач компиляции
 type CompileQueue interface {
 	Enqueue(ctx context.Context, programID uuid.UUID) error
 	Dequeue(ctx context.Context, timeout time.Duration) (*queue.CompileTask, error)
 }
 
-// CompileProgramRepository - доступ к программам для compile-worker'а.
+// CompileProgramRepository - программы для compile-воркера
 type CompileProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error
 	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
-// ProgramCompiler компилирует программу в песочнице.
+// ProgramCompiler собирает программу в докер-песочнице
 type ProgramCompiler interface {
 	Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error)
 }
 
-// CompileWorker обрабатывает очередь компиляции: забирает задачи, компилирует
-// программы в Docker-песочнице и обновляет их статус compiling → ready/failed.
-//
-// Дополнительно периодически возвращает в очередь программы, зависшие
-// в compiling (потерянная задача: краш API между созданием программы
-// и enqueue, недоступность Redis, рестарт worker'а во время компиляции).
+// CompileWorker разбирает очередь компиляции: задача -> сборка в песочнице ->
+// статус compiling -> ready/failed.
+// заодно периодически возвращает в очередь программы, зависшие в compiling
+// (задача потерялась: апи упал между созданием и enqueue, редис моргнул,
+// воркер перезапустился посреди сборки)
 type CompileWorker struct {
 	queue       CompileQueue
 	programRepo CompileProgramRepository
@@ -55,7 +54,7 @@ type CompileWorker struct {
 	wg     sync.WaitGroup
 }
 
-// NewCompileWorker создаёт обработчик очереди компиляции.
+// NewCompileWorker создаёт обработчик очереди компиляции
 func NewCompileWorker(
 	q CompileQueue,
 	programRepo CompileProgramRepository,
@@ -77,7 +76,7 @@ func NewCompileWorker(
 	}
 }
 
-// Start запускает воркеры компиляции и recovery-горутину.
+// Start поднимает воркеры компиляции и recovery-горутину
 func (w *CompileWorker) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	w.cancel = cancel
@@ -99,7 +98,7 @@ func (w *CompileWorker) Start() {
 	w.log.Info("Compile worker started", zap.Int("workers", w.workers))
 }
 
-// Stop останавливает воркеры и дожидается завершения текущих задач.
+// Stop гасит воркеры, текущие задачи дозакончатся
 func (w *CompileWorker) Stop() {
 	if w.cancel != nil {
 		w.cancel()
@@ -121,7 +120,7 @@ func (w *CompileWorker) runWorker(ctx context.Context, id int) {
 				return
 			}
 			w.log.LogError("Compile queue dequeue failed", err)
-			// Пауза, чтобы не крутить hot-loop при недоступном Redis.
+			// пауза чтобы не крутить hot-loop когда редис недоступен
 			select {
 			case <-time.After(2 * time.Second):
 			case <-ctx.Done():
@@ -150,7 +149,7 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 		return // stuck-recovery вернёт программу в очередь
 	}
 
-	// Дубликат задачи (stuck-recovery + оригинал) - программа уже обработана.
+	// дубль задачи (stuck-recovery + оригинал) - программа уже обработана
 	if program.Status != models.ProgramCompiling {
 		return
 	}
@@ -163,8 +162,9 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 
 	result, err := w.compiler.Compile(ctx, program)
 	if err != nil {
-		// Инфраструктурная ошибка (Docker недоступен, образ отсутствует):
-		// программа остаётся в compiling, stuck-recovery повторит позже.
+		// инфра-ошибка (докер недоступен, образа нет): программа остаётся
+		// в compiling, stuck-recovery повторит позже. в failed переводить
+		// нельзя - код тут ни при чём
 		w.log.LogError("Compile failed with infra error, will retry", err,
 			zap.String("program_id", program.ID.String()))
 		return
@@ -194,7 +194,7 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 	)
 }
 
-// publishCompiled отправляет событие ProgramCompiled (best-effort).
+// publishCompiled шлёт событие ProgramCompiled, best-effort
 func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Program, status models.ProgramStatus, errMsg *string) {
 	evt := events.ProgramCompiled{
 		Version:      1,
@@ -211,7 +211,7 @@ func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Pro
 	w.notifier.ProgramCompiled(ctx, evt)
 }
 
-// runStuckRecovery периодически возвращает зависшие compiling-программы в очередь.
+// runStuckRecovery раз в минуту перезакидывает зависшие compiling в очередь
 func (w *CompileWorker) runStuckRecovery(ctx context.Context) {
 	ticker := time.NewTicker(w.stuckInterval)
 	defer ticker.Stop()
