@@ -11,45 +11,46 @@ import (
 	"go.uber.org/zap"
 )
 
-// RecoveryMatchRepository интерфейс для работы с матчами при восстановлении
+// RecoveryMatchRepository - матчи для восстановления
 type RecoveryMatchRepository interface {
 	GetPending(ctx context.Context, limit int) ([]*models.Match, error)
 	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
 	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error
 }
 
-// RecoveryQueueManager интерфейс для добавления матчей в очередь
+// RecoveryQueueManager - постановка матчей обратно в очередь
 type RecoveryQueueManager interface {
 	Enqueue(ctx context.Context, match *models.Match) error
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }
 
-// RecoveryService сервис восстановления застрявших матчей
+// RecoveryService возвращает застрявшие матчи в работу: если воркер умер
+// посреди матча, матч навсегда остался бы running - этот сервис сбрасывает
+// такие обратно в pending и перезакидывает в очередь
 type RecoveryService struct {
 	matchRepo    RecoveryMatchRepository
 	queueManager RecoveryQueueManager
 	log          *logger.Logger
 
-	// Конфигурация
-	stuckDuration    time.Duration // Время, после которого running матч считается застрявшим
-	batchSize        int           // Размер батча для восстановления
-	periodicInterval time.Duration // Интервал периодической проверки
+	stuckDuration    time.Duration // сколько running считается застрявшим
+	batchSize        int
+	periodicInterval time.Duration
 
-	// Мьютекс для предотвращения перекрытия startup и periodic recovery
+	// mu не даёт startup- и periodic-восстановлению перекрыться
 	mu sync.Mutex
 
-	// Для graceful shutdown
 	stopCh chan struct{}
 }
 
-// RecoveryConfig конфигурация сервиса восстановления
+// RecoveryConfig - настройки восстановления
 type RecoveryConfig struct {
-	StuckDuration    time.Duration // По умолчанию 10 минут
-	BatchSize        int           // По умолчанию 1000
-	PeriodicInterval time.Duration // Интервал периодической проверки (0 = отключено)
+	StuckDuration    time.Duration
+	BatchSize        int
+	PeriodicInterval time.Duration
 }
 
-// NewRecoveryService создаёт новый сервис восстановления
+// NewRecoveryService создаёт сервис. реальные пороги задаются из main
+// (120с > таймаута воркера), дефолты тут скорее на всякий случай
 func NewRecoveryService(
 	matchRepo RecoveryMatchRepository,
 	queueManager RecoveryQueueManager,
@@ -77,32 +78,28 @@ func NewRecoveryService(
 	}
 }
 
-// RecoverOnStartup выполняет восстановление при запуске worker'а
-// 1. Сбрасывает "застрявшие" running матчи в pending
-// 2. Добавляет все pending матчи в очередь Redis
+// RecoverOnStartup - восстановление при старте воркера: сперва застрявшие
+// running сбрасываются в pending, потом все pending уходят в очередь
 func (s *RecoveryService) RecoverOnStartup(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.log.Info("Starting match recovery...")
 
-	// Проверяем текущий размер очереди
 	queueSize, err := s.queueManager.GetTotalQueueSize(ctx)
 	if err != nil {
 		s.log.LogError("Failed to get queue size during recovery", err)
-		// Продолжаем, это не критичная ошибка
+		// не критично, дальше по плану
 	} else {
 		s.log.Info("Current queue size before recovery", zap.Int64("queue_size", queueSize))
 	}
 
-	// 1. Восстанавливаем застрявшие running матчи
 	stuckRecovered, err := s.recoverStuckRunning(ctx)
 	if err != nil {
 		s.log.LogError("Failed to recover stuck running matches", err)
-		// Продолжаем с pending матчами
+		// pending всё равно стоит прогнать
 	}
 
-	// 2. Добавляем pending матчи в очередь
 	pendingEnqueued, err := s.enqueuePendingMatches(ctx)
 	if err != nil {
 		return err
@@ -116,9 +113,10 @@ func (s *RecoveryService) RecoverOnStartup(ctx context.Context) error {
 	return nil
 }
 
-// recoverStuckRunning сбрасывает застрявшие running матчи в pending
+// recoverStuckRunning сбрасывает застрявшие running в pending
+// FIXME: если застрявших больше batchSize, за раз берётся только первая пачка,
+// остальные подождут следующего тика
 func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) {
-	// Получаем застрявшие running матчи
 	stuckMatches, err := s.matchRepo.GetStuckRunning(ctx, s.stuckDuration, s.batchSize)
 	if err != nil {
 		return 0, err
@@ -134,7 +132,6 @@ func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) 
 		zap.Duration("stuck_threshold", s.stuckDuration),
 	)
 
-	// Собираем ID для batch update
 	matchIDs := make([]uuid.UUID, len(stuckMatches))
 	for i, match := range stuckMatches {
 		matchIDs[i] = match.ID
@@ -144,7 +141,6 @@ func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) 
 		)
 	}
 
-	// Сбрасываем статус в pending
 	if err := s.matchRepo.BatchUpdateStatus(ctx, matchIDs, models.MatchPending); err != nil {
 		return 0, err
 	}
@@ -156,9 +152,8 @@ func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) 
 	return len(matchIDs), nil
 }
 
-// enqueuePendingMatches добавляет все pending матчи из БД в очередь Redis
+// enqueuePendingMatches закидывает pending матчи из базы в очередь редиса
 func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error) {
-	// Получаем pending матчи
 	pendingMatches, err := s.matchRepo.GetPending(ctx, s.batchSize)
 	if err != nil {
 		return 0, err
@@ -173,7 +168,7 @@ func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error
 		zap.Int("count", len(pendingMatches)),
 	)
 
-	// Добавляем в очередь
+	// ошибка на одном матче не валит остальные
 	enqueued := 0
 	for _, match := range pendingMatches {
 		if err := s.queueManager.Enqueue(ctx, match); err != nil {
@@ -193,7 +188,7 @@ func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error
 	return enqueued, nil
 }
 
-// Start запускает периодическое восстановление в фоне
+// Start запускает периодическую проверку в фоне
 func (s *RecoveryService) Start() {
 	s.log.Info("Starting periodic recovery service",
 		zap.Duration("interval", s.periodicInterval),
@@ -203,13 +198,12 @@ func (s *RecoveryService) Start() {
 	go s.runPeriodic()
 }
 
-// Stop останавливает периодическое восстановление
+// Stop гасит периодику. без join - горутина дозакончит сама
 func (s *RecoveryService) Stop() {
 	s.log.Info("Stopping periodic recovery service...")
 	close(s.stopCh)
 }
 
-// runPeriodic выполняет периодическую проверку застрявших матчей
 func (s *RecoveryService) runPeriodic() {
 	ticker := time.NewTicker(s.periodicInterval)
 	defer ticker.Stop()
@@ -225,7 +219,6 @@ func (s *RecoveryService) runPeriodic() {
 	}
 }
 
-// runPeriodicRecovery выполняет одну итерацию периодического восстановления
 func (s *RecoveryService) runPeriodicRecovery() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -233,8 +226,8 @@ func (s *RecoveryService) runPeriodicRecovery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Только восстанавливаем застрявшие running матчи
-	// Pending матчи уже должны быть в очереди после startup recovery
+	// периодика трогает только застрявшие running - pending уже в очереди
+	// после startup-восстановления
 	stuckRecovered, err := s.recoverStuckRunning(ctx)
 	if err != nil {
 		s.log.LogError("Periodic recovery failed", err)
@@ -242,7 +235,7 @@ func (s *RecoveryService) runPeriodicRecovery() {
 	}
 
 	if stuckRecovered > 0 {
-		// Если были застрявшие матчи, добавляем их в очередь
+		// появились новые сброшенные - их надо и в очередь
 		enqueued, err := s.enqueuePendingMatches(ctx)
 		if err != nil {
 			s.log.LogError("Failed to enqueue recovered matches", err)
