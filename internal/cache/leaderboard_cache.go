@@ -54,8 +54,8 @@ type RatingUpdate struct {
 }
 
 // UpdateRatingsBatch пишет рейтинги одним пайплайном.
-// на паре участников матча экономит один RTT, а если буферизуем
-// несколько матчей — экономия растёт линейно по числу апдейтов
+// на паре участников матча экономит один RTT, а при буферизации
+// нескольких матчей — экономия растёт линейно по числу апдейтов
 func (lc *LeaderboardCache) UpdateRatingsBatch(ctx context.Context, updates []RatingUpdate) error {
 	if len(updates) == 0 {
 		return nil
@@ -133,7 +133,7 @@ func (lc *LeaderboardCache) Clear(ctx context.Context, tournamentID uuid.UUID) e
 	if err := lc.cache.Del(ctx, key); err != nil {
 		return err
 	}
-	// json-кэши и кросс-гейм добиваем сканом
+	// json-кэши и кросс-гейм добиваются сканом
 	return lc.InvalidateFullLeaderboard(ctx, tournamentID)
 }
 
@@ -217,8 +217,8 @@ func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tou
 }
 
 // InvalidateFullLeaderboard выносит json-кэши турнира.
-// ключей несколько (по каждому лимиту свой), поэтому идём сканом,
-// в конце добавляем кросс-гейм ключ и удаляем всё пачкой
+// ключей несколько (по каждому лимиту свой), поэтому чистка идёт сканом,
+// в конце добавляется кросс-гейм ключ и удаляется всё пачкой
 func (lc *LeaderboardCache) InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error {
 	pattern := fmt.Sprintf("leaderboard:full:%s:*", tournamentID.String())
 	crossKey := lc.getCrossGameKey(tournamentID)

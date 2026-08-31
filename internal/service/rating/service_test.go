@@ -48,7 +48,7 @@ func (m *MockRatingRepository) ProcessMatchResultAtomic(ctx context.Context, upd
 }
 
 // capturingNotifier запоминает события результата матча, чтобы проверить их в тесте.
-// остальные методы берём из NoopNotifier - они тут не нужны
+// остальные методы берутся из NoopNotifier - они тут не нужны
 type capturingNotifier struct {
 	events.NoopNotifier
 	events []events.MatchResultProcessed

@@ -62,7 +62,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 		qm.log.LogError("Failed to check dedup key", err,
 			zap.String("match_id", matchIDStr),
 		)
-		// на ошибке дедупа не падаем - лучше дубль чем потерять матч
+		// на ошибке дедупа падать не стоит - лучше дубль чем потерять матч
 	} else if !isNew {
 		qm.log.Info("Match already enqueued, skipping",
 			zap.String("match_id", matchIDStr),
@@ -77,7 +77,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 
 	queueKey := qm.getQueueKey(match.Priority)
 	if err := qm.cache.LPush(ctx, queueKey, data); err != nil {
-		// lpush упал - откатываем дедуп, иначе матч навсегда "в очереди" и не переставится
+		// lpush упал - дедуп откатывается, иначе матч навсегда "в очереди" и не переставится
 		if delErr := qm.cache.Del(ctx, dedupKeyFor(matchIDStr)); delErr != nil {
 			qm.log.LogError("Failed to rollback dedup entry on enqueue failure", delErr,
 				zap.String("match_id", matchIDStr),
@@ -97,7 +97,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 }
 
 // простая ротация чтобы low очередь не голодала:
-// 5 раз подряд смотрим сначала high, потом 3 раза сначала medium, потом 1 раз low
+// 5 раз подряд сначала берётся high, потом 3 раза medium, потом 1 раз low
 func (qm *QueueManager) weightedQueueKeys() []string {
 	qm.dequeueMu.Lock()
 	pos := qm.dequeueCount % 9
@@ -133,7 +133,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 	dedupResults, err := qm.cache.BatchSetNX(ctx, dedupKeys, dedupTTL)
 	if err != nil {
 		qm.log.LogError("Failed batch dedup check, enqueuing all matches", err)
-		// подчищаем что успело выставиться и валим всё в очередь без дедупа
+		// подчищается что успело выставиться и всё валится в очередь без дедупа
 		for key := range dedupKeys {
 			_ = qm.cache.Del(ctx, key)
 		}
@@ -146,7 +146,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 
 	for _, match := range matches {
 		key := dedupKeyFor(match.ID.String())
-		// если пайплайн отработал - смотрим результат, иначе дедуп пропускаем
+		// если пайплайн отработал - берётся результат, иначе дедуп пропускается
 		if dedupResults != nil {
 			isNew, ok := dedupResults[key]
 			if ok && !isNew {
@@ -186,7 +186,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 		return fmt.Errorf("failed to batch enqueue matches: %w", err)
 	}
 
-	// Обновляем метрики
+	// обновление метрик
 	qm.updateQueueSizeMetrics(ctx)
 
 	enqueued := len(matches) - skipped
@@ -218,13 +218,13 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	// result[0] - имя очереди, result[1] - данные
 	var match models.Match
 	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
-		// битый json - в dead-letter, разберёмся руками потом
+		// битый json - в dead-letter, разбор руками потом
 		deadLetterKey := "queue:dead_letter"
 		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
 			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
 		} else {
 			qm.metrics.RecordQueueDeadLetterPush("unmarshal_error")
-			// держим dead-letter не больше 1000 записей и 7 дней
+			// dead-letter живёт не больше 1000 записей и 7 дней
 			if trimErr := qm.cache.LTrim(ctx, deadLetterKey, 0, 999); trimErr != nil {
 				qm.log.Error("Failed to LTRIM dead-letter queue",
 					zap.Error(trimErr),
@@ -241,7 +241,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 				qm.metrics.SetQueueDeadLetterSize(size)
 			}
 		}
-		// обрезаем сырые данные в логе, а то мало ли что там (log injection)
+		// сырые данные в логе обрезаются, а то мало ли что там (log injection)
 		rawData := result[1]
 		if len(rawData) > 1024 {
 			rawData = rawData[:1024] + "...(truncated)"
@@ -254,14 +254,14 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
 	}
 
-	// Удаляем dedup-ключ, чтобы матч мог быть повторно поставлен в очередь в будущем
+	// удаление dedup-ключа, чтобы матч мог быть повторно поставлен в очередь в будущем
 	if err := qm.cache.Del(ctx, dedupKeyFor(match.ID.String())); err != nil {
 		qm.log.LogError("Failed to remove dedup key after dequeue", err,
 			zap.String("match_id", match.ID.String()),
 		)
 	}
 
-	// Обновляем метрики
+	// обновление метрик
 	qm.updateQueueSizeMetrics(ctx)
 
 	qm.log.Info("Match dequeued",
@@ -299,7 +299,7 @@ func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
-// updateQueueSizeMetrics - обновляем гейджи размеров, не чаще раза в секунду
+// updateQueueSizeMetrics - обновляет гейджи размеров, не чаще раза в секунду
 func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
 	qm.metricsMu.Lock()
 	if time.Since(qm.lastMetricsUpdate) < time.Second {
@@ -482,14 +482,14 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority m
 		return 0, nil
 	}
 
-	// оставляем только те что есть в бд
+	// остаются только те что есть в бд
 	var validMatches [][]byte
 	var purgedCount int64
 
 	for _, item := range items {
 		var match models.Match
 		if err := json.Unmarshal([]byte(item), &match); err != nil {
-			// Невалидный JSON - пропускаем
+			// невалидный JSON - пропускается
 			purgedCount++
 			continue
 		}
@@ -505,12 +505,12 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority m
 		}
 	}
 
-	// ничего не выкинули - и не трогаем очередь
+	// ничего не выкинули - и очередь не трогается
 	if purgedCount == 0 {
 		return 0, nil
 	}
 
-	// заменяем очередь целиком в одной транзакции. разворачиваем порядок,
+	// очередь заменяется целиком в одной транзакции. порядок разворачивается,
 	// чтобы после lpush он остался как был
 	reversed := make([][]byte, len(validMatches))
 	for i, v := range validMatches {

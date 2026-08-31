@@ -17,13 +17,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Загружаем конфигурацию
+	// загрузка конфигурации
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Создаём экземпляр migrate
+	// экземпляр migrate
 	m, err := migrate.New(
 		"file://migrations",
 		cfg.Database.DSNURL(),

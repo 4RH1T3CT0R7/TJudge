@@ -55,14 +55,14 @@ func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, t
 // @name Authorization
 // @description JWT Bearer token (format: "Bearer {token}")
 func main() {
-	// Загружаем конфигурацию
+	// загрузка конфигурации
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Инициализируем логгер
+	// логгер
 	log, err := logger.NewWithOptions(logger.Options{
 		Level:  cfg.Logging.Level,
 		Format: cfg.Logging.Format,
@@ -90,10 +90,10 @@ func main() {
 		_ = otelShutdown(shutdownCtx)
 	}()
 
-	// Инициализируем метрики
+	// метрики
 	m := metrics.New()
 
-	// Подключаемся к базе данных
+	// подключение к базе данных
 	database, err := storage.New(&cfg.Database, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to database", zap.Error(err))
@@ -105,12 +105,12 @@ func main() {
 		zap.Int("port", cfg.Database.Port),
 	)
 
-	// Проверяем здоровье БД
+	// проверка здоровья БД
 	if err := database.Health(context.Background()); err != nil {
 		log.Fatal("Database health check failed", zap.Error(err))
 	}
 
-	// Обеспечиваем наличие партиций таблицы matches и rating_history
+	// обеспечение наличия партиций таблиц matches и rating_history
 	if err := database.EnsureMatchPartitions(context.Background()); err != nil {
 		log.Error("Failed to ensure match partitions", zap.Error(err))
 	}
@@ -119,7 +119,7 @@ func main() {
 	}
 	database.StartPartitionMaintenance(cfg.Database.PartitionRetentionMonths)
 
-	// Подключаемся к Redis
+	// подключение к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to Redis", zap.Error(err))
@@ -131,7 +131,7 @@ func main() {
 		zap.Int("port", cfg.Redis.Port),
 	)
 
-	// Инициализируем репозитории
+	// репозитории
 	userRepo := storage.NewUserRepository(database)
 	programRepo := storage.NewProgramRepository(database)
 	tournamentRepo := storage.NewTournamentRepository(database)
@@ -139,7 +139,7 @@ func main() {
 	gameRepo := storage.NewGameRepository(database)
 	teamRepo := storage.NewTeamRepository(database)
 
-	// Инициализируем кэши с метриками
+	// кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
 	leaderboardCache := cache.NewLeaderboardCache(redisCache).WithMetrics(m)
 	tournamentCache := cache.NewTournamentCache(redisCache)
@@ -147,19 +147,19 @@ func main() {
 	rateLimiter := cache.NewRateLimiter(redisCache)
 	distributedLock := cache.NewDistributedLock(redisCache)
 
-	// Инициализируем queue manager
+	// queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
-	// Инициализируем WebSocket hub
+	// WebSocket hub
 	wsHub := ws.NewHub(log)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Запускаем hub в отдельной горутине
+	// запуск hub в отдельной горутине
 	go wsHub.Run(ctx)
 
 	// нотифаер апи: обновляет кэш турниров и лидерборда, рассылает по вебсокету.
-	// в редис наружу отсюда ничего не публикуем (Redis не задаём) - это дело воркера
+	// в редис наружу отсюда ничего не публикуется (Redis не задан) - это дело воркера
 	notifier := &events.SyncNotifier{
 		TournamentCache: tournamentCache,
 		Leaderboard:     leaderboardCache,
@@ -177,7 +177,7 @@ func main() {
 	redisEventSub := events.NewRedisEventSubscriber(redisCache, wsNotifier, log)
 	go redisEventSub.Start(ctx)
 
-	// Инициализируем сервисы
+	// сервисы
 	jwtManager := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
 	authService := auth.NewService(userRepo, jwtManager, tokenBlacklist, log)
 
@@ -216,11 +216,11 @@ func main() {
 	)
 	autoRoundScheduler.Start(ctx)
 
-	// Создаём адаптеры для репозиториев (для game handler)
+	// адаптеры для репозиториев (для game handler)
 	// tournamentRepo уже реализует GetLeaderboardByGameType
 	// matchRepo уже реализует List
 
-	// Создаём адаптер для планирования матчей
+	// адаптер для планирования матчей
 	matchScheduler := &matchSchedulerAdapter{
 		schedulingService: schedulingService,
 		programRepo:       programRepo,
@@ -230,7 +230,7 @@ func main() {
 	// компилирует программу в Docker-песочнице.
 	compileQueue := queue.NewCompileQueue(redisCache, log)
 
-	// Инициализируем handlers
+	// handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
 	programHandler := handlers.NewProgramHandler(
@@ -249,7 +249,7 @@ func main() {
 	wsHandler := handlers.NewWebSocketHandler(wsHub, log)
 	systemHandler := handlers.NewSystemHandler(log)
 
-	// Создаём API сервер
+	// API сервер
 	adminChecker := middleware.NewVerifiedAdminChecker(userRepo, 5*time.Minute)
 
 	// Audit log (async). Буфер 2048: при нагрузке 10 admin-запросов/сек
@@ -306,7 +306,7 @@ func main() {
 		Log:                  log,
 	})
 
-	// Создаём HTTP сервер
+	// HTTP сервер
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:           apiServer.Handler(),
@@ -343,7 +343,7 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Запускаем сервер в отдельной горутине
+	// запуск сервера в отдельной горутине
 	go func() {
 		log.Info("API server listening", zap.String("addr", srv.Addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -351,7 +351,7 @@ func main() {
 		}
 	}()
 
-	// Ждём сигнала остановки
+	// ожидание сигнала остановки
 	<-quit
 	log.Info("Shutting down servers...")
 
@@ -359,27 +359,27 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer shutdownCancel()
 
-	// Останавливаем API сервер
+	// остановка API сервера
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("API server forced to shutdown", zap.Error(err))
 	}
-	// Останавливаем background-горутины (rate-limiter cleanup).
+	// остановка background-горутин (rate-limiter cleanup)
 	apiServer.Close()
 
-	// Останавливаем metrics сервер
+	// остановка metrics сервера
 	if metricsSrv != nil {
 		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
 			log.Error("Metrics server forced to shutdown", zap.Error(err))
 		}
 	}
 
-	// Останавливаем авто-раунд планировщик
+	// остановка авто-раунд планировщика
 	autoRoundScheduler.Stop()
 
-	// Останавливаем Redis event subscriber
+	// остановка Redis event subscriber
 	redisEventSub.Stop()
 
-	// Останавливаем WebSocket hub
+	// остановка WebSocket hub
 	cancel()
 
 	log.Info("Servers stopped gracefully")

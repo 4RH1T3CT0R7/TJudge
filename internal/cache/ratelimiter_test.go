@@ -37,7 +37,7 @@ func TestRateLimiter_Allow_DifferentKeys(t *testing.T) {
 	rl := NewRateLimiter(c)
 	ctx := context.Background()
 
-	// выбираем лимит для ключа A
+	// выбор лимита для ключа A
 	allowed, err := rl.Allow(ctx, "test:keyA", 1, time.Minute)
 	require.NoError(t, err)
 	assert.True(t, allowed)

@@ -28,7 +28,7 @@ func New(level string, format string) (*Logger, error) {
 
 func NewWithOptions(opts Options) (*Logger, error) {
 	var zapLevel zapcore.Level
-	// кривой уровень в конфиге не роняем сервис, просто откатываемся в info
+	// кривой уровень в конфиге не роняет сервис, просто откат в info
 	if err := zapLevel.UnmarshalText([]byte(opts.Level)); err != nil {
 		zapLevel = zapcore.InfoLevel
 	}

@@ -189,7 +189,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter models.Tournamen
 
 // Update обновляет турнир с optimistic lock: апдейт проходит только если version
 // в базе совпала с прочитанной, иначе кто-то успел обновить раньше нас и мы
-// отдаём ErrConcurrentUpdate. version инкрементится тем же запросом
+// отдаётся ErrConcurrentUpdate. version инкрементится тем же запросом
 func (r *TournamentRepository) Update(ctx context.Context, tournament *models.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
 	if err != nil {
@@ -304,7 +304,7 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter models
 		argCount++
 	}
 
-	// двигаем окно от курсора
+	// окно двигается от курсора
 	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
 		if pageReq.IsForward() {
 			// вперёд: записи после курсора
@@ -378,11 +378,11 @@ func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter models
 	// есть ли ещё страницы
 	hasMore := len(tournaments) > pageReq.GetLimit()
 	if hasMore {
-		// убираем лишний, он был добавлен только для проверки hasMore
+		// убирается лишний, он был добавлен только для проверки hasMore
 		tournaments = tournaments[:len(tournaments)-1]
 	}
 
-	// для пагинации назад разворачиваем результаты
+	// для пагинации назад результаты разворачиваются
 	if pageReq.IsBackward() {
 		for i, j := 0, len(tournaments)-1; i < j; i, j = i+1, j-1 {
 			tournaments[i], tournaments[j] = tournaments[j], tournaments[i]
@@ -483,7 +483,7 @@ func (r *TournamentRepository) GetParticipants(ctx context.Context, tournamentID
 func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error) {
 	var participants []*models.TournamentParticipant
 
-	// выбираем только участников с последней версией программы для каждой команды и игры
+	// выбираются только участники с последней версией программы для каждой команды и игры
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
 		FROM tournament_participants tp
@@ -539,7 +539,7 @@ type ParticipantWithGameType struct {
 
 // GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)
 func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error) {
-	// выбираем участников с последней ГОТОВОЙ версией программы и их game_type
+	// выбираются участники с последней готовой версией программы и их game_type
 	// только status='ready', тк compiling ещё не собралась, failed не собралась
 	// вообще. если новая версия сломана, команда продолжает играть предыдущей
 	// рабочей версией (MAX(version) берётся среди ready)
@@ -599,7 +599,7 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error) {
 	var participants []*models.TournamentParticipant
 
-	// Выбираем только участников с программами для конкретной игры (последняя версия)
+	// выбираются только участники с программами для конкретной игры (последняя версия)
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
 		FROM tournament_participants tp

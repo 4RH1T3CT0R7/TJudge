@@ -247,7 +247,7 @@ func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournament
 
 // ResetParticipantsForGame сбрасывает рейтинг и статистику участников по игре
 func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
-	// апдейтим только участников, чьи программы этой игры
+	// апдейт только участников, чьи программы этой игры
 	query := `
 		UPDATE tournament_participants tp
 		SET rating = 1500, wins = 0, losses = 0, draws = 0
@@ -310,7 +310,7 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *rating.ParticipantUpdate) error {
 	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
 		for _, u := range []*rating.ParticipantUpdate{update1, update2} {
-			// пишем запись в историю рейтингов
+			// пишется запись в историю рейтингов
 			insertQuery := `
 				INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -329,7 +329,7 @@ func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1
 				return errors.Wrap(err, fmt.Sprintf("failed to create rating history for program %s", u.ProgramID))
 			}
 
-			// атомарно обновляем рейтинг и статистику участника
+			// атомарно обновляется рейтинг и статистика участника
 			var statsField string
 			if u.Won {
 				statsField = "wins = wins + 1"

@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// пул gzip-writer'ов: создавать новый на каждый ответ дорого, поэтому переиспользуем
+// пул gzip-writer'ов: создавать новый на каждый ответ дорого, поэтому переиспользуются
 var gzipWriterPool = sync.Pool{
 	New: func() any {
 		return gzip.NewWriter(io.Discard)
@@ -40,7 +40,7 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 func Compress() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// клиент не умеет gzip — отдаём как есть
+			// клиент не умеет gzip — отдаётся как есть
 			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return

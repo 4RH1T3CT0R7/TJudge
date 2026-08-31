@@ -90,7 +90,7 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 
-			// скоупим ключ по юзеру и маршруту: иначе угадавший чужой ключ
+			// ключ скоупится по юзеру и маршруту: иначе угадавший чужой ключ
 			// мог бы получить чужой ответ или заблокировать чужое создание
 			scope := "anon"
 			if userID, ok := GetUserID(r.Context()); ok {
@@ -114,7 +114,7 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				}
 			}
 
-			// 2. пробуем захватить in-flight маркер через SetNX
+			// 2. попытка захватить in-flight маркер через SetNX
 			ok, err := store.SetNX(r.Context(), cacheKey, "in-flight", inFlightTTL)
 			if err != nil {
 				log.Warn("idempotency store error, bypassing", zap.Error(err))
@@ -128,9 +128,9 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 				return
 			}
 
-			// 3. первый запрос - выполняем handler и сохраняем snapshot
-			// если ответ не сохранили (не-2xx, ошибка сериализации, паника),
-			// снимаем маркер - иначе честный ретрай ловил бы 409 до конца TTL
+			// 3. первый запрос - handler выполняется, snapshot сохраняется
+			// если ответ не сохранён (не-2xx, ошибка сериализации, паника),
+			// маркер снимается - иначе честный ретрай ловил бы 409 до конца TTL
 			stored := false
 			defer func() {
 				if !stored {
@@ -145,11 +145,11 @@ func Idempotency(store IdempotencyStore, log *logger.Logger) func(http.Handler) 
 			}
 			next.ServeHTTP(rec, r)
 
-			// храним только успешные ответы (2xx), ошибку клиент починит и повторит
+			// хранятся только успешные ответы (2xx), ошибку клиент починит и повторит
 			if rec.status >= 200 && rec.status < 300 {
 				headerSnapshot := map[string][]string{}
 				for k, v := range w.Header() {
-					// пропускаем чувствительные заголовки
+					// чувствительные заголовки пропускаются
 					if strings.EqualFold(k, "Set-Cookie") || strings.EqualFold(k, "Authorization") {
 						continue
 					}

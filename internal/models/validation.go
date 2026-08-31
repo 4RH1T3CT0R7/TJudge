@@ -118,7 +118,7 @@ func (t *Tournament) Validate() error {
 }
 
 // Validate валидирует Match.
-// правила тут дёргает планировщик, так что руками не трогаем поведение
+// правила тут дёргает планировщик, так что руками поведение не трогать
 func (m *Match) Validate() error {
 	errs := ValidationErrors{}
 

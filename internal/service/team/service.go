@@ -95,7 +95,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*mode
 
 	// TODO: 10 секунд на лок захардкожено, вынести бы в конфиг
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// проверку "не состоит в другой команде" делаем уже под локом
+		// проверка "не состоит в другой команде" уже под локом
 		inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, req.TournamentID, req.UserID)
 		if err != nil {
 			return errors.Wrap(err, "failed to check user team membership")
@@ -170,7 +170,7 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*mo
 	var result *models.Team
 
 	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// лимит считаем под локом, поэтому он честный
+		// лимит считается под локом, поэтому он честный
 		memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
 		if err != nil {
 			return errors.Wrap(err, "failed to get member count")
@@ -243,7 +243,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
 			}
 
-			// последний участник ушёл — удаляем команду
+			// последний участник ушёл — команда удаляется
 			if err := s.teamRepo.Delete(ctx, teamID); err != nil {
 				return errors.Wrap(err, "failed to delete team")
 			}
@@ -251,7 +251,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 			return nil
 		}
 
-		// передаём лидерство первому попавшемуся другому участнику
+		// лидерство передаётся первому попавшемуся другому участнику
 		members, err := s.teamRepo.GetMembers(ctx, teamID)
 		if err != nil {
 			return errors.Wrap(err, "failed to get team members")
@@ -272,7 +272,7 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 
 		if !transferred {
 			// гонка: пока считали и тянули список, остальные тоже вышли.
-			// команда по факту пустая — удаляем её (проверку на активный турнир повторяем)
+			// команда по факту пустая — удаляется (проверка на активный турнир повторяется)
 			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
 			if tErr != nil {
 				return errors.Wrap(tErr, "failed to check tournament status")
@@ -367,7 +367,7 @@ func (s *Service) GetTeamWithMembers(ctx context.Context, teamID uuid.UUID) (*mo
 	return s.teamRepo.GetTeamWithMembers(ctx, teamID)
 }
 
-// TODO: отдаём все команды турнира скопом, на большом турнире понадобится limit/offset
+// TODO: отдаются все команды турнира скопом, на большом турнире понадобится limit/offset
 func (s *Service) GetTeamsByTournament(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	return s.teamRepo.GetByTournamentID(ctx, tournamentID)
 }
@@ -402,7 +402,7 @@ func (s *Service) DeleteTeam(ctx context.Context, teamID uuid.UUID) error {
 		return err
 	}
 
-	// из идущего или завершённого турнира команды не удаляем
+	// из идущего или завершённого турнира команды не удаляются
 	if tournament.Status == models.TournamentActive || tournament.Status == models.TournamentCompleted {
 		return errors.ErrBadRequest.WithMessage("cannot delete team from active or completed tournament")
 	}

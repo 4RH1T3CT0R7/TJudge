@@ -25,7 +25,7 @@ func DefaultTimeoutConfig() TimeoutConfig {
 	}
 }
 
-// SmartTimeout выбирает таймаут по типу запроса: тяжёлым выборкам даём больше,
+// SmartTimeout выбирает таймаут по типу запроса: тяжёлым выборкам достаётся больше,
 // записи — меньше. тип операции угадывается по кускам пути, приём грубоватый,
 // но на нашем наборе роутов работает нормально
 func SmartTimeout(config TimeoutConfig) func(next http.Handler) http.Handler {
@@ -33,7 +33,7 @@ func SmartTimeout(config TimeoutConfig) func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			timeout := getTimeoutForRequest(r, config)
 
-			// 0 — это ws, его не ограничиваем
+			// 0 — это ws, он не ограничивается
 			if timeout == 0 {
 				next.ServeHTTP(w, r)
 				return

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// матч уже не pending, второй раз в обработку не берём (защита от дублей)
+// матч уже не pending, второй раз в обработку не берётся (защита от дублей)
 var ErrMatchAlreadyProcessed = errors.New("match already processed or in progress")
 
 type MatchFilter struct {

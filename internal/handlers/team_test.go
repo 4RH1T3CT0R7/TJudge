@@ -146,7 +146,7 @@ func TestTeamHandler_Create_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
 	req = withUserID(req, userID)
 
-	// имя и турнир из тела, автора берём из контекста
+	// имя и турнир из тела, автор берётся из контекста
 	svc.On("CreateTeam", mock.Anything, mock.MatchedBy(func(r *team.CreateTeamRequest) bool {
 		return r.UserID == userID && r.Name == "My Team"
 	})).Return(&models.Team{ID: teamID, Name: "My Team"}, nil)
@@ -162,7 +162,7 @@ func TestTeamHandler_Create_MissingUserID(t *testing.T) {
 
 	body, _ := json.Marshal(CreateTeamRequest{Name: "Test"})
 	req := httptest.NewRequest("POST", "/api/v1/teams", bytes.NewReader(body))
-	// user id в контекст не кладём
+	// user id в контекст не кладётся
 
 	rr := httptest.NewRecorder()
 	h.Create(rr, req)
@@ -446,7 +446,7 @@ func TestTeamHandler_GetMyTeam_NoTeam(t *testing.T) {
 	rr := httptest.NewRecorder()
 	h.GetMyTeam(rr, req)
 
-	// команды нет — это не ошибка, отдаём null
+	// команды нет — это не ошибка, отдаётся null
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), `"data":null`)
 }

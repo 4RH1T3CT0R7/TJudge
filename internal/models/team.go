@@ -25,7 +25,7 @@ type TeamMember struct {
 	JoinedAt time.Time `json:"joined_at" db:"joined_at"`
 }
 
-// команда вместе с участниками, отдаём в апи
+// команда вместе с участниками, отдаётся в апи
 type TeamWithMembers struct {
 	Team
 	Members []User `json:"members"`

@@ -11,7 +11,7 @@ import (
 type AppError struct {
 	Code    int    // http код
 	Message string // что показать пользователю
-	Err     error  // внутренняя ошибка, наружу не отдаём
+	Err     error  // внутренняя ошибка, наружу не отдаётся
 }
 
 func (e *AppError) Error() string {
@@ -35,7 +35,7 @@ func New(code int, message string, err error) *AppError {
 }
 
 // Wrap оборачивает ошибку с текстом. обязательно через %w -
-// иначе выше по стеку не достанем http код из обёрнутого сентинела
+// иначе выше по стеку не достать http код из обёрнутого сентинела
 func Wrap(err error, message string) error {
 	if err == nil {
 		return nil
@@ -74,7 +74,7 @@ var (
 )
 
 // WithMessage новая ошибка с тем же кодом но другим текстом.
-// именно НОВАЯ - сентинелы это глобалы, мутировать их нельзя
+// именно новая - сентинелы это глобалы, мутировать их нельзя
 func (e *AppError) WithMessage(msg string) *AppError {
 	return &AppError{
 		Code:    e.Code,
@@ -105,7 +105,7 @@ func GetAppError(err error) *AppError {
 	return nil
 }
 
-// ToAppError достаёт AppError из ошибки, а если это не наша ошибка -
+// ToAppError достаёт AppError из ошибки, а если это не своя ошибка -
 // заворачивает в 500
 func ToAppError(err error) *AppError {
 	if err == nil {

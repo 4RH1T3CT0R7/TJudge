@@ -6,7 +6,7 @@ import (
 )
 
 // Registry — реестр игровых плагинов
-// НЕ потокобезопасен: все Register должны отработать до первого Get/List/Has
+// не потокобезопасен: все Register должны отработать до первого Get/List/Has
 // (обычно на старте, при инициализации)
 type Registry struct {
 	plugins map[string]*GamePlugin

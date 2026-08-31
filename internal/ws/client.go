@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	// сколько ждём запись в сокет
+	// сколько ждать запись в сокет
 	writeWait = 10 * time.Second
 
-	// ждём pong от клиента, 35s - чтобы быстро ловить мёртвые коннекты
+	// ожидание pong от клиента, 35s - чтобы быстро ловить мёртвые коннекты
 	pongWait = 35 * time.Second
 
-	// как часто пингуем (30s, достаточно чтобы заметить отвал за pongWait)
+	// как часто шлётся пинг (30s, достаточно чтобы заметить отвал за pongWait)
 	pingPeriod = 30 * time.Second
 
 	// макс размер входящего сообщения
@@ -44,7 +44,7 @@ type Client struct {
 	userID       uuid.UUID
 	log          *logger.Logger
 
-	// closed - атомарный флаг что send-канал закрыт. читаем без мьютекса из
+	// closed - атомарный флаг что send-канал закрыт. читается без мьютекса из
 	// sendPong/WritePump чтобы не писать в закрытый канал. писать только через
 	// CloseSend (sync.Once даёт идемпотентность)
 	closed    atomic.Bool
@@ -113,7 +113,7 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// рейт-лимит per-client. превысил - закрываем с кодом 1008 (policy violation)
+		// рейт-лимит per-client. превысил - закрытие с кодом 1008 (policy violation)
 		if !c.readLimiter.Allow() {
 			c.log.Info("WebSocket client exceeded message rate limit, disconnecting",
 				zap.String("tournament_id", c.tournamentID.String()),
@@ -153,7 +153,7 @@ func (c *Client) WritePump() {
 				return
 			}
 
-			// досылаем что накопилось в канале отдельными фреймами
+			// досылается что накопилось в канале отдельными фреймами
 			n := len(c.send)
 			for range n {
 				queued, ok := <-c.send
@@ -185,7 +185,7 @@ func (c *Client) handleMessage(data []byte) {
 		return
 	}
 
-	// пока умеем только ping, остальное игнорим
+	// пока только ping, остальное игнорится
 	switch msg.Type {
 	case MessageTypePing:
 		c.sendPong()
@@ -212,7 +212,7 @@ func (c *Client) sendPong() {
 		return
 	}
 
-	// fast-path: если канал уже закрыт другой горутиной - не суёмся
+	// fast-path: если канал уже закрыт другой горутиной - лучше не соваться
 	if c.IsClosed() {
 		return
 	}

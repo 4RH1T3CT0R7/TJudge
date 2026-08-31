@@ -79,7 +79,7 @@ func TestAudit_RecordsAdminMutation(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusCreated, rr.Code)
 
-	// async - ждём drain
+	// async - ожидание drain
 	assert.Eventually(t, func() bool { return sink.len() == 1 }, time.Second, 10*time.Millisecond)
 	e := sink.last()
 	assert.Equal(t, adminID, e.ActorID)

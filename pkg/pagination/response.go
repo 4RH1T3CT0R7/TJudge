@@ -39,7 +39,7 @@ func NewConnection[T any](nodes []T, getCursor func(T) (*Cursor, error), pageReq
 		HasPreviousPage: hasMore && pageRequest.IsBackward(),
 	}
 
-	// Устанавливаем start и end курсоры
+	// установка курсоров start и end
 	if len(edges) > 0 {
 		pageInfo.StartCursor = &edges[0].Cursor
 		pageInfo.EndCursor = &edges[len(edges)-1].Cursor

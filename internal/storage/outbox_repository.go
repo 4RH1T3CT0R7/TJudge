@@ -24,7 +24,7 @@ const OutboxKindRatingUpdate = "rating_update"
 const outboxMaxAttempts = 10
 
 // OutboxRepository - запасная таблица match_outbox: если воркер упал между
-// записью результата матча и пересчётом рейтинга, задачу добираем отсюда
+// записью результата матча и пересчётом рейтинга, задача добирается отсюда
 type OutboxRepository struct {
 	db *DB
 }
@@ -34,7 +34,7 @@ func NewOutboxRepository(database *DB) *OutboxRepository {
 }
 
 // ClaimPending атомарно забирает пачку зависших pending-задач.
-// берём только старше olderThan (свежие тянет fast path воркера) и без
+// берутся только старше olderThan (свежие тянет fast path воркера) и без
 // живого lease (claimed_at старше минуты или NULL). FOR UPDATE SKIP LOCKED
 // даёт нескольким диспетчерам работать параллельно без двойного клейма,
 // а lease не даёт заклеймить повторно пока задачу обрабатывают

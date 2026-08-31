@@ -311,7 +311,7 @@ func (s *ProgramRepositorySuite) TestDelete() {
 	err := s.repo.Delete(ctx, program.ID)
 	require.NoError(s.T(), err)
 
-	// убираем из трекинга, он уже удалён
+	// убирается из трекинга, он уже удалён
 	for i, id := range s.programIDs {
 		if id == program.ID {
 			s.programIDs = append(s.programIDs[:i], s.programIDs[i+1:]...)

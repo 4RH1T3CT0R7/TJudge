@@ -58,7 +58,7 @@ func (r *ProgramRepository) Create(ctx context.Context, program *models.Program)
 // CreateWithAtomicVersion создаёт программу и сам считает версию:
 // COALESCE(MAX(version),0)+1 прямо внутри INSERT, без отдельного запроса.
 // если две загрузки прилетели одновременно — уникальный индекс ругнётся,
-// тогда повторяем с новым id, до 3 раз
+// тогда повтор с новым id, до 3 раз
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
 		program.Status = models.ProgramReady

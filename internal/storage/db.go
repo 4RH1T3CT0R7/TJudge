@@ -49,12 +49,12 @@ func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*D
 		time.Sleep(retryInterval)
 	}
 
-	// настраиваем пул соединений
+	// настройка пула соединений
 	db.SetMaxOpenConns(cfg.MaxConnections)
 	db.SetMaxIdleConns(cfg.MaxIdle)
 	db.SetConnMaxLifetime(cfg.MaxLifetime)
 
-	// проверяем соединение
+	// проверка соединения
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -75,7 +75,7 @@ func New(cfg *config.DatabaseConfig, log *logger.Logger, m *metrics.Metrics) (*D
 		done:    make(chan struct{}),
 	}
 
-	// запускаем мониторинг метрик пула
+	// запуск мониторинга метрик пула
 	go d.monitorConnectionPool()
 
 	return d, nil
@@ -101,7 +101,7 @@ func (db *DB) monitorConnectionPool() {
 	}
 }
 
-// slowQueryThreshold - порог, выше которого запрос считаем медленным и логируем
+// slowQueryThreshold - порог, выше которого запрос считается медленным и логируется
 const slowQueryThreshold = 500 * time.Millisecond
 
 // ExecWithMetrics выполняет запрос с записью метрик
@@ -212,7 +212,7 @@ func (db *DB) EnsureMatchPartitions(ctx context.Context) error {
 	return nil
 }
 
-// EnsureRatingHistoryPartitions тоже самое для rating_history, зовём на старте
+// EnsureRatingHistoryPartitions тоже самое для rating_history, зовётся на старте
 func (db *DB) EnsureRatingHistoryPartitions(ctx context.Context) error {
 	_, err := db.ExecContext(ctx, "SELECT create_rating_history_partition_if_needed()")
 	if err != nil {
@@ -249,7 +249,7 @@ func (db *DB) DropOldPartitions(ctx context.Context, retentionMonths int) error 
 }
 
 // StartPartitionMaintenance раз в сутки досоздаёт партиции на текущий и
-// следующий месяц (иначе при долгой работе без рестарта ловим
+// следующий месяц (иначе при долгой работе без рестарта ловится
 // partition-not-found). retentionMonths > 0 ещё и удаляет партиции старше
 // этого числа месяцев (DB_PARTITION_RETENTION_MONTHS; 0 - выключено)
 // TODO: интервал в сутки захардкожен, мб тоже в конфиг вынести

@@ -62,7 +62,7 @@ func TestSecurityHeaders_HSTS_WithTLS(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/", nil)
-	req.TLS = &tls.ConnectionState{} // имитируем TLS
+	req.TLS = &tls.ConnectionState{} // имитация TLS
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

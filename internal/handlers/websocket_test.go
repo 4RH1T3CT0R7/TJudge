@@ -71,7 +71,7 @@ func TestWebSocketHandler_HandleTournament_MissingAuth(t *testing.T) {
 // HTTP-соединения. Для такого теста потребуется httptest.NewServer + реальный WebSocket dialer.
 
 // TestCheckWebSocketOrigin_ProdFailClosed защищает от CSWSH: в prod
-// wildcard и пустой origin-list ДОЛЖНЫ отклоняться.
+// wildcard и пустой origin-list должны отклоняться.
 func TestCheckWebSocketOrigin_ProdFailClosed(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "")
@@ -117,7 +117,7 @@ func TestCheckWebSocketOrigin_ProdEmptyOriginBrowser(t *testing.T) {
 }
 
 func TestCheckWebSocketOrigin_ProdEmptyOriginNonBrowser(t *testing.T) {
-	// curl/bot не шлёт Sec-Fetch-Site - разрешаем.
+	// curl/bot не шлёт Sec-Fetch-Site - разрешается
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "https://tjudge.example")
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)

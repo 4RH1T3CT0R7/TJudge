@@ -66,7 +66,7 @@ type roleCacheEntry struct {
 
 // VerifiedAdminChecker сверяет админскую роль с базой а не только с jwt.
 // смысл: jwt живёт сутки, и если у админа отобрали права, по одному jwt он
-// оставался бы админом до истечения токена. тут перепроверяем базу с кэшом
+// оставался бы админом до истечения токена. тут перепроверка базы с кэшом
 type VerifiedAdminChecker struct {
 	userRepo UserRoleChecker
 	cacheTTL time.Duration
@@ -88,7 +88,7 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// сначала дешёвая проверка по jwt - если в токене не админ,
-			// в базу даже не ходим
+			// до базы дело не доходит
 			role, ok := r.Context().Value(RoleKey).(models.Role)
 			if !ok || role != models.RoleAdmin {
 				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
@@ -114,15 +114,15 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 				return
 			}
 
-			// в кэше нет или протухло - идём в базу
+			// в кэше нет или протухло - запрос в базу
 			user, err := v.userRepo.GetByID(r.Context(), userID)
 			if err != nil {
 				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
 
-			// пишем в кэш. заодно ленивая чистка: когда записей за тысячу,
-			// выкидываем протухшие (отдельную горутину заводить лень, да и незачем)
+			// запись в кэш. заодно ленивая чистка: когда записей за тысячу,
+			// протухшие выкидываются (отдельную горутину заводить лень, да и незачем)
 			v.mu.Lock()
 			v.cache[userID] = roleCacheEntry{
 				role:      user.Role,

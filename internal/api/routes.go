@@ -67,7 +67,7 @@ type ServerDeps struct {
 	IdempStore           middleware.IdempotencyStore     // опционально
 	AuthService          middleware.AuthService
 	RateLimiter          middleware.RateLimiter
-	AdminChecker         *middleware.VerifiedAdminChecker // опционально, без него админа проверяем только по jwt
+	AdminChecker         *middleware.VerifiedAdminChecker // опционально, без него админ проверяется только по jwt
 	CORS                 config.CORSConfig
 	RateLimit            config.RateLimitConfig
 	Log                  *logger.Logger
@@ -145,7 +145,7 @@ func (s *Server) auditMiddleware() func(http.Handler) http.Handler {
 	return middleware.Audit(s.auditLogger)
 }
 
-// setupMiddleware подключает мидлвари. ПОРЯДОК ВАЖЕН: RealIP должен идти
+// setupMiddleware подключает мидлвари. порядок важен: RealIP должен идти
 // до рейтлимита и аудита (они читают ip из RemoteAddr), Recoverer оборачивает
 // всё что ниже, CORS последним
 func (s *Server) setupMiddleware() {
@@ -199,7 +199,7 @@ func (s *Server) setupMiddleware() {
 	}))
 
 	// csrf-защита не нужна: jwt лежит в localStorage и ходит в заголовке
-	// Authorization, куками мы не пользуемся
+	// Authorization, куки не используются
 }
 
 // setupRoutes вешает все маршруты

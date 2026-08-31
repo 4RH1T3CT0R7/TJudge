@@ -36,7 +36,7 @@ func startHub(t *testing.T, hub *Hub) context.CancelFunc {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	go hub.Run(ctx)
-	// Даём горутине хаба время запуститься
+	// горутине хаба даётся время запуститься
 	time.Sleep(5 * time.Millisecond)
 	return cancel
 }
@@ -149,7 +149,7 @@ func TestHub_UnregisterUnregistered(t *testing.T) {
 	// Отмена регистрации никогда не зарегистрированного клиента не должна паниковать
 	hub.unregister <- client
 
-	// Даём время на обработку и проверяем, что статистика по-прежнему нулевая
+	// пауза на обработку и проверка, что статистика по-прежнему нулевая
 	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
@@ -174,7 +174,7 @@ func TestHub_BroadcastToRegisteredClients(t *testing.T) {
 		Payload:      map[string]string{"status": "completed"},
 	}
 
-	// Ждём, пока оба клиента получат сообщение
+	// ожидание, пока оба клиента получат сообщение
 	require.Eventually(t, func() bool {
 		return len(c1.send) == 1 && len(c2.send) == 1
 	}, time.Second, time.Millisecond)
@@ -201,7 +201,7 @@ func TestHub_BroadcastNoClients(t *testing.T) {
 		Payload:      nil,
 	}
 
-	// Даём время на обработку
+	// пауза на обработку
 	time.Sleep(5 * time.Millisecond)
 	stats := hub.GetStats()
 	assert.Equal(t, 0, stats["tournaments"])
@@ -276,7 +276,7 @@ func TestHub_BroadcastToSlowClient_DisconnectsClient(t *testing.T) {
 
 	tournamentID := uuid.New()
 
-	// Создаём "медленного" клиента с send-буфером размера 1
+	// создаётся "медленный" клиент с send-буфером размера 1
 	log, _ := logger.New("error", "json")
 	slowClient := &Client{
 		hub:          hub,
@@ -290,10 +290,10 @@ func TestHub_BroadcastToSlowClient_DisconnectsClient(t *testing.T) {
 	hub.register <- slowClient
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Заполняем send-буфер "медленного" клиента
+	// заполнение send-буфера "медленного" клиента
 	slowClient.send <- []byte("filler")
 
-	// Рассылаем сообщение; буфер "медленного" клиента полон, поэтому он должен быть отключён
+	// рассылка сообщения; буфер "медленного" клиента полон, поэтому он должен быть отключён
 	hub.broadcast <- &Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypeMatchUpdate,
@@ -325,7 +325,7 @@ func TestHub_DoubleUnregister_NoPanic(t *testing.T) {
 	// Повторный unregister не должен паниковать
 	hub.unregister <- client
 
-	// Даём время на обработку повторного unregister
+	// пауза на обработку повторного unregister
 	time.Sleep(10 * time.Millisecond)
 
 	stats := hub.GetStats()
@@ -346,17 +346,17 @@ func TestHub_BroadcastOtherTournament_NotReceived(t *testing.T) {
 	hub.register <- clientA
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Рассылаем в турнир B (где clientA НЕ зарегистрирован)
+	// рассылка в турнир B (где clientA не зарегистрирован)
 	hub.broadcast <- &Message{
 		TournamentID: tournamentB,
 		Type:         MessageTypeLeaderboardUpdate,
 		Payload:      map[string]string{"rank": "1"},
 	}
 
-	// Даём время на обработку broadcast
+	// пауза на обработку broadcast
 	time.Sleep(10 * time.Millisecond)
 
-	// Клиент A НЕ должен был получить ничего
+	// Клиент A не должен был получить ничего
 	select {
 	case <-clientA.send:
 		t.Fatal("client should not receive a message broadcast to a different tournament")
@@ -373,11 +373,11 @@ func TestHub_RegisterClosedClient_Skips(t *testing.T) {
 	tournamentID := uuid.New()
 	client := newTestClient(hub, tournamentID, uuid.New())
 
-	// Закрываем клиента до регистрации (идемпотентно через sync.Once)
+	// клиент закрывается до регистрации (идемпотентно через sync.Once)
 	client.CloseSend()
 
 	hub.register <- client
-	// Даём время на обработку register
+	// пауза на обработку register
 	time.Sleep(10 * time.Millisecond)
 
 	stats := hub.GetStats()
@@ -396,7 +396,7 @@ func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
 	hub.register <- client
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Заполняем broadcast-канал хаба до ёмкости (256)
+	// заполнение broadcast-канала хаба до ёмкости (256)
 	for i := range 256 {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
@@ -409,7 +409,7 @@ func TestHub_Broadcast_ChannelFull_EventuallyDelivered(t *testing.T) {
 	// но всё равно в итоге доставить сообщение (поскольку хаб обрабатывает)
 	hub.Broadcast(tournamentID, string(MessageTypeLeaderboardUpdate), nil)
 
-	// Сливаем client send-канал и проверяем, что сообщения доставлены
+	// слив client send-канала и проверка, что сообщения доставлены
 	require.Eventually(t, func() bool {
 		return len(client.send) > 0
 	}, 2*time.Second, 10*time.Millisecond)
@@ -465,7 +465,7 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	// Конкурентно регистрируем клиентов
+	// конкурентная регистрация клиентов
 	clients := make([]*Client, numGoroutines)
 	for i := range numGoroutines {
 		clients[i] = newTestClient(hub, tournamentID, uuid.New())
@@ -488,7 +488,7 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 	wg.Wait()
 
-	// Ждём завершения всех регистраций
+	// ожидание завершения всех регистраций
 	waitForStats(t, hub, "total_clients", numGoroutines)
 
 	stats := hub.GetStats()
@@ -498,11 +498,11 @@ func TestHub_ConcurrentRegisterBroadcast(t *testing.T) {
 
 func TestHub_Broadcast_ChannelFull_DroppedAfterTimeout(t *testing.T) {
 	hub := newTestHub(t)
-	// Хаб НЕ запускаем - broadcast-канал никогда не будет опустошён.
+	// Хаб не запускается - broadcast-канал никогда не будет опустошён.
 
 	tournamentID := uuid.New()
 
-	// Заполняем broadcast-канал до ёмкости.
+	// заполнение broadcast-канала до ёмкости
 	for i := range 256 {
 		hub.broadcast <- &Message{
 			TournamentID: tournamentID,
@@ -549,14 +549,14 @@ func TestHub_BroadcastMessage_MarshalError(t *testing.T) {
 	hub.register <- client
 	waitForStats(t, hub, "total_clients", 1)
 
-	// Отправляем сообщение с payload, который не сериализуется.
+	// отправка сообщения с payload, который не сериализуется.
 	hub.broadcast <- &Message{
 		TournamentID: tournamentID,
 		Type:         MessageTypeMatchUpdate,
 		Payload:      make(chan int), // каналы не сериализуются
 	}
 
-	// Даём хабу время на обработку.
+	// пауза хабу на обработку.
 	time.Sleep(50 * time.Millisecond)
 
 	// Клиент должен остаться подключённым (не отключён из-за ошибки marshal).

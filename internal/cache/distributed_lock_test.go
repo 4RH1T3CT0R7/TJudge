@@ -40,7 +40,7 @@ func TestDistributedLock_TryLock(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	// пока держим — второй TryLock исчерпает попытки и вернёт ошибку с текстом
+	// пока лок держится — второй TryLock исчерпает попытки и вернёт ошибку с текстом
 	_, err = lock.TryLock(ctx, "test-trylock", 5*time.Second, 2, 10*time.Millisecond)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to acquire lock after")

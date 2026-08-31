@@ -84,7 +84,7 @@ func (h *Hub) registerClient(client *Client) {
 	defer h.mu.Unlock()
 
 	// если клиент уже закрыт (unregister прилетел раньше register из-за буферов),
-	// не добавляем мёртвого клиента в map
+	// мёртвый клиент в map не добавляется
 	if client.IsClosed() {
 		h.log.Info("Client already closed, skipping registration",
 			zap.String("tournament_id", client.tournamentID.String()),
@@ -113,7 +113,7 @@ func (h *Hub) unregisterClient(client *Client) {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
 
-			// пустую map турнира выкидываем
+			// пустая map турнира выкидывается
 			if len(clients) == 0 {
 				delete(h.tournaments, client.tournamentID)
 			}
@@ -125,7 +125,7 @@ func (h *Hub) unregisterClient(client *Client) {
 		}
 	}
 
-	// всегда закрываем клиента, даже если его ещё не было в map (register висит
+	// клиент всегда закрывается, даже если его ещё не было в map (register висит
 	// в буфере) - тогда registerClient увидит закрытого и пропустит.
 	// CloseSend идемпотентен через sync.Once
 	client.CloseSend()
@@ -140,7 +140,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 		return
 	}
 
-	// маршалим один раз
+	// маршалинг один раз
 	data, err := json.Marshal(message)
 	if err != nil {
 		h.log.LogError("Failed to marshal message", err)
@@ -148,7 +148,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 	}
 
 	for client := range clients {
-		// уже закрытых пропускаем (защита от буферизованных register/unregister)
+		// уже закрытые пропускаются (защита от буферизованных register/unregister)
 		if client.IsClosed() {
 			delete(clients, client)
 			continue
@@ -156,7 +156,7 @@ func (h *Hub) broadcastMessage(message *Message) {
 		select {
 		case client.send <- data:
 		default:
-			// буфер забит - рубим клиента, ждать не будем
+			// буфер забит - клиент рубится, ждать смысла нет
 			h.log.Info("Client send buffer full, disconnecting",
 				zap.String("tournament_id", client.tournamentID.String()),
 				zap.String("user_id", client.userID.String()),
@@ -185,7 +185,7 @@ func (h *Hub) Broadcast(tournamentID uuid.UUID, messageType string, payload any)
 	select {
 	case h.broadcast <- message:
 	default:
-		// канал полон, пробуем ещё разок с таймаутом, потом дропаем
+		// канал полон, ещё попытка с таймаутом, потом дроп
 		timer := time.NewTimer(time.Second)
 		defer timer.Stop()
 		select {
@@ -203,7 +203,7 @@ func (h *Hub) shutdown() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// закрываем все подключения (idempotent через sync.Once)
+	// закрытие всех подключений (idempotent через sync.Once)
 	for tournamentID, clients := range h.tournaments {
 		for client := range clients {
 			client.CloseSend()

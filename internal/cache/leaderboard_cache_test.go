@@ -66,7 +66,7 @@ func TestLeaderboardCache_IncrementRating(t *testing.T) {
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
-	// заодно проверяем что UpdateRating кладёт member/score корректно
+	// заодно проверяется что UpdateRating кладёт member/score корректно
 	assert.Equal(t, 1, entries[0].Rank)
 	assert.Equal(t, programID, entries[0].ProgramID)
 	assert.Equal(t, 1550, entries[0].Rating)
@@ -222,7 +222,7 @@ func TestLeaderboardCache_GetTop_InvalidUUID(t *testing.T) {
 	_, err := mr.ZAdd(key, 1500, "not-a-valid-uuid")
 	require.NoError(t, err)
 
-	// битый uuid просто пропускаем
+	// битый uuid просто пропускается
 	entries, err := lc.GetTop(ctx, tournamentID, 10)
 	require.NoError(t, err)
 	assert.Empty(t, entries)

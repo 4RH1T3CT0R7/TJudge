@@ -148,7 +148,7 @@ func (h *SystemRecoveryHandler) RetryOutboxErrors(w http.ResponseWriter, r *http
 // @Success 200 {object} object{requeued=int}
 // @Router /system/recovery/requeue-compiling [post]
 func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.Request) {
-	// olderThan=0: берём ВСЕ compiling-программы — кнопка жмётся осознанно,
+	// olderThan=0: берутся все compiling-программы — кнопка жмётся осознанно,
 	// дедупликацию дублей обеспечивает идемпотентность compile-worker'а
 	// (статус-проверка перед компиляцией).
 	programs, err := h.programRepo.GetStuckCompiling(r.Context(), 0, 500)

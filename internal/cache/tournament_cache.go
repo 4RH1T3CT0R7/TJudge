@@ -105,7 +105,7 @@ func (tc *TournamentCache) IncrementParticipantsCount(ctx context.Context, tourn
 		return err
 	}
 
-	// ttl вешаем только на первой записи (val==1), иначе счётчик
+	// ttl вешается только на первой записи (val==1), иначе счётчик
 	// никогда не протухнет — каждый инкремент сбрасывал бы expiry
 	if val == 1 {
 		if err := tc.cache.Expire(ctx, key, tc.ttl); err != nil {
@@ -180,7 +180,7 @@ func (tc *TournamentCache) GetList(ctx context.Context, filter string) ([]*model
 }
 
 // InvalidateList сносит все закэшированные списки турниров через SCAN
-// (фильтров много, конкретные ключи заранее не знаем)
+// (фильтров много, конкретные ключи заранее не известны)
 func (tc *TournamentCache) InvalidateList(ctx context.Context) error {
 	pattern := "tournaments:list:*"
 	var cursor uint64

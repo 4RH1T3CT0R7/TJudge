@@ -299,7 +299,7 @@ func TestRequireUserID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, userID, gotID)
 
-	// пустой контекст - ждём ошибку
+	// пустой контекст - ожидается ошибка
 	emptyCtx := context.Background()
 	_, err = middleware.RequireUserID(emptyCtx)
 	assert.Error(t, err)
@@ -365,7 +365,7 @@ func TestOptionalAuth_BlacklistCheckError(t *testing.T) {
 	mockAuth.On("IsTokenBlacklisted", mock.Anything, "some-token").Return(false, assert.AnError)
 
 	handler := middleware.OptionalAuth(mockAuth, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// fail-open: продолжаем как аноним, user ID в контекст не кладём
+		// fail-open: проход как аноним, user ID в контекст не кладётся
 		_, ok := middleware.GetUserID(r.Context())
 		assert.False(t, ok, "User ID should not be in context when blacklist check fails")
 

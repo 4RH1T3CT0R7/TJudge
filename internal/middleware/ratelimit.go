@@ -35,7 +35,7 @@ type fallbackEntry struct {
 	lastSeen time.Time
 }
 
-// запасной лимит СТРОЖЕ основного (0.5 = вдвое). если бы fallback был мягче,
+// запасной лимит строже основного (0.5 = вдвое). если бы fallback был мягче,
 // уронить редис = способ обойти основной лимит
 const fallbackLimitMultiplier = 0.5
 
@@ -80,7 +80,7 @@ func (f *fallbackLimiter) cleanup(maxAge time.Duration) {
 }
 
 // RateLimit ограничивает число запросов с одного ip. при недоступном редисе
-// не открываемся нараспашку, а падаем на in-memory fallback (вдвое строже)
+// не открывается нараспашку, а падает на in-memory fallback (вдвое строже)
 func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
 	fallback := newFallbackLimiter(limit, window)
 
@@ -107,7 +107,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := getClientIP(r)
 
-			// локалхост не лимитируем, но только вне прода (удобно для разработки)
+			// локалхост не лимитируется, но только вне прода (удобно для разработки)
 			if os.Getenv("ENVIRONMENT") != "production" && isLocalhost(ip) {
 				next.ServeHTTP(w, r)
 				return
@@ -122,7 +122,7 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 					zap.Error(err),
 				)
 
-				// редис лежит - работаем через запасной лимитер
+				// редис лежит - в ход идёт запасной лимитер
 				if !fallback.allow(ip) {
 					log.Info("Rate limit exceeded (fallback)",
 						zap.String("ip", ip),
@@ -178,7 +178,7 @@ func isLocalhost(ip string) bool {
 }
 
 // getClientIP берёт ip из RemoteAddr - его уже выставил RealIP из chi.
-// сырые заголовки типа X-Forwarded-For тут НЕ читаем, иначе их можно подделать
+// сырые заголовки типа X-Forwarded-For тут не читаются, иначе их можно подделать
 // и обойти лимит
 func getClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

@@ -44,7 +44,7 @@ func TestCacheControl_ReturnsNotModifiedOnETagMatch(t *testing.T) {
 		_, _ = w.Write([]byte(`stable-content`))
 	}))
 
-	// Первый запрос - получаем ETag.
+	// первый запрос - получение ETag
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

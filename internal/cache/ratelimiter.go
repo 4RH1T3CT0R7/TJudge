@@ -17,7 +17,7 @@ func NewRateLimiter(cache *Cache) *RateLimiter {
 	}
 }
 
-// Allow - fixed window: инкрементим счётчик, на первом запросе вешаем ttl окна
+// Allow - fixed window: счётчик инкрементится, на первом запросе вешается ttl окна
 func (rl *RateLimiter) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
 	script := `
 		local current = redis.call("INCR", KEYS[1])

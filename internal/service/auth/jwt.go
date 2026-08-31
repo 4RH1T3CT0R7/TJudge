@@ -69,7 +69,7 @@ func (jm *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 // ValidateToken проверяет подпись и достаёт claims
 func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
-		// обязательно проверяем что алгоритм именно HMAC. если этого не делать,
+		// обязательно проверяется что алгоритм именно HMAC. если этого не делать,
 		// можно подсунуть токен подписанный другим методом (alg confusion) и пролезть
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -87,7 +87,7 @@ func (jm *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	// старые токены выписаны ещё до того как появилось поле Role, у них роль пустая.
-	// ставим RoleUser чтобы человек не потерял доступ после выката
+	// ставится RoleUser чтобы человек не потерял доступ после выката
 	if claims.Role == "" {
 		claims.Role = models.RoleUser
 	}

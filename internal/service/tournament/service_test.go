@@ -168,7 +168,7 @@ func (m *MockQueueManager) EnqueueBatch(ctx context.Context, matches []*models.M
 
 type MockDistributedLock struct{ mock.Mock }
 
-// если мок не вернул ошибку - реально зовём fn, тк надо прогнать тело под локом
+// если мок не вернул ошибку - реально зовётся fn, тк надо прогнать тело под локом
 func (m *MockDistributedLock) WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error {
 	args := m.Called(ctx, key, ttl, fn)
 	if args.Error(0) == nil {
@@ -327,7 +327,7 @@ func TestService_GetByID(t *testing.T) {
 		id := uuid.New()
 		tournament := &models.Tournament{ID: id, Name: "Cached Tournament", GameType: "chess", Status: models.TournamentPending}
 
-		// кладём в кэш заранее - до бд дело не дойдёт
+		// запись в кэш заранее - до бд дело не дойдёт
 		require.NoError(t, service.tournamentCache.Set(ctx, tournament))
 
 		result, err := service.GetByID(ctx, id)
@@ -492,7 +492,7 @@ func TestService_Join(t *testing.T) {
 		err := service.Join(ctx, &JoinRequest{TournamentID: id, ProgramID: uuid.New()})
 		require.NoError(t, err)
 
-		// без лимита счётчик участников не дёргаем
+		// без лимита счётчик участников не дёргается
 		tournamentRepo.AssertNotCalled(t, "GetParticipantsCount", mock.Anything, mock.Anything)
 	})
 
@@ -510,7 +510,7 @@ func TestService_Join(t *testing.T) {
 		err := service.Join(ctx, &JoinRequest{TournamentID: id, ProgramID: uuid.New()})
 		assert.Contains(t, err.Error(), "failed to get participants count")
 
-		// счёт не получем - участника не добавляем
+		// счёт не получен - участник не добавляется
 		tournamentRepo.AssertNotCalled(t, "AddParticipant", mock.Anything, mock.Anything)
 	})
 
@@ -1099,7 +1099,7 @@ func TestService_RetryFailedMatches(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 0, count)
 
-		// нечего перезапускать - в очередь не лезем
+		// нечего перезапускать - в очередь ходить незачем
 		matchRepo.AssertNotCalled(t, "GetPendingByTournamentID", mock.Anything, mock.Anything)
 	})
 
@@ -1162,7 +1162,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 		// n*(n-1) = 3*2 = 6
 		assert.Len(t, matches, 6)
 
-		// заодно проверяем поля сгенерированных матчей
+		// заодно проверяются поля сгенерированных матчей
 		seen := make(map[[2]uuid.UUID]bool)
 		for _, m := range matches {
 			assert.Equal(t, id, m.TournamentID)

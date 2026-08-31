@@ -74,7 +74,7 @@ func sampleRate() float64 {
 	case "":
 		return 0.1
 	}
-	// Больше не разбираем: Prometheus, kafka и прочее используют ParentBased.
+	// больше не разбирается: Prometheus, kafka и прочее используют ParentBased.
 	return 0.1
 }
 
@@ -84,7 +84,7 @@ func HTTPMiddleware(serviceName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		wrapped := otelhttp.NewHandler(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Добавляем trace-id в response header если span активен.
+				// trace-id добавляется в response header если span активен.
 				if span := trace.SpanFromContext(r.Context()); span.SpanContext().IsValid() {
 					w.Header().Set("X-Trace-ID", span.SpanContext().TraceID().String())
 				}

@@ -29,7 +29,7 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 	})
 
 	// после рестарта редис отвечает LOADING пока грузит aof, или ещё не поднялся.
-	// это на пару секунд, поэтому ждём а не падаем сразу (иначе роняло api/worker
+	// это на пару секунд, поэтому лучше подождать а не падать сразу (иначе роняло api/worker
 	// каскадом на каждом рестарте редиса)
 	const (
 		connectTimeout = 60 * time.Second
@@ -232,7 +232,7 @@ func (c *Cache) BRPop(ctx context.Context, timeout time.Duration, keys ...string
 	}
 	if err != nil {
 		// отмена контекста - это штатный graceful shutdown (заблокированным
-		// горутинам пула прилетает cancel), не логируем чтобы не пугать доктора
+		// горутинам пула прилетает cancel), без логов чтобы не пугать доктора
 		if stderrors.Is(err, context.Canceled) {
 			return nil, err
 		}
@@ -345,7 +345,7 @@ func (c *Cache) BatchSetNX(ctx context.Context, keys map[string]any, ttl time.Du
 	}
 
 	_, pipeErr := pipe.Exec(ctx)
-	// даже если pipeline ошибся, собираем что успело выполниться -
+	// даже если pipeline ошибся, собирается что успело выполниться -
 	// на этом держится откат dedup в очереди
 	results := make(map[string]bool, len(cmds))
 	for key, cmd := range cmds {

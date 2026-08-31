@@ -252,7 +252,7 @@ func (s *RatingRepositorySuite) TestUpdateParticipantStats_Win() {
 	err = s.repo.UpdateParticipantStats(ctx, tournament.ID, program.ID, true, false)
 	require.NoError(s.T(), err)
 
-	// геттера полной статы в репо нет, читаем напрямую
+	// геттера полной статы в репо нет, чтение напрямую
 	var wins, losses, draws int
 	err = s.database.QueryRowContext(ctx,
 		"SELECT wins, losses, draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
@@ -421,7 +421,7 @@ func (s *RatingRepositorySuite) TestRatingHistoryFields() {
 }
 
 // ProcessMatchResultAtomic должен в одной транзакции обновить рейтинг+стату
-// обоим участникам. проверяем zero-sum: сколько один выиграл, столько другой потерял.
+// обоим участникам. проверка zero-sum: сколько один выиграл, столько другой потерял.
 func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
 	tournament, program1 := s.setupRatingPrerequisites("pmat1")
 	user2 := s.createUser("rating_pmat2")
@@ -618,7 +618,7 @@ func (s *RatingRepositorySuite) TestResetParticipantsForGame() {
 
 	ctx := context.Background()
 
-	// уводим рейтинг и стату от дефолтов
+	// рейтинг и стата уводятся от дефолтов
 	err := s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog1.ID, 200, true, false)
 	require.NoError(s.T(), err)
 	err = s.repo.UpdateParticipantRatingAndStats(ctx, tournament.ID, prog2.ID, -100, false, false)
@@ -696,7 +696,7 @@ func (s *RatingRepositorySuite) TestUpdateParticipantRating_ConcurrentDeltas() {
 	final, err := s.repo.GetParticipantRating(ctx, tournament.ID, program.ID)
 	require.NoError(s.T(), err)
 	// каждый из N параллельных UPDATE добавил +1, итого +N.
-	// если БД не сериализует корректно, получим меньше baseline+N (lost update).
+	// если БД не сериализует корректно, выйдет меньше baseline+N (lost update).
 	assert.Equal(s.T(), baseline+n, final,
 		"concurrent delta-based UPDATE must not lose updates (MVCC row-lock invariant)")
 }
