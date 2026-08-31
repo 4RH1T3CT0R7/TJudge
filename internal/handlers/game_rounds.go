@@ -318,7 +318,7 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 //
 // репозиторий уже сливает обе ориентации матча (AB и BA) в одну ячейку, так что
 // на выходе плоский список ячеек, а не полноценная матрица - фронт сам раскладывает
-// её по строкам и столбцам, здесь мы только отдаём агрегат как есть
+// её по строкам и столбцам, здесь только отдаётся агрегат как есть
 // @Summary Head-to-head матрица по игре
 // @Description Агрегат личных встреч всех пар команд (обе ориентации матчей слиты)
 // @Tags games
@@ -340,7 +340,7 @@ func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request)
 	}
 
 	// матрица считается по game_type (системному имени), а не по gameID,
-	// поэтому сначала резолвим игру и достаём её Name
+	// поэтому сначала резолвится игра и достаётся её Name
 	g, err := h.gameService.GetByID(r.Context(), gameID)
 	if err != nil {
 		h.log.LogError("Failed to get game", err)
@@ -513,11 +513,11 @@ type ResetGameRoundResponse struct {
 
 // ResetGameRound полностью сбрасывает раунд игры: удаляет матчи, обнуляет рейтинги и статистику.
 //
-// это самая разрушительная операция во всём хендлере, поэтому идём аккуратно:
-//  1. резолвим игру, чтобы получить её game_type (сброс работает по типу, не по id)
-//  2. одной транзакцией в репозитории сносим матчи, обнуляем участников и историю рейтинга
-//  3. логируем сколько чего снесли (пригодится при разборе жалоб «куда делись очки»)
-//  4. шлём событие GameRoundReset, чтобы подписчики сбросили кэши и лидерборды
+// это самая разрушительная операция во всём хендлере, поэтому всё делается аккуратно:
+//  1. игра резолвится, чтобы получить её game_type (сброс работает по типу, не по id)
+//  2. одной транзакцией в репозитории сносятся матчи, обнуляются участники и история рейтинга
+//  3. логируется сколько чего снесли (пригодится при разборе жалоб «куда делись очки»)
+//  4. уходит событие GameRoundReset, чтобы подписчики сбросили кэши и лидерборды
 //
 // возврата назад нет - удалённые матчи не восстановить, так что ручка только для админов
 // @Summary Сбросить раунд игры
@@ -543,7 +543,7 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// сброс идёт по game_type, поэтому сперва достаём саму игру
+	// сброс идёт по game_type, поэтому сперва достаётся сама игра
 	g, err := h.gameService.GetByID(r.Context(), gameID)
 	if err != nil {
 		h.log.LogError("Failed to get game details", err,
@@ -624,7 +624,7 @@ func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// если выключаем, ставим дефолтный интервал
+	// если выключается, ставится дефолтный интервал
 	if !req.Enabled && req.IntervalSeconds == 0 {
 		req.IntervalSeconds = 60
 	}
@@ -719,7 +719,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// получаем все игры этого турнира
+	// берутся все игры этого турнира
 	games, err := h.tournamentGameStatusRepo.GetTournamentGames(r.Context(), tournamentID)
 	if err != nil {
 		h.log.LogError("Failed to get tournament games", err,
@@ -729,7 +729,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// резолвим upload-директорию для валидации путей (EvalSymlinks раскрывает симлинки)
+	// резолвится upload-директория для валидации путей (EvalSymlinks раскрывает симлинки)
 	absUploadDir, err := filepath.EvalSymlinks(h.uploadDir)
 	if err != nil {
 		h.log.Error("Failed to resolve upload dir", zap.Error(err))
@@ -737,7 +737,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// выставляем заголовки ответа до записи тела
+	// заголовки ответа выставляются до записи тела
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"programs_%s.zip\"", tournamentID.String()[:8]))
 
@@ -747,7 +747,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 	filesAdded := 0
 
 	for _, tg := range games {
-		// получаем данные игры для display-имени
+		// берутся данные игры для display-имени
 		game, err := h.gameService.GetByID(r.Context(), tg.GameID)
 		if err != nil {
 			h.log.Error("Failed to get game details, skipping",
@@ -762,7 +762,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 			gameDirName = game.Name
 		}
 
-		// получаем последние программы для этой игры
+		// берутся последние программы для этой игры
 		programs, err := h.programRepo.GetByTournamentAndGame(r.Context(), tournamentID, tg.GameID)
 		if err != nil {
 			h.log.Error("Failed to get programs for game, skipping",
@@ -779,7 +779,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 
 			filePath := *prog.FilePath
 
-			// проверяем, что путь внутри upload-директории (EvalSymlinks раскрывает симлинки)
+			// проверка, что путь внутри upload-директории (EvalSymlinks раскрывает симлинки)
 			absFilePath, err := filepath.EvalSymlinks(filePath)
 			if err != nil || !strings.HasPrefix(absFilePath, absUploadDir+string(os.PathSeparator)) {
 				h.log.Error("Program file path outside upload dir, skipping",
@@ -789,7 +789,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 				continue
 			}
 
-			// проверяем, что файл существует.
+			// проверка, что файл существует
 			// #nosec G703 G304 -- filePath провалидирован через EvalSymlinks +
 			// HasPrefix(absUploadDir) чуть выше; path-traversal невозможен.
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -800,7 +800,7 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 				continue
 			}
 
-			// формируем путь ZIP-записи: game_name/program_name_v{version}.ext
+			// формируется путь ZIP-записи: game_name/program_name_v{version}.ext
 			ext := filepath.Ext(filePath)
 			entryName := fmt.Sprintf("%s/%s_v%d%s", gameDirName, sanitizeZipPath(prog.Name), prog.Version, ext)
 
@@ -883,7 +883,7 @@ func sanitizeZipPath(name string) string {
 		}
 		return r
 	}, name)
-	// удаляем последовательности ".." path-traversal
+	// удаляются последовательности ".." path-traversal
 	name = strings.ReplaceAll(name, "..", "_")
 	name = strings.TrimSpace(name)
 	if name == "" {

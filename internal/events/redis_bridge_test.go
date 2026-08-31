@@ -50,12 +50,12 @@ func TestRedisEventPublisher_Handle(t *testing.T) {
 
 	pub := NewRedisEventPublisher(adapter, log)
 
-	// Подписываемся на канал, чтобы перехватить опубликованные сообщения.
+	// подписка на канал, чтобы перехватить опубликованные сообщения
 	ctx := context.Background()
 	pubsub := client.Subscribe(ctx, defaultChannel)
 	defer pubsub.Close()
 
-	// Ждём готовности подписки.
+	// ожидание готовности подписки.
 	_, err := pubsub.Receive(ctx)
 	require.NoError(t, err)
 
@@ -72,7 +72,7 @@ func TestRedisEventPublisher_Handle(t *testing.T) {
 	err = pub.Publish(ctx, "MatchResultProcessed", event)
 	require.NoError(t, err)
 
-	// Читаем опубликованное сообщение.
+	// чтение опубликованного сообщения.
 	msg, err := pubsub.ReceiveMessage(ctx)
 	require.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 	log := newTestLogger(t)
 	adapter := &redisCacheAdapter{client: client}
 
-	// Создаём шину, записывающую опубликованные события.
+	// шина, записывающая опубликованные события
 	var mu sync.Mutex
 	var receivedEvents []any
 	recordingBus := &recordingNotifier{
@@ -115,10 +115,10 @@ func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 
 	go sub.Start(ctx)
 
-	// Даём подписчику время подключиться.
+	// подписчику даётся время подключиться.
 	time.Sleep(100 * time.Millisecond)
 
-	// Публикуем событие напрямую через Redis.
+	// событие публикуется напрямую через Redis
 	event := MatchResultProcessed{
 		TournamentID: uuid.New(),
 		MatchID:      uuid.New(),
@@ -139,7 +139,7 @@ func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 	err = client.Publish(ctx, defaultChannel, payload).Err()
 	require.NoError(t, err)
 
-	// Ждём получения и повторной публикации события.
+	// ожидание получения и повторной публикации события.
 	require.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
@@ -178,13 +178,13 @@ func TestRedisEventSubscriber_UnknownTypeIgnored(t *testing.T) {
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
 
-	// Публикуем неизвестный тип события.
+	// публикация неизвестного типа события
 	env := envelope{Type: "UnknownEventType", Data: json.RawMessage(`{"foo":"bar"}`)}
 	payload, _ := json.Marshal(env)
 	err := client.Publish(ctx, defaultChannel, payload).Err()
 	require.NoError(t, err)
 
-	// Немного ждём, чтобы убедиться, что событие не перепубликовывается.
+	// небольшая пауза, чтобы убедиться, что событие не перепубликовывается.
 	time.Sleep(200 * time.Millisecond)
 
 	mu.Lock()
@@ -232,16 +232,16 @@ func TestRedisEndToEnd_PublisherToSubscriber(t *testing.T) {
 		},
 	}
 
-	// Настраиваем подписчика.
+	// настройка подписчика
 	sub := NewRedisEventSubscriber(adapter, recordingBus, log)
 	ctx := t.Context()
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
 
-	// Настраиваем publisher.
+	// настройка publisher'а
 	pub := NewRedisEventPublisher(adapter, log)
 
-	// Публикуем через Handler publisher'а.
+	// публикация через Handler publisher'а
 	event := MatchResultProcessed{
 		TournamentID: uuid.New(),
 		MatchID:      uuid.New(),
@@ -292,11 +292,11 @@ func TestRedisEventSubscriber_InvalidEnvelopeJSON(t *testing.T) {
 	go sub.Start(ctx)
 	time.Sleep(100 * time.Millisecond)
 
-	// Публикуем невалидный JSON (не корректный envelope).
+	// публикация невалидного JSON (не корректный envelope).
 	err := client.Publish(ctx, defaultChannel, "not valid json{{{").Err()
 	require.NoError(t, err)
 
-	// Немного ждём - ни одно событие не должно быть перепубликовано.
+	// небольшая пауза - ни одно событие не должно быть перепубликовано.
 	time.Sleep(200 * time.Millisecond)
 
 	mu.Lock()
@@ -332,7 +332,7 @@ func TestRedisEventSubscriber_InvalidEventData(t *testing.T) {
 	err := client.Publish(ctx, defaultChannel, payload).Err()
 	require.NoError(t, err)
 
-	// Немного ждём - ни одно событие не должно быть перепубликовано из-за ошибки unmarshal.
+	// небольшая пауза - ни одно событие не должно быть перепубликовано из-за ошибки unmarshal.
 	time.Sleep(200 * time.Millisecond)
 
 	mu.Lock()
@@ -343,7 +343,7 @@ func TestRedisEventSubscriber_InvalidEventData(t *testing.T) {
 func TestRedisEventPublisher_Handle_PublishError(t *testing.T) {
 	log := newTestLogger(t)
 
-	// Используем publisher, который всегда возвращает ошибку.
+	// publisher, который всегда возвращает ошибку
 	failPub := &failingPublisher{}
 	pub := NewRedisEventPublisher(failPub, log)
 
@@ -392,7 +392,7 @@ func (f *failingPublisher) Publish(_ context.Context, _ string, _ any) error {
 }
 
 // recordingNotifier - тестовый Notifier, отдаёт полученные события в колбэк.
-// остальные методы берём из NoopNotifier
+// остальные методы берутся из NoopNotifier
 type recordingNotifier struct {
 	NoopNotifier
 	onPublish func(event any)

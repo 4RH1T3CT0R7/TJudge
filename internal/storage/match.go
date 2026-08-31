@@ -49,7 +49,7 @@ func (r *MatchRepository) Create(ctx context.Context, match *models.Match) error
 }
 
 // CreateBatch вставляет пачку матчей в одной транзакции.
-// prepared statement переиспользуем, чтобы не парсить один и тот же запрос на каждый матч
+// prepared statement переиспользуется, чтобы не парсить один и тот же запрос на каждый матч
 func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*models.Match) error {
 	if len(matches) == 0 {
 		return nil
@@ -318,7 +318,7 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 }
 
 // GetPlayedProgramPairs - пары программ, которые уже играли в этом турнире и игре (любой статус).
-// ключ "uuid1|uuid2" направленный, AB и BA считаем разными - round-robin гоняет обе ориентации
+// ключ "uuid1|uuid2" направленный, AB и BA считаются разными - round-robin гоняет обе ориентации
 func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
 	query := `
 		SELECT program1_id, program2_id
@@ -395,7 +395,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// тянем все матчи турнира разом чтобы не делать N+1
+	// тянутся все матчи турнира разом чтобы не делать N+1
 	matchQuery := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
@@ -410,7 +410,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 	}
 	defer matchRows.Close()
 
-	// индексируем раунды по (round_number, game_type) чтобы быстро раскидать матчи
+	// раунды индексируются по (round_number, game_type) чтобы быстро раскидать матчи
 	type roundKey struct {
 		roundNumber int
 		gameType    string
@@ -696,7 +696,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.Matc
 		argCount++
 	}
 
-	// forward - идём в прошлое (created_at меньше курсора), backward - в обратную сторону
+	// forward - шаг в прошлое (created_at меньше курсора), backward - в обратную сторону
 	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
 		if pageReq.IsForward() {
 			query += fmt.Sprintf(" AND created_at < $%d", argCount)
@@ -713,7 +713,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.Matc
 		query += " ORDER BY round_number DESC, created_at DESC"
 	}
 
-	// берём на одну строку больше лимита - если она пришла, значит есть следующая страница
+	// берётся на одну строку больше лимита - если она пришла, значит есть следующая страница
 	limit := pageReq.GetLimit() + 1
 	query += fmt.Sprintf(" LIMIT $%d", argCount)
 	args = append(args, limit)
@@ -760,7 +760,7 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.Matc
 		matches = matches[:len(matches)-1]
 	}
 
-	// при backward выбирали в обратном порядке, разворачиваем обратно
+	// при backward выбирали в обратном порядке, потому разворот обратно
 	if pageReq.IsBackward() {
 		for i, j := 0, len(matches)-1; i < j; i, j = i+1, j-1 {
 			matches[i], matches[j] = matches[j], matches[i]
@@ -824,7 +824,7 @@ func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration tim
 	return matches, nil
 }
 
-// MatchStatistics - счётчики матчей по статусам (отдаём в /matches/queue/stats)
+// MatchStatistics - счётчики матчей по статусам (отдаются в /matches/queue/stats)
 type MatchStatistics struct {
 	Total     int `json:"total"`
 	Pending   int `json:"pending"`
@@ -968,7 +968,7 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	var query string
 
 	if status == models.MatchRunning {
-		// в running переходим только из pending - защита от двойной обработки,
+		// в running переход только из pending - защита от двойной обработки,
 		// если матч случайно оказался в очереди дважды (retry)
 		query = `
 			UPDATE matches
@@ -1088,7 +1088,7 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 	})
 }
 
-// MarkRatingApplied - fast path: воркер сразу посчитал рейтинг, гасим outbox-задачу
+// MarkRatingApplied - fast path: воркер сразу посчитал рейтинг, гасит outbox-задачу
 func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
 	query := `
 		UPDATE match_outbox
@@ -1102,7 +1102,7 @@ func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UU
 }
 
 // ResetToPending возвращает матч running->pending при транзиентной ошибке
-// executor'а (докер недоступен и т.п.) - программа не виновата, матч повторим
+// executor'а (докер недоступен и т.п.) - программа не виновата, матч повторится
 func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
 	query := `
 		UPDATE matches

@@ -101,7 +101,7 @@ func (c *Compiler) Close() error {
 
 // extractJavaClassName возвращает имя первого top-level класса в Java-исходнике.
 func extractJavaClassName(source string) string {
-	// Убираем комментарии, чтобы не зацепить class в /* ... */ или //.
+	// комментарии убираются, чтобы не зацепить class в /* ... */ или //.
 	blockRe := regexp.MustCompile(`/\*[\s\S]*?\*/`)
 	cleaned := blockRe.ReplaceAllString(source, "")
 	lineRe := regexp.MustCompile(`//[^\n]*`)
@@ -200,7 +200,7 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 		return &CompileResult{OK: false, Log: err.Error()}, nil
 	}
 
-	// Изолированный каталог сборки: компилятору доступен ТОЛЬКО он.
+	// Изолированный каталог сборки: компилятору доступен только он.
 	// Монтировать весь каталог программ нельзя - #include "../чужая_команда.c"
 	// читал бы исходники других команд.
 	buildDir := filepath.Join(c.programsPath, "build", program.ID.String())
@@ -223,7 +223,7 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 		if logMsg == "" {
 			logMsg = fmt.Sprintf("компиляция завершилась с кодом %d", exitCode)
 		}
-		// Пути из контейнера не несут смысла для пользователя - подчищаем.
+		// Пути из контейнера не несут смысла для пользователя - подчищаются.
 		logMsg = strings.ReplaceAll(logMsg, buildContainerPath+"/", "")
 		if len(logMsg) > compileLogLimit {
 			logMsg = logMsg[:compileLogLimit] + "..."
@@ -251,7 +251,7 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 	binPath := strings.TrimSuffix(sourcePath, ext)
 
 	if program.Language == langJava {
-		// .class кладём в каталог программы (имена классов разных команд
+		// .class кладётся в каталог программы (имена классов разных команд
 		// конфликтуют в плоском каталоге), wrapper ссылается на путь внутри
 		// контейнера матча.
 		classDirName := filepath.Base(binPath) + "_classes"
@@ -259,7 +259,7 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 		if err := os.MkdirAll(classDir, 0o750); err != nil {
 			return "", fmt.Errorf("failed to create class dir: %w", err)
 		}
-		// Переносим все .class (включая вложенные классы Foo$Bar.class).
+		// переносятся все .class (включая вложенные классы Foo$Bar.class).
 		entries, err := os.ReadDir(buildDir)
 		if err != nil {
 			return "", fmt.Errorf("failed to read build dir: %w", err)

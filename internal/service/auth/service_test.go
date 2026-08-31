@@ -110,7 +110,7 @@ func TestService_Register_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
 	assert.Equal(t, req.Username, resp.User.Username)
-	// пароль наружу не отдаём
+	// пароль наружу не отдаётся
 	assert.Empty(t, resp.User.PasswordHash)
 
 	userRepo.AssertExpectations(t)
@@ -301,7 +301,7 @@ func TestService_RefreshTokens_ReusedToken(t *testing.T) {
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// AddIfNotExists вернул false — токен уже использовали, второй раз не пускаем
+	// AddIfNotExists вернул false — токен уже использован, второй раз хода нет
 	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, nil)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -330,7 +330,7 @@ func TestService_RefreshTokens_GetUserError(t *testing.T) {
 	userID := uuid.New()
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
-	// GetByID падает ДО AddIfNotExists — токен не гасим, чтобы не залочить юзера
+	// GetByID падает до AddIfNotExists — токен не гасится, чтобы не залочить юзера
 	userRepo.On("GetByID", ctx, userID).Return(nil, errors.ErrNotFound)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -349,7 +349,7 @@ func TestService_RefreshTokens_BlacklistError(t *testing.T) {
 	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
 
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
-	// редис лёг — fail-closed, запрос отклоняем
+	// редис лёг — fail-closed, запрос отклоняется
 	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(false, errors.ErrInternal)
 
 	resp, err := service.RefreshTokens(ctx, refreshToken)
@@ -391,7 +391,7 @@ func TestService_Logout_ExpiredAccessSkipped(t *testing.T) {
 	accessToken, _ := jwtManager.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
 	time.Sleep(10 * time.Millisecond)
 
-	// протухший access не валидируется, поэтому в блеклист не кладём и ошибку не возвращаем
+	// протухший access не валидируется, поэтому в блеклист не кладётся и ошибка не возвращается
 	err := service.Logout(context.Background(), accessToken, "")
 
 	assert.NoError(t, err)
@@ -465,7 +465,7 @@ func TestService_GetUserByToken_Success(t *testing.T) {
 	user := &models.User{ID: userID, Username: "testuser", PasswordHash: "hash", Role: models.RoleUser}
 	token, _ := service.jwtManager.GenerateAccessToken(userID, "testuser", models.RoleUser)
 
-	// получем юзера по токену, хеш пароля в ответе должен быть затёрт
+	// получение юзера по токену, хеш пароля в ответе должен быть затёрт
 	userRepo.On("GetByID", ctx, userID).Return(user, nil)
 
 	result, err := service.GetUserByToken(ctx, token)
@@ -508,7 +508,7 @@ func TestService_hashPassword(t *testing.T) {
 func TestService_hashPassword_TooLong(t *testing.T) {
 	service, _, _ := newTestService(t)
 
-	// bcrypt молча режет всё что длиннее 72 байт, поэтому такие пароли отбиваем сами
+	// bcrypt молча режет всё что длиннее 72 байт, поэтому такие пароли отсекаются сами
 	longPassword := string(make([]byte, 73))
 	hash, err := service.hashPassword(longPassword)
 

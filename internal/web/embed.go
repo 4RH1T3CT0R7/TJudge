@@ -24,7 +24,7 @@ func GetFileSystem() (http.FileSystem, error) {
 func Handler() http.Handler {
 	fsys, err := GetFileSystem()
 	if err != nil {
-		// В случае ошибки возвращаем заглушку
+		// в случае ошибки возвращается заглушка
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Frontend not available", http.StatusServiceUnavailable)
 		})
@@ -35,13 +35,13 @@ func Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// Для API запросов пропускаем
+		// для API запросов - пропуск
 		if strings.HasPrefix(path, "/api/") {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Пробуем найти файл
+		// поиск файла
 		f, err := fsys.Open(strings.TrimPrefix(path, "/"))
 		if err == nil {
 			f.Close()
@@ -49,7 +49,7 @@ func Handler() http.Handler {
 			return
 		}
 
-		// SPA fallback - возвращаем index.html для всех остальных путей
+		// SPA fallback - возвращается index.html для всех остальных путей
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})

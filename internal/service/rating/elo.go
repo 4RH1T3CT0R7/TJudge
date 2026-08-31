@@ -31,7 +31,7 @@ func (ec *EloCalculator) CalculateNewRating(currentRating, opponentRating int, s
 	change := float64(ec.kFactor) * (score - expectedScore)
 	newRating := float64(currentRating) + change
 
-	// в минус рейтинг не пускаем
+	// в минус рейтинг не уходит
 	if newRating < 0 {
 		return 0
 	}

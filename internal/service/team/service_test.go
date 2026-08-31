@@ -272,7 +272,7 @@ func TestService_JoinTeamByCode_TeamFull(t *testing.T) {
 	assert.Contains(t, err.Error(), "full")
 }
 
-// MaxTeamSize 0 значит без лимита, тк проверку размера тогда вообще не делаем
+// MaxTeamSize 0 значит без лимита, тк проверки размера тогда вообще нет
 func TestService_JoinTeamByCode_UnlimitedTeamSize(t *testing.T) {
 	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
@@ -320,7 +320,7 @@ func TestService_LeaveTeam_RegularMember(t *testing.T) {
 	teamRepo.AssertExpectations(t)
 }
 
-// уходит лидер, а он последний — команду удаляем
+// уходит лидер, а он последний — команда удаляется
 func TestService_LeaveTeam_LeaderLastMember(t *testing.T) {
 	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
@@ -392,7 +392,7 @@ func TestService_LeaveTeam_UserNotInTeam(t *testing.T) {
 }
 
 // гонка: GetMemberCount вернул 2, а GetMembers отдал только лидера
-// (остальные вышли между вызовами). по факту команда пустая — удаляем
+// (остальные вышли между вызовами). по факту команда пустая — удаляется
 func TestService_LeaveTeam_OnlyLeaderLeft(t *testing.T) {
 	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
@@ -568,7 +568,7 @@ func TestService_DisqualifyTeam_Success(t *testing.T) {
 
 	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, IsDisqualified: false}, nil)
 	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
-	// вся чистка идёт одной транзакцией в репозитории, тут просто отдаём счётчики
+	// вся чистка идёт одной транзакцией в репозитории, тут просто отдаются счётчики
 	teamRepo.On("DisqualifyTeamFull", ctx, teamID, tID).Return(int64(5), int64(3), int64(2), nil)
 
 	res, err := svc.DisqualifyTeam(ctx, teamID)

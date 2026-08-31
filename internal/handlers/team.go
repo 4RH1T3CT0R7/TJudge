@@ -311,7 +311,7 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// memberID — тот, кого выкидываем; leaderID выше — кто выкидывает
+	// memberID — тот, кого выкидывают; leaderID выше — кто выкидывает
 	memberID, ok := parseUUIDParam(w, r, "userId", "user")
 	if !ok {
 		return
@@ -368,7 +368,7 @@ func (h *TeamHandler) GetInviteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// саму ссылку собрал сервис, а код тянем отдельным запросом за командой
+	// саму ссылку собрал сервис, а код тянется отдельным запросом за командой
 	t, err := h.teamService.GetTeamByID(r.Context(), teamID)
 	if err != nil {
 		h.log.LogError("Failed to get team", err)
@@ -430,7 +430,7 @@ func (h *TeamHandler) GetMyTeam(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.teamService.GetUserTeamInTournament(r.Context(), tournamentID, userID)
 	if err != nil {
-		// команды нет — отдаём null, а не 404
+		// команды нет — отдаётся null, а не 404
 		if errors.IsNotFound(err) {
 			writeJSON(w, http.StatusOK, nil)
 			return
@@ -496,7 +496,7 @@ func (h *TeamHandler) Disqualify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// сюда доходят только админы (проверка в мидлвари), id берём для лога
+	// сюда доходят только админы (проверка в мидлвари), id берётся для лога
 	adminID, _ := middleware.GetUserID(r.Context())
 	h.log.Info("Team disqualified",
 		zap.String("team_id", teamID.String()),

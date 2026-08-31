@@ -10,13 +10,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// дефолтный секрет, он же первый в блоклисте - в prod с ним не пустим
+// дефолтный секрет, он же первый в блоклисте - в prod с ним не пустит
 const defaultJWTSecret = "change-this-secret-in-production"
 
-// меньше 32 байт в prod не даём, брутфорсится
+// меньше 32 байт в prod нельзя, брутфорсится
 const minJWTSecretLength = 32
 
-// секреты-заглушки, которые нельзя тащить в прод (сравниваем без регистра)
+// секреты-заглушки, которые нельзя тащить в прод (сравнение без регистра)
 var jwtSecretPlaceholders = []string{
 	defaultJWTSecret,
 	"your-secret-key-change-in-production",
@@ -34,7 +34,7 @@ func isProductionEnv() bool {
 	return env == "production" || env == "prod"
 }
 
-// проверяем секрет только в prod, в dev пускаем что угодно
+// секрет проверяется только в prod, в dev проходит что угодно
 func validateJWTSecret(secret string, isProd bool) error {
 	if !isProd {
 		return nil
@@ -99,7 +99,7 @@ type DatabaseConfig struct {
 	MaxIdle        int
 	MaxLifetime    time.Duration
 	// сколько месяцев хранить партиции matches/rating_history.
-	// 0 = не удаляем, чистка турнирных данных должна быть осознанной
+	// 0 = без удаления, чистка турнирных данных должна быть осознанной
 	PartitionRetentionMonths int
 }
 
@@ -138,7 +138,7 @@ type WorkerConfig struct {
 	Timeout           time.Duration
 	RetryAttempts     int
 	RetryDelay        time.Duration
-	AutoScaleInterval time.Duration // как часто проверяем пул, 0 = 2s
+	AutoScaleInterval time.Duration // как часто проверяется пул, 0 = 2s
 }
 
 type ExecutorConfig struct {
@@ -228,8 +228,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("worker queue_size must be positive")
 	}
 
-	// jwt проверяем строго только в prod
-	// TODO: валидировать бы ещё format/output логгера, пока проверяем только level
+	// jwt проверяется строго только в prod
+	// TODO: валидировать бы ещё format/output логгера, пока проверяется только level
 	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// подбираем пул под воркеров, но не больше дефолтного лимита постгреса (100).
+// пул подбирается под воркеров, но не больше дефолтного лимита постгреса (100).
 // если DB_MAX_CONNECTIONS задан явно - берётся он, это только дефолт
 func recommendedDBPoolSize(workerMax int) int {
 	const apiOverhead = 20
@@ -260,10 +260,10 @@ func recommendedDBPoolSize(workerMax int) int {
 
 // Load загружает конфигурацию из переменных окружения
 func Load() (*Config, error) {
-	// .env подхватываем если есть, нет так нет
+	// .env подхватывается если есть, нет так нет
 	_ = godotenv.Load()
 
-	// дефолт для пула бд считаем от WORKER_MAX
+	// дефолт для пула бд считается от WORKER_MAX
 	workerMax := getEnvInt("WORKER_MAX", 1000)
 	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
@@ -322,7 +322,7 @@ func Load() (*Config, error) {
 		},
 		Storage: StorageConfig{
 			ProgramsPath:     getEnv("PROGRAMS_PATH", "/data/programs"),
-			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // пусто = берём ProgramsPath
+			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // пусто = берётся ProgramsPath
 			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10мб
 		},
 		JWT: JWTConfig{
@@ -361,7 +361,7 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// режем csv по запятой, пустые куски выкидываем
+// csv режется по запятой, пустые куски выкидываются
 func splitAndTrim(s string) []string {
 	parts := strings.Split(s, ",")
 	var result []string
@@ -408,7 +408,7 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-// сначала пробуем обычную переменную, потом KEY_FILE (docker secrets)
+// сначала берётся обычная переменная, потом KEY_FILE (docker secrets)
 func getEnvOrFile(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -418,7 +418,7 @@ func getEnvOrFile(key, defaultValue string) string {
 	if filePath := os.Getenv(fileKey); filePath != "" {
 		content, err := os.ReadFile(filePath) // #nosec G304 -- путь из env, это docker secrets
 		if err == nil {
-			return strings.TrimSpace(string(content)) // убираем хвостовой перевод строки
+			return strings.TrimSpace(string(content)) // убирается хвостовой перевод строки
 		}
 	}
 

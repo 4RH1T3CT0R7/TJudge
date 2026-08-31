@@ -109,7 +109,7 @@ func (r *GameRepository) List(ctx context.Context, filter models.GameFilter) ([]
 	args := []any{}
 	argCount := 1
 
-	// фильтр по имени, ищем подстроку в name и display_name
+	// фильтр по имени, ищется подстрока в name и display_name
 	if filter.Name != "" {
 		query += fmt.Sprintf(" AND (name ILIKE $%d OR display_name ILIKE $%d)", argCount, argCount)
 		args = append(args, "%"+filter.Name+"%")
@@ -460,7 +460,7 @@ func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gam
 
 	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&completed)
 	if stderrors.Is(err, sql.ErrNoRows) {
-		// елси связи нет, считаем раунд не завершённым
+		// елси связи нет, раунд считается не завершённым
 		return false, nil
 	}
 	if err != nil {
@@ -496,7 +496,7 @@ func (r *GameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// гасим все игры турнира
+	// гасятся все игры турнира
 	deactivateQuery := `
 		UPDATE tournament_games
 		SET is_active = false
@@ -506,7 +506,7 @@ func (r *GameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID
 		return errors.Wrap(err, "failed to deactivate games")
 	}
 
-	// поднимаем нужную
+	// поднимается нужная
 	activateQuery := `
 		UPDATE tournament_games
 		SET is_active = true
@@ -623,10 +623,10 @@ func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameI
 }
 
 // ResetGameRoundFull полный сброс раунда одной транзакцией:
-// сносим рейтинги, матчи, обнуляем участников и статус раунда
+// снос рейтингов, матчей, обнуление участников и статуса раунда
 func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
 	err = r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
-		// сначала проверяем что нет запущенных матчей, т.к. по ним нельзя сбрасывать
+		// сначала проверка что нет запущенных матчей, т.к. по ним нельзя сбрасывать
 		var runningCount int
 		if txErr := tx.GetContext(ctx, &runningCount, `
 			SELECT COUNT(*) FROM matches
@@ -638,7 +638,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 			return errors.ErrValidation.WithMessage("cannot reset: there are matches currently running")
 		}
 
-		// сносим историю рейтингов по матчам этой игры
+		// снос истории рейтингов по матчам этой игры
 		result, txErr := tx.ExecContext(ctx, `
 			DELETE FROM rating_history rh
 			WHERE rh.tournament_id = $1
@@ -651,7 +651,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 		}
 		ratingHistoryDeleted, _ = result.RowsAffected()
 
-		// сносим матчи
+		// снос матчей
 		result, txErr = tx.ExecContext(ctx, `
 			DELETE FROM matches
 			WHERE tournament_id = $1 AND game_type = $2
@@ -661,7 +661,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 		}
 		matchesDeleted, _ = result.RowsAffected()
 
-		// обнуляем рейтинги участников этой игры
+		// обнуление рейтингов участников этой игры
 		result, txErr = tx.ExecContext(ctx, `
 			UPDATE tournament_participants tp
 			SET rating = 1500, wins = 0, losses = 0, draws = 0
@@ -675,7 +675,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 		}
 		participantsReset, _ = result.RowsAffected()
 
-		// сбрасываем номер раунда
+		// сброс номера раунда
 		result, txErr = tx.ExecContext(ctx, `
 			UPDATE tournament_games
 			SET current_round = 0, round_completed = false, round_completed_at = NULL
@@ -698,7 +698,7 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 // зовётся при авто-перезапуске игры из сервиса турниров
 func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error {
 	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
-		// проверяем что нет запущенных матчей
+		// проверка что нет запущенных матчей
 		var runningCount int
 		if err := tx.GetContext(ctx, &runningCount, `
 			SELECT COUNT(*) FROM matches
@@ -710,7 +710,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 			return errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
 		}
 
-		// сносим историю рейтингов по матчам этой игры
+		// снос истории рейтингов по матчам этой игры
 		if _, err := tx.ExecContext(ctx, `
 			DELETE FROM rating_history
 			WHERE tournament_id = $1
@@ -721,7 +721,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 			return errors.Wrap(err, "failed to delete rating history")
 		}
 
-		// сносим матчи
+		// снос матчей
 		if _, err := tx.ExecContext(ctx, `
 			DELETE FROM matches
 			WHERE tournament_id = $1 AND game_type = $2
@@ -729,7 +729,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 			return errors.Wrap(err, "failed to delete matches")
 		}
 
-		// обнуляем рейтинги участников этой игры
+		// обнуление рейтингов участников этой игры
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE tournament_participants tp
 			SET rating = 1500, wins = 0, losses = 0, draws = 0
@@ -742,7 +742,7 @@ func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.
 			return errors.Wrap(err, "failed to reset participant ratings")
 		}
 
-		// сбрасываем номер раунда
+		// сброс номера раунда
 		result, txErr := tx.ExecContext(ctx, `
 			UPDATE tournament_games tg
 			SET current_round = 0, round_completed = false, round_completed_at = NULL

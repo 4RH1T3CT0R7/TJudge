@@ -56,7 +56,7 @@ var nameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 // Create создаёт игру
 func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Game, error) {
-	// проверяем имя, елси кривое — сразу отказ
+	// проверка имени, елси кривое — сразу отказ
 	if !nameRegex.MatchString(req.Name) {
 		return nil, errors.ErrValidation.WithMessage("game name must contain only lowercase letters, digits and underscores")
 	}
@@ -155,7 +155,7 @@ func (s *Service) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID)
 
 // AddToTournament цепляет игру к турниру
 func (s *Service) AddToTournament(ctx context.Context, tournamentID, gameID uuid.UUID) error {
-	// проверяем что игра есть
+	// проверка что игра есть
 	_, err := s.gameRepo.GetByID(ctx, gameID)
 	if err != nil {
 		return err

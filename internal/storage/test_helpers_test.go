@@ -19,7 +19,7 @@ import (
 )
 
 // setupTestDB поднимает коннект к БД для интеграционных тестов.
-// параметры берём из env, с дефолтами под локальный docker-compose.
+// параметры берутся из env, с дефолтами под локальный docker-compose.
 func setupTestDB(t *testing.T) *storage.DB {
 	t.Helper()
 

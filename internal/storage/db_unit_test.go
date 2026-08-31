@@ -176,7 +176,7 @@ func TestDB_BeginTx_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tx)
 
-	// откатываем, чтобы ожидания мока остались чистыми
+	// откат, чтобы ожидания мока остались чистыми
 	mock.ExpectRollback()
 	_ = tx.Rollback()
 

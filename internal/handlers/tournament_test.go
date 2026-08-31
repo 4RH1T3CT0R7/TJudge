@@ -19,7 +19,7 @@ import (
 )
 
 // MockTournamentService - мок сервиса турниров.
-// держим все методы интерфейса целиком, иначе не скомпилится.
+// все методы интерфейса присутствуют целиком, иначе не скомпилится
 type MockTournamentService struct {
 	mock.Mock
 }
@@ -252,7 +252,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 	})
 
 	// единственный представитель кейса «битый uuid» - путь один и тот же
-	// (parseUUIDParam) во всех ручках, поэтому не размазываем его по каждой
+	// (parseUUIDParam) во всех ручках, поэтому он не размазывается по каждой
 	t.Run("invalid UUID format", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -270,7 +270,7 @@ func TestTournamentHandler_Get(t *testing.T) {
 func TestTournamentHandler_List(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	// проверяем и happy-path, и что status/game_type из query доезжают до фильтра
+	// проверяется и happy-path, и что status/game_type из query доезжают до фильтра
 	t.Run("list with filters", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -331,7 +331,7 @@ func TestTournamentHandler_Join(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
-	// уже стартовавший турнир не пускает новых - ждём 409
+	// уже стартовавший турнир не пускает новых - ожидается 409
 	t.Run("tournament already started", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
@@ -561,7 +561,7 @@ func TestTournamentHandler_RunAllMatches(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
 	// прогон всего пула round-robin: планировщик возвращает число матчей в очереди.
-	// на N участниках это N*(N-1) матчей на игру - число enqueued тут и проверяем
+	// на N участниках это N*(N-1) матчей на игру - число enqueued тут и проверяется
 	t.Run("successfully run all matches", func(t *testing.T) {
 		mockService := new(MockTournamentService)
 		mockScheduling := new(MockSchedulingService)

@@ -11,9 +11,9 @@ import (
 )
 
 // Metrics пишет prometheus-метрики по каждому http-запросу: счётчик, длительность,
-// in-flight. лейбл пути берём из chi RoutePattern ("/tournaments/{id}"), а не из
+// in-flight. лейбл пути берётся из chi RoutePattern ("/tournaments/{id}"), а не из
 // сырого пути — иначе id в урле раздули бы кардинальнось метрик. паттерн chi
-// проставляет по ходу роутинга, так что читаем его уже после обработки
+// проставляет по ходу роутинга, так что читается он уже после обработки
 func Metrics() func(http.Handler) http.Handler {
 	m := metrics.New()
 	return func(next http.Handler) http.Handler {

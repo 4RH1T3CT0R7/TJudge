@@ -86,7 +86,7 @@ func (s *AutoRoundScheduler) tick(ctx context.Context) {
 		return
 	}
 
-	// TODO: дёргаем все игры по очереди, при большом кол-ве стоило бы пачками
+	// TODO: все игры дёргаются по очереди, при большом кол-ве стоило бы пачками
 	for _, g := range games {
 		s.processGame(ctx, g)
 	}
@@ -106,7 +106,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return
 	}
 	if hasActive {
-		return // ещё крутятся, ждём
+		return // ещё крутятся, надо ждать
 	}
 
 	// 2. прошёл ли cooldown с прошлого раунда?
@@ -135,7 +135,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return // новых прог нет, перезапускать нечего
 	}
 
-	// 4. запускаем раунд через RunGameMatches (он сам возьмёт свой лок)
+	// 4. запуск раунда через RunGameMatches (он сам возьмёт свой лок)
 	lockKey := fmt.Sprintf("tournament:autoround:%s:%s", g.TournamentID.String(), g.GameType)
 	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
 		enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
@@ -143,7 +143,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 			return err
 		}
 
-		// обновляем время послднего запуска
+		// обновляется время послднего запуска
 		if updateErr := s.gameRepo.UpdateAutoRoundLastRun(ctx, g.TournamentID, g.GameID); updateErr != nil {
 			s.log.Error("Auto-round: failed to update last run timestamp",
 				zap.Error(updateErr),

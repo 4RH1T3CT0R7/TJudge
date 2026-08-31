@@ -178,7 +178,7 @@ func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// отбрасываем path-traversal и требуем, чтобы абсолютные пути были внутри upload-директории
+	// path-traversal отбрасывается, абсолютные пути должны быть внутри upload-директории
 	if req.CodePath != "" {
 		cleaned := filepath.Clean(req.CodePath)
 		if strings.Contains(cleaned, "..") {
@@ -367,7 +367,7 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// удаляем файл, если он есть
+	// удаление файла, если он есть
 	// #nosec G703 -- program.FilePath установлен сервером при upload
 	// (generateProgramPath из UUID + controlled uploadDir), не пользователем.
 	if program.FilePath != nil && *program.FilePath != "" {
@@ -531,7 +531,7 @@ type uploadFormData struct {
 // файла целиком в память (размер ограничен maxFileSize). Возвращает nil при
 // ошибке — ответ клиенту к этому моменту уже записан
 func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request) *uploadFormData {
-	// парсим multipart form
+	// парсинг multipart form
 	// #nosec G120 -- h.maxFileSize ограничивает размер form, плюс routes.go
 	// применяет middleware.MaxBodySize(10 << 20) на /programs роуте. Double-bound.
 	if err := r.ParseMultipartForm(h.maxFileSize); err != nil {
@@ -579,7 +579,7 @@ func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request)
 		return nil
 	}
 
-	// читаем всё содержимое файла в память (ограничено maxFileSize)
+	// чтение всего содержимого файла в память (ограничено maxFileSize)
 	fileContent, err := io.ReadAll(file)
 	if err != nil {
 		h.log.Error("Failed to read uploaded file", zap.Error(err))
@@ -587,7 +587,7 @@ func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request)
 		return nil
 	}
 
-	// если имя не задано — берём имя загруженного файла
+	// если имя не задано — берётся имя загруженного файла
 	if name == "" {
 		name = header.Filename
 	}
@@ -660,7 +660,7 @@ func (h *ProgramHandler) validateTournamentActive(w http.ResponseWriter, r *http
 // раундом или идущими матчами; в авто-режиме загрузки не блокируются, т.к.
 // новая программа будет подхвачена следующим раундом. false — ответ записан
 func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
-	// проверяем, включён ли авто-раунд для этой игры
+	// проверка, включён ли авто-раунд для этой игры
 	autoRoundEnabled := false
 	if h.roundChecker != nil {
 		var autoRoundErr error
@@ -674,12 +674,12 @@ func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http
 		}
 	}
 
-	// в авто-режиме загрузка НЕ блокируется матчами
+	// в авто-режиме загрузка не блокируется матчами
 	if autoRoundEnabled {
 		return true
 	}
 
-	// в ручном режиме сохраняем оригинальную логику блокировки
+	// в ручном режиме сохраняется оригинальная логика блокировки
 	if !h.validateRoundNotCompleted(w, r, tournamentID, gameID) {
 		return false
 	}
@@ -687,7 +687,7 @@ func (h *ProgramHandler) validateUploadNotBlocked(w http.ResponseWriter, r *http
 }
 
 // validateRoundNotCompleted блокирует загрузку, если раунд игры уже закрыт;
-// при невозможности проверить статус — не мешаем (fail-open)
+// при невозможности проверить статус — без помех (fail-open)
 func (h *ProgramHandler) validateRoundNotCompleted(w http.ResponseWriter, r *http.Request, tournamentID, gameID uuid.UUID) bool {
 	if h.roundChecker == nil {
 		return true
@@ -699,7 +699,7 @@ func (h *ProgramHandler) validateRoundNotCompleted(w http.ResponseWriter, r *htt
 			zap.String("tournament_id", tournamentID.String()),
 			zap.String("game_id", gameID.String()),
 		)
-		// продолжаем, если не смогли проверить статус раунда
+		// проход дальше, если не смогли проверить статус раунда
 		return true
 	}
 
@@ -733,7 +733,7 @@ func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http
 		return true
 	}
 
-	// подтягиваем название активной игры для информативного сообщения
+	// подтягивается название активной игры для информативного сообщения
 	activeGame, _ := h.matchChecker.GetActiveGameType(r.Context(), tournamentID)
 	h.log.Info("Upload blocked: matches running for another game",
 		zap.String("tournament_id", tournamentID.String()),
@@ -751,7 +751,7 @@ func (h *ProgramHandler) validateNoRunningMatches(w http.ResponseWriter, r *http
 // saveUploadedFile пишет исходник на диск, добавляя shebang интерпретируемым
 // языкам и делая файл исполняемым для песочницы. false — ответ уже записан
 func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []byte, language, filePath string) bool {
-	// на всякий случай гарантируем директорию (safety net для Docker volumes)
+	// на всякий случай директория гарантируется (safety net для Docker volumes)
 	// 0750 — group read/execute, other — нет; appuser внутри worker'а
 	// единственный потребитель этой директории
 	if err := os.MkdirAll(h.uploadDir, 0o750); err != nil {
@@ -760,7 +760,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 		return false
 	}
 
-	// сохраняем файл
+	// сохранение файла
 	// #nosec G304 -- filePath формируется из h.uploadDir + {teamID/gameID/programID}[:8] +
 	// canonicalExtension(language); ни один компонент не контролируется пользователем
 	// напрямую (UUID-prefixes, hardcoded ext). Path-traversal невозможен.
@@ -772,7 +772,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	}
 	defer dst.Close()
 
-	// дописываем shebang интерпретируемым языкам, если его ещё нет
+	// дописывается shebang интерпретируемым языкам, если его ещё нет
 	shebang := getShebang(language)
 	if shebang != "" && !bytes.HasPrefix(fileContent, []byte("#!")) {
 		if _, err := dst.WriteString(shebang); err != nil {
@@ -785,13 +785,13 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 
 	if _, err := dst.Write(fileContent); err != nil {
 		h.log.Error("Failed to write file", zap.Error(err))
-		// подчищаем частично записанный файл
+		// подчищается частично записанный файл
 		os.Remove(filePath)
 		writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
 		return false
 	}
 
-	// делаем файл исполняемым
+	// файл делается исполняемым
 	// #nosec G302 -- бот-программа должна быть executable внутри Docker-sandbox'а;
 	// 0o750 даёт rwx только owner+group (appuser + docker), other - 0.
 	if err := os.Chmod(filePath, 0o750); err != nil {
@@ -805,7 +805,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 // и при CODESCAN_STRICT=true с запрещёнными API-вызовами возвращает сообщение
 // об отказе, иначе nil.
 //
-// проверка синтаксиса и компиляция тут НЕ выполняются: недоверенный код никогда
+// проверка синтаксиса и компиляция тут не выполняются: недоверенный код никогда
 // не должен попадать в тулчейны на хосте API-процесса. программа создаётся в
 // статусе compiling, а собирает её worker уже в Docker-песочнице
 func (h *ProgramHandler) validateProgramSource(language, filePath string) *string {
@@ -851,7 +851,7 @@ func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, prog
 		return
 	}
 
-	// используем program.ID (а не локальный programID), т.к. CreateWithAtomicVersion может перегенерировать его при retry
+	// берётся program.ID (а не локальный programID), т.к. CreateWithAtomicVersion может перегенерировать его при retry
 	participant := &models.TournamentParticipant{
 		ID:           uuid.New(),
 		TournamentID: tournamentID,
@@ -865,7 +865,7 @@ func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, prog
 			zap.String("program_id", program.ID.String()),
 			zap.String("tournament_id", tournamentID.String()),
 		)
-		// не возвращаем ошибку — программа уже создана, участие опционально
+		// ошибка не возвращается — программа уже создана, участие опционально
 	} else {
 		h.log.Info("Program registered as tournament participant",
 			zap.String("program_id", program.ID.String()),
@@ -882,10 +882,10 @@ func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, prog
 // codescan (CODESCAN_STRICT): при запрещённых API-вызовах компилировать нечего,
 // и запись сразу создаётся в failed
 func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
-	// жёстко ограничиваем размер тела ещё до чтения формы
+	// размер тела жёстко ограничивается ещё до чтения формы
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxFileSize)
 
-	// парсим форму и извлекаем данные
+	// парсинг формы и извлечение данных
 	form := h.parseUploadForm(w, r)
 	if form == nil {
 		return
@@ -906,14 +906,14 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// определяем язык по расширению
+	// определение языка по расширению
 	language := detectLanguage(form.filename)
 	if language == LangUnknown {
 		writeError(w, errors.ErrInvalidInput.WithMessage("unsupported file extension"))
 		return
 	}
 
-	// уникальный путь для файла. берём канонический (hardcoded) extension из
+	// уникальный путь для файла. берётся канонический (hardcoded) extension из
 	// language, а не raw из form.filename — так в имя файла не пролезут shell-
 	// метасимволы (напр. "Test.java;rm -rf /")
 	programID := uuid.New()
@@ -925,7 +925,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	fileName := fmt.Sprintf("%s_%s_%s%s", form.teamID.String()[:8], form.gameID.String()[:8], programID.String()[:8], ext)
 	filePath := filepath.Join(h.uploadDir, fileName)
 
-	// сохраняем файл на диск
+	// сохранение файла на диск
 	if !h.saveUploadedFile(w, form.fileContent, language, filePath) {
 		return
 	}
@@ -958,16 +958,16 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 
 	if err := h.programRepo.CreateWithAtomicVersion(r.Context(), program); err != nil {
 		h.log.LogError("Failed to create program", err)
-		// удаляем загруженный файл при ошибке
+		// удаление загруженного файла при ошибке
 		os.Remove(filePath)
 		writeError(w, err)
 		return
 	}
 
-	// автоматически регистрируем программу как участника турнира
+	// программа автоматически регистрируется как участник турнира
 	h.registerTournamentParticipant(r.Context(), program, form.tournamentID)
 
-	// ставим программу в очередь компиляции. при ошибке enqueue ничего не
+	// программа ставится в очередь компиляции. при ошибке enqueue ничего не
 	// теряется: compile-worker периодически возвращает в очередь программы,
 	// зависшие в статусе compiling
 	if status == models.ProgramCompiling && h.compileQueue != nil {
@@ -978,7 +978,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// ВАЖНО: матчи НЕ создаются автоматически при загрузке программы!
+	// важно: матчи не создаются автоматически при загрузке программы!
 	// админ запускает их вручную кнопкой "Run All Matches"
 	// POST /api/v1/tournaments/{id}/run-matches.
 
@@ -1089,7 +1089,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	// админы скачивают любую программу
 	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 	if userRole != models.RoleAdmin {
-		// остальным проверяем владение
+		// остальным проверяется владение
 		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
 		if err != nil {
 			h.log.LogError("Failed to check ownership", err)
@@ -1136,7 +1136,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// проверяем, что файл существует (absFilePath для defense-in-depth)
+	// проверка, что файл существует (absFilePath для defense-in-depth)
 	// #nosec G703 -- absFilePath провалидирован через HasPrefix(absUploadDir) выше.
 	if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
 		h.log.Error("Program file does not exist", zap.String("path", absFilePath))
@@ -1144,7 +1144,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// открываем файл
+	// открытие файла
 	// #nosec G304 G703 -- absFilePath провалидирован через HasPrefix(absUploadDir)
 	// выше; path-traversal невозможен.
 	file, err := os.Open(absFilePath)
@@ -1166,7 +1166,7 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// сантизируем имя файла для безопасного использования в заголовке
+	// имя файла санитизируется для безопасного использования в заголовке
 	safeName := strings.Map(func(r rune) rune {
 		if r == '"' || r == '\\' || r == '\r' || r == '\n' {
 			return '_'
@@ -1178,10 +1178,10 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", safeName))
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	// стримим файл в response
+	// файл стримится в response
 	if _, err := io.Copy(w, file); err != nil {
 		h.log.Error("Failed to send file", zap.Error(err))
-		// уже начали отправлять — ошибку вернуть не можем
+		// уже начали отправлять — ошибку вернуть уже нельзя
 		return
 	}
 

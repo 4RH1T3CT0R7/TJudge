@@ -32,13 +32,13 @@ type Executor struct {
 
 // NewExecutor создаёт новый executor
 func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath string, log *logger.Logger) (*Executor, error) {
-	// Создаём Docker клиент
+	// создание Docker-клиента
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
 
-	// Если hostProgramsPath не указан, используем programsPath
+	// Если hostProgramsPath не указан, используется programsPath
 	if hostProgramsPath == "" {
 		hostProgramsPath = programsPath
 	}
@@ -64,7 +64,7 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 
 	start := time.Now()
 
-	// Преобразуем пути к программам для использования внутри контейнера
+	// преобразование путей к программам для использования внутри контейнера
 	containerProgram1, err := e.hostToContainerPath(program1Path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid program1 path: %w", err)
@@ -74,11 +74,11 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 		return nil, fmt.Errorf("invalid program2 path: %w", err)
 	}
 
-	// Создаём контекст с таймаутом
+	// создание контекста с таймаутом
 	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
 
-	// Запускаем матч в Docker контейнере
+	// запуск матча в Docker контейнере
 	result, err := e.runInDocker(execCtx, match.GameType, containerProgram1, containerProgram2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run match: %w", err)
@@ -102,7 +102,7 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 
 // runInDocker запускает матч в Docker контейнере
 func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string) (*models.MatchResult, error) {
-	// Формируем команду для tjudge-cli
+	// формируется команда для tjudge-cli
 	// Формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
 
@@ -124,15 +124,15 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 
 	// Ограничения ресурсов и безопасности
 	securityOpts := []string{
-		"no-new-privileges:true", // Запрещаем повышение привилегий
+		"no-new-privileges:true", // запрет повышения привилегий
 	}
 
-	// Добавляем seccomp профиль если указан
+	// seccomp профиль добавляется если указан
 	if e.config.SeccompProfile != "" {
 		securityOpts = append(securityOpts, "seccomp="+e.config.SeccompProfile)
 	}
 
-	// Добавляем AppArmor профиль если указан
+	// AppArmor профиль добавляется если указан
 	if e.config.AppArmorProfile != "" {
 		securityOpts = append(securityOpts, "apparmor="+e.config.AppArmorProfile)
 	}
@@ -142,10 +142,10 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			CPUQuota:       e.config.CPUQuota,
 			CPUPeriod:      100000, // 100ms period
 			Memory:         e.config.MemoryLimit,
-			MemorySwap:     e.config.MemoryLimit, // Запрещаем swap
+			MemorySwap:     e.config.MemoryLimit, // запрет swap
 			PidsLimit:      &e.config.PidsLimit,
-			CpusetCpus:     e.config.CPUSetCPUs, // Ограничиваем ядра CPU
-			OomKillDisable: new(false),          // Разрешаем OOM killer
+			CpusetCpus:     e.config.CPUSetCPUs, // ограничение ядер CPU
+			OomKillDisable: new(false),          // разрешение OOM killer
 			// BlkioWeight не поддерживается на macOS (cgroups v2)
 			Ulimits: []*container.Ulimit{
 				{Name: "nofile", Soft: 1024, Hard: 1024},        // Достаточно для Python + subprocess
@@ -154,22 +154,22 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // 10MB max file size
 			},
 		},
-		// Монтируем директорию с программами (только для чтения)
-		// Используем hostProgramsPath для Docker-in-Docker сценария
+		// директория с программами монтируется (только для чтения)
+		// hostProgramsPath используется для Docker-in-Docker сценария
 		Binds: []string{
 			fmt.Sprintf("%s:%s:ro", e.hostProgramsPath, e.containerPath),
 		},
-		NetworkMode:    "none", // Отключаем сеть
+		NetworkMode:    "none", // сеть отключена
 		ReadonlyRootfs: true,   // Только для чтения root filesystem
 		SecurityOpt:    securityOpts,
-		CapDrop:        []string{"ALL"}, // Убираем все capabilities
+		CapDrop:        []string{"ALL"}, // все capabilities убираются
 		Tmpfs: map[string]string{
 			"/tmp": "rw,nosuid,size=64m", // Временная директория для записи (exec разрешён для Python)
 		},
-		AutoRemove: false, // Отключаем автоудаление чтобы получить логи
+		AutoRemove: false, // автоудаление отключено чтобы получить логи
 	}
 
-	// Создаём контейнер
+	// создание контейнера
 	resp, err := e.dockerClient.ContainerCreate(
 		ctx,
 		containerConfig,
@@ -183,29 +183,29 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	}
 
 	containerID := resp.ID
-	defer e.cleanup(containerID) // Удаляем контейнер после получения логов
+	defer e.cleanup(containerID) // удаление контейнера после получения логов
 
-	// Запускаем контейнер
+	// запуск контейнера
 	if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return nil, infraErrorf("failed to start container: %w", err)
 	}
 
-	// Ждём завершения
+	// ожидание завершения
 	statusCh, errCh := e.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		if err != nil {
-			// Пытаемся получить логи даже при ошибке
+			// логи забираются даже при ошибке
 			_, stderr, logErr := e.getContainerLogs(ctx, containerID)
 			if logErr == nil && stderr != "" {
 				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
 			}
 			return nil, infraErrorf("error waiting for container: %w", err)
 		}
-		// errCh сработал с nil-ошибкой - неожиданно, считаем это ошибкой
+		// errCh сработал с nil-ошибкой - неожиданно, это считается ошибкой
 		return nil, infraErrorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
-		// Получаем логи контейнера
+		// чтение логов контейнера
 		stdout, stderrRaw, err := e.getContainerLogs(ctx, containerID)
 		if err != nil {
 			// Логи недоступны из-за Docker API - это проблема окружения,
@@ -224,10 +224,10 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			zap.Int("stderr_len", len(stderr)),
 		)
 
-		// Парсим результат
+		// парсинг результата
 		return e.parseResult(status.StatusCode, stdout, stderr)
 	case <-ctx.Done():
-		// Таймаут - останавливаем контейнер
+		// таймаут - остановка контейнера
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stopCancel()
 		_ = e.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
@@ -249,7 +249,7 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	}
 	defer logs.Close()
 
-	// Читаем логи, используя stdcopy для демультиплексирования.
+	// чтение логов через stdcopy для демультиплексирования.
 	// Раздельные читатели по 1 МБ на stdout и stderr через limitWriter:
 	// общий LimitReader при большом stdout молча обрезал stderr до нуля,
 	// теряя сообщение об ошибке.
@@ -278,7 +278,7 @@ func (lw *limitWriter) Write(p []byte) (int, error) {
 		return len(p), nil // silently drop
 	}
 	if len(p) > lw.n {
-		// Записываем только то, что влезает в бюджет.
+		// записывается только то, что влезает в бюджет.
 		written, err := lw.w.Write(p[:lw.n])
 		lw.n -= written
 		if err != nil {
@@ -368,7 +368,7 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 		return result, nil
 	}
 
-	// Парсим счёт из stdout
+	// парсинг счёта из stdout
 	// Формат: "10 15"
 	scores := strings.Fields(strings.TrimSpace(stdout))
 	if len(scores) != 2 {
@@ -398,7 +398,7 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 	result.Score1 = score1
 	result.Score2 = score2
 
-	// Определяем победителя
+	// определение победителя
 	if score1 > score2 {
 		result.Winner = 1
 	} else if score2 > score1 {
@@ -415,10 +415,10 @@ func (e *Executor) cleanup(containerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Останавливаем контейнер если он всё ещё работает
+	// контейнер останавливается если он всё ещё работает
 	_ = e.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{})
 
-	// Удаляем контейнер
+	// удаление контейнера
 	err := e.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force: true,
 	})
@@ -448,7 +448,7 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 		return e.containerPath + cleaned[len(e.programsPath):], nil
 	}
 
-	// Путь вне programsPath - возвращаем ошибку
+	// Путь вне programsPath - возвращается ошибка
 	return "", fmt.Errorf("path %q is outside programs directory %q", cleaned, e.programsPath)
 }
 
@@ -457,20 +457,20 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 // Формат: <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 // Поддерживаемые игры: см. https://github.com/bmstu-itstech/tjudge-cli
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
-	// Не включаем TJudgePath так как контейнер имеет ENTRYPOINT
+	// TJudgePath не включается так как контейнер имеет ENTRYPOINT
 	cmd := []string{gameType}
 
-	// Добавляем количество итераций
+	// добавление количества итераций
 	if e.config.DefaultIterations > 0 {
 		cmd = append(cmd, "-i", strconv.Itoa(e.config.DefaultIterations))
 	}
 
-	// Добавляем verbose режим
+	// добавление verbose режима
 	if e.config.Verbose {
 		cmd = append(cmd, "-v")
 	}
 
-	// Добавляем пути к программам
+	// добавление путей к программам
 	cmd = append(cmd, program1, program2)
 
 	return cmd

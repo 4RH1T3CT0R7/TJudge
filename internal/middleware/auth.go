@@ -32,7 +32,7 @@ type AuthService interface {
 	IsTokenBlacklisted(ctx context.Context, token string) (bool, error)
 }
 
-// Auth проверяет jwt токен. без валидного токена дальше не пускаем
+// Auth проверяет jwt токен. без валидного токена дальше не пройти
 func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,8 +74,8 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// чёрный список (разлогиненные токены). если редис упал - отдаём 500,
-			// НЕ пропускаем: иначе отозванный токен прошёл бы пока редис лежит
+			// чёрный список (разлогиненные токены). если редис упал - отдаётся 500,
+			// пропускать нельзя: иначе отозванный токен прошёл бы пока редис лежит
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.LogError("Failed to check token blacklist", err)
@@ -88,7 +88,7 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 				return
 			}
 
-			// айди и роль берём прямо из jwt, в базу не ходим
+			// айди и роль берутся прямо из jwt, в базу ходить не надо
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, RoleKey, claims.Role)
 
@@ -97,8 +97,8 @@ func Auth(authService AuthService, log *logger.Logger) func(http.Handler) http.H
 	}
 }
 
-// OptionalAuth - необязательная авторизация: есть валидный токен - положим юзера
-// в контекст, нет - пропустим как анонима. для публичных ручек где залогиненным
+// OptionalAuth - необязательная авторизация: есть валидный токен - юзер попадёт
+// в контекст, нет - пройдёт как аноним. для публичных ручек где залогиненным
 // можно показать чуть больше
 func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -122,8 +122,8 @@ func OptionalAuth(authService AuthService, log *logger.Logger) func(http.Handler
 				return
 			}
 
-			// тут при ошибке блэклиста НЕ 500 как в Auth, а просто пропускаем анонимом:
-			// ручка публичная, ронять её из-за редиса глупо. токену при этом не доверяем
+			// тут при ошибке блэклиста не 500 как в Auth, а просто пропуск анонимом:
+			// ручка публичная, ронять её из-за редиса глупо. токену при этом веры нет
 			blacklisted, err := authService.IsTokenBlacklisted(r.Context(), token)
 			if err != nil {
 				log.Warn("Blacklist check failed, proceeding without authentication",

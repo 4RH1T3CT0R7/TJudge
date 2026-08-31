@@ -55,7 +55,7 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 
 		lastErr = err
 
-		// после последней попытки не спим
+		// после последней попытки без сна
 		if attempt < maxAttempts {
 			select {
 			case <-ctx.Done():
@@ -72,7 +72,7 @@ func (dl *DistributedLock) TryLock(ctx context.Context, key string, ttl time.Dur
 func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string) error {
 	lockKey := fmt.Sprintf("lock:%s", key)
 
-	// скрипт с redis.io, удаляет лок только если токен наш
+	// скрипт с redis.io, удаляет лок только если токен свой
 	// https://redis.io/docs/latest/develop/use/patterns/distributed-locks/
 	script := `
 		if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -87,10 +87,10 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 		return fmt.Errorf("failed to unlock: %w", err)
 	}
 
-	// 0 = токен не наш или ключа уже нет, 1 = удалили
+	// 0 = токен не свой или ключа уже нет, 1 = удалили
 	if val, ok := result.(int64); ok && val == 0 {
 		// если ключа нет - лок уже сняли (протух ttl), это ок.
-		// если ключ есть но токен не наш - кто-то другой держит лок
+		// если ключ есть но токен не свой - кто-то другой держит лок
 		exists, err := dl.cache.Exists(ctx, lockKey)
 		if err != nil {
 			return fmt.Errorf("failed to check lock existence: %w", err)
@@ -117,7 +117,7 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 	go dl.renewLoop(renewCtx, key, token, ttl, renewDone)
 
 	defer func() {
-		// сначала гасим продление и ЖДЁМ горутину, только потом снимаем лок,
+		// сначала стоп продлению, ждать горутину, и только потом снимать лок,
 		// иначе renew может продлить лок уже после снятия
 		renewCancel()
 		<-renewDone
@@ -126,7 +126,7 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		// ошибку тут глотаем, основная работа уже сделана
+		// ошибка тут проглатывается, основная работа уже сделана
 		_ = dl.Unlock(unlockCtx, key, token)
 	}()
 
@@ -144,7 +144,7 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// продлеваем только если лок всё ещё наш
+	// продление только если лок всё ещё свой
 	script := `
 		if redis.call("get", KEYS[1]) == ARGV[1] then
 			return redis.call("pexpire", KEYS[1], ARGV[2])

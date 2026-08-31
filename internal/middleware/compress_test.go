@@ -25,7 +25,7 @@ func TestCompress_WithGzipAccept(t *testing.T) {
 	assert.Equal(t, "gzip", rr.Header().Get("Content-Encoding"))
 	assert.Equal(t, "Accept-Encoding", rr.Header().Get("Vary"))
 
-	// Декодируем и проверяем тело
+	// декодируется и проверяется тело
 	reader, err := gzip.NewReader(rr.Body)
 	require.NoError(t, err)
 	defer reader.Close()

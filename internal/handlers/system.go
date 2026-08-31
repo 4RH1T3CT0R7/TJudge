@@ -22,7 +22,7 @@ import (
 // TODO: system-ручек тут набралось прилично (метрики, health, полный статус,
 // recovery в соседнем файле) — стоит разложить по под-пакетам, пока не разрослось
 
-// appStartTime — момент старта процесса API, отсюда считаем uptime
+// appStartTime — момент старта процесса API, отсюда считается uptime
 var appStartTime = time.Now()
 
 // SystemMetrics описывает метрики системных ресурсов
@@ -140,7 +140,7 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		metrics.Memory.UsedPercent = vmStat.UsedPercent
 	}
 
-	// диск — пробуем несколько путей, чтобы найти основной системный
+	// диск — проверяется несколько путей, чтобы найти основной системный
 	diskPaths := []string{"/System/Volumes/Data", "/", os.Getenv("HOME")}
 	if runtime.GOOS != "darwin" {
 		diskPaths = []string{"/"}
@@ -370,7 +370,7 @@ func appVersion() (revision, buildTime string, dirty bool) {
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			// тег из ldflags точнее коммита — не перетираем его
+			// тег из ldflags точнее коммита — не перетирается
 			if injectedVersion == "" && len(s.Value) >= 8 {
 				revision = s.Value[:8]
 			}

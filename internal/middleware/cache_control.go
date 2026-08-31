@@ -33,11 +33,11 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 				buf:            &bytes.Buffer{},
 				status:         http.StatusOK,
 			}
-			// гоняем handler через recorder, ловим body и статус
+			// handler гоняется через recorder, снимаются body и статус
 			next.ServeHTTP(rec, r)
 
-			// ETag и Cache-Control только для 2xx, иначе закэшируем ошибку
-			// не-2xx просто пробрасываем как есть
+			// ETag и Cache-Control только для 2xx, иначе в кэш попадёт ошибка
+			// не-2xx просто пробрасывается как есть
 			if rec.status < 200 || rec.status >= 300 {
 				w.WriteHeader(rec.status)
 				_, _ = w.Write(rec.buf.Bytes())
@@ -50,13 +50,13 @@ func CacheControl(maxAgeSeconds int) func(http.Handler) http.Handler {
 			w.Header().Set("ETag", etag)
 			w.Header().Set("Cache-Control", directive)
 
-			// If-None-Match совпал - отдаём 304 без тела
+			// If-None-Match совпал - отдаётся 304 без тела
 			if match := r.Header.Get("If-None-Match"); match != "" && match == etag {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
 
-			// пишем реальный статус и тело
+			// пишется реальный статус и тело
 			w.WriteHeader(rec.status)
 			_, _ = w.Write(rec.buf.Bytes())
 		})

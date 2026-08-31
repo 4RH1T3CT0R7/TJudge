@@ -64,7 +64,7 @@ func (s *TournamentRepositorySuite) TearDownTest() {
 	for _, id := range s.teamIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM teams WHERE id = $1", id)
 	}
-	// заодно чистим по паттерну кода - для старых тестов
+	// заодно чистка по паттерну кода - для старых тестов
 	_, _ = s.database.ExecContext(ctx, "DELETE FROM tournaments WHERE code LIKE 'TEST%'")
 	for _, id := range s.tournamentIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM tournaments WHERE id = $1", id)
@@ -441,7 +441,7 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	tournament := s.createTrackedTournament("TPCGL1", user.ID)
 
 	// кросс-игровому лидерборду нужны проги с team_id/game_id и завершённые
-	// матчи. без матчей выборка пустая - проверяем что не падает.
+	// матчи. без матчей выборка пустая - проверка что не падает.
 	ctx := context.Background()
 	entries, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
 	require.NoError(s.T(), err)

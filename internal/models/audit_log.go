@@ -7,7 +7,7 @@ import (
 )
 
 // одна запись audit-лога.
-// сюда пишем admin-действия чтобы потом разбирать инциденты
+// сюда пишутся admin-действия чтобы потом разбирать инциденты
 type AuditLogEntry struct {
 	ID         uuid.UUID `db:"id"          json:"id"`
 	ActorID    uuid.UUID `db:"actor_id"    json:"actor_id"`

@@ -155,7 +155,7 @@ func TestSyncNotifier_WorkerTopology(t *testing.T) {
 	require.NoError(t, json.Unmarshal(pub.payloads[0], &env))
 	assert.Equal(t, "MatchResultProcessed", env.Type)
 
-	// ProgramCompiled - только редис, лидерборд не трогаем
+	// ProgramCompiled - только редис, лидерборд не трогается
 	n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid, ProgramID: uuid.New(), Status: "ready"})
 	require.Len(t, pub.payloads, 2)
 	require.NoError(t, json.Unmarshal(pub.payloads[1], &env))

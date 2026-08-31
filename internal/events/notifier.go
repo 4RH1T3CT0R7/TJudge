@@ -51,10 +51,10 @@ type Broadcaster interface {
 // мост из редиса) - разница только в том что передать в поля.
 // TODO: не помешал бы счётчик отправленных/упавших событий, но пока не горит
 type SyncNotifier struct {
-	TournamentCache TournamentCacheWriter  // в воркере nil - кэш турниров там не трогаем
+	TournamentCache TournamentCacheWriter  // в воркере nil - кэш турниров там не трогается
 	Leaderboard     LeaderboardCacheWriter // может быть nil
 	Broadcaster     Broadcaster            // в воркере nil - вебсокета нет
-	Redis           *RedisEventPublisher   // в апи nil - наружу не публикуем, уже пришло из редиса
+	Redis           *RedisEventPublisher   // в апи nil - наружу не публикуется, уже пришло из редиса
 	Log             *logger.Logger
 }
 
@@ -89,7 +89,7 @@ func (n *SyncNotifier) TournamentCompleted(ctx context.Context, e TournamentComp
 }
 
 func (n *SyncNotifier) TournamentDeleted(ctx context.Context, e TournamentDeleted) {
-	// турнир удалили - выкидываем и его кэш, и лидерборд
+	// турнир удалили - выкидывается и его кэш, и лидерборд
 	if n.TournamentCache != nil {
 		n.logErr("TournamentDeleted", n.TournamentCache.Invalidate(ctx, e.TournamentID))
 	}
@@ -120,7 +120,7 @@ func (n *SyncNotifier) MatchesCreated(ctx context.Context, e MatchesCreated) {
 }
 
 func (n *SyncNotifier) GameRoundReset(ctx context.Context, e GameRoundReset) {
-	// раунд сбросили - инвалидруем турнир и целиком чистим лидерборд
+	// раунд сбросили - турнир инвалидируется и лидерборд целиком чистится
 	// (раньше Clear звался из двух хендлеров, но DEL идемпотентен так что хватает одного)
 	if n.TournamentCache != nil {
 		n.logErr("GameRoundReset", n.TournamentCache.Invalidate(ctx, e.TournamentID))

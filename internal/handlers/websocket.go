@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// прод определяем на каждом вызове а не кэшируем в переменную пакета -
+// прод определяется на каждом вызове, а не кэшируется в переменную пакета -
 // тесты переключают окружение через t.Setenv
 func isProductionEnvLookup() bool {
 	env := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
@@ -28,7 +28,7 @@ func isProductionEnvLookup() bool {
 //
 // правила:
 //   - в проде wildcard "*" и пустой список запрещены, Origin должен точно
-//     совпасть с одним из разрешённых. пустой Origin пропускаем только для
+//     совпасть с одним из разрешённых. пустой Origin пропускается только для
 //     не-браузерных клиентов (нет Sec-Fetch-Site)
 //   - в dev wildcard/пустой список разрешают всё, для локалки
 func checkWebSocketOrigin(r *http.Request) bool {
@@ -47,8 +47,8 @@ func checkWebSocketOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		// браузер при cross-origin всегда шлёт Origin, так что пустой - это
-		// same-origin или curl/бот. в проде отсекаем случай когда заголовок
-		// Sec-Fetch-Site есть (значит браузер), иначе пропускаем
+		// same-origin или curl/бот. в проде отсекается случай когда заголовок
+		// Sec-Fetch-Site есть (значит браузер), иначе пропуск
 		if prod && r.Header.Get("Sec-Fetch-Site") != "" {
 			return false
 		}
@@ -104,7 +104,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// отражаем клиентский сабпротокол с токеном обратно, так требует rfc 6455
+	// клиентский сабпротокол с токеном отражается обратно, так требует rfc 6455
 	// (иначе некоторые браузеры рвут соединение)
 	responseHeader := http.Header{}
 	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
@@ -130,7 +130,7 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 	}
 
 	// tcp keepalive чтобы быстрее замечать молча отвалившихся клиентов
-	// (заснувший ноутбук и тп) - os-пробы ходят чаще чем наш ws-пинг
+	// (заснувший ноутбук и тп) - os-пробы ходят чаще чем свой ws-пинг
 	if tcp, ok := conn.UnderlyingConn().(*net.TCPConn); ok {
 		_ = tcp.SetKeepAlive(true)
 		_ = tcp.SetKeepAlivePeriod(30 * time.Second)

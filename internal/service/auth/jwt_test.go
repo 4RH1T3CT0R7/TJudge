@@ -23,7 +23,7 @@ func TestNewJWTManager(t *testing.T) {
 	assert.Equal(t, refreshTTL, manager.refreshTTL)
 }
 
-// генерим access и тут же валидируем — claims должны вернуться как положили
+// access генерится и тут же валидируется — claims должны вернуться как положили
 func TestJWTManager_AccessTokenRoundtrip(t *testing.T) {
 	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
 	userID := uuid.New()

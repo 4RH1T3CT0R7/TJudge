@@ -126,7 +126,7 @@ func TestRateLimit_XRealIP_Ignored(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	// то же для X-Real-IP - его тоже игнорируем, берём только r.RemoteAddr
+	// то же для X-Real-IP - он тоже игнорируется, берётся только r.RemoteAddr
 	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +187,7 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// выжимаем fallback для IP1: limit=1, множитель 0.5,
+	// выжимается fallback для IP1: limit=1, множитель 0.5,
 	// int(1*0.5)=0, но зажимается к минимуму 1, значит burst=1
 	for range 1 {
 		req := httptest.NewRequest("GET", "/", nil)

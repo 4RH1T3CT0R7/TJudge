@@ -218,7 +218,7 @@ func (s *GameRepositorySuite) TestUpdate() {
 	// updated_at должен обновиться
 	assert.True(s.T(), game.UpdatedAt.After(originalUpdatedAt) || game.UpdatedAt.Equal(originalUpdatedAt))
 
-	// перечитываем и сверяем
+	// перечитывание и сверка
 	result, err := s.repo.GetByID(ctx, game.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "Updated Display Name", result.DisplayName)
@@ -303,7 +303,7 @@ func (s *GameRepositorySuite) TestAddToTournament_Idempotent() {
 
 	ctx := context.Background()
 
-	// добавляем дважды - ON CONFLICT DO NOTHING, ошибки быть не должно
+	// добавление дважды - ON CONFLICT DO NOTHING, ошибки быть не должно
 	err := s.repo.AddToTournament(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
 
@@ -476,7 +476,7 @@ func (s *GameRepositorySuite) TestIsRoundCompleted_True() {
 func (s *GameRepositorySuite) TestIsRoundCompleted_NoLink() {
 	ctx := context.Background()
 
-	// связки турнир-игра нет - возвращаем false, а не ошибку
+	// связки турнир-игра нет - возвращается false, а не ошибку
 	completed, err := s.repo.IsRoundCompleted(ctx, uuid.New(), uuid.New())
 	require.NoError(s.T(), err)
 	assert.False(s.T(), completed)
@@ -489,7 +489,7 @@ func (s *GameRepositorySuite) TestResetGameRound() {
 	ctx := context.Background()
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
 
-	// закрываем раунд и инкрементим
+	// раунд закрывается и инкрементится
 	require.NoError(s.T(), s.repo.MarkRoundCompleted(ctx, tournament.ID, game.ID))
 	_, err := s.repo.IncrementCurrentRound(ctx, tournament.ID, game.ID)
 	require.NoError(s.T(), err)
@@ -542,7 +542,7 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game1.ID))
 	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game2.ID))
 
-	// активируем game1
+	// активация game1
 	err := s.repo.SetActiveGame(ctx, tournament.ID, game1.ID)
 	require.NoError(s.T(), err)
 
@@ -551,7 +551,7 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	assert.Equal(s.T(), game1.ID, active.GameID)
 	assert.True(s.T(), active.IsActive)
 
-	// переключаемся на game2
+	// переключение на game2
 	err = s.repo.SetActiveGame(ctx, tournament.ID, game2.ID)
 	require.NoError(s.T(), err)
 
@@ -602,7 +602,7 @@ func (s *GameRepositorySuite) TestIsGameActive_True() {
 func (s *GameRepositorySuite) TestIsGameActive_NoLink() {
 	ctx := context.Background()
 
-	// связки турнир-игра нет - возвращаем false, а не ошибку
+	// связки турнир-игра нет - возвращается false, а не ошибку
 	isActive, err := s.repo.IsGameActive(ctx, uuid.New(), uuid.New())
 	require.NoError(s.T(), err)
 	assert.False(s.T(), isActive)

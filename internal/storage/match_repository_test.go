@@ -141,7 +141,7 @@ func (s *MatchRepositorySuite) TestCreate() {
 	require.NoError(s.T(), err)
 	s.matchIDs = append(s.matchIDs, match.ID)
 
-	// перечитываем и сверяем
+	// перечитывание и сверка
 	result, err := s.repo.GetByID(ctx, match.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), match.ID, result.ID)
@@ -321,12 +321,12 @@ func (s *MatchRepositorySuite) TestUpdateStatus_ToCompleted() {
 	result, err := s.repo.GetByID(ctx, match.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), models.MatchCompleted, result.Status)
-	// сразу в completed - started_at не трогаем
+	// сразу в completed - started_at не трогается
 	assert.Nil(s.T(), result.StartedAt)
 }
 
 // перевод в running атомарно уводит матч из pending. если матча нет или он
-// уже не pending - это НЕ not found, а защита от двойной обработки
+// уже не pending - это не not found, а защита от двойной обработки
 // (ErrMatchAlreadyProcessed). а вот обычный статус по несуществующему id - not found.
 func (s *MatchRepositorySuite) TestUpdateStatus_NotFound() {
 	ctx := context.Background()
@@ -435,7 +435,7 @@ func (s *MatchRepositorySuite) TestGetNextRoundNumber() {
 
 	ctx := context.Background()
 
-	// матчей ещё нет - ждём 1
+	// матчей ещё нет - ожидается 1
 	nextRound, err := s.repo.GetNextRoundNumber(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), 1, nextRound)
@@ -592,7 +592,7 @@ func (s *MatchRepositorySuite) TestDeleteMatchesForGame() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(2), affected)
 
-	// удалённые убираем из трекинга
+	// удалённые убираются из трекинга
 	s.matchIDs = []uuid.UUID{m3.ID}
 	_ = m1 // уже снесён через DeleteMatchesForGame
 

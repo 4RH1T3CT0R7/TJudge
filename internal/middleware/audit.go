@@ -89,11 +89,11 @@ func (w *auditResponseWriter) WriteHeader(code int) {
 // Audit пишет в audit-лог изменяющие запросы (POST/PUT/PATCH/DELETE)
 // от админов - нужно для разбора инцидентов
 //
-// ставить ПОСЛЕ auth middleware: читает UserIDKey и RoleKey из контекста
+// ставить после auth middleware: читает UserIDKey и RoleKey из контекста
 func Audit(a *AuditLogger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// изменяющие методы, read-запросы не аудитим
+			// изменяющие методы, read-запросы не аудитятся
 			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
 				next.ServeHTTP(w, r)
 				return

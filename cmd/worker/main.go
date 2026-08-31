@@ -26,14 +26,14 @@ import (
 )
 
 func main() {
-	// Загружаем конфигурацию
+	// загрузка конфигурации
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Инициализируем логгер
+	// логгер
 	log, err := logger.NewWithOptions(logger.Options{
 		Level:  cfg.Logging.Level,
 		Format: cfg.Logging.Format,
@@ -50,10 +50,10 @@ func main() {
 		zap.Int("max_workers", cfg.Worker.MaxWorkers),
 	)
 
-	// Инициализируем метрики
+	// метрики
 	m := metrics.New()
 
-	// Подключаемся к базе данных
+	// подключение к базе данных
 	database, err := storage.New(&cfg.Database, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to database", zap.Error(err))
@@ -65,12 +65,12 @@ func main() {
 		zap.Int("port", cfg.Database.Port),
 	)
 
-	// Проверяем здоровье БД
+	// проверка здоровья БД
 	if err := database.Health(context.Background()); err != nil {
 		log.Fatal("Database health check failed", zap.Error(err))
 	}
 
-	// Обеспечиваем наличие партиций таблицы matches и rating_history
+	// обеспечение наличия партиций таблиц matches и rating_history
 	if err := database.EnsureMatchPartitions(context.Background()); err != nil {
 		log.Error("Failed to ensure match partitions", zap.Error(err))
 	}
@@ -78,10 +78,10 @@ func main() {
 		log.Error("Failed to ensure rating_history partitions", zap.Error(err))
 	}
 
-	// Запускаем периодическое обслуживание партиций (каждые 24ч)
+	// запуск периодического обслуживания партиций (каждые 24ч)
 	database.StartPartitionMaintenance(cfg.Database.PartitionRetentionMonths)
 
-	// Подключаемся к Redis
+	// подключение к Redis
 	redisCache, err := cache.New(&cfg.Redis, log, m)
 	if err != nil {
 		log.Fatal("Failed to connect to Redis", zap.Error(err))
@@ -93,19 +93,19 @@ func main() {
 		zap.Int("port", cfg.Redis.Port),
 	)
 
-	// Инициализируем репозитории
+	// репозитории
 	matchRepo := storage.NewMatchRepository(database)
 	ratingRepo := storage.NewRatingRepository(database)
 	programRepo := storage.NewProgramRepository(database)
 
-	// Инициализируем кэши с метриками
+	// кэши с метриками
 	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
 	leaderboardCache := cache.NewLeaderboardCache(redisCache).WithMetrics(m)
 
-	// Инициализируем queue manager
+	// queue manager
 	queueManager := queue.NewQueueManager(redisCache, log, m)
 
-	// нотифаер воркера: результат матча кладём в кэш лидерборда, и заодно пробрасываем
+	// нотифаер воркера: результат матча кладётся в кэш лидерборда, и заодно пробрасывается
 	// событие в редис чтобы апи разослал его по вебсокету. кэш турниров и вебсокет тут не нужны
 	redisEventPub := events.NewRedisEventPublisher(redisCache, log)
 	notifier := &events.SyncNotifier{
@@ -114,13 +114,13 @@ func main() {
 		Log:         log,
 	}
 
-	// Инициализируем rating service
+	// rating service
 	ratingService := rating.NewService(ratingRepo, notifier, log)
 
-	// Проверяем наличие образа tjudge-cli
+	// проверка наличия образа tjudge-cli
 	checkTJudgeCLIImage(log)
 
-	// Проверяем наличие builder-образа для компиляции программ (warn-only:
+	// проверка наличия builder-образа для компиляции программ (warn-only:
 	// без него compile-задачи будут копиться, stuck-recovery повторит их
 	// после появления образа).
 	if !imageExists(cfg.Executor.BuilderImage, log) {
@@ -130,7 +130,7 @@ func main() {
 		)
 	}
 
-	// Инициализируем executor с путём к программам
+	// executor с путём к программам
 	exec, err := executor.NewExecutor(cfg.Executor, cfg.Storage.ProgramsPath, cfg.Storage.HostProgramsPath, log)
 	if err != nil {
 		log.Fatal("Failed to create executor", zap.Error(err))
@@ -143,7 +143,7 @@ func main() {
 		zap.Duration("timeout", cfg.Executor.Timeout),
 	)
 
-	// Инициализируем processor
+	// processor
 	processor := worker.NewProcessor(
 		matchRepo,
 		ratingRepo,
@@ -154,7 +154,7 @@ func main() {
 		log,
 	)
 
-	// Инициализируем worker pool
+	// worker pool
 	pool := worker.NewPool(
 		cfg.Worker,
 		queueManager,
@@ -163,7 +163,7 @@ func main() {
 		m,
 	)
 
-	// Инициализируем recovery service и восстанавливаем застрявшие матчи
+	// recovery service и восстановление застрявших матчей
 	recoveryService := worker.NewRecoveryService(
 		matchRepo,
 		queueManager,
@@ -175,13 +175,13 @@ func main() {
 		},
 	)
 
-	// Запускаем восстановление при старте
+	// запуск восстановления при старте
 	if err := recoveryService.RecoverOnStartup(context.Background()); err != nil {
 		log.Error("Failed to recover matches on startup", zap.Error(err))
-		// Продолжаем работу, это не критическая ошибка
+		// работа продолжается, это не критическая ошибка
 	}
 
-	// Запускаем периодическое восстановление
+	// запуск периодического восстановления
 	recoveryService.Start()
 
 	// Outbox-диспетчер: доводит до конца обновления рейтингов, потерянные
@@ -215,7 +215,7 @@ func main() {
 	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler, notifier, log)
 	compileWorker.Start()
 
-	// Запускаем worker pool
+	// запуск worker pool
 	pool.Start()
 	log.Info("Worker pool started",
 		zap.Int("initial_workers", cfg.Worker.MinWorkers),
@@ -255,26 +255,26 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	// Ждём сигнала остановки
+	// ожидание сигнала остановки
 	<-quit
 	log.Info("Shutting down worker pool...")
 
-	// Останавливаем recovery service
+	// остановка recovery service
 	recoveryService.Stop()
 
-	// Останавливаем outbox-диспетчер
+	// остановка outbox-диспетчера
 	outboxDispatcher.Stop()
 
-	// Останавливаем compile-worker
+	// остановка compile-worker
 	compileWorker.Stop()
 
-	// Останавливаем worker pool
+	// остановка worker pool
 	pool.Stop()
 
-	// Ждём завершения worker pool
+	// ожидание завершения worker pool
 	pool.Wait()
 
-	// Останавливаем metrics сервер
+	// остановка metrics сервера
 	if metricsSrv != nil {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
@@ -292,7 +292,7 @@ func main() {
 func checkTJudgeCLIImage(log *logger.Logger) {
 	const imageName = "tjudge-cli:latest"
 
-	// Проверяем наличие образа
+	// проверка наличия образа
 	if imageExists(imageName, log) {
 		log.Info("Docker image tjudge-cli verified",
 			zap.String("image", imageName),
@@ -304,7 +304,7 @@ func checkTJudgeCLIImage(log *logger.Logger) {
 		zap.String("image", imageName),
 	)
 
-	// Пытаемся собрать образ через docker compose
+	// попытка собрать образ через docker compose
 	if tryBuildWithCompose(log) {
 		if imageExists(imageName, log) {
 			log.Info("Docker image tjudge-cli built successfully",
@@ -314,7 +314,7 @@ func checkTJudgeCLIImage(log *logger.Logger) {
 		}
 	}
 
-	// Пытаемся собрать напрямую через docker build
+	// попытка собрать напрямую через docker build
 	if tryBuildDirectly(log) {
 		if imageExists(imageName, log) {
 			log.Info("Docker image tjudge-cli built successfully",
@@ -351,7 +351,7 @@ func imageExists(imageName string, log *logger.Logger) bool {
 func tryBuildWithCompose(log *logger.Logger) bool {
 	log.Info("Trying to build tjudge-cli with docker compose...")
 
-	// Проверяем возможные пути к docker-compose.yml
+	// проверка возможных путей к docker-compose.yml
 	composePaths := []string{
 		"docker-compose.yml",
 		"../docker-compose.yml",
@@ -389,7 +389,7 @@ func tryBuildWithCompose(log *logger.Logger) bool {
 func tryBuildDirectly(log *logger.Logger) bool {
 	log.Info("Trying to build tjudge-cli with docker build...")
 
-	// Проверяем возможные пути к Dockerfile
+	// проверка возможных путей к Dockerfile
 	dockerfilePaths := []struct {
 		dockerfile string
 		context    string

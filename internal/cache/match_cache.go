@@ -21,7 +21,7 @@ type MatchCache struct {
 func NewMatchCache(cache *Cache) *MatchCache {
 	return &MatchCache{
 		cache:   cache,
-		ttl:     24 * time.Hour, // результаты держим сутки
+		ttl:     24 * time.Hour, // результаты живут сутки
 		metrics: nil,            // метрики опциональны
 	}
 }
@@ -56,10 +56,10 @@ func (mc *MatchCache) SetMatch(ctx context.Context, match *models.Match) error {
 	}
 
 	key := mc.getKey(match.ID)
-	// активный матч ещё поменяется, поэтому держим недолго
+	// активный матч ещё поменяется, поэтому живёт недолго
 	ttl := 5 * time.Minute
 	if match.Status == models.MatchCompleted {
-		ttl = mc.ttl // завершённый уже не изменится, храним сутки
+		ttl = mc.ttl // завершённый уже не изменится, хранится сутки
 	}
 	return mc.cache.Set(ctx, key, data, ttl)
 }

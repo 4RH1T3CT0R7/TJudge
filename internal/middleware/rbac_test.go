@@ -177,7 +177,7 @@ func TestRequireRoleValue(t *testing.T) {
 }
 
 func TestMiddlewareChain(t *testing.T) {
-	// Проверяем, что auth и rbac middleware работают вместе
+	// проверка, что auth и rbac middleware работают вместе
 	mockAuth := new(MockAuthService)
 	log := newTestLogger()
 
@@ -328,7 +328,7 @@ func TestVerifiedAdminChecker_NonAdminJWT(t *testing.T) {
 	assert.False(t, handlerCalled, "Handler should not be called for non-admin JWT")
 	assert.Equal(t, http.StatusForbidden, rr.Code)
 	assert.Contains(t, rr.Body.String(), "insufficient permissions")
-	// БД НЕ должна вызываться - отклонено на уровне JWT
+	// БД не должна вызываться - отклонено на уровне JWT
 	mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 }
 
@@ -365,7 +365,7 @@ func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
 	mockRepo.On("GetByID", mock.Anything, userID).Return(&models.User{
 		ID:   userID,
 		Role: models.RoleAdmin,
-	}, nil).Once() // Ожидаем ровно один вызов БД
+	}, nil).Once() // ожидается ровно один вызов БД
 
 	handler := checker.RequireVerifiedAdmin()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -385,7 +385,7 @@ func TestVerifiedAdminChecker_CacheHitFresh(t *testing.T) {
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
 
-	// Проверяем, что БД была вызвана только один раз
+	// проверяется, что БД была вызвана только один раз
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 }
 
@@ -412,7 +412,7 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr1.Code)
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 
-	// Ждём истечения TTL кэша
+	// ожидание истечения TTL кэша
 	time.Sleep(150 * time.Millisecond)
 
 	// Второй запрос - кэш истёк, снова идёт в БД
@@ -422,7 +422,7 @@ func TestVerifiedAdminChecker_CacheExpiry(t *testing.T) {
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusOK, rr2.Code)
 
-	// Проверяем, что БД была вызвана дважды (один раз fresh, один раз после expiry)
+	// проверяется, что БД была вызвана дважды (один раз fresh, один раз после expiry)
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 2)
 }
 

@@ -24,7 +24,7 @@ type TournamentCacher interface {
 }
 
 // LeaderboardCacher — кэш лидерборда
-// читаем cache-aside в GetLeaderboard/GetCrossGameLeaderboard
+// чтение cache-aside в GetLeaderboard/GetCrossGameLeaderboard
 type LeaderboardCacher interface {
 	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
 	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
@@ -143,11 +143,11 @@ type CreateRequest struct {
 	IsPermanent     bool           `json:"is_permanent,omitempty"`
 	StartTime       *time.Time     `json:"start_time,omitempty"`
 	Metadata        map[string]any `json:"metadata,omitempty"`
-	CreatorID       *uuid.UUID     `json:"-"` // ставим из контекста, а не из json
+	CreatorID       *uuid.UUID     `json:"-"` // ставится из контекста, а не из json
 }
 
 // generateCode — код турнира на 6 символов
-// берём crypto/rand чтобы символы падали равномерно
+// берётся crypto/rand чтобы символы падали равномерно
 func generateCode() string {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // выкинул похожие символы I,O,0,1
 	code := make([]byte, 6)
@@ -191,7 +191,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Tourn
 		return nil, errors.ErrValidation.WithError(err)
 	}
 
-	// сохраняем
+	// сохранение
 	if err := s.tournamentRepo.Create(ctx, tournament); err != nil {
 		return nil, fmt.Errorf("failed to create tournament: %w", err)
 	}
@@ -202,7 +202,7 @@ func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Tourn
 		zap.String("game_type", tournament.GameType),
 	)
 
-	// шлём событие, кэш чистится в обработчиках
+	// уходит событие, кэш чистится в обработчиках
 	s.notifier.TournamentCreated(ctx, events.TournamentCreated{Version: 1, Tournament: tournament})
 
 	return tournament, nil
@@ -221,7 +221,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament
 		return nil, err
 	}
 
-	// кладём в кэш
+	// запись в кэш
 	if err := s.tournamentCache.Set(ctx, tournament); err != nil {
 		s.log.Error("Failed to cache tournament", zap.Error(err))
 	}
@@ -255,11 +255,11 @@ type JoinRequest struct {
 
 // Join добавляет участника в турнир
 func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
-	// лочим, иначе гонка на проверке лимита участников
+	// лок, иначе гонка на проверке лимита участников
 	lockKey := fmt.Sprintf("tournament:join:%s", req.TournamentID.String())
 
 	return s.distributedLock.WithLock(ctx, lockKey, 5*time.Second, func(ctx context.Context) error {
-		// получем турнир
+		// берётся турнир
 		tournament, err := s.GetByID(ctx, req.TournamentID)
 		if err != nil {
 			return err
@@ -270,7 +270,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 			return errors.ErrTournamentStarted
 		}
 
-		// проверяем лимит
+		// проверка лимита
 		if tournament.MaxParticipants != nil {
 			count, err := s.tournamentRepo.GetParticipantsCount(ctx, req.TournamentID)
 			if err != nil {
@@ -282,7 +282,7 @@ func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
 			}
 		}
 
-		// добавляем участника
+		// добавление участника
 		participant := &models.TournamentParticipant{
 			ID:           uuid.New(),
 			TournamentID: req.TournamentID,
@@ -318,7 +318,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	lockKey := fmt.Sprintf("tournament:start:%s", tournamentID.String())
 
 	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
-		// читаем прямо из бд мимо кэша, иначе ловим конфликт версий
+		// чтение прямо из бд мимо кэша, иначе конфликт версий
 		// на оптимистичной блокировке
 		tournament, err := s.tournamentRepo.GetByID(ctx, tournamentID)
 		if err != nil {
@@ -339,7 +339,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrValidation.WithMessage("для старта турнира нужно минимум 2 команды")
 		}
 
-		// меняем статус
+		// смена статуса
 		now := time.Now()
 		tournament.Status = models.TournamentActive
 		tournament.StartTime = &now
@@ -353,7 +353,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 			zap.String("tournament_id", tournamentID.String()),
 		)
 
-		// активируем первую игру елси она есть
+		// активация первой игры елси она есть
 		if s.gameRepo != nil {
 			games, err := s.gameRepo.GetTournamentGames(ctx, tournamentID)
 			if err != nil {
@@ -381,7 +381,7 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 		return nil
 	})
 
-	// разбираем ошибку лока
+	// разбор ошибки лока
 	if lockErr != nil {
 		if errors.IsAppError(lockErr) {
 			return lockErr
@@ -443,7 +443,7 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 }
 
 func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
-	// подтягиваем турнир для проверки
+	// подтягивается турнир для проверки
 	tournament, err := s.GetByID(ctx, tournamentID)
 	if err != nil {
 		return err
@@ -454,7 +454,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 		return errors.ErrConflict.WithMessage("cannot delete active tournament")
 	}
 
-	// удаляем
+	// удаление
 	if err := s.tournamentRepo.Delete(ctx, tournamentID); err != nil {
 		return fmt.Errorf("failed to delete tournament: %w", err)
 	}
@@ -472,7 +472,7 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 // GetLeaderboard — таблица лидеров
 func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
 	// сначала полный json-кэш (короткий ttl)
-	// TODO: лидерборд без пагинации, отдаём весь топ как есть
+	// TODO: лидерборд без пагинации, отдаётся весь топ как есть
 	cached, err := s.leaderboardCache.GetFullLeaderboard(ctx, tournamentID, limit)
 	if err != nil {
 		s.log.Error("Failed to get full leaderboard cache", zap.Error(err))
@@ -490,12 +490,12 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 			return nil, err
 		}
 
-		// кладём полный json в кэш
+		// полный json кладётся в кэш
 		if err := s.leaderboardCache.SetFullLeaderboard(ctx, tournamentID, limit, leaderboard); err != nil {
 			s.log.Error("Failed to set full leaderboard cache", zap.Error(err))
 		}
 
-		// заодно обновляем sorted set для поиска по рейтингу
+		// заодно обновляется sorted set для поиска по рейтингу
 		for _, entry := range leaderboard {
 			if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
 				s.log.Error("Failed to update leaderboard cache", zap.Error(err))
@@ -535,7 +535,7 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 		return nil, errors.ErrValidation.WithError(err)
 	}
 
-	// сохраняем в бд
+	// сохранение в бд
 	if err := s.matchRepo.Create(ctx, match); err != nil {
 		return nil, fmt.Errorf("failed to create match: %w", err)
 	}
@@ -546,7 +546,7 @@ func (s *Service) CreateMatch(ctx context.Context, tournamentID, program1ID, pro
 			zap.Error(err),
 			zap.String("match_id", match.ID.String()),
 		)
-		// ошибку не возвращаем, матч уже в бд тк создан выше
+		// ошибка не возвращается, матч уже в бд тк создан выше
 	}
 
 	s.log.Info("Match created",

@@ -31,7 +31,7 @@ type SecurityConfig struct {
 //
 // в CSP прикрыто лишнее: object-src 'none' (Flash/апплеты), base-uri 'self'
 // (base-tag injection), form-action 'self', frame-ancestors 'none' (кликджекинг)
-// 'unsafe-inline' в script-src пока держим из-за inline-скрипта в index.html,
+// 'unsafe-inline' в script-src пока держится из-за inline-скрипта в index.html,
 // потом надо уйти на nonce; в style-src он нужен Tailwind, риск меньше
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
@@ -69,8 +69,8 @@ func SecurityHeaders(config SecurityConfig) func(http.Handler) http.Handler {
 				w.Header().Set("Referrer-Policy", config.ReferrerPolicy)
 			}
 
-			// HSTS ставим только когда соединение реально по TLS: напрямую это
-			// r.TLS, а за реверс-прокси TLS рвётся на нём, поэтому смотрим X-Forwarded-Proto
+			// HSTS ставится только когда соединение реально по TLS: напрямую это
+			// r.TLS, а за реверс-прокси TLS рвётся на нём, поэтому в ход идёт X-Forwarded-Proto
 			if config.StrictTransportSecurity != "" && (r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https") {
 				w.Header().Set("Strict-Transport-Security", config.StrictTransportSecurity)
 			}

@@ -161,7 +161,7 @@ func TestMatchHandler_Get(t *testing.T) {
 		assert.Equal(t, cachedMatch.ID, response.ID)
 
 		mockCache.AssertExpectations(t)
-		// при попадании в кэш репозиторий не трогаем
+		// при попадании в кэш репозиторий не трогается
 		mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
 	})
 

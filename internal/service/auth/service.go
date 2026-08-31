@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserRepository — получем и пишем юзеров в базу, обычный fat-репозиторий
+// UserRepository — читает и пишет юзеров в базу, обычный fat-репозиторий
 type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -123,7 +123,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResp
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// пароль наружу не отдаём
+	// пароль наружу не отдаётся
 	user.PasswordHash = ""
 
 	return &AuthResponse{
@@ -138,7 +138,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	var user *models.User
 	var err error
 
-	// достаём юзера по email или по username, что дали
+	// юзер достаётся по email или по username, что дали
 	if req.Email != "" {
 		user, err = s.userRepo.GetByEmail(ctx, req.Email)
 	} else if req.Username != "" {
@@ -161,7 +161,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 	}
 
 	if err := s.comparePassword(user.PasswordHash, req.Password); err != nil {
-		// логируем только user_id, без ника и почты — иначе по логам можно
+		// логируется только user_id, без ника и почты — иначе по логам можно
 		// перебором вычислять кто вообще есть в базе
 		s.log.Info("Invalid password attempt",
 			zap.String("user_id", user.ID.String()),
@@ -194,15 +194,15 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 }
 
 // RefreshTokens меняет пару токенов на новую.
-// делаем ротацию: старый рефреш после этого невалиден
+// ротация: старый рефреш после этого невалиден
 func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*AuthResponse, error) {
-	// сначала проверяем сам токен, это дёшево и без побочек
+	// сначала проверяется сам токен, это дёшево и без побочек
 	userID, err := s.jwtManager.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		return nil, errors.ErrInvalidToken.WithError(err)
 	}
 
-	// юзера достаём ДО того как погасим токен. если сходить в базу после
+	// юзер достаётся до гашения токена. если сходить в базу после
 	// AddIfNotExists и там упасть, человек останется без рефреша и залогиниться
 	// заново не сможет (lockout)
 	user, err := s.userRepo.GetByID(ctx, userID)
@@ -210,16 +210,16 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// token rotation: атомарно кладём старый рефреш в блеклист через setnx.
+	// token rotation: старый рефреш атомарно кладётся в блеклист через setnx.
 	// это защита от TOCTOU — если прилетело два запроса с одним токеном,
-	// пройдёт только первый. на ошибке редиса fail-closed, запрос отклоняем
+	// пройдёт только первый. на ошибке редиса fail-closed, запрос отклоняется
 	wasNew, err := s.tokenBlacklist.AddIfNotExists(ctx, refreshToken, s.jwtManager.RefreshTokenTTL())
 	if err != nil {
 		s.log.LogError("Failed to atomically blacklist refresh token", err)
 		return nil, fmt.Errorf("failed to blacklist refresh token: %w", err)
 	}
 	if !wasNew {
-		// токен уже использовали, второй раз не пускаем
+		// токен уже использован, второй раз хода нет
 		s.log.Warn("Attempt to reuse already-consumed refresh token")
 		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
 	}
@@ -249,7 +249,7 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 
 // Logout гасит токены через блеклист
 func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) error {
-	// fail-closed: если не смогли занести токен в блеклист — возвращаем ошибку,
+	// fail-closed: если не смогли занести токен в блеклист — возвращается ошибка,
 	// чтобы клиент понял что logout прошёл не до конца
 	claims, err := s.jwtManager.ValidateToken(accessToken)
 	if err != nil {
@@ -266,7 +266,7 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 	}
 
 	if refreshToken != "" {
-		// рефреш кладём на полный ttl, тк его срок может быть позже чем у access
+		// рефреш кладётся на полный ttl, тк его срок может быть позже чем у access
 		if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
 			s.log.LogError("Failed to blacklist refresh token", err)
 			return fmt.Errorf("failed to blacklist refresh token: %w", err)
@@ -294,7 +294,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// email трогаем только если он реально другой
+	// email трогается только если он реально другой
 	if req.Email != "" && req.Email != user.Email {
 		existingUser, existErr := s.userRepo.GetByEmail(ctx, req.Email)
 		if existErr != nil && !errors.IsNotFound(existErr) {
@@ -307,7 +307,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 	}
 
 	if req.Password != "" {
-		// пароль меняем только вместе с текущим паролем, иначе угнанный access
+		// пароль меняется только вместе с текущим паролем, иначе угнанный access
 		// токен позволил бы сменить пароль без знания старого
 		if req.CurrentPassword == "" {
 			return nil, errors.ErrValidation.WithMessage("current password is required to change password")
@@ -374,7 +374,7 @@ func (s *Service) GetUserFromToken(ctx context.Context, tokenString string) (*mo
 const BcryptCost = 12
 
 // hashPassword хеширует пароль. bcrypt молча режет всё что длиннее 72 байт,
-// поэтому такие пароли отбиваем сами, а не даём ему тихо обрезать
+// поэтому такие пароли отсекаются заранее, а не отдаются ему на тихую обрезку
 func (s *Service) hashPassword(password string) (string, error) {
 	if len([]byte(password)) > 72 {
 		return "", errors.ErrValidation.WithMessage("password is too long")
@@ -387,7 +387,7 @@ func (s *Service) hashPassword(password string) (string, error) {
 }
 
 // comparePassword сверяет пароль с хешом.
-// те же >72 байта режем заранее, чтобы не поймать коллизию обрезки bcrypt
+// те же >72 байта режутся заранее, чтобы не поймать коллизию обрезки bcrypt
 func (s *Service) comparePassword(hash, password string) error {
 	if len([]byte(password)) > 72 {
 		return errors.ErrInvalidCredentials.WithMessage("invalid credentials")

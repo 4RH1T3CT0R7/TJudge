@@ -43,7 +43,7 @@ type SchedulingService interface {
 //
 // файл раздулся до бога-обработчика: тут и CRUD турнира, и лидерборды, и запуск
 // матчей, и в конце ещё история рейтинга. по-хорошему давно просится распил на
-// несколько файлов, но пока живём так - каждый раз откладываю на потом.
+// несколько файлов, но пока так и остаётся - каждый раз откладываю на потом.
 type TournamentHandler struct {
 	tournamentService TournamentService
 	schedulingService SchedulingService
@@ -80,7 +80,7 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// id создателя достаём из контекста аутентификаци, если он там есть
+	// id создателя берётся из контекста аутентификаци, если он там есть
 	if userID, ok := r.Context().Value(middleware.UserIDKey).(uuid.UUID); ok {
 		req.CreatorID = &userID
 	}
@@ -115,7 +115,7 @@ func (h *TournamentHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := models.TournamentFilter{}
 
-	// статус приходит строкой из query - прогоняем через whitelist, иначе 400,
+	// статус приходит строкой из query - прогоняется через whitelist, иначе 400,
 	// чтобы мусоный фильтр не улетал в БД
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := models.TournamentStatus(status)
@@ -379,7 +379,7 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// приоритет не обязателен: если не прислали - кладём medium
+	// приоритет не обязателен: если не прислали - ставится medium
 	if req.Priority == "" {
 		req.Priority = models.PriorityMedium
 	}

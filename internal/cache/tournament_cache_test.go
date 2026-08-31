@@ -132,11 +132,11 @@ func TestTournamentCache_IncrementParticipantsCount_NoExpiryReset(t *testing.T) 
 	ttlAfterFirst := mr.TTL(key)
 	assert.Greater(t, ttlAfterFirst, time.Duration(0), "после первого инкремента ttl должен стоять")
 
-	// проматываем время, ttl уменьшается
+	// время проматывается, ttl уменьшается
 	mr.FastForward(10 * time.Second)
 	ttlBefore := mr.TTL(key)
 
-	// второй инкремент: значение 2, ttl НЕ сбрасывается (он ставится только на val==1)
+	// второй инкремент: значение 2, ttl не сбрасывается (он ставится только на val==1)
 	require.NoError(t, tc.IncrementParticipantsCount(ctx, tournamentID))
 
 	count, err := tc.GetParticipantsCount(ctx, tournamentID)
@@ -204,7 +204,7 @@ func TestTournamentCache_InvalidateList(t *testing.T) {
 	tc := NewTournamentCache(c)
 	ctx := context.Background()
 
-	// вручную кладём ключи под паттерн "tournaments:list:*"
+	// вручную кладутся ключи под паттерн "tournaments:list:*"
 	require.NoError(t, mr.Set("tournaments:list:status:active", "data1"))
 	require.NoError(t, mr.Set("tournaments:list:status:pending", "data2"))
 	require.NoError(t, mr.Set("tournaments:list:all", "data3"))

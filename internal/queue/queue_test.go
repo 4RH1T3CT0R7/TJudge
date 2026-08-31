@@ -45,7 +45,7 @@ func testMatch(priority models.MatchPriority) *models.Match {
 	}
 }
 
-// поднимаем реальный Cache поверх miniredis, моки тут не нужны
+// поднимается реальный Cache поверх miniredis, моки тут не нужны
 func setupTestQueueManager(t *testing.T) *QueueManager {
 	t.Helper()
 
@@ -91,7 +91,7 @@ func TestQueueManager_EnqueueDequeue_PriorityOrdering(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	// кладём в обратном порядке: low, medium, high
+	// кладётся в обратном порядке: low, medium, high
 	lowMatch := testMatch(models.PriorityLow)
 	medMatch := testMatch(models.PriorityMedium)
 	highMatch := testMatch(models.PriorityHigh)
@@ -100,7 +100,7 @@ func TestQueueManager_EnqueueDequeue_PriorityOrdering(t *testing.T) {
 	require.NoError(t, qm.Enqueue(ctx, medMatch))
 	require.NoError(t, qm.Enqueue(ctx, highMatch))
 
-	// достаём: high -> medium -> low
+	// достаётся: high -> medium -> low
 	first, err := qm.Dequeue(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, first)
@@ -267,10 +267,10 @@ func TestQueueManager_EnqueueBatch_DedupSkipsDuplicates(t *testing.T) {
 	match1 := testMatch(models.PriorityHigh)
 	match2 := testMatch(models.PriorityHigh)
 
-	// match1 сначала ставим по одиночке
+	// match1 сначала ставится по одиночке
 	require.NoError(t, qm.Enqueue(ctx, match1))
 
-	// батчем кладём и дубль match1, и новый match2
+	// батчем кладётся и дубль match1, и новый match2
 	require.NoError(t, qm.EnqueueBatch(ctx, []*models.Match{match1, match2}))
 
 	// в очереди должно быть 2 (match1 + match2), а не 3
@@ -295,14 +295,14 @@ func TestQueueManager_WeightedFairQueueing_NoStarvation(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	// наполняем все три очереди по 20 матчей
+	// все три очереди наполняются по 20 матчей
 	for range 20 {
 		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
 		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityMedium)))
 		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
 	}
 
-	// достаём все 60 и считаем по приоритетам, low не должна остаться голодной
+	// достаются все 60 и считаются по приоритетам, low не должна остаться голодной
 	counts := map[models.MatchPriority]int{}
 	for i := range 60 {
 		match, err := qm.Dequeue(ctx)
@@ -352,7 +352,7 @@ func TestQueueManager_Dequeue_MalformedJSON_DeadLetter(t *testing.T) {
 	qm := setupTestQueueManager(t)
 	ctx := context.Background()
 
-	// пихаем битый json прямо в high очередь
+	// битый json пихается прямо в high очередь
 	queueKey := qm.getQueueKey(models.PriorityHigh)
 	require.NoError(t, qm.cache.LPush(ctx, queueKey, "not-valid-json{{{"))
 
@@ -488,7 +488,7 @@ func TestQueueManager_ConcurrentEnqueueDequeue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(totalMatches), total)
 
-	// параллельно вычёрпываем всё обратно
+	// параллельно всё вычёрпывается обратно
 	const dequeueGoroutines = 3
 	dequeuedIDs := make(chan uuid.UUID, totalMatches)
 

@@ -67,35 +67,35 @@ func NewSchedulingService(
 }
 
 // ScheduleNewProgramMatches - досоздаёт матчи для новой программы против всех остальных.
-// оптимизация round-robin: не гоняем весь турнир заново, только пары с новой прогой
+// оптимизация round-robin: не гоняется весь турнир заново, только пары с новой прогой
 func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNewProgramMatchesRequest, programRepo ProgramRepository) error {
 	// лок чтобы параллельные запросы не наплодили дублей матчей
 	lockKey := fmt.Sprintf("tournament:schedule:%s:%s", req.TournamentID.String(), req.GameID.String())
 
 	return ss.distributedLock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// берём турнир из бд
+		// турнир берётся из бд
 		tournament, err := ss.tournamentRepo.GetByID(ctx, req.TournamentID)
 		if err != nil {
 			return err
 		}
 
-		// для завершённого турнира матчи уже не планируем
+		// для завершённого турнира матчи уже не планируются
 		if tournament.Status != models.TournamentActive && tournament.Status != models.TournamentPending {
 			return errors.ErrConflict.WithMessage("cannot schedule matches for completed tournament")
 		}
 
-		// получем все программы турнира по этой игре
+		// берутся все программы турнира по этой игре
 		programs, err := programRepo.GetByTournamentAndGame(ctx, req.TournamentID, req.GameID)
 		if err != nil {
 			return fmt.Errorf("failed to get programs: %w", err)
 		}
 
-		// матчи только против чужих программ (свою команду пропускаем)
+		// матчи только против чужих программ (своя команда пропускается)
 		var matches []*models.Match
 		now := time.Now()
 
 		for _, prog := range programs {
-			// свою прогу и проги своей команды скипаем
+			// своя прога и проги своей команды скипаются
 			if prog.ID == req.NewProgramID {
 				continue
 			}
@@ -156,13 +156,13 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 			return nil
 		}
 
-		// пишем матчи в бд
+		// матчи пишутся в бд
 		if err := ss.matchRepo.CreateBatch(ctx, matches); err != nil {
 			return fmt.Errorf("failed to create matches: %w", err)
 		}
 
-		// кидаем в очередь батчем (один pipeline в редис).
-		// если enqueue упал - откатываем матчи из бд, иначе повиснут
+		// всё в очередь батчем (один pipeline в редис)
+		// если enqueue упал - матчи откатываются из бд, иначе повиснут
 		// в pending навсегда и в обработку не попадут
 		if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
 			ids := matchIDs(matches)
@@ -182,7 +182,7 @@ func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req 
 			zap.Int("matches_created", len(matches)),
 		)
 
-		// шлём событие, дальше broadcast разрулят обработчики
+		// уходит событие, дальше broadcast разрулят обработчики
 		ss.notifier.MatchesCreated(ctx, events.MatchesCreated{
 			Version:      1,
 			TournamentID: req.TournamentID,
@@ -211,17 +211,17 @@ func (ss *SchedulingService) RunAllMatches(ctx context.Context, tournamentID uui
 }
 
 func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournamentID uuid.UUID) (int, error) {
-	// сначала берём то что уже висит в pending
+	// сначала берётся то что уже висит в pending
 	matches, err := ss.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 
-	// id матчей, созданных именно в этом вызове - только их откатываем при ошибке enqueue.
-	// старые pending из бд не трогаем, их recovery-worker подберёт
+	// id матчей, созданных именно в этом вызове - только они откатываются при ошибке enqueue.
+	// старые pending из бд не трогаются, их recovery-worker подберёт
 	var createdIDs []uuid.UUID
 
-	// pending пусто - генерим новый раунд
+	// pending пусто - генерируется новый раунд
 	if len(matches) == 0 {
 		ss.log.Info("No pending matches, generating new round",
 			zap.String("tournament_id", tournamentID.String()),
@@ -233,7 +233,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			return 0, fmt.Errorf("failed to get tournament: %w", err)
 		}
 
-		// раунд гоняем только для активного турнира
+		// раунд гоняется только для активного турнира
 		if tournament.Status != models.TournamentActive {
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
@@ -248,7 +248,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			return 0, errors.ErrValidation.WithMessage("need at least 2 participants to run matches")
 		}
 
-		// сбрасываем ВСЕ игры до генерации, тк иначе может выйти частичный сброс,
+		// сбрасываются все игры до генерации, тк иначе может выйти частичный сброс,
 		// если у какой-то игры остались running матчи
 		for gameType := range participantsByGame {
 			if err := ss.gameRepo.ResetGameByType(ctx, tournamentID, gameType); err != nil {
@@ -256,7 +256,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			}
 		}
 
-		// генерим матчи по каждой игре отдельно
+		// матчи генерируются по каждой игре отдельно
 		for gameType, participants := range participantsByGame {
 			if len(participants) < 2 {
 				ss.log.Warn("Skipping game with fewer than 2 participants",
@@ -278,7 +278,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			}
 
 			if err := ss.matchRepo.CreateBatch(ctx, gameMatches); err != nil {
-				// откатываем то что уже успели создать в этом вызове
+				// откат того что уже успели создать в этом вызове
 				if len(createdIDs) > 0 {
 					if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
 						ss.log.Error("Failed to rollback partially-created matches",
@@ -303,8 +303,8 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 	}
 
 	// всё в очередь батчем (один pipeline).
-	// при ошибке enqueue откатываем только свежесозданные;
-	// старые pending оставляем, их подберёт recovery-worker
+	// при ошибке enqueue откатываются только свежесозданные;
+	// старые pending остаются, их подберёт recovery-worker
 	if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
 		if len(createdIDs) > 0 {
 			if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
@@ -352,7 +352,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 	// createdIDs - что создали в этом вызове, для отката
 	var createdIDs []uuid.UUID
 
-	// pending нет - сбрасываем старые результаты и генерим заново
+	// pending нет - старые результаты сбрасываются и раунд генерируется заново
 	if len(matches) == 0 {
 		ss.log.Info("No pending matches for game, resetting and generating new round",
 			zap.String("tournament_id", tournamentID.String()),
@@ -369,7 +369,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 			return 0, errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
-		// сбрасываем прошлые матчи и рейтинги этой игры (если были).
+		// прошлые матчи и рейтинги этой игры сбрасываются (если были)
 		// при перезапуске новые результаты затирают старые
 		if err := ss.gameRepo.ResetGameByType(ctx, tournamentID, gameType); err != nil {
 			return 0, fmt.Errorf("failed to reset game %s before generating matches: %w", gameType, err)
@@ -398,7 +398,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 			return 0, errors.ErrValidation.WithMessage("no matches generated for this game")
 		}
 
-		// сохраняем в бд
+		// сохранение в бд
 		if err := ss.matchRepo.CreateBatch(ctx, matches); err != nil {
 			return 0, fmt.Errorf("failed to create matches: %w", err)
 		}
@@ -413,8 +413,8 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 	}
 
 	// всё в очередь батчем (один pipeline).
-	// при ошибке enqueue откатываем только свежесозданные;
-	// старые pending оставляем recovery-worker'у
+	// при ошибке enqueue откатываются только свежесозданные;
+	// старые pending остаются recovery-worker'у
 	if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
 		if len(createdIDs) > 0 {
 			if delErr := ss.matchRepo.DeleteBatch(ctx, createdIDs); delErr != nil {
@@ -444,7 +444,7 @@ func (ss *SchedulingService) getLatestParticipantsByGame(ctx context.Context, to
 }
 
 // generateRoundRobinMatchesForGame - собирает матчи для одной игры.
-// playedPairs это уже сыгранные пары "program1_id|program2_id", их пропускаем
+// playedPairs это уже сыгранные пары "program1_id|program2_id", они пропускаются
 func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models.Tournament, participants []*models.TournamentParticipant, gameType string, roundNumber int, priority models.MatchPriority, playedPairs map[string]struct{}) ([]*models.Match, error) {
 	var matches []*models.Match
 	now := time.Now()
@@ -459,7 +459,7 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models
 				continue
 			}
 
-			// пары что уже игрались с теми же программами - скипаем
+			// пары что уже игрались с теми же программами - скипаются
 			pairKey := participants[i].ProgramID.String() + "|" + participants[j].ProgramID.String()
 			if _, played := playedPairs[pairKey]; played {
 				continue
@@ -500,7 +500,7 @@ func (ss *SchedulingService) RetryFailedMatches(ctx context.Context, tournamentI
 		return 0, nil
 	}
 
-	// забираем pending и ставим в очередь
+	// pending забирается и ставится в очередь
 	matches, err := ss.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)

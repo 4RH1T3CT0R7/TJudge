@@ -187,7 +187,7 @@ func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
 	tournamentID := uuid.New()
 	log, _ := logger.New("error", "json")
 
-	// Создаём клиент с send-буфером размера 1
+	// клиент с send-буфером размера 1
 	client := &Client{
 		hub:          hub,
 		conn:         nil,
@@ -197,7 +197,7 @@ func TestClient_sendPong_BufferFull_NoPanic(t *testing.T) {
 		log:          log,
 	}
 
-	// Заполняем send-буфер
+	// заполнение send-буфера
 	client.send <- []byte("filler")
 
 	// sendPong не должен паниковать при полном буфере
@@ -225,7 +225,7 @@ func TestClient_sendPong_ClosedChannel_NoPanic(t *testing.T) {
 		log:          log,
 	}
 
-	// Закрываем канал, чтобы сработала ветка recover
+	// канал закрывается, чтобы сработала ветка recover
 	close(client.send)
 
 	assert.NotPanics(t, func() {
@@ -262,7 +262,7 @@ func TestClient_handleMessage_EmptyPayload(t *testing.T) {
 		t.Fatal("timed out waiting for pong response")
 	}
 
-	// Также проверяем с неизвестным типом и nil payload - не должно паниковать, сообщение не отправляется
+	// также проверка с неизвестным типом и nil payload - не должно паниковать, сообщение не отправляется
 	unknownMsg := Message{
 		TournamentID: tournamentID,
 		Type:         MessageType("some_type"),

@@ -185,6 +185,6 @@ func TestSystemStatus_DegradesGracefully(t *testing.T) {
 	// при нездоровой БД агрегаты не запрашиваются — нули, а не ошибка
 	assert.Equal(t, int64(0), status.Database.SchemaVersion)
 	assert.Empty(t, status.Matches.ByStatus)
-	// при нездоровом Redis очереди тоже не трогаем
+	// при нездоровом Redis очереди тоже не трогаются
 	assert.Equal(t, int64(0), status.Queues.Total)
 }

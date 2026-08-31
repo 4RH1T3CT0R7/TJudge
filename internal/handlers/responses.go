@@ -37,8 +37,8 @@ type ErrorResponse struct {
 }
 
 // writeJSON заворачивает payload в конверт {"data":...} и пишет его.
-// nil-слайсы и nil-мапы приводим к []/{} - фронтовая схема ждёт массив,
-// и null ей ломает разбор. голый nil оставляем как null (значит «ресурса нет»)
+// nil-слайсы и nil-мапы приводятся к []/{} - фронтовая схема ждёт массив,
+// и null ей ломает разбор. голый nil оставляется как null (значит «ресурса нет»)
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	v = normalizeNilCollections(v)
 	envelope := Response{Data: v}
@@ -46,7 +46,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // normalizeNilCollections подменяет typed-nil slice/map на пустую коллекцию.
-// без рефлексии тут никак - тип узнаём только в рантайме
+// без рефлексии тут никак - тип известен только в рантайме
 func normalizeNilCollections(v any) any {
 	if v == nil {
 		return nil

@@ -92,7 +92,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authService.Login(r.Context(), &req)
 	if err != nil {
-		// логин и пароль намеренно не пишем в лог, иначе перебором можно узнать какие юзеры есть
+		// логин и пароль намеренно не пишутся в лог, иначе перебором можно узнать какие юзеры есть
 		h.log.LogError("Failed to login", err)
 		writeError(w, err)
 		return
@@ -158,7 +158,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// refresh в теле опционален, поэтому ошибку декодирования просто глотаем
+	// refresh в теле опционален, поэтому ошибка декодирования просто проглатывается
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -191,7 +191,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} object{error=string}
 // @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
-	// токен уже проверен auth-middleware, здесь только достаём юзера
+	// токен уже проверен auth-middleware, здесь только достаётся юзер
 	token := middleware.ExtractToken(r)
 	if token == "" {
 		writeError(w, errors.ErrUnauthorized)

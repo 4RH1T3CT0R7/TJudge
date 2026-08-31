@@ -65,14 +65,14 @@ func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLo
 }
 
 // filterMatchError прячет текст ошибки от чужих глаз: владелец упавшей
-// программы и админ видят полный текст, остальным отдаём обезличенное сообщение
+// программы и админ видят полный текст, остальным отдаётся обезличенное сообщение
 func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match, userID uuid.UUID, isAdmin bool) *models.Match {
-	// нет ошибки или некому проверять владельца - отдаём как есть
+	// нет ошибки или некому проверять владельца - отдаётся как есть
 	if match.ErrorMessage == nil || *match.ErrorMessage == "" || h.programLookup == nil {
 		return match
 	}
 
-	// админу показываем всё без фильтрации
+	// админу показывается всё без фильтрации
 	if isAdmin {
 		return match
 	}
@@ -87,7 +87,7 @@ func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match
 		}
 	}
 
-	// победителя нет - непонятно, чья программа упала, поэтому скрываем
+	// победителя нет - непонятно, чья программа упала, поэтому скрывается
 	if failedProgramID == uuid.Nil {
 		opponentError := "Ошибка выполнения матча"
 		match.ErrorMessage = &opponentError
@@ -134,13 +134,13 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// сначала пробуем кэш - это дешевле похода в базу
+	// сначала проверяется кэш - это дешевле похода в базу
 	cachedMatch, cacheErr := h.matchCache.GetMatch(r.Context(), id)
 	if cacheErr == nil && cachedMatch != nil {
 		h.log.Info("Match from cache",
 			zap.String("match_id", id.String()),
 		)
-		// даже кэшированный матч прогоняем через фильтр ошибок по правам
+		// даже кэшированный матч прогоняется через фильтр ошибок по правам
 		userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 		userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 		isAdmin := userRole == models.RoleAdmin
@@ -149,7 +149,7 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// промах кэша - идём за матчем в базу
+	// промах кэша - матч берётся из базы
 	match, err := h.matchRepo.GetByID(r.Context(), id)
 	if err != nil {
 		h.log.LogError("Failed to get match", err,
@@ -204,7 +204,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.ProgramID = &id
 	}
 
-	// статус берём только из белого списка, иначе отдаём 400
+	// статус берётся только из белого списка, иначе отдаётся 400
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := models.MatchStatus(status)
 		switch s {
@@ -216,7 +216,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// тип игры принимаем как есть, без валидации значения
+	// тип игры принимается как есть, без валидации значения
 	filter.GameType = r.URL.Query().Get("game_type")
 
 	// TODO: вынести разбор фильтров из хендлера в отдельный парсер
@@ -231,7 +231,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// скрываем чужие ошибки в каждом матче списка
+	// чужие ошибки скрываются в каждом матче списка
 	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
 	isAdmin := userRole == models.RoleAdmin
@@ -341,7 +341,7 @@ func (h *MatchHandler) PurgeInvalidMatches(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// матч считаем валидным, только если он ещё есть в базе
+	// матч считается валидным, только если он ещё есть в базе
 	validator := func(matchIDStr string) bool {
 		matchID, err := uuid.Parse(matchIDStr)
 		if err != nil {

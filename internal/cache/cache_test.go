@@ -334,7 +334,7 @@ func TestCache_Close(t *testing.T) {
 	assert.NoError(t, c.Close())
 }
 
-// гоняем set/get/del параллельно, интересует детектор гонок
+// set/get/del гоняются параллельно, интересует детектор гонок
 func TestCache_ConcurrentReadWrite(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
@@ -382,7 +382,7 @@ func TestCache_ErrorPaths(t *testing.T) {
 	c := &Cache{client: client, log: log, metrics: metrics.New()}
 	ctx := context.Background()
 
-	mr.Close() // роняем редис
+	mr.Close() // редис роняется
 
 	_, err := c.Get(ctx, "key")
 	assert.Error(t, err)

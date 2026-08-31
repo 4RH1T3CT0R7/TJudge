@@ -44,7 +44,7 @@ func TestWrap(t *testing.T) {
 	assert.Nil(t, Wrap(nil, "message"))
 }
 
-// пары (код, сообщение) уходят на клиента, это контракт - проверяем все
+// пары (код, сообщение) уходят на клиента, это контракт - проверяются все
 func TestPredefinedErrors(t *testing.T) {
 	tests := []struct {
 		err     *AppError
@@ -120,7 +120,7 @@ func TestGetAppError(t *testing.T) {
 }
 
 func TestToAppError(t *testing.T) {
-	// уже наша ошибка - отдаём как есть
+	// уже своя ошибка - отдаётся как есть
 	appErr := ErrValidation.WithMessage("custom message")
 	assert.Equal(t, appErr.Code, ToAppError(appErr).Code)
 

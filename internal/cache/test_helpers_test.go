@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// поднимаем Cache поверх miniredis, сервер сам закрывается по концу теста
+// Cache поднимается поверх miniredis, сервер сам закрывается по концу теста
 func setupTestCache(t *testing.T) *Cache {
 	t.Helper()
 
@@ -29,7 +29,7 @@ func setupTestCache(t *testing.T) *Cache {
 	}
 }
 
-// то же, но отдаём и miniredis чтобы крутить время (FastForward)
+// то же, но отдаётся ещё и miniredis чтобы крутить время (FastForward)
 func setupTestCacheWithMR(t *testing.T) (*Cache, *miniredis.Miniredis) {
 	t.Helper()
 

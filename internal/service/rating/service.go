@@ -68,7 +68,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, r
 
 	winner := *match.Winner
 
-	// раскладываем результат: 1 - выиграл первый, 0 - ничья обоим, 2 - выиграл второй
+	// результат раскладывается: 1 - выиграл первый, 0 - ничья обоим, 2 - выиграл второй
 	var won1, draw1, won2, draw2 bool
 	if winner == 1 {
 		won1 = true
@@ -121,7 +121,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, r
 		return err
 	}
 
-	// событие шлём ТОЛЬКО после успешного апдейта, от него зависит кэш и вебсокет
+	// событие уходит только после успешного апдейта, от него зависит кэш и вебсокет
 	s.notifier.MatchResultProcessed(ctx, events.MatchResultProcessed{
 		Version:      1,
 		TournamentID: match.TournamentID,
