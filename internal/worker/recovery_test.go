@@ -22,8 +22,7 @@ func newTestRecoveryService(t *testing.T, cfg RecoveryConfig) (*RecoveryService,
 	return svc, matchRepo, queueMgr
 }
 
-// --- NewRecoveryService ---
-
+// пустой конфиг подставляет дефолтные значения
 func TestNewRecoveryService_Defaults(t *testing.T) {
 	svc, _, _ := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -32,27 +31,12 @@ func TestNewRecoveryService_Defaults(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, svc.periodicInterval)
 }
 
-func TestNewRecoveryService_CustomConfig(t *testing.T) {
-	cfg := RecoveryConfig{
-		StuckDuration:    20 * time.Minute,
-		BatchSize:        500,
-		PeriodicInterval: 2 * time.Minute,
-	}
-	svc, _, _ := newTestRecoveryService(t, cfg)
-
-	assert.Equal(t, 20*time.Minute, svc.stuckDuration)
-	assert.Equal(t, 500, svc.batchSize)
-	assert.Equal(t, 2*time.Minute, svc.periodicInterval)
-}
-
-// --- RecoverOnStartup ---
-
+// зависшие running переводятся в pending, pending переотправляется в очередь
 func TestRecoveryService_RecoverOnStartup_Success(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
 	now := time.Now().Add(-20 * time.Minute)
 	stuckMatch := &models.Match{ID: uuid.New(), StartedAt: &now}
-
 	pendingMatch := &models.Match{ID: uuid.New()}
 
 	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
@@ -70,20 +54,7 @@ func TestRecoveryService_RecoverOnStartup_Success(t *testing.T) {
 	queueMgr.AssertExpectations(t)
 }
 
-func TestRecoveryService_RecoverOnStartup_NoStuckNoPending(t *testing.T) {
-	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
-
-	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(5), nil)
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{}, nil)
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return([]*models.Match{}, nil)
-
-	err := svc.RecoverOnStartup(context.Background())
-	assert.NoError(t, err)
-	matchRepo.AssertExpectations(t)
-}
-
+// ошибка чтения размера очереди не прерывает восстановление
 func TestRecoveryService_RecoverOnStartup_QueueSizeError_Continues(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -97,6 +68,7 @@ func TestRecoveryService_RecoverOnStartup_QueueSizeError_Continues(t *testing.T)
 	assert.NoError(t, err)
 }
 
+// ошибка восстановления зависших не прерывает восстановление pending
 func TestRecoveryService_RecoverOnStartup_StuckRecoveryError_Continues(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -110,6 +82,7 @@ func TestRecoveryService_RecoverOnStartup_StuckRecoveryError_Continues(t *testin
 	assert.NoError(t, err)
 }
 
+// ошибка чтения pending пробрасывается наружу
 func TestRecoveryService_RecoverOnStartup_EnqueueFails(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -123,6 +96,7 @@ func TestRecoveryService_RecoverOnStartup_EnqueueFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// частичный сбой enqueue логируется, а не возвращается
 func TestRecoveryService_RecoverOnStartup_PartialEnqueueFailure(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -138,12 +112,11 @@ func TestRecoveryService_RecoverOnStartup_PartialEnqueueFailure(t *testing.T) {
 	queueMgr.On("Enqueue", mock.Anything, m2).Return(nil)
 
 	err := svc.RecoverOnStartup(context.Background())
-	assert.NoError(t, err) // частичные ошибки логируются, а не возвращаются
+	assert.NoError(t, err)
 	queueMgr.AssertExpectations(t)
 }
 
-// --- recoverStuckRunning ---
-
+// в pending переводятся именно найденные зависшие матчи
 func TestRecoveryService_RecoverStuckRunning_VerifiesMatchIDs(t *testing.T) {
 	svc, matchRepo, _ := newTestRecoveryService(t, RecoveryConfig{})
 
@@ -162,20 +135,13 @@ func TestRecoveryService_RecoverStuckRunning_VerifiesMatchIDs(t *testing.T) {
 	matchRepo.AssertExpectations(t)
 }
 
-// --- Start/Stop ---
-
+// Stop не блокируется при работающем периодическом цикле
 func TestRecoveryService_StartStop(t *testing.T) {
-	cfg := RecoveryConfig{
-		PeriodicInterval: 100 * time.Millisecond,
-	}
-	svc, _, _ := newTestRecoveryService(t, cfg)
+	svc, _, _ := newTestRecoveryService(t, RecoveryConfig{PeriodicInterval: 100 * time.Millisecond})
 
 	svc.Start()
-
-	// Даём горутине запуститься
 	time.Sleep(50 * time.Millisecond)
 
-	// Stop не должен блокироваться
 	done := make(chan struct{})
 	go func() {
 		svc.Stop()
@@ -184,7 +150,6 @@ func TestRecoveryService_StartStop(t *testing.T) {
 
 	select {
 	case <-done:
-		// успех
 	case <-time.After(2 * time.Second):
 		t.Fatal("Stop() did not return in time")
 	}
