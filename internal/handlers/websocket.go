@@ -24,7 +24,7 @@ func isProductionEnvLookup() bool {
 
 // checkWebSocketOrigin - проверка Origin на ws-хендшейке, в проде fail-closed.
 // без неё чужой сайт, открытый у залогиненного юзера, мог бы подключиться
-// к нашему ws от его имени (CSWSH)
+// к этому ws от его имени (CSWSH)
 //
 // правила:
 //   - в проде wildcard "*" и пустой список запрещены, Origin должен точно
