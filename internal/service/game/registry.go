@@ -34,7 +34,7 @@ func (r *Registry) Register(plugin *GamePlugin) error {
 	return nil
 }
 
-// Get — плагин по имени, плюс флаг нашли/нет
+// Get — плагин по имени, плюс флаг найден/нет
 func (r *Registry) Get(name string) (*GamePlugin, bool) {
 	p, ok := r.plugins[name]
 	return p, ok

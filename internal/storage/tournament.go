@@ -188,7 +188,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter models.Tournamen
 }
 
 // Update обновляет турнир с optimistic lock: апдейт проходит только если version
-// в базе совпала с прочитанной, иначе кто-то успел обновить раньше нас и мы
+// в базе совпала с прочитанной, иначе кто-то успел обновить раньше и наружу
 // отдаётся ErrConcurrentUpdate. version инкрементится тем же запросом
 func (r *TournamentRepository) Update(ctx context.Context, tournament *models.Tournament) error {
 	metadata, err := json.Marshal(tournament.Metadata)
