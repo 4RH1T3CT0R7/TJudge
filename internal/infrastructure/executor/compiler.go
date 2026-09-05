@@ -101,7 +101,7 @@ func (c *Compiler) Close() error {
 
 // extractJavaClassName возвращает имя первого top-level класса в Java-исходнике.
 func extractJavaClassName(source string) string {
-	// комментарии убираются, чтобы не зацепить class в /* ... */ или //.
+	// комментарии срезаются, чтобы class внутри /* ... */ или // не зацепился
 	blockRe := regexp.MustCompile(`/\*[\s\S]*?\*/`)
 	cleaned := blockRe.ReplaceAllString(source, "")
 	lineRe := regexp.MustCompile(`//[^\n]*`)
@@ -196,13 +196,13 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 
 	plan, err := buildCompilePlan(program.Language, className)
 	if err != nil {
-		// Ошибка плана (нет class-декларации, неизвестный язык) - вина программы.
+		// ошибка плана (нет class-декларации, неизвестный язык) - вина программы
 		return &CompileResult{OK: false, Log: err.Error()}, nil
 	}
 
-	// Изолированный каталог сборки: компилятору доступен только он.
-	// Монтировать весь каталог программ нельзя - #include "../чужая_команда.c"
-	// читал бы исходники других команд.
+	// изолированный каталог сборки, компилятору виден только он.
+	// монтировать весь каталог программ нельзя - #include "../чужая_команда.c"
+	// читал бы исходники других команд
 	buildDir := filepath.Join(c.programsPath, "build", program.ID.String())
 	if err := os.MkdirAll(buildDir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create build dir: %w", err)
@@ -223,7 +223,7 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 		if logMsg == "" {
 			logMsg = fmt.Sprintf("компиляция завершилась с кодом %d", exitCode)
 		}
-		// Пути из контейнера не несут смысла для пользователя - подчищаются.
+		// пути из контейнера пользователю ничего не говорят, вычищаются
 		logMsg = strings.ReplaceAll(logMsg, buildContainerPath+"/", "")
 		if len(logMsg) > compileLogLimit {
 			logMsg = logMsg[:compileLogLimit] + "..."
@@ -252,14 +252,14 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 
 	if program.Language == langJava {
 		// .class кладётся в каталог программы (имена классов разных команд
-		// конфликтуют в плоском каталоге), wrapper ссылается на путь внутри
-		// контейнера матча.
+		// в плоском каталоге конфликтуют), wrapper ссылается на путь внутри
+		// контейнера матча
 		classDirName := filepath.Base(binPath) + "_classes"
 		classDir := filepath.Join(filepath.Dir(sourcePath), classDirName)
 		if err := os.MkdirAll(classDir, 0o750); err != nil {
 			return "", fmt.Errorf("failed to create class dir: %w", err)
 		}
-		// переносятся все .class (включая вложенные классы Foo$Bar.class).
+		// переносятся все .class, в том числе вложенные Foo$Bar.class
 		entries, err := os.ReadDir(buildDir)
 		if err != nil {
 			return "", fmt.Errorf("failed to read build dir: %w", err)
@@ -310,7 +310,7 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 		Image: c.builderImage,
 		Cmd:   cmd,
 		Env: []string{
-			// Компиляторам нужен writable scratch; всё в tmpfs.
+			// компиляторам нужен writable scratch, всё в tmpfs
 			"HOME=/tmp",
 			"TMPDIR=/tmp",
 			"GOCACHE=/tmp/gocache",
@@ -369,7 +369,7 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer stopCancel()
 		_ = c.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
-		// Таймаут компиляции - вина программы (компиляционная бомба), не инфры.
+		// таймаут компиляции - вина программы (компиляционная бомба), не инфры
 		return 1, "компиляция превысила лимит времени", nil
 	}
 }
