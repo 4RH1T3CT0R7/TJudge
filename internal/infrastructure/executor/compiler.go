@@ -320,25 +320,7 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 		Tty: false,
 	}
 
-	pidsLimit := int64(256)
-	hostConfig := &container.HostConfig{
-		Resources: container.Resources{
-			Memory:     1 << 30, // 1GB: компиляторам (rustc, go) нужно больше, чем матчам
-			MemorySwap: 1 << 30,
-			PidsLimit:  &pidsLimit,
-		},
-		Binds: []string{
-			fmt.Sprintf("%s:%s:rw", hostBuildDir, buildContainerPath),
-		},
-		NetworkMode:    "none",
-		ReadonlyRootfs: true,
-		SecurityOpt:    []string{"no-new-privileges:true"},
-		CapDrop:        []string{"ALL"},
-		Tmpfs: map[string]string{
-			"/tmp": "rw,nosuid,size=512m",
-		},
-		AutoRemove: false,
-	}
+	hostConfig := buildBuilderHostConfig(hostBuildDir)
 
 	resp, err := c.dockerClient.ContainerCreate(execCtx, containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
@@ -371,6 +353,32 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 		_ = c.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
 		// таймаут компиляции - вина программы (компиляционная бомба), не инфры
 		return 1, "компиляция превысила лимит времени", nil
+	}
+}
+
+// buildBuilderHostConfig собирает hostConfig для builder-контейнера. отличается
+// от матч-sandbox осознанно (память 1гб, pids 256, tmpfs 512м, без cpuset/ulimits,
+// без seccomp-хука, /build:rw) - компиляторам нужен ресурс пожирнее, объединять с
+// матчем не надо. вынесено ради теста флагов
+func buildBuilderHostConfig(hostBuildDir string) *container.HostConfig {
+	pidsLimit := int64(256)
+	return &container.HostConfig{
+		Resources: container.Resources{
+			Memory:     1 << 30, // 1GB: компиляторам (rustc, go) нужно больше, чем матчам
+			MemorySwap: 1 << 30,
+			PidsLimit:  &pidsLimit,
+		},
+		Binds: []string{
+			fmt.Sprintf("%s:%s:rw", hostBuildDir, buildContainerPath),
+		},
+		NetworkMode:    "none",
+		ReadonlyRootfs: true,
+		SecurityOpt:    []string{"no-new-privileges:true"},
+		CapDrop:        []string{"ALL"},
+		Tmpfs: map[string]string{
+			"/tmp": "rw,nosuid,size=512m",
+		},
+		AutoRemove: false,
 	}
 }
 
