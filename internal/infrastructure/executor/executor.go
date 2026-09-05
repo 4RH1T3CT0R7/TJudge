@@ -118,53 +118,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		Tty:   false,
 	}
 
-	securityOpts := []string{
-		"no-new-privileges:true", // без setuid-эскалации
-	}
-
-	// seccomp-профиль подключается только если задан env-ом (по дефолту пусто)
-	if e.config.SeccompProfile != "" {
-		securityOpts = append(securityOpts, "seccomp="+e.config.SeccompProfile)
-	}
-
-	// apparmor так же - опционально, только при заданном профиле
-	if e.config.AppArmorProfile != "" {
-		securityOpts = append(securityOpts, "apparmor="+e.config.AppArmorProfile)
-	}
-
-	// каждая строка hostConfig - отдельная линия обороны против чужого кода,
-	// значения трогать нельзя (детали в notes)
-	hostConfig := &container.HostConfig{
-		Resources: container.Resources{
-			CPUQuota:       e.config.CPUQuota,
-			CPUPeriod:      100000, // период cpu 100мс (из доки docker)
-			Memory:         e.config.MemoryLimit,
-			MemorySwap:     e.config.MemoryLimit, // == Memory: swap запрещён, лимит памяти не обойти
-			PidsLimit:      &e.config.PidsLimit,  // защита от fork-bomb
-			CpusetCpus:     e.config.CPUSetCPUs,
-			OomKillDisable: new(false), // oom-killer включён, runaway убивается а не висит
-			// BlkioWeight на macOS не поддерживается (cgroups v2)
-			Ulimits: []*container.Ulimit{
-				{Name: "nofile", Soft: 1024, Hard: 1024},        // хватает python + subprocess
-				{Name: "nproc", Soft: 64, Hard: 64},             // хватает на fork
-				{Name: "core", Soft: 0, Hard: 0},                // без core-дампов
-				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // файл максимум 10мб
-			},
-		},
-		// программы монтируются только на чтение, чужой код не испортить.
-		// hostProgramsPath - для docker-in-docker
-		Binds: []string{
-			fmt.Sprintf("%s:%s:ro", e.hostProgramsPath, e.containerPath),
-		},
-		NetworkMode:    "none", // сети нет - ни эксфильтрации, ни скачивания
-		ReadonlyRootfs: true,   // корень только на чтение, писать можно лишь в tmpfs
-		SecurityOpt:    securityOpts,
-		CapDrop:        []string{"ALL"}, // все capabilities сняты
-		Tmpfs: map[string]string{
-			"/tmp": "rw,nosuid,size=64m", // writable /tmp, но nosuid (без эскалации) и капнут
-		},
-		AutoRemove: false, // не автоудалять - сперва надо забрать логи, потом cleanup
-	}
+	hostConfig := buildMatchHostConfig(e.config, e.hostProgramsPath, e.containerPath)
 
 	resp, err := e.dockerClient.ContainerCreate(
 		ctx,
@@ -225,6 +179,57 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		defer stopCancel()
 		_ = e.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
 		return nil, fmt.Errorf("match execution timeout")
+	}
+}
+
+// buildMatchHostConfig собирает докер-hostConfig для матч-контейнера. вынесено
+// отдельно чтобы флаги можно было проверить тестом - каждая строка тут отдельная
+// линия обороны против чужого кода, значения трогать нельзя
+func buildMatchHostConfig(cfg config.ExecutorConfig, hostProgramsPath, containerPath string) *container.HostConfig {
+	securityOpts := []string{
+		"no-new-privileges:true", // без setuid-эскалации
+	}
+
+	// seccomp-профиль подключается только если задан env-ом (по дефолту пусто)
+	if cfg.SeccompProfile != "" {
+		securityOpts = append(securityOpts, "seccomp="+cfg.SeccompProfile)
+	}
+
+	// apparmor так же - опционально, только при заданном профиле
+	if cfg.AppArmorProfile != "" {
+		securityOpts = append(securityOpts, "apparmor="+cfg.AppArmorProfile)
+	}
+
+	return &container.HostConfig{
+		Resources: container.Resources{
+			CPUQuota:       cfg.CPUQuota,
+			CPUPeriod:      100000, // период cpu 100мс (из доки docker)
+			Memory:         cfg.MemoryLimit,
+			MemorySwap:     cfg.MemoryLimit, // == Memory: swap запрещён, лимит памяти не обойти
+			PidsLimit:      &cfg.PidsLimit,  // защита от fork-bomb
+			CpusetCpus:     cfg.CPUSetCPUs,
+			OomKillDisable: new(false), // oom-killer включён, runaway убивается а не висит
+			// BlkioWeight на macOS не поддерживается (cgroups v2)
+			Ulimits: []*container.Ulimit{
+				{Name: "nofile", Soft: 1024, Hard: 1024},        // хватает python + subprocess
+				{Name: "nproc", Soft: 64, Hard: 64},             // хватает на fork
+				{Name: "core", Soft: 0, Hard: 0},                // без core-дампов
+				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // файл максимум 10мб
+			},
+		},
+		// программы монтируются только на чтение, чужой код не испортить.
+		// hostProgramsPath - для docker-in-docker
+		Binds: []string{
+			fmt.Sprintf("%s:%s:ro", hostProgramsPath, containerPath),
+		},
+		NetworkMode:    "none", // сети нет - ни эксфильтрации, ни скачивания
+		ReadonlyRootfs: true,   // корень только на чтение, писать можно лишь в tmpfs
+		SecurityOpt:    securityOpts,
+		CapDrop:        []string{"ALL"}, // все capabilities сняты
+		Tmpfs: map[string]string{
+			"/tmp": "rw,nosuid,size=64m", // writable /tmp, но nosuid (без эскалации) и капнут
+		},
+		AutoRemove: false, // не автоудалять - сперва надо забрать логи, потом cleanup
 	}
 }
 
