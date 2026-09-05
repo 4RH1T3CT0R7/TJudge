@@ -186,7 +186,7 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 	// Java: имя класса нужно до построения плана.
 	className := ""
 	if program.Language == langJava {
-		// #nosec G304 -- sourcePath сформирован сервером из UUID-компонентов.
+		// sourcePath сервер формирует из uuid-компонентов, не из пользовательского ввода
 		srcBytes, err := os.ReadFile(sourcePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read source: %w", err)
@@ -275,7 +275,7 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 
 		containerClassDir := matchContainerPath + "/" + classDirName
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp '%s' %s \"$@\"\n", containerClassDir, className)
-		// #nosec G306 -- wrapper должен быть исполняемым; 0o750 owner+group.
+		// wrapper должен быть исполняемым, 0o750 = owner+group
 		if err := os.WriteFile(binPath, []byte(wrapper), 0o750); err != nil {
 			return "", fmt.Errorf("failed to write java wrapper: %w", err)
 		}
@@ -285,7 +285,7 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 	if err := os.Rename(filepath.Join(buildDir, plan.ArtifactName), binPath); err != nil {
 		return "", fmt.Errorf("failed to move binary: %w", err)
 	}
-	// #nosec G302 -- бинарник исполняется в Docker-sandbox; 0o750 owner+group.
+	// бинарник гоняется в докер-песочнице, 0o750 = owner+group
 	if err := os.Chmod(binPath, 0o750); err != nil {
 		c.log.Warn("Failed to chmod compiled binary", zap.Error(err), zap.String("path", binPath))
 	}
@@ -410,14 +410,13 @@ func stripDockerLogHeaders(data []byte) string {
 
 // copyFile копирует файл с правами 0640.
 func copyFile(src, dst string) error {
-	// #nosec G304 -- оба пути формируются сервером из UUID-компонентов.
+	// оба пути сервер формирует из uuid-компонентов
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	// #nosec G304
 	// 0o600: исходник в build-каталоге читает только процесс worker'а
 	// (builder-контейнер монтирует каталог от того же uid).
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
