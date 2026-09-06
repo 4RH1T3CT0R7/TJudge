@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestJavaClassNameRegex блокирует shell-метасимволы в Java class name
-// (защита от инъекций в wrapper-скрипт).
+// TestJavaClassNameRegex блокирует shell-метасимволы в имени Java-класса
+// (защита от инъекций в wrapper-скрипт)
 func TestJavaClassNameRegex(t *testing.T) {
 	okNames := []string{"Main", "Solution1", "_Hidden", "$Dollar", "A1_b2"}
 	for _, n := range okNames {
@@ -32,7 +32,7 @@ func TestJavaClassNameRegex(t *testing.T) {
 	}
 }
 
-// TestExtractJavaClassName проверяет извлечение declared class name из Java-source.
+// TestExtractJavaClassName проверяет извлечение объявленного имени класса из Java-исходника
 func TestExtractJavaClassName(t *testing.T) {
 	cases := []struct {
 		name, src, want string
@@ -75,7 +75,7 @@ func TestBuildCompilePlan_CompiledLanguages(t *testing.T) {
 			assert.Equal(t, c.source, plan.SourceName)
 			assert.Equal(t, c.artifact, plan.ArtifactName)
 			assert.Equal(t, c.first, plan.Cmd[0])
-			// Все пути в команде должны лежать внутри /build.
+			// все пути в команде должны лежать внутри /build
 			for _, arg := range plan.Cmd[1:] {
 				if arg[0] == '/' {
 					assert.Contains(t, arg, buildContainerPath+"/")
@@ -86,7 +86,7 @@ func TestBuildCompilePlan_CompiledLanguages(t *testing.T) {
 }
 
 func TestBuildCompilePlan_InterpretedLanguages(t *testing.T) {
-	// Интерпретируемые языки: только проверка синтаксиса, артефакта нет.
+	// интерпретируемые языки: только проверка синтаксиса, артефакта нет
 	for lang, first := range map[string]string{
 		"python":     "python3",
 		"javascript": "node",
@@ -110,11 +110,11 @@ func TestBuildCompilePlan_Java(t *testing.T) {
 	assert.Equal(t, "Main.class", plan.ArtifactName)
 	assert.Equal(t, []string{"javac", "/build/Main.java"}, plan.Cmd)
 
-	// Без class-декларации - ошибка программы (не инфраструктуры).
+	// без class-декларации - ошибка программы (не инфраструктуры)
 	_, err = buildCompilePlan("java", "")
 	assert.Error(t, err)
 
-	// Невалидное имя класса блокируется allowlist-регэкспом.
+	// невалидное имя класса блокируется allowlist-регэкспом
 	_, err = buildCompilePlan("java", "Evil;rm -rf /")
 	assert.Error(t, err)
 }
@@ -125,12 +125,12 @@ func TestBuildCompilePlan_UnsupportedLanguage(t *testing.T) {
 }
 
 func TestStripDockerLogHeaders(t *testing.T) {
-	// Фрейм: [stream(1) 0 0 0 size(4)] payload
+	// фрейм: [stream(1) 0 0 0 size(4)] payload
 	frame := append([]byte{1, 0, 0, 0, 0, 0, 0, 5}, []byte("hello")...)
 	frame = append(frame, append([]byte{2, 0, 0, 0, 0, 0, 0, 6}, []byte(" world")...)...)
 	assert.Equal(t, "hello world", stripDockerLogHeaders(frame))
 
-	// Пустой и неполный ввод не паникуют.
+	// пустой и неполный ввод не паникуют
 	assert.Equal(t, "", stripDockerLogHeaders(nil))
 	assert.Equal(t, "", stripDockerLogHeaders([]byte{1, 0, 0}))
 }

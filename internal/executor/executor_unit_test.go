@@ -135,7 +135,7 @@ func TestParseResult_ExitCode0_Draw(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 10, result.Score1)
 	assert.Equal(t, 10, result.Score2)
-	assert.Equal(t, 0, result.Winner) // Draw
+	assert.Equal(t, 0, result.Winner) // ничья
 }
 
 func TestParseResult_ExitCode1_Program1Error(t *testing.T) {
@@ -144,7 +144,7 @@ func TestParseResult_ExitCode1_Program1Error(t *testing.T) {
 	result, err := e.parseResult(1, "", "runtime error")
 
 	require.NoError(t, err)
-	assert.Equal(t, 2, result.Winner) // Program 2 wins
+	assert.Equal(t, 2, result.Winner) // побеждает программа 2
 	assert.Equal(t, 1, result.ErrorCode)
 	assert.NotEmpty(t, result.ErrorMessage)
 }
@@ -155,7 +155,7 @@ func TestParseResult_ExitCode2_Program2Error(t *testing.T) {
 	result, err := e.parseResult(2, "", "timeout")
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, result.Winner) // Program 1 wins
+	assert.Equal(t, 1, result.Winner) // побеждает программа 1
 	assert.Equal(t, 2, result.ErrorCode)
 	assert.NotEmpty(t, result.ErrorMessage)
 }
@@ -196,22 +196,12 @@ func TestParseResult_InvalidOutput_Empty(t *testing.T) {
 	assert.Contains(t, err.Error(), "expected 2 scores")
 }
 
-// --- boolPtr ---
-
-func TestBoolPtr(t *testing.T) {
-	trueVal := new(true)
-	falseVal := new(false)
-
-	assert.True(t, *trueVal)
-	assert.False(t, *falseVal)
-}
-
-// --- parseResult (additional) ---
+// --- parseResult (дополнительно) ---
 
 func TestParseResult_LargeScores(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Scores within the allowed bound [0, 100000]
+	// очки в допустимых границах [0, 100000]
 	result, err := e.parseResult(0, "99999 88888", "")
 
 	require.NoError(t, err)
@@ -223,7 +213,7 @@ func TestParseResult_LargeScores(t *testing.T) {
 func TestParseResult_ScoresOutOfBounds(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Конфигурация по умолчанию (0 итераций) даёт нижний порог 100_000
+	// конфигурация по умолчанию (0 итераций) даёт нижний порог 100_000
 	_, err := e.parseResult(0, "999999 888888", "")
 
 	require.Error(t, err)
@@ -255,7 +245,7 @@ func TestParseResult_HighIterationsStillRejectsExtremeScores(t *testing.T) {
 func TestParseResult_NegativeScore(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Small negative scores are valid (e.g. dollar_auction loser gets -bid)
+	// небольшие отрицательные очки допустимы (например, проигравший в dollar_auction получает -bid)
 	result, err := e.parseResult(0, "-1 50", "")
 
 	require.NoError(t, err)
@@ -266,7 +256,7 @@ func TestParseResult_NegativeScore(t *testing.T) {
 func TestParseResult_ExtremeNegativeScore(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Extreme negative scores beyond -maxScore are still rejected
+	// экстремально отрицательные очки за пределами -maxScore отклоняются
 	_, err := e.parseResult(0, "-999999 50", "")
 
 	require.Error(t, err)
@@ -281,7 +271,7 @@ func TestParseResult_ZeroScores(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Score1)
 	assert.Equal(t, 0, result.Score2)
-	assert.Equal(t, 0, result.Winner) // Draw
+	assert.Equal(t, 0, result.Winner) // ничья
 }
 
 func TestParseResult_WhitespaceOutput(t *testing.T) {
@@ -317,7 +307,7 @@ func TestParseResult_ExitCodeGeneric(t *testing.T) {
 func TestParseResult_ErrorWithStdoutAndStderr(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// stdout must be >20 chars or contain no spaces to pass the filter in parseResult
+	// stdout должен быть длиннее 20 символов или без пробелов, чтобы пройти фильтр parseResult
 	longStdout := "traceback in main function call"
 	result, err := e.parseResult(1, longStdout, "error msg")
 
@@ -341,7 +331,7 @@ func TestParseResult_NullBytesInError(t *testing.T) {
 	assert.Contains(t, result.ErrorMessage, "errormessage")
 }
 
-// --- buildCommand (additional) ---
+// --- buildCommand (дополнительно) ---
 
 func TestBuildCommand_ZeroIterations(t *testing.T) {
 	e := newTestExecutor(t)
@@ -371,7 +361,7 @@ func TestBuildCommand_EmptyGameType(t *testing.T) {
 	assert.Equal(t, "", cmd[0])
 }
 
-// --- hostToContainerPath (additional) ---
+// --- hostToContainerPath (дополнительно) ---
 
 func TestHostToContainerPath_ExactMatch(t *testing.T) {
 	e := newTestExecutor(t)
@@ -385,14 +375,14 @@ func TestHostToContainerPath_ExactMatch(t *testing.T) {
 func TestHostToContainerPath_TraversalNormalized(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Path with ".." is cleaned by filepath.Clean before prefix check,
-	// so "/data/programs/../programs/evil" becomes "/data/programs/evil"
-	// and still maps correctly under the container path.
+	// путь с ".." нормализуется filepath.Clean до проверки префикса,
+	// так что "/data/programs/../programs/evil" превращается в "/data/programs/evil"
+	// и по-прежнему корректно отображается внутри пути контейнера
 	result, err := e.hostToContainerPath("/data/programs/../programs/evil")
 	require.NoError(t, err)
 	assert.Equal(t, "/programs/evil", result)
 
-	// Path that tries to escape programsPath returns error now.
+	// путь, пытающийся выйти за programsPath, теперь возвращает ошибку
 	_, err = e.hostToContainerPath("/data/programs/../../etc/passwd")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "outside programs directory")
@@ -401,7 +391,7 @@ func TestHostToContainerPath_TraversalNormalized(t *testing.T) {
 func TestHostToContainerPath_DotSegments(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Redundant dot segments are cleaned
+	// избыточные dot-сегменты вычищаются
 	result, err := e.hostToContainerPath("/data/programs/./team1/../team1/solution.py")
 	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1/solution.py", result)
@@ -410,8 +400,8 @@ func TestHostToContainerPath_DotSegments(t *testing.T) {
 func TestHostToContainerPath_SiblingDirectory(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// "/data/programs-evil" starts with "/data/programs" but is NOT a subdirectory.
-	// Must return error, not silently pass through.
+	// "/data/programs-evil" начинается с "/data/programs", но не является подкаталогом;
+	// должна вернуться ошибка, а не тихий проброс
 	_, err := e.hostToContainerPath("/data/programs-evil/secret.py")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "outside programs directory")
@@ -427,7 +417,7 @@ func TestClose_NilDockerClient(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// --- parseResult error message details ---
+// --- parseResult: детали сообщения об ошибке ---
 
 func TestParseResult_ExitCode1_NoStderr(t *testing.T) {
 	e := newTestExecutor(t)
@@ -454,7 +444,7 @@ func TestParseResult_ExitCode2_StderrOnly(t *testing.T) {
 func TestParseResult_ExitCode1_ShortStdout_Filtered(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// Short stdout with space (e.g. "10 15") should be filtered out
+	// короткий stdout с пробелом (например, "10 15") должен отсеиваться
 	result, err := e.parseResult(1, "10 15", "error")
 
 	require.NoError(t, err)
@@ -464,7 +454,7 @@ func TestParseResult_ExitCode1_ShortStdout_Filtered(t *testing.T) {
 func TestHostToContainerPath_TrailingSlashInput(t *testing.T) {
 	e := newTestExecutor(t)
 
-	// filepath.Clean removes trailing slash, should still match
+	// filepath.Clean убирает завершающий слэш, совпадение должно сохраниться
 	result, err := e.hostToContainerPath("/data/programs/team1/")
 	require.NoError(t, err)
 	assert.Equal(t, "/programs/team1", result)
@@ -487,7 +477,7 @@ func TestSanitizeStderr_StripANSI(t *testing.T) {
 }
 
 func TestSanitizeStderr_TruncateLongOutput(t *testing.T) {
-	// Create a string longer than 4KB
+	// строка длиннее 4KB
 	long := strings.Repeat("x", 5000)
 	result := sanitizeStderr(long)
 
@@ -496,7 +486,7 @@ func TestSanitizeStderr_TruncateLongOutput(t *testing.T) {
 }
 
 func TestSanitizeStderr_ExactlyAtLimit(t *testing.T) {
-	// A string exactly at 4096 bytes should NOT be truncated
+	// строка ровно в 4096 байт не усекается
 	exact := strings.Repeat("a", maxStderrSize)
 	result := sanitizeStderr(exact)
 
@@ -505,7 +495,7 @@ func TestSanitizeStderr_ExactlyAtLimit(t *testing.T) {
 }
 
 func TestSanitizeStderr_OneBeyondLimit(t *testing.T) {
-	// A string one byte beyond limit should be truncated
+	// строка на один байт больше лимита усекается
 	input := strings.Repeat("b", maxStderrSize+1)
 	result := sanitizeStderr(input)
 
@@ -514,16 +504,16 @@ func TestSanitizeStderr_OneBeyondLimit(t *testing.T) {
 }
 
 func TestSanitizeStderr_ANSIStrippedBeforeTruncation(t *testing.T) {
-	// ANSI codes are stripped first, so the effective content should be
-	// measured without them.
-	// Create content that would exceed 4KB with ANSI but fits without.
+	// ANSI-коды снимаются первыми, поэтому полезный объём
+	// меряется без них;
+	// контент, который превысил бы 4KB с ANSI, но без них помещается
 	content := strings.Repeat("x", maxStderrSize-10)
-	ansiPadding := strings.Repeat("\x1b[0m", 100) // adds 400 bytes of ANSI
+	ansiPadding := strings.Repeat("\x1b[0m", 100) // добавляет 400 байт ANSI
 	input := ansiPadding + content
 
 	result := sanitizeStderr(input)
 
-	// After stripping ANSI, the content is under the limit
+	// после снятия ANSI контент помещается в лимит
 	assert.Equal(t, content, result)
 	assert.False(t, strings.HasSuffix(result, "...(truncated)"))
 }
@@ -537,7 +527,7 @@ func TestSanitizeStderr_MultipleANSICodes(t *testing.T) {
 // --- limitWriter ---
 
 // TestLimitWriter_UnderLimit_WritesFully проверяет, что запись меньше лимита
-// проходит без усечения и возвращает правильный счётчик.
+// проходит без усечения и возвращает правильный счётчик
 func TestLimitWriter_UnderLimit_WritesFully(t *testing.T) {
 	var buf strings.Builder
 	lw := &limitWriter{w: &buf, n: 100}
@@ -550,8 +540,8 @@ func TestLimitWriter_UnderLimit_WritesFully(t *testing.T) {
 
 // TestLimitWriter_OverLimit_TruncatesButReportsFullWrite проверяет важное
 // для stdcopy поведение: даже когда лимит достигнут, Write должен вернуть
-// len(p), иначе stdcopy интерпретирует это как short-write error и прервёт
-// чтение второго потока.
+// len(p), иначе stdcopy интерпретирует это как short-write и прервёт
+// чтение второго потока
 func TestLimitWriter_OverLimit_TruncatesButReportsFullWrite(t *testing.T) {
 	var buf strings.Builder
 	lw := &limitWriter{w: &buf, n: 5}
@@ -563,7 +553,7 @@ func TestLimitWriter_OverLimit_TruncatesButReportsFullWrite(t *testing.T) {
 }
 
 // TestLimitWriter_AfterLimit_DropsSilently: после исчерпания бюджета
-// последующие записи тихо отбрасываются, буфер не растёт.
+// последующие записи тихо отбрасываются, буфер не растёт
 func TestLimitWriter_AfterLimit_DropsSilently(t *testing.T) {
 	var buf strings.Builder
 	lw := &limitWriter{w: &buf, n: 3}
@@ -575,7 +565,7 @@ func TestLimitWriter_AfterLimit_DropsSilently(t *testing.T) {
 }
 
 // TestLimitWriter_IndependentBudgets: два writer'а имеют независимые лимиты,
-// большой stdout не ворует бюджет stderr.
+// большой stdout не ворует бюджет stderr
 func TestLimitWriter_IndependentBudgets(t *testing.T) {
 	var outBuf, errBuf strings.Builder
 	out := &limitWriter{w: &outBuf, n: 5}
