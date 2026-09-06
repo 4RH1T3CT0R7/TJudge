@@ -154,7 +154,7 @@ GF_ADMIN_PASSWORD=<replace>
 2. Для каждого репозитория `tjudge-{api,worker,executor,migrate,cli}` **оставляет N последних тегов** (по умолчанию 3, переопределяется через `TJUDGE_IMAGE_KEEP`), остальные сносит.
 3. Чистит **build-кэш** старше 7 дней.
 
-**Почему не `docker image prune -a`**: образ `tjudge-executor` запускается воркером on-demand (`internal/infrastructure/executor/executor.go:169-186`), поэтому между матчами на него **нет ни одного работающего контейнера**. Blanket-prune удалил бы его и сломал бы выполнение матчей до следующего pull'а из ghcr.io. Tag-based retention решает это и сохраняет предыдущие версии API/worker для rollback.
+**Почему не `docker image prune -a`**: образ `tjudge-executor` запускается воркером on-demand (`internal/executor/executor.go:169-186`), поэтому между матчами на него **нет ни одного работающего контейнера**. Blanket-prune удалил бы его и сломал бы выполнение матчей до следующего pull'а из ghcr.io. Tag-based retention решает это и сохраняет предыдущие версии API/worker для rollback.
 
 Если на сервере всё равно накопился мусор (длительный простой деплоя, старые проекты), ручная чистка:
 
