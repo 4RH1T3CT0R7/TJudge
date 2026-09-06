@@ -19,12 +19,13 @@ type InfraError struct {
 func (e *InfraError) Error() string { return e.Err.Error() }
 func (e *InfraError) Unwrap() error { return e.Err }
 
-// infraErrorf оборачивает ошибку как инфраструктурную.
+// infraErrorf оборачивает ошибку как инфраструктурную
 func infraErrorf(format string, args ...any) error {
 	return &InfraError{Err: fmt.Errorf(format, args...)}
 }
 
-// IsInfraError сообщает, является ли ошибка инфраструктурной (транзиентной).
+// IsInfraError - инфраструктурная ли ошибка. по этому воркер решает, вернуть
+// матч в pending (инфра) или пометить failed (виновата программа)
 func IsInfraError(err error) bool {
 	var ie *InfraError
 	return stderrors.As(err, &ie)
