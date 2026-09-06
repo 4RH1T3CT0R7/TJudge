@@ -3,7 +3,7 @@
 # Worker запускает этот образ для каждой задачи компиляции:
 #   - network none, CapDrop ALL, readonly rootfs, tmpfs /tmp;
 #   - монтируется ТОЛЬКО каталог сборки конкретной программы (/build, rw);
-#   - команда формируется в internal/infrastructure/executor/compiler.go
+#   - команда формируется в internal/executor/compiler.go
 #     (buildCompilePlan) - компиляторы и syntax-check интерпретаторов.
 #
 # Сборка: make docker-build-builder
