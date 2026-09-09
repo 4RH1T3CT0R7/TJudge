@@ -190,7 +190,8 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, hostProgramsPath, container
 		"no-new-privileges:true", // без setuid-эскалации
 	}
 
-	// seccomp-профиль подключается только если задан env-ом (по дефолту пусто)
+	// seccomp-профиль лежит в deployments/security, но по дефолту не подключён -
+	// включается env-ом EXECUTOR_SECCOMP_PROFILE. так и было задумано, не трогать
 	if cfg.SeccompProfile != "" {
 		securityOpts = append(securityOpts, "seccomp="+cfg.SeccompProfile)
 	}
