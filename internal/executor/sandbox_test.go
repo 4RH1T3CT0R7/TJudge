@@ -30,6 +30,7 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	require.NotNil(t, hc.OomKillDisable)
 	assert.False(t, *hc.OomKillDisable, "oom-killer должен быть включён")
 	assert.Equal(t, int64(100000), hc.CPUPeriod)
+	assert.Equal(t, cfg.CPUQuota, hc.CPUQuota)
 	assert.False(t, hc.AutoRemove, "автоудаление off - сперва логи, потом cleanup")
 
 	// tmpfs /tmp писабельный, но без setuid и с лимитом
@@ -50,6 +51,7 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	for _, u := range hc.Ulimits {
 		limits[u.Name] = [2]int64{u.Soft, u.Hard}
 	}
+	assert.Equal(t, [2]int64{1024, 1024}, limits["nofile"])
 	assert.Equal(t, [2]int64{64, 64}, limits["nproc"])
 	assert.Equal(t, [2]int64{0, 0}, limits["core"])
 	assert.Equal(t, [2]int64{10485760, 10485760}, limits["fsize"])
