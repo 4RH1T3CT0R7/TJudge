@@ -40,10 +40,10 @@ docker run -d --name "$TEST_CONTAINER" \
     -e POSTGRES_USER=tjudge -e POSTGRES_PASSWORD=test -e POSTGRES_DB=tjudge \
     "$PG_IMAGE" >/dev/null
 
-# Ждём готовности. ВАЖНО: проверка по TCP (-h 127.0.0.1), не unix-socket:
-# во время initdb энтрипоинт поднимает ВРЕМЕННЫЙ сервер (socket-only),
+# ожидание готовности. проверка именно по tcp (-h 127.0.0.1), не unix-socket:
+# во время initdb энтрипоинт поднимает временный сервер (socket-only),
 # pg_isready без -h отвечает на него успешно, а затем сервер рестартует -
-# psql попадал в окно рестарта и падал с connection refused.
+# psql попадал в окно рестарта и падал с connection refused
 for i in $(seq 1 30); do
     if docker exec "$TEST_CONTAINER" pg_isready -h 127.0.0.1 -U tjudge >/dev/null 2>&1; then
         break
