@@ -185,7 +185,7 @@ func main() {
 		tournamentRepo,
 		matchRepo,
 		queueManager,
-		gameRepo, // game repository for setting active game
+		gameRepo,
 		tournamentCache,
 		leaderboardCache,
 		notifier,
