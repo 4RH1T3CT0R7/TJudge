@@ -1,28 +1,12 @@
 # TJudge
 
-<div align="center">
+![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)
-![React](https://img.shields.io/badge/React-19+-61DAFB?style=for-the-badge&logo=react)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=for-the-badge&logo=postgresql)
-![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-
-**Турнирная платформа для соревнований программных ботов по теории игр**
-
-[Быстрый старт](#быстрый-старт) •
-[Игры](#игры) •
-[Возможности](#возможности) •
-[Архитектура](#архитектура) •
-[Разработка](#разработка) •
-[API](#api) •
-[Документация](#документация)
+Турнирная платформа для соревнований программных ботов по теории игр.
+Go 1.26 / PostgreSQL 15 / Redis 7 / React 19.
 
 <img src="docs/media/demo.gif" width="100%" alt="Интерфейс TJudge: главная, игры, рейтинг, матчи по раундам, правила игры">
-
-</div>
-
----
 
 ## О проекте
 
