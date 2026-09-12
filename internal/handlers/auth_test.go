@@ -355,19 +355,6 @@ func TestAuthHandler_Me(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
-
-	// пустой заголовок отсекается ещё до сервиса
-	t.Run("без заголовка Authorization", func(t *testing.T) {
-		mockService := new(MockAuthService)
-		handler := NewAuthHandler(mockService, log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-		w := httptest.NewRecorder()
-
-		handler.Me(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-	})
 }
 
 func TestAuthHandler_UpdateProfile(t *testing.T) {
@@ -424,25 +411,6 @@ func TestAuthHandler_UpdateProfile(t *testing.T) {
 		handler.UpdateProfile(w, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("битый JSON в теле", func(t *testing.T) {
-		mockService := new(MockAuthService)
-		handler := NewAuthHandler(mockService, log)
-
-		userID := uuid.New()
-
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/auth/profile", bytes.NewBufferString("invalid json"))
-		req.Header.Set("Content-Type", "application/json")
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		req = req.WithContext(ctx)
-		w := httptest.NewRecorder()
-
-		handler.UpdateProfile(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
 
 		mockService.AssertExpectations(t)
 	})

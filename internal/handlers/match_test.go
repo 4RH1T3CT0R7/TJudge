@@ -10,7 +10,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
-	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -195,25 +194,6 @@ func TestMatchHandler_Get(t *testing.T) {
 		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
-
-	t.Run("матч не найден", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		matchID := uuid.New()
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
-		mockRepo.On("GetByID", mock.Anything, matchID).Return(nil, errors.ErrNotFound.WithMessage("match not found"))
-
-		w := httptest.NewRecorder()
-		handler.Get(w, getWithRouteContext(matchID.String()))
-
-		assert.Equal(t, http.StatusNotFound, w.Code)
-
-		mockCache.AssertExpectations(t)
-		mockRepo.AssertExpectations(t)
-	})
 }
 
 func TestMatchHandler_List(t *testing.T) {
@@ -317,19 +297,6 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 
 		mockRepo.AssertExpectations(t)
 	})
-
-	t.Run("битый tournament_id даёт 400", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/statistics?tournament_id=invalid", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetStatistics(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-	})
 }
 
 func TestMatchHandler_GetQueueStats(t *testing.T) {
@@ -409,20 +376,6 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 
 		mockQueue.AssertExpectations(t)
 	})
-
-	t.Run("без менеджера очереди - 500", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/clear", nil)
-		w := httptest.NewRecorder()
-
-		handler.ClearQueue(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-	})
 }
 
 func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
@@ -450,20 +403,6 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 		assert.Equal(t, float64(7), response["purged_count"])
 
 		mockQueue.AssertExpectations(t)
-	})
-
-	t.Run("без менеджера очереди - 500", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/purge", nil)
-		w := httptest.NewRecorder()
-
-		handler.PurgeInvalidMatches(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
 

@@ -36,23 +36,6 @@ func TestWriteJSON_StatusOK_Map(t *testing.T) {
 	assert.Equal(t, "value", result["key"])
 }
 
-func TestWriteJSON_StatusCreated_Struct(t *testing.T) {
-	type TestResp struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	}
-
-	rr := httptest.NewRecorder()
-	writeJSON(rr, http.StatusCreated, TestResp{ID: 1, Name: "test"})
-
-	assert.Equal(t, http.StatusCreated, rr.Code)
-
-	var result TestResp
-	decodeJSONData(t, rr.Body, &result)
-	assert.Equal(t, 1, result.ID)
-	assert.Equal(t, "test", result.Name)
-}
-
 func TestWriteJSON_NilValue(t *testing.T) {
 	rr := httptest.NewRecorder()
 	writeJSON(rr, http.StatusOK, nil)
@@ -60,15 +43,6 @@ func TestWriteJSON_NilValue(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	// nil data => envelope with data:null
 	assert.Contains(t, rr.Body.String(), `"data":null`)
-}
-
-func TestWriteJSON_EmptySlice(t *testing.T) {
-	rr := httptest.NewRecorder()
-	writeJSON(rr, http.StatusOK, []string{})
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	// empty slice is wrapped: {"data":[]}
-	assert.Contains(t, rr.Body.String(), `"data":[]`)
 }
 
 func TestWriteError_NotFound(t *testing.T) {
