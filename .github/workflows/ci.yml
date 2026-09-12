@@ -96,8 +96,8 @@ jobs:
       - name: vet
         run: go vet ./...
 
-      # ставим go install чтобы линтер собрался под наш go
-      # версию пиним, @latest ломает ci на каждом релизе линтера
+      # go install, иначе бинарь линтера не собирается под go 1.26
+      # версия пинится, @latest ломает ci на каждом релизе линтера
       - name: golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
