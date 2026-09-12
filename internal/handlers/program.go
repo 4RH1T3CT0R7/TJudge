@@ -814,7 +814,7 @@ func (h *ProgramHandler) validateProgramSource(language, filePath string) *strin
 		return nil
 	}
 
-	// #nosec G304 -- filePath тот же, что мы сами создали выше (UUID-based).
+	// #nosec G304 -- тот же filePath что собран выше из uuid, не пользовательский ввод
 	src, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil
