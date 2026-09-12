@@ -73,13 +73,13 @@ jobs:
             export GITHUB_REPOSITORY_OWNER=4rh1t3ct0r7
             export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
             mkdir -p data/programs
-            # gid docker.sock у каждого хоста свой, фиксируем в .env один раз
+            # gid docker.sock у каждого хоста свой, пишется в .env один раз
             grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
             ./scripts/init-secrets.sh
             V=${TAG#v}
             VERSION=$V docker compose -f docker-compose.prod.yml pull
             VERSION=$V docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            # проверяем, что api реально работает на запрошенной версии
+            # проверка что api реально работает на запрошенной версии
             requested="ghcr.io/4rh1t3ct0r7/tjudge-api:$V"
             running=$(docker inspect tjudge-api-1 --format '{{.Image}}' 2>/dev/null || true)
             expected=$(docker image inspect "$requested" --format '{{.Id}}' 2>/dev/null || true)
