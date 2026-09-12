@@ -18,9 +18,9 @@ linters:
         - name: exported
           disabled: true
     staticcheck:
-      # QF — это quick-fix suggestions (refactoring hints), не реальные баги.
-      # Отключаем, т.к. они срабатывают на паттернах которые мы сознательно
-      # используем (прямые field-access через embedded, if-else вместо switch).
+      # QF — quick-fix suggestions (refactoring hints), не реальные баги.
+      # отключены: срабатывают на сознательно выбранных паттернах —
+      # прямой field-access через embedded, if-else вместо switch
       checks:
         - all
         - -QF1003
