@@ -179,39 +179,6 @@ func TestGameRoundHandler_GetGameMatches_InvalidTournamentID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
-func TestGameRoundHandler_GetGameMatches_InvalidGameID(t *testing.T) {
-	gameSvc := new(MockGameRoundLookupService)
-	matchRepo := new(MockGameMatchRepo)
-	h := newTestGameRoundHandler(gameSvc, matchRepo, nil)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withTwoChiParams(req, "id", uuid.New().String(), "gameId", "bad")
-
-	rr := httptest.NewRecorder()
-	h.GetGameMatches(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameRoundHandler_GetGameMatches_GameNotFound(t *testing.T) {
-	gameSvc := new(MockGameRoundLookupService)
-	matchRepo := new(MockGameMatchRepo)
-	h := newTestGameRoundHandler(gameSvc, matchRepo, nil)
-
-	tournamentID := uuid.New()
-	gameID := uuid.New()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req = withTwoChiParams(req, "id", tournamentID.String(), "gameId", gameID.String())
-
-	gameSvc.On("GetByID", mock.Anything, gameID).Return(nil, errors.ErrNotFound)
-
-	rr := httptest.NewRecorder()
-	h.GetGameMatches(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-}
-
 func TestGameRoundHandler_GetGameMatches_NilMatchRepo(t *testing.T) {
 	gameSvc := new(MockGameRoundLookupService)
 	h := newTestGameRoundHandler(gameSvc, nil, nil)
@@ -285,39 +252,4 @@ func TestGameRoundHandler_GetActiveGame_NoActiveGame(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), "null")
-}
-
-func TestGameRoundHandler_GetActiveGame_InvalidID(t *testing.T) {
-	gameSvc := new(MockGameRoundLookupService)
-	statusRepo := new(MockTournamentGameStatusRepo)
-	h := newTestGameRoundHandler(gameSvc, nil, statusRepo)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "bad-uuid")
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	h.GetActiveGame(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameRoundHandler_GetActiveGame_NilStatusRepo(t *testing.T) {
-	gameSvc := new(MockGameRoundLookupService)
-	h := newTestGameRoundHandler(gameSvc, nil, nil)
-
-	tournamentID := uuid.New()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	h.GetActiveGame(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }

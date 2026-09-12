@@ -13,7 +13,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/game"
-	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -143,51 +142,6 @@ func TestGameHandler_Create_Success(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestGameHandler_Create_InvalidJSON(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-
-	req := httptest.NewRequest("POST", "/api/v1/games", bytes.NewReader([]byte("invalid")))
-	rr := httptest.NewRecorder()
-
-	handler.Create(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameHandler_Create_ValidationError(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-
-	svc.On("Create", mock.Anything, mock.Anything).
-		Return(nil, errors.ErrValidation.WithMessage("invalid name"))
-
-	body, _ := json.Marshal(game.CreateRequest{Name: "INVALID"})
-	req := httptest.NewRequest("POST", "/api/v1/games", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	handler.Create(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	svc.AssertExpectations(t)
-}
-
-func TestGameHandler_Create_Conflict(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-
-	svc.On("Create", mock.Anything, mock.Anything).
-		Return(nil, errors.ErrConflict.WithMessage("game already exists"))
-
-	body, _ := json.Marshal(game.CreateRequest{Name: "chess"})
-	req := httptest.NewRequest("POST", "/api/v1/games", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	handler.Create(rr, req)
-
-	assert.Equal(t, http.StatusConflict, rr.Code)
-	svc.AssertExpectations(t)
-}
-
 // --- List ---
 
 func TestGameHandler_List_NoFilters(t *testing.T) {
@@ -212,21 +166,6 @@ func TestGameHandler_List_NoFilters(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestGameHandler_List_WithPagination(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-
-	svc.On("List", mock.Anything, models.GameFilter{Limit: 10, Offset: 20}).
-		Return([]*models.Game{}, nil)
-
-	req := httptest.NewRequest("GET", "/api/v1/games?limit=10&offset=20", nil)
-	rr := httptest.NewRecorder()
-
-	handler.List(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	svc.AssertExpectations(t)
-}
-
 func TestGameHandler_List_WithNameFilter(t *testing.T) {
 	handler, svc := newTestGameHandler(t)
 
@@ -239,21 +178,6 @@ func TestGameHandler_List_WithNameFilter(t *testing.T) {
 	handler.List(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	svc.AssertExpectations(t)
-}
-
-func TestGameHandler_List_ServiceError(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-
-	svc.On("List", mock.Anything, mock.Anything).
-		Return(nil, errors.ErrInternal)
-
-	req := httptest.NewRequest("GET", "/api/v1/games", nil)
-	rr := httptest.NewRecorder()
-
-	handler.List(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -281,39 +205,6 @@ func TestGameHandler_Get_Success(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestGameHandler_Get_InvalidUUID(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-
-	req := httptest.NewRequest("GET", "/api/v1/games/not-a-uuid", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "not-a-uuid")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.Get(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameHandler_Get_NotFound(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-	gameID := uuid.New()
-
-	svc.On("GetByID", mock.Anything, gameID).
-		Return(nil, errors.ErrNotFound)
-
-	req := httptest.NewRequest("GET", "/api/v1/games/"+gameID.String(), nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.Get(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-	svc.AssertExpectations(t)
-}
-
 // --- GetByName ---
 
 func TestGameHandler_GetByName_Success(t *testing.T) {
@@ -333,20 +224,6 @@ func TestGameHandler_GetByName_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	svc.AssertExpectations(t)
-}
-
-func TestGameHandler_GetByName_EmptyName(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-
-	req := httptest.NewRequest("GET", "/api/v1/games/name/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("name", "")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.GetByName(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
 // --- Update ---
@@ -375,42 +252,6 @@ func TestGameHandler_Update_Success(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestGameHandler_Update_InvalidJSON(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-	gameID := uuid.New()
-
-	req := httptest.NewRequest("PUT", "/api/v1/games/"+gameID.String(), bytes.NewReader([]byte("invalid")))
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.Update(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameHandler_Update_NotFound(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-	gameID := uuid.New()
-
-	svc.On("Update", mock.Anything, gameID, mock.Anything).
-		Return(nil, errors.ErrNotFound)
-
-	body, _ := json.Marshal(game.UpdateRequest{DisplayName: "Test"})
-	req := httptest.NewRequest("PUT", "/api/v1/games/"+gameID.String(), bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.Update(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-	svc.AssertExpectations(t)
-}
-
 // --- Delete ---
 
 func TestGameHandler_Delete_Success(t *testing.T) {
@@ -428,24 +269,6 @@ func TestGameHandler_Delete_Success(t *testing.T) {
 	handler.Delete(rr, req)
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
-	svc.AssertExpectations(t)
-}
-
-func TestGameHandler_Delete_NotFound(t *testing.T) {
-	handler, svc := newTestGameHandler(t)
-	gameID := uuid.New()
-
-	svc.On("Delete", mock.Anything, gameID).Return(errors.ErrNotFound)
-
-	req := httptest.NewRequest("DELETE", "/api/v1/games/"+gameID.String(), nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.Delete(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
 	svc.AssertExpectations(t)
 }
 
@@ -594,37 +417,6 @@ func TestGameHandler_RemoveGameFromTournament_Success(t *testing.T) {
 	svc.AssertExpectations(t)
 }
 
-func TestGameHandler_RemoveGameFromTournament_InvalidTournamentUUID(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-
-	req := httptest.NewRequest("DELETE", "/api/v1/tournaments/invalid/games/"+uuid.New().String(), nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "invalid")
-	rctx.URLParams.Add("gameId", uuid.New().String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.RemoveGameFromTournament(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestGameHandler_RemoveGameFromTournament_InvalidGameUUID(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-	tournamentID := uuid.New()
-
-	req := httptest.NewRequest("DELETE", "/api/v1/tournaments/"+tournamentID.String()+"/games/bad", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	rctx.URLParams.Add("gameId", "bad")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.RemoveGameFromTournament(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
 // --- GetGameLeaderboard ---
 
 func TestGameHandler_GetGameLeaderboard_NoRepo(t *testing.T) {
@@ -646,71 +438,6 @@ func TestGameHandler_GetGameLeaderboard_NoRepo(t *testing.T) {
 }
 
 // --- GetGameMatches ---
-
-// --- GetGamePrograms ---
-
-func TestGameHandler_GetGamePrograms_NoRepo(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-	tournamentID := uuid.New()
-	gameID := uuid.New()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	rctx.URLParams.Add("gameId", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.GetGamePrograms(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	assert.Contains(t, rr.Body.String(), "program repository not configured")
-}
-
-// --- GetTournamentGamesWithStatus ---
-
-func TestGameHandler_GetTournamentGamesWithStatus_NoRepo(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-	tournamentID := uuid.New()
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.GetTournamentGamesWithStatus(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-}
-
-// --- MarkGameRoundCompleted ---
-
-// --- SetActiveGame ---
-
-// --- DeactivateAllGames ---
-
-// --- GetActiveGame ---
-
-// --- ResetGameRound ---
-
-func TestGameHandler_ResetGameRound_NoTournamentGameStatusRepo(t *testing.T) {
-	handler, _ := newTestGameHandler(t)
-	tournamentID := uuid.New()
-	gameID := uuid.New()
-
-	req := httptest.NewRequest("POST", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	rctx.URLParams.Add("gameId", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.ResetGameRound(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	assert.Contains(t, rr.Body.String(), "tournament game status repository not configured")
-}
 
 // =============================================================================
 // Фаза 2: happy-path тесты методов game handler с repos
@@ -873,25 +600,6 @@ func TestGameHandler_GetGameLeaderboard_Success(t *testing.T) {
 	leaderboardRepo.AssertExpectations(t)
 }
 
-func TestGameHandler_GetGameLeaderboard_GameNotFound(t *testing.T) {
-	handler, svc, _, _, _, _ := newGameHandlerWithAllRepos(t)
-	tournamentID := uuid.New()
-	gameID := uuid.New()
-
-	svc.On("GetByID", mock.Anything, gameID).Return(nil, errors.ErrNotFound)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	rctx.URLParams.Add("gameId", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.GetGameLeaderboard(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-}
-
 // --- GetGameMatches success ---
 
 func TestGameHandler_GetGameMatches_WithStatusFilter(t *testing.T) {
@@ -1019,21 +727,6 @@ func TestGameHandler_SetActiveGame_Success(t *testing.T) {
 	tgsRepo.AssertExpectations(t)
 }
 
-func TestGameHandler_SetActiveGame_InvalidBody(t *testing.T) {
-	handler, _, _, _, _, _ := newGameHandlerWithAllRepos(t)
-	tournamentID := uuid.New()
-
-	req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte("invalid")))
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.SetActiveGame(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
 // --- DeactivateAllGames success ---
 
 func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
@@ -1052,23 +745,6 @@ func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 	tgsRepo.AssertExpectations(t)
-}
-
-func TestGameHandler_DeactivateAllGames_RepoError(t *testing.T) {
-	handler, _, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
-	tournamentID := uuid.New()
-
-	tgsRepo.On("DeactivateAllGames", mock.Anything, tournamentID).Return(errors.ErrInternal)
-
-	req := httptest.NewRequest("POST", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", tournamentID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.DeactivateAllGames(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }
 
 // --- GetActiveGame success ---

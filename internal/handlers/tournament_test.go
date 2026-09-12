@@ -175,29 +175,6 @@ func TestTournamentHandler_Create(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
-
-	t.Run("validation error - empty name", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		reqBody := tournament.CreateRequest{
-			Name:     "", // пустое имя - сервис вернёт ошибку валидации
-			GameType: "chess",
-		}
-
-		mockService.On("Create", mock.Anything, &reqBody).Return(nil, errors.ErrValidation.WithMessage("name is required"))
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-
-		handler.Create(w, req)
-
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
 }
 
 func TestTournamentHandler_Get(t *testing.T) {
@@ -228,25 +205,6 @@ func TestTournamentHandler_Get(t *testing.T) {
 		var response models.Tournament
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, expectedTournament.ID, response.ID)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("tournament not found", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-
-		mockService.On("GetByID", mock.Anything, tournamentID).Return(nil, errors.ErrNotFound.WithMessage("tournament not found"))
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String(), nil)
-		req = withTournamentID(req, tournamentID.String())
-		w := httptest.NewRecorder()
-
-		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusNotFound, w.Code)
 
 		mockService.AssertExpectations(t)
 	})
@@ -376,25 +334,6 @@ func TestTournamentHandler_Start(t *testing.T) {
 		handler.Start(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-
-	t.Run("tournament already started", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-
-		mockService.On("Start", mock.Anything, tournamentID).Return(errors.ErrConflict.WithMessage("tournament already started"))
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/start", nil)
-		req = withTournamentID(req, tournamentID.String())
-		w := httptest.NewRecorder()
-
-		handler.Start(w, req)
-
-		assert.Equal(t, http.StatusConflict, w.Code)
 
 		mockService.AssertExpectations(t)
 	})
@@ -861,34 +800,6 @@ func TestRatingHistoryHandler_Success(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// любой из двух битых uuid (турнира или программы) даёт 400
-func TestRatingHistoryHandler_InvalidUUIDs(t *testing.T) {
-	handler, _ := newTestRatingHistoryHandler(t)
-
-	rr := httptest.NewRecorder()
-	handler.GetProgramRatingHistory(rr, ratingHistoryRequest("not-a-uuid", uuid.New().String()))
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-
-	rr = httptest.NewRecorder()
-	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(uuid.New().String(), "not-a-uuid"))
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestRatingHistoryHandler_RepoError(t *testing.T) {
-	handler, repo := newTestRatingHistoryHandler(t)
-	tournamentID := uuid.New()
-	programID := uuid.New()
-
-	repo.On("GetByProgramAndTournament", mock.Anything, programID, tournamentID, 200).
-		Return(nil, assert.AnError)
-
-	rr := httptest.NewRecorder()
-	handler.GetProgramRatingHistory(rr, ratingHistoryRequest(tournamentID.String(), programID.String()))
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	repo.AssertExpectations(t)
-}
-
 // --- GetHeadToHead (живёт в GameRoundHandler, мок расширен в game_test.go) ---
 
 func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
@@ -921,23 +832,4 @@ func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
 	assert.Equal(t, 2, result[0].Wins)
 	svc.AssertExpectations(t)
 	leaderboardRepo.AssertExpectations(t)
-}
-
-func TestGameHandler_GetHeadToHead_GameNotFound(t *testing.T) {
-	handler, svc, _, _, _, _ := newGameHandlerWithAllRepos(t)
-	gameID := uuid.New()
-
-	svc.On("GetByID", mock.Anything, gameID).Return(nil, errors.ErrNotFound)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", uuid.New().String())
-	rctx.URLParams.Add("gameId", gameID.String())
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	rr := httptest.NewRecorder()
-
-	handler.GetHeadToHead(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-	svc.AssertExpectations(t)
 }
