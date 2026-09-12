@@ -296,8 +296,4 @@ MIT License. См. [LICENSE](LICENSE).
 
 ---
 
-<div align="center">
-
-**[BMSTU ITSTech](https://github.com/bmstu-itstech)**
-
-</div>
+Сделано в [BMSTU ITSTech](https://github.com/bmstu-itstech).
