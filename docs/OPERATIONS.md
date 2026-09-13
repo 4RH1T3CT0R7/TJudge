@@ -1,23 +1,18 @@
 # TJudge - эксплуатация
 
-Документ для оператора: развёртывание, обновление, диагностика и восстановление. Рассчитан на self-hosted single-node. Быстрый старт с авто-подбором профиля железа — в §14.
+Runbook для self-hosted single-node: деплой, диагностика, восстановление. Быстрый старт с авто-профилем железа — §13.
 
 ## 1. Требования
 
-- Linux x86_64, Docker 24+, Docker Compose v2.
-- 4 ГБ RAM, 20 ГБ диска (под БД и резервные копии).
-- Домен с A-записью на IP сервера.
-- Открытые порты 80 и 443.
+Linux x86_64, Docker 24+, Docker Compose v2. 4 ГБ RAM, 20 ГБ диска (БД + бэкапы). Домен с A-записью на IP сервера, открытые порты 80 и 443.
 
 ## 2. Первичная настройка
 
 ```bash
 git clone https://github.com/bmstu-itstech/tjudge.git
 cd tjudge
-
 ./scripts/init-secrets.sh      # создаст ./secrets/{db_password,redis_password,jwt_secret}
 chmod 600 secrets/*
-
 cp .env.production.example .env.production
 ```
 
@@ -34,113 +29,53 @@ WEBSOCKET_ALLOWED_ORIGINS=https://tjudge.example.com
 RATE_LIMIT_ENABLED=true
 ```
 
-`JWT_SECRET` не должен содержать плейсхолдеры (`CHANGE_ME`, `secret`, `password` и подобные): при старте в prod код сразу упадёт с ошибкой.
+`JWT_SECRET` с плейсхолдером (`CHANGE_ME`, `secret`, `password` и т.п.) уронит prod при старте — проверка вшита в код.
 
 ## 3. Первый запуск
 
 ```bash
-# TLS: сертификат Let's Encrypt.
-./scripts/init-ssl.sh tjudge.example.com admin@example.com
-
-# Сборка и запуск.
+./scripts/init-ssl.sh tjudge.example.com admin@example.com   # tls let's encrypt
 docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
-
-# Миграции применяются автоматически сервисом migrate.
-
-# Проверка health.
-curl https://tjudge.example.com/health    # ожидаем "OK"
-
-# Назначение первого админа.
-docker exec -it tjudge-api ./tjudge-admin promote admin@example.com
+docker compose -f docker-compose.prod.yml up -d              # миграции применит сервис migrate
+curl https://tjudge.example.com/health                       # "OK"
+docker exec -it tjudge-api ./tjudge-admin promote admin@example.com   # первый админ
 ```
 
 ## 4. Резервное копирование
 
-Автоматический backup включается профилем compose:
-
-```bash
-docker compose -f docker-compose.prod.yml --profile backup up -d backup
-```
-
-По умолчанию backup раз в сутки в volume `backups_data` (prod) или `./backups` (self-hosted), retention 30 дней. Ручной запуск: `./scripts/backup.sh ./backups`.
-
-Проверка: `docker logs tjudge-backup` через сутки.
+Включение: `docker compose -f docker-compose.prod.yml --profile backup up -d backup`. Раз в сутки в volume `backups_data` (prod) или `./backups` (self-hosted), retention 30 дней. Ручной запуск: `./scripts/backup.sh ./backups`. Проверка через сутки: `docker logs tjudge-backup`.
 
 ## 5. Мониторинг
 
-Два режима (флаг `MONITORING_MODE` в `.env`, по умолчанию `standalone`).
-api/worker из prod-compose подключены к внешней docker-сети `monitoring`
-и несут лейблы `prometheus_job: tjudge-api / tjudge-worker` — оба режима
-скрейпят их по этой сети, имена job'ов и дашборды идентичны.
+Два режима (`MONITORING_MODE` в `.env`, по умолчанию `standalone`). api/worker из prod-compose подключены к внешней docker-сети `monitoring` с лейблами `prometheus_job: tjudge-api / tjudge-worker` — оба режима скрейпят по этой сети, job'ы и дашборды идентичны. Оба стека одновременно не поднимать — порты конфликтуют.
 
-**standalone** — автономный стек TJudge:
+- **standalone** — автономный стек TJudge: `make monitoring-up` (= `docker compose -f docker-compose.monitoring.yml up -d`).
+- **external** — общий стек infra-monitoring (Prometheus+Grafana+Loki+Alertmanager+Pushgateway на той же сети, авто-дискавери по docker-лейблам), TJudge ничего не поднимает: в `.env` `MONITORING_MODE=external`, стек — `cd ~/infra-monitoring && docker compose up -d`.
 
-```bash
-make monitoring-up        # = docker compose -f docker-compose.monitoring.yml up -d
-```
+Порты одинаковые в обоих режимах: Prometheus 9092 (алерты из `deployments/prometheus/alerts/`), Alertmanager 9093 (Telegram: токен в `deployments/alertmanager/telegram_token`, chat_id в `alertmanager.yml`), Pushgateway 9094 (метрики doctor'а), Grafana 3000 (дашборды «TJudge — Обзор системы» и «TJudge — Doctor» провижнятся сами; учётка — `GF_ADMIN_USER`/`GF_ADMIN_PASSWORD` в `.env.production`). Если `make doctor` пишет «Prometheus НЕ скрейпит API» — почти всегда старый Prometheus в другой docker-сети не резолвит имена `api`/`worker`: остановить его и поднять стек как выше.
 
-**external** — общая система infra-monitoring (Prometheus+Grafana+Loki+
-Alertmanager+Pushgateway на той же сети `monitoring`, авто-дискавери по
-docker-лейблам). TJudge ничего не поднимает:
-
-```bash
-# в .env: MONITORING_MODE=external
-# стек поднимается из репозитория infra-monitoring:
-#   cd ~/infra-monitoring && docker compose up -d
-```
-
-Порты в обоих режимах одинаковые (Prometheus 9092, Alertmanager 9093,
-Pushgateway 9094, Grafana 3000) — `make doctor`, дашборды и алерты работают
-без перенастройки. ВАЖНО: не запускайте оба стека одновременно — порты
-конфликтуют.
-
-Поднимает: Prometheus (:9092, алерты из `deployments/prometheus/alerts/`),
-Alertmanager (:9093, доставка в Telegram — токен в
-`deployments/alertmanager/telegram_token`, chat_id в `alertmanager.yml`),
-Pushgateway (:9094, метрики doctor'а), Grafana (:3000, дашборды
-«TJudge — Обзор системы» и «TJudge — Doctor» провижнятся автоматически).
-
-Если Prometheus был запущен раньше другим способом и `make doctor` пишет
-«Prometheus НЕ скрейпит API» — остановите старый контейнер и поднимите стек
-командой выше: дело почти всегда в том, что Prometheus находится в другой
-docker-сети и не резолвит имена `api`/`worker`.
-
-**Guardian (только external-режим).** В стек infra-monitoring входит guardian —
-авто-восстановление контейнеров. В `docker-compose.prod.yml` уже стоят лейблы:
-nginx/api/worker — `guardian.enabled` (рестарт при unhealthy), postgres/redis —
-`notify-only` (БД не рестартим: при WAL-replay это удлинит восстановление).
-Перед долгими ручными работами на сервере:
-`cd ~/infra-monitoring && make maintenance 1h` — guardian не будет вмешиваться.
-Подробности: README репозитория infra-monitoring.
-
-Учётные данные Grafana задаются в `.env.production`:
-
-```
-GF_ADMIN_USER=admin
-GF_ADMIN_PASSWORD=<replace>
-```
+**Guardian (только external).** В infra-monitoring входит guardian — авто-восстановление контейнеров. Лейблы в `docker-compose.prod.yml` уже стоят: nginx/api/worker — `guardian.enabled` (рестарт при unhealthy), postgres/redis — `notify-only` (БД не рестартим: WAL-replay удлинит восстановление). Перед долгими ручными работами: `cd ~/infra-monitoring && make maintenance 1h`. Детали — README infra-monitoring.
 
 ## 6. Чеклист перед открытием на публику
 
 - [ ] `JWT_SECRET` не короче 32 байт, не из blacklist-плейсхолдеров (автопроверка при старте).
 - [ ] `.env.production` не в git: `git ls-files .env.production` пусто.
 - [ ] TLS настроен, HTTP-трафика нет, HSTS выставлен.
-- [ ] `CORS_ALLOWED_ORIGINS` содержит только ваши домены без `*`.
+- [ ] `CORS_ALLOWED_ORIGINS` — только ваши домены, без `*`.
 - [ ] `WEBSOCKET_ALLOWED_ORIGINS` задан (в prod fail-closed).
-- [ ] Worker запущен не от root: `docker compose ps worker` показывает `user=1000`.
+- [ ] Worker не от root: `docker compose ps worker` показывает `user=1000`.
 - [ ] `RATE_LIMIT_ENABLED=true`.
 - [ ] Backup-сервис работает: `docker ps | grep tjudge-backup`.
-- [ ] Локально прошёл `make security`; HIGH-находки исправлены.
+- [ ] `make security` прошёл, HIGH-находки исправлены.
 - [ ] Первый админ назначен, пароль надёжный.
 
 ## 7. Обновление (blue-green)
 
 ```bash
 ./scripts/blue-green-deploy.sh <new-tag>
-./scripts/smoke-test.sh              # проверяем готовность нового стека
-./scripts/switch-traffic.sh          # переключаем nginx-upstream
-# После ~5 минут мониторинга:
+./scripts/smoke-test.sh              # готовность нового стека
+./scripts/switch-traffic.sh          # переключение nginx-upstream
+# после ~5 минут мониторинга:
 ./scripts/blue-green-deploy.sh cleanup
 ```
 
@@ -148,33 +83,20 @@ GF_ADMIN_PASSWORD=<replace>
 
 ### 7.1 Очистка диска после релизов
 
-`scripts/deploy.sh` и `scripts/blue-green-deploy.sh` автоматически вызывают `cleanup_old_images` после успешного деплоя. Функция делает три вещи:
+`scripts/deploy.sh` и `scripts/blue-green-deploy.sh` после успешного деплоя вызывают `cleanup_old_images`: удаляет dangling-образы, для каждого `tjudge-{api,worker,executor,migrate,cli}` оставляет N последних тегов (по умолчанию 3, переопределяется `TJUDGE_IMAGE_KEEP`), чистит build-кэш старше 7 дней. Почему не `docker image prune -a`: `tjudge-executor` запускается воркером on-demand (`internal/executor/executor.go:169-186`), между матчами на него нет работающих контейнеров — blanket-prune его удалит и сломает матчи до следующего pull'а из ghcr.io. Tag-based retention заодно сохраняет прошлые версии API/worker для rollback.
 
-1. Удаляет **dangling-образы** (безымянные слои, оставшиеся после rebuild).
-2. Для каждого репозитория `tjudge-{api,worker,executor,migrate,cli}` **оставляет N последних тегов** (по умолчанию 3, переопределяется через `TJUDGE_IMAGE_KEEP`), остальные сносит.
-3. Чистит **build-кэш** старше 7 дней.
-
-**Почему не `docker image prune -a`**: образ `tjudge-executor` запускается воркером on-demand (`internal/executor/executor.go:169-186`), поэтому между матчами на него **нет ни одного работающего контейнера**. Blanket-prune удалил бы его и сломал бы выполнение матчей до следующего pull'а из ghcr.io. Tag-based retention решает это и сохраняет предыдущие версии API/worker для rollback.
-
-Если на сервере всё равно накопился мусор (длительный простой деплоя, старые проекты), ручная чистка:
+Ручная чистка при накопившемся мусоре:
 
 ```bash
-# Безопасно: dangling-образы + build-кэш.
-docker image prune -f
-docker builder prune -af
-
-# Посмотреть, что занимает место.
-docker system df
-
-# Увеличить/уменьшить retention для следующего деплоя.
-TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>
+docker image prune -f        # безопасно: только dangling
+docker builder prune -af     # build-кэш
+docker system df             # что занимает место
+TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>   # другой retention
 ```
 
-**НЕ запускать на проде:**
-- `docker image prune -af` без фильтров — удалит `tjudge-executor`, следующий матч упадёт.
-- `docker system prune -af --volumes` и `docker volume prune` — если контейнер `postgres` или `redis` в этот момент остановлен (например, между переключениями blue-green), volume посчитается unused и улетит вместе с БД.
+Не запускать на проде: `docker image prune -af` без фильтров (удалит `tjudge-executor`, следующий матч упадёт); `docker system prune -af --volumes` и `docker volume prune` (при остановленном postgres/redis, например между переключениями blue-green, volume посчитается unused и улетит вместе с БД).
 
-Ротация логов контейнеров — в `/etc/docker/daemon.json`:
+Ротация логов контейнеров — `/etc/docker/daemon.json`:
 
 ```json
 {
@@ -183,99 +105,35 @@ TJUDGE_IMAGE_KEEP=5 ./scripts/blue-green-deploy.sh <version>
 }
 ```
 
-После правки: `sudo systemctl restart docker`. Новые контейнеры подхватят настройку автоматически, старые — при следующем пересоздании (ближайший деплой).
-
-Каталог `data/programs/` (переменная `HOST_PROGRAMS_PATH`) хранит загруженные программы участников и **не чистится автоматически**. Это данные, не мусор; если нужна политика retention — обсуждается отдельно.
+После правки `sudo systemctl restart docker`; старые контейнеры подхватят при пересоздании (ближайший деплой). `data/programs/` (`HOST_PROGRAMS_PATH`) — загруженные программы участников, автоматически не чистится: это данные, не мусор.
 
 ## 8. Быстрая диагностика
 
-### make status — всё состояние одной командой
+### make status
 
-```bash
-# На сервере, рядом с docker-compose:
-make status
-```
+`make status` на сервере, рядом с docker-compose. Для полного статуса (БД, очереди, матчи, программы, outbox) — в `.env` учётка админа: `ADMIN_USER=<логин или email>`, `ADMIN_PASSWORD=<пароль>`; скрипт сам получает свежий JWT. Лучше отдельная служебная учётка (`make admin EMAIL=...`), чем личный пароль. Альтернатива `ADMIN_TOKEN=<jwt>` протухает за `JWT_ACCESS_TTL` (24ч).
 
-Для полного статуса (БД, очереди, матчи, программы, outbox) задайте в `.env`
-учётку админа — скрипт сам получит свежий JWT на каждый запуск:
-
-```
-ADMIN_USER=<логин или email админа>
-ADMIN_PASSWORD=<пароль>
-```
-
-Рекомендация: заведите отдельную служебную учётку (`make admin EMAIL=...`),
-чтобы не хранить личный пароль. Альтернатива — `ADMIN_TOKEN=<jwt>`, но он
-истекает за `JWT_ACCESS_TTL` (24ч) и в `.env` быстро протухает.
-
-Команда проверяет: контейнеры, наличие образов `tjudge-cli`/`tjudge-builder`,
-**не работают ли контейнеры api/worker на устаревшем образе** (образ пересобран,
-но контейнер не перезапущен — главный ответ на вопрос «надо ли пересобирать»),
-health API/worker'а и, при наличии `ADMIN_TOKEN`, полный статус из
-`GET /api/v1/system/status`: версия сборки и аптайм, здоровье и версия миграций
-PostgreSQL, Redis, размеры всех очередей (включая компиляцию и dead-letter),
-матчи и программы по статусам, outbox целостности рейтингов, WebSocket-клиенты.
-
-Тот же полный статус доступен:
-- в **админ-панели** на вкладке «Система» (обновляется каждые 10 секунд);
-- в **Grafana**: дашборд «TJudge — Обзор системы» (provisioning автоматический,
-  профиль `monitoring` в docker-compose.selfhosted.yml);
-- сырым JSON: `curl -sH "Authorization: Bearer <admin-jwt>" \
-  http://localhost:8080/api/v1/system/status | jq`
+Проверяет: контейнеры, наличие образов `tjudge-cli`/`tjudge-builder`, не крутятся ли api/worker на устаревшем образе (главный ответ на «надо ли пересобирать»), health API/worker и — при наличии токена — полный статус из `GET /api/v1/system/status`: версия сборки и аптайм, здоровье и версия миграций PostgreSQL, Redis, размеры всех очередей (компиляция, dead-letter), матчи и программы по статусам, outbox целостности рейтингов, WebSocket-клиенты. Тот же статус: админ-панель, вкладка «Система» (обновление каждые 10 секунд); Grafana-дашборд «TJudge — Обзор системы» (профиль `monitoring` в docker-compose.selfhosted.yml); сырой JSON — `curl -sH "Authorization: Bearer <admin-jwt>" http://localhost:8080/api/v1/system/status | jq`.
 
 ### make doctor — глубокая диагностика после деплоя
 
 ```bash
-make doctor                         # терминальный отчёт + Telegram при проблемах
+make doctor                         # терминальный отчёт + telegram при проблемах
 ./scripts/doctor.sh --json          # машиночитаемый вывод
-DOCTOR_TELEGRAM=always make doctor  # отчёт в Telegram даже когда всё ок
+DOCTOR_TELEGRAM=always make doctor  # отчёт в telegram даже когда всё ок
 ```
 
-Doctor — «умный» чекер, который проверяет, что система **корректно запустилась
-и работает**: контейнеры (включая crash-loop по RestartCount), наличие образов
-и работу контейнеров на устаревших образах, health API/worker, глубокий статус
-(БД+миграции, Redis, dead-letter, outbox, зависшая компиляция — нужны
-`ADMIN_USER`/`ADMIN_PASSWORD` в `.env`, как у `make status`), метрики Prometheus (up-цели, 5xx против SLO, **активные
-алерты** — их описания попадают в отчёт), **ошибки в логах** api/worker за
-`DOCTOR_LOG_WINDOW` (с топом повторяющихся сообщений) и диск.
+Проверяет: контейнеры (включая crash-loop по RestartCount), образы и работу на устаревших образах, health API/worker, глубокий статус (БД+миграции, Redis, dead-letter, outbox, зависшая компиляция — нужны `ADMIN_USER`/`ADMIN_PASSWORD`), Prometheus (up-цели, 5xx против SLO, активные алерты — описания попадают в отчёт), ошибки в логах api/worker за `DOCTOR_LOG_WINDOW` с топом повторов, диск. Каждая проблема — с подсказкой «куда смотреть». Вердикт: HEALTHY / DEGRADED / CRITICAL (exit 1 → деплой неуспешен).
 
-Каждая проблема сопровождается подсказкой «куда смотреть». Вердикт:
-HEALTHY / DEGRADED / CRITICAL (exit 1 → деплой считается неуспешным).
-
-Куда отчитывается:
-- **Telegram** (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`): при проблемах —
-  вердикт + список «что не так и на что обратить внимание»;
-- **Grafana**: отдельный дашборд «TJudge — Doctor» (вердикт, таблица всех
-  проверок, история) — через Pushgateway. `PUSHGATEWAY_URL` по умолчанию
-  `http://localhost:9094` (стандартный порт из infra-monitoring); если
-  pushgateway не поднят, push тихо пропускается;
-- **Prometheus-алерты**: `DoctorCritical`/`DoctorDegraded`/`DoctorStale`
-  (deployments/prometheus/alerts/tjudge-doctor.yml) → Telegram через
-  Alertmanager.
-
-Запускается **автоматически после деплоя** (`scripts/deploy.sh` — staging
-гейтится по CRITICAL; blue-green — best-effort после переключения трафика).
-Рекомендуемый cron на сервере для регулярной проверки:
-
-```
-*/30 * * * * cd /opt/tjudge && ./scripts/doctor.sh >/dev/null 2>&1
-```
+Куда отчитывается: Telegram (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`) — вердикт + список проблем; Grafana — дашборд «TJudge — Doctor» через Pushgateway (`PUSHGATEWAY_URL` по умолчанию `http://localhost:9094`; без pushgateway push тихо пропускается); Prometheus-алерты `DoctorCritical`/`DoctorDegraded`/`DoctorStale` (deployments/prometheus/alerts/tjudge-doctor.yml) → Telegram через Alertmanager. Запускается автоматически после деплоя: `scripts/deploy.sh` — staging гейтится по CRITICAL; blue-green — best-effort после переключения трафика. Cron для регулярной проверки: `*/30 * * * * cd /opt/tjudge && ./scripts/doctor.sh >/dev/null 2>&1`.
 
 ### Точечные проверки
 
 ```bash
-# Health API.
 curl -sf http://localhost:8080/health            # "OK"
-curl -sfH "Authorization: Bearer <admin-jwt>" \
-    http://localhost:8080/api/v1/system/health   # JSON со статусом
-
-# Метрики.
+curl -sfH "Authorization: Bearer <admin-jwt>" http://localhost:8080/api/v1/system/health   # json со статусом
 curl -s http://localhost:8080/metrics | grep -E '^(tjudge_|go_goroutines)'
-
-# Последние логи API.
 docker logs --tail=200 tjudge-api
-
-# Очереди и dead-letter.
 docker exec -it tjudge-redis redis-cli -n 0 llen queue:high
 docker exec -it tjudge-redis redis-cli -n 0 llen queue:dead_letter
 ```
@@ -284,154 +142,80 @@ docker exec -it tjudge-redis redis-cli -n 0 llen queue:dead_letter
 
 ### 9.0 Всё упало: полный старт/стоп
 
-После перезагрузки сервера обычно делать ничего не нужно: у контейнеров
-`restart: always`, docker поднимет всё сам — подождите 2-3 минуты и проверьте
-`make doctor`.
-
-Ручной полный старт (порядок важен — TJudge требует внешнюю сеть `monitoring`,
-её создаёт инфра-стек):
+После перезагрузки сервера обычно ничего делать не нужно: `restart: always`, docker поднимет всё сам — подождать 2-3 минуты, проверить `make doctor`. Ручной полный старт (порядок важен — TJudge требует внешнюю сеть `monitoring`, её создаёт инфра-стек):
 
 ```bash
 cd ~/infra-monitoring && make up                                  # 1. мониторинг + сеть
-cd ~/TJudge && docker compose -f docker-compose.prod.yml up -d    # 2. TJudge
+cd ~/TJudge && docker compose -f docker-compose.prod.yml up -d    # 2. tjudge
 docker compose -f docker-compose.prod.yml --profile backup up -d backup  # 3. бэкапы
 make doctor                                                       # 4. проверка
 ```
 
-Запуск TJudge без мониторинга: достаточно самой сети —
-`docker network create monitoring`, дальше шаг 2.
+Без мониторинга: достаточно `docker network create monitoring`, дальше шаг 2. Полная остановка (мониторинг первым, чтобы не спамить алертами в Telegram): `cd ~/infra-monitoring && make down`, затем `cd ~/TJudge && docker compose -f docker-compose.prod.yml down`. Никогда не добавлять `-v` к `down` — удалит volumes: базу, Redis, загруженные программы. «Остановить на время» — `docker compose stop` / `start`.
 
-Полная остановка (мониторинг первым, чтобы не спамить алертами в Telegram):
+### 9.1 API падает или в perpetual restart
 
-```bash
-cd ~/infra-monitoring && make down
-cd ~/TJudge && docker compose -f docker-compose.prod.yml down
-```
-
-НИКОГДА не добавляйте `-v` к `down` — флаг удаляет volumes: базу, Redis и
-загруженные программы. Для «остановить на время» достаточно
-`docker compose stop` (контейнеры остаются, вернуть — `start`).
-
-### 9.1 API падает или уходит в perpetual restart
-
-1. Смотрим логи: `docker logs --tail=300 tjudge-api`. Частые причины:
-   - `JWT_SECRET must be at least 32 bytes`: обновите секрет (см. §11.1).
-   - `database connection refused`: проверяем Postgres (§9.3).
-   - `panic: send on closed channel`: баг инфраструктуры, заводим issue.
-2. Рестарт: `docker compose restart api`.
-3. Если не помогает, откат: `./scripts/rollback.sh`.
+1. `docker logs --tail=300 tjudge-api`. Частые причины: `JWT_SECRET must be at least 32 bytes` — обновить секрет (§11); `database connection refused` — Postgres (§9.3); `panic: send on closed channel` — баг инфраструктуры, заводить issue.
+2. `docker compose restart api`.
+3. Не помогло — откат: `./scripts/rollback.sh`.
 
 ### 9.2 Растёт очередь матчей
 
 Триггер: `tjudge_queue_size{priority="high"} > 1000`.
 
-1. Проверяем размер пула воркеров: `curl -s localhost:9090/metrics | grep tjudge_worker_pool_size`.
-2. Увеличиваем `WORKER_MAX` и перезапускаем воркер:
-   ```bash
-   echo "WORKER_MAX=50" >> .env
-   docker compose up -d worker
-   ```
-3. Если матчи падают: `docker logs --tail=300 tjudge-worker | grep ERROR`. Частая причина - отсутствует образ `tjudge-cli`. Пересобрать: `docker compose build tjudge-cli`.
+1. Размер пула: `curl -s localhost:9090/metrics | grep tjudge_worker_pool_size`.
+2. Увеличить лимит и перезапустить воркер: `echo "WORKER_MAX=50" >> .env`, затем `docker compose up -d worker`.
+3. Матчи падают: `docker logs --tail=300 tjudge-worker | grep ERROR`. Частая причина — нет образа `tjudge-cli`; пересобрать: `docker compose build tjudge-cli`.
 
 ### 9.3 Postgres недоступен
 
-1. `docker ps | grep postgres` - контейнер запущен?
-2. Если нет: `docker compose up -d postgres`, ждём healthcheck.
-3. Если запущен, но недоступен: `docker exec -it tjudge-postgres psql -U tjudge -c 'SELECT 1'`.
-4. Проверить диск: `df -h /var/lib/docker`. При переполнении удалить старые backup-ы и партиции.
+1. `docker ps | grep postgres` — контейнер запущен?
+2. Нет: `docker compose up -d postgres`, ждать healthcheck.
+3. Запущен, но недоступен: `docker exec -it tjudge-postgres psql -U tjudge -c 'SELECT 1'`.
+4. Диск: `df -h /var/lib/docker`. При переполнении удалить старые backup-ы и партиции.
 5. Crash-loop: восстановление из backup (§10).
 
 ### 9.4 Redis недоступен
 
-API автоматически переключается на fallback rate-limiter (0.5× от основного лимита). Очередь матчей при падении Redis не работает.
-
-1. Перезапустить: `docker compose restart redis`.
-2. Если данные очередей потеряны, запустить recovery-worker: он переставит pending-матчи в очередь.
+API сам переключается на fallback rate-limiter (0.5× от основного лимита); очередь матчей без Redis не работает. Перезапустить: `docker compose restart redis`. Если данные очередей потеряны — запустить recovery-worker: он переставит pending-матчи в очередь.
 
 ### 9.5 WebSocket-шторм подключений
 
-- Метрика `tjudge_queue_deadletter_size` растёт - возможно poison-сообщения; проверить deserializer.
-- Клиентский flood: в `client.go` включён per-client rate limit (10 msg/sec). Лимитируемые клиенты получают close 1008.
+Растёт `tjudge_queue_deadletter_size` — возможно poison-сообщения, проверить deserializer. Клиентский flood: в `client.go` включён per-client rate limit (10 msg/sec), лимитируемые получают close 1008.
 
 ### 9.6 Расследование admin-действий
 
-```bash
-curl -sH "Authorization: Bearer <admin-jwt>" \
-  'http://localhost:8080/api/v1/admin/audit?limit=500' | jq
-```
-
-В БД: `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200;`.
+`curl -sH "Authorization: Bearer <admin-jwt>" 'http://localhost:8080/api/v1/admin/audit?limit=500' | jq`, в БД — `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200;`.
 
 ## 10. Восстановление из backup
 
 ```bash
-# 1. Остановить API и worker, чтобы не было конкурентных записей.
-docker compose stop api worker
-
-# 2. Восстановить БД (пример: последний backup).
+docker compose stop api worker                 # 1. остановить конкурентные записи
 LATEST=$(ls -t backups/tjudge_*.sql.gz | head -1)
-gunzip -c "$LATEST" | docker exec -i tjudge-postgres psql -U tjudge tjudge
-
-# 3. Прогнать миграции на случай, если backup старше текущих.
-docker compose up migrate
-
-# 4. Запустить api и worker.
-docker compose up -d api worker
+gunzip -c "$LATEST" | docker exec -i tjudge-postgres psql -U tjudge tjudge   # 2. восстановить бд
+docker compose up migrate                      # 3. миграции, если backup старше текущих
+docker compose up -d api worker                # 4. запустить обратно
 ```
 
-Point-in-time recovery пока не настроен: WAL-archiving не включён. Для prod рекомендуется `pgbackrest` или `wal-g` с S3-хранилищем.
+Point-in-time recovery не настроен: WAL-archiving выключен. Для prod — `pgbackrest` или `wal-g` с S3-хранилищем.
 
 ## 11. Частые задачи
 
-### 11.1 Ротация JWT_SECRET
+- **Ротация JWT_SECRET:** сгенерировать `openssl rand -hex 48`; обновить secret (Docker secrets или env-переменная); `docker compose up -d api` (rolling при `replicas>1`). Все сессии инвалидируются, пользователи перелогиниваются.
+- **Назначение админа:** `make admin EMAIL=foo@bar.com`.
+- **Миграции БД:** `make migrate-up` — применить pending; `make migrate-down` — откат последней (только dev); `make migrate-create NAME=add_foo` — шаблон новой.
+- **Сброс пароля:** `UPDATE users SET password_hash = '$2a$12$...' WHERE email = 'foo@bar.com';` — bcrypt-hash cost 12, как в auth.Service: `SELECT crypt('newpassword', gen_salt('bf', 12));`.
 
-1. Сгенерировать: `openssl rand -hex 48`.
-2. Обновить secret (Docker secrets или env-переменная).
-3. `docker compose up -d api` (rolling при `replicas>1`).
-4. Все существующие сессии инвалидируются, пользователи должны перелогиниться.
+## 12. Масштабирование и ограничения
 
-### 11.2 Назначение админа
+- Вертикально: `WORKER_MAX` — максимум 200 при 4 vCPU, не выше `DB_MAX_CONNECTIONS * 1.5`; `DB_MAX_CONNECTIONS` — в пределах `pg_settings.max_connections - 10` (запас на админские сессии); `REDIS_POOL_SIZE` 50-200 достаточно.
+- Горизонтально: API stateless, несколько экземпляров ок; worker безопасен в multi-instance через Redis distributed lock.
+- Обновление ELO delta-based: параллельные матчи одного участника могут давать snapshot-based deltas; для строгой сериализации нужен advisory lock.
+- Docker-in-Docker worker монтирует `docker.sock` read-only с non-root пользователем: на хосте должна существовать docker-group с совпадающим GID.
 
-```bash
-make admin EMAIL=foo@bar.com
-```
+## 13. Профили железа и быстрый self-hosted старт
 
-### 11.3 Миграции БД
-
-```bash
-make migrate-up                      # применить pending
-make migrate-down                    # откат последней (только dev)
-make migrate-create NAME=add_foo     # шаблон новой миграции
-```
-
-### 11.4 Сброс пароля пользователя
-
-```sql
--- bcrypt-hash (cost 12, как в auth.Service):
--- SELECT crypt('newpassword', gen_salt('bf', 12));
-UPDATE users SET password_hash = '$2a$12$...' WHERE email = 'foo@bar.com';
-```
-
-## 12. Масштабирование
-
-### 12.1 Вертикальное (single-node)
-
-- `WORKER_MAX`: максимум 200 при 4 vCPU; не ставить выше `DB_MAX_CONNECTIONS * 1.5`.
-- `DB_MAX_CONNECTIONS`: держим в пределах `pg_settings.max_connections - 10` с запасом на админские сессии.
-- `REDIS_POOL_SIZE`: 50-200 достаточно.
-
-### 12.2 Горизонтальное
-
-API stateless, запускается в нескольких экземплярах. Worker безопасен в multi-instance режиме через Redis distributed lock.
-
-## 13. Известные ограничения
-
-- Обновление ELO идёт delta-based: параллельные матчи одного участника могут давать snapshot-based deltas. Для строгой сериализации нужен advisory lock.
-- Docker-in-Docker worker монтирует `docker.sock` read-only с non-root пользователем. На хосте должна существовать docker-group с совпадающим GID.
-
-## 14. Профили железа и быстрый self-hosted старт
-
-Для запуска на своём сервере есть готовые профили под разное железо — они задают число воркеров, лимиты памяти/CPU на матч и размеры пулов БД/Redis (`config/profiles/{weak,medium,strong}.env`):
+Профили задают число воркеров, лимиты памяти/CPU на матч и пулы БД/Redis (`config/profiles/{weak,medium,strong}.env`):
 
 | Профиль | CPU | RAM | WORKER_MAX | Память/матч | Для кого |
 |---------|-----|-----|------------|-------------|----------|
@@ -439,17 +223,15 @@ API stateless, запускается в нескольких экземпляр
 | medium | 4 | 8 ГБ | 5 | 512 MiB | обычный сервер; до ~200 участников |
 | strong | 8+ | 16+ ГБ | 20 | 1 GiB | выделенный сервер; 500+ участников |
 
-Быстрый старт (self-hosted compose, миграции применяются автоматически сервисом `migrate`):
+Быстрый старт (self-hosted compose, миграции применяет сервис `migrate`):
 
 ```bash
 git clone https://github.com/bmstu-itstech/tjudge.git && cd tjudge
-make detect-profile       # показать рекомендуемый профиль по железу
-make deploy               # авто-профиль: определит железо, создаст секреты, соберёт и поднимет
-# либо вручную:
-make deploy-weak | make deploy-medium | make deploy-strong
-
-docker compose -f docker-compose.selfhosted.yml ps   # статус
+make detect-profile       # рекомендуемый профиль по железу
+make deploy               # авто: определит железо, создаст секреты, соберёт и поднимет
+# либо вручную: make deploy-weak | make deploy-medium | make deploy-strong
+docker compose -f docker-compose.selfhosted.yml ps
 curl http://localhost:8080/health                    # "OK"
 ```
 
-`make deploy*` вызывают `scripts/quick-deploy.sh <profile>`. Сменить профиль после запуска — остановить (`docker compose -f docker-compose.selfhosted.yml down`) и развернуть заново нужным `make deploy-*`.
+`make deploy*` вызывают `scripts/quick-deploy.sh <profile>`. Смена профиля — `docker compose -f docker-compose.selfhosted.yml down` и заново нужным `make deploy-*`.
