@@ -28,8 +28,8 @@ func TestServer_Close_Idempotent(t *testing.T) {
 	}
 }
 
-// TestServer_Close_NilStopCh - Close на только что созданном Server (без вызовов WithXxx)
-// не должен паниковать, даже если rateLimitStopCh не инициализирован.
+// TestServer_Close_NilStopCh - Close на пустом Server не должен паниковать,
+// даже если rateLimitStopCh не инициализирован
 func TestServer_Close_NilStopCh(t *testing.T) {
 	s := &Server{}
 	assert.NotPanics(t, func() { s.Close() })
