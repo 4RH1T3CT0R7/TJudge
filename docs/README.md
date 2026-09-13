@@ -19,8 +19,7 @@
 
 | Документ | Описание |
 |----------|----------|
-| [SELF_HOSTED.md](SELF_HOSTED.md) | Self-hosted развёртывание с Docker Compose |
-| [OPERATIONS.md](OPERATIONS.md) | Production деплой, runbook, бэкапы, мониторинг, инциденты |
+| [OPERATIONS.md](OPERATIONS.md) | Деплой (prod и self-hosted), профили железа, runbook, бэкапы, мониторинг, инциденты |
 
 ## Справочники API
 

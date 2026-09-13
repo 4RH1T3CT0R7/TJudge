@@ -1,6 +1,6 @@
 # TJudge - эксплуатация
 
-Документ для оператора: развёртывание, обновление, диагностика и восстановление. Рассчитан на self-hosted single-node. Для кластерного деплоя смотрите `deployments/k8s/` (экспериментальный режим).
+Документ для оператора: развёртывание, обновление, диагностика и восстановление. Рассчитан на self-hosted single-node. Быстрый старт с авто-подбором профиля железа — в §14.
 
 ## 1. Требования
 
@@ -422,9 +422,34 @@ UPDATE users SET password_hash = '$2a$12$...' WHERE email = 'foo@bar.com';
 
 ### 12.2 Горизонтальное
 
-API stateless, запускается в нескольких экземплярах. Worker безопасен в multi-instance режиме через Redis distributed lock. Переход в K8s: см. `deployments/k8s/` (требует доработки).
+API stateless, запускается в нескольких экземплярах. Worker безопасен в multi-instance режиме через Redis distributed lock.
 
 ## 13. Известные ограничения
 
 - Обновление ELO идёт delta-based: параллельные матчи одного участника могут давать snapshot-based deltas. Для строгой сериализации нужен advisory lock.
 - Docker-in-Docker worker монтирует `docker.sock` read-only с non-root пользователем. На хосте должна существовать docker-group с совпадающим GID.
+
+## 14. Профили железа и быстрый self-hosted старт
+
+Для запуска на своём сервере есть готовые профили под разное железо — они задают число воркеров, лимиты памяти/CPU на матч и размеры пулов БД/Redis (`config/profiles/{weak,medium,strong}.env`):
+
+| Профиль | CPU | RAM | WORKER_MAX | Память/матч | Для кого |
+|---------|-----|-----|------------|-------------|----------|
+| weak | 2 | 4 ГБ | 3 | 256 MiB | старый ноут, начальный VPS; турниры до ~50 участников |
+| medium | 4 | 8 ГБ | 5 | 512 MiB | обычный сервер; до ~200 участников |
+| strong | 8+ | 16+ ГБ | 20 | 1 GiB | выделенный сервер; 500+ участников |
+
+Быстрый старт (self-hosted compose, миграции применяются автоматически сервисом `migrate`):
+
+```bash
+git clone https://github.com/bmstu-itstech/tjudge.git && cd tjudge
+make detect-profile       # показать рекомендуемый профиль по железу
+make deploy               # авто-профиль: определит железо, создаст секреты, соберёт и поднимет
+# либо вручную:
+make deploy-weak | make deploy-medium | make deploy-strong
+
+docker compose -f docker-compose.selfhosted.yml ps   # статус
+curl http://localhost:8080/health                    # "OK"
+```
+
+`make deploy*` вызывают `scripts/quick-deploy.sh <profile>`. Сменить профиль после запуска — остановить (`docker compose -f docker-compose.selfhosted.yml down`) и развернуть заново нужным `make deploy-*`.
