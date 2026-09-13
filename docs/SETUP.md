@@ -1,69 +1,59 @@
 # Настройка и развёртывание TJudge
 
-## Быстрый старт
-
-### Требования
+## Требования
 
 | Компонент | Версия | Назначение |
 |-----------|--------|------------|
 | Docker | 20+ | Контейнеризация |
 | Docker Compose | 2+ | Оркестрация |
 | Go | 1.24+ | Локальная разработка |
-| Node.js | 20+ | Фронтенд разработка |
+| Node.js | 20+ | Фронтенд |
 | Make | - | Команды сборки |
 
-### Запуск (Docker Compose)
+## Быстрый старт (Docker Compose)
 
 ```bash
-# Клонирование и настройка
 git clone https://github.com/bmstu-itstech/tjudge.git
 cd tjudge
 cp .env.example .env
 
-# Запуск всех сервисов
 docker-compose up -d
-
-# Проверка
 docker-compose ps
 curl http://localhost:8080/health
 ```
 
-**Доступные сервисы:**
-
-| Сервис | URL | Описание |
-|--------|-----|----------|
-| Веб-приложение | http://localhost:8080 | Основной интерфейс |
-| API | http://localhost:8080/api/v1 | REST API |
-| Grafana | http://localhost:3000 | Мониторинг (admin/admin) |
-| Prometheus | http://localhost:9092 | Метрики |
-| Loki | http://localhost:3100 | Логи |
-
----
+| Сервис | URL |
+|--------|-----|
+| Веб-приложение | http://localhost:8080 |
+| API | http://localhost:8080/api/v1 |
+| Grafana | http://localhost:3000 (admin/admin) |
+| Prometheus | http://localhost:9092 |
+| Loki | http://localhost:3100 |
 
 ## Локальная разработка
 
-### Настройка окружения
-
 ```bash
-# 1. Запуск инфраструктуры
+# 1. Инфраструктура
 docker-compose up -d postgres redis
 
-# 2. Установка зависимостей
+# 2. Зависимости
 go mod download
 cd web && npm install && cd ..
 
-# 3. Применение миграций
+# 3. Миграции
 make migrate-up
 
-# 4. Запуск API (терминал 1)
+# 4. API (терминал 1)
 make run-api
 
-# 5. Запуск воркера (терминал 2)
+# 5. Воркер (терминал 2)
 make run-worker
 
-# 6. Запуск фронтенда в dev-режиме (терминал 3)
+# 6. Фронтенд (терминал 3)
 cd web && npm run dev
 ```
+
+Docker Compose пробрасывает PostgreSQL 5432 → 5433 на хосте, поэтому при локальной разработке используйте `DB_PORT=5433`.
 
 ### Команды Make
 
@@ -72,137 +62,116 @@ cd web && npm run dev
 | `make dev` | API с hot reload (air) |
 | `make run-api` | Запуск API сервера |
 | `make run-worker` | Запуск воркера |
-| `make test` | Unit тесты (~970 в internal/ + table-driven subtests) |
+| `make test` | Unit-тесты (~970 в internal/) |
 | `make test-race` | Тесты с детектором гонок |
 | `make test-coverage` | Тесты с покрытием |
 | `make lint` | Линтер (golangci-lint) |
 | `make build` | Сборка бинарников |
-| `make docker-build` | Сборка Docker образов |
+| `make docker-build` | Сборка Docker-образов |
 | `make migrate-up` | Применить миграции |
 | `make migrate-down` | Откатить миграции |
 | `make admin EMAIL=x@y.z` | Назначить администратора |
 
-### Работа с фронтендом
+### Фронтенд
 
 ```bash
 cd web
-npm run dev        # Режим разработки (http://localhost:5173)
+npm run dev        # Dev-режим (http://localhost:5173)
 npm run build      # Сборка для встраивания в Go
 npm run lint       # Линтинг
 npm run preview    # Предпросмотр сборки
 ```
 
-**Стек фронтенда:**
-- React 19
-- TypeScript 5.9
-- Vite 7.2
-- Tailwind CSS 4.1
-- Zustand 5.0 (state management)
-- React Query 5.90
+Стек: React 19, TypeScript 5.9, Vite 7.2, Tailwind CSS 4.1, Zustand 5.0, React Query 5.90.
 
-> После `npm run build` запустите `go build` для встраивания в бинарник.
-
----
+После `npm run build` запустите `go build` для встраивания фронтенда в бинарник.
 
 ## Конфигурация
 
-### Переменные окружения (.env)
-
-Конфигурация загружается через `godotenv` + `os.Getenv()` (см. `internal/config/config.go`).
-Файл `config.example.yaml` существует в корне проекта как справочник по структуре, но загрузка YAML не реализована - используются только переменные окружения.
-Для секретов в production поддерживается суффикс `_FILE` (Docker secrets) для переменных `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`.
+Загружается через `godotenv` + `os.Getenv()` (см. `internal/config/config.go`). Файл `config.example.yaml` в корне — только справочник по структуре, загрузка YAML не реализована. Для секретов в production поддерживается суффикс `_FILE` (Docker secrets) у `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`.
 
 ```bash
-# ─── Окружение ────────────────────────────────────────
+# ─── Окружение ───
 ENVIRONMENT=development        # development | production
 
-# ─── API Server ───────────────────────────────────────
-API_PORT=8080                  # Порт HTTP сервера
-BASE_URL=http://localhost:8080 # Базовый URL (для ссылок-приглашений и др.)
-READ_TIMEOUT=30s               # Таймаут чтения запроса
-WRITE_TIMEOUT=30s              # Таймаут записи ответа
+# ─── API Server ───
+API_PORT=8080
+BASE_URL=http://localhost:8080 # Для ссылок-приглашений и др.
+READ_TIMEOUT=30s
+WRITE_TIMEOUT=30s
 SHUTDOWN_TIMEOUT=10s           # Таймаут graceful shutdown
 
-# ─── PostgreSQL ───────────────────────────────────────
+# ─── PostgreSQL ───
 DB_HOST=localhost
-DB_PORT=5432                   # Внутренний порт PostgreSQL (по умолчанию 5432).
-                               # Docker Compose пробрасывает 5432 на 5433 на хосте,
-                               # поэтому при локальной разработке используйте DB_PORT=5433
+DB_PORT=5432                   # Локально с Docker используйте 5433 (см. выше)
 DB_USER=tjudge
-DB_PASSWORD=secret             # Поддерживает Docker secrets: DB_PASSWORD_FILE
+DB_PASSWORD=secret             # + DB_PASSWORD_FILE
 DB_NAME=tjudge
 DB_SSLMODE=disable             # disable | require | verify-full
-DB_MAX_CONNECTIONS=50          # Максимальное количество соединений
-DB_MAX_IDLE=10                 # Максимальное количество idle-соединений
-DB_MAX_LIFETIME=1h             # Максимальное время жизни соединения
+DB_MAX_CONNECTIONS=50
+DB_MAX_IDLE=10
+DB_MAX_LIFETIME=1h
 
-# ─── Redis ────────────────────────────────────────────
+# ─── Redis ───
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=                # Поддерживает Docker secrets: REDIS_PASSWORD_FILE
-REDIS_DB=0                     # Номер базы данных Redis
-REDIS_POOL_SIZE=100            # Размер пула соединений
+REDIS_PASSWORD=                # + REDIS_PASSWORD_FILE
+REDIS_DB=0
+REDIS_POOL_SIZE=100
 
-# ─── Worker Pool ──────────────────────────────────────
-WORKER_MIN=10                  # Минимальное количество воркеров (по умолчанию 10)
-WORKER_MAX=1000                # Максимальное количество воркеров (по умолчанию 1000)
-WORKER_QUEUE_SIZE=10000        # Размер внутренней очереди
-WORKER_TIMEOUT=90s             # Таймаут обработки матча
-WORKER_RETRY_ATTEMPTS=3        # Количество повторных попыток
-WORKER_RETRY_DELAY=5s          # Задержка между попытками
+# ─── Worker Pool ───
+WORKER_MIN=10
+WORKER_MAX=1000
+WORKER_QUEUE_SIZE=10000
+WORKER_TIMEOUT=90s
+WORKER_RETRY_ATTEMPTS=3
+WORKER_RETRY_DELAY=5s
 
-# ─── Executor (Docker-контейнер для матчей) ───────────
+# ─── Executor (Docker-контейнер для матчей) ───
 EXECUTOR_DOCKER_IMAGE=tjudge-cli:latest
-EXECUTOR_TIMEOUT=60s           # Таймаут выполнения матча
-EXECUTOR_CPU_QUOTA=100000      # Лимит CPU (микросекунды на 100ms)
-EXECUTOR_MEMORY_LIMIT=536870912  # Лимит памяти: 512MB
-EXECUTOR_PIDS_LIMIT=100        # Лимит процессов в контейнере
-EXECUTOR_NETWORK_DISABLED=true # Отключить сеть в контейнере
-EXECUTOR_DEFAULT_ITERATIONS=100 # Количество итераций по умолчанию
+EXECUTOR_TIMEOUT=60s
+EXECUTOR_CPU_QUOTA=100000      # Микросекунды на 100ms
+EXECUTOR_MEMORY_LIMIT=536870912  # 512MB
+EXECUTOR_PIDS_LIMIT=100
+EXECUTOR_NETWORK_DISABLED=true
+EXECUTOR_DEFAULT_ITERATIONS=100
 
-# ─── JWT (ОБЯЗАТЕЛЬНО измените в production!) ─────────
-JWT_SECRET=your-secret-key-minimum-32-characters  # Поддерживает Docker secrets: JWT_SECRET_FILE
-JWT_ACCESS_TTL=24h             # Время жизни access-токена (по умолчанию 24 часа)
-JWT_REFRESH_TTL=168h           # Время жизни refresh-токена (по умолчанию 7 дней)
+# ─── JWT (измените в production!) ───
+JWT_SECRET=your-secret-key-minimum-32-characters  # + JWT_SECRET_FILE
+JWT_ACCESS_TTL=24h
+JWT_REFRESH_TTL=168h           # 7 дней
 
-# ─── Хранилище программ ──────────────────────────────
-PROGRAMS_PATH=/data/programs   # Путь хранения загруженных программ
-HOST_PROGRAMS_PATH=            # Путь на хосте для Docker-in-Docker (если пусто, используется PROGRAMS_PATH)
-MAX_FILE_SIZE=10485760         # Максимальный размер файла: 10MB
+# ─── Хранилище программ ───
+PROGRAMS_PATH=/data/programs
+HOST_PROGRAMS_PATH=            # Путь на хосте для Docker-in-Docker; пусто → PROGRAMS_PATH
+MAX_FILE_SIZE=10485760         # 10MB
 
-# ─── CORS ─────────────────────────────────────────────
+# ─── CORS ───
 CORS_ALLOWED_ORIGINS=http://localhost:3000
-CORS_MAX_AGE=3600              # Время кэширования preflight-запросов (секунды)
+CORS_MAX_AGE=3600              # Кэш preflight, секунды
 
-# ─── Rate Limiting ────────────────────────────────────
-RATE_LIMIT_ENABLED=false       # Отключён по умолчанию для разработки
-RATE_LIMIT_RPM=100             # Запросов в минуту
-RATE_LIMIT_BURST=200           # Допустимый burst
+# ─── Rate Limiting ───
+RATE_LIMIT_ENABLED=false
+RATE_LIMIT_RPM=100
+RATE_LIMIT_BURST=200
 
-# ─── Логирование ─────────────────────────────────────
-LOG_LEVEL=info                 # debug, info, warn, error
-LOG_FORMAT=json                # json, console
-LOG_OUTPUT=stdout              # stdout, stderr, путь к файлу
-LOG_ASYNC=true                 # Асинхронное логирование (рекомендуется для production)
+# ─── Логирование ───
+LOG_LEVEL=info                 # debug | info | warn | error
+LOG_FORMAT=json                # json | console
+LOG_OUTPUT=stdout              # stdout | stderr | путь к файлу
+LOG_ASYNC=true
 
-# ─── Метрики ─────────────────────────────────────────
+# ─── Метрики ───
 METRICS_ENABLED=true
 METRICS_PORT=9090
 METRICS_PATH=/metrics
 ```
 
----
-
 ## Production деплой
 
-### Управление секретами
-
-**Development:** Переменные окружения в `.env`
-
-**Production:** Docker Secrets
+Секреты — через Docker Secrets:
 
 ```bash
-# Создание секретов
 mkdir -p secrets
 echo "your-db-password" > secrets/db_password.txt
 echo "your-jwt-secret-min-32-chars" > secrets/jwt_secret.txt
@@ -227,36 +196,20 @@ secrets:
     file: ./secrets/jwt_secret.txt
 ```
 
-### Запуск в production
-
 ```bash
-# Загрузка образов
 docker-compose -f docker-compose.prod.yml pull
-
-# Запуск
 docker-compose -f docker-compose.prod.yml up -d
-
-# Масштабирование воркеров
-docker-compose up -d --scale worker=5
-
-# Проверка
+docker-compose up -d --scale worker=5   # Масштабирование воркеров
 curl http://localhost:8080/health
 ```
 
 ### Blue-Green деплой
 
 ```bash
-# Деплой синей версии
-./scripts/blue-green-deploy.sh blue
-
-# Переключение трафика
-./scripts/switch-traffic.sh blue
-
-# Smoke-тесты
-./scripts/smoke-test.sh
-
-# Откат при проблемах
-./scripts/rollback.sh
+./scripts/blue-green-deploy.sh blue   # Деплой синей версии
+./scripts/switch-traffic.sh blue      # Переключение трафика
+./scripts/smoke-test.sh               # Smoke-тесты
+./scripts/rollback.sh                 # Откат
 ```
 
 ### Рекомендации по ресурсам
@@ -268,78 +221,32 @@ curl http://localhost:8080/health
 | PostgreSQL | 2 ядра | 4GB | 1 |
 | Redis | 1 ядро | 1GB | 1 |
 
----
-
 ## Мониторинг
 
-### Grafana дашборды
+Grafana (http://localhost:3000, admin/admin) — дашборды: TJudge Overview, Workers, API, Database.
 
-http://localhost:3000 (admin/admin)
-
-- **TJudge Overview** - общая статистика
-- **Workers** - очередь, воркеры, время обработки
-- **API** - запросы, латентность
-- **Database** - соединения, длительность запросов
-
-### Prometheus метрики
+Prometheus-запросы:
 
 ```promql
-# Матчей в очереди
-tjudge_queue_size{priority="high"}
-
-# Активных воркеров
-tjudge_workers_active
-
-# HTTP латентность (p99)
-histogram_quantile(0.99, tjudge_http_request_duration_seconds_bucket)
-
-# Обработано матчей
-rate(tjudge_matches_total[5m])
+tjudge_queue_size{priority="high"}                                        # Матчей в очереди
+tjudge_workers_active                                                     # Активных воркеров
+histogram_quantile(0.99, tjudge_http_request_duration_seconds_bucket)     # HTTP p99
+rate(tjudge_matches_total[5m])                                            # Обработано матчей
 ```
 
-### Loki (логирование)
-
-http://localhost:3100
-
-Логи собираются через Promtail и доступны в Grafana.
-
-### Alertmanager
-
-http://localhost:9093
-
-Настроенные алерты в `deployments/prometheus/alerts/tjudge.yml`.
-
----
+- Loki (http://localhost:3100) — логи через Promtail, доступны в Grafana.
+- Alertmanager (http://localhost:9093) — алерты в `deployments/prometheus/alerts/tjudge.yml`.
 
 ## CI/CD
-
-### GitHub Actions
 
 | Workflow | Описание |
 |----------|----------|
 | `ci.yml` | Линт, тесты, сборка |
 | `release.yml` | Сборка образов и деплой по тегу v* |
 
-### Запуск CI локально
-
-```bash
-# Линтинг
-make lint
-
-# Тесты
-make test
-make test-race
-
-# Сборка
-make build
-make docker-build
-```
-
----
+Локальный прогон: `make lint`, `make test`, `make test-race`, `make build`, `make docker-build`.
 
 ## Устранение неполадок
-
-### Частые проблемы
 
 | Проблема | Решение |
 |----------|---------|
@@ -347,68 +254,40 @@ make docker-build
 | `air: command not found` | `go install github.com/air-verse/air@latest` + `export PATH=$PATH:~/go/bin` |
 | `connection refused :8080` | Сервер не запущен, проверьте логи |
 | `Internal server error` | Миграции не применены: `make migrate-up` |
-| Матчи не обрабатываются | Проверьте воркер: `docker-compose logs worker` |
+| Матчи не обрабатываются | `docker-compose logs worker` |
 | `pattern all:dist: no matching files found` | Фронтенд не собран: `cd web && npm run build` |
 
-### Диагностика
+Диагностика:
 
 ```bash
-# Статус контейнеров
-docker-compose ps
-
-# Логи сервисов
-docker-compose logs -f api worker
-
-# Подключение к БД
-docker exec -it tjudge-postgres psql -U tjudge -d tjudge
-
-# Очередь Redis
-docker exec tjudge-redis redis-cli LLEN queue:high
-
-# Очистка и перезапуск
-docker-compose down -v
-docker-compose up -d
+docker-compose ps                                          # Статус контейнеров
+docker-compose logs -f api worker                          # Логи
+docker exec -it tjudge-postgres psql -U tjudge -d tjudge   # Подключение к БД
+docker exec tjudge-redis redis-cli LLEN queue:high         # Очередь Redis
+docker-compose down -v && docker-compose up -d             # Очистка и перезапуск
 ```
 
-### Резервное копирование
+Бэкап:
 
 ```bash
-# PostgreSQL бэкап
+# PostgreSQL
 docker exec tjudge-postgres pg_dump -U tjudge tjudge > backup.sql
-
-# PostgreSQL восстановление
 docker exec -i tjudge-postgres psql -U tjudge -d tjudge < backup.sql
 
-# Redis бэкап
+# Redis
 docker exec tjudge-redis redis-cli BGSAVE
 docker cp tjudge-redis:/data/dump.rdb ./backup/
 ```
 
----
-
 ## Безопасность
 
-### Рекомендации
-
-1. **Никогда** не коммитьте секреты в Git
-2. Добавьте `secrets/` и `.env` в `.gitignore`
-3. Используйте Docker Secrets в production
-4. JWT secret минимум 32 символа
-5. Регулярно ротируйте секреты
-6. Настройте rate limiting (`RATE_LIMIT_RPM`)
-
-### Проверка безопасности
+- Не коммитьте секреты; `secrets/` и `.env` — в `.gitignore`.
+- В production — Docker Secrets, JWT secret минимум 32 символа, ротация секретов.
+- Настройте rate limiting (`RATE_LIMIT_RPM`).
 
 ```bash
 # Сканирование зависимостей Go
 go list -json -m all | docker run --rm -i sonatypecommunity/nancy:latest sleuth
-
-# Сканирование Docker образов
+# Сканирование Docker-образов
 docker scan tjudge-api:latest
 ```
-
----
-
-*Версия документации: 3.1*
-*Последнее обновление: Март 2026*
-
