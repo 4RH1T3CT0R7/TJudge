@@ -331,15 +331,15 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 		// по коду понятно чья программа упала
 		switch exitCode {
 		case 1:
-			errorParts = append(errorParts, "❌ Программа 1 завершилась с ошибкой:")
+			errorParts = append(errorParts, "Программа 1 завершилась с ошибкой:")
 			result.Winner = 2 // побеждает программа 2
 		case 2:
-			errorParts = append(errorParts, "❌ Программа 2 завершилась с ошибкой:")
+			errorParts = append(errorParts, "Программа 2 завершилась с ошибкой:")
 			result.Winner = 1 // побеждает программа 1
 		default:
 			// системная ошибка с неизвестным кодом. ErrorCode уже выставлен выше,
 			// winner остаётся 0 (ничья), матч запишется как failed
-			errorParts = append(errorParts, fmt.Sprintf("❌ Ошибка выполнения (код %d):", exitCode))
+			errorParts = append(errorParts, fmt.Sprintf("Ошибка выполнения (код %d):", exitCode))
 		}
 
 		// stderr - основной источник ошибки
