@@ -208,7 +208,7 @@ check_system_status() {
         || add crit db "PostgreSQL unhealthy" "docker logs --tail=100 tjudge-postgres; проверьте DB_* в .env"
 
     [ "$(q '.data.database.schema_dirty')" = "true" ] \
-        && add crit db-schema "миграции в состоянии DIRTY" "незавершённая миграция: golang-migrate требует ручного вмешательства (docs/DATABASE_SCHEMA.md)"
+        && add crit db-schema "миграции в состоянии DIRTY" "незавершённая миграция: golang-migrate требует ручного вмешательства (см. docs/OPERATIONS.md)"
 
     [ "$(q '.data.redis.healthy')" = "true" ] \
         && add ok redis "Redis healthy" \

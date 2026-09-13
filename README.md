@@ -147,7 +147,7 @@ CI/CD (GitHub Actions): `ci` (фронтенд + линт, тесты, сбор�
 
 ## API
 
-Основные эндпоинты (полный справочник — [docs/API_GUIDE.md](docs/API_GUIDE.md)):
+Основные эндпоинты (полный справочник — [docs/openapi.yaml](docs/openapi.yaml), Swagger UI на `/swagger/` под админом):
 
 | Метод | Путь | Описание |
 |-------|------|----------|
@@ -173,12 +173,10 @@ CI/CD (GitHub Actions): `ci` (фронтенд + линт, тесты, сбор�
 
 | Документ | Описание |
 |----------|----------|
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Руководство пользователя и администратора |
-| [docs/SETUP.md](docs/SETUP.md) | Настройка окружения и локальная разработка |
-| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Production-деплой, runbook, бэкапы, мониторинг |
-| [docs/API_GUIDE.md](docs/API_GUIDE.md) | REST API и WebSocket эндпоинты |
-| [docs/DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Схема базы данных |
-| [docs/ADDING_GAMES.md](docs/ADDING_GAMES.md) | Добавление новых игр |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Участие в турнирах, стратегии, правила игр, добавление игры |
+| [docs/SETUP.md](docs/SETUP.md) | Локальная разработка, окружение, схема БД |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Деплой, runbook, бэкапы, мониторинг |
+| [docs/openapi.yaml](docs/openapi.yaml) | Полный справочник REST API (Swagger на `/swagger/`) |
 
 ## Лицензия
 
