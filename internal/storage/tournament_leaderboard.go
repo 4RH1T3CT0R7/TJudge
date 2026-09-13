@@ -109,7 +109,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 	// team_id используется для связи матчей (чтобы учитывать все версии программ команды)
 	query := `
 		WITH latest_programs AS (
-			-- Получаем последние версии программ для отображения имени
+			-- последние версии программ для отображения имени
 			SELECT DISTINCT ON (p.team_id, p.game_id)
 				p.id as program_id,
 				p.name as program_name,
@@ -268,7 +268,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 	// team_id используется для агрегации (чтобы учитывать все версии программ команды)
 	query := `
 		WITH latest_programs AS (
-			-- Получаем последние версии программ для отображения имени
+			-- последние версии программ для отображения имени
 			SELECT DISTINCT ON (p.team_id)
 				p.id as program_id,
 				p.name as program_name,
