@@ -30,15 +30,15 @@ type MatchQueueManager interface {
 	PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error)
 }
 
-// поиск владельца программы для фильтрации текста ошибок
-type MatchProgramLookup interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
+// UserProgramLister - программы юзера и всех его команд (для фильтра текста ошибок)
+type UserProgramLister interface {
+	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error)
 }
 
 // MatchHandler обслуживает запросы к матчам
 type MatchHandler struct {
 	matchRepo     MatchRepository
-	programLookup MatchProgramLookup
+	programLookup UserProgramLister
 	queueManager  MatchQueueManager
 	log           *logger.Logger
 }
@@ -46,7 +46,7 @@ type MatchHandler struct {
 // NewMatchHandler собирает хендлер матчей. programLookup и queueManager
 // опциональны и могут быть nil - без них хендлер продолжает работать,
 // просто отключая связанные с ними возможности
-func NewMatchHandler(matchRepo MatchRepository, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
+func NewMatchHandler(matchRepo MatchRepository, programLookup UserProgramLister, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
 	return &MatchHandler{
 		matchRepo:     matchRepo,
 		programLookup: programLookup,
@@ -55,60 +55,63 @@ func NewMatchHandler(matchRepo MatchRepository, programLookup MatchProgramLookup
 	}
 }
 
-// filterMatchError прячет текст ошибки от чужих глаз: владелец упавшей
-// программы и админ видят полный текст, остальным отдаётся обезличенное сообщение
-func (h *MatchHandler) filterMatchError(ctx context.Context, match *models.Match, userID uuid.UUID, isAdmin bool) *models.Match {
-	// нет ошибки или некому проверять владельца - отдаётся как есть
-	if match.ErrorMessage == nil || *match.ErrorMessage == "" || h.programLookup == nil {
-		return match
+// redactMatchErrors прячет текст ошибок матчей (вывод упавшей программы):
+// целиком его видят админ и команда упавшей программы, остальные, включая
+// анонимов, - обезличенную формулировку. через неё идут все ручки, отдающие
+// матчи; programs == nil - прячется всё
+func redactMatchErrors(ctx context.Context, programs UserProgramLister, matches []*models.Match) {
+	if isAdmin(ctx) {
+		return
 	}
 
-	// админу показывается всё без фильтрации
-	if isAdmin {
-		return match
-	}
+	var own map[uuid.UUID]bool
+	for _, m := range matches {
+		if m.ErrorMessage == nil || *m.ErrorMessage == "" {
+			continue
+		}
 
-	// winner=1 значит упала вторая программа, winner=2 - первая
-	var failedProgramID uuid.UUID
-	if match.Winner != nil {
-		if *match.Winner == 1 {
-			failedProgramID = match.Program2ID
-		} else if *match.Winner == 2 {
-			failedProgramID = match.Program1ID
+		// winner=1 значит упала вторая программа, winner=2 - первая
+		var failed uuid.UUID
+		if m.Winner != nil {
+			switch *m.Winner {
+			case 1:
+				failed = m.Program2ID
+			case 2:
+				failed = m.Program1ID
+			}
+		}
+		// победителя нет - непонятно, чья программа упала, поэтому скрывается
+		if failed == uuid.Nil {
+			msg := "Ошибка выполнения матча"
+			m.ErrorMessage = &msg
+			continue
+		}
+
+		if own == nil {
+			own = ownProgramIDs(ctx, programs)
+		}
+		if !own[failed] {
+			msg := "Программа оппонента завершилась с ошибкой"
+			m.ErrorMessage = &msg
 		}
 	}
-
-	// победителя нет - непонятно, чья программа упала, поэтому скрывается
-	if failedProgramID == uuid.Nil {
-		opponentError := "Ошибка выполнения матча"
-		match.ErrorMessage = &opponentError
-		return match
-	}
-
-	program, err := h.programLookup.GetByID(ctx, failedProgramID)
-	if err != nil {
-		h.log.Warn("Failed to get program for error filtering", zap.Error(err))
-		opponentError := "Ошибка выполнения матча"
-		match.ErrorMessage = &opponentError
-		return match
-	}
-
-	// свою ошибку пользователь видит целиком
-	if program.UserID == userID {
-		return match
-	}
-
-	// чужую - только общей формулировкой
-	opponentError := "Программа оппонента завершилась с ошибкой"
-	match.ErrorMessage = &opponentError
-	return match
 }
 
-func (h *MatchHandler) filterMatchesErrors(ctx context.Context, matches []*models.Match, userID uuid.UUID, isAdmin bool) []*models.Match {
-	for i, match := range matches {
-		matches[i] = h.filterMatchError(ctx, match, userID, isAdmin)
+// ownProgramIDs - программы команд текущего юзера; при ошибке пусто (всё прячется)
+func ownProgramIDs(ctx context.Context, programs UserProgramLister) map[uuid.UUID]bool {
+	own := map[uuid.UUID]bool{}
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok || programs == nil {
+		return own
 	}
-	return matches
+	list, err := programs.GetByUserID(ctx, userID)
+	if err != nil {
+		return own
+	}
+	for _, p := range list {
+		own[p.ID] = true
+	}
+	return own
 }
 
 // @Summary Получить матч
@@ -134,10 +137,7 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
-	isAdmin := userRole == models.RoleAdmin
-	match = h.filterMatchError(r.Context(), match, userID, isAdmin)
+	redactMatchErrors(r.Context(), h.programLookup, []*models.Match{match})
 
 	writeJSON(w, http.StatusOK, match)
 }
@@ -207,10 +207,7 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// чужие ошибки скрываются в каждом матче списка
-	userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
-	isAdmin := userRole == models.RoleAdmin
-	matches = h.filterMatchesErrors(r.Context(), matches, userID, isAdmin)
+	redactMatchErrors(r.Context(), h.programLookup, matches)
 
 	writeJSON(w, http.StatusOK, matches)
 }

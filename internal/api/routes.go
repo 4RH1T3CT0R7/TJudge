@@ -280,15 +280,16 @@ func (s *Server) setupRoutes() {
 			r.Get("/{id}", s.tournamentHandler.Get)
 			r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
 			r.Get("/{id}/cross-game-leaderboard", s.tournamentHandler.GetCrossGameLeaderboard)
-			r.Get("/{id}/matches", s.tournamentHandler.GetMatches)
-			r.Get("/{id}/matches/rounds", s.tournamentHandler.GetMatchesByRounds)
+			// токен необязателен: своей команде текст ошибок матчей виден целиком
+			r.With(s.optionalAuth()).Get("/{id}/matches", s.tournamentHandler.GetMatches)
+			r.With(s.optionalAuth()).Get("/{id}/matches/rounds", s.tournamentHandler.GetMatchesByRounds)
 			r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
 			r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
 
 			// по конкретной игре турнира
 			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
 			r.Get("/{id}/games/{gameId}/head-to-head", s.gameHandler.GetHeadToHead)
-			r.Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
+			r.With(s.optionalAuth()).Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
 			r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
 			r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
 			if s.ratingHistoryHandler != nil {

@@ -489,6 +489,14 @@ func (m *MockGameProgramRepository) GetByTournamentAndGame(ctx context.Context, 
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
+func (m *MockGameProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Program), args.Error(1)
+}
+
 type MockTournamentGameStatusRepository struct {
 	mock.Mock
 }

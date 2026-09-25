@@ -423,6 +423,7 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 		writeError(w, err)
 		return
 	}
+	redactMatchErrors(r.Context(), h.programRepo, matches)
 
 	writeJSON(w, http.StatusOK, matches)
 }

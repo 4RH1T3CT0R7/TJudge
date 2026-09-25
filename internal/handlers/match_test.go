@@ -76,17 +76,17 @@ func (m *MockMatchQueueManager) PurgeInvalidMatches(ctx context.Context, validat
 	return args.Get(0).(int64), args.Error(1)
 }
 
-// MockMatchProgramLookup - мок поиска владельца программы
+// MockMatchProgramLookup - мок списка программ юзера и его команд
 type MockMatchProgramLookup struct {
 	mock.Mock
 }
 
-func (m *MockMatchProgramLookup) GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error) {
-	args := m.Called(ctx, id)
+func (m *MockMatchProgramLookup) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
+	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*models.Program), args.Error(1)
+	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
 // getWithRouteContext собирает GET-запрос с id в chi-контексте
@@ -410,12 +410,13 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		program2ID := uuid.New()
 		errorMsg := "segfault in user code at line 15"
 
-		// winner=1 значит победил program1, упал program2
+		// winner=1 значит победил program1, упал program2. загрузил его
+		// сокомандник, но программа командная - текст виден всей команде
 		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
-		failedProgram := &models.Program{ID: program2ID, UserID: ownerID, Name: "my-bot"}
+		teamProgram := &models.Program{ID: program2ID, UserID: uuid.New(), Name: "my-bot"}
 
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
+		mockProgramLookup.On("GetByUserID", mock.Anything, ownerID).Return([]*models.Program{teamProgram}, nil)
 
 		req := getWithRouteContext(matchID.String())
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, ownerID)
@@ -443,18 +444,17 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		handler := NewMatchHandler(mockRepo, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
-		programOwnerID := uuid.New()
 		otherUserID := uuid.New()
 		program1ID := uuid.New()
 		program2ID := uuid.New()
 		errorMsg := "segfault in user code at line 15"
 
-		// упала program2, но запрашивает не её владелец
+		// упала program2, но запрашивает не её команда
 		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
-		failedProgram := &models.Program{ID: program2ID, UserID: programOwnerID, Name: "opponent-bot"}
+		ownProgram := &models.Program{ID: program1ID, UserID: otherUserID, Name: "my-bot"}
 
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
-		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
+		mockProgramLookup.On("GetByUserID", mock.Anything, otherUserID).Return([]*models.Program{ownProgram}, nil)
 
 		req := getWithRouteContext(matchID.String())
 		ctx := context.WithValue(req.Context(), middleware.UserIDKey, otherUserID)

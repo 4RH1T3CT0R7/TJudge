@@ -47,6 +47,7 @@ type GameTournamentRepository interface {
 
 type GameProgramRepository interface {
 	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error)
+	UserProgramLister
 }
 
 // GameRoundResetter - ручной сброс раунда игры под общим локом планирования турнира.

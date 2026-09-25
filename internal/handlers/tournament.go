@@ -46,14 +46,16 @@ type SchedulingService interface {
 type TournamentHandler struct {
 	tournamentService TournamentService
 	schedulingService SchedulingService
+	programs          UserProgramLister // для фильтра текста ошибок матчей
 	log               *logger.Logger
 }
 
 // NewTournamentHandler собирает хендлер из сервисов турниров и планировщика.
-func NewTournamentHandler(tournamentService TournamentService, schedulingService SchedulingService, log *logger.Logger) *TournamentHandler {
+func NewTournamentHandler(tournamentService TournamentService, schedulingService SchedulingService, programs UserProgramLister, log *logger.Logger) *TournamentHandler {
 	return &TournamentHandler{
 		tournamentService: tournamentService,
 		schedulingService: schedulingService,
+		programs:          programs,
 		log:               log,
 	}
 }
@@ -402,6 +404,7 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	redactMatchErrors(r.Context(), h.programs, matches)
 
 	writeJSON(w, http.StatusOK, matches)
 }
@@ -428,6 +431,9 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 		)
 		writeError(w, err)
 		return
+	}
+	for _, round := range rounds {
+		redactMatchErrors(r.Context(), h.programs, round.Matches)
 	}
 
 	writeJSON(w, http.StatusOK, rounds)

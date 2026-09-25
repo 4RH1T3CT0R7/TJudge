@@ -206,7 +206,7 @@ func main() {
 
 	// handlers
 	authHandler := handlers.NewAuthHandler(authService, log)
-	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
+	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, programRepo, log)
 	programHandler := handlers.NewProgramHandler(
 		programRepo, tournamentRepo,
 		gameService, matchRepo, gameRepo,
