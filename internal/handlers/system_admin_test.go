@@ -111,27 +111,17 @@ func (s *stubRecoveryCompileQueue) Enqueue(_ context.Context, id uuid.UUID) erro
 }
 
 type stubRecoveryMatches struct {
-	stuck []*models.Match
-	reset []uuid.UUID
+	reset     int64
+	threshold time.Duration
 }
 
-func (s *stubRecoveryMatches) GetStuckRunning(_ context.Context, _ time.Duration, _ int) ([]*models.Match, error) {
-	return s.stuck, nil
-}
-
-func (s *stubRecoveryMatches) ResetToPending(_ context.Context, id uuid.UUID) error {
-	s.reset = append(s.reset, id)
-	return nil
+func (s *stubRecoveryMatches) ResetStuckRunning(_ context.Context, stuckDuration time.Duration, _ int) (int64, error) {
+	s.threshold = stuckDuration
+	return s.reset, nil
 }
 
 type stubRecoveryQueue struct {
-	enqueued []uuid.UUID
-	cleared  int64
-}
-
-func (s *stubRecoveryQueue) Enqueue(_ context.Context, m *models.Match) error {
-	s.enqueued = append(s.enqueued, m.ID)
-	return nil
+	cleared int64
 }
 
 func (s *stubRecoveryQueue) ClearDeadLetter(_ context.Context) (int64, error) { return s.cleared, nil }
@@ -174,22 +164,13 @@ func TestRecovery_RequeueCompiling(t *testing.T) {
 
 func TestRecovery_ResetStuckMatches(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	stuck := []*models.Match{
-		{ID: uuid.New(), Status: models.MatchRunning},
-		{ID: uuid.New(), Status: models.MatchRunning},
-	}
-	mr := &stubRecoveryMatches{stuck: stuck}
-	qm := &stubRecoveryQueue{}
-	h := NewSystemRecoveryHandler(nil, nil, nil, mr, qm, 2*time.Minute, log)
+	mr := &stubRecoveryMatches{reset: 2}
+	h := NewSystemRecoveryHandler(nil, nil, nil, mr, nil, 2*time.Minute, log)
 
 	data := recoveryResponse(t, h.ResetStuckMatches, "/system/recovery/reset-stuck-matches")
 	assert.Equal(t, int64(2), data["reset"])
-	assert.Len(t, mr.reset, 2)
-	// матчи вернулись в очередь уже со статусом pending
-	assert.Len(t, qm.enqueued, 2)
-	for _, m := range stuck {
-		assert.Equal(t, models.MatchPending, m.Status)
-	}
+	// порог тот же, что у recovery воркера
+	assert.Equal(t, 2*time.Minute, mr.threshold)
 }
 
 func TestRecovery_ClearDeadLetter(t *testing.T) {
