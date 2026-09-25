@@ -597,6 +597,50 @@ func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 }
 
 // v1 ready, v2 failed: в раунд идёт v1; программа игры, не привязанной к турниру, не участвует
+// авто-раунд: новой считается последняя готовая версия команды, ставшая ready после
+// since. компиляция и неудачная сборка раунд не запускают, правка старой версии тоже
+func (s *TournamentRepositorySuite) TestHasNewProgramsSince() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_hnp")
+	tournament := s.createTrackedTournament("TPHNP1", user.ID)
+	game := s.createTrackedGame("hnp_game")
+	team := s.createTrackedTeam(tournament.ID, user.ID, "THNP01")
+
+	dbNow := func() time.Time {
+		var now time.Time
+		require.NoError(s.T(), s.database.GetContext(ctx, &now, "SELECT NOW()"))
+		return now
+	}
+	hasNew := func(since time.Time) bool {
+		ok, err := s.gameRepo.HasNewProgramsSince(ctx, tournament.ID, game.Name, since)
+		require.NoError(s.T(), err)
+		return ok
+	}
+	compiling := func(version int) *models.Program {
+		p := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, fmt.Sprintf("BotHNP%d", version), version)
+		_, err := s.database.ExecContext(ctx, "UPDATE programs SET status = 'compiling' WHERE id = $1", p.ID)
+		require.NoError(s.T(), err)
+		return p
+	}
+
+	v1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotHNP1", 1)
+	since := dbNow()
+
+	v2 := compiling(2)
+	assert.False(s.T(), hasNew(since), "compiling")
+	require.NoError(s.T(), s.programRepo.UpdateCompileResult(ctx, v2.ID, models.ProgramFailed, v2.CodePath, nil))
+	assert.False(s.T(), hasNew(since), "failed")
+
+	v3 := compiling(3)
+	require.NoError(s.T(), s.programRepo.UpdateCompileResult(ctx, v3.ID, models.ProgramReady, v3.CodePath, nil))
+	assert.True(s.T(), hasNew(since), "ready")
+
+	since = dbNow()
+	v1.Name = "BotHNP1_renamed"
+	require.NoError(s.T(), s.programRepo.Update(ctx, v1))
+	assert.False(s.T(), hasNew(since), "правка старой версии")
+}
+
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame_UsesLatestReadyVersion() {
 	ctx := context.Background()
 	user := s.createTrackedUser("tp_lrv")
