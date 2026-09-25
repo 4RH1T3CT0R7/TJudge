@@ -71,6 +71,19 @@ function humanErrorMessage(
   }
 }
 
+// Auth-ручки, которым refresh по 401 не нужен: токена ещё нет (login,
+// register), refresh зациклился бы (refresh), logout шлёт refresh-токен
+// в теле, и ротация перед ним отозвала бы не тот токен.
+// /auth/me и /auth/profile сюда не входят: истёкший access на них
+// должен обновляться, как и на остальных ручках.
+const NO_REFRESH_AUTH_ENDPOINT = /\/auth\/(login|register|refresh|logout)$/;
+
+// Сессия недействительна только по отказу сервера (401) или без refresh-токена.
+// Сеть и 5xx - временные: токены не стираются, пользователь не разлогинивается.
+function isAuthRejection(error: unknown): boolean {
+  return !axios.isAxiosError(error) || error.response?.status === 401;
+}
+
 // isRetryableError возвращает true для transient-ошибок, где retry имеет смысл.
 function isRetryableError(error: AxiosError): boolean {
   // Network / timeout без response - retry полезен.
@@ -131,17 +144,13 @@ class ApiClient {
       async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config;
 
-        // Пропускаем refresh для auth-эндпоинтов (им не нужен refresh токена):
-        // - /auth/refresh: вызвал бы бесконечный цикл
-        // - /auth/logout: пользователь выходит, refresh не нужен
-        // - /auth/login: пользователь аутентифицируется, токена ещё нет
-        // - /auth/register: регистрация нового пользователя, токена не существует
-        // Также пропускаем, если запрос уже повторён или нет config
+        // Refresh пропускается для ручек из NO_REFRESH_AUTH_ENDPOINT,
+        // для уже повторённого запроса и без config
         const requestWithRetry = originalRequest as unknown as {
           _retry?: boolean;
           _retryCount?: number;
         };
-        const isAuthEndpoint = originalRequest?.url?.includes('/auth/');
+        const isAuthEndpoint = NO_REFRESH_AUTH_ENDPOINT.test(originalRequest?.url ?? '');
         if (
           error.response?.status === 401 &&
           originalRequest &&
@@ -153,17 +162,23 @@ class ApiClient {
           // Mutex предотвращает одновременные refresh-попытки
           try {
             await this.refreshTokenWithMutex();
-            // Повторяем исходный запрос с новым токеном
-            return this.client.request(originalRequest);
-          } catch {
-            // Refresh провалился - просто очищаем токены локально, не вызываем logout API
+          } catch (refreshError) {
+            // Сеть/5xx на refresh: сессия жива, запрос падает с ошибкой refresh,
+            // чтобы вызывающий (initialize) не принял её за отказ в доступе
+            if (!isAuthRejection(refreshError)) {
+              return Promise.reject(refreshError);
+            }
+            // Refresh отклонён - токены чистятся локально, logout API не вызывается
             // (вызов logout API привёл бы к ещё одному 401 и бесконечному циклу)
             this.clearTokens();
             // Уведомляем подписчиков (напр. auth store), чтобы React Router сделал navigate
             if (this.onAuthFailure) {
               this.onAuthFailure();
             }
+            return Promise.reject(error);
           }
+          // Повтор вне try: его собственная ошибка - не повод стирать токены
+          return this.client.request(originalRequest);
         }
 
         // Exponential backoff retry для transient-ошибок (5xx, 429, network).
@@ -277,15 +292,47 @@ class ApiClient {
     }
   }
 
+  /**
+   * Вкладки делят localStorage, а ротация refresh-токена одноразовая: второй
+   * refresh тем же токеном сервер отклонит. Web Lock не даёт вкладкам
+   * обновлять пару одновременно, а вкладка, дождавшаяся соседку, берёт её токен.
+   */
   async refreshToken(): Promise<void> {
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      await navigator.locks.request('tjudge-auth-refresh', () => this.refreshTokenOnce());
+      return;
+    }
+    await this.refreshTokenOnce();
+  }
+
+  private async refreshTokenOnce(): Promise<void> {
+    if (this.adoptStoredAccessToken()) return;
+
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) throw new Error('No refresh token');
 
-    const { data } = await this.client.post<AuthResponse>('/auth/refresh', {
-      refresh_token: refreshToken,
-    });
-    this.setAccessToken(data.access_token);
-    localStorage.setItem('refresh_token', data.refresh_token);
+    try {
+      const { data } = await this.client.post<AuthResponse>('/auth/refresh', {
+        refresh_token: refreshToken,
+      });
+      this.setAccessToken(data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+    } catch (err) {
+      // Без Web Locks вкладки могут столкнуться: проигравшая получает 401,
+      // а свежая пара победителя к этому моменту уже в localStorage
+      if (this.adoptStoredAccessToken()) return;
+      throw err;
+    }
+  }
+
+  // Берёт access-токен, сохранённый другой вкладкой, если он новее своего.
+  private adoptStoredAccessToken(): boolean {
+    const stored = localStorage.getItem('access_token');
+    if (stored && stored !== this.accessToken) {
+      this.accessToken = stored;
+      return true;
+    }
+    return false;
   }
 
   async logout(): Promise<void> {

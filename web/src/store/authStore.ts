@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import axios from 'axios';
 import type { User } from '../types';
 import api from '../api/client';
 
@@ -94,15 +95,21 @@ export const useAuthStore = create<AuthState>()(
           try {
             const user = await api.getMe();
             set({ user, isAuthenticated: true, isInitialized: true });
-          } catch {
-            // Token is invalid, clear it
-            api.clearTokens();
-            set({ user: null, isAuthenticated: false, isInitialized: true });
+          } catch (err) {
+            // Сессию сбрасывает только 401: интерцептор уже попробовал refresh,
+            // и сервер его отклонил. Сеть и 5xx на старте (деплой) токены не
+            // трогают: остаётся сохранённый пользователь, запросы пойдут,
+            // когда API оживёт.
+            if (axios.isAxiosError(err) && err.response?.status === 401) {
+              api.clearTokens();
+              set({ user: null, isAuthenticated: false });
+            }
+            set({ isInitialized: true });
           } finally {
             set({ isLoading: false });
           }
         } else {
-          set({ isInitialized: true });
+          set({ user: null, isAuthenticated: false, isInitialized: true });
         }
       },
     }),
