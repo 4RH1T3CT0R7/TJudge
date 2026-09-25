@@ -21,7 +21,6 @@ export function MatchesTab({
   pollInterval: number | false;
 }) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [hiddenRounds, setHiddenRounds] = useState<Set<string>>(new Set());
 
   const hideRound = (roundKey: string) => {
@@ -96,7 +95,7 @@ export function MatchesTab({
             <h2 className="text-xl font-bold text-gray-100">
               Матчи по раундам
             </h2>
-            {hasActiveMatches && autoRefresh && (
+            {hasActiveMatches && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 text-xs">
                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                 Обновление...
@@ -131,14 +130,6 @@ export function MatchesTab({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {hasActiveMatches && (
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`btn text-sm ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              {autoRefresh ? 'Авто-обновление вкл' : 'Авто-обновление выкл'}
-            </button>
-          )}
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
