@@ -14,7 +14,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -140,65 +139,6 @@ func (s *RedisTestSuite) TestCache_Exists() {
 }
 
 // =============================================================================
-// Leaderboard Cache Tests
-// =============================================================================
-
-func (s *RedisTestSuite) TestLeaderboardCache_UpdateAndGetTop() {
-	tournamentID := uuid.New()
-	program1 := uuid.New()
-	program2 := uuid.New()
-	program3 := uuid.New()
-
-	// Update ratings for programs
-	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program1, 1500)
-	require.NoError(s.T(), err)
-	err = s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program2, 1400)
-	require.NoError(s.T(), err)
-	err = s.leaderboardCache.UpdateRating(s.ctx, tournamentID, program3, 1300)
-	require.NoError(s.T(), err)
-
-	// Get top entries
-	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 10)
-	require.NoError(s.T(), err)
-	require.Len(s.T(), entries, 3)
-	assert.Equal(s.T(), 1500, entries[0].Rating)
-}
-
-func (s *RedisTestSuite) TestLeaderboardCache_IncrementRating() {
-	tournamentID := uuid.New()
-	programID := uuid.New()
-
-	// Set initial rating
-	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, programID, 1500)
-	require.NoError(s.T(), err)
-
-	// Increment rating
-	err = s.leaderboardCache.IncrementRating(s.ctx, tournamentID, programID, 100)
-	require.NoError(s.T(), err)
-
-	// Verify
-	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 1)
-	require.NoError(s.T(), err)
-	require.Len(s.T(), entries, 1)
-	assert.Equal(s.T(), 1600, entries[0].Rating)
-}
-
-func (s *RedisTestSuite) TestLeaderboardCache_ClearTournament() {
-	tournamentID := uuid.New()
-	programID := uuid.New()
-
-	err := s.leaderboardCache.UpdateRating(s.ctx, tournamentID, programID, 1500)
-	require.NoError(s.T(), err)
-
-	err = s.leaderboardCache.Clear(s.ctx, tournamentID)
-	require.NoError(s.T(), err)
-
-	entries, err := s.leaderboardCache.GetTop(s.ctx, tournamentID, 10)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), entries, 0)
-}
-
-// =============================================================================
 // Distributed Lock Tests
 // =============================================================================
 
@@ -298,27 +238,6 @@ func (s *RedisTestSuite) TestDistributedLock_ConcurrentAccess() {
 
 	// Counter should be exactly numGoroutines if locking works
 	assert.Equal(s.T(), numGoroutines, counter)
-}
-
-// =============================================================================
-// Sorted Set Operations Tests (for Queue)
-// =============================================================================
-
-func (s *RedisTestSuite) TestSortedSet_ZAdd() {
-	key := "test:sortedset"
-
-	// Add items with scores (priorities)
-	err := s.cache.ZAdd(s.ctx, key, 1.0, "item1")
-	require.NoError(s.T(), err)
-	err = s.cache.ZAdd(s.ctx, key, 2.0, "item2")
-	require.NoError(s.T(), err)
-	err = s.cache.ZAdd(s.ctx, key, 3.0, "item3")
-	require.NoError(s.T(), err)
-
-	// Verify with ZRevRangeWithScores
-	results, err := s.cache.ZRevRangeWithScores(s.ctx, key, 0, -1)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), results, 3)
 }
 
 func TestRedisSuite(t *testing.T) {

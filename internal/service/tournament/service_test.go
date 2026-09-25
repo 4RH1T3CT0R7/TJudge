@@ -548,9 +548,6 @@ func TestService_GetLeaderboard(t *testing.T) {
 		id := uuid.New()
 		programID := uuid.New()
 
-		// в кэше только частичные данные (id + рейтинг), полный лидерборд всё равно из бд
-		require.NoError(t, service.leaderboardCache.UpdateRating(ctx, id, programID, 1800))
-
 		entries := []*models.LeaderboardEntry{
 			{Rank: 1, ProgramID: programID, ProgramName: "bot-v1", Rating: 1800, Wins: 5, Losses: 2, TotalGames: 7},
 		}

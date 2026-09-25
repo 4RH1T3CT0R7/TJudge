@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -32,26 +31,8 @@ func (f *fakeTournamentCache) Invalidate(_ context.Context, id uuid.UUID) error 
 }
 
 type fakeLeaderboard struct {
-	updateRating   int
-	batchUpdates   int
-	clearIDs       []uuid.UUID
 	invalidateFull []uuid.UUID
 	err            error
-}
-
-func (f *fakeLeaderboard) UpdateRating(_ context.Context, _, _ uuid.UUID, _ int) error {
-	f.updateRating++
-	return f.err
-}
-
-func (f *fakeLeaderboard) UpdateRatingsBatch(_ context.Context, updates []cache.RatingUpdate) error {
-	f.batchUpdates += len(updates)
-	return f.err
-}
-
-func (f *fakeLeaderboard) Clear(_ context.Context, id uuid.UUID) error {
-	f.clearIDs = append(f.clearIDs, id)
-	return f.err
 }
 
 func (f *fakeLeaderboard) InvalidateFullLeaderboard(_ context.Context, id uuid.UUID) error {
@@ -115,11 +96,10 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 	assert.Equal(t, "tournament_update", br.calls[1].messageType)
 
 	n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: tid})
-	assert.Contains(t, lb.clearIDs, tid)
+	assert.Equal(t, []uuid.UUID{tid}, lb.invalidateFull)
 
 	n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: tid, ProgramID: uuid.New(), InitialRating: 1500})
-	assert.Equal(t, 1, lb.updateRating)
-	assert.Contains(t, lb.invalidateFull, tid)
+	assert.Len(t, lb.invalidateFull, 2)
 
 	n.MatchesCreated(ctx, MatchesCreated{Version: 1, TournamentID: tid, ProgramID: uuid.New(), MatchCount: 4})
 	last := br.calls[len(br.calls)-1]
@@ -128,8 +108,8 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 	assert.Equal(t, 4, payload["matches_count"])
 
 	n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid, GameID: uuid.New()})
-	// сброс раунда чистит лидерборд (второй Clear)
-	assert.Len(t, lb.clearIDs, 2)
+	// сброс раунда тоже чистит лидерборд
+	assert.Len(t, lb.invalidateFull, 3)
 }
 
 // --- топология воркера: лидерборд + редис, без кэша турниров и вебсокета ---
@@ -144,9 +124,8 @@ func TestSyncNotifier_WorkerTopology(t *testing.T) {
 	e := MatchResultProcessed{Version: 1, TournamentID: tid, MatchID: uuid.New(), NewRating1: 1516, NewRating2: 1484, Winner: 1}
 	n.MatchResultProcessed(ctx, e)
 
-	// два рейтинга пачкой + инвалидация полного лидерборда
-	assert.Equal(t, 2, lb.batchUpdates)
-	assert.Contains(t, lb.invalidateFull, tid)
+	// результат матча инвалидирует лидерборд турнира
+	assert.Equal(t, []uuid.UUID{tid}, lb.invalidateFull)
 
 	// ушло в редис с правильным конвертом
 	require.Len(t, pub.payloads, 1)
