@@ -856,13 +856,18 @@ func (r *GameRepository) IsAutoRoundEnabled(ctx context.Context, tournamentID, g
 	return enabled, nil
 }
 
+// HasNewProgramsSince - стала ли какая-то программа игры готовой после since.
+// смотрится updated_at ready-программ (момент перехода в ready после компиляции), а не
+// created_at: иначе раунд стартовал бы до окончания компиляции, а неудачная загрузка
+// сбрасывала бы игру
 func (r *GameRepository) HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error) {
 	var exists bool
 	query := `
 		SELECT EXISTS(
 			SELECT 1 FROM programs p
 			JOIN games g ON g.id = p.game_id
-			WHERE p.tournament_id = $1 AND g.name = $2 AND p.created_at > $3
+			WHERE p.tournament_id = $1 AND g.name = $2
+			  AND p.status = 'ready' AND p.updated_at > $3
 		)
 	`
 
