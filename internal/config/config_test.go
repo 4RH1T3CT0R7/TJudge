@@ -19,8 +19,8 @@ func validConfig() *Config {
 		Server:   ServerConfig{Port: 8080},
 		Database: DatabaseConfig{Host: "localhost", Port: 5432, User: "tjudge", Name: "tjudge", MaxConnections: 10},
 		Redis:    RedisConfig{Host: "localhost", Port: 6379},
-		Worker:   WorkerConfig{MinWorkers: 1, MaxWorkers: 10, QueueSize: 100, Timeout: 90 * time.Second},
-		Executor: ExecutorConfig{Timeout: 60 * time.Second, CompileWorkers: 2},
+		Worker:   WorkerConfig{MinWorkers: 1, MaxWorkers: 10, Timeout: 90 * time.Second},
+		Executor: ExecutorConfig{Timeout: time.Minute, MemoryLimit: 512 << 20, DefaultIterations: 100, CompileWorkers: 2},
 		JWT:      JWTConfig{Secret: "test-secret-minimum-length", AccessTTL: 15 * time.Minute, RefreshTTL: 24 * time.Hour},
 		Logging:  LoggingConfig{Level: "info", Format: "json"},
 	}
@@ -116,12 +116,20 @@ func TestConfig_Validate_WorkerMaxLessThanMin(t *testing.T) {
 	assert.Contains(t, err.Error(), "max_workers")
 }
 
-func TestConfig_Validate_WorkerQueueSizeLessThan1(t *testing.T) {
+// лимит памяти ниже докерного минимума и пустые таймауты ловятся на старте,
+// а не падением каждого матча
+func TestConfig_Validate_Executor(t *testing.T) {
 	cfg := validConfig()
-	cfg.Worker.QueueSize = 0
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "queue_size")
+	cfg.Executor.MemoryLimit = 512 // "512m" раньше парсилось как 512 байт
+	assert.ErrorContains(t, cfg.Validate(), "EXECUTOR_MEMORY_LIMIT")
+
+	cfg = validConfig()
+	cfg.Executor.Timeout = 0
+	assert.ErrorContains(t, cfg.Validate(), "EXECUTOR_TIMEOUT")
+
+	cfg = validConfig()
+	cfg.Executor.DefaultIterations = 0
+	assert.ErrorContains(t, cfg.Validate(), "EXECUTOR_DEFAULT_ITERATIONS")
 }
 
 // ctx воркера не должен истекать раньше таймаута контейнера: иначе таймаут
@@ -250,37 +258,38 @@ func TestGetEnv(t *testing.T) {
 	assert.Equal(t, "default", getEnv("NONEXISTENT_KEY_12345", "default"))
 }
 
-func TestGetEnvInt(t *testing.T) {
-	t.Setenv("TEST_INT", "42")
-	assert.Equal(t, 42, getEnvInt("TEST_INT", 0))
+func TestEnvReader(t *testing.T) {
+	var env envReader
 
-	t.Setenv("TEST_INT_INVALID", "not-a-number")
-	assert.Equal(t, 99, getEnvInt("TEST_INT_INVALID", 99))
-
-	assert.Equal(t, 10, getEnvInt("NONEXISTENT_KEY_12345", 10))
-}
-
-func TestGetEnvBool(t *testing.T) {
-	t.Setenv("TEST_BOOL_TRUE", "true")
-	assert.True(t, getEnvBool("TEST_BOOL_TRUE", false))
-
-	t.Setenv("TEST_BOOL_ONE", "1")
-	assert.True(t, getEnvBool("TEST_BOOL_ONE", false))
-
-	t.Setenv("TEST_BOOL_FALSE", "false")
-	assert.False(t, getEnvBool("TEST_BOOL_FALSE", true))
-
-	assert.True(t, getEnvBool("NONEXISTENT_KEY_12345", true))
-}
-
-func TestGetEnvDuration(t *testing.T) {
+	t.Setenv("TEST_INT", " 42 ")
+	t.Setenv("TEST_BOOL", "True")
 	t.Setenv("TEST_DUR", "5s")
-	assert.Equal(t, 5*time.Second, getEnvDuration("TEST_DUR", time.Minute))
+	assert.Equal(t, 42, env.Int("TEST_INT", 0))
+	assert.True(t, env.Bool("TEST_BOOL", false))
+	assert.Equal(t, 5*time.Second, env.Duration("TEST_DUR", time.Minute))
+	assert.Equal(t, 10, env.Int("NONEXISTENT_KEY_12345", 10))
+	assert.Empty(t, env.errs)
 
-	t.Setenv("TEST_DUR_INVALID", "not-duration")
-	assert.Equal(t, time.Minute, getEnvDuration("TEST_DUR_INVALID", time.Minute))
+	// опечатки копятся как ошибки, а не превращаются молча в дефолт
+	t.Setenv("TEST_INT_BAD", "512m")
+	t.Setenv("TEST_BOOL_BAD", "yes")
+	t.Setenv("TEST_DUR_BAD", "90")
+	assert.Equal(t, 99, env.Int("TEST_INT_BAD", 99))
+	assert.False(t, env.Bool("TEST_BOOL_BAD", false))
+	assert.Equal(t, time.Minute, env.Duration("TEST_DUR_BAD", time.Minute))
+	assert.Len(t, env.errs, 3)
+}
 
-	assert.Equal(t, 10*time.Second, getEnvDuration("NONEXISTENT_KEY_12345", 10*time.Second))
+func TestLoad_InvalidEnvFails(t *testing.T) {
+	clearEnvKeys(t)
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "tjudge")
+	t.Setenv("DB_NAME", "tjudge")
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("RATE_LIMIT_ENABLED", "yes")
+
+	_, err := Load()
+	assert.ErrorContains(t, err, "RATE_LIMIT_ENABLED")
 }
 
 func TestGetEnvOrFile(t *testing.T) {
@@ -350,7 +359,7 @@ func TestLoad_DefaultValues(t *testing.T) {
 	// Clear all env vars that Load reads so defaults are used
 	envVars := []string{
 		"API_PORT", "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
-		"REDIS_HOST", "REDIS_PORT", "WORKER_MIN", "WORKER_MAX", "WORKER_QUEUE_SIZE",
+		"REDIS_HOST", "REDIS_PORT", "WORKER_MIN", "WORKER_MAX",
 		"JWT_SECRET", "JWT_ACCESS_TTL", "LOG_LEVEL", "ENVIRONMENT",
 	}
 	for _, key := range envVars {
@@ -380,7 +389,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("WORKER_MIN", "2")
 	t.Setenv("WORKER_MAX", "20")
-	t.Setenv("WORKER_QUEUE_SIZE", "500")
 	t.Setenv("JWT_ACCESS_TTL", "30m")
 
 	cfg, err := Load()
@@ -395,7 +403,6 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, 2, cfg.Worker.MinWorkers)
 	assert.Equal(t, 20, cfg.Worker.MaxWorkers)
-	assert.Equal(t, 500, cfg.Worker.QueueSize)
 	assert.Equal(t, 30*time.Minute, cfg.JWT.AccessTTL)
 }
 
@@ -467,7 +474,7 @@ func clearEnvKeys(t *testing.T) {
 		"API_PORT", "DB_PORT", "DB_HOST", "DB_USER", "DB_NAME",
 		"DB_MAX_CONNECTIONS", "DB_MAX_IDLE",
 		"REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",
-		"WORKER_MIN", "WORKER_MAX", "WORKER_QUEUE_SIZE",
+		"WORKER_MIN", "WORKER_MAX", "RATE_LIMIT_ENABLED",
 		"JWT_SECRET", "JWT_ACCESS_TTL", "LOG_LEVEL", "ENVIRONMENT",
 	}
 	for _, k := range keys {

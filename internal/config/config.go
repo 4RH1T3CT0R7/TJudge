@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -22,6 +23,9 @@ const minJWTSecretLength = 32
 
 // на сколько WORKER_TIMEOUT должен превышать EXECUTOR_TIMEOUT
 const workerTimeoutMargin = 20 * time.Second
+
+// минимальный лимит памяти контейнера, который принимает docker
+const minExecutorMemory = 6 * 1024 * 1024
 
 // секреты-заглушки, которые нельзя тащить в прод (сравнение без регистра)
 var jwtSecretPlaceholders = []string{
@@ -84,7 +88,6 @@ type Config struct {
 type StorageConfig struct {
 	ProgramsPath     string
 	HostProgramsPath string // путь на хосте для docker-in-docker
-	MaxFileSize      int64
 }
 
 type ServerConfig struct {
@@ -150,7 +153,6 @@ func (c RedisConfig) Address() string {
 type WorkerConfig struct {
 	MinWorkers        int
 	MaxWorkers        int
-	QueueSize         int
 	Timeout           time.Duration
 	RetryAttempts     int
 	RetryDelay        time.Duration
@@ -164,13 +166,11 @@ func (w WorkerConfig) StuckThreshold() time.Duration {
 }
 
 type ExecutorConfig struct {
-	TJudgePath        string
 	DockerImage       string
 	Timeout           time.Duration
 	CPUQuota          int64 // микросекунды на 100ms
 	MemoryLimit       int64 // в байтах
 	PidsLimit         int64
-	NetworkDisabled   bool
 	DefaultIterations int
 	Verbose           bool
 	SeccompProfile    string
@@ -190,14 +190,12 @@ type JWTConfig struct {
 type LoggingConfig struct {
 	Level  string
 	Format string
-	Output string
 	Async  bool
 }
 
 type MetricsConfig struct {
 	Enabled bool
 	Port    int
-	Path    string
 }
 
 type CORSConfig struct {
@@ -247,8 +245,19 @@ func (c *Config) Validate() error {
 	if c.Worker.MaxWorkers < c.Worker.MinWorkers {
 		return fmt.Errorf("worker max_workers must be >= min_workers")
 	}
-	if c.Worker.QueueSize < 1 {
-		return fmt.Errorf("worker queue_size must be positive")
+	if c.Worker.Timeout <= 0 {
+		return fmt.Errorf("WORKER_TIMEOUT must be positive")
+	}
+
+	if c.Executor.Timeout <= 0 {
+		return fmt.Errorf("EXECUTOR_TIMEOUT must be positive")
+	}
+	// меньше 6 МБ docker контейнер не создаст, и упадёт каждый матч
+	if c.Executor.MemoryLimit < minExecutorMemory {
+		return fmt.Errorf("EXECUTOR_MEMORY_LIMIT must be at least %d bytes (got %d)", minExecutorMemory, c.Executor.MemoryLimit)
+	}
+	if c.Executor.DefaultIterations < 1 {
+		return fmt.Errorf("EXECUTOR_DEFAULT_ITERATIONS must be positive")
 	}
 	// таймаут обработки матча накрывает таймаут контейнера с запасом на
 	// create/cleanup и запись результата. иначе первым истекает ctx воркера,
@@ -262,7 +271,7 @@ func (c *Config) Validate() error {
 	}
 
 	// jwt проверяется строго только в prod
-	// TODO: валидировать бы ещё format/output логгера, пока проверяется только level
+	// TODO: валидировать бы ещё format логгера, пока проверяется только level
 	if err := validateJWTSecret(c.JWT.Secret, isProductionEnv()); err != nil {
 		return err
 	}
@@ -300,100 +309,101 @@ func Load() (*Config, error) {
 	// .env подхватывается если есть, нет так нет
 	_ = godotenv.Load()
 
+	var env envReader
+
 	// по умолчанию воркеров столько же, сколько ядер: каждый держит матч-контейнер
 	// с квотой в ядро, больше - переподписка CPU и ложные таймауты программ.
 	// от WORKER_MAX же считаются дефолты пулов бд и редиса
-	workerMax := getEnvInt("WORKER_MAX", runtime.NumCPU())
+	workerMax := env.Int("WORKER_MAX", runtime.NumCPU())
 	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Port:            getEnvInt("API_PORT", 8080),
-			ReadTimeout:     getEnvDuration("READ_TIMEOUT", 30*time.Second),
-			WriteTimeout:    getEnvDuration("WRITE_TIMEOUT", 30*time.Second),
-			ShutdownTimeout: getEnvDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+			Port:            env.Int("API_PORT", 8080),
+			ReadTimeout:     env.Duration("READ_TIMEOUT", 30*time.Second),
+			WriteTimeout:    env.Duration("WRITE_TIMEOUT", 30*time.Second),
+			ShutdownTimeout: env.Duration("SHUTDOWN_TIMEOUT", 10*time.Second),
 			BaseURL:         getEnv("BASE_URL", "http://localhost:8080"),
 		},
 		Database: DatabaseConfig{
 			Host:           getEnv("DB_HOST", "localhost"),
-			Port:           getEnvInt("DB_PORT", 5432),
+			Port:           env.Int("DB_PORT", 5432),
 			User:           getEnv("DB_USER", "tjudge"),
 			Password:       getEnvOrFile("DB_PASSWORD", "secret"),
 			Name:           getEnv("DB_NAME", "tjudge"),
 			SSLMode:        getEnv("DB_SSLMODE", "disable"),
-			MaxConnections: getEnvInt("DB_MAX_CONNECTIONS", defaultPoolSize),
-			MaxIdle:        getEnvInt("DB_MAX_IDLE", defaultPoolSize/5), // ~20% от макс
-			MaxLifetime:    getEnvDuration("DB_MAX_LIFETIME", 1*time.Hour),
+			MaxConnections: env.Int("DB_MAX_CONNECTIONS", defaultPoolSize),
+			MaxIdle:        env.Int("DB_MAX_IDLE", defaultPoolSize/5), // ~20% от макс
+			MaxLifetime:    env.Duration("DB_MAX_LIFETIME", 1*time.Hour),
 
-			PartitionRetentionMonths: getEnvInt("DB_PARTITION_RETENTION_MONTHS", 0),
+			PartitionRetentionMonths: env.Int("DB_PARTITION_RETENTION_MONTHS", 0),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
-			Port:     getEnvInt("REDIS_PORT", 6379),
+			Port:     env.Int("REDIS_PORT", 6379),
 			Password: getEnvOrFile("REDIS_PASSWORD", ""),
-			DB:       getEnvInt("REDIS_DB", 0),
+			DB:       env.Int("REDIS_DB", 0),
 			// простаивающий воркер держит соединение на BRPOP, поэтому пул не
 			// меньше WORKER_MAX плюс запас на остальные команды
-			PoolSize: max(getEnvInt("REDIS_POOL_SIZE", 100), workerMax+redisPoolReserve),
+			PoolSize: max(env.Int("REDIS_POOL_SIZE", 100), workerMax+redisPoolReserve),
 		},
 		Worker: WorkerConfig{
-			MinWorkers:        getEnvInt("WORKER_MIN", min(2, workerMax)),
+			MinWorkers:        env.Int("WORKER_MIN", min(2, workerMax)),
 			MaxWorkers:        workerMax,
-			QueueSize:         getEnvInt("WORKER_QUEUE_SIZE", 10000),
-			Timeout:           getEnvDuration("WORKER_TIMEOUT", 90*time.Second),
-			RetryAttempts:     getEnvInt("WORKER_RETRY_ATTEMPTS", 3),
-			RetryDelay:        getEnvDuration("WORKER_RETRY_DELAY", 5*time.Second),
-			AutoScaleInterval: getEnvDuration("WORKER_AUTOSCALE_INTERVAL", 2*time.Second),
+			Timeout:           env.Duration("WORKER_TIMEOUT", 90*time.Second),
+			RetryAttempts:     env.Int("WORKER_RETRY_ATTEMPTS", 3),
+			RetryDelay:        env.Duration("WORKER_RETRY_DELAY", 5*time.Second),
+			AutoScaleInterval: env.Duration("WORKER_AUTOSCALE_INTERVAL", 2*time.Second),
 		},
 		Executor: ExecutorConfig{
-			TJudgePath:        getEnv("TJUDGE_PATH", "tjudge-cli"),
 			DockerImage:       getEnv("EXECUTOR_DOCKER_IMAGE", "tjudge-cli:latest"),
-			Timeout:           getEnvDuration("EXECUTOR_TIMEOUT", 60*time.Second),
-			CPUQuota:          int64(getEnvInt("EXECUTOR_CPU_QUOTA", 100000)),
-			MemoryLimit:       int64(getEnvInt("EXECUTOR_MEMORY_LIMIT", 536870912)),
-			PidsLimit:         int64(getEnvInt("EXECUTOR_PIDS_LIMIT", 100)),
-			NetworkDisabled:   getEnvBool("EXECUTOR_NETWORK_DISABLED", true),
-			DefaultIterations: getEnvInt("EXECUTOR_DEFAULT_ITERATIONS", 100),
-			Verbose:           getEnvBool("EXECUTOR_VERBOSE", false),
+			Timeout:           env.Duration("EXECUTOR_TIMEOUT", 60*time.Second),
+			CPUQuota:          int64(env.Int("EXECUTOR_CPU_QUOTA", 100000)),
+			MemoryLimit:       int64(env.Int("EXECUTOR_MEMORY_LIMIT", 536870912)),
+			PidsLimit:         int64(env.Int("EXECUTOR_PIDS_LIMIT", 100)),
+			DefaultIterations: env.Int("EXECUTOR_DEFAULT_ITERATIONS", 100),
+			Verbose:           env.Bool("EXECUTOR_VERBOSE", false),
 			SeccompProfile:    getEnv("EXECUTOR_SECCOMP_PROFILE", ""),
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),
 			BuilderImage:      getEnv("EXECUTOR_BUILDER_IMAGE", "tjudge-builder:latest"),
-			CompileTimeout:    getEnvDuration("EXECUTOR_COMPILE_TIMEOUT", 120*time.Second),
-			CompileWorkers:    getEnvInt("EXECUTOR_COMPILE_WORKERS", 2),
+			CompileTimeout:    env.Duration("EXECUTOR_COMPILE_TIMEOUT", 120*time.Second),
+			CompileWorkers:    env.Int("EXECUTOR_COMPILE_WORKERS", 2),
 			CPUSetCPUs:        getEnv("EXECUTOR_CPUSET_CPUS", ""),
 		},
 		Storage: StorageConfig{
 			ProgramsPath:     getEnv("PROGRAMS_PATH", "/data/programs"),
-			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""),            // пусто = берётся ProgramsPath
-			MaxFileSize:      int64(getEnvInt("MAX_FILE_SIZE", 10485760)), // 10мб
+			HostProgramsPath: getEnv("HOST_PROGRAMS_PATH", ""), // пусто = берётся ProgramsPath
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret),
-			AccessTTL:  getEnvDuration("JWT_ACCESS_TTL", 24*time.Hour),    // сутки активной сессии
-			RefreshTTL: getEnvDuration("JWT_REFRESH_TTL", 7*24*time.Hour), // неделя неактивности
+			AccessTTL:  env.Duration("JWT_ACCESS_TTL", 24*time.Hour),    // сутки активной сессии
+			RefreshTTL: env.Duration("JWT_REFRESH_TTL", 7*24*time.Hour), // неделя неактивности
 		},
 		Logging: LoggingConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
 			Format: getEnv("LOG_FORMAT", "json"),
-			Output: getEnv("LOG_OUTPUT", "stdout"),
-			Async:  getEnvBool("LOG_ASYNC", true), // в проде асинхронно
+			Async:  env.Bool("LOG_ASYNC", true), // в проде асинхронно
 		},
 		Metrics: MetricsConfig{
-			Enabled: getEnvBool("METRICS_ENABLED", true),
-			Port:    getEnvInt("METRICS_PORT", 9090),
-			Path:    getEnv("METRICS_PATH", "/metrics"),
+			Enabled: env.Bool("METRICS_ENABLED", true),
+			Port:    env.Int("METRICS_PORT", 9090),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: splitAndTrim(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders: []string{"Content-Type", "Authorization"},
-			MaxAge:         getEnvInt("CORS_MAX_AGE", 3600),
+			MaxAge:         env.Int("CORS_MAX_AGE", 3600),
 		},
 		RateLimit: RateLimitConfig{
-			Enabled:           getEnvBool("RATE_LIMIT_ENABLED", false), // в дев-режиме выключен
-			RequestsPerMinute: getEnvInt("RATE_LIMIT_RPM", 100),
-			Burst:             getEnvInt("RATE_LIMIT_BURST", 200),
+			Enabled:           env.Bool("RATE_LIMIT_ENABLED", false), // в дев-режиме выключен
+			RequestsPerMinute: env.Int("RATE_LIMIT_RPM", 100),
+			Burst:             env.Int("RATE_LIMIT_BURST", 200),
 		},
+	}
+
+	// опечатка в .env не должна молча превращаться в дефолт
+	if err := errors.Join(env.errs...); err != nil {
+		return nil, fmt.Errorf("invalid environment: %w", err)
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -423,31 +433,50 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		var result int
-		// sscanf а не atoi специально: "42abc" распарсит 42, так исторически
-		if _, err := fmt.Sscanf(value, "%d", &result); err == nil {
-			return result
-		}
-	}
-	return defaultValue
+// envReader разбирает числовые, булевы и длительности из env и копит ошибки:
+// RATE_LIMIT_ENABLED=yes, EXECUTOR_MEMORY_LIMIT=512m или WORKER_TIMEOUT=90
+// раньше молча давали дефолт или мусор
+type envReader struct {
+	errs []error
 }
 
-func getEnvBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		return value == "true" || value == "1"
+func (e *envReader) Int(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
 	}
-	return defaultValue
+	result, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		e.errs = append(e.errs, fmt.Errorf("%s: invalid integer %q", key, value))
+		return defaultValue
+	}
+	return result
 }
 
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value := os.Getenv(key); value != "" {
-		if duration, err := time.ParseDuration(value); err == nil {
-			return duration
-		}
+func (e *envReader) Bool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
 	}
-	return defaultValue
+	result, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		e.errs = append(e.errs, fmt.Errorf("%s: invalid boolean %q", key, value))
+		return defaultValue
+	}
+	return result
+}
+
+func (e *envReader) Duration(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	result, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil {
+		e.errs = append(e.errs, fmt.Errorf("%s: invalid duration %q (unit required, e.g. 90s)", key, value))
+		return defaultValue
+	}
+	return result
 }
 
 // сначала берётся обычная переменная, потом KEY_FILE (docker secrets)
