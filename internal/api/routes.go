@@ -164,9 +164,10 @@ func (s *Server) setupMiddleware() {
 	})
 	// prometheus-метрики http. раньше был только otel и панели по http пустовали
 	s.router.Use(middleware.Metrics())
-	// RealIP в chi v5.3 помечен deprecated из-за подмены ip заголовками; замена на
-	// доверие только X-Real-IP от nginx - отдельная правка рейтлимита
-	s.router.Use(chiMiddleware.RealIP) //nolint:staticcheck
+	// RealIP в chi v5.3 помечен deprecated: ip подменяется через True-Client-IP,
+	// X-Real-IP и левое значение XFF. обновление chi это не чинит. nolint снимается
+	// вместе с заменой на ClientIPFromXFFTrustedProxies/GetClientIP
+	s.router.Use(chiMiddleware.RealIP) //nolint:staticcheck // GHSA-3fxj-6jh8-hvhx, F0/F14/F105
 	s.router.Use(chiMiddleware.Logger)
 	s.router.Use(chiMiddleware.Recoverer)
 
