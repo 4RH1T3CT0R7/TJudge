@@ -54,7 +54,6 @@ type TournamentRepository interface {
 // MatchRepository — матчи в бд
 type MatchRepository interface {
 	Create(ctx context.Context, match *models.Match) error
-	CreateBatch(ctx context.Context, matches []*models.Match) error
 	DeleteBatch(ctx context.Context, ids []uuid.UUID) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
@@ -78,7 +77,7 @@ type DistributedLock interface {
 type GameRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
-	ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error
+	StartNewRound(ctx context.Context, tournamentID uuid.UUID, gameTypes []string, matches []*models.Match) error
 	// авто-раунд
 	GetAutoRoundEnabledGames(ctx context.Context) ([]*models.AutoRoundGameInfo, error)
 	UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error
