@@ -40,8 +40,10 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 func Compress() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// клиент не умеет gzip — отдаётся как есть
-			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			// клиент не умеет gzip — отдаётся как есть.
+			// upgrade (вебсокет) тоже мимо: обёртка не умеет Hijack, а после
+			// hijack отложенный gz.Close() писал бы в чужое соединение
+			if r.Header.Get("Upgrade") != "" || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 				next.ServeHTTP(w, r)
 				return
 			}
