@@ -2,9 +2,12 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -107,20 +110,29 @@ type DatabaseConfig struct {
 	PartitionRetentionMonths int
 }
 
-// DSN строка подключения к postgres в формате key=value
+// DSN строка подключения к postgres в формате key=value. значения в кавычках с
+// экранированием, иначе пароль с пробелом или кавычкой ломает разбор.
+// timezone=UTC: колонки TIMESTAMP без зоны заполняются и NOW() сервера, и временем из
+// Go; при другой зоне сессии время съезжает на смещение, а с ним границы партиций
 func (c DatabaseConfig) DSN() string {
+	quote := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
+	q := func(v string) string { return "'" + quote.Replace(v) + "'" }
 	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode,
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=UTC",
+		q(c.Host), c.Port, q(c.User), q(c.Password), q(c.Name), q(c.SSLMode),
 	)
 }
 
 // DSNURL то же самое но url-ом, нужно для golang-migrate
 func (c DatabaseConfig) DSNURL() string {
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		c.User, c.Password, c.Host, c.Port, c.Name, c.SSLMode,
-	)
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(c.User, c.Password),
+		Host:     net.JoinHostPort(c.Host, strconv.Itoa(c.Port)),
+		Path:     "/" + c.Name,
+		RawQuery: url.Values{"sslmode": {c.SSLMode}, "timezone": {"UTC"}}.Encode(),
+	}
+	return u.String()
 }
 
 type RedisConfig struct {

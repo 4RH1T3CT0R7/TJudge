@@ -146,3 +146,12 @@ func intPtr(v int) *int {
 func uuidPtr(v uuid.UUID) *uuid.UUID {
 	return &v
 }
+
+// сессия всегда в UTC, даже если сервер настроен на другую зону: иначе NOW() в
+// колонках TIMESTAMP и время из Go расходятся на смещение
+func TestDBSessionTimeZoneIsUTC(t *testing.T) {
+	database := setupTestDB(t)
+	var tz string
+	require.NoError(t, database.QueryRowContext(context.Background(), "SELECT current_setting('TimeZone')").Scan(&tz))
+	require.Equal(t, "UTC", tz)
+}
