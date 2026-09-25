@@ -1,0 +1,49 @@
+name: nightly
+
+# полный цикл на собранных образах: загрузка -> компиляция в tjudge-builder ->
+# матч в tjudge-cli -> лидерборд и ELO. ловит то, что ci без docker не видит:
+# Dockerfile'ы, volume программ, HOST_PROGRAMS_PATH, формат вывода tjudge-cli
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # абсолютный путь: worker монтирует его в контейнеры песочниц через docker.sock
+      HOST_PROGRAMS_PATH: ${{ github.workspace }}/data/programs
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      # worker, api и песочницы работают от uid 1000, как в проде. root из
+      # dev-compose создал бы каталоги сборки, недоступные builder'у
+      - name: stack
+        run: |
+          mkdir -p data/programs
+          sudo chown 1000:1000 data/programs
+          docker network create monitoring
+          DOCKER_GID=$(getent group docker | cut -d: -f3)
+          export DOCKER_GID WORKER_USER=1000:$DOCKER_GID
+          docker compose up -d --build
+          curl -sf --retry 60 --retry-all-errors --retry-delay 2 http://localhost:8080/health
+
+      # DB_* по умолчанию смотрят в postgres dev-compose (5433/tjudge)
+      - name: full cycle
+        env:
+          E2E_FULL_CYCLE: 'true'
+        run: go test -count=1 -v -tags=e2e -run TestE2E_FullCycle ./tests/e2e/
+
+      - name: logs
+        if: failure()
+        run: docker compose logs --no-color api worker
