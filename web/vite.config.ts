@@ -23,11 +23,11 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
+        // react-markdown без ручного чанка: он попадает только в ленивые чанки GameView/GameDetail
         manualChunks: {
           'three': ['three'],
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-react': ['react', 'react-dom', 'react/jsx-runtime', 'react-router-dom'],
           'vendor-data': ['axios', 'zustand'],
-          'vendor-markdown': ['react-markdown', 'remark-gfm'],
           'vendor-motion': ['motion'],
         },
       },
