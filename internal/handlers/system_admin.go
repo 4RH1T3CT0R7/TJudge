@@ -12,10 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// recoveryStuckThreshold — после этого времени матч считается зависшим в running
-// (синхронизировано с RecoveryService воркера: 120s > worker timeout 90s)
-const recoveryStuckThreshold = 2 * time.Minute
-
 // AuditLogReader описывает то, что нужно эндпоинту от репозитория
 type AuditLogReader interface {
 	List(ctx context.Context, limit int) ([]*models.AuditLogEntry, error)
@@ -99,7 +95,10 @@ type SystemRecoveryHandler struct {
 	compileQueue RecoveryCompileQueue
 	matchRepo    RecoveryMatchRepo
 	queueManager RecoveryQueueManager
-	log          *logger.Logger
+	// после этого времени в running матч считается зависшим, тот же порог
+	// что у recovery воркера (WorkerConfig.StuckThreshold)
+	stuckThreshold time.Duration
+	log            *logger.Logger
 }
 
 // NewSystemRecoveryHandler создаёт handler восстановления
@@ -109,15 +108,17 @@ func NewSystemRecoveryHandler(
 	compileQueue RecoveryCompileQueue,
 	matchRepo RecoveryMatchRepo,
 	queueManager RecoveryQueueManager,
+	stuckThreshold time.Duration,
 	log *logger.Logger,
 ) *SystemRecoveryHandler {
 	return &SystemRecoveryHandler{
-		outboxRepo:   outboxRepo,
-		programRepo:  programRepo,
-		compileQueue: compileQueue,
-		matchRepo:    matchRepo,
-		queueManager: queueManager,
-		log:          log,
+		outboxRepo:     outboxRepo,
+		programRepo:    programRepo,
+		compileQueue:   compileQueue,
+		matchRepo:      matchRepo,
+		queueManager:   queueManager,
+		stuckThreshold: stuckThreshold,
+		log:            log,
 	}
 }
 
@@ -179,7 +180,7 @@ func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.
 // @Success 200 {object} object{reset=int}
 // @Router /system/recovery/reset-stuck-matches [post]
 func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http.Request) {
-	stuck, err := h.matchRepo.GetStuckRunning(r.Context(), recoveryStuckThreshold, 1000)
+	stuck, err := h.matchRepo.GetStuckRunning(r.Context(), h.stuckThreshold, 1000)
 	if err != nil {
 		h.log.LogError("recovery: list stuck matches", err)
 		writeError(w, err)

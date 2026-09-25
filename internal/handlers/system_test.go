@@ -134,6 +134,7 @@ func newStatusHandler(t *testing.T, dbHealthy bool, redisErr error) *SystemStatu
 		&stubCompileQueue{},
 		&stubWSHub{},
 		&stubRedis{err: redisErr},
+		2*time.Minute,
 		log,
 	)
 }

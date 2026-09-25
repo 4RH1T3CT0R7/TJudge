@@ -144,6 +144,12 @@ type WorkerConfig struct {
 	AutoScaleInterval time.Duration // как часто проверяется пул, 0 = 2s
 }
 
+// StuckThreshold - после скольких секунд в running матч считается брошенным.
+// живой воркер держит матч не дольше Timeout, запас покрывает запись результата
+func (w WorkerConfig) StuckThreshold() time.Duration {
+	return w.Timeout + 30*time.Second
+}
+
 type ExecutorConfig struct {
 	TJudgePath        string
 	DockerImage       string
