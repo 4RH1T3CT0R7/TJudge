@@ -232,7 +232,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_AddGame() {
 	assert.Equal(s.T(), game.ID, tg.GameID)
 	assert.False(s.T(), tg.IsActive)
 	assert.False(s.T(), tg.RoundCompleted)
-	assert.Equal(s.T(), 0, tg.CurrentRound)
 }
 
 // =============================================================================
@@ -462,7 +461,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	assert.Len(s.T(), tournamentGames, 2)
 	for _, tg := range tournamentGames {
 		assert.False(s.T(), tg.RoundCompleted)
-		assert.Equal(s.T(), 0, tg.CurrentRound)
 	}
 
 	// Step 8: Set active game and verify

@@ -22,7 +22,6 @@ type TournamentGame struct {
 	IsActive              bool       `json:"is_active" db:"is_active"`
 	RoundCompleted        bool       `json:"round_completed" db:"round_completed"`
 	RoundCompletedAt      *time.Time `json:"round_completed_at,omitempty" db:"round_completed_at"`
-	CurrentRound          int        `json:"current_round" db:"current_round"`
 	AutoRoundEnabled      bool       `json:"auto_round_enabled" db:"auto_round_enabled"`
 	AutoRoundIntervalSecs int        `json:"auto_round_interval_seconds" db:"auto_round_interval_seconds"`
 	AutoRoundLastRunAt    *time.Time `json:"auto_round_last_run_at,omitempty" db:"auto_round_last_run_at"`
@@ -38,7 +37,6 @@ type TournamentGameWithDetails struct {
 	IsActive              bool       `json:"is_active" db:"is_active"`
 	RoundCompleted        bool       `json:"round_completed" db:"round_completed"`
 	RoundCompletedAt      *time.Time `json:"round_completed_at,omitempty" db:"round_completed_at"`
-	CurrentRound          int        `json:"current_round" db:"current_round"`
 	AutoRoundEnabled      bool       `json:"auto_round_enabled" db:"auto_round_enabled"`
 	AutoRoundIntervalSecs int        `json:"auto_round_interval_seconds" db:"auto_round_interval_seconds"`
 	AutoRoundLastRunAt    *time.Time `json:"auto_round_last_run_at,omitempty" db:"auto_round_last_run_at"`

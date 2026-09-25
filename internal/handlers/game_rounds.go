@@ -88,7 +88,6 @@ type TournamentGameWithDetails struct {
 	IsActive              bool      `json:"is_active"`
 	RoundCompleted        bool      `json:"round_completed"`
 	RoundCompletedAt      *string   `json:"round_completed_at,omitempty"`
-	CurrentRound          int       `json:"current_round"`
 	AutoRoundEnabled      bool      `json:"auto_round_enabled"`
 	AutoRoundIntervalSecs int       `json:"auto_round_interval_seconds"`
 	AutoRoundLastRunAt    *string   `json:"auto_round_last_run_at,omitempty"`
@@ -133,7 +132,6 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 			GameDisplayName:       d.GameDisplayName,
 			IsActive:              d.IsActive,
 			RoundCompleted:        d.RoundCompleted,
-			CurrentRound:          d.CurrentRound,
 			AutoRoundEnabled:      d.AutoRoundEnabled,
 			AutoRoundIntervalSecs: d.AutoRoundIntervalSecs,
 		}
@@ -200,7 +198,6 @@ func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request)
 		GameDisplayName:       g.DisplayName,
 		IsActive:              activeGame.IsActive,
 		RoundCompleted:        activeGame.RoundCompleted,
-		CurrentRound:          activeGame.CurrentRound,
 		AutoRoundEnabled:      activeGame.AutoRoundEnabled,
 		AutoRoundIntervalSecs: activeGame.AutoRoundIntervalSecs,
 	}

@@ -78,7 +78,6 @@ export interface TournamentGameWithDetails {
   is_active: boolean;
   round_completed: boolean;
   round_completed_at?: string;
-  current_round: number;
   auto_round_enabled: boolean;
   auto_round_interval_seconds: number;
   auto_round_last_run_at?: string;

@@ -297,7 +297,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 	var tg models.TournamentGame
 
 	query := `
-		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at,
 		       COALESCE(auto_round_enabled, false), COALESCE(auto_round_interval_seconds, 60), auto_round_last_run_at, created_at
 		FROM tournament_games
 		WHERE tournament_id = $1 AND game_id = $2
@@ -309,7 +309,6 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 		&tg.IsActive,
 		&tg.RoundCompleted,
 		&tg.RoundCompletedAt,
-		&tg.CurrentRound,
 		&tg.AutoRoundEnabled,
 		&tg.AutoRoundIntervalSecs,
 		&tg.AutoRoundLastRunAt,
@@ -328,7 +327,7 @@ func (r *GameRepository) GetTournamentGame(ctx context.Context, tournamentID, ga
 
 func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error) {
 	query := `
-		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at, COALESCE(tg.current_round, 0),
+		SELECT tg.tournament_id, tg.game_id, COALESCE(tg.is_active, false), COALESCE(tg.round_completed, false), tg.round_completed_at,
 		       COALESCE(tg.auto_round_enabled, false), COALESCE(tg.auto_round_interval_seconds, 60), tg.auto_round_last_run_at, tg.created_at
 		FROM tournament_games tg
 		INNER JOIN games g ON g.id = tg.game_id
@@ -352,7 +351,6 @@ func (r *GameRepository) GetTournamentGames(ctx context.Context, tournamentID uu
 			&tg.IsActive,
 			&tg.RoundCompleted,
 			&tg.RoundCompletedAt,
-			&tg.CurrentRound,
 			&tg.AutoRoundEnabled,
 			&tg.AutoRoundIntervalSecs,
 			&tg.AutoRoundLastRunAt,
@@ -381,7 +379,6 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 		       COALESCE(tg.is_active, false) AS is_active,
 		       COALESCE(tg.round_completed, false) AS round_completed,
 		       tg.round_completed_at,
-		       COALESCE(tg.current_round, 0) AS current_round,
 		       COALESCE(tg.auto_round_enabled, false) AS auto_round_enabled,
 		       COALESCE(tg.auto_round_interval_seconds, 60) AS auto_round_interval_seconds,
 		       tg.auto_round_last_run_at
@@ -408,7 +405,6 @@ func (r *GameRepository) GetTournamentGamesWithDetails(ctx context.Context, tour
 			&d.IsActive,
 			&d.RoundCompleted,
 			&d.RoundCompletedAt,
-			&d.CurrentRound,
 			&d.AutoRoundEnabled,
 			&d.AutoRoundIntervalSecs,
 			&d.AutoRoundLastRunAt,
@@ -533,7 +529,7 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 	var tg models.TournamentGame
 
 	query := `
-		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at, COALESCE(current_round, 0),
+		SELECT tournament_id, game_id, COALESCE(is_active, false), COALESCE(round_completed, false), round_completed_at,
 		       COALESCE(auto_round_enabled, false), COALESCE(auto_round_interval_seconds, 60), auto_round_last_run_at, created_at
 		FROM tournament_games
 		WHERE tournament_id = $1 AND is_active = true
@@ -545,7 +541,6 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 		&tg.IsActive,
 		&tg.RoundCompleted,
 		&tg.RoundCompletedAt,
-		&tg.CurrentRound,
 		&tg.AutoRoundEnabled,
 		&tg.AutoRoundIntervalSecs,
 		&tg.AutoRoundLastRunAt,
@@ -615,10 +610,10 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 		}
 		participantsReset, _ = result.RowsAffected()
 
-		// сброс номера раунда
+		// сброс статуса раунда
 		result, txErr = tx.ExecContext(ctx, `
 			UPDATE tournament_games
-			SET current_round = 0, round_completed = false, round_completed_at = NULL
+			SET round_completed = false, round_completed_at = NULL
 			WHERE tournament_id = $1 AND game_id = $2
 		`, tournamentID, gameID)
 		if txErr != nil {
@@ -695,10 +690,10 @@ func resetGame(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameTyp
 		return errors.Wrap(err, "failed to reset participant ratings")
 	}
 
-	// сброс номера раунда
+	// сброс статуса раунда
 	result, txErr := tx.ExecContext(ctx, `
 		UPDATE tournament_games tg
-		SET current_round = 0, round_completed = false, round_completed_at = NULL
+		SET round_completed = false, round_completed_at = NULL
 		FROM games g
 		WHERE tg.tournament_id = $1
 		AND tg.game_id = g.id

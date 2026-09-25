@@ -381,7 +381,6 @@ func (s *GameRepositorySuite) TestGetTournamentGame() {
 	assert.Equal(s.T(), game.ID, tg.GameID)
 	assert.False(s.T(), tg.IsActive)
 	assert.False(s.T(), tg.RoundCompleted)
-	assert.Equal(s.T(), 0, tg.CurrentRound)
 	assert.NotZero(s.T(), tg.CreatedAt)
 }
 

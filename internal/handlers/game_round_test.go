@@ -211,7 +211,6 @@ func TestGameRoundHandler_GetActiveGame_Success(t *testing.T) {
 		TournamentID: tournamentID,
 		GameID:       gameID,
 		IsActive:     true,
-		CurrentRound: 1,
 	}, nil)
 
 	gameSvc.On("GetByID", mock.Anything, gameID).Return(&models.Game{

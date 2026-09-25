@@ -138,12 +138,9 @@ export function GamesTab({
         {games.map((game, index) => {
           const gameStatus = gamesStatus.find(g => g.game_id === game.id);
           const isActive = gameStatus?.is_active || false;
-          const currentRound = gameStatus?.current_round || 0;
-          const hasActiveMatches = (matchRounds || []).some(
+          const isRoundRunning = (matchRounds || []).some(
             r => r.game_type === game.name && (r.pending_count > 0 || r.running_count > 0)
           );
-          const roundInProgress = currentRound > 0 && gameStatus?.round_completed === false;
-          const isRoundRunning = hasActiveMatches || roundInProgress;
 
           return (
             <Link
@@ -166,11 +163,6 @@ export function GamesTab({
                   <code className="text-sm bg-gray-800 px-2 py-0.5 rounded text-gray-400">
                     {game.name}
                   </code>
-                  {currentRound > 0 && (
-                    <span className="text-xs text-gray-400">
-                      • Раунд {currentRound}
-                    </span>
-                  )}
                   {isActive && (
                     <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
                       Активна
