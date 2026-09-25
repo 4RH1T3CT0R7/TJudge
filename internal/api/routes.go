@@ -137,6 +137,19 @@ func (s *Server) requireAdmin() func(http.Handler) http.Handler {
 	return middleware.RequireAdmin()
 }
 
+// строгий лимит на логин и регистрацию с одного ip в минуту: bcrypt дорогой,
+// а без него пароли перебирались бы со скоростью общего лимита
+const authRateLimit = 30
+
+// rateLimit - лимитер со своим счётчиком name, пустышка если лимит выключен.
+// stopCh гасит cleanup-горутину фолбэк-лимитера при Close
+func (s *Server) rateLimit(name string, limit int) func(http.Handler) http.Handler {
+	if !s.rateLimitConfig.Enabled {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return middleware.RateLimit(s.rateLimiter, name, limit, time.Minute, s.authService, s.log, s.rateLimitStopCh)
+}
+
 // auditMiddleware пишет admin-действия в аудит-лог, без логгера - пустышка
 func (s *Server) auditMiddleware() func(http.Handler) http.Handler {
 	if s.auditLogger == nil {
@@ -147,7 +160,7 @@ func (s *Server) auditMiddleware() func(http.Handler) http.Handler {
 
 // setupMiddleware подключает мидлвари. порядок важен: RealIP должен идти
 // до рейтлимита и аудита (они читают ip из RemoteAddr), Recoverer оборачивает
-// всё что ниже, CORS последним
+// всё что ниже, CORS последним. рейтлимит висит на /api/v1 в setupRoutes
 func (s *Server) setupMiddleware() {
 	// otel-трейсинг, no-op если OTEL_* не заданы
 	s.router.Use(observability.HTTPMiddleware("tjudge-api"))
@@ -173,21 +186,6 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.Compress())
 
 	s.router.Use(middleware.SmartTimeout(middleware.DefaultTimeoutConfig()))
-
-	// рейтлимит если включён. stopCh обязательно - иначе cleanup-горутина
-	// фолбэк-лимитера живёт вечно
-	if s.rateLimitConfig.Enabled {
-		if s.rateLimitStopCh == nil {
-			s.rateLimitStopCh = make(chan struct{})
-		}
-		s.router.Use(middleware.RateLimit(
-			s.rateLimiter,
-			s.rateLimitConfig.RequestsPerMinute,
-			time.Minute,
-			s.log,
-			s.rateLimitStopCh,
-		))
-	}
 
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   s.corsConfig.AllowedOrigins,
@@ -235,11 +233,16 @@ func (s *Server) setupRoutes() {
 	bodyLimit := middleware.MaxBodySize(1 << 20)
 
 	s.router.Route("/api/v1", func(r chi.Router) {
+		// статика spa и /health под лимит не попадают: они дешёвые, а в общем
+		// счётчике выбивали бы лимит всей аудитории
+		r.Use(s.rateLimit("api", s.rateLimitConfig.RequestsPerMinute))
+
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(bodyLimit)
 			// публичные
-			r.Post("/register", s.authHandler.Register)
-			r.Post("/login", s.authHandler.Login)
+			authLimit := s.rateLimit("auth", authRateLimit)
+			r.With(authLimit).Post("/register", s.authHandler.Register)
+			r.With(authLimit).Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
 
 			// под токеном

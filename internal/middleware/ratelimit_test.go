@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
+	"github.com/bmstu-itstech/tjudge/internal/service/auth"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -26,13 +28,13 @@ func TestRateLimit_AllowedRequest(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 100, time.Minute).Return(true, nil)
 
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 
@@ -46,13 +48,13 @@ func TestRateLimit_ExceededLimit(t *testing.T) {
 	mockLimiter := new(MockRateLimiter)
 	log := newTestLogger()
 
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(false, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 100, time.Minute).Return(false, nil)
 
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("Handler should not be called when rate limit exceeded")
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 
@@ -70,7 +72,7 @@ func TestRateLimit_LocalhostBypass(t *testing.T) {
 	log := newTestLogger()
 
 	// localhost обходит rate limit - мок вызываться не должен
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -105,13 +107,13 @@ func TestRateLimit_XForwardedFor_Ignored(t *testing.T) {
 
 	// X-Forwarded-For напрямую брать нельзя; getClientIP смотрит только на
 	// r.RemoteAddr (его ставит RealIP из доверенных прокси)
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 100, time.Minute).Return(true, nil)
 
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	req.Header.Set("X-Forwarded-For", "10.0.0.1")
 	rr := httptest.NewRecorder()
@@ -127,13 +129,13 @@ func TestRateLimit_XRealIP_Ignored(t *testing.T) {
 	log := newTestLogger()
 
 	// то же для X-Real-IP - он тоже игнорируется, берётся только r.RemoteAddr
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 100, time.Minute).Return(true, nil)
 
-	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	req.Header.Set("X-Real-IP", "10.0.0.2")
 	rr := httptest.NewRecorder()
@@ -150,17 +152,17 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 
 	// при ошибке Redis fallback строже основного (0.5x), а не 2x -
 	// иначе rate limit можно обойти, положив Redis
-	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 10, time.Minute).Return(false, assert.AnError)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 10, time.Minute).Return(false, assert.AnError)
 
 	handlerCalled := 0
-	handler := middleware.RateLimit(mockLimiter, 10, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 10, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled++
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// fallback burst = max(1, int(10*0.5)) = 5, первые 5 запросов проходят
 	for i := range 5 {
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest("POST", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -169,7 +171,7 @@ func TestRateLimit_ErrorFallsBackToInMemory(t *testing.T) {
 	assert.Equal(t, 5, handlerCalled)
 
 	// следующий уже режется fallback'ом (строже основного)
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -183,14 +185,14 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 	// оба IP получат ошибку Redis
 	mockLimiter.On("Allow", mock.Anything, mock.Anything, 1, time.Minute).Return(false, assert.AnError)
 
-	handler := middleware.RateLimit(mockLimiter, 1, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RateLimit(mockLimiter, "api", 1, time.Minute, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	// выжимается fallback для IP1: limit=1, множитель 0.5,
 	// int(1*0.5)=0, но зажимается к минимуму 1, значит burst=1
 	for range 1 {
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest("POST", "/", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -198,14 +200,14 @@ func TestRateLimit_ErrorFallbackPerIP(t *testing.T) {
 	}
 
 	// IP1 теперь заблокирован
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
 
 	// IP2 по-прежнему проходит - у него свой bucket
-	req = httptest.NewRequest("GET", "/", nil)
+	req = httptest.NewRequest("POST", "/", nil)
 	req.RemoteAddr = "10.0.0.1:12345"
 	rr = httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -228,13 +230,13 @@ func TestRateLimit_DifferentWindows(t *testing.T) {
 			mockLimiter := new(MockRateLimiter)
 			log := newTestLogger()
 
-			mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", tc.limit, tc.window).Return(true, nil)
+			mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", tc.limit, tc.window).Return(true, nil)
 
-			handler := middleware.RateLimit(mockLimiter, tc.limit, tc.window, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := middleware.RateLimit(mockLimiter, "api", tc.limit, tc.window, nil, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest("POST", "/", nil)
 			req.RemoteAddr = "192.168.1.1:12345"
 			rr := httptest.NewRecorder()
 
@@ -284,4 +286,32 @@ func TestRealIP(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+// залогиненный считается по user id, а не по общему ip за NAT;
+// чтение идёт в свой счётчик с лимитом в 10 раз выше
+func TestRateLimit_SubjectAndReadBucket(t *testing.T) {
+	userID := uuid.New()
+	tokens := new(MockAuthService)
+	tokens.On("ValidateToken", "good").Return(&auth.Claims{UserID: userID}, nil)
+	tokens.On("ValidateToken", "bad").Return(nil, assert.AnError)
+
+	mockLimiter := new(MockRateLimiter)
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:user:"+userID.String(), 100, time.Minute).Return(true, nil).Once()
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:ip:192.168.1.1", 100, time.Minute).Return(true, nil).Once()
+	mockLimiter.On("Allow", mock.Anything, "ratelimit:api:read:user:"+userID.String(), 1000, time.Minute).Return(true, nil).Once()
+
+	handler := middleware.RateLimit(mockLimiter, "api", 100, time.Minute, tokens, newTestLogger())(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	for _, tc := range []struct{ method, token string }{
+		{"POST", "good"},
+		{"POST", "bad"},
+		{"GET", "good"},
+	} {
+		req := httptest.NewRequest(tc.method, "/", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	mockLimiter.AssertExpectations(t)
 }

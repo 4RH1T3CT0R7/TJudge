@@ -80,12 +80,21 @@ func (f *fallbackLimiter) cleanup(maxAge time.Duration) {
 	}
 }
 
-// RateLimit ограничивает число запросов с одного ip. при недоступном редисе
-// не открывается нараспашку, а падает на in-memory fallback (вдвое строже)
-func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
-	fallback := newFallbackLimiter(limit, window)
+// во сколько раз лимит на чтение (GET/HEAD) выше общего: живые обновления
+// турнира перечитывают лидерборды несколько раз в секунду
+const readLimitMultiplier = 10
 
-	// горутина периодически чистит fallback-мапу. stopCh нужен для graceful
+// RateLimit ограничивает число запросов одного клиента за window. клиент - юзер
+// из валидного bearer-токена (tokens может быть nil), иначе ip: так аудитория за
+// одним NAT не делит один счётчик. чтение считается отдельно и с лимитом в
+// readLimitMultiplier раз выше, чтобы частые GET не выбивали логин и загрузки.
+// name разводит счётчики разных лимитов. при недоступном редисе лимитер не
+// открывается нараспашку, а падает на in-memory fallback (вдвое строже)
+func RateLimit(limiter RateLimiter, name string, limit int, window time.Duration, tokens AuthService, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
+	writeFallback := newFallbackLimiter(limit, window)
+	readFallback := newFallbackLimiter(limit*readLimitMultiplier, window)
+
+	// горутина периодически чистит fallback-мапы. stopCh нужен для graceful
 	// shutdown - без него горутина живёт вечно
 	var stop <-chan struct{}
 	if len(stopCh) > 0 && stopCh[0] != nil {
@@ -99,7 +108,8 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 			case <-stop: // чтение из nil-канала висит вечно, так что без stopCh чистка просто крутится всегда
 				return
 			case <-ticker.C:
-				fallback.cleanup(10 * time.Minute)
+				writeFallback.cleanup(10 * time.Minute)
+				readFallback.cleanup(10 * time.Minute)
 			}
 		}
 	}()
@@ -114,41 +124,29 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 				return
 			}
 
-			key := fmt.Sprintf("ratelimit:%s", ip)
+			l, bucket, fallback := limit, name, writeFallback
+			if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				l, bucket, fallback = limit*readLimitMultiplier, name+":read", readFallback
+			}
+			key := fmt.Sprintf("ratelimit:%s:%s", bucket, rateLimitSubject(r, tokens, ip))
 
-			allowed, err := limiter.Allow(r.Context(), key, limit, window)
+			allowed, err := limiter.Allow(r.Context(), key, l, window)
 			if err != nil {
+				// редис лежит - в ход идёт запасной лимитер
 				log.Warn("Rate limit check failed, falling back to in-memory limiter",
-					zap.String("ip", ip),
+					zap.String("key", key),
 					zap.Error(err),
 				)
-
-				// редис лежит - в ход идёт запасной лимитер
-				if !fallback.allow(ip) {
-					log.Info("Rate limit exceeded (fallback)",
-						zap.String("ip", ip),
-						zap.String("path", r.URL.Path),
-					)
-
-					w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
-					w.Header().Set("X-RateLimit-Window", window.String())
-					w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
-
-					writeError(w, errors.ErrRateLimitExceeded)
-					return
-				}
-
-				next.ServeHTTP(w, r)
-				return
+				allowed = fallback.allow(key)
 			}
 
 			if !allowed {
 				log.Info("Rate limit exceeded",
-					zap.String("ip", ip),
+					zap.String("key", key),
 					zap.String("path", r.URL.Path),
 				)
 
-				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l))
 				w.Header().Set("X-RateLimit-Window", window.String())
 				w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
 
@@ -159,6 +157,20 @@ func RateLimit(limiter RateLimiter, limit int, window time.Duration, log *logger
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// rateLimitSubject - за кем считаются запросы. блэклист токена тут не
+// проверяется: отозванный токен всё равно отобьёт Auth, а тратит он только
+// счётчик своего владельца
+func rateLimitSubject(r *http.Request, tokens AuthService, ip string) string {
+	if tokens != nil {
+		if token := ExtractToken(r); token != "" {
+			if claims, err := tokens.ValidateToken(token); err == nil {
+				return "user:" + claims.UserID.String()
+			}
+		}
+	}
+	return "ip:" + ip
 }
 
 func isLocalhost(ip string) bool {
