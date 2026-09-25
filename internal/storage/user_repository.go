@@ -102,8 +102,8 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
 		UPDATE users
-		SET username = $2, email = $3, password_hash = $4,
-		    password_changed_at = CASE WHEN password_hash IS DISTINCT FROM $4
+		SET username = $2, email = $3, password_hash = $4::varchar,
+		    password_changed_at = CASE WHEN password_hash IS DISTINCT FROM $4::varchar
 		                               THEN NOW() ELSE password_changed_at END
 		WHERE id = $1
 		RETURNING updated_at
