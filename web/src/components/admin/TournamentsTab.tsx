@@ -627,7 +627,6 @@ export function TournamentsTab({
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-xs text-gray-400">
                                   {game.name}
-                                  {gameStatus && ` • Раунд ${gameStatus.current_round}`}
                                 </span>
                                 {isActive && (
                                   <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">

@@ -2589,8 +2589,6 @@ components:
           type: string
           format: date-time
           nullable: true
-        current_round:
-          type: integer
         auto_round_enabled:
           type: boolean
         auto_round_interval_seconds:

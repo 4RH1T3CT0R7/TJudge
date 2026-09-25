@@ -1569,7 +1569,6 @@ export interface components {
             round_completed?: boolean;
             /** Format: date-time */
             round_completed_at?: string | null;
-            current_round?: number;
             auto_round_enabled?: boolean;
             auto_round_interval_seconds?: number;
             /** Format: date-time */
