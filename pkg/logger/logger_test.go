@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,6 +38,34 @@ func TestNewWithOptions_Async(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, log)
 	_ = log.Sync() // sync на stdout иногда ругается, это ок
+}
+
+// асинхронный логгер сбрасывает буфер сам, без Sync: иначе при падении
+// процесса хвост логов пропадает
+func TestNewWithOptions_AsyncFlushesWithoutSync(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	stdout := os.Stdout
+	os.Stdout = w
+	log, err := NewWithOptions(Options{Level: "info", Format: "json", Async: true})
+	os.Stdout = stdout
+	require.NoError(t, err)
+	defer func() { _ = log.Sync() }()
+
+	log.Info("flush me")
+
+	got := make(chan string, 1)
+	go func() {
+		buf := make([]byte, 1024)
+		n, _ := r.Read(buf)
+		got <- string(buf[:n])
+	}()
+	select {
+	case line := <-got:
+		assert.Contains(t, line, "flush me")
+	case <-time.After(3 * time.Second):
+		t.Fatal("буфер не сброшен без Sync")
+	}
 }
 
 func TestLogger_LogError(t *testing.T) {
