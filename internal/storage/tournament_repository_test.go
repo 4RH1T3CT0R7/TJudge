@@ -377,9 +377,11 @@ func (s *TournamentRepositorySuite) TestGetParticipantsCount_AfterAdding() {
 }
 
 func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
+	ctx := context.Background()
 	user := s.createTrackedUser("tp_lbo")
 	tournament := s.createTrackedTournament("TPLBO1", user.ID)
 	game := s.createTrackedGame("lbo_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
 
 	a := s.createTeamEntrant(tournament.ID, game.ID, "TLBOA1")
 	b := s.createTeamEntrant(tournament.ID, game.ID, "TLBOB1")
@@ -390,7 +392,6 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	s.completeMatch(tournament.ID, b.ID, c.ID, game.Name, 8, 2, 1)
 	s.completeMatch(tournament.ID, c.ID, a.ID, game.Name, 1, 9, 2)
 
-	ctx := context.Background()
 	leaderboard, err := s.repo.GetLeaderboard(ctx, tournament.ID, 10)
 	require.NoError(s.T(), err)
 	require.Len(s.T(), leaderboard, 3)
@@ -409,16 +410,65 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	}
 }
 
+// лидерборд: строка на команду и игру (только последняя версия), статистика
+// считается одинаково с лидербордом игры, форфейт - это сыгранный матч
+func (s *TournamentRepositorySuite) TestGetLeaderboard_LatestVersionsAndForfeits() {
+	ctx := context.Background()
+	user1 := s.createTrackedUser("tp_lbf1")
+	user2 := s.createTrackedUser("tp_lbf2")
+	tournament := s.createTrackedTournament("TPLBF1", user1.ID)
+	game := s.createTrackedGame("lbf_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+	team1 := s.createTrackedTeam(tournament.ID, user1.ID, "TLBF01")
+	team2 := s.createTrackedTeam(tournament.ID, user2.ID, "TLBF02")
+
+	old1 := s.createTrackedProgram(user1.ID, &team1.ID, &tournament.ID, &game.ID, "BotLBF1v1", 1)
+	new1 := s.createTrackedProgram(user1.ID, &team1.ID, &tournament.ID, &game.ID, "BotLBF1v2", 2)
+	p2 := s.createTrackedProgram(user2.ID, &team2.ID, &tournament.ID, &game.ID, "BotLBF2", 1)
+	for _, p := range []*models.Program{old1, new1, p2} {
+		s.createTestParticipant(tournament.ID, p.ID, 1500)
+	}
+
+	finish := func(p1, p2 uuid.UUID, status string, winner int) {
+		m := s.createTrackedMatch(tournament.ID, p1, p2, game.Name, models.MatchRunning)
+		_, err := s.database.ExecContext(ctx,
+			"UPDATE matches SET status = $2, winner = $3, score1 = 3, score2 = 1 WHERE id = $1", m.ID, status, winner)
+		require.NoError(s.T(), err)
+	}
+	finish(new1.ID, p2.ID, "completed", 1) // победа team1
+	finish(p2.ID, new1.ID, "failed", 1)    // форфейт: упала программа team1
+	finish(p2.ID, new1.ID, "failed", 0)    // сбой без победителя - не считается
+
+	leaderboard, err := s.repo.GetLeaderboard(ctx, tournament.ID, 10)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), leaderboard, 2, "старая версия team1 не должна попадать в таблицу")
+
+	byGame, err := s.repo.GetLeaderboardByGameType(ctx, tournament.ID, game.Name, 10)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), byGame, 2)
+
+	for _, entries := range [][]*models.LeaderboardEntry{leaderboard, byGame} {
+		for _, e := range entries {
+			assert.NotEqual(s.T(), old1.ID, e.ProgramID)
+			assert.Equal(s.T(), 2, e.TotalGames)
+			assert.Equal(s.T(), e.TotalGames, e.Wins+e.Losses+e.Draws)
+			assert.Equal(s.T(), 1, e.Wins)
+			assert.Equal(s.T(), 1, e.Losses)
+		}
+	}
+}
+
 func (s *TournamentRepositorySuite) TestGetLeaderboard_LimitEnforced() {
+	ctx := context.Background()
 	user := s.createTrackedUser("tp_lbl")
 	tournament := s.createTrackedTournament("TPLBL1", user.ID)
 	game := s.createTrackedGame("lbl_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
 
 	for i := 0; i < 5; i++ {
 		s.createTeamEntrant(tournament.ID, game.ID, fmt.Sprintf("TLBL0%d", i))
 	}
 
-	ctx := context.Background()
 	leaderboard, err := s.repo.GetLeaderboard(ctx, tournament.ID, 2)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), leaderboard, 2)
@@ -437,6 +487,7 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 
 	// теперь полный сценарий: команда + игра + прога + матч
 	game := s.createTrackedGame("cgl_game1")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
 	team := s.createTrackedTeam(tournament.ID, user.ID, "TCGL01")
 	prog1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotCGL1", 1)
 
