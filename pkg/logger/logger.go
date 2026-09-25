@@ -2,6 +2,7 @@ package logger
 
 import (
 	"os"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -52,11 +53,13 @@ func NewWithOptions(opts Options) (*Logger, error) {
 
 	var writeSyncer zapcore.WriteSyncer
 	if opts.Async {
-		// буфер 8кб, флашится когда заполнится или по Sync() (mains делают defer Sync)
+		// буфер 8кб, флашится когда заполнится, раз в секунду и по Sync()
+		// (mains делают defer Sync). FlushInterval 0 в zap значит 30с - при
+		// падении процесса терялось бы до 30с логов
 		writeSyncer = &zapcore.BufferedWriteSyncer{
 			WS:            zapcore.AddSync(os.Stdout),
 			Size:          8 * 1024,
-			FlushInterval: 0,
+			FlushInterval: time.Second,
 		}
 	} else {
 		writeSyncer = zapcore.AddSync(os.Stdout)
