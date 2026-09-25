@@ -84,7 +84,7 @@ func loadSeccompProfile(path string) (string, error) {
 
 // Execute прогоняет матч через tjudge-cli
 func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error) {
-	e.log.Info("Executing match",
+	e.log.Debug("Executing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("game_type", match.GameType),
 		zap.String("program1", program1Path),
@@ -106,7 +106,7 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 	result.MatchID = match.ID
 	result.Duration = time.Since(start)
 
-	e.log.Info("Match executed",
+	e.log.Debug("Match executed",
 		zap.String("match_id", match.ID.String()),
 		zap.Int("score1", result.Score1),
 		zap.Int("score2", result.Score2),
@@ -124,7 +124,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	// формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
 
-	e.log.Info("Creating container",
+	e.log.Debug("Creating container",
 		zap.Strings("cmd", cmd),
 		zap.Strings("binds", binds),
 		zap.String("image", e.config.DockerImage),
@@ -191,13 +191,12 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 
 		stderr := sanitizeStderr(stderrRaw)
 
-		e.log.Info("Container finished",
+		// stdout до 1мб в лог не идёт, только размер
+		e.log.Debug("Container finished",
 			zap.String("container_id", containerID),
 			zap.Int64("exit_code", status.StatusCode),
-			zap.String("stdout", stdout),
 			zap.String("stderr", stderr),
 			zap.Int("stdout_len", len(stdout)),
-			zap.Int("stderr_len", len(stderr)),
 		)
 
 		return e.parseResult(status.StatusCode, stdout, stderr)
@@ -343,12 +342,6 @@ func sanitizeStderr(raw string) string {
 
 // parseResult разбирает вывод tjudge-cli
 func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.MatchResult, error) {
-	e.log.Info("Parsing result",
-		zap.Int64("exit_code", exitCode),
-		zap.String("stdout", stdout),
-		zap.String("stderr", stderr),
-	)
-
 	result := &models.MatchResult{
 		ErrorCode: int(exitCode),
 	}
