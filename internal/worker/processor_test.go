@@ -255,6 +255,27 @@ func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
 	matchRepo.AssertNotCalled(t, "UpdateResultWithOutbox", mock.Anything, mock.Anything, mock.Anything)
 }
 
+// ctx матча отменён посреди исполнения (shutdown): возврат в pending всё равно
+// пишется, а не падает на мёртвом ctx с матчем, застрявшим в running
+func TestProcessor_Process_InfraFailureAfterCancel_ResetsWithLiveCtx(t *testing.T) {
+	p, matchRepo, _, programRepo, _, executorMock := newTestProcessor(t)
+	match := testProcessorMatch()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return(twoPrograms(match), nil)
+	executorMock.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
+		Run(func(mock.Arguments) { cancel() }).
+		Return(nil, &executor.InfraError{Err: context.Canceled})
+	matchRepo.On("ResetToPending", mock.MatchedBy(func(c context.Context) bool { return c.Err() == nil }), match.ID).
+		Return(nil)
+
+	err := p.Process(ctx, match)
+	assert.Error(t, err)
+	matchRepo.AssertExpectations(t)
+}
+
 // updateRatings: ошибка ProcessMatchResult пробрасывается наверх
 func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
 	p, _, ratingRepo, _, ratingService, _ := newTestProcessor(t)
