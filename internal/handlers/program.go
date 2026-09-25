@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,11 +21,9 @@ import (
 
 // ProgramRepository интерфейс для работы с программами
 type ProgramRepository interface {
-	Create(ctx context.Context, program *models.Program) error
 	CreateWithAtomicVersion(ctx context.Context, program *models.Program) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error)
-	Update(ctx context.Context, program *models.Program) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
 	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error)
@@ -119,15 +116,15 @@ func NewProgramHandler(
 	}
 }
 
-// @Summary Создать программу
-// @Description Создаёт новую программу. Поддерживает загрузку файла (multipart/form-data) и JSON
+// @Summary Загрузить программу
+// @Description Загружает новую версию программы команды (multipart/form-data)
 // @Tags programs
-// @Accept multipart/form-data,json
+// @Accept multipart/form-data
 // @Produce json
-// @Param file formData file false "Файл программы"
-// @Param team_id formData string false "Team ID" format(uuid)
-// @Param tournament_id formData string false "Tournament ID" format(uuid)
-// @Param game_id formData string false "Game ID" format(uuid)
+// @Param file formData file true "Файл программы"
+// @Param team_id formData string true "Team ID" format(uuid)
+// @Param tournament_id formData string true "Tournament ID" format(uuid)
+// @Param game_id formData string true "Game ID" format(uuid)
 // @Param name formData string false "Название программы"
 // @Security BearerAuth
 // @Success 201 {object} models.Program
@@ -142,171 +139,9 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-
-	if strings.HasPrefix(contentType, "multipart/form-data") {
-		h.handleFileUpload(w, r, userID)
-		return
-	}
-
-	h.handleJSONCreate(w, r, userID)
-}
-
-func (h *ProgramHandler) handleJSONCreate(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
-	var req struct {
-		Name     string `json:"name"`
-		GameType string `json:"game_type"`
-		CodePath string `json:"code_path"`
-		Language string `json:"language"`
-	}
-
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		h.log.Info("Invalid request body", zap.Error(err))
-		writeError(w, errors.ErrInvalidInput.WithError(err))
-		return
-	}
-
-	// path-traversal отбрасывается, абсолютные пути должны быть внутри upload-директории
-	if req.CodePath != "" {
-		cleaned := filepath.Clean(req.CodePath)
-		if strings.Contains(cleaned, "..") {
-			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
-			return
-		}
-		// абсолютные пути должны лежать внутри upload-директории
-		if filepath.IsAbs(cleaned) {
-			uploadDir := filepath.Clean(h.uploadDir)
-			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
-				writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
-				return
-			}
-		}
-		req.CodePath = cleaned
-	}
-
-	program := &models.Program{
-		ID:       uuid.New(),
-		UserID:   userID,
-		Name:     req.Name,
-		GameType: req.GameType,
-		CodePath: req.CodePath,
-		Language: req.Language,
-		Version:  1,
-	}
-
-	if err := program.Validate(); err != nil {
-		writeError(w, errors.ErrValidation.WithError(err))
-		return
-	}
-
-	if err := h.programRepo.Create(r.Context(), program); err != nil {
-		h.log.LogError("Failed to create program", err)
-		writeError(w, err)
-		return
-	}
-
-	h.log.Info("Program created",
-		zap.String("program_id", program.ID.String()),
-		zap.String("user_id", userID.String()),
-		zap.String("name", program.Name),
-	)
-
-	writeJSON(w, http.StatusCreated, program)
-}
-
-// @Summary Обновить программу
-// @Description Обновляет метаданные программы (название, путь, язык)
-// @Tags programs
-// @Accept json
-// @Produce json
-// @Param id path string true "Program ID" format(uuid)
-// @Param request body object{name=string,code_path=string,language=string} true "Данные для обновления"
-// @Security BearerAuth
-// @Success 200 {object} models.Program
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /programs/{id} [put]
-func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID, err := middleware.RequireUserID(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
-	id, ok := parseUUIDParam(w, r, "id", "program")
-	if !ok {
-		return
-	}
-
-	isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
-	if err != nil {
-		h.log.LogError("Failed to check ownership", err)
-		writeError(w, err)
-		return
-	}
-	if !isOwner {
-		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
-		return
-	}
-
-	var req struct {
-		Name     string `json:"name"`
-		CodePath string `json:"code_path"`
-		Language string `json:"language"`
-	}
-
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		h.log.Info("Invalid request body", zap.Error(err))
-		writeError(w, errors.ErrInvalidInput.WithError(err))
-		return
-	}
-
-	if req.CodePath != "" {
-		cleaned := filepath.Clean(req.CodePath)
-		if strings.Contains(cleaned, "..") {
-			writeError(w, errors.ErrForbidden.WithMessage("invalid code path"))
-			return
-		}
-		if filepath.IsAbs(cleaned) {
-			uploadDir := filepath.Clean(h.uploadDir)
-			if !strings.HasPrefix(cleaned, uploadDir+string(filepath.Separator)) {
-				writeError(w, errors.ErrForbidden.WithMessage("code path must be within the programs directory"))
-				return
-			}
-		}
-		req.CodePath = cleaned
-	}
-
-	program, err := h.programRepo.GetByID(r.Context(), id)
-	if err != nil {
-		h.log.LogError("Failed to get program", err)
-		writeError(w, err)
-		return
-	}
-
-	program.Name = req.Name
-	program.CodePath = req.CodePath
-	program.Language = req.Language
-
-	if err := program.Validate(); err != nil {
-		writeError(w, errors.ErrValidation.WithError(err))
-		return
-	}
-
-	if err := h.programRepo.Update(r.Context(), program); err != nil {
-		h.log.LogError("Failed to update program", err)
-		writeError(w, err)
-		return
-	}
-
-	h.log.Info("Program updated",
-		zap.String("program_id", id.String()),
-		zap.String("user_id", userID.String()),
-	)
-
-	writeJSON(w, http.StatusOK, program)
+	// программа создаётся только загрузкой файла: путь к коду задаёт сервер.
+	// JSON-создание и PUT с code_path позволяли подставить файл чужой команды
+	h.handleFileUpload(w, r, userID)
 }
 
 // @Summary Удалить программу

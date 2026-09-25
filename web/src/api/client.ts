@@ -328,10 +328,6 @@ class ApiClient {
     return data;
   }
 
-  async joinTournament(id: string, programId: string): Promise<void> {
-    await this.client.post(`/tournaments/${id}/join`, { program_id: programId });
-  }
-
   async startTournament(id: string): Promise<void> {
     await this.client.post(`/tournaments/${id}/start`);
   }

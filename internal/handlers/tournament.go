@@ -20,7 +20,6 @@ type TournamentService interface {
 	Create(ctx context.Context, req *tournament.CreateRequest) (*models.Tournament, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 	List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error)
-	Join(ctx context.Context, req *tournament.JoinRequest) error
 	Start(ctx context.Context, tournamentID uuid.UUID) error
 	Complete(ctx context.Context, tournamentID uuid.UUID) error
 	Delete(ctx context.Context, tournamentID uuid.UUID) error
@@ -169,56 +168,6 @@ func (h *TournamentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, t)
-}
-
-// @Summary Присоединиться к турниру
-// @Description Присоединяет программу к турниру
-// @Tags tournaments
-// @Accept json
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param request body object{program_id=string} true "ID программы для участия"
-// @Security BearerAuth
-// @Success 200 {object} object{status=string}
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/join [post]
-func (h *TournamentHandler) Join(w http.ResponseWriter, r *http.Request) {
-	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
-	if !ok {
-		return
-	}
-
-	var req struct {
-		ProgramID uuid.UUID `json:"program_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.log.Info("Invalid request body", zap.Error(err))
-		writeError(w, errors.ErrInvalidInput.WithError(err))
-		return
-	}
-
-	joinReq := &tournament.JoinRequest{
-		TournamentID: tournamentID,
-		ProgramID:    req.ProgramID,
-	}
-
-	if err := h.tournamentService.Join(r.Context(), joinReq); err != nil {
-		h.log.LogError("Failed to join tournament", err,
-			zap.String("tournament_id", tournamentID.String()),
-			zap.String("program_id", req.ProgramID.String()),
-		)
-		writeError(w, err)
-		return
-	}
-
-	h.log.Info("Joined tournament",
-		zap.String("tournament_id", tournamentID.String()),
-		zap.String("program_id", req.ProgramID.String()),
-	)
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "joined"})
 }
 
 // @Summary Запустить турнир

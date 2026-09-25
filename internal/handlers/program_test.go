@@ -154,41 +154,25 @@ func createMultipartRequest(t *testing.T, fields map[string]string, fileName str
 func TestProgramHandler_Create(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("successfully create program", func(t *testing.T) {
+	// путь к коду задаёт только сервер: JSON с code_path больше не создаёт программу
+	t.Run("json with code_path rejected", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
 		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
-		userID := uuid.New()
-		reqBody := map[string]string{
-			"name":      "My Chess AI",
-			"game_type": "chess",
-			"code_path": "/data/programs/chess/ai.py",
+		body, _ := json.Marshal(map[string]string{
+			"name":      "stolen",
+			"code_path": "/data/programs/aaaaaaaa_bbbbbbbb_cccccccc.py",
 			"language":  "python",
-		}
-
-		mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
-			return p.UserID == userID && p.Name == reqBody["name"]
-		})).Return(nil)
-
-		body, _ := json.Marshal(reqBody)
+		})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/programs", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
-
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		req = req.WithContext(ctx)
+		req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, uuid.New()))
 
 		w := httptest.NewRecorder()
-
 		handler.Create(w, req)
 
-		assert.Equal(t, http.StatusCreated, w.Code)
-
-		var response models.Program
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, reqBody["name"], response.Name)
-		assert.Equal(t, userID, response.UserID)
-
-		mockRepo.AssertExpectations(t)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		mockRepo.AssertNotCalled(t, "CreateWithAtomicVersion", mock.Anything, mock.Anything)
 	})
 
 	t.Run("missing user ID in context", func(t *testing.T) {
@@ -359,95 +343,6 @@ func TestProgramHandler_Get(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		handler.Get(w, req)
-
-		assert.Equal(t, http.StatusForbidden, w.Code)
-
-		mockRepo.AssertExpectations(t)
-	})
-}
-
-func TestProgramHandler_Update(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully update program", func(t *testing.T) {
-		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
-
-		userID := uuid.New()
-		programID := uuid.New()
-
-		existingProgram := &models.Program{
-			ID:       programID,
-			UserID:   userID,
-			Name:     "Old Name",
-			GameType: "chess",
-			CodePath: "/old/path",
-			Language: "python",
-		}
-
-		reqBody := map[string]string{
-			"name":      "New Name",
-			"code_path": "/data/programs/new/path",
-			"language":  "javascript",
-		}
-
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
-		mockRepo.On("GetByID", mock.Anything, programID).Return(existingProgram, nil)
-		mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
-			return p.Name == reqBody["name"] && p.CodePath == reqBody["code_path"]
-		})).Return(nil)
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", programID.String())
-		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Update(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Program
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, reqBody["name"], response.Name)
-
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("not the owner", func(t *testing.T) {
-		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
-
-		userID := uuid.New()
-		programID := uuid.New()
-
-		reqBody := map[string]string{
-			"name":      "New Name",
-			"code_path": "/data/programs/new/path",
-			"language":  "javascript",
-		}
-
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/programs/"+programID.String(), bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", programID.String())
-		ctx = context.WithValue(ctx, chi.RouteCtxKey, rctx)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.Update(w, req)
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
 
