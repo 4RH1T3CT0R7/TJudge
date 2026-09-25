@@ -230,7 +230,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Tournament leaderboard */
+        /**
+         * Tournament leaderboard
+         * @description Строка на последнюю версию программы команды в каждой игре турнира. Для несуществующего турнира - пустой список.
+         */
         get: operations["tournamentsGetLeaderboard"];
         put?: never;
         post?: never;
@@ -1373,6 +1376,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin audit log (admin)
+         * @description Последние записи admin-действий, новые первыми.
+         */
+        get: operations["adminAuditList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1817,6 +1840,26 @@ export interface components {
         };
         HeadToHeadListEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["HeadToHeadCell"][];
+        };
+        AuditLogEntry: {
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: uuid
+             * @description Нулевой UUID, если пользователь-актор удалён
+             */
+            actor_id?: string;
+            actor_role?: string;
+            action?: string;
+            target_type?: string;
+            target_id?: string;
+            method?: string;
+            path?: string;
+            status_code?: number;
+            ip?: string;
+            user_agent?: string;
+            /** Format: date-time */
+            created_at?: string;
         };
         RatingHistoryListEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["RatingHistoryPoint"][];
@@ -2410,7 +2453,6 @@ export interface operations {
                     "application/json": components["schemas"]["LeaderboardListEnvelope"];
                 };
             };
-            404: components["responses"]["NotFound"];
         };
     };
     tournamentsGetCrossGameLeaderboard: {
@@ -4206,6 +4248,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuccessEnvelope"] & {
                         data?: components["schemas"]["HealthStatus"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    adminAuditList: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audit log entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["AuditLogEntry"][];
                     };
                 };
             };

@@ -391,6 +391,9 @@ paths:
     get:
       tags: [tournaments]
       summary: Tournament leaderboard
+      description: >-
+        Строка на последнюю версию программы команды в каждой игре турнира.
+        Для несуществующего турнира - пустой список.
       operationId: tournamentsGetLeaderboard
       parameters:
         - name: limit
@@ -405,8 +408,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LeaderboardListEnvelope'
-        '404':
-          $ref: '#/components/responses/NotFound'
 
   /tournaments/{id}/cross-game-leaderboard:
     parameters:
@@ -967,6 +968,7 @@ paths:
           schema:
             type: integer
             default: 200
+            maximum: 500
       responses:
         '200':
           description: Rating history points (chronological)
@@ -2116,6 +2118,41 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /admin/audit:
+    get:
+      tags: [system]
+      summary: Admin audit log (admin)
+      description: Последние записи admin-действий, новые первыми.
+      operationId: adminAuditList
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 500
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditLogEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 # ---------------------------------------------------------------------------
 # Components
 # ---------------------------------------------------------------------------
@@ -3063,6 +3100,25 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/HeadToHeadCell'
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actor_id:
+          type: string
+          format: uuid
+          description: Нулевой UUID, если пользователь-актор удалён
+        actor_role: { type: string }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        method: { type: string }
+        path: { type: string }
+        status_code: { type: integer }
+        ip: { type: string }
+        user_agent: { type: string }
+        created_at: { type: string, format: date-time }
 
     RatingHistoryListEnvelope:
       allOf:
