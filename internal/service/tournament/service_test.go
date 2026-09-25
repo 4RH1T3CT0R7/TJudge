@@ -748,6 +748,31 @@ func TestService_RunAllMatches(t *testing.T) {
 		assert.Equal(t, 0, count)
 		matchRepo.AssertCalled(t, "DeleteBatch", mock.Anything, mock.AnythingOfType("[]uuid.UUID"))
 	})
+
+	// раунд закоммичен, а запрос отменён (клиент ушёл): постановка в очередь всё равно идёт
+	t.Run("enqueue_survives_request_cancel", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		id := uuid.New()
+		participants := map[string][]*models.TournamentParticipant{
+			"chess": {
+				{ID: uuid.New(), ProgramID: uuid.New(), TournamentID: id},
+				{ID: uuid.New(), ProgramID: uuid.New(), TournamentID: id},
+			},
+		}
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentActive}, nil)
+		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{}, nil)
+		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(participants, nil)
+		gameRepo.On("StartNewRound", ctx, id, []string{"chess"}, mock.Anything).Run(func(mock.Arguments) { cancel() }).Return(nil)
+		queueManager.On("EnqueueBatch", mock.MatchedBy(func(c context.Context) bool { return c.Err() == nil }), mock.Anything).Return(nil)
+
+		count, err := service.RunAllMatches(ctx, id)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+	})
 }
 
 func TestService_RunGameMatches(t *testing.T) {
