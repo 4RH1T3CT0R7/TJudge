@@ -652,31 +652,26 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	return true
 }
 
-// validateProgramSource прогоняет исходник через статический анализ (codescan)
-// и при CODESCAN_STRICT=true с запрещёнными API-вызовами возвращает сообщение
-// об отказе, иначе nil.
+// logCodeScan пишет находки статического анализа (codescan) в лог и только.
+// отказывать в загрузке по нему нельзя: он срабатывает на обычные import sys и
+// re.compile и обходится одной строкой, изоляцию даёт песочница.
 //
 // проверка синтаксиса и компиляция тут не выполняются: недоверенный код никогда
 // не должен попадать в тулчейны на хосте API-процесса. программа создаётся в
 // статусе compiling, а собирает её worker уже в Docker-песочнице
-func (h *ProgramHandler) validateProgramSource(language, filePath string) *string {
+func (h *ProgramHandler) logCodeScan(language, filePath string) {
 	scanner := codescan.ScannerFor(language)
 	if scanner == nil {
-		return nil
+		return
 	}
 
 	// #nosec G304 -- тот же filePath что собран выше из uuid, не пользовательский ввод
 	src, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil
+		return
 	}
 
-	findings := scanner.Scan(string(src))
-	if len(findings) == 0 {
-		return nil
-	}
-
-	for _, f := range findings {
+	for _, f := range scanner.Scan(string(src)) {
 		h.log.Warn("Code scan finding",
 			zap.String("file", filePath),
 			zap.String("language", language),
@@ -686,22 +681,14 @@ func (h *ProgramHandler) validateProgramSource(language, filePath string) *strin
 			zap.String("message", f.Message),
 		)
 	}
-
-	if os.Getenv("CODESCAN_STRICT") == "true" && codescan.HasForbidden(findings) {
-		msg := "Обнаружены запрещённые API-вызовы; загрузка отклонена (CODESCAN_STRICT)"
-		return &msg
-	}
-
-	return nil
 }
 
 // handleFileUpload — основной путь загрузки бота: multipart -> проверки доступа
-// и блокировок -> запись на диск -> codescan -> запись в БД -> очередь компиляции.
+// и блокировок -> запись на диск -> codescan в лог -> запись в БД -> очередь
+// компиляции.
 //
 // статусная модель: программа рождается в compiling и уходит в очередь; worker
-// собирает её в песочнице и переводит в ready или failed. исключение — строгий
-// codescan (CODESCAN_STRICT): при запрещённых API-вызовах компилировать нечего,
-// и запись сразу создаётся в failed
+// собирает её в песочнице и переводит в ready или failed
 func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request, userID uuid.UUID) {
 	// размер тела жёстко ограничивается ещё до чтения формы
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxFileSize)
@@ -755,15 +742,8 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// статический анализ исходника (codescan); компиляция и проверка синтаксиса
-	// идут асинхроно в Docker-песочнице worker'а
-	scanError := h.validateProgramSource(language, filePath)
-
-	status := models.ProgramCompiling
-	if scanError != nil {
-		// запрещённые API при CODESCAN_STRICT: компилировать нечего
-		status = models.ProgramFailed
-	}
+	// компиляция и проверка синтаксиса идут асинхронно в Docker-песочнице worker'а
+	h.logCodeScan(language, filePath)
 
 	// запись в БД с атомарным назначением версии
 	program := &models.Program{
@@ -777,8 +757,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		CodePath:     filePath, // исходник; после компиляции worker заменит на бинарник
 		FilePath:     &filePath,
 		Language:     language,
-		Status:       status,
-		ErrorMessage: scanError,
+		Status:       models.ProgramCompiling,
 	}
 
 	// запись программы и регистрация её участником турнира - один запрос
@@ -793,7 +772,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	// программа ставится в очередь компиляции. при ошибке enqueue ничего не
 	// теряется: compile-worker периодически возвращает в очередь программы,
 	// зависшие в статусе compiling
-	if status == models.ProgramCompiling && h.compileQueue != nil {
+	if h.compileQueue != nil {
 		if err := h.compileQueue.Enqueue(r.Context(), program.ID); err != nil {
 			h.log.LogError("Failed to enqueue compile task, stuck-recovery will retry", err,
 				zap.String("program_id", program.ID.String()),
