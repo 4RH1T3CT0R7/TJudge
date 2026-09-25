@@ -359,20 +359,26 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 	statusCh, errCh := c.dockerClient.ContainerWait(execCtx, containerID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
-		if err != nil {
-			return 0, "", infraErrorf("error waiting for builder container: %w", err)
+		// по истечении execCtx ошибка ожидания - это тот же дедлайн, разбор ниже
+		if execCtx.Err() == nil {
+			if err != nil {
+				return 0, "", infraErrorf("error waiting for builder container: %w", err)
+			}
+			return 0, "", infraErrorf("builder container: wait returned nil error without status")
 		}
-		return 0, "", infraErrorf("builder container: wait returned nil error without status")
 	case status := <-statusCh:
 		output := c.builderLogs(containerID)
 		return status.StatusCode, output, nil
 	case <-execCtx.Done():
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stopCancel()
-		_ = c.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
-		// таймаут компиляции - вина программы (компиляционная бомба), не инфры
-		return 1, "компиляция превысила лимит времени", nil
 	}
+
+	// контейнер убивает отложенный remove с Force
+	if ctx.Err() != nil {
+		// остановка воркера - программа остаётся в compiling, сборку повторят
+		return 0, "", infraErrorf("compilation interrupted: %w", ctx.Err())
+	}
+	// таймаут компиляции - вина программы (компиляционная бомба), не инфры
+	return 1, "компиляция превысила лимит времени", nil
 }
 
 // buildBuilderHostConfig собирает hostConfig для builder-контейнера. отличается

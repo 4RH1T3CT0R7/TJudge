@@ -17,7 +17,8 @@ func validConfig() *Config {
 		Server:   ServerConfig{Port: 8080},
 		Database: DatabaseConfig{Host: "localhost", Port: 5432, User: "tjudge", Name: "tjudge", MaxConnections: 10},
 		Redis:    RedisConfig{Host: "localhost", Port: 6379},
-		Worker:   WorkerConfig{MinWorkers: 1, MaxWorkers: 10, QueueSize: 100},
+		Worker:   WorkerConfig{MinWorkers: 1, MaxWorkers: 10, QueueSize: 100, Timeout: 90 * time.Second},
+		Executor: ExecutorConfig{Timeout: 60 * time.Second},
 		JWT:      JWTConfig{Secret: "test-secret-minimum-length", AccessTTL: 15 * time.Minute, RefreshTTL: 24 * time.Hour},
 		Logging:  LoggingConfig{Level: "info", Format: "json"},
 	}
@@ -119,6 +120,20 @@ func TestConfig_Validate_WorkerQueueSizeLessThan1(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "queue_size")
+}
+
+// ctx воркера не должен истекать раньше таймаута контейнера: иначе таймаут
+// программы не записывается и матч бесконечно возвращается через recovery
+func TestConfig_Validate_WorkerTimeoutCoversExecutor(t *testing.T) {
+	cfg := validConfig()
+	cfg.Worker.Timeout = 60 * time.Second
+	cfg.Executor.Timeout = 60 * time.Second
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "WORKER_TIMEOUT")
+
+	cfg.Worker.Timeout = 80 * time.Second
+	assert.NoError(t, cfg.Validate())
 }
 
 func TestConfig_Validate_JWTSecretInProduction(t *testing.T) {

@@ -16,6 +16,9 @@ const defaultJWTSecret = "change-this-secret-in-production"
 // меньше 32 байт в prod нельзя, брутфорсится
 const minJWTSecretLength = 32
 
+// на сколько WORKER_TIMEOUT должен превышать EXECUTOR_TIMEOUT
+const workerTimeoutMargin = 20 * time.Second
+
 // секреты-заглушки, которые нельзя тащить в прод (сравнение без регистра)
 var jwtSecretPlaceholders = []string{
 	defaultJWTSecret,
@@ -226,6 +229,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Worker.QueueSize < 1 {
 		return fmt.Errorf("worker queue_size must be positive")
+	}
+	// таймаут обработки матча накрывает таймаут контейнера с запасом на
+	// create/cleanup и запись результата. иначе первым истекает ctx воркера,
+	// таймаут программы не записывается и матч крутится через recovery вечно
+	if c.Worker.Timeout < c.Executor.Timeout+workerTimeoutMargin {
+		return fmt.Errorf("WORKER_TIMEOUT (%s) must be at least EXECUTOR_TIMEOUT (%s) + %s",
+			c.Worker.Timeout, c.Executor.Timeout, workerTimeoutMargin)
 	}
 
 	// jwt проверяется строго только в prod

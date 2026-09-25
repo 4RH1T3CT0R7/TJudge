@@ -169,7 +169,9 @@ func main() {
 		queueManager,
 		log,
 		worker.RecoveryConfig{
-			StuckDuration:    120 * time.Second, // Матч считается застрявшим после 120 секунд (> worker timeout 90s)
+			// дольше таймаута обработки матч никто не ведёт; с фиксированными 120с
+			// при WORKER_TIMEOUT > 120s recovery перезапускал бы живые матчи
+			StuckDuration:    cfg.Worker.Timeout + 30*time.Second,
 			BatchSize:        1000,
 			PeriodicInterval: 60 * time.Second, // Проверка каждые 60 секунд
 		},

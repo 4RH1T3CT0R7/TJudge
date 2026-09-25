@@ -141,9 +141,13 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		// тут важно различать два вида ошибок. инфраструктурная (докер лёг,
 		// образа нет) - программа не виновата, матч возвращается в pending,
 		// его повторит ретрай пула или recovery. а ошибка самой программы
-		// (упала, мусор в выводе) - терминальная, матч помечается failed
+		// (упала, мусор в выводе) - терминальная, матч помечается failed.
+		// итог пишется и при истёкшем ctx матча (shutdown, таймаут воркера),
+		// иначе матч остаётся running до recovery
+		writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
 		if executor.IsInfraError(err) {
-			if resetErr := p.matchRepo.ResetToPending(ctx, match.ID); resetErr != nil {
+			if resetErr := p.matchRepo.ResetToPending(writeCtx, match.ID); resetErr != nil {
 				p.log.Error("Failed to reset match to pending after infra error",
 					zap.String("match_id", match.ID.String()),
 					zap.Error(resetErr),
@@ -157,7 +161,7 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 			ErrorCode:    1,
 			ErrorMessage: err.Error(),
 		}
-		if dbErr := p.matchRepo.UpdateResult(ctx, match.ID, errorResult); dbErr != nil {
+		if dbErr := p.matchRepo.UpdateResult(writeCtx, match.ID, errorResult); dbErr != nil {
 			p.log.Error("Failed to save error result to database",
 				zap.String("match_id", match.ID.String()),
 				zap.Error(dbErr),

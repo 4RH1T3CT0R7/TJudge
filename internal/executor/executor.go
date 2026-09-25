@@ -95,10 +95,7 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 		return nil, err
 	}
 
-	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
-	defer cancel()
-
-	result, err := e.runInDocker(execCtx, match.GameType, programs[0], programs[1], binds)
+	result, err := e.runInDocker(ctx, match.GameType, programs[0], programs[1], binds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run match: %w", err)
 	}
@@ -130,6 +127,11 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		zap.String("image", e.config.DockerImage),
 	)
 
+	// у матча свой дедлайн поверх ctx воркера: по тому, какой из них истёк,
+	// видно, виновата программа или окружение
+	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
+	defer cancel()
+
 	containerConfig := &container.Config{
 		Image: e.config.DockerImage,
 		Cmd:   cmd,
@@ -139,7 +141,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	hostConfig := buildMatchHostConfig(e.config, binds)
 
 	resp, err := e.dockerClient.ContainerCreate(
-		ctx,
+		execCtx,
 		containerConfig,
 		hostConfig,
 		nil,
@@ -153,23 +155,26 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	containerID := resp.ID
 	defer e.cleanup(containerID) // стоит сразу после create - сработает на любом выходе, отсюда «ноль сирот»
 
-	if err := e.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+	if err := e.dockerClient.ContainerStart(execCtx, containerID, container.StartOptions{}); err != nil {
 		return nil, infraErrorf("failed to start container: %w", err)
 	}
 
-	statusCh, errCh := e.dockerClient.ContainerWait(ctx, containerID, container.WaitConditionNotRunning)
+	statusCh, errCh := e.dockerClient.ContainerWait(execCtx, containerID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
-		if err != nil {
-			// логи забираются даже при ошибке
-			_, stderr, logErr := e.getContainerLogs(ctx, containerID)
-			if logErr == nil && stderr != "" {
-				return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
+		// по истечении execCtx ошибка ожидания - это тот же дедлайн, разбор ниже
+		if execCtx.Err() == nil {
+			if err != nil {
+				// логи забираются даже при ошибке
+				_, stderr, logErr := e.getContainerLogs(ctx, containerID)
+				if logErr == nil && stderr != "" {
+					return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
+				}
+				return nil, infraErrorf("error waiting for container: %w", err)
 			}
-			return nil, infraErrorf("error waiting for container: %w", err)
+			// errCh с nil - так быть не должно, считается инфра-ошибкой
+			return nil, infraErrorf("container %s: wait returned nil error without status", containerID)
 		}
-		// errCh с nil - так быть не должно, считается инфра-ошибкой
-		return nil, infraErrorf("container %s: wait returned nil error without status", containerID)
 	case status := <-statusCh:
 		stdout, stderrRaw, err := e.getContainerLogs(ctx, containerID)
 		if err != nil {
@@ -190,14 +195,18 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		)
 
 		return e.parseResult(status.StatusCode, stdout, stderr)
-	case <-ctx.Done():
-		// таймаут - зависшая/медленная программа это вина программы, не окружения,
-		// поэтому ошибка терминальная (fmt.Errorf), не infra
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer stopCancel()
-		_ = e.dockerClient.ContainerStop(stopCtx, containerID, container.StopOptions{})
-		return nil, fmt.Errorf("match execution timeout")
+	case <-execCtx.Done():
 	}
+
+	// контейнер убивает отложенный cleanup (remove с Force)
+	if ctx.Err() != nil {
+		// отменён ctx воркера (shutdown, общий таймаут обработки) - программа
+		// тут ни при чём, матч надо повторить, а не записывать ей таймаут
+		return nil, infraErrorf("match interrupted: %w", ctx.Err())
+	}
+	// истёк собственный лимит матча - зависшая/медленная программа, это её
+	// вина, поэтому ошибка терминальная (fmt.Errorf), не infra
+	return nil, fmt.Errorf("match execution timeout")
 }
 
 // buildMatchHostConfig собирает докер-hostConfig для матч-контейнера. вынесено
@@ -413,12 +422,11 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 	return result, nil
 }
 
-// cleanup останавливает и force-удаляет контейнер, ошибку только логирует
+// cleanup force-удаляет контейнер (живой убивается сразу, без SIGTERM и
+// 10с ожидания stop), ошибку только логирует
 func (e *Executor) cleanup(containerID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	_ = e.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{})
 
 	err := e.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force: true,
