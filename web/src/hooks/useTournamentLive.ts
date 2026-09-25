@@ -1,12 +1,11 @@
 // Живые обновления турнира: WebSocket-события → точечная инвалидация
 // кэша TanStack Query.
 //
-// Раньше WS-сообщения работали как «пинг»: payload игнорировался, на каждое
-// событие шёл полный REST-рефетч, и параллельно крутился поллинг каждые 2с.
-// Теперь payload используется по назначению, а поллинг включается ТОЛЬКО
-// как fallback, когда WS-соединение недоступно (pollInterval из этого хука).
+// Поллинг включается только как fallback, когда WS-соединения нет
+// (pollInterval из этого хука). Это касается и анонимов: /ws требует токен,
+// поэтому у них живых событий нет и данные обновляет поллинг.
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from './useWebSocket';
 import { parseTournamentWSMessage } from '../types/ws';
@@ -19,34 +18,64 @@ interface UseTournamentLiveOptions {
   enabled?: boolean;
 }
 
-// Debounce инвалидаций матчей/лидербордов: при пачке завершившихся матчей
-// (раунд на 100 пар) не нужно дёргать рефетч на каждое событие.
-const INVALIDATE_DEBOUNCE_MS = 500;
+// Во время раунда match_result идут непрерывно (по событию на матч), а каждая
+// инвалидация - это запросы лидерборда и раундов. Окно 5с держит вкладку
+// в пределах серверного rate limit.
+export const INVALIDATE_THROTTLE_MS = 5000;
+
+/**
+ * Throttle с первым и хвостовым вызовом: первое событие обновляет данные сразу,
+ * всё, что пришло внутри окна, схлопывается в один вызов в конце окна.
+ */
+export function throttle(fn: () => void, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending = false;
+  const openWindow = () => {
+    timer = setTimeout(() => {
+      timer = null;
+      if (pending) {
+        pending = false;
+        fn();
+        openWindow();
+      }
+    }, ms);
+  };
+  const call = () => {
+    if (timer) {
+      pending = true;
+      return;
+    }
+    fn();
+    openWindow();
+  };
+  call.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending = false;
+  };
+  return call;
+}
 
 export function useTournamentLive({ tournamentId, enabled = true }: UseTournamentLiveOptions) {
   const queryClient = useQueryClient();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingMatchInvalidate = useRef(false);
 
-  const flushMatchInvalidations = useCallback(() => {
-    if (!pendingMatchInvalidate.current) return;
-    pendingMatchInvalidate.current = false;
-
-    void queryClient.invalidateQueries({ queryKey: queryKeys.leaderboard(tournamentId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentMatches(tournamentId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
-  }, [queryClient, tournamentId]);
-
-  const scheduleMatchInvalidation = useCallback(() => {
-    pendingMatchInvalidate.current = true;
-    if (debounceRef.current) return;
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      flushMatchInvalidations();
-    }, INVALIDATE_DEBOUNCE_MS);
-  }, [flushMatchInvalidations]);
+  const scheduleMatchInvalidation = useMemo(
+    () =>
+      throttle(() => {
+        // cancelRefetch: false - идущий запрос не перезапускается: иначе при
+        // медленном ответе результат выбрасывается и запросы копятся на сервере.
+        const opts = { cancelRefetch: false };
+        void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) }, opts);
+        // Счётчики раундов и открытые страницы матчей (ключи вложены).
+        void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) }, opts);
+        // Ключи страницы игры: лидерборд, матчи, head-to-head.
+        void queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'game'] }, opts);
+        // Авто-раунд сдвигает current_round и last_run_at, отдельного события нет.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) }, opts);
+      }, INVALIDATE_THROTTLE_MS),
+    [queryClient, tournamentId]
+  );
+  useEffect(() => scheduleMatchInvalidation.cancel, [scheduleMatchInvalidation]);
 
   const handleMessage = useCallback(
     (raw: WSMessage) => {
@@ -55,13 +84,13 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
 
       switch (message.type) {
         case 'tournament_update':
-          // Статус турнира меняется редко - инвалидируем сразу, без debounce.
+          // Статус турнира меняется редко - инвалидация сразу, без throttle.
           void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId) });
           break;
 
         case 'match_result':
           // Рейтинги уже в payload, но позиции лидерборда и тайбрейки
-          // считает сервер - debounced-инвалидация дешевле и корректнее
+          // считает сервер - редкая инвалидация дешевле и корректнее
           // ручного патча сортировки.
           scheduleMatchInvalidation();
           break;
@@ -94,9 +123,8 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
     onMessage: handleMessage,
   });
 
-  // Fallback-поллинг: только когда живых обновлений нет.
-  const pollInterval: number | false =
-    enabled && !isConnected ? FALLBACK_POLL_INTERVAL : false;
+  // Fallback-поллинг: только когда живых обновлений нет, в том числе без WS вовсе.
+  const pollInterval: number | false = isConnected ? false : FALLBACK_POLL_INTERVAL;
 
   return { isConnected, isOnline, reconnect, pollInterval };
 }
