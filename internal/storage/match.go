@@ -37,7 +37,7 @@ func (r *MatchRepository) Create(ctx context.Context, match *models.Match) error
 		match.Status,
 		match.Priority,
 		match.RoundNumber,
-		match.CreatedAt,
+		match.CreatedAt.UTC(),
 	)
 
 	if err != nil {
