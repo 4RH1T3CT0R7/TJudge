@@ -131,7 +131,7 @@ export function SystemTab({
   const handleClearQueue = async () => {
     if (!(await confirmDialog({
       title: 'Очистка очереди',
-      message: 'Очистить очередь? Все ожидающие матчи будут удалены.',
+      message: 'Очистить очередь? Все ожидающие матчи будут отменены.',
       confirmLabel: 'Очистить',
       danger: true,
     }))) {
@@ -492,10 +492,10 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'stuck',
-                        'Сбросить зависшие матчи (running > 2 минут) в очередь на повторное выполнение?',
+                        'Сбросить зависшие матчи (running дольше WORKER_TIMEOUT+30с) в pending? В очередь их вернёт воркер в течение минуты.',
                         async () => {
                           const r = await api.recoveryResetStuckMatches();
-                          return `Возвращено в очередь: ${r.reset} матчей`;
+                          return `Сброшено в pending: ${r.reset} матчей`;
                         }
                       )
                     }

@@ -1778,6 +1778,7 @@ paths:
     post:
       tags: [matches]
       summary: Clear match queue (admin)
+      description: Отменяет pending-матчи всех турниров в БД (status cancelled), затем очищает очереди Redis
       operationId: matchesQueueClear
       security:
         - BearerAuth: []
@@ -2005,7 +2006,8 @@ paths:
   /system/recovery/reset-stuck-matches:
     post:
       tags: [system]
-      summary: Reset stuck running matches back to queue (admin)
+      summary: Reset stuck running matches to pending (admin)
+      description: В очередь сброшенные матчи ставит периодический recovery воркера, в течение минуты
       operationId: systemRecoveryResetStuckMatches
       security:
         - BearerAuth: []
@@ -3268,7 +3270,7 @@ components:
                 type: integer
             stuck_running:
               type: integer
-              description: Матчи в running дольше 2 минут (чинится кнопкой восстановления)
+              description: Матчи в running дольше WORKER_TIMEOUT+30с (чинится кнопкой восстановления)
             last_completed_at:
               type: string
               format: date-time

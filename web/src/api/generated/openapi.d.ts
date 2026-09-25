@@ -1163,7 +1163,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Clear match queue (admin) */
+        /**
+         * Clear match queue (admin)
+         * @description Отменяет pending-матчи всех турниров в БД (status cancelled), затем очищает очереди Redis
+         */
         post: operations["matchesQueueClear"];
         delete?: never;
         options?: never;
@@ -1323,7 +1326,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset stuck running matches back to queue (admin) */
+        /**
+         * Reset stuck running matches to pending (admin)
+         * @description В очередь сброшенные матчи ставит периодический recovery воркера, в течение минуты
+         */
         post: operations["systemRecoveryResetStuckMatches"];
         delete?: never;
         options?: never;
@@ -1947,7 +1953,7 @@ export interface components {
                 by_status?: {
                     [key: string]: number;
                 };
-                /** @description Матчи в running дольше 2 минут (чинится кнопкой восстановления) */
+                /** @description Матчи в running дольше WORKER_TIMEOUT+30с (чинится кнопкой восстановления) */
                 stuck_running?: number;
                 /** Format: date-time */
                 last_completed_at?: string | null;
