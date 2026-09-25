@@ -52,17 +52,6 @@ func setupTestDB(t *testing.T) *storage.DB {
 	return database
 }
 
-// cleanupTable сносит строки таблицы по условию where
-func cleanupTable(t *testing.T, database *storage.DB, table, where string, args ...interface{}) {
-	t.Helper()
-	ctx := context.Background()
-	query := fmt.Sprintf("DELETE FROM %s WHERE %s", table, where)
-	_, err := database.ExecContext(ctx, query, args...)
-	if err != nil {
-		t.Logf("Warning: failed to cleanup table %s: %v", table, err)
-	}
-}
-
 // createTestUser создаёт юзера для теста
 func createTestUser(t *testing.T, repo *storage.UserRepository, suffix string) *models.User {
 	t.Helper()
