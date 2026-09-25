@@ -39,7 +39,7 @@ help:
 	@echo ""
 	@echo "  === Database ==="
 	@echo "  make migrate-up    - Apply database migrations"
-	@echo "  make migrate-down  - Rollback database migrations"
+	@echo "  make migrate-down  - Rollback the last migration"
 	@echo "  make admin         - Make user admin (EMAIL=user@example.com)"
 	@echo "  make create-user   - Register user via API (EMAIL=, USERNAME=, PASSWORD= [ADMIN=1])"
 	@echo ""
@@ -158,9 +158,9 @@ migrate-up:
 	@echo "Applying database migrations..."
 	go run ./cmd/migrations up
 
-# Rollback database migrations
+# Rollback the last migration
 migrate-down:
-	@echo "Rolling back database migrations..."
+	@echo "Rolling back the last migration..."
 	go run ./cmd/migrations down
 
 # Create new migration
