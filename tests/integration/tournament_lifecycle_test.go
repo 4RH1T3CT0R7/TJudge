@@ -84,14 +84,14 @@ func (s *TournamentLifecycleSuite) SetupTest() {
 
 func (s *TournamentLifecycleSuite) cleanupTestData() {
 	// Clean up in reverse order of foreign key dependencies
-	s.db.ExecContext(s.ctx, "DELETE FROM tournament_participants WHERE tournament_id IN (SELECT id FROM tournaments WHERE name LIKE 'lifecycle_test_%')")
-	s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE code_path LIKE 'lifecycle_test_%'")
-	s.db.ExecContext(s.ctx, "DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE name LIKE 'lifecycle_test_%')")
-	s.db.ExecContext(s.ctx, "DELETE FROM tournament_games WHERE tournament_id IN (SELECT id FROM tournaments WHERE name LIKE 'lifecycle_test_%')")
-	s.db.ExecContext(s.ctx, "DELETE FROM teams WHERE name LIKE 'lifecycle_test_%'")
-	s.db.ExecContext(s.ctx, "DELETE FROM tournaments WHERE name LIKE 'lifecycle_test_%'")
-	s.db.ExecContext(s.ctx, "DELETE FROM games WHERE name LIKE 'lifecycle_test_%'")
-	s.db.ExecContext(s.ctx, "DELETE FROM users WHERE username LIKE 'lifecycle_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM tournament_participants WHERE tournament_id IN (SELECT id FROM tournaments WHERE name LIKE 'lifecycle_test_%')")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE code_path LIKE 'lifecycle_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE name LIKE 'lifecycle_test_%')")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM tournament_games WHERE tournament_id IN (SELECT id FROM tournaments WHERE name LIKE 'lifecycle_test_%')")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM teams WHERE name LIKE 'lifecycle_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM tournaments WHERE name LIKE 'lifecycle_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM games WHERE name LIKE 'lifecycle_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM users WHERE username LIKE 'lifecycle_test_%'")
 }
 
 // =============================================================================
@@ -408,7 +408,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	require.Len(s.T(), teams, 3)
 
 	// Step 4: Upload programs for each team for each game
-	programs := make([]*models.Program, 0, 6)
 	for i, teamInfo := range []struct {
 		leader *models.User
 		team   *models.Team
@@ -425,7 +424,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 				game,
 				fmt.Sprintf("full_t%d_g%d", i+1, j+1),
 			)
-			programs = append(programs, prog)
 
 			// Add as tournament participant
 			participant := &models.TournamentParticipant{

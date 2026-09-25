@@ -63,7 +63,7 @@ func (s *AuthFlowSuite) TearDownSuite() {
 
 func (s *AuthFlowSuite) SetupTest() {
 	// Clean up blacklist keys before each test
-	s.cache.Del(s.ctx, "blacklist:token:*")
+	_ = s.cache.Del(s.ctx, "blacklist:token:*")
 }
 
 // =============================================================================
