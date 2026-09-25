@@ -414,7 +414,10 @@ func TestRedisBridge_ApiEventsReachBroadcaster(t *testing.T) {
 	got := make(chanBroadcaster, 3)
 	sub := NewRedisEventSubscriber(adapter, &SyncNotifier{Broadcaster: got, Log: log}, log)
 	go sub.Start(ctx)
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		n, _ := client.PubSubNumSub(ctx, defaultChannel).Result()
+		return n[defaultChannel] > 0
+	}, time.Second, 10*time.Millisecond)
 
 	api := &SyncNotifier{Redis: NewRedisEventPublisher(adapter, log), Log: log}
 	tid := uuid.New()
