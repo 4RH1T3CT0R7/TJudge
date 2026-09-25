@@ -141,7 +141,7 @@ jobs:
       # клиентский SDK executor'а
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           rc=0
           govulncheck ./... > vuln.txt || rc=$?
           cat vuln.txt
@@ -165,11 +165,12 @@ jobs:
           go build -o bin/worker ./cmd/worker
           go build -o bin/migrate ./cmd/migrations
 
+      # -p 1: пакеты делят одну БД и чистят её по шаблонам, параллельно флакают
       - name: integration tests
         env:
           RUN_INTEGRATION: true
           JWT_SECRET: test-jwt-secret-for-ci
-        run: go test -race -count=1 -tags=integration -timeout=10m ./internal/storage/... ./tests/integration/...
+        run: go test -race -count=1 -p 1 -tags=integration -timeout=10m ./internal/storage/... ./tests/integration/...
 
       # api без worker'а: e2e (полный цикл с компиляцией - в nightly) и security
       # проверяют http-контракт, authn/authz и лимиты тела
