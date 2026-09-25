@@ -14,7 +14,9 @@ import (
 	"github.com/google/uuid"
 )
 
-const orderByCreatedAtDesc = " ORDER BY created_at DESC"
+// id - тай-брейк: при равном created_at порядок в postgres не определён, и
+// OFFSET-страницы дублируют или теряют строки
+const orderByCreatedAtDesc = " ORDER BY created_at DESC, id DESC"
 
 type TeamRepository struct {
 	db *DB

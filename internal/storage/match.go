@@ -143,7 +143,7 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE tournament_id = $1
-		ORDER BY round_number DESC, created_at DESC
+		ORDER BY round_number DESC, created_at DESC, id DESC
 		LIMIT $2 OFFSET $3
 	`
 
@@ -439,7 +439,8 @@ func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) (
 		argCount++
 	}
 
-	query += " ORDER BY round_number DESC, created_at DESC"
+	// все матчи раунда создаются с одним created_at, без id страницы OFFSET плывут
+	query += " ORDER BY round_number DESC, created_at DESC, id DESC"
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argCount)
