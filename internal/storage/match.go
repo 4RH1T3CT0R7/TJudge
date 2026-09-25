@@ -770,60 +770,6 @@ func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.Matc
 	return matches, hasMore, nil
 }
 
-// GetStuckRunning - матчи, зависшие в running дольше stuckDuration (воркер умер посреди матча)
-func (r *MatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error) {
-	var matches []*models.Match
-
-	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
-		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
-		FROM matches
-		WHERE status = $1 AND started_at < $2
-		ORDER BY started_at ASC
-		LIMIT $3
-	`
-
-	threshold := time.Now().Add(-stuckDuration)
-
-	rows, err := r.db.QueryContext(ctx, query, models.MatchRunning, threshold, limit)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get stuck running matches")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var match models.Match
-		err := rows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan match")
-		}
-		matches = append(matches, &match)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return matches, nil
-}
-
 // MatchStatistics - счётчики матчей по статусам (отдаются в /matches/queue/stats)
 type MatchStatistics struct {
 	Total     int `json:"total"`

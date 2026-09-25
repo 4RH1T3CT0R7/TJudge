@@ -709,47 +709,6 @@ func (s *MatchRepositorySuite) TestGetByID_Success() {
 	assert.NotZero(s.T(), result.CreatedAt)
 }
 
-func (s *MatchRepositorySuite) TestGetStuckRunning() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("stuck")
-
-	ctx := context.Background()
-
-	// running с давним started_at - это и есть "зависший"
-	stuckMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	oldTime := time.Now().Add(-2 * time.Hour)
-	_, err := s.database.ExecContext(ctx,
-		"UPDATE matches SET status = $2, started_at = $3 WHERE id = $1",
-		stuckMatch.ID, models.MatchRunning, oldTime)
-	require.NoError(s.T(), err)
-
-	// running, но стартанул только что - зависшим не считается
-	recentMatch := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	_, err = s.database.ExecContext(ctx,
-		"UPDATE matches SET status = $2, started_at = NOW() WHERE id = $1",
-		recentMatch.ID, models.MatchRunning)
-	require.NoError(s.T(), err)
-
-	// pending возвращать не должны
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-
-	// порог зависания - 1 час
-	stuckMatches, err := s.repo.GetStuckRunning(ctx, 1*time.Hour, 10)
-	require.NoError(s.T(), err)
-
-	var foundStuck bool
-	var foundRecent bool
-	for _, m := range stuckMatches {
-		if m.ID == stuckMatch.ID {
-			foundStuck = true
-		}
-		if m.ID == recentMatch.ID {
-			foundRecent = true
-		}
-	}
-	assert.True(s.T(), foundStuck, "should find the stuck match")
-	assert.False(s.T(), foundRecent, "should NOT find the recently started match")
-}
-
 // сбрасываются только running старше порога: свежий running и завершённый
 // матч с давним started_at не трогаются
 func (s *MatchRepositorySuite) TestResetStuckRunning() {

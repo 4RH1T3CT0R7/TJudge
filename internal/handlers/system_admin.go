@@ -76,13 +76,11 @@ type RecoveryCompileQueue interface {
 
 // зависшие матчи
 type RecoveryMatchRepo interface {
-	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
-	ResetToPending(ctx context.Context, id uuid.UUID) error
+	ResetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) (int64, error)
 }
 
-// возврат матчей в очередь и чистка dead-letter
+// чистка dead-letter
 type RecoveryQueueManager interface {
-	Enqueue(ctx context.Context, match *models.Match) error
 	ClearDeadLetter(ctx context.Context) (int64, error)
 }
 
@@ -172,7 +170,8 @@ func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]int64{"requeued": requeued})
 }
 
-// ResetStuckMatches сбрасывает зависшие running-матчи в pending и возвращает в очередь
+// ResetStuckMatches сбрасывает зависшие running-матчи в pending. в очередь их
+// ставит периодический recovery воркера (раз в минуту)
 // @Summary Сбросить зависшие матчи (admin)
 // @Tags system
 // @Produce json
@@ -180,25 +179,13 @@ func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.
 // @Success 200 {object} object{reset=int}
 // @Router /system/recovery/reset-stuck-matches [post]
 func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http.Request) {
-	stuck, err := h.matchRepo.GetStuckRunning(r.Context(), h.stuckThreshold, 1000)
+	// выборка и сброс одним запросом по часам бд: матч, который успел
+	// завершиться или заново стартовать, не трогается
+	reset, err := h.matchRepo.ResetStuckRunning(r.Context(), h.stuckThreshold, 1000)
 	if err != nil {
-		h.log.LogError("recovery: list stuck matches", err)
+		h.log.LogError("recovery: reset stuck matches", err)
 		writeError(w, err)
 		return
-	}
-
-	reset := int64(0)
-	for _, m := range stuck {
-		if err := h.matchRepo.ResetToPending(r.Context(), m.ID); err != nil {
-			h.log.LogError("recovery: reset match", err, zap.String("match_id", m.ID.String()))
-			continue
-		}
-		m.Status = models.MatchPending
-		if err := h.queueManager.Enqueue(r.Context(), m); err != nil {
-			// не страшно: pending-матч подберёт периодический recovery воркера
-			h.log.LogError("recovery: enqueue match", err, zap.String("match_id", m.ID.String()))
-		}
-		reset++
 	}
 
 	h.log.Info("recovery: stuck matches reset", zap.Int64("count", reset))
