@@ -8,7 +8,7 @@
 // WebSocket недоступен (см. useTournamentLive) - живое соединение само
 // инвалидирует нужные ключи.
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 
@@ -59,6 +59,27 @@ export function useMatchesByRounds(tournamentId: string, opts: PollOption = {}) 
     queryFn: () => api.getMatchesByRounds(tournamentId),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
+  });
+}
+
+/** Размер страницы матчей раунда (потолок на бэке - 100). */
+export const ROUND_PAGE_SIZE = 50;
+
+// Ключ вложен в matchesByRounds: инвалидация раундов заодно обновляет открытые страницы.
+export function useRoundMatches(
+  tournamentId: string,
+  round: number,
+  gameType: string,
+  page: number,
+  opts: PollOption = {}
+) {
+  return useQuery({
+    queryKey: [...queryKeys.matchesByRounds(tournamentId), round, gameType, page] as const,
+    queryFn: () =>
+      api.getRoundMatches(tournamentId, round, gameType, ROUND_PAGE_SIZE, page * ROUND_PAGE_SIZE),
+    enabled: (opts.enabled ?? true) && !!tournamentId,
+    refetchInterval: opts.pollInterval ?? false,
+    placeholderData: keepPreviousData,
   });
 }
 

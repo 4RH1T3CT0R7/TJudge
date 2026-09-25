@@ -132,7 +132,10 @@ export interface MatchRound {
   pending_count: number;
   running_count: number;
   failed_count: number;
-  matches: Match[];
+  wins1: number;
+  wins2: number;
+  // только в ответе на конкретный раунд, страницей
+  matches?: Match[];
   created_at: string;
 }
 

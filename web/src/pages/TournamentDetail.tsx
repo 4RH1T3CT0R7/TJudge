@@ -289,11 +289,10 @@ export function TournamentDetail() {
     }
   };
 
-  // Ручное обновление матчей (кнопка «Обновить»): refetch стабилен между рендерами.
-  const refetchMatches = matchRoundsQuery.refetch;
+  // Ручное обновление матчей (кнопка «Обновить»): счётчики и открытые страницы раундов.
   const refreshMatches = useCallback(() => {
-    void refetchMatches();
-  }, [refetchMatches]);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
+  }, [queryClient, tournamentId]);
   const isRefreshingMatches = matchRoundsQuery.isRefetching;
 
   // Ручное обновление таблиц рейтинга (кнопка «Обновить»).
@@ -576,10 +575,12 @@ export function TournamentDetail() {
 
         {activeTab === 'matches' && (
           <MatchesTab
+            tournamentId={tournament.id}
             rounds={matchRounds}
             onRefresh={refreshMatches}
             isRefreshing={isRefreshingMatches}
             isAdmin={isAdmin}
+            pollInterval={live.pollInterval}
           />
         )}
 

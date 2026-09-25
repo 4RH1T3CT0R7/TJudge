@@ -443,7 +443,33 @@ paths:
     get:
       tags: [tournaments]
       summary: Matches grouped by rounds
+      description: |
+        Without parameters returns only per-round counters, `matches` is omitted.
+        With `round` and `game_type` (both required together) returns that single
+        round with one page of its matches (`limit` capped at 100); `total_matches`
+        is the size of the whole round.
       operationId: tournamentsGetMatchesByRounds
+      parameters:
+        - name: round
+          in: query
+          description: Round number (together with game_type)
+          schema:
+            type: integer
+            minimum: 1
+        - name: game_type
+          in: query
+          description: Game type (together with round)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Page size for round matches
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
           description: Match rounds
@@ -451,6 +477,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MatchRoundListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -2822,8 +2850,15 @@ components:
           type: integer
         failed_count:
           type: integer
+        wins1:
+          type: integer
+          description: Completed matches won by program1
+        wins2:
+          type: integer
+          description: Completed matches won by program2
         matches:
           type: array
+          description: Only when round and game_type are requested
           items:
             $ref: '#/components/schemas/Match'
         created_at:
