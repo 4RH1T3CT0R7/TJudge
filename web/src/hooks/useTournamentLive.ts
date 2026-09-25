@@ -67,10 +67,10 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
           break;
 
         case 'program_update': {
-          // Статус компиляции патчится в кэш напрямую. Текста ошибки в WS нет
-          // (рассылка идёт всему турниру), при failed своя программа перечитывается.
+          // Статус компиляции патчится в кэш сразу. Текста ошибки в WS нет
+          // (рассылка идёт всему турниру), а свежей версии сокомандника в кэше
+          // ещё нет, поэтому программы перечитываются всегда: события редкие.
           const { program_id, status } = message.payload;
-          const own = queryClient.getQueryData<Program[]>(queryKeys.programs)?.some((p) => p.id === program_id);
           queryClient.setQueriesData<Program[]>(
             { queryKey: queryKeys.programs },
             (old) => old?.map((p) => (p.id === program_id ? { ...p, status } : p))
@@ -78,11 +78,8 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
           queryClient.setQueryData<Program>(queryKeys.program(program_id), (old) =>
             old ? { ...old, status } : old
           );
-          if (status === 'failed' && own) {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.programs });
-          }
-          // Списки версий и программ игры (ключи параметризованы) - инвалидация поддерева.
-          void queryClient.invalidateQueries({ queryKey: ['programs', 'versions'] });
+          // ['programs'] - префикс и списка, и версий, и отдельных программ.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.programs });
           void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId), exact: false, predicate: (q) => q.queryKey.includes('programs') });
           break;
         }
