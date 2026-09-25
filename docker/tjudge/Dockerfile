@@ -7,9 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends git musl-tools 
 # Добавляем musl target для статической линковки (совместимость с Alpine runtime)
 RUN rustup target add $(uname -m)-unknown-linux-musl
 
-# Клонируем tjudge-cli
+# tjudge-cli на зафиксированном коммите: в нём правила и подсчёт очков игр,
+# сборка из HEAD меняла бы их между релизами. Обновляется отдельным коммитом.
+ARG TJUDGE_CLI_REF=600879b5e81f86cdd06b877227e2c1ef9e6dca1c
 WORKDIR /build
-RUN git clone --depth 1 https://github.com/bmstu-itstech/tjudge-cli.git .
+RUN git init -q . \
+    && git remote add origin https://github.com/bmstu-itstech/tjudge-cli.git \
+    && git fetch -q --depth 1 origin ${TJUDGE_CLI_REF} \
+    && git checkout -q FETCH_HEAD
 
 # Собираем статический бинарник для musl (работает на Alpine)
 RUN cargo build --release --target $(uname -m)-unknown-linux-musl \
