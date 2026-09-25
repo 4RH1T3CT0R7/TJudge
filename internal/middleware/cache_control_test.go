@@ -11,7 +11,7 @@ import (
 )
 
 func TestCacheControl_SetsHeadersOnGET(t *testing.T) {
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 
@@ -20,27 +20,14 @@ func TestCacheControl_SetsHeadersOnGET(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Header().Get("Cache-Control"), "max-age=60")
-	assert.Contains(t, rec.Header().Get("Cache-Control"), "public")
+	assert.Equal(t, "no-cache", rec.Header().Get("Cache-Control"))
 	assert.NotEmpty(t, rec.Header().Get("ETag"))
 	body, _ := io.ReadAll(rec.Body)
 	assert.Equal(t, `{"ok":true}`, string(body))
 }
 
-func TestCacheControl_NoStoreWhenZero(t *testing.T) {
-	handler := CacheControl(0)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{}`))
-	}))
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
-}
-
 func TestCacheControl_ReturnsNotModifiedOnETagMatch(t *testing.T) {
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`stable-content`))
 	}))
 
@@ -63,7 +50,7 @@ func TestCacheControl_ReturnsNotModifiedOnETagMatch(t *testing.T) {
 
 func TestCacheControl_DifferentBodyDifferentETag(t *testing.T) {
 	counter := 0
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		counter++
 		_, _ = w.Write([]byte(strings.Repeat("x", counter)))
 	}))
@@ -79,7 +66,7 @@ func TestCacheControl_DifferentBodyDifferentETag(t *testing.T) {
 }
 
 func TestCacheControl_IgnoresPOST(t *testing.T) {
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -90,7 +77,7 @@ func TestCacheControl_IgnoresPOST(t *testing.T) {
 }
 
 func TestCacheControl_SkipsErrorResponses(t *testing.T) {
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`error`))
 	}))
@@ -106,7 +93,7 @@ func TestCacheControl_SkipsErrorResponses(t *testing.T) {
 // этот кейс поймал реальный баг на E2E: для 404 middleware не звал WriteHeader,
 // и наружу уходил дефолтный 200 с телом ошибки вместо 404
 func TestCacheControl_PreservesNotFoundStatus(t *testing.T) {
-	handler := CacheControl(60)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := CacheControl()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"not found"}`))
 	}))

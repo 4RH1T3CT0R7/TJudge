@@ -332,10 +332,10 @@ func (s *Server) setupRoutes() {
 
 		r.Route("/games", func(r chi.Router) {
 			r.Use(bodyLimit)
-			// публичные read-only кэшируются на минуту с etag
-			r.With(middleware.CacheControl(60)).Get("/", s.gameHandler.List)
-			r.With(middleware.CacheControl(60)).Get("/{id}", s.gameHandler.Get)
-			r.With(middleware.CacheControl(60)).Get("/name/{name}", s.gameHandler.GetByName)
+			// публичные read-only: браузер ревалидирует по etag на каждом запросе
+			r.With(middleware.CacheControl()).Get("/", s.gameHandler.List)
+			r.With(middleware.CacheControl()).Get("/{id}", s.gameHandler.Get)
+			r.With(middleware.CacheControl()).Get("/name/{name}", s.gameHandler.GetByName)
 
 			r.Group(func(r chi.Router) {
 				r.Use(s.auth())
