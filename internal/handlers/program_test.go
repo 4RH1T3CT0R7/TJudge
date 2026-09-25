@@ -105,9 +105,12 @@ func (m *MockTeamMembershipChecker) IsUserInTeam(ctx context.Context, teamID, us
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockTeamMembershipChecker) IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error) {
-	args := m.Called(ctx, teamID)
-	return args.Bool(0), args.Error(1)
+func (m *MockTeamMembershipChecker) GetByID(ctx context.Context, id uuid.UUID) (*models.Team, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Team), args.Error(1)
 }
 
 // MockRoundCompletionChecker — мок чекера завершения раунда
@@ -760,7 +763,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
-		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
+		mockTeamChecker.On("GetByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, TournamentID: tournamentID}, nil)
 		mockRoundChecker.On("IsAutoRoundEnabled", mock.Anything, tournamentID, gameID).Return(false, nil)
 		mockRoundChecker.On("IsRoundCompleted", mock.Anything, tournamentID, gameID).Return(true, nil)
 
@@ -800,7 +803,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
-		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
+		mockTeamChecker.On("GetByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, TournamentID: tournamentID}, nil)
 		mockMatchChecker.On("HasAnyRunningMatches", mock.Anything, tournamentID).Return(true, nil)
 		mockMatchChecker.On("GetActiveGameType", mock.Anything, tournamentID).Return("prisoners_dilemma", nil)
 
@@ -838,7 +841,8 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		gameID := uuid.New()
 
 		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
-		mockTeamChecker.On("IsTeamDisqualified", mock.Anything, teamID).Return(false, nil)
+		mockTeamChecker.On("GetByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, TournamentID: tournamentID}, nil)
+		mockRepo.On("GetLatestVersion", mock.Anything, teamID, gameID).Return(3, nil)
 		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.MatchedBy(func(p *models.Program) bool {
 			return p.UserID == userID &&
 				p.Name == "My Strategy" &&
@@ -874,6 +878,41 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		assert.Equal(t, models.ProgramCompiling, response.Status)
 
 		mockRepo.AssertExpectations(t)
+	})
+
+	// член команды турнира X не загрузит программу в турнир Y, и команда
+	// не зальёт больше maxVersionsPerTeamGame версий
+	t.Run("foreign tournament and quota", func(t *testing.T) {
+		userID, teamID, tournamentID, gameID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+		for name, tc := range map[string]struct {
+			teamTournament uuid.UUID
+			version        int
+		}{
+			"foreign tournament": {uuid.New(), 0},
+			"quota reached":      {tournamentID, maxVersionsPerTeamGame},
+		} {
+			mockRepo := new(MockProgramRepository)
+			mockTeamChecker := new(MockTeamMembershipChecker)
+			handler := &ProgramHandler{programRepo: mockRepo, teamChecker: mockTeamChecker, uploadDir: t.TempDir(), maxFileSize: 1 << 20, log: log}
+
+			mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
+			mockTeamChecker.On("GetByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, TournamentID: tc.teamTournament}, nil)
+			mockRepo.On("GetLatestVersion", mock.Anything, teamID, gameID).Return(tc.version, nil)
+
+			req := createMultipartRequest(t, map[string]string{
+				"team_id":       teamID.String(),
+				"tournament_id": tournamentID.String(),
+				"game_id":       gameID.String(),
+			}, "strategy.py", []byte("print('hello')"))
+			req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+
+			w := httptest.NewRecorder()
+			handler.Create(w, req)
+
+			assert.Equal(t, http.StatusForbidden, w.Code, name)
+			mockRepo.AssertNotCalled(t, "CreateWithAtomicVersion", mock.Anything, mock.Anything)
+		}
 	})
 }
 

@@ -52,10 +52,10 @@ type RoundCompletionChecker interface {
 	IsAutoRoundEnabled(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error)
 }
 
-// TeamMembershipChecker проверяет членство в команде и её дисквалификацию
+// TeamMembershipChecker - членство в команде и сама команда (турнир, дисквалификация)
 type TeamMembershipChecker interface {
 	IsUserInTeam(ctx context.Context, teamID, userID uuid.UUID) (bool, error)
-	IsTeamDisqualified(ctx context.Context, teamID uuid.UUID) (bool, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Team, error)
 }
 
 // CompileEnqueuer ставит загруженную программу в очередь асинхронной
@@ -441,9 +441,10 @@ func (h *ProgramHandler) parseUploadForm(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// validateTeamAccess требует членства пользователя в команде и отсутствия
-// дисквалификации; при nil-checker'е фейлится закрыто. false — ответ записан
-func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Request, teamID, userID uuid.UUID) bool {
+// validateTeamAccess требует членства пользователя в команде, чтобы команда
+// была из этого турнира и не была дисквалифицирована; при nil-checker'е
+// фейлится закрыто. false — ответ записан
+func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Request, teamID, tournamentID, userID uuid.UUID) bool {
 	if h.teamChecker == nil {
 		h.log.Error("Team membership checker not configured")
 		writeError(w, errors.ErrInternal.WithMessage("authorization service unavailable"))
@@ -461,17 +462,41 @@ func (h *ProgramHandler) validateTeamAccess(w http.ResponseWriter, r *http.Reque
 		return false
 	}
 
-	disqualified, err := h.teamChecker.IsTeamDisqualified(r.Context(), teamID)
+	team, err := h.teamChecker.GetByID(r.Context(), teamID)
 	if err != nil {
-		h.log.LogError("Failed to check team disqualification", err)
+		h.log.LogError("Failed to get team", err)
 		writeError(w, errors.ErrInternal.WithMessage("failed to verify team status"))
 		return false
 	}
-	if disqualified {
+	// иначе член команды из турнира X играл бы в активном турнире Y без регистрации
+	if team.TournamentID != tournamentID {
+		writeError(w, errors.ErrForbidden.WithMessage("команда не участвует в этом турнире"))
+		return false
+	}
+	if team.IsDisqualified {
 		writeError(w, errors.ErrForbidden.WithMessage("команда дисквалифицирована"))
 		return false
 	}
 
+	return true
+}
+
+// сколько версий одной игры может загрузить команда. без потолка одна команда
+// забивала бы диск и очередь компиляции
+const maxVersionsPerTeamGame = 100
+
+// validateUploadQuota режет загрузку сверх maxVersionsPerTeamGame. false — ответ записан
+func (h *ProgramHandler) validateUploadQuota(w http.ResponseWriter, r *http.Request, teamID, gameID uuid.UUID) bool {
+	version, err := h.programRepo.GetLatestVersion(r.Context(), teamID, gameID)
+	if err != nil {
+		h.log.LogError("Failed to get latest program version", err)
+		writeError(w, errors.ErrInternal.WithMessage("failed to verify upload quota"))
+		return false
+	}
+	if version >= maxVersionsPerTeamGame {
+		writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("достигнут лимит версий программы: %d", maxVersionsPerTeamGame)))
+		return false
+	}
 	return true
 }
 
@@ -700,8 +725,8 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// пользователь должен состоять в команде, команда — не дисквалифицирована
-	if !h.validateTeamAccess(w, r, form.teamID, userID) {
+	// пользователь должен состоять в команде этого турнира, команда — не дисквалифицирована
+	if !h.validateTeamAccess(w, r, form.teamID, form.tournamentID, userID) {
 		return
 	}
 
@@ -712,6 +737,10 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 
 	// блокировки загрузки (завершённый раунд, идущие матчи)
 	if !h.validateUploadNotBlocked(w, r, form.tournamentID, form.gameID) {
+		return
+	}
+
+	if !h.validateUploadQuota(w, r, form.teamID, form.gameID) {
 		return
 	}
 
