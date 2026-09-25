@@ -9,7 +9,6 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
-	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
@@ -650,124 +649,6 @@ func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*models.
 	}
 
 	return matches, nil
-}
-
-// ListWithCursor - список матчей через cursor-пагинацию (курсор по created_at)
-func (r *MatchRepository) ListWithCursor(ctx context.Context, filter models.MatchFilter, pageReq *pagination.PageRequest) ([]*models.Match, bool, error) {
-	if err := pageReq.Validate(); err != nil {
-		return nil, false, errors.Wrap(err, "invalid pagination request")
-	}
-
-	cursor, err := pageReq.GetCursor()
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to decode cursor")
-	}
-
-	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
-		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
-		FROM matches
-		WHERE 1=1
-	`
-	args := []any{}
-	argCount := 1
-
-	if filter.TournamentID != nil {
-		query += fmt.Sprintf(" AND tournament_id = $%d", argCount)
-		args = append(args, *filter.TournamentID)
-		argCount++
-	}
-
-	if filter.ProgramID != nil {
-		query += fmt.Sprintf(" AND (program1_id = $%d OR program2_id = $%d)", argCount, argCount)
-		args = append(args, *filter.ProgramID)
-		argCount++
-	}
-
-	if filter.Status != "" {
-		query += fmt.Sprintf(" AND status = $%d", argCount)
-		args = append(args, filter.Status)
-		argCount++
-	}
-
-	if filter.GameType != "" {
-		query += fmt.Sprintf(" AND game_type = $%d", argCount)
-		args = append(args, filter.GameType)
-		argCount++
-	}
-
-	// forward - шаг в прошлое (created_at меньше курсора), backward - в обратную сторону
-	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
-		if pageReq.IsForward() {
-			query += fmt.Sprintf(" AND created_at < $%d", argCount)
-		} else {
-			query += fmt.Sprintf(" AND created_at > $%d", argCount)
-		}
-		args = append(args, *cursor.Timestamp)
-		argCount++
-	}
-
-	if pageReq.IsBackward() {
-		query += " ORDER BY round_number ASC, created_at ASC"
-	} else {
-		query += " ORDER BY round_number DESC, created_at DESC"
-	}
-
-	// берётся на одну строку больше лимита - если она пришла, значит есть следующая страница
-	limit := pageReq.GetLimit() + 1
-	query += fmt.Sprintf(" LIMIT $%d", argCount)
-	args = append(args, limit)
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to list matches with cursor")
-	}
-	defer rows.Close()
-
-	var matches []*models.Match
-	for rows.Next() {
-		var match models.Match
-		err := rows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "failed to scan match")
-		}
-		matches = append(matches, &match)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, false, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	hasMore := len(matches) > pageReq.GetLimit()
-	if hasMore {
-		matches = matches[:len(matches)-1]
-	}
-
-	// при backward выбирали в обратном порядке, потому разворот обратно
-	if pageReq.IsBackward() {
-		for i, j := 0, len(matches)-1; i < j; i, j = i+1, j-1 {
-			matches[i], matches[j] = matches[j], matches[i]
-		}
-	}
-
-	return matches, hasMore, nil
 }
 
 // MatchStatistics - счётчики матчей по статусам (отдаются в /matches/queue/stats)

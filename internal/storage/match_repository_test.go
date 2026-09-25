@@ -10,7 +10,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
-	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -820,47 +819,4 @@ func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 	assert.Equal(s.T(), 1, *r3.ErrorCode)
 	require.NotNil(s.T(), r3.ErrorMessage)
 	assert.Equal(s.T(), "timeout", *r3.ErrorMessage)
-}
-
-func (s *MatchRepositorySuite) TestListWithCursor() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("lstcr")
-
-	// 5 матчей, created_at у всех чуть разный
-	for i := 0; i < 5; i++ {
-		s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	}
-
-	ctx := context.Background()
-
-	// первая страница - первые 2
-	first := 2
-	pageReq := &pagination.PageRequest{First: &first}
-	matches, hasMore, err := s.repo.ListWithCursor(ctx, models.MatchFilter{
-		TournamentID: &tournament.ID,
-	}, pageReq)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), matches, 2)
-	assert.True(s.T(), hasMore, "should have more pages with 5 total items and limit 2")
-
-	// created_at последнего результата - курсор для следующей страницы
-	lastMatch := matches[len(matches)-1]
-	cursor := pagination.NewTimestampCursor(lastMatch.CreatedAt)
-	cursorStr, err := cursor.Encode()
-	require.NoError(s.T(), err)
-
-	// вторая страница
-	pageReq2 := &pagination.PageRequest{First: &first, After: &cursorStr}
-	matches2, hasMore2, err := s.repo.ListWithCursor(ctx, models.MatchFilter{
-		TournamentID: &tournament.ID,
-	}, pageReq2)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), matches2, 2)
-	assert.True(s.T(), hasMore2, "should have one more page")
-
-	// страницы не должны пересекаться
-	for _, m1 := range matches {
-		for _, m2 := range matches2 {
-			assert.NotEqual(s.T(), m1.ID, m2.ID, "pages should not overlap")
-		}
-	}
 }
