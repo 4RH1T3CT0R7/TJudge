@@ -78,10 +78,6 @@ func (m *MockTournamentGameStatusRepo) GetActiveGame(ctx context.Context, tourna
 	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
-func (m *MockTournamentGameStatusRepo) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
-	return m.Called(ctx, tournamentID, gameID).Error(0)
-}
-
 func (m *MockTournamentGameStatusRepo) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, int64, int64, error) {
 	args := m.Called(ctx, tournamentID, gameID, gameType)
 	return args.Get(0).(int64), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)

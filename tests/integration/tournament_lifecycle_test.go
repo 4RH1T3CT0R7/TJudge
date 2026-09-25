@@ -438,9 +438,9 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	}
 
 	// Verify all participants
-	participants, err := s.tournamentRepo.GetParticipants(s.ctx, tournament.ID)
+	participantsCount, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)
 	require.NoError(s.T(), err)
-	assert.Len(s.T(), participants, 6) // 3 teams * 2 games
+	assert.Equal(s.T(), 6, participantsCount) // 3 teams * 2 games
 
 	// Step 5: Activate tournament
 	err = s.tournamentRepo.UpdateStatus(s.ctx, tournament.ID, models.TournamentActive)
@@ -475,9 +475,9 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	assert.True(s.T(), activeTG.IsActive)
 
 	// Verify game2 is not active
-	isGame2Active, err := s.gameRepo.IsGameActive(s.ctx, tournament.ID, game2.ID)
+	game2TG, err := s.gameRepo.GetTournamentGame(s.ctx, tournament.ID, game2.ID)
 	require.NoError(s.T(), err)
-	assert.False(s.T(), isGame2Active)
+	assert.False(s.T(), game2TG.IsActive)
 
 	// Step 9: Verify team with members
 	teamWithMembers, err := s.teamRepo.GetTeamWithMembers(s.ctx, team1.ID)
@@ -595,11 +595,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 	teams, err := s.teamRepo.GetByTournamentID(s.ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), teams, numTeams)
-
-	// Verify all participants were added
-	participants, err := s.tournamentRepo.GetParticipants(s.ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), participants, numTeams)
 
 	// Verify participant count
 	count, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)

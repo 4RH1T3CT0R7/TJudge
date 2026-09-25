@@ -316,38 +316,6 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 	return matches, nil
 }
 
-// GetPlayedProgramPairs - пары программ, которые уже играли в этом турнире и игре (любой статус).
-// ключ "uuid1|uuid2" направленный, AB и BA считаются разными - round-robin гоняет обе ориентации
-func (r *MatchRepository) GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error) {
-	query := `
-		SELECT program1_id, program2_id
-		FROM matches
-		WHERE tournament_id = $1 AND game_type = $2
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get played program pairs")
-	}
-	defer rows.Close()
-
-	pairs := make(map[string]struct{})
-	for rows.Next() {
-		var p1, p2 uuid.UUID
-		if err := rows.Scan(&p1, &p2); err != nil {
-			return nil, errors.Wrap(err, "failed to scan program pair")
-		}
-		key := p1.String() + "|" + p2.String()
-		pairs[key] = struct{}{}
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "rows iteration error in played program pairs")
-	}
-
-	return pairs, nil
-}
-
 func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
 	query := `
 		SELECT
@@ -541,59 +509,6 @@ func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) (
 	return matches, nil
 }
 
-func (r *MatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error) {
-	if len(ids) == 0 {
-		return []*models.Match{}, nil
-	}
-
-	query := `
-		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
-		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
-		FROM matches
-		WHERE id = ANY($1)
-		ORDER BY round_number DESC, created_at DESC
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, ids)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get matches by IDs")
-	}
-	defer rows.Close()
-
-	var matches []*models.Match
-	for rows.Next() {
-		var match models.Match
-		err := rows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan match")
-		}
-		matches = append(matches, &match)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, errors.Wrap(err, "rows iteration error")
-	}
-
-	return matches, nil
-}
-
 func (r *MatchRepository) GetPending(ctx context.Context, limit int) ([]*models.Match, error) {
 	var matches []*models.Match
 
@@ -660,26 +575,6 @@ type MatchStatistics struct {
 	Failed    int `json:"failed"`
 }
 
-// HasStartedMatches - есть ли по этой игре уже running или completed матчи
-func (r *MatchRepository) HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
-	query := `
-		SELECT EXISTS(
-			SELECT 1 FROM matches
-			WHERE tournament_id = $1
-			AND game_type = $2
-			AND status IN ($3, $4)
-		)
-	`
-
-	var exists bool
-	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType, models.MatchRunning, models.MatchCompleted).Scan(&exists)
-	if err != nil {
-		return false, errors.Wrap(err, "failed to check started matches")
-	}
-
-	return exists, nil
-}
-
 // HasAnyRunningMatches - есть ли в турнире running/pending матчи по любой игре.
 // нужно чтобы не давать грузить программы пока раунд крутится
 func (r *MatchRepository) HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error) {
@@ -723,39 +618,6 @@ func (r *MatchRepository) GetActiveGameType(ctx context.Context, tournamentID uu
 	}
 
 	return gameType, nil
-}
-
-func (r *MatchRepository) GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error) {
-	var maxRound sql.NullInt64
-
-	query := `SELECT MAX(round_number) FROM matches WHERE tournament_id = $1`
-
-	err := r.db.QueryRowContext(ctx, query, tournamentID).Scan(&maxRound)
-	if err != nil {
-		return 1, errors.Wrap(err, "failed to get max round number")
-	}
-
-	if !maxRound.Valid {
-		return 1, nil
-	}
-
-	return int(maxRound.Int64) + 1, nil
-}
-
-func (r *MatchRepository) GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
-	query := `
-		SELECT COALESCE(MAX(round_number), 0) + 1
-		FROM matches
-		WHERE tournament_id = $1 AND game_type = $2
-	`
-
-	var nextRound int
-	err := r.db.QueryRowContext(ctx, query, tournamentID, gameType).Scan(&nextRound)
-	if err != nil {
-		return 1, errors.Wrap(err, "failed to get next round number by game")
-	}
-
-	return nextRound, nil
 }
 
 func (r *MatchRepository) GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*MatchStatistics, error) {
@@ -1006,82 +868,4 @@ func (r *MatchRepository) CancelPending(ctx context.Context) (int64, error) {
 		return 0, errors.Wrap(err, "failed to cancel pending matches")
 	}
 	return result.RowsAffected()
-}
-
-func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*models.MatchResult) error {
-	if len(results) == 0 {
-		return nil
-	}
-
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.Wrap(err, "failed to begin transaction")
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	query := `
-		UPDATE matches
-		SET status = $2, score1 = $3, score2 = $4, winner = $5,
-		    error_code = $6, error_message = $7, completed_at = NOW()
-		WHERE id = $1
-	`
-
-	stmt, err := tx.PrepareContext(ctx, query)
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare statement")
-	}
-	defer stmt.Close()
-
-	for matchID, result := range results {
-		status := models.MatchCompleted
-		if result.ErrorCode != 0 {
-			status = models.MatchFailed
-		}
-
-		var errorCode *int
-		if result.ErrorCode != 0 {
-			errorCode = &result.ErrorCode
-		}
-
-		var errorMsg *string
-		if result.ErrorMessage != "" {
-			errorMsg = &result.ErrorMessage
-		}
-
-		_, err := stmt.ExecContext(ctx,
-			matchID,
-			status,
-			result.Score1,
-			result.Score2,
-			result.Winner,
-			errorCode,
-			errorMsg,
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to update match result in batch")
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
-}
-
-// DeleteMatchesForGame - снести все матчи турнира по игре
-func (r *MatchRepository) DeleteMatchesForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
-	query := `DELETE FROM matches WHERE tournament_id = $1 AND game_type = $2`
-
-	result, err := r.db.ExecContext(ctx, query, tournamentID, gameType)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to delete matches for game")
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get rows affected")
-	}
-
-	return rows, nil
 }

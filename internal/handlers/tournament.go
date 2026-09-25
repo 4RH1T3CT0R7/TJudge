@@ -401,19 +401,6 @@ func (h *TournamentHandler) CreateMatch(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, match)
 }
 
-// CrossGameLeaderboardEntry - строка сводного рейтинга по всем играм турнира.
-type CrossGameLeaderboardEntry struct {
-	Rank        int            `json:"rank"`
-	TeamID      *uuid.UUID     `json:"team_id,omitempty"`
-	TeamName    string         `json:"team_name"`
-	ProgramName string         `json:"program_name"`
-	GameRatings map[string]int `json:"game_ratings"` // ключ - game_id, значение - рейтинг
-	TotalRating int            `json:"total_rating"`
-	TotalWins   int            `json:"total_wins"`
-	TotalLosses int            `json:"total_losses"`
-	TotalGames  int            `json:"total_games"`
-}
-
 // @Summary Кросс-игровой рейтинг
 // @Description Возвращает общий рейтинг по всем играм турнира
 // @Tags tournaments

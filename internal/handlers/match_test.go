@@ -48,14 +48,6 @@ func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *u
 	return args.Get(0).(*storage.MatchStatistics), args.Error(1)
 }
 
-func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error) {
-	args := m.Called(ctx, ids)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Match), args.Error(1)
-}
-
 func (m *MockMatchRepository) CancelPending(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)

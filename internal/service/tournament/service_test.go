@@ -63,18 +63,6 @@ func (m *MockTournamentRepository) GetTeamsCount(ctx context.Context, id uuid.UU
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockTournamentRepository) GetParticipants(ctx context.Context, id uuid.UUID) ([]*models.TournamentParticipant, error) {
-	args := m.Called(ctx, id)
-	v, _ := args.Get(0).([]*models.TournamentParticipant)
-	return v, args.Error(1)
-}
-
-func (m *MockTournamentRepository) GetLatestParticipants(ctx context.Context, id uuid.UUID) ([]*models.TournamentParticipant, error) {
-	args := m.Called(ctx, id)
-	v, _ := args.Get(0).([]*models.TournamentParticipant)
-	return v, args.Error(1)
-}
-
 func (m *MockTournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, id uuid.UUID) (map[string][]*models.TournamentParticipant, error) {
 	args := m.Called(ctx, id)
 	v, _ := args.Get(0).(map[string][]*models.TournamentParticipant)
@@ -137,23 +125,6 @@ func (m *MockMatchRepository) ResetFailedMatches(ctx context.Context, id uuid.UU
 func (m *MockMatchRepository) GetMatchesByRounds(ctx context.Context, id uuid.UUID) ([]*models.MatchRound, error) {
 	args := m.Called(ctx, id)
 	v, _ := args.Get(0).([]*models.MatchRound)
-	return v, args.Error(1)
-}
-
-// эти два в интерфейсе есть, но в тестах сервиса не дёргаются
-func (m *MockMatchRepository) GetNextRoundNumber(ctx context.Context, id uuid.UUID) (int, error) {
-	args := m.Called(ctx, id)
-	return args.Int(0), args.Error(1)
-}
-
-func (m *MockMatchRepository) GetNextRoundNumberByGame(ctx context.Context, id uuid.UUID, gameType string) (int, error) {
-	args := m.Called(ctx, id, gameType)
-	return args.Int(0), args.Error(1)
-}
-
-func (m *MockMatchRepository) GetPlayedProgramPairs(ctx context.Context, id uuid.UUID, gameType string) (map[string]struct{}, error) {
-	args := m.Called(ctx, id, gameType)
-	v, _ := args.Get(0).(map[string]struct{})
 	return v, args.Error(1)
 }
 
@@ -810,7 +781,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 			{ID: uuid.New(), TournamentID: id, ProgramID: p2},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, models.PriorityMedium, nil)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", models.PriorityMedium)
 		require.NoError(t, err)
 		assert.Len(t, matches, 2)
 
@@ -836,7 +807,7 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
 		}
 
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 1, models.PriorityMedium, nil)
+		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", models.PriorityMedium)
 		require.NoError(t, err)
 		// n*(n-1) = 3*2 = 6
 		assert.Len(t, matches, 6)
@@ -854,44 +825,6 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 			assert.False(t, seen[key], "дубль пары")
 			seen[key] = true
 		}
-	})
-
-	t.Run("skips_played_pairs", func(t *testing.T) {
-		service, _, _, _, _, _ := newTestSchedulingService(t)
-
-		p1, p2, p3 := uuid.New(), uuid.New(), uuid.New()
-		participants := []*models.TournamentParticipant{
-			{ID: uuid.New(), TournamentID: id, ProgramID: p1},
-			{ID: uuid.New(), TournamentID: id, ProgramID: p2},
-			{ID: uuid.New(), TournamentID: id, ProgramID: p3},
-		}
-		// p1 vs p2 и p2 vs p1 уже сыграны
-		played := map[string]struct{}{
-			p1.String() + "|" + p2.String(): {},
-			p2.String() + "|" + p1.String(): {},
-		}
-
-		matches, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 2, models.PriorityMedium, played)
-		require.NoError(t, err)
-		// 6 пар всего минус 2 сыгранных = 4
-		assert.Len(t, matches, 4)
-		for _, m := range matches {
-			_, isPlayed := played[m.Program1ID.String()+"|"+m.Program2ID.String()]
-			assert.False(t, isPlayed, "сыгранная пара попала в матчи")
-		}
-
-		// а елси все пары уже сыграны - на выходе пусто
-		allPlayed := map[string]struct{}{}
-		for i := range participants {
-			for j := range participants {
-				if i != j {
-					allPlayed[participants[i].ProgramID.String()+"|"+participants[j].ProgramID.String()] = struct{}{}
-				}
-			}
-		}
-		empty, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 3, models.PriorityMedium, allPlayed)
-		require.NoError(t, err)
-		assert.Len(t, empty, 0)
 	})
 }
 

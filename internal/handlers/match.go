@@ -20,7 +20,6 @@ type MatchRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
 	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
 	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error)
-	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error)
 	CancelPending(ctx context.Context) (int64, error)
 }
 

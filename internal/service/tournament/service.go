@@ -44,8 +44,6 @@ type TournamentRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
-	GetParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error)
-	GetLatestParticipants(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentParticipant, error)
 	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error)
 	GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error)
 	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
@@ -62,10 +60,7 @@ type MatchRepository interface {
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
-	GetNextRoundNumber(ctx context.Context, tournamentID uuid.UUID) (int, error)
-	GetNextRoundNumberByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
-	GetPlayedProgramPairs(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string]struct{}, error)
 }
 
 // QueueManager кладёт матчи в очередь

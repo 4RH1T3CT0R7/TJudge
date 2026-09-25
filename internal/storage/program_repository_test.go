@@ -383,62 +383,6 @@ func (s *ProgramRepositorySuite) TestClearErrorMessages() {
 	assert.Equal(s.T(), int64(0), affected)
 }
 
-func (s *ProgramRepositorySuite) TestGetLatestVersion() {
-	user := s.createUser("prog_latestver")
-	tournament := s.createTournament("TESTLV1", user.ID)
-	game := s.createGame("prog_game_lv")
-	team := s.createTeam(tournament.ID, user.ID, "PLVTM1")
-
-	ctx := context.Background()
-
-	// версий ещё нет
-	ver, err := s.repo.GetLatestVersion(ctx, team.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 0, ver)
-
-	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v1", 1)
-	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v2", 2)
-
-	ver, err = s.repo.GetLatestVersion(ctx, team.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 2, ver)
-}
-
-func (s *ProgramRepositorySuite) TestGetByUserIDAndGameType() {
-	user := s.createUser("prog_usergtype")
-
-	s.createProgram(user.ID, nil, nil, nil, "PD Bot 1", 1)
-	s.createProgram(user.ID, nil, nil, nil, "PD Bot 2", 1)
-
-	// прога с другой игрой
-	ctx := context.Background()
-	otherProg := &models.Program{
-		ID:       uuid.New(),
-		UserID:   user.ID,
-		Name:     "Other Bot",
-		GameType: "tug_of_war",
-		CodePath: "/tmp/test/other.py",
-		Language: "python",
-		Version:  1,
-	}
-	err := s.repo.Create(ctx, otherProg)
-	require.NoError(s.T(), err)
-	s.programIDs = append(s.programIDs, otherProg.ID)
-
-	programs, err := s.repo.GetByUserIDAndGameType(ctx, user.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), programs, 2)
-
-	for _, p := range programs {
-		assert.Equal(s.T(), "prisoners_dilemma", p.GameType)
-	}
-
-	programs, err = s.repo.GetByUserIDAndGameType(ctx, user.ID, "tug_of_war")
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), programs, 1)
-	assert.Equal(s.T(), otherProg.ID, programs[0].ID)
-}
-
 func (s *ProgramRepositorySuite) TestGetByTournamentAndGame_Empty() {
 	ctx := context.Background()
 

@@ -351,37 +351,6 @@ func (s *TournamentRepositorySuite) TestAddParticipant_Success() {
 	assert.NotZero(s.T(), participant.CreatedAt)
 }
 
-func (s *TournamentRepositorySuite) TestGetParticipants_Empty() {
-	user := s.createTrackedUser("tp_gpe")
-	tournament := s.createTrackedTournament("TPGPE1", user.ID)
-
-	ctx := context.Background()
-	participants, err := s.repo.GetParticipants(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Empty(s.T(), participants)
-}
-
-func (s *TournamentRepositorySuite) TestGetParticipants_Multiple() {
-	user := s.createTrackedUser("tp_gpm")
-	tournament := s.createTrackedTournament("TPGPM1", user.ID)
-
-	// три проги как участники
-	for i := 0; i < 3; i++ {
-		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotGPM%d", i), 1)
-		s.createTestParticipant(tournament.ID, prog.ID, 1500+i*100)
-	}
-
-	ctx := context.Background()
-	participants, err := s.repo.GetParticipants(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), participants, 3)
-
-	// все в одном турнире
-	for _, p := range participants {
-		assert.Equal(s.T(), tournament.ID, p.TournamentID)
-	}
-}
-
 func (s *TournamentRepositorySuite) TestGetParticipantsCount_Zero() {
 	user := s.createTrackedUser("tp_gcz")
 	tournament := s.createTrackedTournament("TPGCZ1", user.ID)
@@ -496,23 +465,6 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	if len(entries) >= 2 {
 		assert.GreaterOrEqual(s.T(), entries[0].TotalRating, entries[1].TotalRating)
 	}
-}
-
-func (s *TournamentRepositorySuite) TestGetLatestParticipants() {
-	user := s.createTrackedUser("tp_glp")
-	tournament := s.createTrackedTournament("TPGLP1", user.ID)
-	game := s.createTrackedGame("glp_game")
-	team := s.createTrackedTeam(tournament.ID, user.ID, "TGLP01")
-
-	// проге нужны полные ссылки - иначе не пройдёт INNER JOIN по programs
-	prog := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotGLP1", 1)
-	s.createTestParticipant(tournament.ID, prog.ID, 1500)
-
-	ctx := context.Background()
-	participants, err := s.repo.GetLatestParticipants(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Len(s.T(), participants, 1)
-	assert.Equal(s.T(), prog.ID, participants[0].ProgramID)
 }
 
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {

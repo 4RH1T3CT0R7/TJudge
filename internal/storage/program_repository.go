@@ -212,54 +212,6 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	return programs, nil
 }
 
-func (r *ProgramRepository) GetByUserIDAndGameType(ctx context.Context, userID uuid.UUID, gameType string) ([]*models.Program, error) {
-	query := `
-		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
-		FROM programs
-		WHERE user_id = $1 AND game_type = $2
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, userID, gameType)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get programs by user and game type")
-	}
-	defer rows.Close()
-
-	var programs []*models.Program
-	for rows.Next() {
-		var p models.Program
-		err := rows.Scan(
-			&p.ID,
-			&p.UserID,
-			&p.TeamID,
-			&p.TournamentID,
-			&p.GameID,
-			&p.Name,
-			&p.GameType,
-			&p.CodePath,
-			&p.FilePath,
-			&p.Language,
-			&p.Status,
-			&p.ErrorMessage,
-			&p.Version,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan program")
-		}
-		programs = append(programs, &p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return programs, nil
-}
-
 func (r *ProgramRepository) Update(ctx context.Context, program *models.Program) error {
 	query := `
 		UPDATE programs
@@ -383,23 +335,6 @@ func (r *ProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID
 		return 0, errors.Wrap(err, "failed to clear error messages")
 	}
 	return result.RowsAffected()
-}
-
-func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
-	var version int
-
-	query := `
-		SELECT COALESCE(MAX(version), 0)
-		FROM programs
-		WHERE team_id = $1 AND game_id = $2
-	`
-
-	err := r.db.QueryRowContext(ctx, query, teamID, gameID).Scan(&version)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get latest version")
-	}
-
-	return version, nil
 }
 
 // GetByTournamentAndGame отдаёт только последние версии программ по каждой команде турнира
