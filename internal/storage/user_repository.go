@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	stderrors "errors"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -104,16 +105,19 @@ func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 		UPDATE users
 		SET username = $2, email = $3, password_hash = $4::varchar,
 		    password_changed_at = CASE WHEN password_hash IS DISTINCT FROM $4::varchar
-		                               THEN NOW() ELSE password_changed_at END
+		                               THEN $5::timestamptz ELSE password_changed_at END
 		WHERE id = $1
 		RETURNING updated_at
 	`
 
+	// отметка по часам API, а не NOW() базы: с ней сравнивается iat токенов,
+	// которые выписывает API, и расхождение часов не должно отзывать свежие
 	err := r.db.QueryRowContext(ctx, query,
 		user.ID,
 		user.Username,
 		user.Email,
 		user.PasswordHash,
+		time.Now(),
 	).Scan(&user.UpdatedAt)
 
 	if stderrors.Is(err, sql.ErrNoRows) {
