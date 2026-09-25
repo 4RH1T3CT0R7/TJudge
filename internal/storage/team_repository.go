@@ -596,7 +596,10 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		fmt.Fprintf(&placeholders, "$%d", i+2) // $2, $3, ...
 	}
 
-	// 3. снос rating_history по завершённым матчам с программами команды
+	// 3. снос rating_history по сыгранным матчам с программами команды.
+	// failed тоже: форфейт (упала программа) даёт сопернику победу в лидербордах.
+	// рейтинг и wins соперников в tournament_participants не пересчитываются -
+	// лидерборды считаются живым запросом по matches, эти поля не канонические
 	args := append([]any{tournamentID}, pidStrings...)
 	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM rating_history
@@ -604,7 +607,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		AND match_id IN (
 			SELECT id FROM matches
 			WHERE tournament_id = $1
-			AND status = 'completed'
+			AND status IN ('completed', 'failed')
 			AND (program1_id IN (%s) OR program2_id IN (%s))
 		)
 	`, placeholders.String(), placeholders.String()), args...)
@@ -613,11 +616,11 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	ratingHistoryDeleted, _ = result.RowsAffected()
 
-	// 4. снос самих завершённых матчей
+	// 4. снос самих сыгранных матчей
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM matches
 		WHERE tournament_id = $1
-		AND status = 'completed'
+		AND status IN ('completed', 'failed')
 		AND (program1_id IN (%s) OR program2_id IN (%s))
 	`, placeholders.String(), placeholders.String()), args...)
 	if err != nil {

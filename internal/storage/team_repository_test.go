@@ -5,6 +5,7 @@ package storage_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
@@ -613,4 +614,56 @@ func (s *TeamRepositorySuite) TestGetTeamWithMembers_NotFound() {
 	_, err := s.repo.GetTeamWithMembers(ctx, uuid.New())
 	assert.Error(s.T(), err)
 	assert.True(s.T(), errors.IsNotFound(err))
+}
+
+// дисквалификация убирает и завершённые матчи, и форфейты (failed): иначе
+// технические победы над командой остаются у соперников в лидербордах
+func (s *TeamRepositorySuite) TestDisqualifyTeamFull_RemovesPlayedMatches() {
+	ctx := context.Background()
+	user := s.createTeamUser("dq1")
+	opponent := s.createTeamUser("dq2")
+	tournament := s.createTeamTournament("TTEAMDQ", user.ID)
+	team := s.createTeam("Test Team DQ", "TDQ001", tournament.ID, user.ID)
+	other := s.createTeam("Test Team DQ Other", "TDQ002", tournament.ID, opponent.ID)
+
+	programRepo := storage.NewProgramRepository(s.database)
+	matchRepo := storage.NewMatchRepository(s.database)
+	newProgram := func(owner uuid.UUID, teamID uuid.UUID, name string) *models.Program {
+		p := &models.Program{
+			ID: uuid.New(), UserID: owner, TeamID: &teamID, TournamentID: &tournament.ID,
+			Name: name, GameType: "dilemma", CodePath: "/tmp/" + name, Language: "python", Version: 1,
+		}
+		require.NoError(s.T(), programRepo.Create(ctx, p))
+		s.T().Cleanup(func() { _, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", p.ID) })
+		return p
+	}
+	dq := newProgram(user.ID, team.ID, "dq_bot")
+	opp := newProgram(opponent.ID, other.ID, "opp_bot")
+
+	statuses := []models.MatchStatus{models.MatchCompleted, models.MatchFailed, models.MatchPending, models.MatchRunning}
+	ids := make(map[models.MatchStatus]uuid.UUID)
+	for _, st := range statuses {
+		m := &models.Match{
+			ID: uuid.New(), TournamentID: tournament.ID, Program1ID: dq.ID, Program2ID: opp.ID,
+			GameType: "dilemma", Status: st, Priority: models.PriorityMedium, RoundNumber: 1, CreatedAt: time.Now(),
+		}
+		require.NoError(s.T(), matchRepo.Create(ctx, m))
+		ids[st] = m.ID
+		s.T().Cleanup(func() { _, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", m.ID) })
+	}
+
+	deleted, cancelled, _, err := s.repo.DisqualifyTeamFull(ctx, team.ID, tournament.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), deleted)
+	assert.Equal(s.T(), int64(2), cancelled)
+
+	for _, st := range []models.MatchStatus{models.MatchCompleted, models.MatchFailed} {
+		_, err := matchRepo.GetByID(ctx, ids[st])
+		assert.True(s.T(), errors.IsNotFound(err), "матч %s должен быть удалён", st)
+	}
+	for _, st := range []models.MatchStatus{models.MatchPending, models.MatchRunning} {
+		m, err := matchRepo.GetByID(ctx, ids[st])
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), models.MatchCancelled, m.Status)
+	}
 }
