@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -310,17 +311,13 @@ func TestDatabaseConfig_DSN(t *testing.T) {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "tjudge",
-		Password: "secret",
+		Password: `it's a \secret`,
 		Name:     "tjudge",
 		SSLMode:  "disable",
 	}
-	dsn := cfg.DSN()
-	assert.Contains(t, dsn, "host=localhost")
-	assert.Contains(t, dsn, "port=5432")
-	assert.Contains(t, dsn, "user=tjudge")
-	assert.Contains(t, dsn, "password=secret")
-	assert.Contains(t, dsn, "dbname=tjudge")
-	assert.Contains(t, dsn, "sslmode=disable")
+	assert.Equal(t,
+		`host='localhost' port=5432 user='tjudge' password='it\'s a \\secret' dbname='tjudge' sslmode='disable' timezone=UTC`,
+		cfg.DSN())
 }
 
 func TestDatabaseConfig_DSNURL(t *testing.T) {
@@ -328,12 +325,18 @@ func TestDatabaseConfig_DSNURL(t *testing.T) {
 		Host:     "localhost",
 		Port:     5432,
 		User:     "tjudge",
-		Password: "secret",
+		Password: "p@ss/w#rd x",
 		Name:     "tjudge",
 		SSLMode:  "disable",
 	}
-	url := cfg.DSNURL()
-	assert.Equal(t, "postgres://tjudge:secret@localhost:5432/tjudge?sslmode=disable", url)
+	dsn := cfg.DSNURL()
+	assert.Equal(t, "postgres://tjudge:p%40ss%2Fw%23rd%20x@localhost:5432/tjudge?sslmode=disable&timezone=UTC", dsn)
+
+	// пароль со спецсимволами должен разбираться обратно без потерь
+	u, err := url.Parse(dsn)
+	require.NoError(t, err)
+	password, _ := u.User.Password()
+	assert.Equal(t, cfg.Password, password)
 }
 
 func TestRedisConfig_Address(t *testing.T) {
