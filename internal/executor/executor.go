@@ -522,7 +522,9 @@ const (
 	labelOwner   = "tjudge.owner"
 )
 
-// ownerID - hostname воркера, в докере это короткий id его контейнера
+// ownerID - hostname воркера, в докере это короткий id его контейнера.
+// реплики с общим hostname (hostname: в compose, network_mode: host) на старте
+// удалят живые контейнеры друг друга
 var ownerID, _ = os.Hostname()
 
 func containerLabels() map[string]string {
