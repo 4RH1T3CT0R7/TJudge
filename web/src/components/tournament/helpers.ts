@@ -29,15 +29,18 @@ export const statusConfig: Record<TournamentStatus, {
   },
 };
 
-// Helper function to wait for matches to complete and auto-retry if needed
+// Ждёт, пока матчи турнира доиграют, и обновляет лидерборд с раундами по ходу.
+// Упавшие матчи автоматически не перезапускаются: ошибка программы
+// детерминирована, и авто-ретрай из браузера гонял бы её матчи по кругу.
+// Для ретраев есть кнопка «Перезапустить неудачные» и recovery на бэкенде.
 export async function waitForMatchesAndAutoRetry(
   queryClient: QueryClient,
   targetTournamentId: string,
   initialEnqueued: number
 ) {
   const MAX_WAIT_TIME = 10 * 60 * 1000; // 10 minutes max
-  const POLL_INTERVAL = 2000; // 2 seconds
-  const AUTO_RETRY_THRESHOLD = 50;
+  // Не чаще живых инвалидаций (useTournamentLive): вкладка админа тоже под rate limit
+  const POLL_INTERVAL = 5000;
 
   const startTime = Date.now();
   let lastPending = initialEnqueued;
@@ -57,22 +60,7 @@ export async function waitForMatchesAndAutoRetry(
       }
 
       // All matches completed
-      if (inProgress === 0) {
-        // Check for failed matches
-        if (stats.failed > 0 && stats.failed <= AUTO_RETRY_THRESHOLD) {
-          console.log(`Auto-retrying ${stats.failed} failed matches (threshold: ${AUTO_RETRY_THRESHOLD})`);
-          try {
-            const retryResult = await api.retryFailedMatches(targetTournamentId);
-            if (retryResult.enqueued > 0) {
-              // Wait for retry to complete recursively
-              await waitForMatchesAndAutoRetry(queryClient, targetTournamentId, retryResult.enqueued);
-            }
-          } catch (retryErr) {
-            console.error('Failed to auto-retry matches:', retryErr);
-          }
-        }
-        return;
-      }
+      if (inProgress === 0) return;
     } catch (err) {
       console.error('Error polling match status:', err);
     }
