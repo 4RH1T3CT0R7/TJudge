@@ -218,6 +218,16 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 		return err
 	}
 
+	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+	if err != nil {
+		return errors.Wrap(err, "failed to check tournament status")
+	}
+	// состав команды завершённого турнира - часть итогов: уход последнего участника
+	// удалил бы команду из финальных таблиц
+	if tournament.Status == models.TournamentCompleted {
+		return errors.ErrConflict.WithMessage("cannot leave team of completed tournament")
+	}
+
 	inTeam, err := s.teamRepo.IsUserInTeam(ctx, teamID, userID)
 	if err != nil {
 		return errors.Wrap(err, "failed to check user in team")
@@ -235,10 +245,6 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 
 		if memberCount == 1 {
 			// в команде он один — но во время активного турнира сносить нельзя
-			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
-			if tErr != nil {
-				return errors.Wrap(tErr, "failed to check tournament status")
-			}
 			if tournament.Status == models.TournamentActive {
 				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
 			}
@@ -273,10 +279,6 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 		if !transferred {
 			// гонка: пока считали и тянули список, остальные тоже вышли.
 			// команда по факту пустая — удаляется (проверка на активный турнир повторяется)
-			tournament, tErr := s.tournamentRepo.GetByID(ctx, team.TournamentID)
-			if tErr != nil {
-				return errors.Wrap(tErr, "failed to check tournament status")
-			}
 			if tournament.Status == models.TournamentActive {
 				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
 			}
