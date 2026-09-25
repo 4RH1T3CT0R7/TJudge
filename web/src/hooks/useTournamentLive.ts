@@ -77,7 +77,7 @@ export function useTournamentLive({ tournamentId, enabled = true, active }: UseT
           queryKey: ['tournament', tournamentId, 'game'],
           predicate: (q) => q.queryKey[4] !== 'head-to-head',
         });
-        // Авто-раунд сдвигает current_round и last_run_at, отдельного события нет.
+        // Авто-раунд сдвигает last_run_at, отдельного события нет.
         void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
       }, INVALIDATE_THROTTLE_MS),
     [queryClient, tournamentId]
