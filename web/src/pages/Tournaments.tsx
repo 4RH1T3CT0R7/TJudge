@@ -16,7 +16,7 @@ const statusLabels: Record<TournamentStatus, { label: string; className: string 
 
 export function Tournaments() {
   const [filter, setFilter] = useState<TournamentStatus | ''>('');
-  const { data, isPending } = useTournaments(filter || undefined);
+  const { data, isPending, isError, refetch } = useTournaments(filter || undefined);
   const showLoading = useDelayedLoading(isPending);
   const tournaments = data ?? [];
 
@@ -48,7 +48,17 @@ export function Tournaments() {
       {/* Content */}
       {showLoading ? (
         <TerminalLoader />
-      ) : isPending ? null : tournaments.length === 0 ? (
+      ) : isPending ? null : isError && !data ? (
+        <div className="text-center py-12">
+          <div className="flex justify-center mb-4">
+            <SpaceInvader size="sm" controlledPose="dizzy" speechBubble="// ошибка загрузки" eyeOverride="sad" />
+          </div>
+          <p className="text-red-400">Не удалось загрузить список турниров</p>
+          <button onClick={() => refetch()} className="btn btn-secondary mt-4">
+            Попробовать снова
+          </button>
+        </div>
+      ) : tournaments.length === 0 ? (
         <div className="text-center py-16">
           <div className="relative inline-block">
             <SpaceInvader size="md" controlledPose="cry" eyeOverride="sad" speechBubble="// пусто..." />
