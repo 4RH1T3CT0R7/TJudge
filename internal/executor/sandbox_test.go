@@ -60,18 +60,35 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	assert.Equal(t, [2]int64{10485760, 10485760}, limits["fsize"])
 }
 
-// seccomp/apparmor добавляются в SecurityOpt только когда профиль задан env-ом
+// seccomp/apparmor добавляются в SecurityOpt только когда профиль задан env-ом.
+// в seccomp= уходит содержимое профиля: демон разбирает значение как JSON
 func TestBuildMatchHostConfig_ProfilesOptional(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "seccomp.json")
+	require.NoError(t, os.WriteFile(path, []byte("{\n  \"defaultAction\": \"SCMP_ACT_ERRNO\"\n}\n"), 0o600))
+	profile, err := loadSeccompProfile(path)
+	require.NoError(t, err)
+
 	cfg := config.ExecutorConfig{
-		SeccompProfile:  "/sec/seccomp.json",
+		SeccompProfile:  profile,
 		AppArmorProfile: "tjudge-profile",
 	}
 	hc := buildMatchHostConfig(cfg, nil)
 	assert.Equal(t, []string{
 		"no-new-privileges:true",
-		"seccomp=/sec/seccomp.json",
+		`seccomp={"defaultAction":"SCMP_ACT_ERRNO"}`,
 		"apparmor=tjudge-profile",
 	}, hc.SecurityOpt)
+}
+
+// нечитаемый или битый профиль - отказ на старте, а не infra-ошибка каждого матча
+func TestLoadSeccompProfile_Invalid(t *testing.T) {
+	_, err := loadSeccompProfile(filepath.Join(t.TempDir(), "missing.json"))
+	assert.Error(t, err)
+
+	path := filepath.Join(t.TempDir(), "bad.json")
+	require.NoError(t, os.WriteFile(path, []byte("not json"), 0o600))
+	_, err = loadSeccompProfile(path)
+	assert.Error(t, err)
 }
 
 // в матч монтируются только файлы двух программ (и классы java), а не весь

@@ -3,6 +3,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,16 @@ type Executor struct {
 
 // NewExecutor создаёт executor
 func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath string, log *logger.Logger) (*Executor, error) {
+	// Engine API в seccomp= ждёт сам JSON профиля, путь к файлу понимает только
+	// docker CLI. файл читается один раз на старте, дальше в конфиге содержимое
+	if cfg.SeccompProfile != "" {
+		profile, err := loadSeccompProfile(cfg.SeccompProfile)
+		if err != nil {
+			return nil, err
+		}
+		cfg.SeccompProfile = profile
+	}
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
@@ -53,6 +64,19 @@ func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath strin
 		containerPath:    "/programs", // фиксированный путь внутри контейнера
 		log:              log,
 	}, nil
+}
+
+// loadSeccompProfile читает seccomp-профиль и возвращает его JSON одной строкой
+func loadSeccompProfile(path string) (string, error) {
+	raw, err := os.ReadFile(path) // #nosec G304 -- путь из env EXECUTOR_SECCOMP_PROFILE
+	if err != nil {
+		return "", fmt.Errorf("failed to read seccomp profile: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return "", fmt.Errorf("invalid seccomp profile %s: %w", path, err)
+	}
+	return buf.String(), nil
 }
 
 // Execute прогоняет матч через tjudge-cli
@@ -184,8 +208,8 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 		"no-new-privileges:true", // без setuid-эскалации
 	}
 
-	// seccomp-профиль лежит в deployments/security, но по дефолту не подключён -
-	// включается env-ом EXECUTOR_SECCOMP_PROFILE. так и было задумано, не трогать
+	// seccomp-профиль лежит в deployments/security, по дефолту не подключён,
+	// включается env-ом EXECUTOR_SECCOMP_PROFILE. тут уже JSON, файл прочитан в NewExecutor
 	if cfg.SeccompProfile != "" {
 		securityOpts = append(securityOpts, "seccomp="+cfg.SeccompProfile)
 	}
