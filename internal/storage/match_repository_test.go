@@ -747,6 +747,34 @@ func (s *MatchRepositorySuite) TestResetStuckRunning() {
 	assert.Equal(s.T(), models.MatchCompleted, got.Status)
 }
 
+// отменяются только pending, running и завершённые не трогаются
+func (s *MatchRepositorySuite) TestCancelPending() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("cnclp")
+	ctx := context.Background()
+
+	pending := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
+	running := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	completed := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+
+	// отмена глобальная, в базе могут быть pending от других тестов
+	n, err := s.repo.CancelPending(ctx)
+	require.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), n, int64(1))
+
+	for id, want := range map[uuid.UUID]models.MatchStatus{
+		pending.ID:   models.MatchCancelled,
+		running.ID:   models.MatchRunning,
+		completed.ID: models.MatchCompleted,
+	} {
+		got, err := s.repo.GetByID(ctx, id)
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), want, got.Status)
+	}
+
+	// отменённый матч воркер уже не возьмёт
+	assert.ErrorIs(s.T(), s.repo.UpdateStatus(ctx, pending.ID, models.MatchRunning), models.ErrMatchAlreadyProcessed)
+}
+
 func (s *MatchRepositorySuite) TestBatchUpdateResults() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("batur")
 

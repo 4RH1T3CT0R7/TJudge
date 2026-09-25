@@ -1112,6 +1112,21 @@ func (r *MatchRepository) ResetStuckRunning(ctx context.Context, stuckDuration t
 	return result.RowsAffected()
 }
 
+// CancelPending отменяет все pending матчи (админская очистка очереди): без
+// этого recovery воркера вернул бы их в очередь. running доигрывают
+func (r *MatchRepository) CancelPending(ctx context.Context) (int64, error) {
+	query := `
+		UPDATE matches
+		SET status = 'cancelled', error_message = 'Cancelled by admin'
+		WHERE status = 'pending'
+	`
+	result, err := r.db.ExecWithMetrics(ctx, "match_cancel_pending", query)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to cancel pending matches")
+	}
+	return result.RowsAffected()
+}
+
 func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*models.MatchResult) error {
 	if len(results) == 0 {
 		return nil
