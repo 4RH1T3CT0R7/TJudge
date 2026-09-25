@@ -156,17 +156,14 @@ func (s *Server) requireAdmin() func(http.Handler) http.Handler {
 	return middleware.RequireAdmin()
 }
 
-// строгий лимит на логин и регистрацию с одного ip в минуту: bcrypt дорогой,
-// а без него пароли перебирались бы со скоростью общего лимита
-const authRateLimit = 30
-
 // rateLimit - лимитер со своим счётчиком name, пустышка если лимит выключен.
+// с tokens залогиненный считается по user id, без них всегда по ip.
 // stopCh гасит cleanup-горутину фолбэк-лимитера при Close
-func (s *Server) rateLimit(name string, limit int) func(http.Handler) http.Handler {
+func (s *Server) rateLimit(name string, tokens middleware.AuthService) func(http.Handler) http.Handler {
 	if !s.rateLimitConfig.Enabled {
 		return func(next http.Handler) http.Handler { return next }
 	}
-	return middleware.RateLimit(s.rateLimiter, name, limit, time.Minute, s.authService, s.log, s.rateLimitStopCh)
+	return middleware.RateLimit(s.rateLimiter, name, s.rateLimitConfig.RequestsPerMinute, time.Minute, tokens, s.log, s.rateLimitStopCh)
 }
 
 // auditMiddleware пишет admin-действия в аудит-лог, без логгера - пустышка
@@ -254,12 +251,14 @@ func (s *Server) setupRoutes() {
 	s.router.Route("/api/v1", func(r chi.Router) {
 		// статика spa и /health под лимит не попадают: они дешёвые, а в общем
 		// счётчике выбивали бы лимит всей аудитории
-		r.Use(s.rateLimit("api", s.rateLimitConfig.RequestsPerMinute))
+		r.Use(s.rateLimit("api", s.authService))
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(bodyLimit)
 			// публичные
-			authLimit := s.rateLimit("auth", authRateLimit)
+			// логин и регистрация всегда считаются по ip: по user id каждый
+			// новый аккаунт давал бы перебору паролей свой счётчик
+			authLimit := s.rateLimit("auth", nil)
 			r.With(authLimit).Post("/register", s.authHandler.Register)
 			r.With(authLimit).Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
