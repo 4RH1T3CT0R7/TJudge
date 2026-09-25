@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { useAuthStore } from './authStore';
 import api from '../api/client';
+import { queryClient } from '../api/queryClient';
 
 // Node 25+ держит свой глобальный localStorage (без --localstorage-file он
 // undefined), и тот закрывает хранилище happy-dom.
@@ -40,5 +41,16 @@ describe('authStore', () => {
     await useAuthStore.getState().initialize();
     expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, isInitialized: true });
     expect(localStorage.getItem('refresh_token')).toBeNull();
+  });
+
+  it('logout оставляет стор инициализированным и чистит кэш запросов', async () => {
+    vi.spyOn(api, 'logout').mockResolvedValueOnce();
+    queryClient.setQueryData(['tournament', 't1', 'my-team'], { id: 'team' });
+    useAuthStore.setState({ isAuthenticated: true, isInitialized: true });
+
+    await useAuthStore.getState().logout();
+
+    expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: false, isInitialized: true });
+    expect(queryClient.getQueryData(['tournament', 't1', 'my-team'])).toBeUndefined();
   });
 });
