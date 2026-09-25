@@ -662,7 +662,8 @@ func (h *RatingHistoryHandler) GetProgramRatingHistory(w http.ResponseWriter, r 
 		return
 	}
 
-	pg := pagination.ParseLimitOffset(r, 200, 0)
+	// дефолт 200 выше общего потолка 100, поэтому потолок свой
+	pg := pagination.ParseLimitOffset(r, 200, 500)
 
 	history, err := h.repo.GetByProgramAndTournament(r.Context(), programID, tournamentID, pg.Limit)
 	if err != nil {

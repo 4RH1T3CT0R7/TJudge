@@ -15,8 +15,9 @@ type LimitOffset struct {
 }
 
 // ParseLimitOffset парсит limit и offset из query параметров запроса.
-// defaultLimit используется, если параметр не указан.
-// maxLimit ограничивает максимальное значение (0 = DefaultMaxLimit).
+// defaultLimit используется, если параметр не указан или некорректен.
+// maxLimit - потолок (0 = DefaultMaxLimit): слишком большой limit обрезается до него,
+// а не откатывается к дефолту, иначе клиент, попросивший больше, получит меньше
 func ParseLimitOffset(r *http.Request, defaultLimit int, maxLimit int) LimitOffset {
 	if maxLimit <= 0 {
 		maxLimit = DefaultMaxLimit
@@ -24,8 +25,8 @@ func ParseLimitOffset(r *http.Request, defaultLimit int, maxLimit int) LimitOffs
 
 	limit := defaultLimit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= maxLimit {
-			limit = l
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = min(l, maxLimit)
 		}
 	}
 

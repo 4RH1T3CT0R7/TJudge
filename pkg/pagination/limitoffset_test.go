@@ -32,7 +32,7 @@ func TestParseLimitOffset_LimitExceedsMax(t *testing.T) {
 	r := newRequest("limit=200")
 	lo := ParseLimitOffset(r, 20, 100)
 
-	assert.Equal(t, 20, lo.Limit) // откатывается к значению по умолчанию
+	assert.Equal(t, 100, lo.Limit) // обрезается до потолка
 }
 
 func TestParseLimitOffset_NegativeLimit(t *testing.T) {
