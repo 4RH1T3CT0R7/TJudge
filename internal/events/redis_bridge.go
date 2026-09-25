@@ -29,7 +29,7 @@ type redisSubscriber interface {
 }
 
 // RedisEventPublisher отправляет события в Redis Pub/Sub канал, чтобы события одного
-// процесса (воркер) доходили до другого (API), подписанного на тот же канал.
+// процесса (воркер или реплика API) доходили до всех реплик API, подписанных на канал.
 type RedisEventPublisher struct {
 	pub     redisPublisher
 	channel string
@@ -71,7 +71,7 @@ func (p *RedisEventPublisher) Publish(ctx context.Context, typeName string, even
 }
 
 // RedisEventSubscriber слушает Redis-канал и отдаёт полученные события локальному
-// нотифаеру (обычно в процессе API - там он только рассылает по вебсокету).
+// нотифаеру (в процессе API - там он только рассылает по вебсокету).
 type RedisEventSubscriber struct {
 	sub      redisSubscriber
 	notifier Notifier
@@ -141,31 +141,26 @@ func (s *RedisEventSubscriber) handleMessage(ctx context.Context, msg *redis.Mes
 		return
 	}
 
-	// из редиса реально приходят только эти два типа (см. что подписан публиковать
-	// воркер), остальное - unknown. имена строк обязаны совпадать с тем что кладёт publisher.
+	// имена типов обязаны совпадать с тем что кладёт publisher
+	var err error
 	switch env.Type {
 	case "MatchResultProcessed":
-		var e MatchResultProcessed
-		if err := json.Unmarshal(env.Data, &e); err != nil {
-			s.log.Error("Redis event subscriber: unmarshal event data",
-				zap.Error(err),
-				zap.String("type", env.Type),
-			)
-			return
-		}
-		s.notifier.MatchResultProcessed(ctx, e)
+		err = dispatch(ctx, env.Data, s.notifier.MatchResultProcessed)
 	case "ProgramCompiled":
-		var e ProgramCompiled
-		if err := json.Unmarshal(env.Data, &e); err != nil {
-			s.log.Error("Redis event subscriber: unmarshal event data",
-				zap.Error(err),
-				zap.String("type", env.Type),
-			)
-			return
-		}
-		s.notifier.ProgramCompiled(ctx, e)
+		err = dispatch(ctx, env.Data, s.notifier.ProgramCompiled)
+	case "TournamentStarted":
+		err = dispatch(ctx, env.Data, s.notifier.TournamentStarted)
+	case "TournamentCompleted":
+		err = dispatch(ctx, env.Data, s.notifier.TournamentCompleted)
 	default:
 		s.log.Warn("Redis event subscriber: unknown event type",
+			zap.String("type", env.Type),
+		)
+		return
+	}
+	if err != nil {
+		s.log.Error("Redis event subscriber: unmarshal event data",
+			zap.Error(err),
 			zap.String("type", env.Type),
 		)
 		return
@@ -175,4 +170,14 @@ func (s *RedisEventSubscriber) handleMessage(ctx context.Context, msg *redis.Mes
 		zap.String("type", env.Type),
 		zap.String("channel", s.channel),
 	)
+}
+
+// dispatch разбирает data в событие типа T и отдаёт его обработчику
+func dispatch[T any](ctx context.Context, data json.RawMessage, handle func(context.Context, T)) error {
+	var e T
+	if err := json.Unmarshal(data, &e); err != nil {
+		return err
+	}
+	handle(ctx, e)
+	return nil
 }
