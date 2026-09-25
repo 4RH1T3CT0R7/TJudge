@@ -283,7 +283,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
 
 				// добавить игру может админ или создатель турнира, проверка в хендлере
-				r.Post("/{id}/games", s.gameHandler.AddGameToTournament)
+				r.With(s.auditMiddleware()).Post("/{id}/games", s.gameHandler.AddGameToTournament)
 
 				// админские
 				r.Group(func(r chi.Router) {
@@ -400,6 +400,8 @@ func (s *Server) setupRoutes() {
 			r.Use(bodyLimit)
 			r.Use(middleware.Auth(s.authService, s.log))
 			r.Use(s.requireAdmin())
+			// кнопки восстановления ниже - самые инвазивные действия оператора
+			r.Use(s.auditMiddleware())
 
 			r.Get("/metrics", s.systemHandler.GetMetrics)
 			r.Get("/health", s.systemHandler.GetHealth)
