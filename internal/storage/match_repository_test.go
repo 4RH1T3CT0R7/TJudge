@@ -161,53 +161,58 @@ func (s *MatchRepositorySuite) TestGetByID_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-func (s *MatchRepositorySuite) TestCreateBatch() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("batch")
-
+// новый раунд целиком заменяет матчи игры, а при running-матчах не меняет ничего
+func (s *MatchRepositorySuite) TestStartNewRound() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("snr")
 	ctx := context.Background()
-	matches := []*models.Match{
-		{
-			ID:           uuid.New(),
-			TournamentID: tournament.ID,
-			Program1ID:   prog1.ID,
-			Program2ID:   prog2.ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchPending,
-			Priority:     models.PriorityHigh,
-			RoundNumber:  1,
-			CreatedAt:    time.Now(),
-		},
-		{
-			ID:           uuid.New(),
-			TournamentID: tournament.ID,
-			Program1ID:   prog2.ID,
-			Program2ID:   prog1.ID,
-			GameType:     "prisoners_dilemma",
-			Status:       models.MatchPending,
-			Priority:     models.PriorityLow,
-			RoundNumber:  1,
-			CreatedAt:    time.Now(),
-		},
+
+	gameRepo := storage.NewGameRepository(s.database)
+	game := &models.Game{ID: uuid.New(), Name: "test_snr_" + uuid.New().String()[:8], DisplayName: "SNR"}
+	require.NoError(s.T(), gameRepo.Create(ctx, game))
+	s.T().Cleanup(func() { _, _ = s.database.ExecContext(ctx, "DELETE FROM games WHERE id = $1", game.ID) })
+	require.NoError(s.T(), gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+
+	old := s.createMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, models.MatchCompleted, models.PriorityMedium, 1)
+
+	newRound := func() []*models.Match {
+		var round []*models.Match
+		for _, pair := range [][2]uuid.UUID{{prog1.ID, prog2.ID}, {prog2.ID, prog1.ID}} {
+			m := &models.Match{
+				ID:           uuid.New(),
+				TournamentID: tournament.ID,
+				Program1ID:   pair[0],
+				Program2ID:   pair[1],
+				GameType:     game.Name,
+				Status:       models.MatchPending,
+				Priority:     models.PriorityHigh,
+				RoundNumber:  1,
+				CreatedAt:    time.Now(),
+			}
+			round = append(round, m)
+			s.matchIDs = append(s.matchIDs, m.ID)
+		}
+		return round
 	}
 
-	err := s.repo.CreateBatch(ctx, matches)
-	require.NoError(s.T(), err)
-	for _, m := range matches {
-		s.matchIDs = append(s.matchIDs, m.ID)
-	}
+	round := newRound()
+	require.NoError(s.T(), gameRepo.StartNewRound(ctx, tournament.ID, []string{game.Name}, round))
 
-	// оба должны создаться
-	for _, m := range matches {
-		result, err := s.repo.GetByID(ctx, m.ID)
+	_, err := s.repo.GetByID(ctx, old.ID)
+	assert.True(s.T(), errors.IsNotFound(err), "матч прошлого раунда должен быть удалён")
+	for _, m := range round {
+		got, err := s.repo.GetByID(ctx, m.ID)
 		require.NoError(s.T(), err)
-		assert.Equal(s.T(), m.ID, result.ID)
+		assert.Equal(s.T(), models.MatchPending, got.Status)
 	}
-}
 
-func (s *MatchRepositorySuite) TestCreateBatch_Empty() {
-	ctx := context.Background()
-
-	err := s.repo.CreateBatch(ctx, []*models.Match{})
+	// running-матч: транзакция откатывается, текущий раунд не тронут
+	_, err = s.database.ExecContext(ctx, "UPDATE matches SET status = 'running' WHERE id = $1", round[0].ID)
+	require.NoError(s.T(), err)
+	err = gameRepo.StartNewRound(ctx, tournament.ID, []string{game.Name}, newRound())
+	appErr := errors.GetAppError(err)
+	require.NotNil(s.T(), appErr)
+	assert.Equal(s.T(), 409, appErr.Code)
+	_, err = s.repo.GetByID(ctx, round[1].ID)
 	require.NoError(s.T(), err)
 }
 

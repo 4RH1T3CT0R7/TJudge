@@ -92,9 +92,6 @@ type MockMatchRepository struct{ mock.Mock }
 func (m *MockMatchRepository) Create(ctx context.Context, match *models.Match) error {
 	return m.Called(ctx, match).Error(0)
 }
-func (m *MockMatchRepository) CreateBatch(ctx context.Context, matches []*models.Match) error {
-	return m.Called(ctx, matches).Error(0)
-}
 func (m *MockMatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
 	return m.Called(ctx, ids).Error(0)
 }
@@ -153,8 +150,8 @@ type MockGameRepository struct{ mock.Mock }
 func (m *MockGameRepository) SetActiveGame(ctx context.Context, id, gameID uuid.UUID) error {
 	return m.Called(ctx, id, gameID).Error(0)
 }
-func (m *MockGameRepository) ResetGameByType(ctx context.Context, id uuid.UUID, gameType string) error {
-	return m.Called(ctx, id, gameType).Error(0)
+func (m *MockGameRepository) StartNewRound(ctx context.Context, id uuid.UUID, gameTypes []string, matches []*models.Match) error {
+	return m.Called(ctx, id, gameTypes, matches).Error(0)
 }
 func (m *MockGameRepository) UpdateAutoRoundLastRun(ctx context.Context, id, gameID uuid.UUID) error {
 	return m.Called(ctx, id, gameID).Error(0)
@@ -221,7 +218,7 @@ func newTestSchedulingService(t *testing.T) (*SchedulingService, *MockTournament
 	gameRepo := new(MockGameRepository)
 
 	log, _ := logger.New("error", "json")
-	service := NewSchedulingService(tournamentRepo, matchRepo, queueManager, gameRepo, distributedLock, events.NoopNotifier{}, log)
+	service := NewSchedulingService(tournamentRepo, matchRepo, queueManager, gameRepo, distributedLock, log)
 	return service, tournamentRepo, matchRepo, queueManager, distributedLock, gameRepo
 }
 
@@ -623,17 +620,44 @@ func TestService_RunAllMatches(t *testing.T) {
 		// pending пусто -> сброс + генерация нового раунда
 		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(map[string][]*models.TournamentParticipant{"chess": participants}, nil)
-		gameRepo.On("ResetGameByType", ctx, id, "chess").Return(nil)
-		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
-		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
+		// у go одна программа: её игра не сбрасывается и в раунд не попадает
+		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(map[string][]*models.TournamentParticipant{
+			"chess": participants,
+			"go":    {{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()}},
+		}, nil)
+		gameRepo.On("StartNewRound", ctx, id, []string{"chess"}, mock.AnythingOfType("[]*models.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", mock.Anything, mock.AnythingOfType("[]*models.Match")).Return(nil)
 
 		count, err := service.RunAllMatches(ctx, id)
 		require.NoError(t, err)
 		// 2 участника, обе ориентации = 2 матча
 		assert.Equal(t, 2, count)
-		gameRepo.AssertCalled(t, "ResetGameByType", ctx, id, "chess")
-		matchRepo.AssertCalled(t, "CreateBatch", ctx, mock.MatchedBy(func(matches []*models.Match) bool { return len(matches) == 2 }))
+		gameRepo.AssertCalled(t, "StartNewRound", ctx, id, []string{"chess"}, mock.MatchedBy(func(matches []*models.Match) bool { return len(matches) == 2 }))
+	})
+
+	t.Run("start_round_conflict_enqueues_nothing", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+		ctx := context.Background()
+
+		id := uuid.New()
+		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
+		participants := []*models.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+		}
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{}, nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
+		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(map[string][]*models.TournamentParticipant{"chess": participants}, nil)
+		// в игре ещё идут матчи: транзакция откатилась целиком
+		gameRepo.On("StartNewRound", ctx, id, []string{"chess"}, mock.Anything).Return(errors.ErrConflict.WithMessage("cannot reset: there are matches currently running"))
+
+		_, err := service.RunAllMatches(ctx, id)
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 409, appErr.Code)
+		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
+		matchRepo.AssertNotCalled(t, "DeleteBatch", mock.Anything, mock.Anything)
 	})
 
 	t.Run("not_active", func(t *testing.T) {
@@ -689,16 +713,15 @@ func TestService_RunAllMatches(t *testing.T) {
 		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(participants, nil)
-		gameRepo.On("ResetGameByType", ctx, id, "chess").Return(nil)
-		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
-		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(fmt.Errorf("redis pipeline error"))
+		gameRepo.On("StartNewRound", ctx, id, []string{"chess"}, mock.AnythingOfType("[]*models.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", mock.Anything, mock.AnythingOfType("[]*models.Match")).Return(fmt.Errorf("redis pipeline error"))
 		// матчи из этого вызова обязаны откатиться
-		matchRepo.On("DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
+		matchRepo.On("DeleteBatch", mock.Anything, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
 
 		count, err := service.RunAllMatches(ctx, id)
 		assert.Error(t, err)
 		assert.Equal(t, 0, count)
-		matchRepo.AssertCalled(t, "DeleteBatch", ctx, mock.AnythingOfType("[]uuid.UUID"))
+		matchRepo.AssertCalled(t, "DeleteBatch", mock.Anything, mock.AnythingOfType("[]uuid.UUID"))
 	})
 }
 
@@ -719,23 +742,68 @@ func TestService_RunGameMatches(t *testing.T) {
 		matchRepo.On("GetPendingByTournamentAndGame", ctx, id, gameType).Return([]*models.Match{}, nil)
 		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
 		tournamentRepo.On("GetLatestParticipantsByGame", ctx, id, gameType).Return(participants, nil)
-		gameRepo.On("ResetGameByType", ctx, id, gameType).Return(nil)
-		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
-		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
+		gameRepo.On("StartNewRound", ctx, id, []string{gameType}, mock.AnythingOfType("[]*models.Match")).Return(nil)
+		queueManager.On("EnqueueBatch", mock.Anything, mock.AnythingOfType("[]*models.Match")).Return(nil)
 
 		count, err := service.RunGameMatches(ctx, id, gameType)
 		require.NoError(t, err)
 		// 3 участника: AB, BA, AC, CA, BC, CB = 6 матчей
 		assert.Equal(t, 6, count)
 	})
+
+	t.Run("one_participant_does_not_reset", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, _, distLock, gameRepo := newTestSchedulingService(t)
+		ctx := context.Background()
+
+		id := uuid.New()
+		gameType := "prisoners_dilemma"
+		tournament := &models.Tournament{ID: id, Name: "Active", GameType: gameType, Status: models.TournamentActive}
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		matchRepo.On("GetPendingByTournamentAndGame", ctx, id, gameType).Return([]*models.Match{}, nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
+		tournamentRepo.On("GetLatestParticipantsByGame", ctx, id, gameType).Return([]*models.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+		}, nil)
+
+		_, err := service.RunGameMatches(ctx, id, gameType)
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 400, appErr.Code)
+		// результаты прошлого раунда не тронуты
+		gameRepo.AssertNotCalled(t, "StartNewRound", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+}
+
+// все операции планирования турнира берут один ключ лока, иначе RunAll и RunGame
+// (авто-раунд) могут одновременно сгенерировать раунд одной игры
+func TestScheduling_SharedLockKey(t *testing.T) {
+	service, _, _, _, distLock, _ := newTestSchedulingService(t)
+	ctx := context.Background()
+	id := uuid.New()
+
+	var keys []string
+	distLock.On("WithLock", anyLock()...).Run(func(args mock.Arguments) {
+		keys = append(keys, args.String(1))
+	}).Return(fmt.Errorf("lock held"))
+
+	_, _ = service.RunAllMatches(ctx, id)
+	_, _ = service.RunGameMatches(ctx, id, "dilemma")
+	_, _ = service.RetryFailedMatches(ctx, id)
+
+	require.Len(t, keys, 3)
+	assert.Equal(t, scheduleLockKey(id), keys[0])
+	assert.Equal(t, keys[0], keys[1])
+	assert.Equal(t, keys[0], keys[2])
 }
 
 func TestService_RetryFailedMatches(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		service, _, matchRepo, queueManager, _, _ := newTestSchedulingService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		id := uuid.New()
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentActive}, nil)
 		matchRepo.On("ResetFailedMatches", ctx, id).Return(3, nil)
 		pending := []*models.Match{
 			{ID: uuid.New(), TournamentID: id, Status: models.MatchPending},
@@ -750,11 +818,28 @@ func TestService_RetryFailedMatches(t *testing.T) {
 		assert.Equal(t, 3, count)
 	})
 
-	t.Run("no_failed_matches", func(t *testing.T) {
-		service, _, matchRepo, _, _, _ := newTestSchedulingService(t)
+	t.Run("not_active_tournament", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		id := uuid.New()
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentCompleted}, nil)
+
+		_, err := service.RetryFailedMatches(ctx, id)
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 409, appErr.Code)
+		matchRepo.AssertNotCalled(t, "ResetFailedMatches", mock.Anything, mock.Anything)
+	})
+
+	t.Run("no_failed_matches", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
+		ctx := context.Background()
+
+		id := uuid.New()
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentActive}, nil)
 		matchRepo.On("ResetFailedMatches", ctx, id).Return(0, nil)
 
 		count, err := service.RetryFailedMatches(ctx, id)

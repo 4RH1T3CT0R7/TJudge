@@ -2,11 +2,11 @@ package tournament
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -16,7 +16,6 @@ import (
 type AutoRoundScheduler struct {
 	schedulingService *SchedulingService
 	gameRepo          GameRepository
-	distributedLock   DistributedLock
 	log               *logger.Logger
 
 	pollInterval time.Duration
@@ -27,7 +26,6 @@ type AutoRoundScheduler struct {
 func NewAutoRoundScheduler(
 	schedulingService *SchedulingService,
 	gameRepo GameRepository,
-	distributedLock DistributedLock,
 	log *logger.Logger,
 	pollInterval time.Duration,
 ) *AutoRoundScheduler {
@@ -37,7 +35,6 @@ func NewAutoRoundScheduler(
 	return &AutoRoundScheduler{
 		schedulingService: schedulingService,
 		gameRepo:          gameRepo,
-		distributedLock:   distributedLock,
 		log:               log,
 		pollInterval:      pollInterval,
 		stopCh:            make(chan struct{}),
@@ -135,37 +132,35 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return // новых прог нет, перезапускать нечего
 	}
 
-	// 4. запуск раунда через RunGameMatches (он сам возьмёт свой лок)
-	lockKey := fmt.Sprintf("tournament:autoround:%s:%s", g.TournamentID.String(), g.GameType)
-	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
-		enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
-		if err != nil {
-			return err
+	// 4. запуск раунда через RunGameMatches, лок планирования турнира он берёт сам
+	enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
+	if err != nil {
+		// 4xx - штатные ситуации (лок занят, не хватает участников, идут матчи),
+		// остальное - реальная поломка, её должно быть видно в логах
+		logFn := s.log.Warn
+		if appErr := errors.GetAppError(err); appErr != nil && appErr.Code < 500 {
+			logFn = s.log.Debug
 		}
-
-		// обновляется время послднего запуска
-		if updateErr := s.gameRepo.UpdateAutoRoundLastRun(ctx, g.TournamentID, g.GameID); updateErr != nil {
-			s.log.Error("Auto-round: failed to update last run timestamp",
-				zap.Error(updateErr),
-				zap.String("tournament_id", g.TournamentID.String()),
-				zap.String("game_type", g.GameType),
-			)
-		}
-
-		s.log.Info("Auto-round triggered",
+		logFn("Auto-round: round not started",
+			zap.Error(err),
 			zap.String("tournament_id", g.TournamentID.String()),
 			zap.String("game_type", g.GameType),
-			zap.Int("matches_enqueued", enqueued),
 		)
-		return nil
-	})
+		return
+	}
 
-	if lockErr != nil {
-		// лок не взяли или ошибка - это норм, другой процесс уже обрабатывает
-		s.log.Debug("Auto-round: skipped (lock or error)",
-			zap.Error(lockErr),
+	// обновляется время последнего запуска
+	if updateErr := s.gameRepo.UpdateAutoRoundLastRun(ctx, g.TournamentID, g.GameID); updateErr != nil {
+		s.log.Error("Auto-round: failed to update last run timestamp",
+			zap.Error(updateErr),
 			zap.String("tournament_id", g.TournamentID.String()),
 			zap.String("game_type", g.GameType),
 		)
 	}
+
+	s.log.Info("Auto-round triggered",
+		zap.String("tournament_id", g.TournamentID.String()),
+		zap.String("game_type", g.GameType),
+		zap.Int("matches_enqueued", enqueued),
+	)
 }

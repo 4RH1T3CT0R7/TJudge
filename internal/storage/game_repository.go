@@ -634,73 +634,85 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID, g
 	return
 }
 
-// ResetGameByType полный сброс матчей и рейтингов игры по типу (name)
-// зовётся при авто-перезапуске игры из сервиса турниров
-func (r *GameRepository) ResetGameByType(ctx context.Context, tournamentID uuid.UUID, gameType string) error {
+// StartNewRound одной транзакцией сбрасывает результаты перечисленных игр турнира
+// (матчи, rating_history, статистику участников, статус раунда) и вставляет матчи
+// нового раунда: либо раунд создан целиком, либо прошлые результаты не тронуты.
+// если в какой-то из игр идут матчи - ErrConflict
+func (r *GameRepository) StartNewRound(ctx context.Context, tournamentID uuid.UUID, gameTypes []string, matches []*models.Match) error {
 	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
-		// проверка что нет запущенных матчей
-		var runningCount int
-		if err := tx.GetContext(ctx, &runningCount, `
-			SELECT COUNT(*) FROM matches
-			WHERE tournament_id = $1 AND game_type = $2 AND status = 'running'
-		`, tournamentID, gameType); err != nil {
-			return errors.Wrap(err, "failed to check running matches")
+		for _, gameType := range gameTypes {
+			if err := resetGame(ctx, tx, tournamentID, gameType); err != nil {
+				return err
+			}
 		}
-		if runningCount > 0 {
-			return errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
-		}
-
-		// снос истории рейтингов по матчам этой игры
-		if _, err := tx.ExecContext(ctx, `
-			DELETE FROM rating_history
-			WHERE tournament_id = $1
-			AND match_id IN (
-				SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
-			)
-		`, tournamentID, gameType); err != nil {
-			return errors.Wrap(err, "failed to delete rating history")
-		}
-
-		// снос матчей
-		if _, err := tx.ExecContext(ctx, `
-			DELETE FROM matches
-			WHERE tournament_id = $1 AND game_type = $2
-		`, tournamentID, gameType); err != nil {
-			return errors.Wrap(err, "failed to delete matches")
-		}
-
-		// обнуление рейтингов участников этой игры
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE tournament_participants tp
-			SET rating = 1500, wins = 0, losses = 0, draws = 0
-			FROM programs p
-			INNER JOIN games g ON g.id = p.game_id
-			WHERE tp.program_id = p.id
-			AND tp.tournament_id = $1
-			AND g.name = $2
-		`, tournamentID, gameType); err != nil {
-			return errors.Wrap(err, "failed to reset participant ratings")
-		}
-
-		// сброс номера раунда
-		result, txErr := tx.ExecContext(ctx, `
-			UPDATE tournament_games tg
-			SET current_round = 0, round_completed = false, round_completed_at = NULL
-			FROM games g
-			WHERE tg.tournament_id = $1
-			AND tg.game_id = g.id
-			AND g.name = $2
-		`, tournamentID, gameType)
-		if txErr != nil {
-			return errors.Wrap(txErr, "failed to reset game round status")
-		}
-		rows, _ := result.RowsAffected()
-		if rows == 0 {
-			return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament game not found for type: %s", gameType))
-		}
-
-		return nil
+		return insertMatches(ctx, tx, matches)
 	})
+}
+
+// resetGame - полный сброс матчей и рейтингов игры по типу (name) внутри транзакции
+func resetGame(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameType string) error {
+	// проверка что нет запущенных матчей
+	var runningCount int
+	if err := tx.GetContext(ctx, &runningCount, `
+		SELECT COUNT(*) FROM matches
+		WHERE tournament_id = $1 AND game_type = $2 AND status = 'running'
+	`, tournamentID, gameType); err != nil {
+		return errors.Wrap(err, "failed to check running matches")
+	}
+	if runningCount > 0 {
+		return errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
+	}
+
+	// снос истории рейтингов по матчам этой игры
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM rating_history
+		WHERE tournament_id = $1
+		AND match_id IN (
+			SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
+		)
+	`, tournamentID, gameType); err != nil {
+		return errors.Wrap(err, "failed to delete rating history")
+	}
+
+	// снос матчей
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM matches
+		WHERE tournament_id = $1 AND game_type = $2
+	`, tournamentID, gameType); err != nil {
+		return errors.Wrap(err, "failed to delete matches")
+	}
+
+	// обнуление рейтингов участников этой игры
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE tournament_participants tp
+		SET rating = 1500, wins = 0, losses = 0, draws = 0
+		FROM programs p
+		INNER JOIN games g ON g.id = p.game_id
+		WHERE tp.program_id = p.id
+		AND tp.tournament_id = $1
+		AND g.name = $2
+	`, tournamentID, gameType); err != nil {
+		return errors.Wrap(err, "failed to reset participant ratings")
+	}
+
+	// сброс номера раунда
+	result, txErr := tx.ExecContext(ctx, `
+		UPDATE tournament_games tg
+		SET current_round = 0, round_completed = false, round_completed_at = NULL
+		FROM games g
+		WHERE tg.tournament_id = $1
+		AND tg.game_id = g.id
+		AND g.name = $2
+	`, tournamentID, gameType)
+	if txErr != nil {
+		return errors.Wrap(txErr, "failed to reset game round status")
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament game not found for type: %s", gameType))
+	}
+
+	return nil
 }
 
 // авто-раунд

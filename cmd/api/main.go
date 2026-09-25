@@ -181,7 +181,6 @@ func main() {
 		queueManager,
 		gameRepo,
 		distributedLock,
-		notifier,
 		log,
 	)
 
@@ -192,7 +191,6 @@ func main() {
 	autoRoundScheduler := tournament.NewAutoRoundScheduler(
 		schedulingService,
 		gameRepo,
-		distributedLock,
 		log,
 		5*time.Second,
 	)

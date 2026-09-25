@@ -47,51 +47,33 @@ func (r *MatchRepository) Create(ctx context.Context, match *models.Match) error
 	return nil
 }
 
-// CreateBatch вставляет пачку матчей в одной транзакции.
-// prepared statement переиспользуется, чтобы не парсить один и тот же запрос на каждый матч
-func (r *MatchRepository) CreateBatch(ctx context.Context, matches []*models.Match) error {
+// insertMatches вставляет матчи внутри транзакции одной командой COPY: построчный
+// INSERT на раунд в десятки тысяч матчей упирался в таймаут запроса.
+// created_at пишется в UTC - колонка без зоны, смещение postgres молча отбросил бы
+func insertMatches(ctx context.Context, tx *sqlx.Tx, matches []*models.Match) error {
 	if len(matches) == 0 {
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("matches",
+		"id", "tournament_id", "program1_id", "program2_id", "game_type", "status", "priority", "round_number", "created_at"))
 	if err != nil {
-		return errors.Wrap(err, "failed to begin transaction")
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	query := `
-		INSERT INTO matches (id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`
-
-	stmt, err := tx.PrepareContext(ctx, query)
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare statement")
+		return errors.Wrap(err, "failed to prepare matches copy")
 	}
 	defer stmt.Close()
 
-	for _, match := range matches {
-		_, err := stmt.ExecContext(ctx,
-			match.ID,
-			match.TournamentID,
-			match.Program1ID,
-			match.Program2ID,
-			match.GameType,
-			match.Status,
-			match.Priority,
-			match.RoundNumber,
-			match.CreatedAt,
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to insert match")
+	for _, m := range matches {
+		if _, err := stmt.ExecContext(ctx,
+			m.ID, m.TournamentID, m.Program1ID, m.Program2ID, m.GameType, m.Status, m.Priority, m.RoundNumber, m.CreatedAt.UTC(),
+		); err != nil {
+			return errors.Wrap(err, "failed to copy match")
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
+	// пустой Exec отправляет накопленные строки на сервер
+	if _, err := stmt.ExecContext(ctx); err != nil {
+		return errors.Wrap(err, "failed to insert matches")
 	}
-
 	return nil
 }
 
