@@ -793,6 +793,21 @@ func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
+// CancelActiveByTournament отменяет pending и running матчи турнира (завершение турнира).
+// pending воркер пропустит: в running он переводит только из pending
+func (r *MatchRepository) CancelActiveByTournament(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
+	query := `
+		UPDATE matches
+		SET status = 'cancelled', error_message = 'Tournament completed'
+		WHERE tournament_id = $1 AND status IN ('pending', 'running')
+	`
+	result, err := r.db.ExecWithMetrics(ctx, "match_cancel_active", query, tournamentID)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to cancel active matches")
+	}
+	return result.RowsAffected()
+}
+
 // ResetFailedMatches - все failed матчи турнира обратно в pending
 func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error) {
 	query := `

@@ -59,6 +59,7 @@ type MatchRepository interface {
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
+	CancelActiveByTournament(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
 }
 
@@ -382,12 +383,11 @@ func (s *Service) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	return nil
 }
 
-// Complete завершает турнир
+// Complete завершает турнир. недоигранные матчи отменяются, чтобы итоговые
+// результаты больше не менялись
 func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
-	// лок от двойного завершения
-	lockKey := fmt.Sprintf("tournament:complete:%s", tournamentID.String())
-
-	lockErr := s.distributedLock.WithLock(ctx, lockKey, 60*time.Second, func(ctx context.Context) error {
+	// лок планирования: и от двойного завершения, и от запуска раунда параллельно
+	lockErr := s.distributedLock.WithLock(ctx, scheduleLockKey(tournamentID), 60*time.Second, func(ctx context.Context) error {
 		// прямо из бд, кэш может быть протухшим
 		tournament, err := s.tournamentRepo.GetByID(ctx, tournamentID)
 		if err != nil {
@@ -396,6 +396,14 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 
 		if tournament.Status != models.TournamentActive {
 			return errors.ErrConflict.WithMessage("tournament is not active")
+		}
+
+		// отмена до смены статуса: если смена не пройдёт, турнир останется активным
+		// и завершение можно повторить, а обратный порядок оставил бы в очереди
+		// матчи уже завершённого турнира
+		cancelled, err := s.matchRepo.CancelActiveByTournament(ctx, tournamentID)
+		if err != nil {
+			return fmt.Errorf("failed to cancel active matches: %w", err)
 		}
 
 		now := time.Now()
@@ -408,6 +416,7 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 
 		s.log.Info("Tournament completed",
 			zap.String("tournament_id", tournamentID.String()),
+			zap.Int64("matches_cancelled", cancelled),
 		)
 
 		// событие: кэш и broadcast в обработчиках
