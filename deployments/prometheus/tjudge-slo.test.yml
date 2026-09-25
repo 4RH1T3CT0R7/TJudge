@@ -12,7 +12,7 @@ tests:
   # Матчи висят без завершений, суммарно открыто 90 соединений из 100.
   - interval: 1m
     input_series:
-      - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+      - series: 'tjudge_active_workers{job="tjudge-worker",instance="w1"}'
         values: '3x30'
       - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
         values: '10x30'
@@ -26,7 +26,7 @@ tests:
         exp_alerts:
           - exp_labels: {severity: critical}
             exp_annotations:
-              summary: "Матчи в работе, но ни один не завершился за 10 минут"
+              summary: "Воркеры заняты, но ни один матч не завершился за 10 минут"
               description: "Матчи не разбираются: проверь worker и Docker daemon."
       - eval_time: 20m
         alertname: DBConnectionsNearLimit
@@ -39,7 +39,7 @@ tests:
   # Штатный большой раунд: очередь огромная, но матчи завершаются.
   - interval: 1m
     input_series:
-      - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+      - series: 'tjudge_active_workers{job="tjudge-worker",instance="w1"}'
         values: '200x30'
       - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
         values: '0+100x30'
@@ -56,7 +56,20 @@ tests:
   # Между раундами в работе ничего нет.
   - interval: 1m
     input_series:
+      - series: 'tjudge_active_workers{job="tjudge-worker",instance="w1"}'
+        values: '0x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
+        values: '500x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: QueueStuck
+
+  # После паники in_progress залип на 1, но воркеры свободны.
+  - interval: 1m
+    input_series:
       - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+        values: '1x30'
+      - series: 'tjudge_active_workers{job="tjudge-worker",instance="w1"}'
         values: '0x30'
       - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
         values: '500x30'
