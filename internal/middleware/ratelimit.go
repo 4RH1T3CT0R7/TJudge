@@ -190,11 +190,13 @@ func isLocalhost(ip string) bool {
 	return false
 }
 
-// RealIP подменяет RemoteAddr на адрес клиента из X-Forwarded-For / X-Real-IP,
-// но только если запрос пришёл от доверенного прокси. trustedCIDRs пустой -
-// доверяются loopback и приватные сети (nginx в docker-сети). True-Client-IP
-// не читается вовсе: chi RealIP верил ему от кого угодно, и рейтлимит
-// обходился подменой заголовка
+// RealIP подменяет RemoteAddr на адрес клиента, но только если запрос пришёл
+// от доверенного прокси. без trustedCIDRs доверенный сосед - loopback или
+// приватная сеть (nginx в docker-сети), и от него берётся только X-Real-IP:
+// nginx перетирает его на $remote_addr. цепочка X-Forwarded-For разбирается
+// только по явному списку, иначе клиент из приватной сети дописал бы в неё
+// любой адрес. True-Client-IP не читается вовсе: chi RealIP верил ему от кого
+// угодно, и рейтлимит обходился подменой заголовка
 func RealIP(trustedCIDRs []string) func(http.Handler) http.Handler {
 	var nets []*net.IPNet
 	for _, c := range trustedCIDRs {
@@ -202,10 +204,17 @@ func RealIP(trustedCIDRs []string) func(http.Handler) http.Handler {
 			nets = append(nets, n)
 		}
 	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.RemoteAddr = realClientIP(r, nets)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func realClientIP(r *http.Request, nets []*net.IPNet) string {
 	trusted := func(ip net.IP) bool {
-		if len(nets) == 0 {
-			return ip.IsLoopback() || ip.IsPrivate()
-		}
 		for _, n := range nets {
 			if n.Contains(ip) {
 				return true
@@ -214,34 +223,31 @@ func RealIP(trustedCIDRs []string) func(http.Handler) http.Handler {
 		return false
 	}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.RemoteAddr = realClientIP(r, trusted)
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func realClientIP(r *http.Request, trusted func(net.IP) bool) string {
-	peer := getClientIP(r)
-	if ip := net.ParseIP(peer); ip == nil || !trusted(ip) {
+	peer := net.ParseIP(getClientIP(r))
+	switch {
+	case peer == nil:
 		return r.RemoteAddr
+	case len(nets) == 0:
+		if !peer.IsLoopback() && !peer.IsPrivate() {
+			return r.RemoteAddr
+		}
+	case !trusted(peer):
+		return r.RemoteAddr
+	default:
+		// каждый прокси дописывает адрес своего соседа справа, левые записи мог
+		// прислать сам клиент. поэтому берётся первый справа адрес не из списка
+		hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+		for i := len(hops) - 1; i >= 0; i-- {
+			ip := net.ParseIP(strings.TrimSpace(hops[i]))
+			if ip == nil {
+				break
+			}
+			if !trusted(ip) {
+				return ip.String()
+			}
+		}
 	}
 
-	// каждый прокси дописывает адрес своего соседа справа, левые записи мог
-	// прислать сам клиент. поэтому берётся первый справа адрес не из доверенных
-	hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-	for i := len(hops) - 1; i >= 0; i-- {
-		ip := net.ParseIP(strings.TrimSpace(hops[i]))
-		if ip == nil {
-			break
-		}
-		if !trusted(ip) {
-			return ip.String()
-		}
-	}
-
-	// nginx пишет сюда $remote_addr, клиентское значение он перетирает
 	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
 		return ip.String()
 	}

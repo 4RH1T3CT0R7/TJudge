@@ -209,8 +209,9 @@ type RateLimitConfig struct {
 	Enabled           bool
 	RequestsPerMinute int
 	Burst             int
-	// CIDR прокси, которым верится в X-Forwarded-For/X-Real-IP. пусто -
-	// loopback и приватные сети. нужен и при выключенном лимите (аудит, логи)
+	// CIDR прокси, по которым разбирается X-Forwarded-For. пусто - от соседа
+	// из loopback и приватных сетей берётся только X-Real-IP. нужен и при
+	// выключенном лимите (аудит, логи)
 	TrustedProxies []string
 }
 
