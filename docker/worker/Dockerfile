@@ -34,8 +34,8 @@ FROM alpine:3.23
 # 0 при Docker Desktop на macOS). Передавайте через --build-arg DOCKER_GID=$(getent group docker | cut -d: -f3).
 ARG DOCKER_GID=999
 
-# Install Docker CLI for running tjudge-cli in containers
-RUN apk --no-cache add docker-cli ca-certificates
+# с демоном воркер говорит через Docker SDK, docker-cli в образе не нужен
+RUN apk --no-cache add ca-certificates
 
 # Create non-root user and docker group (aligned with host GID).
 # SECURITY (P0.8): раньше worker запускался от root для доступа к docker.sock;
