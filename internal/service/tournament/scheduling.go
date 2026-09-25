@@ -73,6 +73,12 @@ func (ss *SchedulingService) RunAllMatches(ctx context.Context, tournamentID uui
 }
 
 func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournamentID uuid.UUID) (int, error) {
+	// проверка до перепостановки: pending завершённого турнира в очередь не уходят
+	tournament, err := ss.getActiveTournament(ctx, tournamentID)
+	if err != nil {
+		return 0, err
+	}
+
 	// недоигранный раунд: висящие pending просто ставятся в очередь заново
 	pending, err := ss.matchRepo.GetPendingByTournamentID(ctx, tournamentID)
 	if err != nil {
@@ -85,11 +91,6 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 	ss.log.Info("No pending matches, generating new round",
 		zap.String("tournament_id", tournamentID.String()),
 	)
-
-	tournament, err := ss.getActiveTournament(ctx, tournamentID)
-	if err != nil {
-		return 0, err
-	}
 
 	// участники сгруппированы по играм, чтобы не сводить проги разных игр
 	participantsByGame, err := ss.tournamentRepo.GetLatestParticipantsGroupedByGame(ctx, tournamentID)
@@ -138,6 +139,11 @@ func (ss *SchedulingService) RunGameMatches(ctx context.Context, tournamentID uu
 }
 
 func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	tournament, err := ss.getActiveTournament(ctx, tournamentID)
+	if err != nil {
+		return 0, err
+	}
+
 	// pending именно этой игры - просто в очередь заново
 	pending, err := ss.matchRepo.GetPendingByTournamentAndGame(ctx, tournamentID, gameType)
 	if err != nil {
@@ -151,11 +157,6 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		zap.String("tournament_id", tournamentID.String()),
 		zap.String("game_type", gameType),
 	)
-
-	tournament, err := ss.getActiveTournament(ctx, tournamentID)
-	if err != nil {
-		return 0, err
-	}
 
 	// участники - последние готовые версии прог каждой команды по этой игре
 	participants, err := ss.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)

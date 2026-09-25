@@ -682,14 +682,16 @@ func TestService_RunAllMatches(t *testing.T) {
 		matchRepo.AssertNotCalled(t, "DeleteBatch", mock.Anything, mock.Anything)
 	})
 
+	// висящие pending завершённого турнира (завершён до отмены pending при Complete)
+	// в очередь не возвращаются
 	t.Run("not_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distLock, _ := newTestSchedulingService(t)
+		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestSchedulingService(t)
 		ctx := context.Background()
 
 		id := uuid.New()
-		tournament := &models.Tournament{ID: id, Name: "Pending", GameType: "chess", Status: models.TournamentPending}
-		distLock.On("WithLock", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration"), mock.AnythingOfType("func(context.Context) error")).Return(nil)
-		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{}, nil)
+		tournament := &models.Tournament{ID: id, Name: "Done", GameType: "chess", Status: models.TournamentCompleted}
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		matchRepo.On("GetPendingByTournamentID", ctx, id).Return([]*models.Match{{ID: uuid.New(), TournamentID: id}}, nil)
 		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
 
 		count, err := service.RunAllMatches(ctx, id)
@@ -698,6 +700,7 @@ func TestService_RunAllMatches(t *testing.T) {
 		require.NotNil(t, appErr)
 		assert.Equal(t, 409, appErr.Code)
 		assert.Contains(t, appErr.Message, "not active")
+		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
 	})
 
 	t.Run("no_participants", func(t *testing.T) {
@@ -793,6 +796,22 @@ func TestService_RunGameMatches(t *testing.T) {
 		assert.Equal(t, 400, appErr.Code)
 		// результаты прошлого раунда не тронуты
 		gameRepo.AssertNotCalled(t, "StartNewRound", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+	t.Run("not_active_pending_not_enqueued", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, queueManager, distLock, _ := newTestSchedulingService(t)
+		ctx := context.Background()
+
+		id := uuid.New()
+		gameType := "prisoners_dilemma"
+		distLock.On("WithLock", anyLock()...).Return(nil)
+		matchRepo.On("GetPendingByTournamentAndGame", ctx, id, gameType).Return([]*models.Match{{ID: uuid.New(), TournamentID: id}}, nil)
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentCompleted}, nil)
+
+		_, err := service.RunGameMatches(ctx, id, gameType)
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 409, appErr.Code)
+		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
 	})
 }
 
