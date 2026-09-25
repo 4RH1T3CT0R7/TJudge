@@ -1,6 +1,6 @@
 # Multi-stage build для tjudge-cli
 # Stage 1: Сборка Rust приложения (Debian-based — musl/Alpine падает с SIGBUS на Apple Silicon)
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.98-trixie AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends git musl-tools && rm -rf /var/lib/apt/lists/*
 
