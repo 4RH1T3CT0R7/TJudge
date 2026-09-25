@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -382,6 +383,41 @@ func TestRedisEventSubscriber_DoubleStop(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("subscriber did not stop within timeout")
 	}
+}
+
+// события апи через редис доходят до вебсокета любой реплики, включая свою
+func TestRedisBridge_ApiEventsReachBroadcaster(t *testing.T) {
+	client, _ := newTestRedisClient(t)
+	log := newTestLogger(t)
+	adapter := &redisCacheAdapter{client: client}
+	ctx := t.Context()
+
+	got := make(chanBroadcaster, 3)
+	sub := NewRedisEventSubscriber(adapter, &SyncNotifier{Broadcaster: got, Log: log}, log)
+	go sub.Start(ctx)
+	time.Sleep(100 * time.Millisecond)
+
+	api := &SyncNotifier{Redis: NewRedisEventPublisher(adapter, log), Log: log}
+	tid := uuid.New()
+	api.TournamentStarted(ctx, TournamentStarted{Version: 1, TournamentID: tid, Status: models.TournamentActive})
+	api.TournamentCompleted(ctx, TournamentCompleted{Version: 1, TournamentID: tid, Status: models.TournamentCompleted})
+
+	for _, want := range []string{"tournament_update", "tournament_update"} {
+		select {
+		case c := <-got:
+			assert.Equal(t, want, c.messageType)
+			assert.Equal(t, tid, c.tournamentID)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("не дошло %s", want)
+		}
+	}
+}
+
+// chanBroadcaster отдаёт рассылки в канал, подписчик зовёт его из своей горутины
+type chanBroadcaster chan broadcastCall
+
+func (c chanBroadcaster) Broadcast(tid uuid.UUID, mt string, p any) {
+	c <- broadcastCall{tid, mt, p}
 }
 
 // failingPublisher всегда возвращает ошибку при вызове Publish.

@@ -73,14 +73,14 @@ func testLog(t *testing.T) *logger.Logger {
 	return log
 }
 
-// --- топология апи: кэш турниров + лидерборд + broadcaster, без редиса ---
+// --- топология апи: кэш турниров + лидерборд + редис, без локального broadcaster ---
 
 func TestSyncNotifier_ApiTopology(t *testing.T) {
 	ctx := context.Background()
 	tc := &fakeTournamentCache{}
 	lb := &fakeLeaderboard{}
-	br := &fakeBroadcaster{}
-	n := &SyncNotifier{TournamentCache: tc, Leaderboard: lb, Broadcaster: br, Log: testLog(t)}
+	pub := &fakeRedisPub{}
+	n := &SyncNotifier{TournamentCache: tc, Leaderboard: lb, Redis: NewRedisEventPublisher(pub, testLog(t)), Log: testLog(t)}
 
 	tid := uuid.New()
 
@@ -89,11 +89,8 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 
 	n.TournamentStarted(ctx, TournamentStarted{Version: 1, TournamentID: tid, Status: models.TournamentActive})
 	n.TournamentCompleted(ctx, TournamentCompleted{Version: 1, TournamentID: tid})
-	// оба инвалидируют кэш и шлют tournament_update
+	// оба инвалидируют кэш
 	assert.Len(t, tc.invalidateIDs, 2)
-	require.Len(t, br.calls, 2)
-	assert.Equal(t, "tournament_update", br.calls[0].messageType)
-	assert.Equal(t, "tournament_update", br.calls[1].messageType)
 
 	n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: tid})
 	assert.Equal(t, []uuid.UUID{tid}, lb.invalidateFull)
@@ -104,6 +101,15 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 	n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid, GameID: uuid.New()})
 	// сброс раунда тоже чистит лидерборд
 	assert.Len(t, lb.invalidateFull, 3)
+
+	// в редис ушли только события для вебсокета, в порядке вызова
+	var types []string
+	for _, p := range pub.payloads {
+		var env envelope
+		require.NoError(t, json.Unmarshal(p, &env))
+		types = append(types, env.Type)
+	}
+	assert.Equal(t, []string{"TournamentStarted", "TournamentCompleted"}, types)
 }
 
 // --- топология воркера: лидерборд + редис, без кэша турниров и вебсокета ---
@@ -146,10 +152,12 @@ func TestSyncNotifier_WsTopology(t *testing.T) {
 	n.MatchResultProcessed(ctx, MatchResultProcessed{Version: 1, TournamentID: tid, MatchID: uuid.New(), NewRating1: 1500, NewRating2: 1500, Winner: 0})
 	compileLog := "bot.c:3: error: 'secret' undeclared"
 	n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid, ProgramID: uuid.New(), TeamID: uuid.New(), Status: "failed", ErrorMessage: &compileLog})
+	n.TournamentStarted(ctx, TournamentStarted{Version: 1, TournamentID: tid, Status: models.TournamentActive})
 
-	require.Len(t, br.calls, 2)
+	require.Len(t, br.calls, 3)
 	assert.Equal(t, "match_result", br.calls[0].messageType)
 	assert.Equal(t, "program_update", br.calls[1].messageType)
+	assert.Equal(t, "tournament_update", br.calls[2].messageType)
 	// ключи payload'а match_result - замороженный контракт фронта
 	mp := br.calls[0].payload.(map[string]any)
 	for _, k := range []string{"match_id", "program1_id", "program2_id", "new_rating1", "new_rating2", "winner"} {

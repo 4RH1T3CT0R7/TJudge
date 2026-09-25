@@ -47,8 +47,8 @@ type Broadcaster interface {
 type SyncNotifier struct {
 	TournamentCache TournamentCacheWriter  // в воркере nil - кэш турниров там не трогается
 	Leaderboard     LeaderboardCacheWriter // может быть nil
-	Broadcaster     Broadcaster            // в воркере nil - вебсокета нет
-	Redis           *RedisEventPublisher   // в апи nil - наружу не публикуется, уже пришло из редиса
+	Broadcaster     Broadcaster            // в воркере и апи nil - по вебсокету рассылает мост из редиса
+	Redis           *RedisEventPublisher   // в мосте nil - событие уже пришло из редиса
 	Log             *logger.Logger
 }
 
@@ -62,6 +62,9 @@ func (n *SyncNotifier) TournamentStarted(ctx context.Context, e TournamentStarte
 	if n.TournamentCache != nil {
 		n.logErr("TournamentStarted", n.TournamentCache.Invalidate(ctx, e.TournamentID))
 	}
+	if n.Redis != nil {
+		n.logErr("TournamentStarted", n.Redis.Publish(ctx, "TournamentStarted", e))
+	}
 	if n.Broadcaster != nil {
 		n.Broadcaster.Broadcast(e.TournamentID, "tournament_update", map[string]any{
 			"status":     e.Status,
@@ -73,6 +76,9 @@ func (n *SyncNotifier) TournamentStarted(ctx context.Context, e TournamentStarte
 func (n *SyncNotifier) TournamentCompleted(ctx context.Context, e TournamentCompleted) {
 	if n.TournamentCache != nil {
 		n.logErr("TournamentCompleted", n.TournamentCache.Invalidate(ctx, e.TournamentID))
+	}
+	if n.Redis != nil {
+		n.logErr("TournamentCompleted", n.Redis.Publish(ctx, "TournamentCompleted", e))
 	}
 	if n.Broadcaster != nil {
 		n.Broadcaster.Broadcast(e.TournamentID, "tournament_update", map[string]any{
