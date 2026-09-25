@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,11 @@ func TestDefaultSecurityConfig_Headers(t *testing.T) {
 	assert.Contains(t, csp, "base-uri 'self'", "base-uri защищает от base-tag injection")
 	assert.Contains(t, csp, "form-action 'self'", "form-action предотвращает submit на evil origin")
 	assert.Contains(t, csp, "frame-ancestors 'none'", "защита от clickjacking")
+	for d := range strings.SplitSeq(csp, ";") {
+		if strings.HasPrefix(strings.TrimSpace(d), "script-src") {
+			assert.NotContains(t, d, "'unsafe-inline'", "inline-скрипт при XSS не должен выполняться")
+		}
+	}
 	assert.Equal(t, "strict-origin-when-cross-origin", rr.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "camera=(), microphone=(), geolocation=()", rr.Header().Get("Permissions-Policy"))
 	assert.Equal(t, "noopen", rr.Header().Get("X-Download-Options"))

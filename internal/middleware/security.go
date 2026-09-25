@@ -31,14 +31,15 @@ type SecurityConfig struct {
 //
 // в CSP прикрыто лишнее: object-src 'none' (Flash/апплеты), base-uri 'self'
 // (base-tag injection), form-action 'self', frame-ancestors 'none' (кликджекинг)
-// 'unsafe-inline' в script-src пока держится из-за inline-скрипта в index.html,
-// потом надо уйти на nonce; в style-src он нужен Tailwind, риск меньше
+// в script-src нет 'unsafe-inline': inline-скриптов в index.html нет, и при XSS
+// инъекция не выполнится. в style-src он нужен Tailwind, риск меньше.
+// 'self' в connect-src покрывает и ws/wss того же хоста
 func DefaultSecurityConfig() SecurityConfig {
 	return SecurityConfig{
 		XSSProtection:           true,
 		ContentTypeNosniff:      true,
 		XFrameOptions:           "DENY",
-		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss: https://cloudflareinsights.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+		ContentSecurityPolicy:   "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
 		ReferrerPolicy:          "strict-origin-when-cross-origin",
 		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
 		PermissionsPolicy:       "camera=(), microphone=(), geolocation=()",
