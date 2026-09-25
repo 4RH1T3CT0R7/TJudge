@@ -13,6 +13,7 @@ import {
   useGameLeaderboard,
   useMyTeam,
 } from '../hooks/queries';
+import { useTournamentLive } from '../hooks/useTournamentLive';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { SpaceInvader } from '../components/SpaceInvader';
@@ -47,11 +48,15 @@ export function GameDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  // Живые обновления, как на странице турнира: WS-события инвалидируют ключи
+  // игры, без WS (аноним, обрыв) работает поллинг.
+  const live = useTournamentLive({ tournamentId: tournamentId ?? '', enabled: isAuthenticated });
+
   // Базовые данные страницы
   const tournamentQuery = useTournament(tournamentId ?? '');
   const gameQuery = useGame(gameId ?? '');
-  const gamesStatusQuery = useTournamentGamesStatus(tournamentId ?? '');
-  const leaderboardQuery = useGameLeaderboard(tournamentId ?? '', gameId ?? '');
+  const gamesStatusQuery = useTournamentGamesStatus(tournamentId ?? '', { pollInterval: live.pollInterval });
+  const leaderboardQuery = useGameLeaderboard(tournamentId ?? '', gameId ?? '', { pollInterval: live.pollInterval });
   const myTeamQuery = useMyTeam(tournamentId ?? '', { enabled: isAuthenticated });
 
   const tournament = tournamentQuery.data ?? null;
@@ -81,7 +86,8 @@ export function GameDetail() {
   });
 
   // Матчи с пагинацией: ключ включает страницу, предыдущая страница
-  // остаётся на экране, пока грузится новая
+  // остаётся на экране, пока грузится новая. Total ручка не отдаёт, поэтому
+  // запрашивается на один матч больше: лишний означает, что есть следующая страница.
   const matchesQuery = useQuery({
     queryKey: [...queryKeys.gameMatches(tournamentId ?? '', gameId ?? ''), currentPage] as const,
     queryFn: () =>
@@ -89,14 +95,16 @@ export function GameDetail() {
         tournamentId ?? '',
         gameId ?? '',
         undefined,
-        matchesPerPage,
+        matchesPerPage + 1,
         (currentPage - 1) * matchesPerPage
       ),
     enabled: !!tournamentId && !!gameId,
     placeholderData: keepPreviousData,
+    refetchInterval: live.pollInterval,
   });
-  const matches = matchesQuery.data ?? [];
-  const totalMatches = matches.length;
+  const pageData = matchesQuery.data ?? [];
+  const hasNextPage = pageData.length > matchesPerPage;
+  const matches = hasNextPage ? pageData.slice(0, matchesPerPage) : pageData;
 
   // Программы команды: поллинг каждые 10с, пока какая-то версия
   // компилируется (бейдж статуса обновится сам)
@@ -358,7 +366,7 @@ export function GameDetail() {
                 : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
             }`}
           >
-            Матчи ({matches.length})
+            Матчи
           </button>
         </nav>
       </div>
@@ -442,40 +450,35 @@ export function GameDetail() {
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
-                {matches.length > 0 && (
-                  <span className="text-sm text-gray-400">
-                    Всего: {totalMatches}
-                  </span>
-                )}
               </div>
               {matches.length > 0 ? (
-                <>
-                  <MatchGroups matches={matches} />
-                  {/* Pagination */}
-                  {totalMatches > matchesPerPage && (
-                    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-700">
-                      <button
-                        onClick={() => setCurrentPage((p) => p - 1)}
-                        disabled={currentPage === 1}
-                        className="btn btn-secondary text-sm disabled:opacity-50"
-                      >
-                        Назад
-                      </button>
-                      <span className="text-sm text-gray-400 px-4">
-                        Страница {currentPage} из {Math.ceil(totalMatches / matchesPerPage)}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage((p) => p + 1)}
-                        disabled={currentPage >= Math.ceil(totalMatches / matchesPerPage)}
-                        className="btn btn-secondary text-sm disabled:opacity-50"
-                      >
-                        Вперёд
-                      </button>
-                    </div>
-                  )}
-                </>
+                <MatchGroups matches={matches} />
               ) : (
-                <p className="text-gray-400">Матчи ещё не проводились.</p>
+                <p className="text-gray-400">
+                  {currentPage > 1 ? 'На этой странице матчей нет.' : 'Матчи ещё не проводились.'}
+                </p>
+              )}
+              {/* Pagination: и на опустевшей странице (раунд сбросили), чтобы было куда вернуться */}
+              {(currentPage > 1 || hasNextPage) && (
+                <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-700">
+                  <button
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                    disabled={currentPage === 1}
+                    className="btn btn-secondary text-sm disabled:opacity-50"
+                  >
+                    Назад
+                  </button>
+                  <span className="text-sm text-gray-400 px-4">
+                    Страница {currentPage}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    disabled={!hasNextPage}
+                    className="btn btn-secondary text-sm disabled:opacity-50"
+                  >
+                    Вперёд
+                  </button>
+                </div>
               )}
             </div>
           )}
