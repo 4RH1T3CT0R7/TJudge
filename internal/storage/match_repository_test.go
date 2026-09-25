@@ -47,6 +47,7 @@ func (s *MatchRepositorySuite) TearDownTest() {
 	ctx := context.Background()
 	// порядок важен из-за FK: matches -> programs -> tournaments -> users
 	for _, id := range s.matchIDs {
+		_, _ = s.database.ExecContext(ctx, "DELETE FROM match_outbox WHERE match_id = $1", id)
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", id)
 	}
 	for _, id := range s.programIDs {
@@ -396,6 +397,30 @@ func (s *MatchRepositorySuite) TestUpdateResult_WithError() {
 	assert.NotNil(s.T(), fetched.ErrorMessage)
 	assert.Equal(s.T(), "timeout exceeded", *fetched.ErrorMessage)
 	assert.NotNil(s.T(), fetched.CompletedAt)
+}
+
+// отменённый (дисквалификация) матч результатом не перезаписывается и
+// outbox-задачу не получает
+func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_NotRunning() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("updnr")
+	match := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCancelled, models.PriorityMedium, 1)
+
+	ctx := context.Background()
+	result := &models.MatchResult{MatchID: match.ID, Score1: 10, Score2: 5, Winner: 1}
+
+	err := s.repo.UpdateResultWithOutbox(ctx, match.ID, result)
+	assert.ErrorIs(s.T(), err, models.ErrMatchAlreadyProcessed)
+	assert.ErrorIs(s.T(), s.repo.UpdateResult(ctx, match.ID, result), models.ErrMatchAlreadyProcessed)
+
+	fetched, err := s.repo.GetByID(ctx, match.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchCancelled, fetched.Status)
+	assert.Nil(s.T(), fetched.Winner)
+
+	var outboxRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &outboxRows,
+		"SELECT COUNT(*) FROM match_outbox WHERE match_id = $1", match.ID))
+	assert.Zero(s.T(), outboxRows)
 }
 
 func (s *MatchRepositorySuite) TestResetFailedMatches() {

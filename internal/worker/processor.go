@@ -174,6 +174,14 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 
 	// результат + outbox-задача «обновить рейтинг» одной транзакцией
 	if err := p.matchRepo.UpdateResultWithOutbox(writeCtx, match.ID, result); err != nil {
+		if stderrors.Is(err, models.ErrMatchAlreadyProcessed) {
+			// пока матч играл, его отменили (дисквалификация) или удалили
+			// (сброс раунда) - результат выбрасывается, рейтинг не трогается
+			p.log.Info("Match is no longer running, result discarded",
+				zap.String("match_id", match.ID.String()),
+			)
+			return nil
+		}
 		return fmt.Errorf("failed to update match result: %w", err)
 	}
 
