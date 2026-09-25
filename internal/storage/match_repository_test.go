@@ -438,6 +438,30 @@ func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_NotRunning() {
 	assert.Zero(s.T(), outboxRows)
 }
 
+// воркер доиграл матч, который отменило завершение турнира: результат не
+// перетирает cancelled и не создаёт задачу на рейтинг
+func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_AfterTournamentComplete() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("updtc")
+	match := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	ctx := context.Background()
+
+	cancelled, err := s.tournamentRepo.Complete(ctx, tournament)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(1), cancelled)
+
+	err = s.repo.UpdateResultWithOutbox(ctx, match.ID, &models.MatchResult{MatchID: match.ID, Score1: 3, Score2: 1, Winner: 1})
+	assert.ErrorIs(s.T(), err, models.ErrMatchAlreadyProcessed)
+
+	fetched, err := s.repo.GetByID(ctx, match.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchCancelled, fetched.Status)
+
+	var outboxRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &outboxRows,
+		"SELECT COUNT(*) FROM match_outbox WHERE match_id = $1", match.ID))
+	assert.Zero(s.T(), outboxRows)
+}
+
 func (s *MatchRepositorySuite) TestResetFailedMatches() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("rstfld")
 
