@@ -3,7 +3,7 @@ import { parseTournamentWSMessage } from './ws';
 
 describe('parseTournamentWSMessage', () => {
   it('распознаёт все известные типы сообщений', () => {
-    for (const type of ['tournament_update', 'matches_created', 'match_result', 'program_update']) {
+    for (const type of ['tournament_update', 'match_result', 'program_update']) {
       const msg = parseTournamentWSMessage({ type, payload: {} });
       expect(msg).not.toBeNull();
       expect(msg?.type).toBe(type);

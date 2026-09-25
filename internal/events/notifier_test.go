@@ -101,12 +101,6 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 	n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: tid, ProgramID: uuid.New(), InitialRating: 1500})
 	assert.Len(t, lb.invalidateFull, 2)
 
-	n.MatchesCreated(ctx, MatchesCreated{Version: 1, TournamentID: tid, ProgramID: uuid.New(), MatchCount: 4})
-	last := br.calls[len(br.calls)-1]
-	assert.Equal(t, "matches_created", last.messageType)
-	payload := last.payload.(map[string]any)
-	assert.Equal(t, 4, payload["matches_count"])
-
 	n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid, GameID: uuid.New()})
 	// сброс раунда тоже чистит лидерборд
 	assert.Len(t, lb.invalidateFull, 3)
@@ -173,7 +167,6 @@ func TestSyncNotifier_NilCollaborators(t *testing.T) {
 		n.TournamentStarted(ctx, TournamentStarted{Version: 1, TournamentID: tid})
 		n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: tid})
 		n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: tid})
-		n.MatchesCreated(ctx, MatchesCreated{Version: 1, TournamentID: tid})
 		n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid})
 		n.MatchResultProcessed(ctx, MatchResultProcessed{Version: 1, TournamentID: tid})
 		n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid})
@@ -202,7 +195,6 @@ func TestNoopNotifier(t *testing.T) {
 		n.TournamentCompleted(ctx, TournamentCompleted{})
 		n.TournamentDeleted(ctx, TournamentDeleted{})
 		n.ParticipantJoined(ctx, ParticipantJoined{})
-		n.MatchesCreated(ctx, MatchesCreated{})
 		n.GameRoundReset(ctx, GameRoundReset{})
 		n.MatchResultProcessed(ctx, MatchResultProcessed{})
 		n.ProgramCompiled(ctx, ProgramCompiled{})

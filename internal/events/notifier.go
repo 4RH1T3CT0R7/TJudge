@@ -19,7 +19,6 @@ type Notifier interface {
 	TournamentCompleted(ctx context.Context, e TournamentCompleted)
 	TournamentDeleted(ctx context.Context, e TournamentDeleted)
 	ParticipantJoined(ctx context.Context, e ParticipantJoined)
-	MatchesCreated(ctx context.Context, e MatchesCreated)
 	GameRoundReset(ctx context.Context, e GameRoundReset)
 	MatchResultProcessed(ctx context.Context, e MatchResultProcessed)
 	ProgramCompiled(ctx context.Context, e ProgramCompiled)
@@ -102,15 +101,6 @@ func (n *SyncNotifier) ParticipantJoined(ctx context.Context, e ParticipantJoine
 	}
 }
 
-func (n *SyncNotifier) MatchesCreated(ctx context.Context, e MatchesCreated) {
-	if n.Broadcaster != nil {
-		n.Broadcaster.Broadcast(e.TournamentID, "matches_created", map[string]any{
-			"program_id":    e.ProgramID.String(),
-			"matches_count": e.MatchCount,
-		})
-	}
-}
-
 func (n *SyncNotifier) GameRoundReset(ctx context.Context, e GameRoundReset) {
 	// раунд сбросили - турнир инвалидируется и лидерборд целиком чистится
 	if n.TournamentCache != nil {
@@ -174,7 +164,6 @@ func (NoopNotifier) TournamentStarted(context.Context, TournamentStarted)       
 func (NoopNotifier) TournamentCompleted(context.Context, TournamentCompleted)   {}
 func (NoopNotifier) TournamentDeleted(context.Context, TournamentDeleted)       {}
 func (NoopNotifier) ParticipantJoined(context.Context, ParticipantJoined)       {}
-func (NoopNotifier) MatchesCreated(context.Context, MatchesCreated)             {}
 func (NoopNotifier) GameRoundReset(context.Context, GameRoundReset)             {}
 func (NoopNotifier) MatchResultProcessed(context.Context, MatchResultProcessed) {}
 func (NoopNotifier) ProgramCompiled(context.Context, ProgramCompiled)           {}

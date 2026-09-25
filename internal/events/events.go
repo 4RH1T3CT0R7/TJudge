@@ -41,13 +41,6 @@ type ParticipantJoined struct {
 	InitialRating int
 }
 
-type MatchesCreated struct {
-	Version      int
-	TournamentID uuid.UUID
-	ProgramID    uuid.UUID // для какой программы создали матчи (ноль если пачкой)
-	MatchCount   int
-}
-
 // ProgramCompiled - асинхронная компиляция загруженной программы завершилась (успешно или нет).
 // тащит с собой всё что нужно вебсокету, чтобы не лезть лишний раз в базу
 type ProgramCompiled struct {

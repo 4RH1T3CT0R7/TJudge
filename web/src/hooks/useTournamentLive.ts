@@ -59,10 +59,6 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
           void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId) });
           break;
 
-        case 'matches_created':
-          scheduleMatchInvalidation();
-          break;
-
         case 'match_result':
           // Рейтинги уже в payload, но позиции лидерборда и тайбрейки
           // считает сервер - debounced-инвалидация дешевле и корректнее
