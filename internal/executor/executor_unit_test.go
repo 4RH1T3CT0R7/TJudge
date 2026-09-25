@@ -363,13 +363,13 @@ func TestBuildCommand_EmptyGameType(t *testing.T) {
 
 // --- hostToContainerPath (дополнительно) ---
 
-func TestHostToContainerPath_ExactMatch(t *testing.T) {
+// сам каталог программ в матч не отдаётся - там программы всех команд
+func TestHostToContainerPath_ProgramsRootRejected(t *testing.T) {
 	e := newTestExecutor(t)
 
-	result, err := e.hostToContainerPath("/data/programs")
+	_, err := e.hostToContainerPath("/data/programs/")
 
-	require.NoError(t, err)
-	assert.Equal(t, "/programs", result)
+	assert.Error(t, err)
 }
 
 func TestHostToContainerPath_TraversalNormalized(t *testing.T) {

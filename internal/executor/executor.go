@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,20 +66,15 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 
 	start := time.Now()
 
-	// пути к программам переводятся в путь внутри контейнера
-	containerProgram1, err := e.hostToContainerPath(program1Path)
+	programs, binds, err := e.programMounts(program1Path, program2Path)
 	if err != nil {
-		return nil, fmt.Errorf("invalid program1 path: %w", err)
-	}
-	containerProgram2, err := e.hostToContainerPath(program2Path)
-	if err != nil {
-		return nil, fmt.Errorf("invalid program2 path: %w", err)
+		return nil, err
 	}
 
 	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
 
-	result, err := e.runInDocker(execCtx, match.GameType, containerProgram1, containerProgram2)
+	result, err := e.runInDocker(execCtx, match.GameType, programs[0], programs[1], binds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run match: %w", err)
 	}
@@ -99,16 +96,13 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 }
 
 // runInDocker поднимает контейнер, ждёт матч и разбирает результат
-func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string) (*models.MatchResult, error) {
+func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string, binds []string) (*models.MatchResult, error) {
 	// формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
 
-	bindMount := fmt.Sprintf("%s:%s:ro", e.hostProgramsPath, e.containerPath)
 	e.log.Info("Creating container",
 		zap.Strings("cmd", cmd),
-		zap.String("bind_mount", bindMount),
-		zap.String("host_programs_path", e.hostProgramsPath),
-		zap.String("container_path", e.containerPath),
+		zap.Strings("binds", binds),
 		zap.String("image", e.config.DockerImage),
 	)
 
@@ -118,7 +112,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		Tty:   false,
 	}
 
-	hostConfig := buildMatchHostConfig(e.config, e.hostProgramsPath, e.containerPath)
+	hostConfig := buildMatchHostConfig(e.config, binds)
 
 	resp, err := e.dockerClient.ContainerCreate(
 		ctx,
@@ -185,7 +179,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 // buildMatchHostConfig собирает докер-hostConfig для матч-контейнера. вынесено
 // отдельно чтобы флаги можно было проверить тестом - каждая строка тут отдельная
 // линия обороны против чужого кода, значения трогать нельзя
-func buildMatchHostConfig(cfg config.ExecutorConfig, hostProgramsPath, containerPath string) *container.HostConfig {
+func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.HostConfig {
 	securityOpts := []string{
 		"no-new-privileges:true", // без setuid-эскалации
 	}
@@ -218,11 +212,8 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, hostProgramsPath, container
 				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // файл максимум 10мб
 			},
 		},
-		// программы монтируются только на чтение, чужой код не испортить.
-		// hostProgramsPath - для docker-in-docker
-		Binds: []string{
-			fmt.Sprintf("%s:%s:ro", hostProgramsPath, containerPath),
-		},
+		// только файлы двух программ матча и только на чтение (см. programMounts)
+		Binds:          binds,
 		NetworkMode:    "none", // сети нет - ни эксфильтрации, ни скачивания
 		ReadonlyRootfs: true,   // корень только на чтение, писать можно лишь в tmpfs
 		SecurityOpt:    securityOpts,
@@ -416,16 +407,51 @@ func (e *Executor) cleanup(containerID string) {
 	}
 }
 
+// programMounts переводит пути программ в пути внутри контейнера и собирает
+// bind-ы только под них: исполняемый файл и, у java, каталог классов рядом.
+// весь каталог программ монтировать нельзя - бот прочитал бы исходники и
+// бинарники других команд
+func (e *Executor) programMounts(paths ...string) ([]string, []string, error) {
+	containerPaths := make([]string, 0, len(paths))
+	var binds []string
+	for i, p := range paths {
+		cp, err := e.hostToContainerPath(p)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid program%d path: %w", i+1, err)
+		}
+		p = filepath.Clean(p)
+		// без файла докер молча создал бы на его месте пустой каталог
+		if _, err := os.Stat(p); err != nil {
+			return nil, nil, fmt.Errorf("program%d not found: %w", i+1, err)
+		}
+		containerPaths = append(containerPaths, cp)
+		binds = e.appendBind(binds, cp)
+
+		// java-wrapper ссылается на <имя>_classes рядом с собой (см. installArtifact)
+		if st, err := os.Stat(p + javaClassesSuffix); err == nil && st.IsDir() {
+			binds = e.appendBind(binds, cp+javaClassesSuffix)
+		}
+	}
+	return containerPaths, binds, nil
+}
+
+// appendBind добавляет ro-bind для пути внутри контейнера, источник на хосте
+// считается от hostProgramsPath (docker-in-docker). дубль точки монтирования
+// докер отвергает, поэтому повтор пропускается
+func (e *Executor) appendBind(binds []string, containerPath string) []string {
+	rel := strings.TrimPrefix(containerPath, e.containerPath)
+	bind := fmt.Sprintf("%s%s:%s:ro", e.hostProgramsPath, rel, containerPath)
+	if slices.Contains(binds, bind) {
+		return binds
+	}
+	return append(binds, bind)
+}
+
 // hostToContainerPath переводит путь на хосте в путь внутри контейнера.
 // Clean нормализует, а пути вне programsPath отвергаются - defense-in-depth
 // против path traversal
 func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 	cleaned := filepath.Clean(hostPath)
-
-	// точное совпадение с самим каталогом программ
-	if cleaned == e.programsPath {
-		return e.containerPath, nil
-	}
 
 	// именно поддиректория (префикс вместе с сепаратором), иначе сосед вроде
 	// /data/programs-evil прошёл бы как «поддиректория» /data/programs
