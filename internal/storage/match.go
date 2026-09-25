@@ -55,8 +55,8 @@ func insertMatches(ctx context.Context, tx *sqlx.Tx, matches []*models.Match) er
 		return nil
 	}
 
-	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("matches",
-		"id", "tournament_id", "program1_id", "program2_id", "game_type", "status", "priority", "round_number", "created_at"))
+	stmt, err := tx.PrepareContext(ctx, `COPY matches (id, tournament_id, program1_id, program2_id,
+		game_type, status, priority, round_number, created_at) FROM STDIN`)
 	if err != nil {
 		return errors.Wrap(err, "failed to prepare matches copy")
 	}
