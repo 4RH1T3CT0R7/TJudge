@@ -197,7 +197,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, 
 // ротация: старый рефреш после этого невалиден
 func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*AuthResponse, error) {
 	// сначала проверяется сам токен, это дёшево и без побочек
-	userID, err := s.jwtManager.ValidateRefreshToken(refreshToken)
+	userID, issuedAt, err := s.jwtManager.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		return nil, errors.ErrInvalidToken.WithError(err)
 	}
@@ -208,6 +208,12 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// смена пароля отзывает все сессии, выписанные до неё. access живёт недолго,
+	// так что проверки на рефреше хватает. iat в jwt с точностью до секунды
+	if user.PasswordChangedAt != nil && issuedAt.Before(user.PasswordChangedAt.Truncate(time.Second)) {
+		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
 	}
 
 	// token rotation: старый рефреш атомарно кладётся в блеклист через setnx.

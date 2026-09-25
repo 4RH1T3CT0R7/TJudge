@@ -43,7 +43,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 	var user models.User
 
 	query := `
-		SELECT id, username, email, password_hash, role, created_at, updated_at
+		SELECT id, username, email, password_hash, role, created_at, updated_at, password_changed_at
 		FROM users
 		WHERE id = $1
 	`
@@ -102,7 +102,9 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
 		UPDATE users
-		SET username = $2, email = $3, password_hash = $4
+		SET username = $2, email = $3, password_hash = $4,
+		    password_changed_at = CASE WHEN password_hash IS DISTINCT FROM $4
+		                               THEN NOW() ELSE password_changed_at END
 		WHERE id = $1
 		RETURNING updated_at
 	`
