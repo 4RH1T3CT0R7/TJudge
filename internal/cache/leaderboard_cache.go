@@ -3,12 +3,15 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -45,24 +48,27 @@ func (lc *LeaderboardCache) getCrossGameKey(tournamentID uuid.UUID) string {
 	return fmt.Sprintf("leaderboard:crossgame:%s", tournamentID.String())
 }
 
+// полные лидерборды турнира лежат в одном hash (поле = limit): так
+// инвалидация - один DEL известных ключей, без SCAN по всему keyspace
 func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
-	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
-	data, err := lc.cache.Get(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	if data == "" {
+	key := lc.getFullKey(tournamentID)
+	field := strconv.Itoa(limit)
+	data, err := lc.cache.client.HGet(ctx, key, field).Result()
+	if errors.Is(err, redis.Nil) {
 		if lc.metrics != nil {
 			lc.metrics.RecordCacheMiss("leaderboard_full")
 		}
 		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
 	var entries []*models.LeaderboardEntry
 	if err := json.Unmarshal([]byte(data), &entries); err != nil {
 		// битый json проще удалить и посчитать заново
-		lc.cache.log.Warn("leaderboard cache: corrupt full leaderboard JSON, deleting key",
-			zap.String("key", key), zap.String("tournament_id", tournamentID.String()), zap.Error(err))
-		_ = lc.cache.Del(ctx, key)
+		lc.cache.log.Warn("leaderboard cache: corrupt full leaderboard JSON, deleting field",
+			zap.String("key", key), zap.String("field", field), zap.Error(err))
+		_ = lc.cache.client.HDel(ctx, key, field).Err()
 		return nil, nil
 	}
 	if lc.metrics != nil {
@@ -72,12 +78,18 @@ func (lc *LeaderboardCache) GetFullLeaderboard(ctx context.Context, tournamentID
 }
 
 func (lc *LeaderboardCache) SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*models.LeaderboardEntry) error {
-	key := fmt.Sprintf("%s:%d", lc.getFullKey(tournamentID), limit)
+	key := lc.getFullKey(tournamentID)
 	data, err := json.Marshal(entries)
 	if err != nil {
 		return err
 	}
-	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
+	// ttl ставится только новому hash (NX): иначе каждая запись с другим
+	// limit продлевала бы жизнь старым полям. MULTI - чтобы hash не остался без ttl
+	pipe := lc.cache.client.TxPipeline()
+	pipe.HSet(ctx, key, strconv.Itoa(limit), data)
+	pipe.ExpireNX(ctx, key, fullLeaderboardTTL)
+	_, err = pipe.Exec(ctx)
+	return err
 }
 
 func (lc *LeaderboardCache) GetFullCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
@@ -114,30 +126,8 @@ func (lc *LeaderboardCache) SetFullCrossGameLeaderboard(ctx context.Context, tou
 	return lc.cache.Set(ctx, key, string(data), fullLeaderboardTTL)
 }
 
-// InvalidateFullLeaderboard выносит json-кэши турнира.
-// ключей несколько (по каждому лимиту свой), поэтому чистка идёт сканом,
-// в конце добавляется кросс-гейм ключ и удаляется всё пачкой
+// InvalidateFullLeaderboard выносит json-кэши турнира: hash по всем
+// лимитам и кросс-гейм
 func (lc *LeaderboardCache) InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error {
-	pattern := fmt.Sprintf("leaderboard:full:%s:*", tournamentID.String())
-	crossKey := lc.getCrossGameKey(tournamentID)
-
-	var allKeys []string
-	var cursor uint64
-	for {
-		keys, nextCursor, err := lc.cache.Scan(ctx, cursor, pattern, 100)
-		if err != nil {
-			return err
-		}
-		allKeys = append(allKeys, keys...)
-		cursor = nextCursor
-		if cursor == 0 {
-			break
-		}
-	}
-	allKeys = append(allKeys, crossKey)
-
-	if len(allKeys) > 0 {
-		return lc.cache.Del(ctx, allKeys...)
-	}
-	return nil
+	return lc.cache.Del(ctx, lc.getFullKey(tournamentID), lc.getCrossGameKey(tournamentID))
 }
