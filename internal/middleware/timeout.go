@@ -56,15 +56,17 @@ func getTimeoutForRequest(r *http.Request, config TimeoutConfig) time.Duration {
 		return config.WebSocket
 	}
 
-	// тяжёлые агрегаты и админское планирование раундов: сброс прошлого раунда
-	// и вставка десятков тысяч матчей в 5 секунд записи не укладываются
+	// тяжёлые агрегаты и админское планирование раундов: сброс прошлого раунда,
+	// вставка или отмена (завершение турнира) десятков тысяч матчей в 5 секунд
+	// записи не укладываются
 	if strings.Contains(path, "/leaderboard") ||
 		strings.Contains(path, "/statistics") ||
 		strings.Contains(path, "/stats") ||
 		strings.HasSuffix(path, "/run-matches") ||
 		strings.HasSuffix(path, "/run-game-matches") ||
 		strings.HasSuffix(path, "/retry-matches") ||
-		strings.HasSuffix(path, "/reset-round") {
+		strings.HasSuffix(path, "/reset-round") ||
+		strings.HasSuffix(path, "/complete") {
 		return config.Heavy
 	}
 
