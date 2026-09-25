@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import axios from 'axios';
 import type { User } from '../types';
 import api from '../api/client';
+import { queryClient } from '../api/queryClient';
 
 interface AuthState {
   user: User | null;
@@ -50,8 +51,12 @@ export const useAuthStore = create<AuthState>()(
         try {
           await api.logout();
         } finally {
-          // Reset all auth state including isInitialized to ensure clean state for next login
-          set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: false });
+          // isInitialized остаётся true: initialize() зовётся один раз при старте,
+          // и с false защищённые маршруты висели бы на «Загрузка...».
+          // Кэш запросов чистится, чтобы следующий пользователь (общий компьютер
+          // в аудитории) не увидел чужую команду и программы.
+          queryClient.clear();
+          set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true });
         }
       },
 
@@ -85,6 +90,7 @@ export const useAuthStore = create<AuthState>()(
         // Register auth failure callback so the API client can notify us
         // when token refresh fails (instead of doing window.location.href)
         api.setOnAuthFailure(() => {
+          queryClient.clear();
           set({ user: null, isAuthenticated: false, isInitialized: true, isLoading: false });
         });
 
