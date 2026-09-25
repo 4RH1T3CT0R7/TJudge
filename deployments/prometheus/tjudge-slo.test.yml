@@ -1,0 +1,65 @@
+# Тесты алертов: promtool test rules deployments/prometheus/tjudge-slo.test.yml
+# (без локального promtool: docker run --rm -v "$PWD/deployments/prometheus:/p"
+#  --entrypoint promtool prom/prometheus:v2.53.0 test rules /p/tjudge-slo.test.yml).
+# Лежит вне alerts/, иначе Prometheus подхватит его как файл правил.
+
+rule_files:
+  - alerts/tjudge-slo.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Матчи висят без завершений, суммарно открыто 90 соединений из 100.
+  - interval: 1m
+    input_series:
+      - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+        values: '3x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
+        values: '10x30'
+      - series: 'tjudge_db_connections{job="tjudge-api",instance="a1",state="open"}'
+        values: '50x30'
+      - series: 'tjudge_db_connections{job="tjudge-worker",instance="w1",state="open"}'
+        values: '40x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: QueueStuck
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Матчи в работе, но ни один не завершился за 10 минут"
+              description: "Матчи не разбираются: проверь worker и Docker daemon."
+      - eval_time: 20m
+        alertname: DBConnectionsNearLimit
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "Открыто > 85% от max_connections Postgres"
+              description: "При исчерпании Postgres отвечает too many clients: уменьшить DB_MAX_CONNECTIONS или реплики."
+
+  # Штатный большой раунд: очередь огромная, но матчи завершаются.
+  - interval: 1m
+    input_series:
+      - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+        values: '200x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
+        values: '0+100x30'
+      - series: 'tjudge_queue_size{job="tjudge-worker",instance="w1",priority="high"}'
+        values: '9900-300x30'
+      - series: 'tjudge_db_connections{job="tjudge-worker",instance="w1",state="open"}'
+        values: '60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: QueueStuck
+      - eval_time: 20m
+        alertname: DBConnectionsNearLimit
+
+  # Между раундами в работе ничего нет.
+  - interval: 1m
+    input_series:
+      - series: 'tjudge_matches_in_progress{job="tjudge-worker",instance="w1"}'
+        values: '0x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
+        values: '500x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: QueueStuck

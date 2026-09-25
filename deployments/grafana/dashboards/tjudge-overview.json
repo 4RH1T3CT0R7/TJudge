@@ -178,7 +178,7 @@
       },
       "targets": [
         {
-          "expr": "sum(tjudge_queue_size)",
+          "expr": "sum(max by (priority) (tjudge_queue_size{job=\"tjudge-worker\"}))",
           "legendFormat": "в очереди",
           "refId": "A",
           "datasource": {
@@ -433,7 +433,7 @@
       },
       "targets": [
         {
-          "expr": "tjudge_queue_size{priority=\"high\"}",
+          "expr": "max(tjudge_queue_size{job=\"tjudge-worker\",priority=\"high\"})",
           "legendFormat": "high",
           "refId": "A",
           "datasource": {
@@ -442,7 +442,7 @@
           }
         },
         {
-          "expr": "tjudge_queue_size{priority=\"medium\"}",
+          "expr": "max(tjudge_queue_size{job=\"tjudge-worker\",priority=\"medium\"})",
           "legendFormat": "medium",
           "refId": "B",
           "datasource": {
@@ -451,7 +451,7 @@
           }
         },
         {
-          "expr": "tjudge_queue_size{priority=\"low\"}",
+          "expr": "max(tjudge_queue_size{job=\"tjudge-worker\",priority=\"low\"})",
           "legendFormat": "low",
           "refId": "C",
           "datasource": {
@@ -472,7 +472,7 @@
       "gridPos": {
         "x": 0,
         "y": 20,
-        "w": 8,
+        "w": 12,
         "h": 8
       },
       "datasource": {
@@ -498,58 +498,13 @@
       }
     },
     {
-      "id": 31,
-      "title": "Ожидание в очереди P85 (SLO < 30s)",
-      "type": "timeseries",
-      "gridPos": {
-        "x": 8,
-        "y": 20,
-        "w": 8,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.85, sum(rate(tjudge_queue_wait_time_seconds_bucket[10m])) by (le))",
-          "legendFormat": "p85",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 30
-              }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
       "id": 32,
       "title": "Соединения БД",
       "type": "timeseries",
       "gridPos": {
-        "x": 16,
+        "x": 12,
         "y": 20,
-        "w": 8,
+        "w": 12,
         "h": 8
       },
       "datasource": {
