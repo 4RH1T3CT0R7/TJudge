@@ -136,7 +136,15 @@ func TestBuildBuilderHostConfig_SandboxFlags(t *testing.T) {
 	assert.Equal(t, int64(1<<30), hc.MemorySwap)
 	require.NotNil(t, hc.PidsLimit)
 	assert.Equal(t, int64(256), *hc.PidsLimit)
+	assert.Equal(t, int64(1e9), hc.NanoCPUs, "сборка ограничена одним ядром")
 	assert.False(t, hc.AutoRemove)
+
+	limits := map[string][2]int64{}
+	for _, u := range hc.Ulimits {
+		limits[u.Name] = [2]int64{u.Soft, u.Hard}
+	}
+	assert.Equal(t, [2]int64{64 << 20, 64 << 20}, limits["fsize"])
+	assert.Equal(t, [2]int64{4096, 4096}, limits["nofile"])
 
 	tmp := hc.Tmpfs["/tmp"]
 	assert.Contains(t, tmp, "nosuid")
