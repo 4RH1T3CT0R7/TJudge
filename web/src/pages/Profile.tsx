@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 
 export function Profile() {
-  const { user, updateProfile, isLoading } = useAuthStore();
+  const { user, updateProfile, login, isLoading } = useAuthStore();
   const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -48,12 +48,20 @@ export function Profile() {
 
     try {
       await updateProfile({ password: newPassword, current_password: currentPassword });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setMessage({ type: 'success', text: 'Пароль успешно изменён' });
     } catch {
       setMessage({ type: 'error', text: 'Не удалось изменить пароль. Проверьте текущий пароль.' });
+      return;
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    // смена пароля отзывает все выписанные до неё refresh-токены, включая
+    // текущий, поэтому новая пара берётся обычным входом с новым паролем
+    try {
+      await login(user?.username ?? '', newPassword);
+      setMessage({ type: 'success', text: 'Пароль успешно изменён' });
+    } catch {
+      setMessage({ type: 'error', text: 'Пароль изменён, но сессию обновить не удалось: выйдите и войдите с новым паролем' });
     }
   };
 
