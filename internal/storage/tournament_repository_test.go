@@ -184,13 +184,23 @@ func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID,
 	return match
 }
 
-// готовит юзера, турнир, прогу и участника - типовой сетап для тестов участников
-func (s *TournamentRepositorySuite) setupParticipantPrerequisites(suffix string, rating int) (*models.Tournament, *models.Program, *models.TournamentParticipant) {
-	user := s.createTrackedUser("tp_" + suffix)
-	tournament := s.createTrackedTournament("TP"+suffix, user.ID)
-	program := s.createTrackedProgram(user.ID, nil, nil, nil, "Bot_"+suffix, 1)
-	participant := s.createTestParticipant(tournament.ID, program.ID, rating)
-	return tournament, program, participant
+// createTeamEntrant - команда с программой-участником: лидерборд берёт
+// только программы команд (INNER JOIN teams)
+func (s *TournamentRepositorySuite) createTeamEntrant(tournamentID, gameID uuid.UUID, code string) *models.Program {
+	user := s.createTrackedUser("tp_" + code)
+	team := s.createTrackedTeam(tournamentID, user.ID, code)
+	prog := s.createTrackedProgram(user.ID, &team.ID, &tournamentID, &gameID, "Bot"+code, 1)
+	s.createTestParticipant(tournamentID, prog.ID, 1500)
+	return prog
+}
+
+// completeMatch - завершённый матч с заданным счётом
+func (s *TournamentRepositorySuite) completeMatch(tournamentID, p1, p2 uuid.UUID, gameType string, score1, score2, winner int) {
+	match := s.createTrackedMatch(tournamentID, p1, p2, gameType, models.MatchRunning)
+	_, err := s.database.ExecContext(context.Background(),
+		"UPDATE matches SET status = 'completed', score1 = $2, score2 = $3, winner = $4, completed_at = NOW() WHERE id = $1",
+		match.ID, score1, score2, winner)
+	require.NoError(s.T(), err)
 }
 
 func (s *TournamentRepositorySuite) TestCreate() {
@@ -400,34 +410,43 @@ func (s *TournamentRepositorySuite) TestGetParticipantsCount_AfterAdding() {
 func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	user := s.createTrackedUser("tp_lbo")
 	tournament := s.createTrackedTournament("TPLBO1", user.ID)
+	game := s.createTrackedGame("lbo_game")
 
-	// лидерборд считает score по завершённым матчам. матчей нет -
-	// значит у всех total_score=0, но все участники в выборке остаются.
-	var progIDs []uuid.UUID
-	for i := 0; i < 3; i++ {
-		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotLBO%d", i), 1)
-		s.createTestParticipant(tournament.ID, prog.ID, 1500+i*100)
-		progIDs = append(progIDs, prog.ID)
-	}
+	a := s.createTeamEntrant(tournament.ID, game.ID, "TLBOA1")
+	b := s.createTeamEntrant(tournament.ID, game.ID, "TLBOB1")
+	c := s.createTeamEntrant(tournament.ID, game.ID, "TLBOC1")
+
+	// рейтинг - сумма очков по обеим сторонам матчей: a=10+9, b=5+8, c=2+1
+	s.completeMatch(tournament.ID, a.ID, b.ID, game.Name, 10, 5, 1)
+	s.completeMatch(tournament.ID, b.ID, c.ID, game.Name, 8, 2, 1)
+	s.completeMatch(tournament.ID, c.ID, a.ID, game.Name, 1, 9, 2)
 
 	ctx := context.Background()
 	leaderboard, err := s.repo.GetLeaderboard(ctx, tournament.ID, 10)
 	require.NoError(s.T(), err)
-	assert.Len(s.T(), leaderboard, 3)
+	require.Len(s.T(), leaderboard, 3)
 
-	// без матчей все score=0, rank раздаётся через row_number
-	for _, entry := range leaderboard {
-		assert.GreaterOrEqual(s.T(), entry.Rank, 1)
+	want := []struct {
+		id     uuid.UUID
+		rating int
+		wins   int
+	}{{a.ID, 19, 2}, {b.ID, 13, 1}, {c.ID, 3, 0}}
+	for i, w := range want {
+		assert.Equal(s.T(), i+1, leaderboard[i].Rank)
+		assert.Equal(s.T(), w.id, leaderboard[i].ProgramID)
+		assert.Equal(s.T(), w.rating, leaderboard[i].Rating)
+		assert.Equal(s.T(), w.wins, leaderboard[i].Wins)
+		assert.Equal(s.T(), 2, leaderboard[i].TotalGames)
 	}
 }
 
 func (s *TournamentRepositorySuite) TestGetLeaderboard_LimitEnforced() {
 	user := s.createTrackedUser("tp_lbl")
 	tournament := s.createTrackedTournament("TPLBL1", user.ID)
+	game := s.createTrackedGame("lbl_game")
 
 	for i := 0; i < 5; i++ {
-		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotLBL%d", i), 1)
-		s.createTestParticipant(tournament.ID, prog.ID, 1500+i*50)
+		s.createTeamEntrant(tournament.ID, game.ID, fmt.Sprintf("TLBL0%d", i))
 	}
 
 	ctx := context.Background()
