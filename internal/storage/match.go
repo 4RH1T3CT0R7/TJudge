@@ -1108,19 +1108,6 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 	})
 }
 
-// MarkRatingApplied - fast path: воркер сразу посчитал рейтинг, гасит outbox-задачу
-func (r *MatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
-	query := `
-		UPDATE match_outbox
-		SET status = 'done', processed_at = NOW()
-		WHERE match_id = $1 AND kind = $2 AND status = 'pending'
-	`
-	if _, err := r.db.ExecContext(ctx, query, matchID, OutboxKindRatingUpdate); err != nil {
-		return errors.Wrap(err, "failed to mark rating applied")
-	}
-	return nil
-}
-
 // ResetToPending возвращает матч running->pending при транзиентной ошибке
 // executor'а (докер недоступен и т.п.) - программа не виновата, матч повторится
 func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {

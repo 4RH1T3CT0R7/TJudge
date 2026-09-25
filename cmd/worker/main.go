@@ -151,7 +151,6 @@ func main() {
 	// processor
 	processor := worker.NewProcessor(
 		matchRepo,
-		ratingRepo,
 		programRepo,
 		ratingService,
 		exec,
@@ -196,9 +195,7 @@ func main() {
 	outboxDispatcher := worker.NewOutboxDispatcher(
 		outboxRepo,
 		matchRepo,
-		ratingRepo,
 		ratingService,
-		notifier,
 		log,
 	)
 	outboxDispatcher.Start()

@@ -64,32 +64,9 @@ func (m *MockMatchRepository) UpdateResultWithOutbox(ctx context.Context, id uui
 	return args.Error(0)
 }
 
-func (m *MockMatchRepository) MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error {
-	args := m.Called(ctx, matchID)
-	return args.Error(0)
-}
-
 func (m *MockMatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
-}
-
-// MockRatingRepository - мок RatingRepository
-type MockRatingRepository struct {
-	mock.Mock
-}
-
-func (m *MockRatingRepository) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error) {
-	args := m.Called(ctx, tournamentID, program1ID, program2ID)
-	return args.Int(0), args.Int(1), args.Error(2)
-}
-
-func (m *MockRatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
-	args := m.Called(ctx, matchID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.RatingHistory), args.Error(1)
 }
 
 // MockRatingService - мок RatingService
@@ -97,8 +74,8 @@ type MockRatingService struct {
 	mock.Mock
 }
 
-func (m *MockRatingService) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
-	args := m.Called(ctx, match, rating1, rating2)
+func (m *MockRatingService) ProcessMatchResult(ctx context.Context, match *models.Match) error {
+	args := m.Called(ctx, match)
 	return args.Error(0)
 }
 
@@ -149,10 +126,9 @@ func (m *MockProgramRepository) GetStuckCompiling(ctx context.Context, olderThan
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockRatingRepository, *MockProgramRepository, *MockRatingService, *MockExecutor) {
+func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockProgramRepository, *MockRatingService, *MockExecutor) {
 	t.Helper()
 	matchRepo := new(MockMatchRepository)
-	ratingRepo := new(MockRatingRepository)
 	programRepo := new(MockProgramRepository)
 	ratingService := new(MockRatingService)
 	executor := new(MockExecutor)
@@ -160,14 +136,13 @@ func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockRati
 
 	p := &Processor{
 		matchRepo:     matchRepo,
-		ratingRepo:    ratingRepo,
 		programRepo:   programRepo,
 		ratingService: ratingService,
 		executor:      executor,
 		log:           log,
 	}
 
-	return p, matchRepo, ratingRepo, programRepo, ratingService, executor
+	return p, matchRepo, programRepo, ratingService, executor
 }
 
 func testProcessorMatch() *models.Match {
@@ -187,7 +162,7 @@ func twoPrograms(match *models.Match) []*models.Program {
 }
 
 func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
-	p, matchRepo, _, _, _, _ := newTestProcessor(t)
+	p, matchRepo, _, _, _ := newTestProcessor(t)
 	match := testProcessorMatch()
 
 	// дубликат из очереди: UpdateStatus вернул ErrMatchAlreadyProcessed
@@ -200,7 +175,7 @@ func TestProcessor_Process_AlreadyProcessed(t *testing.T) {
 }
 
 func TestProcessor_Process_UpdateStatusNotFound(t *testing.T) {
-	p, matchRepo, _, _, _, _ := newTestProcessor(t)
+	p, matchRepo, _, _, _ := newTestProcessor(t)
 	match := testProcessorMatch()
 
 	// матч исчез: not-found мапится в ErrMatchNotFound (пул пропустит без retry)
@@ -213,7 +188,7 @@ func TestProcessor_Process_UpdateStatusNotFound(t *testing.T) {
 }
 
 func TestProcessor_Process_ExecutorFailure(t *testing.T) {
-	p, matchRepo, _, programRepo, _, executor := newTestProcessor(t)
+	p, matchRepo, programRepo, _, executor := newTestProcessor(t)
 	match := testProcessorMatch()
 
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
@@ -233,7 +208,7 @@ func TestProcessor_Process_ExecutorFailure(t *testing.T) {
 }
 
 func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
-	p, matchRepo, _, programRepo, _, executorMock := newTestProcessor(t)
+	p, matchRepo, programRepo, _, executorMock := newTestProcessor(t)
 	match := testProcessorMatch()
 
 	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
@@ -257,7 +232,7 @@ func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
 // ctx матча истёк посреди исполнения: ретраев пула уже не будет, и pending вне
 // очереди никто бы не подобрал - матч остаётся running до recovery
 func TestProcessor_Process_InfraFailureAfterCancel_StaysRunning(t *testing.T) {
-	p, matchRepo, _, programRepo, _, executorMock := newTestProcessor(t)
+	p, matchRepo, programRepo, _, executorMock := newTestProcessor(t)
 	match := testProcessorMatch()
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -273,24 +248,8 @@ func TestProcessor_Process_InfraFailureAfterCancel_StaysRunning(t *testing.T) {
 	matchRepo.AssertNotCalled(t, "ResetToPending", mock.Anything, mock.Anything)
 }
 
-// updateRatings: ошибка ProcessMatchResult пробрасывается наверх
-func TestProcessor_UpdateRatings_ProcessError(t *testing.T) {
-	p, _, ratingRepo, _, ratingService, _ := newTestProcessor(t)
-	match := testProcessorMatch()
-	result := &models.MatchResult{MatchID: match.ID, Winner: 1}
-
-	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
-		Return(1200, 1000, nil)
-	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).
-		Return(fmt.Errorf("rating error"))
-
-	err := p.updateRatings(context.Background(), match, result)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to process match result")
-}
-
 func TestProcessor_Process_Success(t *testing.T) {
-	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
+	p, matchRepo, programRepo, ratingService, executor := newTestProcessor(t)
 	match := testProcessorMatch()
 	result := &models.MatchResult{MatchID: match.ID, Winner: 1, ErrorCode: 0}
 
@@ -299,24 +258,21 @@ func TestProcessor_Process_Success(t *testing.T) {
 		Return(twoPrograms(match), nil)
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
 	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(nil)
-	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
-		Return(1200, 1000, nil)
-	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).Return(nil)
-	// fast-path обновил рейтинг: outbox-задача закрывается
-	matchRepo.On("MarkRatingApplied", mock.Anything, match.ID).Return(nil)
+	// fast-path рейтинга: outbox-задачу гасит сам ProcessMatchResult
+	ratingService.On("ProcessMatchResult", mock.Anything, match).Return(nil)
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)
 	matchRepo.AssertExpectations(t)
 	programRepo.AssertExpectations(t)
 	executor.AssertExpectations(t)
-	ratingRepo.AssertExpectations(t)
 	ratingService.AssertExpectations(t)
+	assert.Equal(t, 1, *match.Winner)
 }
 
 // матч отменили или удалили пока он играл: результат не пишется, рейтинг не трогается
 func TestProcessor_Process_NoLongerRunning_DiscardsResult(t *testing.T) {
-	p, matchRepo, _, programRepo, ratingService, executor := newTestProcessor(t)
+	p, matchRepo, programRepo, ratingService, executor := newTestProcessor(t)
 	match := testProcessorMatch()
 	result := &models.MatchResult{MatchID: match.ID, Winner: 1}
 
@@ -328,11 +284,11 @@ func TestProcessor_Process_NoLongerRunning_DiscardsResult(t *testing.T) {
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)
-	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything)
 }
 
 func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
-	p, matchRepo, ratingRepo, programRepo, _, executor := newTestProcessor(t)
+	p, matchRepo, programRepo, ratingService, executor := newTestProcessor(t)
 	match := testProcessorMatch()
 	result := &models.MatchResult{MatchID: match.ID, Winner: 1, ErrorCode: 0}
 
@@ -342,19 +298,18 @@ func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
 	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
 	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(nil)
 	// сбой рейтинга не валит матч: outbox доберёт позже
-	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
-		Return(0, 0, fmt.Errorf("redis connection lost"))
+	ratingService.On("ProcessMatchResult", mock.Anything, match).Return(fmt.Errorf("db connection lost"))
 
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)
 	matchRepo.AssertExpectations(t)
 	programRepo.AssertExpectations(t)
 	executor.AssertExpectations(t)
-	ratingRepo.AssertExpectations(t)
+	ratingService.AssertExpectations(t)
 }
 
 func TestProcessor_Process_ErrorCode_SkipsRatings(t *testing.T) {
-	p, matchRepo, ratingRepo, programRepo, ratingService, executor := newTestProcessor(t)
+	p, matchRepo, programRepo, ratingService, executor := newTestProcessor(t)
 	match := testProcessorMatch()
 	result := &models.MatchResult{MatchID: match.ID, Winner: 0, ErrorCode: 1, ErrorMessage: "timeout"}
 
@@ -370,8 +325,7 @@ func TestProcessor_Process_ErrorCode_SkipsRatings(t *testing.T) {
 	programRepo.AssertExpectations(t)
 	executor.AssertExpectations(t)
 	// при ErrorCode != 0 рейтинг не трогается
-	ratingRepo.AssertNotCalled(t, "GetParticipantRatings", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything)
 }
 
 func TestIsNotFoundError(t *testing.T) {

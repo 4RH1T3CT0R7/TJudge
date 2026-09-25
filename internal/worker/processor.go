@@ -34,17 +34,13 @@ type MatchRepository interface {
 	// результат + outbox-задача рейтинга в одной транзакции, чтобы рейтинг
 	// не потерялся при падении
 	UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
-	MarkRatingApplied(ctx context.Context, matchID uuid.UUID) error
 	ResetToPending(ctx context.Context, id uuid.UUID) error
 }
 
-type RatingRepository interface {
-	GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (int, int, error)
-	GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error)
-}
-
+// RatingService применяет рейтинг за матч, повторный вызов по тому же матчу
+// ничего не меняет
 type RatingService interface {
-	ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error
+	ProcessMatchResult(ctx context.Context, match *models.Match) error
 }
 
 // Executor гоняет матч в докере
@@ -62,7 +58,6 @@ type ProgramRepository interface {
 // Processor обрабатывает матчи
 type Processor struct {
 	matchRepo     MatchRepository
-	ratingRepo    RatingRepository
 	programRepo   ProgramRepository
 	ratingService RatingService
 	executor      Executor
@@ -71,7 +66,6 @@ type Processor struct {
 
 func NewProcessor(
 	matchRepo MatchRepository,
-	ratingRepo RatingRepository,
 	programRepo ProgramRepository,
 	ratingService RatingService,
 	executor Executor,
@@ -79,7 +73,6 @@ func NewProcessor(
 ) *Processor {
 	return &Processor{
 		matchRepo:     matchRepo,
-		ratingRepo:    ratingRepo,
 		programRepo:   programRepo,
 		ratingService: ratingService,
 		executor:      executor,
@@ -188,13 +181,9 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	// fast-path рейтинга. если тут что-то упадёт - не страшно, outbox-задача
 	// осталась pending и диспетчер её добьёт
 	if result.ErrorCode == 0 && result.Winner >= 0 {
-		if err := p.updateRatings(ctx, match, result); err != nil {
+		match.Winner = &result.Winner
+		if err := p.ratingService.ProcessMatchResult(ctx, match); err != nil {
 			p.log.LogError("Failed to update ratings, outbox dispatcher will retry", err,
-				zap.String("match_id", match.ID.String()),
-			)
-		} else if err := p.matchRepo.MarkRatingApplied(ctx, match.ID); err != nil {
-			// тоже не страшно - диспетчер увидит rating_history и закроет задачу
-			p.log.LogError("Failed to mark outbox entry done", err,
 				zap.String("match_id", match.ID.String()),
 			)
 		}
@@ -204,25 +193,6 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		zap.String("match_id", match.ID.String()),
 		zap.Int("winner", result.Winner),
 	)
-
-	return nil
-}
-
-func (p *Processor) updateRatings(ctx context.Context, match *models.Match, result *models.MatchResult) error {
-	rating1, rating2, err := p.ratingRepo.GetParticipantRatings(
-		ctx,
-		match.TournamentID,
-		match.Program1ID,
-		match.Program2ID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get participant ratings: %w", err)
-	}
-
-	match.Winner = &result.Winner
-	if err := p.ratingService.ProcessMatchResult(ctx, match, rating1, rating2); err != nil {
-		return fmt.Errorf("failed to process match result: %w", err)
-	}
 
 	return nil
 }

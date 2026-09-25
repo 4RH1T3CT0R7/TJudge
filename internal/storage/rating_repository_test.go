@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/service/rating"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,6 +24,7 @@ type RatingRepositorySuite struct {
 	suite.Suite
 	database       *storage.DB
 	repo           *storage.RatingRepository
+	matchRepo      *storage.MatchRepository
 	userRepo       *storage.UserRepository
 	tournamentRepo *storage.TournamentRepository
 	programRepo    *storage.ProgramRepository
@@ -29,6 +32,7 @@ type RatingRepositorySuite struct {
 	// айдишники для очистки
 	ratingHistoryIDs []uuid.UUID
 	participantIDs   []uuid.UUID
+	matchIDs         []uuid.UUID
 	programIDs       []uuid.UUID
 	gameIDs          []uuid.UUID
 	tournamentIDs    []uuid.UUID
@@ -40,6 +44,7 @@ func TestRatingRepositorySuite(t *testing.T) {
 	s := &RatingRepositorySuite{
 		database:       database,
 		repo:           storage.NewRatingRepository(database),
+		matchRepo:      storage.NewMatchRepository(database),
 		userRepo:       storage.NewUserRepository(database),
 		tournamentRepo: storage.NewTournamentRepository(database),
 		programRepo:    storage.NewProgramRepository(database),
@@ -53,6 +58,11 @@ func (s *RatingRepositorySuite) TearDownTest() {
 	// порядок FK: rating_history -> tournament_participants -> programs -> tournaments -> games -> users
 	for _, id := range s.ratingHistoryIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE id = $1", id)
+	}
+	for _, id := range s.matchIDs {
+		_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE match_id = $1", id)
+		_, _ = s.database.ExecContext(ctx, "DELETE FROM match_outbox WHERE match_id = $1", id)
+		_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", id)
 	}
 	for _, id := range s.participantIDs {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM tournament_participants WHERE id = $1", id)
@@ -70,6 +80,7 @@ func (s *RatingRepositorySuite) TearDownTest() {
 		_, _ = s.database.ExecContext(ctx, "DELETE FROM users WHERE id = $1", id)
 	}
 	s.ratingHistoryIDs = nil
+	s.matchIDs = nil
 	s.participantIDs = nil
 	s.programIDs = nil
 	s.gameIDs = nil
@@ -330,41 +341,6 @@ func (s *RatingRepositorySuite) TestGetParticipantRating_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-func (s *RatingRepositorySuite) TestGetParticipantRatings() {
-	tournament, program1 := s.setupRatingPrerequisites("gprts")
-	user2 := s.createUser("rating_gprts2")
-	program2 := s.createProgram(user2.ID, "RatingBot_gprts2")
-
-	s.addParticipant(tournament.ID, program1.ID, 1500)
-	s.addParticipant(tournament.ID, program2.ID, 1600)
-
-	ctx := context.Background()
-	rating1, rating2, err := s.repo.GetParticipantRatings(ctx, tournament.ID, program1.ID, program2.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1500, rating1)
-	assert.Equal(s.T(), 1600, rating2)
-}
-
-func (s *RatingRepositorySuite) TestGetParticipantRatings_Program1NotFound() {
-	tournament, program := s.setupRatingPrerequisites("gpr1n")
-	s.addParticipant(tournament.ID, program.ID, 1500)
-
-	ctx := context.Background()
-	_, _, err := s.repo.GetParticipantRatings(ctx, tournament.ID, uuid.New(), program.ID)
-	assert.Error(s.T(), err)
-	assert.True(s.T(), errors.IsNotFound(err))
-}
-
-func (s *RatingRepositorySuite) TestGetParticipantRatings_Program2NotFound() {
-	tournament, program := s.setupRatingPrerequisites("gpr2n")
-	s.addParticipant(tournament.ID, program.ID, 1500)
-
-	ctx := context.Background()
-	_, _, err := s.repo.GetParticipantRatings(ctx, tournament.ID, program.ID, uuid.New())
-	assert.Error(s.T(), err)
-	assert.True(s.T(), errors.IsNotFound(err))
-}
-
 func (s *RatingRepositorySuite) createGame(name string) *models.Game {
 	ctx := context.Background()
 	game := &models.Game{
@@ -420,164 +396,184 @@ func (s *RatingRepositorySuite) TestRatingHistoryFields() {
 	assert.NotZero(s.T(), result.CreatedAt)
 }
 
-// ProcessMatchResultAtomic должен в одной транзакции обновить рейтинг+стату
-// обоим участникам. проверка zero-sum: сколько один выиграл, столько другой потерял.
-func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Success() {
-	tournament, program1 := s.setupRatingPrerequisites("pmat1")
-	user2 := s.createUser("rating_pmat2")
-	program2 := s.createProgram(user2.ID, "RatingBot_pmat2")
-
-	s.addParticipant(tournament.ID, program1.ID, 1500)
-	s.addParticipant(tournament.ID, program2.ID, 1500)
-
+// completedMatch создаёт матч так же, как его проводит воркер: running,
+// затем результат вместе с outbox-задачей рейтинга
+func (s *RatingRepositorySuite) completedMatch(tournamentID, program1ID, program2ID uuid.UUID, winner int) *models.Match {
 	ctx := context.Background()
-
-	matchID := uuid.New()
-	now := time.Now()
-
-	// program1 победил: +32, program2 проиграл: -32
-	update1 := &rating.ParticipantUpdate{
-		ProgramID:    program1.ID,
-		TournamentID: tournament.ID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
-			ProgramID:    program1.ID,
-			TournamentID: tournament.ID,
-			OldRating:    1500,
-			NewRating:    1532,
-			Change:       32,
-			MatchID:      &matchID,
-			CreatedAt:    now,
-		},
-		RatingDelta: 32,
-		Won:         true,
-		Draw:        false,
+	match := &models.Match{
+		ID:           uuid.New(),
+		TournamentID: tournamentID,
+		Program1ID:   program1ID,
+		Program2ID:   program2ID,
+		GameType:     "prisoners_dilemma",
+		Status:       models.MatchRunning,
+		Priority:     models.PriorityMedium,
+		RoundNumber:  1,
+		CreatedAt:    time.Now(),
 	}
-	update2 := &rating.ParticipantUpdate{
-		ProgramID:    program2.ID,
-		TournamentID: tournament.ID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
-			ProgramID:    program2.ID,
-			TournamentID: tournament.ID,
-			OldRating:    1500,
-			NewRating:    1468,
-			Change:       -32,
-			MatchID:      &matchID,
-			CreatedAt:    now,
-		},
-		RatingDelta: -32,
-		Won:         false,
-		Draw:        false,
-	}
-	s.ratingHistoryIDs = append(s.ratingHistoryIDs, update1.History.ID, update2.History.ID)
-
-	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
-	require.NoError(s.T(), err)
-
-	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1532, r1)
-
-	r2, err := s.repo.GetParticipantRating(ctx, tournament.ID, program2.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1468, r2)
-
-	// zero-sum: суммарное изменение = 0
-	assert.Equal(s.T(), 0, (r1-1500)+(r2-1500))
-
-	// стата: program1 - 1 победа, program2 - 1 поражение
-	var wins1, losses1, wins2, losses2 int
-	err = s.database.QueryRowContext(ctx,
-		"SELECT wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
-		tournament.ID, program1.ID).Scan(&wins1, &losses1)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, wins1)
-	assert.Equal(s.T(), 0, losses1)
-
-	err = s.database.QueryRowContext(ctx,
-		"SELECT wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
-		tournament.ID, program2.ID).Scan(&wins2, &losses2)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 0, wins2)
-	assert.Equal(s.T(), 1, losses2)
+	require.NoError(s.T(), s.matchRepo.Create(ctx, match))
+	s.matchIDs = append(s.matchIDs, match.ID)
+	require.NoError(s.T(), s.matchRepo.UpdateResultWithOutbox(ctx, match.ID,
+		&models.MatchResult{MatchID: match.ID, Score1: 3, Score2: 1, Winner: winner}))
+	match.Status = models.MatchCompleted
+	match.Winner = &winner
+	return match
 }
 
-func (s *RatingRepositorySuite) TestProcessMatchResultAtomic_Draw() {
-	tournament, program1 := s.setupRatingPrerequisites("pmdrw")
-	user2 := s.createUser("rating_pmdrw2")
-	program2 := s.createProgram(user2.ID, "RatingBot_pmdrw2")
+func (s *RatingRepositorySuite) ratingService() *rating.Service {
+	log, _ := logger.New("error", "json")
+	return rating.NewService(s.repo, events.NoopNotifier{}, log)
+}
 
+func (s *RatingRepositorySuite) stats(tournamentID, programID uuid.UUID) (ratingValue, wins, losses int) {
+	err := s.database.QueryRowContext(context.Background(),
+		"SELECT rating, wins, losses FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournamentID, programID).Scan(&ratingValue, &wins, &losses)
+	require.NoError(s.T(), err)
+	return
+}
+
+// рейтинг за матч применяется один раз: повторный вызов (fast path после
+// диспетчера или наоборот) ничего не меняет, outbox-задача закрыта
+func (s *RatingRepositorySuite) TestApplyMatchResult_Idempotent() {
+	tournament, program1 := s.setupRatingPrerequisites("apid")
+	user2 := s.createUser("rating_apid2")
+	program2 := s.createProgram(user2.ID, "RatingBot_apid2")
 	s.addParticipant(tournament.ID, program1.ID, 1500)
 	s.addParticipant(tournament.ID, program2.ID, 1500)
 
 	ctx := context.Background()
+	svc := s.ratingService()
+	match := s.completedMatch(tournament.ID, program1.ID, program2.ID, 1)
 
-	matchID := uuid.New()
-	now := time.Now()
+	require.NoError(s.T(), svc.ProcessMatchResult(ctx, match))
+	require.NoError(s.T(), svc.ProcessMatchResult(ctx, match))
 
-	// ничья: у обоих дельта 0
-	update1 := &rating.ParticipantUpdate{
-		ProgramID:    program1.ID,
-		TournamentID: tournament.ID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
-			ProgramID:    program1.ID,
-			TournamentID: tournament.ID,
-			OldRating:    1500,
-			NewRating:    1500,
-			Change:       0,
-			MatchID:      &matchID,
-			CreatedAt:    now,
-		},
-		RatingDelta: 0,
-		Won:         false,
-		Draw:        true,
-	}
-	update2 := &rating.ParticipantUpdate{
-		ProgramID:    program2.ID,
-		TournamentID: tournament.ID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
-			ProgramID:    program2.ID,
-			TournamentID: tournament.ID,
-			OldRating:    1500,
-			NewRating:    1500,
-			Change:       0,
-			MatchID:      &matchID,
-			CreatedAt:    now,
-		},
-		RatingDelta: 0,
-		Won:         false,
-		Draw:        true,
-	}
-	s.ratingHistoryIDs = append(s.ratingHistoryIDs, update1.History.ID, update2.History.ID)
+	r1, wins1, _ := s.stats(tournament.ID, program1.ID)
+	r2, _, losses2 := s.stats(tournament.ID, program2.ID)
+	assert.Equal(s.T(), 1516, r1)
+	assert.Equal(s.T(), 1484, r2)
+	assert.Equal(s.T(), 1, wins1)
+	assert.Equal(s.T(), 1, losses2)
 
-	err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2)
+	var historyRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &historyRows,
+		"SELECT COUNT(*) FROM rating_history WHERE match_id = $1", match.ID))
+	assert.Equal(s.T(), 2, historyRows)
+
+	var outboxStatus string
+	require.NoError(s.T(), s.database.GetContext(ctx, &outboxStatus,
+		"SELECT status FROM match_outbox WHERE match_id = $1", match.ID))
+	assert.Equal(s.T(), "done", outboxStatus)
+}
+
+// матч удалили (сброс раунда) до применения рейтинга - дельта не ложится
+func (s *RatingRepositorySuite) TestApplyMatchResult_MatchDeleted() {
+	tournament, program1 := s.setupRatingPrerequisites("apdel")
+	user2 := s.createUser("rating_apdel2")
+	program2 := s.createProgram(user2.ID, "RatingBot_apdel2")
+	s.addParticipant(tournament.ID, program1.ID, 1500)
+	s.addParticipant(tournament.ID, program2.ID, 1500)
+
+	ctx := context.Background()
+	match := s.completedMatch(tournament.ID, program1.ID, program2.ID, 1)
+	_, err := s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", match.ID)
 	require.NoError(s.T(), err)
 
-	// рейтинги не поменялись
-	r1, err := s.repo.GetParticipantRating(ctx, tournament.ID, program1.ID)
-	require.NoError(s.T(), err)
+	require.NoError(s.T(), s.ratingService().ProcessMatchResult(ctx, match))
+
+	r1, wins1, _ := s.stats(tournament.ID, program1.ID)
 	assert.Equal(s.T(), 1500, r1)
+	assert.Equal(s.T(), 0, wins1)
+}
 
-	r2, err := s.repo.GetParticipantRating(ctx, tournament.ID, program2.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1500, r2)
+// fast path и диспетчер одновременно по одному матчу: применяется ровно один раз
+func (s *RatingRepositorySuite) TestApplyMatchResult_ConcurrentSameMatch() {
+	tournament, program1 := s.setupRatingPrerequisites("apcc")
+	user2 := s.createUser("rating_apcc2")
+	program2 := s.createProgram(user2.ID, "RatingBot_apcc2")
+	s.addParticipant(tournament.ID, program1.ID, 1500)
+	s.addParticipant(tournament.ID, program2.ID, 1500)
 
-	// у обоих по одной ничьей
-	var draws1, draws2 int
-	err = s.database.QueryRowContext(ctx,
-		"SELECT draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
-		tournament.ID, program1.ID).Scan(&draws1)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, draws1)
+	ctx := context.Background()
+	svc := s.ratingService()
+	match := s.completedMatch(tournament.ID, program1.ID, program2.ID, 2)
 
-	err = s.database.QueryRowContext(ctx,
-		"SELECT draws FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
-		tournament.ID, program2.ID).Scan(&draws2)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, draws2)
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Go(func() {
+			errs <- svc.ProcessMatchResult(ctx, match)
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(s.T(), err)
+	}
+
+	r1, _, losses1 := s.stats(tournament.ID, program1.ID)
+	assert.Equal(s.T(), 1484, r1)
+	assert.Equal(s.T(), 1, losses1)
+
+	var historyRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &historyRows,
+		"SELECT COUNT(*) FROM rating_history WHERE match_id = $1", match.ID))
+	assert.Equal(s.T(), 2, historyRows)
+}
+
+// матчи AB и BA параллельно: без дедлоков, а история рейтинга каждой
+// программы - непрерывная цепочка, сходящаяся с итоговым рейтингом
+func (s *RatingRepositorySuite) TestApplyMatchResult_ConcurrentABBA() {
+	tournament, programA := s.setupRatingPrerequisites("apab")
+	userB := s.createUser("rating_apab2")
+	programB := s.createProgram(userB.ID, "RatingBot_apab2")
+	s.addParticipant(tournament.ID, programA.ID, 1500)
+	s.addParticipant(tournament.ID, programB.ID, 1500)
+
+	ctx := context.Background()
+	svc := s.ratingService()
+
+	const pairs = 15
+	var matches []*models.Match
+	for range pairs {
+		matches = append(matches,
+			s.completedMatch(tournament.ID, programA.ID, programB.ID, 1),
+			s.completedMatch(tournament.ID, programB.ID, programA.ID, 1),
+		)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(matches))
+	for _, m := range matches {
+		wg.Go(func() {
+			errs <- svc.ProcessMatchResult(ctx, m)
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(s.T(), err)
+	}
+
+	for _, programID := range []uuid.UUID{programA.ID, programB.ID} {
+		current, wins, losses := s.stats(tournament.ID, programID)
+		assert.Equal(s.T(), 2*pairs, wins+losses)
+
+		var history []*models.RatingHistory
+		require.NoError(s.T(), s.database.SelectContext(ctx, &history, `
+			SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
+			FROM rating_history WHERE tournament_id = $1 AND program_id = $2
+			ORDER BY created_at`, tournament.ID, programID))
+		require.Len(s.T(), history, 2*pairs)
+
+		prev := 1500
+		for _, h := range history {
+			assert.Equal(s.T(), prev, h.OldRating, "old_rating должен совпадать с предыдущим new_rating")
+			prev = h.NewRating
+		}
+		assert.Equal(s.T(), current, prev)
+	}
 }
 
 func (s *RatingRepositorySuite) TestUpdateParticipantRatingAndStats_Win() {

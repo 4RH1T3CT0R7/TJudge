@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
@@ -21,16 +20,12 @@ type OutboxStore interface {
 // OutboxDispatcher добивает зависшие outbox-задачи - обновления рейтингов,
 // которые потерялись если процесс упал между записью результата матча и
 // fast-path обработкой.
-// ключевое тут - идемпотентность: проверяется rating_history по match_id,
-// и если записи уже есть (процесс упал после коммита рейтинга но до пометки
-// done), рейтинг второй раз не применяется, только переотправляется событие -
-// оно могло потеряться вместе с процессом, а на нём висят кэш и вебсокет
+// идемпотентность держит сам ProcessMatchResult: задача гасится в одной
+// транзакции с применением рейтинга, так что гонка с fast path не задвоит ELO
 type OutboxDispatcher struct {
 	outbox        OutboxStore
 	matchRepo     MatchRepository
-	ratingRepo    RatingRepository
 	ratingService RatingService
-	notifier      events.Notifier
 	log           *logger.Logger
 
 	interval  time.Duration
@@ -43,21 +38,17 @@ type OutboxDispatcher struct {
 
 // NewOutboxDispatcher создаёт диспетчер.
 // olderThan 10с - задачи свежее добирает fast-path воркера, диспетчер в них
-// не лезет чтобы не гоняться с ним за одну задачу
+// обычно не лезет (а если и полезет, второй раз рейтинг не применится)
 func NewOutboxDispatcher(
 	outbox OutboxStore,
 	matchRepo MatchRepository,
-	ratingRepo RatingRepository,
 	ratingService RatingService,
-	notifier events.Notifier,
 	log *logger.Logger,
 ) *OutboxDispatcher {
 	return &OutboxDispatcher{
 		outbox:        outbox,
 		matchRepo:     matchRepo,
-		ratingRepo:    ratingRepo,
 		ratingService: ratingService,
-		notifier:      notifier,
 		log:           log,
 		interval:      15 * time.Second,
 		olderThan:     10 * time.Second,
@@ -154,51 +145,7 @@ func (d *OutboxDispatcher) processEntry(ctx context.Context, entry *storage.Outb
 		return nil
 	}
 
-	// ключевое место: если в rating_history уже есть записи по матчу, значит
-	// рейтинг посчитан - второй раз применять нельзя, задвоится история и
-	// ело перестанет сходиться. а вот событие надо переотправить
-	history, err := d.ratingRepo.GetByMatchID(ctx, entry.MatchID)
-	if err != nil {
-		return err
-	}
-	if len(history) > 0 {
-		d.republishEvent(ctx, match, history)
-		return nil
-	}
-
-	rating1, rating2, err := d.ratingRepo.GetParticipantRatings(
-		ctx, match.TournamentID, match.Program1ID, match.Program2ID,
-	)
-	if err != nil {
-		return err
-	}
-
 	// ProcessMatchResult сам шлёт MatchResultProcessed после коммита,
 	// отсюда дублировать не надо
-	return d.ratingService.ProcessMatchResult(ctx, match, rating1, rating2)
-}
-
-// republishEvent собирает потерянное событие из уже записанной истории -
-// рейтинги берутся из history, никакого пересчёта
-func (d *OutboxDispatcher) republishEvent(ctx context.Context, match *models.Match, history []*models.RatingHistory) {
-	var newRating1, newRating2 int
-	for _, h := range history {
-		switch h.ProgramID {
-		case match.Program1ID:
-			newRating1 = h.NewRating
-		case match.Program2ID:
-			newRating2 = h.NewRating
-		}
-	}
-
-	d.notifier.MatchResultProcessed(ctx, events.MatchResultProcessed{
-		Version:      1,
-		TournamentID: match.TournamentID,
-		MatchID:      match.ID,
-		Program1ID:   match.Program1ID,
-		Program2ID:   match.Program2ID,
-		NewRating1:   newRating1,
-		NewRating2:   newRating2,
-		Winner:       *match.Winner,
-	})
+	return d.ratingService.ProcessMatchResult(ctx, match)
 }
