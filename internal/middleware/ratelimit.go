@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -177,9 +178,65 @@ func isLocalhost(ip string) bool {
 	return false
 }
 
-// getClientIP берёт ip из RemoteAddr - его уже выставил RealIP из chi.
-// сырые заголовки типа X-Forwarded-For тут не читаются, иначе их можно подделать
-// и обойти лимит
+// RealIP подменяет RemoteAddr на адрес клиента из X-Forwarded-For / X-Real-IP,
+// но только если запрос пришёл от доверенного прокси. trustedCIDRs пустой -
+// доверяются loopback и приватные сети (nginx в docker-сети). True-Client-IP
+// не читается вовсе: chi RealIP верил ему от кого угодно, и рейтлимит
+// обходился подменой заголовка
+func RealIP(trustedCIDRs []string) func(http.Handler) http.Handler {
+	var nets []*net.IPNet
+	for _, c := range trustedCIDRs {
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			nets = append(nets, n)
+		}
+	}
+	trusted := func(ip net.IP) bool {
+		if len(nets) == 0 {
+			return ip.IsLoopback() || ip.IsPrivate()
+		}
+		for _, n := range nets {
+			if n.Contains(ip) {
+				return true
+			}
+		}
+		return false
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.RemoteAddr = realClientIP(r, trusted)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func realClientIP(r *http.Request, trusted func(net.IP) bool) string {
+	peer := getClientIP(r)
+	if ip := net.ParseIP(peer); ip == nil || !trusted(ip) {
+		return r.RemoteAddr
+	}
+
+	// каждый прокси дописывает адрес своего соседа справа, левые записи мог
+	// прислать сам клиент. поэтому берётся первый справа адрес не из доверенных
+	hops := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		ip := net.ParseIP(strings.TrimSpace(hops[i]))
+		if ip == nil {
+			break
+		}
+		if !trusted(ip) {
+			return ip.String()
+		}
+	}
+
+	// nginx пишет сюда $remote_addr, клиентское значение он перетирает
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
+		return ip.String()
+	}
+	return r.RemoteAddr
+}
+
+// getClientIP берёт ip из RemoteAddr - его уже выставил RealIP выше
 func getClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

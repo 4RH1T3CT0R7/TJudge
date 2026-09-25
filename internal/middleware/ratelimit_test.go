@@ -104,7 +104,7 @@ func TestRateLimit_XForwardedFor_Ignored(t *testing.T) {
 	log := newTestLogger()
 
 	// X-Forwarded-For напрямую брать нельзя; getClientIP смотрит только на
-	// r.RemoteAddr (его ставит chi RealIP из доверенных прокси)
+	// r.RemoteAddr (его ставит RealIP из доверенных прокси)
 	mockLimiter.On("Allow", mock.Anything, "ratelimit:192.168.1.1", 100, time.Minute).Return(true, nil)
 
 	handler := middleware.RateLimit(mockLimiter, 100, time.Minute, log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -242,6 +242,46 @@ func TestRateLimit_DifferentWindows(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			mockLimiter.AssertExpectations(t)
+		})
+	}
+}
+
+// заголовкам с адресом клиента верится только от доверенного прокси,
+// True-Client-IP игнорируется всегда
+func TestRealIP(t *testing.T) {
+	cases := []struct {
+		name    string
+		trusted []string
+		remote  string
+		headers map[string]string
+		want    string
+	}{
+		{"прямой клиент подделывает заголовки", nil, "203.0.113.9:5000",
+			map[string]string{"X-Forwarded-For": "1.1.1.1", "X-Real-IP": "2.2.2.2", "True-Client-IP": "3.3.3.3"}, "203.0.113.9:5000"},
+		{"True-Client-IP от nginx не читается", nil, "172.28.0.5:5000",
+			map[string]string{"True-Client-IP": "3.3.3.3", "X-Real-IP": "198.51.100.7"}, "198.51.100.7"},
+		{"левые записи XFF прислал клиент", nil, "172.28.0.5:5000",
+			map[string]string{"X-Forwarded-For": "1.1.1.1, 198.51.100.7", "X-Real-IP": "198.51.100.7"}, "198.51.100.7"},
+		{"прокси перед nginx", nil, "172.28.0.5:5000",
+			map[string]string{"X-Forwarded-For": "198.51.100.7, 172.28.0.1", "X-Real-IP": "172.28.0.1"}, "198.51.100.7"},
+		{"свой список заменяет приватные сети", []string{"203.0.113.0/24"}, "172.28.0.5:5000",
+			map[string]string{"X-Real-IP": "198.51.100.7"}, "172.28.0.5:5000"},
+		{"адрес из своего списка", []string{"203.0.113.0/24"}, "203.0.113.10:5000",
+			map[string]string{"X-Real-IP": "198.51.100.7"}, "198.51.100.7"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			h := middleware.RealIP(tc.trusted)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				got = r.RemoteAddr
+			}))
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tc.remote
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			h.ServeHTTP(httptest.NewRecorder(), req)
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }
