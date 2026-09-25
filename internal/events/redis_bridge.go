@@ -59,7 +59,9 @@ func (p *RedisEventPublisher) Publish(ctx context.Context, typeName string, even
 		return fmt.Errorf("redis publisher: marshal envelope: %w", err)
 	}
 
-	if err := p.pub.Publish(ctx, p.channel, payload); err != nil {
+	// событие шлётся после записи в БД, так что отмена запроса или остановка
+	// воркера не должна его терять; от зависания страхуют таймауты клиента редиса
+	if err := p.pub.Publish(context.WithoutCancel(ctx), p.channel, payload); err != nil {
 		return fmt.Errorf("redis publisher: publish to %s: %w", p.channel, err)
 	}
 
