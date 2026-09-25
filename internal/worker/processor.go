@@ -137,17 +137,23 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	}
 
 	result, err := p.executor.Execute(ctx, match, program1.CodePath, program2.CodePath)
+	// итог пишется и при истёкшем ctx матча (shutdown, таймаут воркера),
+	// иначе готовый результат теряется, а матч остаётся running до recovery
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	if err != nil {
 		// тут важно различать два вида ошибок. инфраструктурная (докер лёг,
 		// образа нет) - программа не виновата, матч возвращается в pending,
-		// его повторит ретрай пула или recovery. а ошибка самой программы
-		// (упала, мусор в выводе) - терминальная, матч помечается failed.
-		// итог пишется и при истёкшем ctx матча (shutdown, таймаут воркера),
-		// иначе матч остаётся running до recovery
-		writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
+		// его повторит ретрай пула. а ошибка самой программы (упала, мусор
+		// в выводе) - терминальная, матч помечается failed
 		if executor.IsInfraError(err) {
-			if resetErr := p.matchRepo.ResetToPending(writeCtx, match.ID); resetErr != nil {
+			// при истёкшем ctx матча ретраев пула уже не будет, а pending вне
+			// очереди никто не подберёт: матч остаётся running, и recovery
+			// через StuckDuration сбросит его и поставит в очередь
+			if ctx.Err() != nil {
+				return fmt.Errorf("transient executor error: %w", err)
+			}
+			if resetErr := p.matchRepo.ResetToPending(ctx, match.ID); resetErr != nil {
 				p.log.Error("Failed to reset match to pending after infra error",
 					zap.String("match_id", match.ID.String()),
 					zap.Error(resetErr),
@@ -171,7 +177,7 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	}
 
 	// результат + outbox-задача «обновить рейтинг» одной транзакцией
-	if err := p.matchRepo.UpdateResultWithOutbox(ctx, match.ID, result); err != nil {
+	if err := p.matchRepo.UpdateResultWithOutbox(writeCtx, match.ID, result); err != nil {
 		return fmt.Errorf("failed to update match result: %w", err)
 	}
 
