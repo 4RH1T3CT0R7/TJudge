@@ -79,9 +79,11 @@ function humanErrorMessage(
 const NO_REFRESH_AUTH_ENDPOINT = /\/auth\/(login|register|refresh|logout)$/;
 
 // Сессия недействительна только по отказу сервера (401) или без refresh-токена.
-// Сеть и 5xx - временные: токены не стираются, пользователь не разлогинивается.
+// Сеть, 5xx и сбои браузера (Web Locks, localStorage) - временные: токены
+// не стираются, пользователь не разлогинивается.
 function isAuthRejection(error: unknown): boolean {
-  return !axios.isAxiosError(error) || error.response?.status === 401;
+  if (axios.isAxiosError(error)) return error.response?.status === 401;
+  return !localStorage.getItem('refresh_token');
 }
 
 // isRetryableError возвращает true для transient-ошибок, где retry имеет смысл.

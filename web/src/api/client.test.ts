@@ -54,6 +54,7 @@ describe('ApiClient refresh', () => {
     calls.length = 0;
     localStorage.clear();
     onAuthFailure.mockReset();
+    vi.restoreAllMocks();
     api.setOnAuthFailure(onAuthFailure);
   });
 
@@ -88,6 +89,22 @@ describe('ApiClient refresh', () => {
     expect((err as AxiosError).response?.status).toBe(401);
     expect(localStorage.getItem('access_token')).toBeNull();
     expect(localStorage.getItem('refresh_token')).toBeNull();
+    expect(onAuthFailure).toHaveBeenCalledOnce();
+  });
+
+  it('сбой браузера при refresh не стирает токены, отсутствие refresh-токена стирает', async () => {
+    login('a1', 'r1');
+    serve(() => ({ status: 401 }));
+    const refresh = vi.spyOn(api, 'refreshToken').mockRejectedValue(new DOMException('aborted', 'AbortError'));
+
+    await expect(api.getMe()).rejects.toBeInstanceOf(DOMException);
+    expect(localStorage.getItem('access_token')).toBe('a1');
+    expect(onAuthFailure).not.toHaveBeenCalled();
+
+    refresh.mockRestore();
+    localStorage.removeItem('refresh_token');
+    await expect(api.getMe()).rejects.toBeInstanceOf(AxiosError);
+    expect(localStorage.getItem('access_token')).toBeNull();
     expect(onAuthFailure).toHaveBeenCalledOnce();
   });
 
