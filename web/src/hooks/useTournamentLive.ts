@@ -3,7 +3,8 @@
 //
 // Поллинг включается только как fallback, когда WS-соединения нет
 // (pollInterval из этого хука). Это касается и анонимов: /ws требует токен,
-// поэтому у них живых событий нет и данные обновляет поллинг.
+// поэтому у них живых событий нет и данные обновляет поллинг. У не идущего
+// турнира матчи не меняются, и поллинга нет.
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,6 +17,8 @@ import { FALLBACK_POLL_INTERVAL } from './queries';
 interface UseTournamentLiveOptions {
   tournamentId: string;
   enabled?: boolean;
+  /** Турнир идёт: только тогда без WS включается поллинг. */
+  active: boolean;
 }
 
 // Во время раунда match_result идут непрерывно (по событию на матч), а каждая
@@ -56,7 +59,7 @@ export function throttle(fn: () => void, ms: number) {
   return call;
 }
 
-export function useTournamentLive({ tournamentId, enabled = true }: UseTournamentLiveOptions) {
+export function useTournamentLive({ tournamentId, enabled = true, active }: UseTournamentLiveOptions) {
   const queryClient = useQueryClient();
 
   const scheduleMatchInvalidation = useMemo(
@@ -128,7 +131,7 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
   });
 
   // Fallback-поллинг: только когда живых обновлений нет, в том числе без WS вовсе.
-  const pollInterval: number | false = isConnected ? false : FALLBACK_POLL_INTERVAL;
+  const pollInterval: number | false = active && !isConnected ? FALLBACK_POLL_INTERVAL : false;
 
   return { isConnected, isOnline, reconnect, pollInterval };
 }
