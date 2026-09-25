@@ -166,7 +166,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 	t.Run("successfully create program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		reqBody := map[string]string{
@@ -203,7 +203,7 @@ func TestProgramHandler_Create(t *testing.T) {
 
 	t.Run("missing user ID in context", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		reqBody := map[string]string{
 			"name":      "My Chess AI",
@@ -229,7 +229,7 @@ func TestProgramHandler_List(t *testing.T) {
 
 	t.Run("successfully list programs", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		expectedPrograms := []*models.Program{
@@ -276,7 +276,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("successfully get program as owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -313,7 +313,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("successfully get program as admin", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -347,7 +347,7 @@ func TestProgramHandler_Get(t *testing.T) {
 
 	t.Run("forbidden when not owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -381,7 +381,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 	t.Run("successfully update program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -432,7 +432,7 @@ func TestProgramHandler_Update(t *testing.T) {
 
 	t.Run("not the owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -470,7 +470,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 
 	t.Run("successfully delete program", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -509,7 +509,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		teamID := uuid.New()
@@ -558,7 +558,7 @@ func TestProgramHandler_GetVersions(t *testing.T) {
 
 	t.Run("no access", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		otherUserID := uuid.New()
@@ -598,7 +598,7 @@ func TestProgramHandler_ClearProgramErrors(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		tournamentID := uuid.New()
 
@@ -630,7 +630,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("not owner", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()
@@ -656,7 +656,7 @@ func TestProgramHandler_Download(t *testing.T) {
 
 	t.Run("file path nil", func(t *testing.T) {
 		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, nil, "", log)
+		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
 
 		userID := uuid.New()
 		programID := uuid.New()

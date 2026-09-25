@@ -13,20 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// ProgramRepository - чтобы достать программы турнира по конкретной игре
-type ProgramRepository interface {
-	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error)
-}
-
-type ScheduleNewProgramMatchesRequest struct {
-	TournamentID uuid.UUID
-	GameID       uuid.UUID
-	NewProgramID uuid.UUID
-	TeamID       uuid.UUID
-}
-
-// SchedulingService - планирование матчей: round-robin, раунды по отдельным играм,
-// перезапуск упавших и досоздание матчей для новых программ
+// SchedulingService - планирование матчей: round-robin, раунды по отдельным играм
+// и перезапуск упавших
 type SchedulingService struct {
 	tournamentRepo  TournamentRepository
 	matchRepo       MatchRepository
@@ -64,134 +52,6 @@ func NewSchedulingService(
 		notifier:        notifier,
 		log:             log,
 	}
-}
-
-// ScheduleNewProgramMatches - досоздаёт матчи для новой программы против всех остальных.
-// оптимизация round-robin: не гоняется весь турнир заново, только пары с новой прогой
-func (ss *SchedulingService) ScheduleNewProgramMatches(ctx context.Context, req *ScheduleNewProgramMatchesRequest, programRepo ProgramRepository) error {
-	// лок чтобы параллельные запросы не наплодили дублей матчей
-	lockKey := fmt.Sprintf("tournament:schedule:%s:%s", req.TournamentID.String(), req.GameID.String())
-
-	return ss.distributedLock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// турнир берётся из бд
-		tournament, err := ss.tournamentRepo.GetByID(ctx, req.TournamentID)
-		if err != nil {
-			return err
-		}
-
-		// для завершённого турнира матчи уже не планируются
-		if tournament.Status != models.TournamentActive && tournament.Status != models.TournamentPending {
-			return errors.ErrConflict.WithMessage("cannot schedule matches for completed tournament")
-		}
-
-		// берутся все программы турнира по этой игре
-		programs, err := programRepo.GetByTournamentAndGame(ctx, req.TournamentID, req.GameID)
-		if err != nil {
-			return fmt.Errorf("failed to get programs: %w", err)
-		}
-
-		// матчи только против чужих программ (своя команда пропускается)
-		var matches []*models.Match
-		now := time.Now()
-
-		for _, prog := range programs {
-			// своя прога и проги своей команды скипаются
-			if prog.ID == req.NewProgramID {
-				continue
-			}
-			if prog.TeamID != nil && *prog.TeamID == req.TeamID {
-				continue
-			}
-
-			// матч 1: новая прога первым игроком, существующая вторым
-			match1 := &models.Match{
-				ID:           uuid.New(),
-				TournamentID: req.TournamentID,
-				Program1ID:   req.NewProgramID,
-				Program2ID:   prog.ID,
-				GameType:     tournament.GameType,
-				Status:       models.MatchPending,
-				Priority:     models.PriorityHigh, // новые матчи в приоритете
-				CreatedAt:    now,
-			}
-
-			if err := match1.Validate(); err != nil {
-				ss.log.Error("Invalid match generated",
-					zap.Error(err),
-					zap.String("program1_id", req.NewProgramID.String()),
-					zap.String("program2_id", prog.ID.String()),
-				)
-				continue
-			}
-
-			// матч 2: наоборот, старая прога первым а новая вторым (важно для несимметричных игр)
-			match2 := &models.Match{
-				ID:           uuid.New(),
-				TournamentID: req.TournamentID,
-				Program1ID:   prog.ID,
-				Program2ID:   req.NewProgramID,
-				GameType:     tournament.GameType,
-				Status:       models.MatchPending,
-				Priority:     models.PriorityHigh, // новые матчи в приоритете
-				CreatedAt:    now,
-			}
-
-			if err := match2.Validate(); err != nil {
-				ss.log.Error("Invalid reverse match generated",
-					zap.Error(err),
-					zap.String("program1_id", prog.ID.String()),
-					zap.String("program2_id", req.NewProgramID.String()),
-				)
-				continue
-			}
-
-			matches = append(matches, match1, match2)
-		}
-
-		if len(matches) == 0 {
-			ss.log.Info("No new matches to schedule",
-				zap.String("tournament_id", req.TournamentID.String()),
-				zap.String("program_id", req.NewProgramID.String()),
-			)
-			return nil
-		}
-
-		// матчи пишутся в бд
-		if err := ss.matchRepo.CreateBatch(ctx, matches); err != nil {
-			return fmt.Errorf("failed to create matches: %w", err)
-		}
-
-		// всё в очередь батчем (один pipeline в редис)
-		// если enqueue упал - матчи откатываются из бд, иначе повиснут
-		// в pending навсегда и в обработку не попадут
-		if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
-			ids := matchIDs(matches)
-			if delErr := ss.matchRepo.DeleteBatch(ctx, ids); delErr != nil {
-				ss.log.Error("Failed to rollback matches after enqueue error",
-					zap.Error(delErr),
-					zap.Int("orphaned_matches", len(ids)),
-					zap.String("tournament_id", req.TournamentID.String()),
-				)
-			}
-			return fmt.Errorf("failed to enqueue matches: %w", err)
-		}
-
-		ss.log.Info("New program matches scheduled",
-			zap.String("tournament_id", req.TournamentID.String()),
-			zap.String("program_id", req.NewProgramID.String()),
-			zap.Int("matches_created", len(matches)),
-		)
-
-		// уходит событие, дальше broadcast разрулят обработчики
-		ss.notifier.MatchesCreated(ctx, events.MatchesCreated{
-			Version:      1,
-			TournamentID: req.TournamentID,
-			ProgramID:    req.NewProgramID,
-			MatchCount:   len(matches),
-		})
-
-		return nil
-	})
 }
 
 // RunAllMatches - гоняет все pending матчи турнира (ручка админа).

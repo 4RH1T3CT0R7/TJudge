@@ -25,26 +25,9 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/storage"
 	"github.com/bmstu-itstech/tjudge/internal/ws"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
-
-// matchSchedulerAdapter адаптер для tournament.SchedulingService.ScheduleNewProgramMatches
-type matchSchedulerAdapter struct {
-	schedulingService *tournament.SchedulingService
-	programRepo       *storage.ProgramRepository
-}
-
-func (a *matchSchedulerAdapter) ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error {
-	req := &tournament.ScheduleNewProgramMatchesRequest{
-		TournamentID: tournamentID,
-		GameID:       gameID,
-		NewProgramID: newProgramID,
-		TeamID:       teamID,
-	}
-	return a.schedulingService.ScheduleNewProgramMatches(ctx, req, a.programRepo)
-}
 
 // @title TJudge API
 // @version 1.0
@@ -219,12 +202,6 @@ func main() {
 	// tournamentRepo уже реализует GetLeaderboardByGameType
 	// matchRepo уже реализует List
 
-	// адаптер для планирования матчей
-	matchScheduler := &matchSchedulerAdapter{
-		schedulingService: schedulingService,
-		programRepo:       programRepo,
-	}
-
 	// Очередь асинхронной компиляции: upload ставит задачу, worker
 	// компилирует программу в Docker-песочнице.
 	compileQueue := queue.NewCompileQueue(redisCache, log)
@@ -234,7 +211,7 @@ func main() {
 	tournamentHandler := handlers.NewTournamentHandler(tournamentService, schedulingService, log)
 	programHandler := handlers.NewProgramHandler(
 		programRepo, tournamentRepo,
-		matchScheduler, gameService, matchRepo, gameRepo,
+		gameService, matchRepo, gameRepo,
 		teamRepo,
 		compileQueue,
 		cfg.Storage.ProgramsPath, log,
