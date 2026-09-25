@@ -307,11 +307,12 @@ func TestService_JoinTeamByCode_UserAlreadyInTeam(t *testing.T) {
 // --- LeaveTeam ---
 
 func TestService_LeaveTeam_RegularMember(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	teamID, leaderID, memberID := uuid.New(), uuid.New(), uuid.New()
 
 	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID}, nil)
+	tournamentRepo.On("GetByID", ctx, uuid.Nil).Return(&models.Tournament{Status: models.TournamentActive}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, memberID).Return(true, nil)
 	teamRepo.On("RemoveMember", ctx, teamID, memberID).Return(nil)
 
@@ -356,12 +357,13 @@ func TestService_LeaveTeam_LeaderLastMember_ActiveTournament(t *testing.T) {
 
 // елси уходит лидер, а в команде есть ещё люди — лидерство переходит первому не-лидеру
 func TestService_LeaveTeam_LeaderTransfersLeadership(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	teamID, leaderID, member1ID, member2ID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 
 	team := &models.Team{ID: teamID, LeaderID: leaderID}
 	teamRepo.On("GetByID", ctx, teamID).Return(team, nil)
+	tournamentRepo.On("GetByID", ctx, uuid.Nil).Return(&models.Tournament{Status: models.TournamentPending}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
 	teamRepo.On("GetMemberCount", ctx, teamID).Return(3, nil)
 	teamRepo.On("GetMembers", ctx, teamID).Return([]*models.TeamMember{
@@ -380,15 +382,35 @@ func TestService_LeaveTeam_LeaderTransfersLeadership(t *testing.T) {
 }
 
 func TestService_LeaveTeam_UserNotInTeam(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
 	teamID, userID := uuid.New(), uuid.New()
 
 	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: uuid.New()}, nil)
+	tournamentRepo.On("GetByID", ctx, uuid.Nil).Return(&models.Tournament{Status: models.TournamentPending}, nil)
 	teamRepo.On("IsUserInTeam", ctx, teamID, userID).Return(false, nil)
 
 	err := svc.LeaveTeam(ctx, teamID, userID)
 	assert.Error(t, err)
+}
+
+// завершённый турнир: состав команды заморожен, иначе уход последнего участника
+// удалил бы команду из итоговых таблиц
+func TestService_LeaveTeam_CompletedTournament(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentCompleted}, nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 409, appErr.Code)
+	teamRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+	teamRepo.AssertNotCalled(t, "RemoveMember", mock.Anything, mock.Anything, mock.Anything)
 }
 
 // гонка: GetMemberCount вернул 2, а GetMembers отдал только лидера
