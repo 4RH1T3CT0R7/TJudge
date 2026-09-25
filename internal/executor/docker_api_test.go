@@ -2,8 +2,11 @@ package executor
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -11,8 +14,10 @@ import (
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -87,6 +92,75 @@ func TestRunInDocker_ParentCancelIsInfra(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, IsInfraError(err))
 	assert.Contains(t, calls(), "DELETE /containers/c1")
+}
+
+// compilerOn - компилятор на том же подставном докере, каталог программ временный
+func compilerOn(e *Executor, dir string, timeout time.Duration) *Compiler {
+	return &Compiler{dockerClient: e.dockerClient, programsPath: dir, hostPrograms: dir, compileTimeout: timeout, log: e.log}
+}
+
+// сборка упёрлась в свой лимит времени - вина программы, а не инфры
+func TestRunBuilder_OwnTimeoutIsCompileError(t *testing.T) {
+	e, calls := fakeDocker(t, config.ExecutorConfig{}, hangingMatch)
+	dir := t.TempDir()
+	c := compilerOn(e, dir, 400*time.Millisecond)
+
+	code, out, err := c.runBuilder(context.Background(), []string{"gcc"}, dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), code)
+	assert.Contains(t, out, "лимит времени")
+	assert.Contains(t, calls(), "DELETE /containers/c1")
+}
+
+// остановка воркера посреди сборки - программа остаётся compiling, сборку повторят
+func TestRunBuilder_ParentCancelIsInfra(t *testing.T) {
+	e, calls := fakeDocker(t, config.ExecutorConfig{}, hangingMatch)
+	dir := t.TempDir()
+	c := compilerOn(e, dir, time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	_, _, err := c.runBuilder(ctx, []string{"gcc"}, dir)
+
+	require.Error(t, err)
+	assert.True(t, IsInfraError(err))
+	assert.Contains(t, calls(), "DELETE /containers/c1")
+}
+
+// "компилятор" записал бинарник больше maxArtifactSize - сборка отвергается,
+// бинарник на место программы не ставится
+func TestCompile_RejectsOversizedArtifact(t *testing.T) {
+	e, _ := fakeDocker(t, config.ExecutorConfig{}, func(w http.ResponseWriter, r *http.Request, path string) {
+		switch {
+		case path == "/containers/create":
+			var body struct{ HostConfig struct{ Binds []string } }
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			hostDir, _, _ := strings.Cut(body.HostConfig.Binds[0], ":")
+			f, err := os.Create(filepath.Join(hostDir, "out"))
+			if assert.NoError(t, err) {
+				assert.NoError(t, f.Truncate(maxArtifactSize+1))
+				_ = f.Close()
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"Id":"c1","Warnings":[]}`))
+		case strings.HasSuffix(path, "/wait"):
+			_, _ = w.Write([]byte(`{"StatusCode":0}`))
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+	dir := t.TempDir()
+	src := filepath.Join(dir, "bot.c")
+	require.NoError(t, os.WriteFile(src, []byte("int main(){}"), 0o600))
+
+	res, err := compilerOn(e, dir, time.Minute).Compile(context.Background(),
+		&models.Program{ID: uuid.New(), Language: "c", CodePath: src})
+
+	require.NoError(t, err)
+	assert.False(t, res.OK)
+	assert.Contains(t, res.Log, "результат сборки больше")
+	assert.NoFileExists(t, filepath.Join(dir, "bot"))
 }
 
 func TestEnsureImage(t *testing.T) {
