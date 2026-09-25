@@ -229,9 +229,9 @@ func TestProcessor_Process_ExecutorInfraFailure_ResetsToPending(t *testing.T) {
 	matchRepo.AssertNotCalled(t, "UpdateResultWithOutbox", mock.Anything, mock.Anything, mock.Anything)
 }
 
-// ctx матча истёк посреди исполнения: ретраев пула уже не будет, и pending вне
-// очереди никто бы не подобрал - матч остаётся running до recovery
-func TestProcessor_Process_InfraFailureAfterCancel_StaysRunning(t *testing.T) {
+// ctx матча истёк посреди исполнения: матч всё равно возвращается в pending
+// на отвязанном контексте, в очередь его вернёт периодический recovery
+func TestProcessor_Process_InfraFailureAfterCancel_ResetsToPending(t *testing.T) {
 	p, matchRepo, programRepo, _, executorMock := newTestProcessor(t)
 	match := testProcessorMatch()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -242,10 +242,13 @@ func TestProcessor_Process_InfraFailureAfterCancel_StaysRunning(t *testing.T) {
 	executorMock.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
 		Run(func(mock.Arguments) { cancel() }).
 		Return(nil, &executor.InfraError{Err: context.Canceled})
+	matchRepo.On("ResetToPending", mock.MatchedBy(func(c context.Context) bool { return c.Err() == nil }), match.ID).
+		Return(nil)
 
 	err := p.Process(ctx, match)
 	assert.Error(t, err)
-	matchRepo.AssertNotCalled(t, "ResetToPending", mock.Anything, mock.Anything)
+	assert.NotErrorIs(t, err, ErrProgramFailed)
+	matchRepo.AssertExpectations(t)
 }
 
 func TestProcessor_Process_Success(t *testing.T) {
@@ -268,6 +271,47 @@ func TestProcessor_Process_Success(t *testing.T) {
 	executor.AssertExpectations(t)
 	ratingService.AssertExpectations(t)
 	assert.Equal(t, 1, *match.Winner)
+}
+
+// ошибка после перевода в running возвращает матч в pending, иначе ретрай
+// пула не переиграл бы его, а засчитал как успех
+func TestProcessor_Process_ErrorAfterRunning_ResetsToPending(t *testing.T) {
+	t.Run("программы не прочитались", func(t *testing.T) {
+		p, matchRepo, programRepo, _, _ := newTestProcessor(t)
+		match := testProcessorMatch()
+
+		matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
+		programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+			Return(nil, fmt.Errorf("connection reset"))
+		matchRepo.On("ResetToPending", mock.Anything, match.ID).Return(nil)
+
+		err := p.Process(context.Background(), match)
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, ErrProgramFailed)
+		matchRepo.AssertExpectations(t)
+	})
+
+	t.Run("результат не записался, контекст матча уже истёк", func(t *testing.T) {
+		p, matchRepo, programRepo, _, executor := newTestProcessor(t)
+		match := testProcessorMatch()
+		result := &models.MatchResult{MatchID: match.ID, Winner: 1}
+		ctx, cancel := context.WithCancel(context.Background())
+
+		matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
+		programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+			Return(twoPrograms(match), nil)
+		executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
+		matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).
+			Run(func(mock.Arguments) { cancel() }).
+			Return(fmt.Errorf("context canceled"))
+		// сброс идёт на живом контексте, отвязанном от истёкшего
+		matchRepo.On("ResetToPending", mock.MatchedBy(func(c context.Context) bool { return c.Err() == nil }), match.ID).
+			Return(nil)
+
+		err := p.Process(ctx, match)
+		assert.Error(t, err)
+		matchRepo.AssertExpectations(t)
+	})
 }
 
 // матч отменили или удалили пока он играл: результат не пишется, рейтинг не трогается

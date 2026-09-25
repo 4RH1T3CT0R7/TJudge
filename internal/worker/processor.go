@@ -105,6 +105,21 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		return fmt.Errorf("failed to update match status: %w", err)
 	}
 
+	// дальше матч running. любая ошибка, кроме терминальной ошибки программы,
+	// возвращает его в pending: иначе ретрай пула упрётся в
+	// ErrMatchAlreadyProcessed на переводе в running и засчитает матч как
+	// успешный, а сам матч провисит running до recovery
+	if err := p.play(ctx, match); err != nil {
+		if !stderrors.Is(err, ErrProgramFailed) {
+			p.resetToPending(ctx, match.ID)
+		}
+		return err
+	}
+	return nil
+}
+
+// play гоняет матч, уже переведённый в running, и пишет результат
+func (p *Processor) play(ctx context.Context, match *models.Match) error {
 	// обе программы одним запросом
 	programs, err := p.programRepo.GetByIDs(ctx, []uuid.UUID{match.Program1ID, match.Program2ID})
 	if err != nil {
@@ -133,21 +148,9 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	if err != nil {
 		// тут важно различать два вида ошибок. инфраструктурная (докер лёг,
 		// образа нет) - программа не виновата, матч возвращается в pending,
-		// его повторит ретрай пула. а ошибка самой программы (упала, мусор
+		// его повторит ретрай пула или recovery. а ошибка самой программы (упала, мусор
 		// в выводе) - терминальная, матч помечается failed
 		if executor.IsInfraError(err) {
-			// при истёкшем ctx матча ретраев пула уже не будет, а pending вне
-			// очереди никто не подберёт: матч остаётся running, и recovery
-			// через StuckDuration сбросит его и поставит в очередь
-			if ctx.Err() != nil {
-				return fmt.Errorf("transient executor error: %w", err)
-			}
-			if resetErr := p.matchRepo.ResetToPending(ctx, match.ID); resetErr != nil {
-				p.log.Error("Failed to reset match to pending after infra error",
-					zap.String("match_id", match.ID.String()),
-					zap.Error(resetErr),
-				)
-			}
 			return fmt.Errorf("transient executor error: %w", err)
 		}
 
@@ -195,6 +198,18 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	)
 
 	return nil
+}
+
+// resetToPending возвращает running-матч в pending. контекст отвязан от
+// контекста матча: тот к этому моменту мог уже истечь по таймауту воркера
+func (p *Processor) resetToPending(ctx context.Context, matchID uuid.UUID) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := p.matchRepo.ResetToPending(ctx, matchID); err != nil {
+		p.log.LogError("Failed to reset match to pending", err,
+			zap.String("match_id", matchID.String()),
+		)
+	}
 }
 
 // isNotFoundError - и AppError с 404, и локальный сентинел
