@@ -211,45 +211,6 @@ func TestCache_BatchLPush(t *testing.T) {
 	require.NoError(t, c.BatchLPush(ctx, nil))
 }
 
-// --- sorted set ---
-
-func TestCache_ZAddZRevRange(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.ZAdd(ctx, "zset", 100, "player1"))
-	require.NoError(t, c.ZAdd(ctx, "zset", 200, "player2"))
-
-	res, err := c.ZRevRangeWithScores(ctx, "zset", 0, -1)
-	require.NoError(t, err)
-	require.Len(t, res, 2)
-	assert.Equal(t, "player2", res[0].Member) // больший скор первым
-
-	// убрали одного - остался второй
-	require.NoError(t, c.ZRem(ctx, "zset", "player1"))
-	res, err = c.ZRevRangeWithScores(ctx, "zset", 0, -1)
-	require.NoError(t, err)
-	require.Len(t, res, 1)
-
-	// пустой zset -> пустая выдача
-	res, err = c.ZRevRangeWithScores(ctx, "nope-zset", 0, -1)
-	require.NoError(t, err)
-	assert.Empty(t, res)
-}
-
-func TestCache_ZIncrBy(t *testing.T) {
-	c := setupTestCache(t)
-	ctx := context.Background()
-
-	require.NoError(t, c.ZAdd(ctx, "incr-set", 100, "player1"))
-	require.NoError(t, c.ZIncrBy(ctx, "incr-set", 50, "player1"))
-
-	res, err := c.ZRevRangeWithScores(ctx, "incr-set", 0, -1)
-	require.NoError(t, err)
-	require.Len(t, res, 1)
-	assert.Equal(t, float64(150), res[0].Score)
-}
-
 func TestCache_SAddSRem(t *testing.T) {
 	c := setupTestCache(t)
 	ctx := context.Background()
@@ -389,7 +350,6 @@ func TestCache_ErrorPaths(t *testing.T) {
 
 	assert.Error(t, c.Set(ctx, "key", "value", time.Minute))
 	assert.Error(t, c.Del(ctx, "key"))
-	assert.Error(t, c.ZAdd(ctx, "key", 1.0, "member"))
 	assert.Error(t, c.LPush(ctx, "key", "value"))
 	assert.Error(t, c.Health(ctx))
 

@@ -2,9 +2,7 @@ package events
 
 import (
 	"context"
-	"errors"
 
-	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -35,9 +33,6 @@ type TournamentCacheWriter interface {
 
 // а это методы лидерборда, которые тут нужны
 type LeaderboardCacheWriter interface {
-	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
-	UpdateRatingsBatch(ctx context.Context, updates []cache.RatingUpdate) error
-	Clear(ctx context.Context, tournamentID uuid.UUID) error
 	InvalidateFullLeaderboard(ctx context.Context, tournamentID uuid.UUID) error
 }
 
@@ -94,7 +89,7 @@ func (n *SyncNotifier) TournamentDeleted(ctx context.Context, e TournamentDelete
 		n.logErr("TournamentDeleted", n.TournamentCache.Invalidate(ctx, e.TournamentID))
 	}
 	if n.Leaderboard != nil {
-		n.logErr("TournamentDeleted", n.Leaderboard.Clear(ctx, e.TournamentID))
+		n.logErr("TournamentDeleted", n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID))
 	}
 }
 
@@ -103,10 +98,7 @@ func (n *SyncNotifier) ParticipantJoined(ctx context.Context, e ParticipantJoine
 		n.logErr("ParticipantJoined", n.TournamentCache.Invalidate(ctx, e.TournamentID))
 	}
 	if n.Leaderboard != nil {
-		n.logErr("ParticipantJoined", errors.Join(
-			n.Leaderboard.UpdateRating(ctx, e.TournamentID, e.ProgramID, e.InitialRating),
-			n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID),
-		))
+		n.logErr("ParticipantJoined", n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID))
 	}
 }
 
@@ -121,26 +113,17 @@ func (n *SyncNotifier) MatchesCreated(ctx context.Context, e MatchesCreated) {
 
 func (n *SyncNotifier) GameRoundReset(ctx context.Context, e GameRoundReset) {
 	// раунд сбросили - турнир инвалидируется и лидерборд целиком чистится
-	// (раньше Clear звался из двух хендлеров, но DEL идемпотентен так что хватает одного)
 	if n.TournamentCache != nil {
 		n.logErr("GameRoundReset", n.TournamentCache.Invalidate(ctx, e.TournamentID))
 	}
 	if n.Leaderboard != nil {
-		n.logErr("GameRoundReset", n.Leaderboard.Clear(ctx, e.TournamentID))
+		n.logErr("GameRoundReset", n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID))
 	}
 }
 
 func (n *SyncNotifier) MatchResultProcessed(ctx context.Context, e MatchResultProcessed) {
 	if n.Leaderboard != nil {
-		// два ZADD одним пайплайном - один RTT вместо двух
-		updates := []cache.RatingUpdate{
-			{TournamentID: e.TournamentID, ProgramID: e.Program1ID, Rating: e.NewRating1},
-			{TournamentID: e.TournamentID, ProgramID: e.Program2ID, Rating: e.NewRating2},
-		}
-		n.logErr("MatchResultProcessed", errors.Join(
-			n.Leaderboard.UpdateRatingsBatch(ctx, updates),
-			n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID),
-		))
+		n.logErr("MatchResultProcessed", n.Leaderboard.InvalidateFullLeaderboard(ctx, e.TournamentID))
 	}
 	if n.Redis != nil {
 		n.logErr("MatchResultProcessed", n.Redis.Publish(ctx, "MatchResultProcessed", e))

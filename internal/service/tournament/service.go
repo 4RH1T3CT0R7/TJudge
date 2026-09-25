@@ -26,10 +26,6 @@ type TournamentCacher interface {
 // LeaderboardCacher — кэш лидерборда
 // чтение cache-aside в GetLeaderboard/GetCrossGameLeaderboard
 type LeaderboardCacher interface {
-	GetTop(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
-	UpdateRating(ctx context.Context, tournamentID, programID uuid.UUID, rating int) error
-	Clear(ctx context.Context, tournamentID uuid.UUID) error
-
 	// полный json лидерборда: короткий ttl, готовый ответ для api
 	GetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
 	SetFullLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int, entries []*models.LeaderboardEntry) error
@@ -493,13 +489,6 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 		// полный json кладётся в кэш
 		if err := s.leaderboardCache.SetFullLeaderboard(ctx, tournamentID, limit, leaderboard); err != nil {
 			s.log.Error("Failed to set full leaderboard cache", zap.Error(err))
-		}
-
-		// заодно обновляется sorted set для поиска по рейтингу
-		for _, entry := range leaderboard {
-			if err := s.leaderboardCache.UpdateRating(ctx, tournamentID, entry.ProgramID, entry.Rating); err != nil {
-				s.log.Error("Failed to update leaderboard cache", zap.Error(err))
-			}
 		}
 
 		return leaderboard, nil

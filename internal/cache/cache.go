@@ -59,7 +59,7 @@ func New(cfg *config.RedisConfig, log *logger.Logger, m *metrics.Metrics) (*Cach
 	)
 
 	if m != nil {
-		m.PrimeCacheType("get", "zrevrange")
+		m.PrimeCacheType("get")
 	}
 
 	return &Cache{
@@ -130,77 +130,6 @@ func (c *Cache) Incr(ctx context.Context, key string) (int64, error) {
 		return 0, err
 	}
 	return val, nil
-}
-
-func (c *Cache) ZAdd(ctx context.Context, key string, score float64, member string) error {
-	err := c.client.ZAdd(ctx, key, redis.Z{
-		Score:  score,
-		Member: member,
-	}).Err()
-
-	if err != nil {
-		c.log.LogError("Redis ZADD failed", err, zap.String("key", key))
-		return err
-	}
-	return nil
-}
-
-// ZAddBatchMember - элемент для BatchZAdd
-type ZAddBatchMember struct {
-	Key    string
-	Score  float64
-	Member string
-}
-
-// BatchZAdd - N элементов одним пайплайном (рейтинг после матча кладёт две ZADD за раз)
-func (c *Cache) BatchZAdd(ctx context.Context, members []ZAddBatchMember) error {
-	if len(members) == 0 {
-		return nil
-	}
-	pipe := c.client.Pipeline()
-	for _, item := range members {
-		pipe.ZAdd(ctx, item.Key, redis.Z{Score: item.Score, Member: item.Member})
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
-		c.log.LogError("Redis pipelined ZADD failed", err, zap.Int("batch_size", len(members)))
-		return err
-	}
-	return nil
-}
-
-func (c *Cache) ZRevRangeWithScores(ctx context.Context, key string, start, stop int64) ([]redis.Z, error) {
-	result, err := c.client.ZRevRangeWithScores(ctx, key, start, stop).Result()
-
-	if stderrors.Is(err, redis.Nil) {
-		c.metrics.RecordCacheMiss("zrevrange")
-		return []redis.Z{}, nil
-	}
-
-	if err != nil {
-		c.log.LogError("Redis ZREVRANGE failed", err, zap.String("key", key))
-		return nil, err
-	}
-
-	c.metrics.RecordCacheHit("zrevrange")
-	return result, nil
-}
-
-func (c *Cache) ZIncrBy(ctx context.Context, key string, increment float64, member string) error {
-	err := c.client.ZIncrBy(ctx, key, increment, member).Err()
-	if err != nil {
-		c.log.LogError("Redis ZINCRBY failed", err, zap.String("key", key))
-		return err
-	}
-	return nil
-}
-
-func (c *Cache) ZRem(ctx context.Context, key string, members ...string) error {
-	err := c.client.ZRem(ctx, key, members).Err()
-	if err != nil {
-		c.log.LogError("Redis ZREM failed", err, zap.String("key", key))
-		return err
-	}
-	return nil
 }
 
 func (c *Cache) LPush(ctx context.Context, key string, values ...any) error {
