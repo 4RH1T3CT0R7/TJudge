@@ -125,3 +125,36 @@ func TestEnsureImage(t *testing.T) {
 		assert.Contains(t, err.Error(), "pull access denied")
 	})
 }
+
+// на старте удаляются контейнеры этого воркера и мёртвых воркеров, контейнеры
+// живой соседней реплики остаются
+func TestRemoveOrphans(t *testing.T) {
+	list := `[
+		{"Id":"own","Labels":{"tjudge.managed":"true","tjudge.owner":"` + ownerID + `"}},
+		{"Id":"dead","Labels":{"tjudge.managed":"true","tjudge.owner":"gone"}},
+		{"Id":"alive","Labels":{"tjudge.managed":"true","tjudge.owner":"sibling"}}
+	]`
+	e, calls := fakeDocker(t, config.ExecutorConfig{}, func(w http.ResponseWriter, r *http.Request, path string) {
+		switch path {
+		case "/containers/json":
+			assert.Contains(t, r.URL.Query().Get("filters"), "tjudge.managed=true")
+			_, _ = w.Write([]byte(list))
+		case "/containers/sibling/json":
+			_, _ = w.Write([]byte(`{"Id":"sibling","State":{"Running":true}}`))
+		case "/containers/gone/json":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"No such container"}`))
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+
+	removed, err := e.RemoveOrphans(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, removed)
+	got := calls()
+	assert.Contains(t, got, "DELETE /containers/own")
+	assert.Contains(t, got, "DELETE /containers/dead")
+	assert.NotContains(t, got, "DELETE /containers/alive")
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -135,9 +136,10 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	defer cancel()
 
 	containerConfig := &container.Config{
-		Image: e.config.DockerImage,
-		Cmd:   cmd,
-		Tty:   false,
+		Image:  e.config.DockerImage,
+		Cmd:    cmd,
+		Tty:    false,
+		Labels: containerLabels(),
 	}
 
 	hostConfig := buildMatchHostConfig(e.config, binds)
@@ -155,7 +157,9 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	}
 
 	containerID := resp.ID
-	defer e.cleanup(containerID) // стоит сразу после create - сработает на любом выходе, отсюда «ноль сирот»
+	// стоит сразу после create - сработает на любом выходе; контейнеры убитого
+	// воркера подбирает RemoveOrphans на старте
+	defer e.cleanup(containerID)
 
 	if err := e.dockerClient.ContainerStart(execCtx, containerID, container.StartOptions{}); err != nil {
 		return nil, infraErrorf("failed to start container: %w", err)
@@ -516,6 +520,70 @@ func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
 	cmd = append(cmd, program1, program2)
 
 	return cmd
+}
+
+// метки контейнеров матчей и сборок. по ним воркер на старте находит
+// контейнеры, брошенные убитым процессом (SIGKILL на деплое, падение)
+const (
+	labelManaged = "tjudge.managed"
+	labelOwner   = "tjudge.owner"
+)
+
+// ownerID - hostname воркера, в докере это короткий id его контейнера
+var ownerID, _ = os.Hostname()
+
+func containerLabels() map[string]string {
+	return map[string]string{labelManaged: "true", labelOwner: ownerID}
+}
+
+// RemoveOrphans удаляет помеченные контейнеры, чей воркер уже не работает.
+// реплики делят один docker-демон, поэтому контейнеры живого чужого воркера
+// не трогаются
+func (e *Executor) RemoveOrphans(ctx context.Context) (int, error) {
+	list, err := e.dockerClient.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("label", labelManaged+"=true")),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	alive := map[string]bool{}
+	removed := 0
+	for _, c := range list {
+		owner := c.Labels[labelOwner]
+		if owner != ownerID {
+			running, seen := alive[owner]
+			if !seen {
+				running = e.ownerRunning(ctx, owner)
+				alive[owner] = running
+			}
+			if running {
+				continue
+			}
+		}
+		// свои контейнеры - от прошлого процесса в этом же контейнере воркера
+		if err := e.dockerClient.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
+			e.log.Warn("Failed to remove orphan container", zap.String("container_id", c.ID), zap.Error(err))
+			continue
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+// ownerRunning - жив ли воркер-владелец. мёртвым считается только тот, кого
+// демон точно не знает или кто остановлен; при сбое запроса - живым, чтобы
+// не убить матчи соседней реплики
+func (e *Executor) ownerRunning(ctx context.Context, owner string) bool {
+	if owner == "" {
+		return false
+	}
+	info, err := e.dockerClient.ContainerInspect(ctx, owner)
+	if err != nil {
+		return !cerrdefs.IsNotFound(err)
+	}
+	return info.ContainerJSONBase != nil && info.State != nil && info.State.Running
 }
 
 // EnsureImage проверяет образ на docker-хосте и скачивает его, если нет:

@@ -341,7 +341,8 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 			"GOPATH=/tmp/go",
 			"GOFLAGS=-mod=mod",
 		},
-		Tty: false,
+		Tty:    false,
+		Labels: containerLabels(),
 	}
 
 	hostConfig := buildBuilderHostConfig(hostBuildDir)
