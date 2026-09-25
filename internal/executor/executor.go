@@ -17,7 +17,9 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"go.uber.org/zap"
@@ -514,6 +516,41 @@ func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
 	cmd = append(cmd, program1, program2)
 
 	return cmd
+}
+
+// EnsureImage проверяет образ на docker-хосте и скачивает его, если нет:
+// ContainerCreate сам образы не тянет, и без этой проверки все матчи (или
+// сборки) уходили бы в infra-ошибку по кругу
+func (e *Executor) EnsureImage(ctx context.Context, ref string) error {
+	_, err := e.dockerClient.ImageInspect(ctx, ref)
+	if err == nil {
+		return nil
+	}
+	if !cerrdefs.IsNotFound(err) {
+		return fmt.Errorf("failed to inspect image %s: %w", ref, err)
+	}
+
+	e.log.Info("Image not found locally, pulling", zap.String("image", ref))
+	rc, err := e.dockerClient.ImagePull(ctx, ref, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to pull image %s: %w", ref, err)
+	}
+	defer rc.Close()
+	// pull идёт, пока читается поток; ошибка посреди pull приходит внутри него
+	dec := json.NewDecoder(rc)
+	for {
+		var msg struct {
+			Error string `json:"error"`
+		}
+		if err := dec.Decode(&msg); err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("failed to pull image %s: %w", ref, err)
+		}
+		if msg.Error != "" {
+			return fmt.Errorf("failed to pull image %s: %s", ref, msg.Error)
+		}
+	}
 }
 
 // Close закрывает docker-клиент
