@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/executor"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -151,10 +153,17 @@ func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *que
 		w.compile(ctx, workerID, task)
 		return nil
 	})
-	if err != nil {
-		w.log.Info("Compile task skipped: program is already being compiled",
-			zap.String("program_id", task.ProgramID.String()), zap.Error(err))
+	if err == nil {
+		return
 	}
+	if appErr := errors.GetAppError(err); appErr != nil && appErr.Code == http.StatusConflict {
+		w.log.Info("Compile task skipped: program is already being compiled",
+			zap.String("program_id", task.ProgramID.String()))
+		return
+	}
+	// редис недоступен: задача уже снята с очереди, программу вернёт stuck-recovery
+	w.log.Warn("Failed to acquire compile lock, stuck recovery will retry",
+		zap.String("program_id", task.ProgramID.String()), zap.Error(err))
 }
 
 func (w *CompileWorker) compile(ctx context.Context, workerID int, task *queue.CompileTask) {
