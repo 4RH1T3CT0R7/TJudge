@@ -122,7 +122,7 @@ func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) 
 
 // enqueuePendingMatches закидывает pending матчи из базы в очередь редиса.
 // повтор безопасен: матч, который уже лежит в очереди, отсекает dedup-ключ.
-// ponytail: берётся только первая пачка (batchSize) по приоритету и возрасту;
+// FIXME: берётся только первая пачка (batchSize) по приоритету и возрасту;
 // выпавшие из очереди матчи старше остальных, поэтому попадают в неё первыми
 func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error) {
 	pendingMatches, err := s.matchRepo.GetPending(ctx, s.batchSize)
