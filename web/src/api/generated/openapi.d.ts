@@ -200,26 +200,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tournaments/{id}/join": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Tournament UUID */
-                id: components["parameters"]["TournamentID"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Join tournament */
-        post: operations["tournamentsJoin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/tournaments/{id}/leaderboard": {
         parameters: {
             query?: never;
@@ -1015,10 +995,10 @@ export interface paths {
         get: operations["programsList"];
         put?: never;
         /**
-         * Create / upload program
-         * @description Supports two content types:
-         *     - `multipart/form-data` -- file upload with form fields (team_id, tournament_id, game_id, name, file).
-         *     - `application/json` -- JSON body with code_path, name, game_type, language.
+         * Upload program
+         * @description Uploads a new version of the team program as `multipart/form-data`.
+         *     The caller must be a member of the team, and the team must belong to the tournament.
+         *     The server chooses the file path; there is no way to set it from the client.
          *
          *     Maximum file size: 10 MB.
          */
@@ -1061,8 +1041,7 @@ export interface paths {
         };
         /** Get program */
         get: operations["programsGet"];
-        /** Update program */
-        put: operations["programsUpdate"];
+        put?: never;
         post?: never;
         /** Delete program */
         delete: operations["programsDelete"];
@@ -1667,11 +1646,6 @@ export interface components {
             created_at?: string;
             /** Format: date-time */
             updated_at?: string;
-        };
-        UpdateProgramRequest: {
-            name?: string;
-            code_path?: string;
-            language?: string;
         };
         ProgramEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["Program"];
@@ -2391,40 +2365,6 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    tournamentsJoin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Tournament UUID */
-                id: components["parameters"]["TournamentID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** Format: uuid */
-                    program_id: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Joined successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusEnvelope"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     tournamentsGetLeaderboard: {
@@ -3717,12 +3657,6 @@ export interface operations {
                     /** @description Display name (defaults to filename) */
                     name?: string;
                 };
-                "application/json": {
-                    name?: string;
-                    game_type?: string;
-                    code_path?: string;
-                    language?: string;
-                };
             };
         };
         responses: {
@@ -3787,37 +3721,6 @@ export interface operations {
                     "application/json": components["schemas"]["ProgramEnvelope"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    programsUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Program UUID */
-                id: components["parameters"]["ProgramID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateProgramRequest"];
-            };
-        };
-        responses: {
-            /** @description Program updated */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProgramEnvelope"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

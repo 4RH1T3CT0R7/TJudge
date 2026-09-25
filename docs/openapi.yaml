@@ -349,42 +349,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /tournaments/{id}/join:
-    parameters:
-      - $ref: '#/components/parameters/TournamentID'
-    post:
-      tags: [tournaments]
-      summary: Join tournament
-      operationId: tournamentsJoin
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [program_id]
-              properties:
-                program_id:
-                  type: string
-                  format: uuid
-      responses:
-        '200':
-          description: Joined successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StatusEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-
   /tournaments/{id}/leaderboard:
     parameters:
       - $ref: '#/components/parameters/TournamentID'
@@ -1524,11 +1488,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [programs]
-      summary: Create / upload program
+      summary: Upload program
       description: |
-        Supports two content types:
-        - `multipart/form-data` -- file upload with form fields (team_id, tournament_id, game_id, name, file).
-        - `application/json` -- JSON body with code_path, name, game_type, language.
+        Uploads a new version of the team program as `multipart/form-data`.
+        The caller must be a member of the team, and the team must belong to the tournament.
+        The server chooses the file path; there is no way to set it from the client.
 
         Maximum file size: 10 MB.
       operationId: programsCreate
@@ -1558,18 +1522,6 @@ paths:
                 name:
                   type: string
                   description: Display name (defaults to filename)
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                game_type:
-                  type: string
-                code_path:
-                  type: string
-                language:
-                  type: string
       responses:
         '201':
           description: Program created
@@ -1635,33 +1587,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProgramEnvelope'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    put:
-      tags: [programs]
-      summary: Update program
-      operationId: programsUpdate
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateProgramRequest'
-      responses:
-        '200':
-          description: Program updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProgramEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2799,16 +2724,6 @@ components:
         updated_at:
           type: string
           format: date-time
-
-    UpdateProgramRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        code_path:
-          type: string
-        language:
-          type: string
 
     ProgramEnvelope:
       allOf:

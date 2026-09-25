@@ -298,7 +298,6 @@ func (s *Server) setupRoutes() {
 			r.Group(func(r chi.Router) {
 				r.Use(s.auth())
 
-				r.Post("/{id}/join", s.tournamentHandler.Join)
 				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
 
 				// добавить игру может админ или создатель турнира, проверка в хендлере
@@ -382,7 +381,6 @@ func (s *Server) setupRoutes() {
 			r.Get("/versions", s.programHandler.GetVersions) // Список версий программ команды
 			r.Get("/{id}", s.programHandler.Get)
 			r.Get("/{id}/download", s.programHandler.Download)
-			r.Put("/{id}", s.programHandler.Update)
 			r.Delete("/{id}", s.programHandler.Delete)
 		})
 

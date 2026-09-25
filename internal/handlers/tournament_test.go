@@ -261,61 +261,6 @@ func TestTournamentHandler_List(t *testing.T) {
 	})
 }
 
-func TestTournamentHandler_Join(t *testing.T) {
-	log, _ := logger.New("error", "json")
-
-	t.Run("successfully join tournament", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		reqBody := tournament.JoinRequest{
-			TournamentID: tournamentID,
-			ProgramID:    uuid.New(),
-		}
-
-		mockService.On("Join", mock.Anything, &reqBody).Return(nil)
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/join", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		req = withTournamentID(req, tournamentID.String())
-		w := httptest.NewRecorder()
-
-		handler.Join(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-
-	// уже стартовавший турнир не пускает новых - ожидается 409
-	t.Run("tournament already started", func(t *testing.T) {
-		mockService := new(MockTournamentService)
-		handler := NewTournamentHandler(mockService, new(MockSchedulingService), log)
-
-		tournamentID := uuid.New()
-		reqBody := tournament.JoinRequest{
-			TournamentID: tournamentID,
-			ProgramID:    uuid.New(),
-		}
-
-		mockService.On("Join", mock.Anything, &reqBody).Return(errors.ErrTournamentStarted)
-
-		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/tournaments/"+tournamentID.String()+"/join", bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", "application/json")
-		req = withTournamentID(req, tournamentID.String())
-		w := httptest.NewRecorder()
-
-		handler.Join(w, req)
-
-		assert.Equal(t, http.StatusConflict, w.Code)
-
-		mockService.AssertExpectations(t)
-	})
-}
-
 func TestTournamentHandler_Start(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
