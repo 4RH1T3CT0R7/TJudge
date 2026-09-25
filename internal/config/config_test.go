@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -393,6 +394,30 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, 20, cfg.Worker.MaxWorkers)
 	assert.Equal(t, 500, cfg.Worker.QueueSize)
 	assert.Equal(t, 30*time.Minute, cfg.JWT.AccessTTL)
+}
+
+// по умолчанию пул воркеров по числу ядер, а пул редиса не меньше WORKER_MAX
+// с запасом: простаивающие воркеры держат соединения на BRPOP
+func TestLoad_WorkerAndRedisPoolDefaults(t *testing.T) {
+	clearEnvKeys(t)
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "tjudge")
+	t.Setenv("DB_NAME", "tjudge")
+	t.Setenv("REDIS_HOST", "localhost")
+	t.Setenv("REDIS_POOL_SIZE", "")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, runtime.NumCPU(), cfg.Worker.MaxWorkers)
+	assert.LessOrEqual(t, cfg.Worker.MinWorkers, cfg.Worker.MaxWorkers)
+	assert.GreaterOrEqual(t, cfg.Redis.PoolSize, cfg.Worker.MaxWorkers+redisPoolReserve)
+
+	// явный пул меньше WORKER_MAX поднимается до WORKER_MAX + запас
+	t.Setenv("WORKER_MAX", "200")
+	t.Setenv("REDIS_POOL_SIZE", "100")
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.Equal(t, 200+redisPoolReserve, cfg.Redis.PoolSize)
 }
 
 // TestRecommendedDBPoolSize проверяет формулу recommendedDBPoolSize.
