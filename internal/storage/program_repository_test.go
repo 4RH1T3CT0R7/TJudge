@@ -283,6 +283,25 @@ func (s *ProgramRepositorySuite) TestGetAllVersionsByTeamAndGame() {
 	assert.Equal(s.T(), 1, programs[2].Version)
 }
 
+func (s *ProgramRepositorySuite) TestGetLatestVersion() {
+	user := s.createUser("prog_latestver")
+	tournament := s.createTournament("TESTLV1", user.ID)
+	game := s.createGame("prog_game_lv")
+	team := s.createTeam(tournament.ID, user.ID, "PLVTM1")
+	ctx := context.Background()
+
+	ver, err := s.repo.GetLatestVersion(ctx, team.ID, game.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, ver)
+
+	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v1", 1)
+	s.createProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "Bot v2", 2)
+
+	ver, err = s.repo.GetLatestVersion(ctx, team.ID, game.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 2, ver)
+}
+
 func (s *ProgramRepositorySuite) TestUpdate() {
 	user := s.createUser("prog_update")
 	program := s.createProgram(user.ID, nil, nil, nil, "Original Bot", 1)

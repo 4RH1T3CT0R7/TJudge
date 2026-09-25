@@ -400,6 +400,16 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	return programs, nil
 }
 
+// GetLatestVersion - номер последней версии программы команды по игре, 0 если версий нет
+func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
+	var version int
+	query := `SELECT COALESCE(MAX(version), 0) FROM programs WHERE team_id = $1 AND game_id = $2`
+	if err := r.db.QueryRowContext(ctx, query, teamID, gameID).Scan(&version); err != nil {
+		return 0, errors.Wrap(err, "failed to get latest version")
+	}
+	return version, nil
+}
+
 func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
