@@ -71,7 +71,7 @@ func TestWebSocketHandler_HandleTournament_MissingAuth(t *testing.T) {
 // HTTP-соединения. Для такого теста потребуется httptest.NewServer + реальный WebSocket dialer.
 
 // TestCheckWebSocketOrigin_ProdFailClosed защищает от CSWSH: в prod
-// wildcard и пустой origin-list должны отклоняться.
+// при wildcard и пустом origin-list чужой origin отклоняется.
 func TestCheckWebSocketOrigin_ProdFailClosed(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "production")
 	t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", "")
@@ -88,6 +88,26 @@ func TestCheckWebSocketOrigin_ProdWildcardReject(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("Origin", "https://evil.example")
 	assert.False(t, checkWebSocketOrigin(req), "wildcard in prod must be rejected")
+}
+
+// без явного списка в prod пускается свой origin, порт не сравнивается
+func TestCheckWebSocketOrigin_ProdWildcardSameOrigin(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+	for _, list := range []string{"", "*"} {
+		t.Setenv("WEBSOCKET_ALLOWED_ORIGINS", list)
+		for origin, want := range map[string]bool{
+			"https://tjudge.example":        true,
+			"http://TJudge.example:8080":    true,
+			"https://tjudge.example.evil.x": false,
+			"null":                          false,
+		} {
+			req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+			req.Host = "tjudge.example"
+			req.Header.Set("Origin", origin)
+			assert.Equal(t, want, checkWebSocketOrigin(req), "list=%q origin=%q", list, origin)
+		}
+	}
 }
 
 func TestCheckWebSocketOrigin_ProdExplicitAllow(t *testing.T) {
