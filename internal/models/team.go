@@ -10,7 +10,7 @@ type Team struct {
 	ID             uuid.UUID  `json:"id" db:"id"`
 	TournamentID   uuid.UUID  `json:"tournament_id" db:"tournament_id"`
 	Name           string     `json:"name" db:"name"`
-	Code           string     `json:"code" db:"code"` // уникальный код, 6-8 символов
+	Code           string     `json:"-" db:"code"` // инвайт-код, 6-8 символов. секрет: наружу только лидеру через /teams/{id}/invite
 	LeaderID       uuid.UUID  `json:"leader_id" db:"leader_id"`
 	IsDisqualified bool       `json:"is_disqualified" db:"is_disqualified"`
 	DisqualifiedAt *time.Time `json:"disqualified_at,omitempty" db:"disqualified_at"`

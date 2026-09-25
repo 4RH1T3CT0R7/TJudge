@@ -235,9 +235,6 @@ export function TeamManagement() {
         )}
 
         <div className="text-sm text-gray-400 space-y-1">
-          <p>
-            Код команды: <code className="bg-gray-800 text-primary-300 px-2 py-0.5 rounded font-mono">{teamData.code}</code>
-          </p>
           <p>Создана: {new Date(teamData.created_at).toLocaleDateString('ru-RU')}</p>
         </div>
       </div>

@@ -405,12 +405,15 @@ func TestTeamHandler_GetTournamentTeams_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req = withChiParam(req, "id", tID.String())
 
-	svc.On("GetTeamsByTournament", mock.Anything, tID).Return([]*models.Team{{Name: "A"}}, nil)
+	svc.On("GetTeamsByTournament", mock.Anything, tID).Return([]*models.Team{{Name: "A", Code: "SECRET1"}}, nil)
 
 	rr := httptest.NewRecorder()
 	h.GetTournamentTeams(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+	// публичный список: по инвайт-коду любой вступил бы в чужую команду
+	assert.NotContains(t, rr.Body.String(), "SECRET1")
+	assert.NotContains(t, rr.Body.String(), `"code"`)
 }
 
 // --- GetMyTeam ---
