@@ -81,7 +81,7 @@ type fakeRedisPub struct {
 
 func (f *fakeRedisPub) Publish(_ context.Context, channel string, message any) error {
 	f.channel = channel
-	f.payloads = append(f.payloads, []byte(message.([]byte)))
+	f.payloads = append(f.payloads, message.([]byte))
 	return nil
 }
 
