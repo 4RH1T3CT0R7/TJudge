@@ -35,15 +35,6 @@ export function useTournament(id: string, opts: PollOption = {}) {
   });
 }
 
-export function useLeaderboard(tournamentId: string, opts: PollOption = {}) {
-  return useQuery({
-    queryKey: queryKeys.leaderboard(tournamentId),
-    queryFn: () => api.getLeaderboard(tournamentId),
-    enabled: (opts.enabled ?? true) && !!tournamentId,
-    refetchInterval: opts.pollInterval ?? false,
-  });
-}
-
 export function useCrossGameLeaderboard(tournamentId: string, opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.crossGameLeaderboard(tournamentId),
@@ -142,33 +133,6 @@ export function useGameLeaderboard(tournamentId: string, gameId: string, opts: P
   });
 }
 
-export function useGamePrograms(tournamentId: string, gameId: string, opts: PollOption = {}) {
-  return useQuery({
-    queryKey: queryKeys.gamePrograms(tournamentId, gameId),
-    queryFn: () => api.getGamePrograms(tournamentId, gameId),
-    enabled: (opts.enabled ?? true) && !!tournamentId && !!gameId,
-    refetchInterval: opts.pollInterval ?? false,
-  });
-}
-
-// --- Программы ---
-
-export function usePrograms() {
-  return useQuery({
-    queryKey: queryKeys.programs,
-    queryFn: () => api.getPrograms(),
-  });
-}
-
-export function useProgramVersions(teamId: string, gameId: string, opts: PollOption = {}) {
-  return useQuery({
-    queryKey: queryKeys.programVersions(teamId, gameId),
-    queryFn: () => api.getProgramVersions(teamId, gameId),
-    enabled: (opts.enabled ?? true) && !!teamId && !!gameId,
-    refetchInterval: opts.pollInterval ?? false,
-  });
-}
-
 // --- Команды ---
 
 export function useTeam(id: string) {
@@ -212,24 +176,6 @@ export function useSystemMetrics(opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.systemMetrics,
     queryFn: () => api.getSystemMetrics(),
-    enabled: opts.enabled ?? true,
-    refetchInterval: opts.pollInterval ?? false,
-  });
-}
-
-export function useSystemHealth(opts: PollOption = {}) {
-  return useQuery({
-    queryKey: queryKeys.systemHealth,
-    queryFn: () => api.getSystemHealth(),
-    enabled: opts.enabled ?? true,
-    refetchInterval: opts.pollInterval ?? false,
-  });
-}
-
-export function useFailedMatches(opts: PollOption = {}) {
-  return useQuery({
-    queryKey: queryKeys.failedMatches,
-    queryFn: () => api.getFailedMatches(),
     enabled: opts.enabled ?? true,
     refetchInterval: opts.pollInterval ?? false,
   });

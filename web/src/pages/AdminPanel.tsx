@@ -330,7 +330,6 @@ export function AdminPanel() {
   const matchStatsQuery = useMatchStatistics(undefined, { enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
   const systemMetricsQuery = useSystemMetrics({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
   const fullStatusQuery = useFullSystemStatus({ enabled: isSystemTab, pollInterval: SYSTEM_POLL_INTERVAL });
-  // useFailedMatches из hooks/queries использует лимит API по умолчанию (20); здесь нужен прежний лимит 50.
   const failedMatchesQuery = useQuery({
     queryKey: queryKeys.failedMatches,
     queryFn: () => api.getFailedMatches(50),

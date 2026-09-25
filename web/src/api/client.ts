@@ -408,13 +408,6 @@ class ApiClient {
     return data;
   }
 
-  async runAllMatches(tournamentId: string): Promise<{ status: string; enqueued: number }> {
-    const { data } = await this.client.post<{ status: string; enqueued: number }>(
-      `/tournaments/${tournamentId}/run-matches`
-    );
-    return data;
-  }
-
   async retryFailedMatches(tournamentId: string): Promise<{ status: string; enqueued: number }> {
     const { data } = await this.client.post<{ status: string; enqueued: number }>(
       `/tournaments/${tournamentId}/retry-matches`
@@ -427,13 +420,6 @@ class ApiClient {
       `/tournaments/${tournamentId}/run-game-matches`,
       { game_type: gameType }
     );
-    return data;
-  }
-
-  async getTournamentMatches(tournamentId: string, limit = 50, offset = 0): Promise<Match[]> {
-    const { data } = await this.client.get<Match[]>(`/tournaments/${tournamentId}/matches`, {
-      params: { limit, offset },
-    });
     return data;
   }
 
@@ -485,30 +471,12 @@ class ApiClient {
     return data;
   }
 
-  async markGameRoundCompleted(tournamentId: string, gameId: string): Promise<void> {
-    await this.client.post(`/tournaments/${tournamentId}/games/${gameId}/complete-round`);
-  }
-
   async setActiveGame(tournamentId: string, gameId: string): Promise<void> {
     await this.client.post(`/tournaments/${tournamentId}/active-game`, { game_id: gameId });
   }
 
   async deactivateAllGames(tournamentId: string): Promise<void> {
     await this.client.post(`/tournaments/${tournamentId}/games/deactivate-all`);
-  }
-
-  async clearProgramErrors(tournamentId: string): Promise<{ cleared: number; message: string }> {
-    const { data } = await this.client.post<{ cleared: number; message: string }>(
-      `/tournaments/${tournamentId}/programs/clear-errors`
-    );
-    return data;
-  }
-
-  async getActiveGame(tournamentId: string): Promise<TournamentGameWithDetails | null> {
-    const { data } = await this.client.get<TournamentGameWithDetails | null>(
-      `/tournaments/${tournamentId}/active-game`
-    );
-    return data;
   }
 
   async resetGameRound(tournamentId: string, gameId: string): Promise<{
@@ -531,16 +499,6 @@ class ApiClient {
     const { data } = await this.client.post(
       `/tournaments/${tournamentId}/games/${gameId}/auto-round`,
       { enabled, interval_seconds: intervalSeconds }
-    );
-    return data;
-  }
-
-  async getAutoRound(
-    tournamentId: string,
-    gameId: string
-  ): Promise<{ enabled: boolean; interval_seconds: number; last_run_at: string | null }> {
-    const { data } = await this.client.get(
-      `/tournaments/${tournamentId}/games/${gameId}/auto-round`
     );
     return data;
   }
@@ -593,11 +551,6 @@ class ApiClient {
     return data;
   }
 
-  async getGameByName(name: string): Promise<Game> {
-    const { data } = await this.client.get<Game>(`/games/name/${name}`);
-    return data;
-  }
-
   async createGame(game: { name: string; display_name: string; rules: string }): Promise<Game> {
     const { data } = await this.client.post<Game>('/games', game);
     return data;
@@ -617,10 +570,6 @@ class ApiClient {
 
   async addGameToTournament(tournamentId: string, gameId: string): Promise<void> {
     await this.client.post(`/tournaments/${tournamentId}/games`, { game_id: gameId });
-  }
-
-  async removeGameFromTournament(tournamentId: string, gameId: string): Promise<void> {
-    await this.client.delete(`/tournaments/${tournamentId}/games/${gameId}`);
   }
 
   async getGameLeaderboard(
@@ -680,16 +629,6 @@ class ApiClient {
   }
 
   // Program endpoints
-  async getPrograms(): Promise<Program[]> {
-    const { data } = await this.client.get<Program[]>('/programs');
-    return data;
-  }
-
-  async getProgram(id: string): Promise<Program> {
-    const { data } = await this.client.get<Program>(`/programs/${id}`);
-    return data;
-  }
-
   async uploadProgram(formData: FormData): Promise<Program> {
     const { data } = await this.client.post<Program>('/programs', formData, {
       headers: {
@@ -697,10 +636,6 @@ class ApiClient {
       },
     });
     return data;
-  }
-
-  async deleteProgram(id: string): Promise<void> {
-    await this.client.delete(`/programs/${id}`);
   }
 
   async downloadProgram(id: string): Promise<Blob> {
@@ -732,23 +667,6 @@ class ApiClient {
 
   async restoreTeam(teamId: string): Promise<void> {
     await this.client.post(`/teams/${teamId}/restore`);
-  }
-
-  async deleteTeam(id: string): Promise<void> {
-    await this.client.delete(`/teams/${id}`);
-  }
-
-  // Match endpoints
-  async getMatches(limit = 50, offset = 0): Promise<Match[]> {
-    const { data } = await this.client.get<Match[]>('/matches', {
-      params: { limit, offset },
-    });
-    return data;
-  }
-
-  async getMatch(id: string): Promise<Match> {
-    const { data } = await this.client.get<Match>(`/matches/${id}`);
-    return data;
   }
 
   // System endpoints (admin only)
@@ -803,11 +721,6 @@ class ApiClient {
 
   async recoveryClearDeadLetter(): Promise<{ cleared: number }> {
     const { data } = await this.client.post<{ cleared: number }>('/system/recovery/clear-dead-letter');
-    return data;
-  }
-
-  async getSystemHealth(): Promise<{ status: string; timestamp: string; hostname: string; pid: number }> {
-    const { data } = await this.client.get<{ status: string; timestamp: string; hostname: string; pid: number }>('/system/health');
     return data;
   }
 
