@@ -101,44 +101,12 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 				return
 			}
 
-			v.mu.RLock()
-			entry, cached := v.cache[userID]
-			v.mu.RUnlock()
-
-			if cached && time.Now().Before(entry.expiresAt) {
-				if entry.role != models.RoleAdmin {
-					writeError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
-					return
-				}
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// в кэше нет или протухло - запрос в базу
-			user, err := v.userRepo.GetByID(r.Context(), userID)
+			admin, err := v.isAdmin(r.Context(), userID)
 			if err != nil {
 				writeError(w, errors.ErrForbidden.WithMessage("insufficient permissions"))
 				return
 			}
-
-			// запись в кэш. заодно ленивая чистка: когда записей за тысячу,
-			// протухшие выкидываются (отдельную горутину заводить лень, да и незачем)
-			v.mu.Lock()
-			v.cache[userID] = roleCacheEntry{
-				role:      user.Role,
-				expiresAt: time.Now().Add(v.cacheTTL),
-			}
-			if len(v.cache) > 1000 {
-				now := time.Now()
-				for id, e := range v.cache {
-					if now.After(e.expiresAt) {
-						delete(v.cache, id)
-					}
-				}
-			}
-			v.mu.Unlock()
-
-			if user.Role != models.RoleAdmin {
+			if !admin {
 				writeError(w, errors.ErrForbidden.WithMessage("admin privileges have been revoked"))
 				return
 			}
@@ -146,4 +114,59 @@ func (v *VerifiedAdminChecker) RequireVerifiedAdmin() func(http.Handler) http.Ha
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// VerifyRole ставится сразу после Auth/OptionalAuth: роль admin из jwt
+// сверяется с базой, и если права отозваны (или база не ответила), в контекст
+// кладётся RoleUser. так проверки админа внутри хендлеров по RoleKey тоже
+// не верят одному jwt
+func (v *VerifiedAdminChecker) VerifyRole() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, _ := r.Context().Value(RoleKey).(models.Role)
+			userID, ok := r.Context().Value(UserIDKey).(uuid.UUID)
+			if role == models.RoleAdmin && ok {
+				if admin, err := v.isAdmin(r.Context(), userID); err != nil || !admin {
+					r = r.WithContext(context.WithValue(r.Context(), RoleKey, models.RoleUser))
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// isAdmin - актуальная роль из базы, с кэшем на cacheTTL
+func (v *VerifiedAdminChecker) isAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
+	v.mu.RLock()
+	entry, cached := v.cache[userID]
+	v.mu.RUnlock()
+
+	if cached && time.Now().Before(entry.expiresAt) {
+		return entry.role == models.RoleAdmin, nil
+	}
+
+	// в кэше нет или протухло - запрос в базу
+	user, err := v.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+
+	// запись в кэш. заодно ленивая чистка: когда записей за тысячу,
+	// протухшие выкидываются (отдельную горутину заводить лень, да и незачем)
+	v.mu.Lock()
+	v.cache[userID] = roleCacheEntry{
+		role:      user.Role,
+		expiresAt: time.Now().Add(v.cacheTTL),
+	}
+	if len(v.cache) > 1000 {
+		now := time.Now()
+		for id, e := range v.cache {
+			if now.After(e.expiresAt) {
+				delete(v.cache, id)
+			}
+		}
+	}
+	v.mu.Unlock()
+
+	return user.Role == models.RoleAdmin, nil
 }
