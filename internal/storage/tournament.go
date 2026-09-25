@@ -9,7 +9,6 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
-	"github.com/bmstu-itstech/tjudge/pkg/pagination"
 	"github.com/google/uuid"
 )
 
@@ -132,7 +131,6 @@ func (r *TournamentRepository) List(ctx context.Context, filter models.Tournamen
 		args = append(args, filter.Limit)
 		argCount++
 	}
-	// FIXME: оффсет медленный на болших списках, есть ListWithCursor
 	if filter.Offset > 0 {
 		query += fmt.Sprintf(" OFFSET $%d", argCount)
 		args = append(args, filter.Offset)
@@ -270,126 +268,6 @@ func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
-}
-
-// ListWithCursor - список турниров с курсорной пагинацией
-func (r *TournamentRepository) ListWithCursor(ctx context.Context, filter models.TournamentFilter, pageReq *pagination.PageRequest) ([]*models.Tournament, bool, error) {
-	if err := pageReq.Validate(); err != nil {
-		return nil, false, errors.Wrap(err, "invalid pagination request")
-	}
-
-	cursor, err := pageReq.GetCursor()
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to decode cursor")
-	}
-
-	query := `
-		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
-		       metadata, version, created_at, updated_at
-		FROM tournaments
-		WHERE 1=1
-	`
-	args := []any{}
-	argCount := 1
-
-	if filter.Status != "" {
-		query += fmt.Sprintf(" AND status = $%d", argCount)
-		args = append(args, filter.Status)
-		argCount++
-	}
-
-	if filter.GameType != "" {
-		query += fmt.Sprintf(" AND game_type = $%d", argCount)
-		args = append(args, filter.GameType)
-		argCount++
-	}
-
-	// окно двигается от курсора
-	if cursor != nil && cursor.Type == pagination.CursorTypeTimestamp && cursor.Timestamp != nil {
-		if pageReq.IsForward() {
-			// вперёд: записи после курсора
-			query += fmt.Sprintf(" AND created_at < $%d", argCount)
-		} else {
-			// назад: записи до курсора
-			query += fmt.Sprintf(" AND created_at > $%d", argCount)
-		}
-		args = append(args, *cursor.Timestamp)
-		argCount++
-	}
-
-	// по умолчанию от новых к старым
-	if pageReq.IsBackward() {
-		query += " ORDER BY created_at ASC" // обратный порядок для пагинации назад
-	} else {
-		query += orderByCreatedAtDesc
-	}
-
-	// +1 к лимиту, чтобы понять есть ли ещё страница
-	limit := pageReq.GetLimit() + 1
-	query += fmt.Sprintf(" LIMIT $%d", argCount)
-	args = append(args, limit)
-
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to list tournaments with cursor")
-	}
-	defer rows.Close()
-
-	var tournaments []*models.Tournament
-	for rows.Next() {
-		var tournament models.Tournament
-		var metadataJSON []byte
-
-		err := rows.Scan(
-			&tournament.ID,
-			&tournament.Code,
-			&tournament.Name,
-			&tournament.Description,
-			&tournament.GameType,
-			&tournament.Status,
-			&tournament.MaxParticipants,
-			&tournament.MaxTeamSize,
-			&tournament.IsPermanent,
-			&tournament.CreatorID,
-			&tournament.StartTime,
-			&tournament.EndTime,
-			&metadataJSON,
-			&tournament.Version,
-			&tournament.CreatedAt,
-			&tournament.UpdatedAt,
-		)
-		if err != nil {
-			return nil, false, errors.Wrap(err, "failed to scan tournament")
-		}
-
-		if metadataJSON != nil {
-			if err := json.Unmarshal(metadataJSON, &tournament.Metadata); err != nil {
-				return nil, false, errors.Wrap(err, "failed to unmarshal metadata")
-			}
-		}
-
-		tournaments = append(tournaments, &tournament)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, false, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	// есть ли ещё страницы
-	hasMore := len(tournaments) > pageReq.GetLimit()
-	if hasMore {
-		// убирается лишний, он был добавлен только для проверки hasMore
-		tournaments = tournaments[:len(tournaments)-1]
-	}
-
-	// для пагинации назад результаты разворачиваются
-	if pageReq.IsBackward() {
-		for i, j := 0, len(tournaments)-1; i < j; i, j = i+1, j-1 {
-			tournaments[i], tournaments[j] = tournaments[j], tournaments[i]
-		}
-	}
-
-	return tournaments, hasMore, nil
 }
 
 func (r *TournamentRepository) GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
