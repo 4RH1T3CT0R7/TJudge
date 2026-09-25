@@ -88,3 +88,40 @@ func TestRunInDocker_ParentCancelIsInfra(t *testing.T) {
 	assert.True(t, IsInfraError(err))
 	assert.Contains(t, calls(), "DELETE /containers/c1")
 }
+
+func TestEnsureImage(t *testing.T) {
+	t.Run("есть локально", func(t *testing.T) {
+		e, calls := fakeDocker(t, config.ExecutorConfig{}, func(w http.ResponseWriter, _ *http.Request, _ string) {
+			_, _ = w.Write([]byte(`{"Id":"sha256:1"}`))
+		})
+		require.NoError(t, e.EnsureImage(context.Background(), "tjudge-cli:latest"))
+		assert.Equal(t, []string{"GET /images/tjudge-cli:latest/json"}, calls())
+	})
+
+	t.Run("нет локально - pull", func(t *testing.T) {
+		e, calls := fakeDocker(t, config.ExecutorConfig{}, func(w http.ResponseWriter, _ *http.Request, path string) {
+			if path == "/images/create" {
+				_, _ = w.Write([]byte(`{"status":"Pulling"}` + "\n" + `{"status":"Downloaded"}`))
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"No such image"}`))
+		})
+		require.NoError(t, e.EnsureImage(context.Background(), "ghcr.io/x/tjudge-executor:1.0"))
+		assert.Contains(t, calls(), "POST /images/create")
+	})
+
+	t.Run("ошибка посреди pull", func(t *testing.T) {
+		e, _ := fakeDocker(t, config.ExecutorConfig{}, func(w http.ResponseWriter, _ *http.Request, path string) {
+			if path == "/images/create" {
+				_, _ = w.Write([]byte(`{"status":"Pulling"}` + "\n" + `{"error":"pull access denied"}`))
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"No such image"}`))
+		})
+		err := e.EnsureImage(context.Background(), "tjudge-builder:latest")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "pull access denied")
+	})
+}
