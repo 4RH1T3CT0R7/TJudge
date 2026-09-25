@@ -60,9 +60,9 @@ func (m *MockProgramRepository) Delete(ctx context.Context, id uuid.UUID) error 
 	return args.Error(0)
 }
 
-func (m *MockProgramRepository) CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error) {
-	args := m.Called(ctx, programID, userID)
-	return args.Bool(0), args.Error(1)
+func (m *MockProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
+	args := m.Called(ctx, teamID, gameID)
+	return args.Int(0), args.Error(1)
 }
 
 func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
@@ -387,7 +387,6 @@ func TestProgramHandler_Delete(t *testing.T) {
 			FilePath: nil,
 		}
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
 		mockRepo.On("Delete", mock.Anything, programID).Return(nil)
 
@@ -413,11 +412,10 @@ func TestProgramHandler_Delete(t *testing.T) {
 		t.Run("conflict in "+string(status)+" tournament", func(t *testing.T) {
 			mockRepo := new(MockProgramRepository)
 			tournamentRepo := new(MockProgramTournamentRepo)
-			handler := NewProgramHandler(mockRepo, tournamentRepo, nil, nil, nil, nil, nil, nil, "", log)
+			handler := NewProgramHandler(mockRepo, tournamentRepo, nil, nil, nil, nil, nil, "", log)
 
 			userID, programID, tournamentID := uuid.New(), uuid.New(), uuid.New()
-			mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
-			mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: userID, TournamentID: &tournamentID}, nil)
+				mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: userID, TournamentID: &tournamentID}, nil)
 			tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(&models.Tournament{ID: tournamentID, Status: status}, nil)
 
 			req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
@@ -435,93 +433,39 @@ func TestProgramHandler_Delete(t *testing.T) {
 	}
 }
 
+// версии команды видит любой её член, а не только тот, кто их загружал
 func TestProgramHandler_GetVersions(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("success", func(t *testing.T) {
-		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
+	for name, isMember := range map[string]bool{"teammate": true, "outsider": false} {
+		t.Run(name, func(t *testing.T) {
+			mockRepo := new(MockProgramRepository)
+			teamChecker := new(MockTeamMembershipChecker)
+			handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, teamChecker, nil, "", log)
 
-		userID := uuid.New()
-		teamID := uuid.New()
-		gameID := uuid.New()
+			userID, teamID, gameID := uuid.New(), uuid.New(), uuid.New()
+			programs := []*models.Program{{ID: uuid.New(), UserID: uuid.New(), Name: "v1", Version: 1}}
 
-		programs := []*models.Program{
-			{
-				ID:       uuid.New(),
-				UserID:   userID,
-				Name:     "v1",
-				GameType: "chess",
-				Language: "python",
-				Version:  1,
-			},
-			{
-				ID:       uuid.New(),
-				UserID:   userID,
-				Name:     "v2",
-				GameType: "chess",
-				Language: "python",
-				Version:  2,
-			},
-		}
+			teamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(isMember, nil)
+			mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(programs, nil).Maybe()
 
-		mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(programs, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+			req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
+			w := httptest.NewRecorder()
+			handler.GetVersions(w, req)
 
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.GetVersions(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response []*models.Program
-		decodeJSONData(t, w.Body, &response)
-		assert.Len(t, response, 2)
-		assert.Equal(t, "v1", response[0].Name)
-		assert.Equal(t, "v2", response[1].Name)
-
-		mockRepo.AssertExpectations(t)
-	})
-
-	t.Run("no access", func(t *testing.T) {
-		mockRepo := new(MockProgramRepository)
-		handler := NewProgramHandler(mockRepo, nil, nil, nil, nil, nil, nil, "", log)
-
-		userID := uuid.New()
-		otherUserID := uuid.New()
-		teamID := uuid.New()
-		gameID := uuid.New()
-
-		programs := []*models.Program{
-			{
-				ID:       uuid.New(),
-				UserID:   otherUserID,
-				Name:     "v1",
-				GameType: "chess",
-				Language: "python",
-				Version:  1,
-			},
-		}
-
-		mockRepo.On("GetAllVersionsByTeamAndGame", mock.Anything, teamID, gameID).Return(programs, nil)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/versions?team_id="+teamID.String()+"&game_id="+gameID.String(), nil)
-
-		ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
-		req = req.WithContext(ctx)
-
-		w := httptest.NewRecorder()
-
-		handler.GetVersions(w, req)
-
-		assert.Equal(t, http.StatusForbidden, w.Code)
-
-		mockRepo.AssertExpectations(t)
-	})
+			if !isMember {
+				assert.Equal(t, http.StatusForbidden, w.Code)
+				mockRepo.AssertNotCalled(t, "GetAllVersionsByTeamAndGame", mock.Anything, mock.Anything, mock.Anything)
+				return
+			}
+			assert.Equal(t, http.StatusOK, w.Code)
+			var response []*models.Program
+			decodeJSONData(t, w.Body, &response)
+			assert.Len(t, response, 1)
+		})
+	}
 }
 
 func TestProgramHandler_ClearProgramErrors(t *testing.T) {
@@ -566,7 +510,7 @@ func TestProgramHandler_Download(t *testing.T) {
 		userID := uuid.New()
 		programID := uuid.New()
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(false, nil)
+		mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: uuid.New()}, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)
 
@@ -599,7 +543,6 @@ func TestProgramHandler_Download(t *testing.T) {
 			FilePath: nil,
 		}
 
-		mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
 		mockRepo.On("GetByID", mock.Anything, programID).Return(program, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/"+programID.String()+"/download", nil)

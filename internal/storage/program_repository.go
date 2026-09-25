@@ -173,12 +173,15 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*m
 	return programs, nil
 }
 
+// GetByUserID - программы юзера и всех его команд: программа командная, и
+// сокомандник должен видеть версии, загруженные другими
 func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
 		       code_path, file_path, language, status, error_message, version, created_at, updated_at
 		FROM programs
 		WHERE user_id = $1
+		   OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $1)
 		ORDER BY created_at DESC
 	`
 
