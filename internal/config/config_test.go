@@ -18,7 +18,7 @@ func validConfig() *Config {
 		Database: DatabaseConfig{Host: "localhost", Port: 5432, User: "tjudge", Name: "tjudge", MaxConnections: 10},
 		Redis:    RedisConfig{Host: "localhost", Port: 6379},
 		Worker:   WorkerConfig{MinWorkers: 1, MaxWorkers: 10, QueueSize: 100, Timeout: 90 * time.Second},
-		Executor: ExecutorConfig{Timeout: 60 * time.Second},
+		Executor: ExecutorConfig{Timeout: 60 * time.Second, CompileWorkers: 2},
 		JWT:      JWTConfig{Secret: "test-secret-minimum-length", AccessTTL: 15 * time.Minute, RefreshTTL: 24 * time.Hour},
 		Logging:  LoggingConfig{Level: "info", Format: "json"},
 	}
@@ -134,6 +134,14 @@ func TestConfig_Validate_WorkerTimeoutCoversExecutor(t *testing.T) {
 
 	cfg.Worker.Timeout = 80 * time.Second
 	assert.NoError(t, cfg.Validate())
+}
+
+func TestConfig_Validate_CompileWorkersLessThan1(t *testing.T) {
+	cfg := validConfig()
+	cfg.Executor.CompileWorkers = 0
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "compile_workers")
 }
 
 func TestConfig_Validate_JWTSecretInProduction(t *testing.T) {

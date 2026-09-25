@@ -211,9 +211,14 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 
 	// изолированный каталог сборки, компилятору виден только он.
 	// монтировать весь каталог программ нельзя - #include "../чужая_команда.c"
-	// читал бы исходники других команд
-	buildDir := filepath.Join(c.programsPath, "build", program.ID.String())
-	if err := os.MkdirAll(buildDir, 0o750); err != nil {
+	// читал бы исходники других команд. каталог свой на каждую попытку: дубль
+	// задачи не должен удалить или перезаписать файлы идущей сборки
+	buildRoot := filepath.Join(c.programsPath, "build")
+	if err := os.MkdirAll(buildRoot, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to create build dir: %w", err)
+	}
+	buildDir, err := os.MkdirTemp(buildRoot, program.ID.String()+"-*")
+	if err != nil {
 		return nil, fmt.Errorf("failed to create build dir: %w", err)
 	}
 	defer os.RemoveAll(buildDir)

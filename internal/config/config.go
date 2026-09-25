@@ -159,6 +159,7 @@ type ExecutorConfig struct {
 	CPUSetCPUs        string // привязка к ядрам, напр "0-3"
 	BuilderImage      string
 	CompileTimeout    time.Duration
+	CompileWorkers    int // параллельных сборок на реплику воркера
 }
 
 type JWTConfig struct {
@@ -236,6 +237,9 @@ func (c *Config) Validate() error {
 	if c.Worker.Timeout < c.Executor.Timeout+workerTimeoutMargin {
 		return fmt.Errorf("WORKER_TIMEOUT (%s) must be at least EXECUTOR_TIMEOUT (%s) + %s",
 			c.Worker.Timeout, c.Executor.Timeout, workerTimeoutMargin)
+	}
+	if c.Executor.CompileWorkers < 1 {
+		return fmt.Errorf("executor compile_workers must be positive")
 	}
 
 	// jwt проверяется строго только в prod
@@ -328,6 +332,7 @@ func Load() (*Config, error) {
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),
 			BuilderImage:      getEnv("EXECUTOR_BUILDER_IMAGE", "tjudge-builder:latest"),
 			CompileTimeout:    getEnvDuration("EXECUTOR_COMPILE_TIMEOUT", 120*time.Second),
+			CompileWorkers:    getEnvInt("EXECUTOR_COMPILE_WORKERS", 2),
 			CPUSetCPUs:        getEnv("EXECUTOR_CPUSET_CPUS", ""),
 		},
 		Storage: StorageConfig{
