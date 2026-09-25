@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ArrowsExpandIcon, ChartBarIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
 import type { CrossGameLeaderboardEntry, Game } from '../../types';
@@ -27,11 +26,6 @@ export function LeaderboardTab({
   hasActiveMatches: boolean;
   isCompleted: boolean;
 }) {
-  // Поллинг каждые 2с удалён: живые данные приходят через WS-инвалидации
-  // (useTournamentLive) либо fallback-поллинг TanStack Query на уровне страницы.
-  // Флаг оставлен для индикатора «Обновление...» в шапке вкладки.
-  const [autoRefresh, setAutoRefresh] = useState(true);
-
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -42,7 +36,7 @@ export function LeaderboardTab({
               Онлайн
             </span>
           )}
-          {hasActiveMatches && autoRefresh && (
+          {hasActiveMatches && (
             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 text-xs">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
               Обновление...
@@ -53,14 +47,6 @@ export function LeaderboardTab({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {hasActiveMatches && (
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`btn text-sm ${autoRefresh ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              {autoRefresh ? 'Авто-обновление вкл' : 'Авто-обновление выкл'}
-            </button>
-          )}
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
