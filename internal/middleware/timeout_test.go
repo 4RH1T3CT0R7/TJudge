@@ -67,3 +67,20 @@ func TestDefaultTimeoutConfig_Values(t *testing.T) {
 	assert.Equal(t, 30*time.Second, config.Heavy)
 	assert.Equal(t, time.Duration(0), config.WebSocket)
 }
+
+// админские ручки планирования не должны получать 5-секундный таймаут записи
+func TestGetTimeoutForRequest_SchedulingIsHeavy(t *testing.T) {
+	config := DefaultTimeoutConfig()
+	for _, path := range []string{
+		"/api/v1/tournaments/x/run-matches",
+		"/api/v1/tournaments/x/run-game-matches",
+		"/api/v1/tournaments/x/retry-matches",
+		"/api/v1/tournaments/x/games/y/reset-round",
+	} {
+		req := httptest.NewRequest("POST", path, nil)
+		assert.Equal(t, config.Heavy, getTimeoutForRequest(req, config), path)
+	}
+	// обычная запись остаётся короткой
+	req := httptest.NewRequest("POST", "/api/v1/teams", nil)
+	assert.Equal(t, config.Cache, getTimeoutForRequest(req, config))
+}
