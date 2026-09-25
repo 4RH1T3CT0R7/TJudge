@@ -313,6 +313,23 @@ func TestService_RefreshTokens_ReusedToken(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
+// после смены пароля старая сессия не продлевается, даже если токен ещё не использован
+func TestService_RefreshTokens_RevokedByPasswordChange(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
+	changedAt := time.Now().Add(2 * time.Second)
+	userRepo.On("GetByID", ctx, userID).Return(&models.User{ID: userID, PasswordChangedAt: &changedAt}, nil)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	blacklist.AssertNotCalled(t, "AddIfNotExists", mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestService_RefreshTokens_InvalidToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 

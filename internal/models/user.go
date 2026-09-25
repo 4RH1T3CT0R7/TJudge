@@ -22,4 +22,6 @@ type User struct {
 	Role         Role      `json:"role" db:"role"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+	// ставит база при смене хеша пароля, refresh-токены старше отзываются
+	PasswordChangedAt *time.Time `json:"-" db:"password_changed_at"`
 }

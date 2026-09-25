@@ -48,9 +48,10 @@ func TestJWTManager_RefreshTokenRoundtrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 
-	got, err := manager.ValidateRefreshToken(token)
+	got, issuedAt, err := manager.ValidateRefreshToken(token)
 	require.NoError(t, err)
 	assert.Equal(t, userID, got)
+	assert.WithinDuration(t, time.Now(), issuedAt, 2*time.Second)
 }
 
 // alg confusion: токен подписан методом none, менеджер обязан его отбить
@@ -67,25 +68,30 @@ func TestJWTManager_ValidateToken_RejectsNoneAlg(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid token")
 }
 
-// старые токены выписаны ещё без роли, после выката роль должна становиться user
-func TestJWTManager_ValidateToken_EmptyRoleDefaultsToUser(t *testing.T) {
+// access и refresh не взаимозаменяемы, токен без typ не принимается ни там, ни там
+func TestJWTManager_TokenTypeChecked(t *testing.T) {
 	manager := NewJWTManager("test-secret", 15*time.Minute, 7*24*time.Hour)
+	userID := uuid.New()
 
-	claims := &Claims{
-		UserID:   uuid.New(),
-		Username: "olduser",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-			Subject:   uuid.New().String(),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(manager.secretKey)
+	access, err := manager.GenerateAccessToken(userID, "user", models.RoleUser)
+	require.NoError(t, err)
+	refresh, err := manager.GenerateRefreshToken(userID)
+	require.NoError(t, err)
+	untyped, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		Subject:   userID.String(),
+	}).SignedString(manager.secretKey)
 	require.NoError(t, err)
 
-	got, err := manager.ValidateToken(signed)
-	require.NoError(t, err)
-	assert.Equal(t, models.RoleUser, got.Role)
+	_, _, err = manager.ValidateRefreshToken(access)
+	assert.Error(t, err, "access как refresh")
+	_, err = manager.ValidateToken(refresh)
+	assert.Error(t, err, "refresh как access")
+	_, _, err = manager.ValidateRefreshToken(untyped)
+	assert.Error(t, err, "refresh без typ")
+	_, err = manager.ValidateToken(untyped)
+	assert.Error(t, err, "access без typ")
 }
 
 func TestJWTManager_ValidateToken_WrongSecret(t *testing.T) {
@@ -131,7 +137,7 @@ func TestJWTManager_ValidateRefreshToken_WrongSecret(t *testing.T) {
 	token, err := manager1.GenerateRefreshToken(uuid.New())
 	require.NoError(t, err)
 
-	_, err = manager2.ValidateRefreshToken(token)
+	_, _, err = manager2.ValidateRefreshToken(token)
 	assert.Error(t, err)
 }
 
@@ -143,7 +149,7 @@ func TestJWTManager_ValidateRefreshToken_Expired(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	_, err = manager.ValidateRefreshToken(token)
+	_, _, err = manager.ValidateRefreshToken(token)
 	assert.Error(t, err)
 }
 

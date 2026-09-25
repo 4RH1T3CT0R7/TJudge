@@ -5,6 +5,7 @@ package storage_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
@@ -140,6 +141,25 @@ func (s *UserRepositorySuite) TestUpdate() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "testuser_updated", result.Username)
 	assert.Equal(s.T(), "testuser_updated@test.com", result.Email)
+}
+
+// отметка смены пароля ставится только когда меняется сам хеш
+func (s *UserRepositorySuite) TestUpdate_PasswordChangedAt() {
+	user := createTestUser(s.T(), s.repo, "pwd_changed")
+	ctx := context.Background()
+
+	user.Email = "testuser_pwd_changed2@test.com"
+	require.NoError(s.T(), s.repo.Update(ctx, user))
+	result, err := s.repo.GetByID(ctx, user.ID)
+	require.NoError(s.T(), err)
+	assert.Nil(s.T(), result.PasswordChangedAt)
+
+	result.PasswordHash = "$2a$10$otherhashedpassword00000000000000000000000000000"
+	require.NoError(s.T(), s.repo.Update(ctx, result))
+	result, err = s.repo.GetByID(ctx, user.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), result.PasswordChangedAt)
+	assert.WithinDuration(s.T(), time.Now(), *result.PasswordChangedAt, time.Minute)
 }
 
 func (s *UserRepositorySuite) TestUpdate_NotFound() {

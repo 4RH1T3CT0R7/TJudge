@@ -385,7 +385,7 @@ func Load() (*Config, error) {
 		},
 		JWT: JWTConfig{
 			Secret:     getEnvOrFile("JWT_SECRET", defaultJWTSecret),
-			AccessTTL:  env.Duration("JWT_ACCESS_TTL", 24*time.Hour),    // сутки активной сессии
+			AccessTTL:  env.Duration("JWT_ACCESS_TTL", time.Hour),       // дальше тихий refresh
 			RefreshTTL: env.Duration("JWT_REFRESH_TTL", 7*24*time.Hour), // неделя неактивности
 		},
 		Logging: LoggingConfig{
