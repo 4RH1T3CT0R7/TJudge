@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// полный цикл нужен рабочий worker, образы tjudge-builder и tjudge-cli,
+// для полного цикла нужны worker и образы tjudge-builder и tjudge-cli,
 // поэтому тест включается отдельно (nightly.yml)
 const fullCycleTimeout = 5 * time.Minute
 
@@ -95,11 +95,16 @@ func TestE2E_FullCycle(t *testing.T) {
 	// ELO пишется outbox'ом отдельно от результата матча, поэтому ожидание:
 	// у каждой программы по записи на каждый из двух матчей
 	var defectorHistory, cooperatorHistory []ratingPoint
-	require.Eventually(t, func() bool {
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(2 * time.Second) {
 		defectorHistory = ratingHistory(t, admin, tournamentID, defectorProg)
 		cooperatorHistory = ratingHistory(t, admin, tournamentID, cooperatorProg)
-		return len(defectorHistory) == 2 && len(cooperatorHistory) == 2
-	}, time.Minute, 2*time.Second, "история рейтинга не появилась")
+		if len(defectorHistory) == 2 && len(cooperatorHistory) == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("история рейтинга не появилась: %d и %d записей", len(defectorHistory), len(cooperatorHistory))
+		}
+	}
 	require.Greater(t, defectorHistory[1].NewRating, cooperatorHistory[1].NewRating)
 }
 
