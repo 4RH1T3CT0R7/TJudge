@@ -9,7 +9,7 @@
 # Сборка: make docker-build-builder
 # Конфиг: EXECUTOR_BUILDER_IMAGE (по умолчанию tjudge-builder:latest).
 
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Компиляторы: gcc/g++ (c, cpp), go, rust, openjdk (java).
 # Интерпретаторы для проверки синтаксиса: python3, nodejs, ruby, php, lua.

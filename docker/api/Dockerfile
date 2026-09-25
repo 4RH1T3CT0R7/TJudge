@@ -1,5 +1,5 @@
 # Frontend build stage
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /frontend
 
@@ -54,7 +54,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o /app/api ./cmd/api
 
 # Final stage
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Только ca-certificates и wget (healthcheck). Компиляторы удалены:
 # компиляция программ выполняется worker'ом в изолированном
