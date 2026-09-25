@@ -15,7 +15,12 @@ type OutboxStore interface {
 	ClaimPending(ctx context.Context, olderThan time.Duration, limit int) ([]*storage.OutboxEntry, error)
 	MarkDone(ctx context.Context, id int64) error
 	MarkFailed(ctx context.Context, id int64, errMsg string) error
+	PurgeDone(ctx context.Context, olderThan time.Duration) (int64, error)
 }
+
+// outboxRetention - сколько хранятся выполненные задачи (для done_last_24h
+// в системном статусе хватает и суток, неделя - с запасом на разбор)
+const outboxRetention = 7 * 24 * time.Hour
 
 // OutboxDispatcher добивает зависшие outbox-задачи - обновления рейтингов,
 // которые потерялись если процесс упал между записью результата матча и
@@ -66,6 +71,8 @@ func (d *OutboxDispatcher) Start() {
 		defer close(d.done)
 		ticker := time.NewTicker(d.interval)
 		defer ticker.Stop()
+		purge := time.NewTicker(time.Hour)
+		defer purge.Stop()
 
 		for {
 			select {
@@ -74,6 +81,12 @@ func (d *OutboxDispatcher) Start() {
 			case <-ticker.C:
 				if n := d.RunOnce(ctx); n > 0 {
 					d.log.Info("Outbox dispatcher processed stale entries", zap.Int("count", n))
+				}
+			case <-purge.C:
+				if n, err := d.outbox.PurgeDone(ctx, outboxRetention); err != nil {
+					d.log.LogError("Outbox: failed to purge done entries", err)
+				} else if n > 0 {
+					d.log.Info("Outbox: purged done entries", zap.Int64("count", n))
 				}
 			}
 		}
