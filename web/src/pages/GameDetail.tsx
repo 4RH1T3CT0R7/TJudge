@@ -18,6 +18,7 @@ import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
+import { handleTabListKeyDown } from '../components/ui/tabs';
 import { LineChart } from '../components/ui/LineChart';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
@@ -333,8 +334,11 @@ export function GameDetail() {
 
       {/* Tabs */}
       <div className="border-b border-gray-700 mb-6">
-        <nav className="-mb-px flex space-x-8">
+        <nav className="-mb-px flex space-x-8" role="tablist" onKeyDown={handleTabListKeyDown}>
           <button
+            role="tab"
+            aria-selected={activeTab === 'rules'}
+            tabIndex={activeTab === 'rules' ? 0 : -1}
             onClick={() => setActiveTab('rules')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'rules'
@@ -345,6 +349,9 @@ export function GameDetail() {
             Правила
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'leaderboard'}
+            tabIndex={activeTab === 'leaderboard' ? 0 : -1}
             onClick={() => setActiveTab('leaderboard')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'leaderboard'
@@ -355,6 +362,9 @@ export function GameDetail() {
             Рейтинг ({leaderboard.length})
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'matches'}
+            tabIndex={activeTab === 'matches' ? 0 : -1}
             onClick={() => setActiveTab('matches')}
             className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'matches'

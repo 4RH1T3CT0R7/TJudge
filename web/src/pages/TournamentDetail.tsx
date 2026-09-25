@@ -38,6 +38,7 @@ import { MatchesTab } from '../components/tournament/MatchesTab';
 import { JoinTournamentModal } from '../components/tournament/JoinTournamentModal';
 import { extractErrorMessage, statusConfig } from '../components/tournament/helpers';
 import { useGameAdminActions } from '../components/tournament/useGameAdminActions';
+import { handleTabListKeyDown } from '../components/ui/tabs';
 import type {
   Tournament,
   TournamentStatus,
@@ -522,12 +523,15 @@ export function TournamentDetail() {
 
       {/* Tabs */}
       <div className="bg-gray-900 rounded-lg border border-gray-800 mb-6 p-1.5">
-        <nav className="flex gap-1 overflow-x-auto items-center">
+        <nav className="flex gap-1 overflow-x-auto items-center" role="tablist" onKeyDown={handleTabListKeyDown}>
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                tabIndex={activeTab === tab.id ? 0 : -1}
                 onClick={() => setActiveTab(tab.id)}
                 className={`tab flex items-center gap-2 whitespace-nowrap ${
                   activeTab === tab.id ? 'tab-active' : 'tab-inactive'
