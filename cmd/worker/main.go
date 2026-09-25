@@ -133,12 +133,15 @@ func main() {
 	}
 	imageCancel()
 
-	// контейнеры матчей и сборок, брошенные прошлым процессом (SIGKILL на деплое)
-	if removed, err := exec.RemoveOrphans(context.Background()); err != nil {
+	// контейнеры матчей и сборок, брошенные прошлым процессом (SIGKILL на деплое).
+	// таймаут - зависший докер не должен подвесить старт
+	orphanCtx, orphanCancel := context.WithTimeout(context.Background(), time.Minute)
+	if removed, err := exec.RemoveOrphans(orphanCtx); err != nil {
 		log.Warn("Failed to remove orphan containers", zap.Error(err))
 	} else if removed > 0 {
 		log.Info("Removed orphan containers", zap.Int("count", removed))
 	}
+	orphanCancel()
 
 	log.Info("Executor initialized",
 		zap.Int64("cpu_quota", cfg.Executor.CPUQuota),
