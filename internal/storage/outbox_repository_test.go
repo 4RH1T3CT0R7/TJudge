@@ -33,7 +33,9 @@ func TestOutboxRepository_PurgeDone(t *testing.T) {
 			"INSERT INTO match_outbox (match_id, status, processed_at) VALUES ($1, $2, NOW() - $3::interval)",
 			row.matchID, row.status, row.age)
 		require.NoError(t, err)
-		t.Cleanup(func() { cleanupTable(t, database, "match_outbox", "match_id = $1", row.matchID) })
+		t.Cleanup(func() {
+			_, _ = database.ExecContext(context.Background(), "DELETE FROM match_outbox WHERE match_id = $1", row.matchID)
+		})
 	}
 
 	_, err := repo.PurgeDone(ctx, 7*24*time.Hour)
