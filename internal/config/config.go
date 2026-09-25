@@ -209,6 +209,9 @@ type RateLimitConfig struct {
 	Enabled           bool
 	RequestsPerMinute int
 	Burst             int
+	// CIDR прокси, которым верится в X-Forwarded-For/X-Real-IP. пусто -
+	// loopback и приватные сети. нужен и при выключенном лимите (аудит, логи)
+	TrustedProxies []string
 }
 
 func (c *Config) Validate() error {
@@ -277,6 +280,12 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.AccessTTL < 1*time.Minute {
 		return fmt.Errorf("JWT access_ttl is too short")
+	}
+
+	for _, cidr := range c.RateLimit.TrustedProxies {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("invalid TRUSTED_PROXIES entry %q: %w", cidr, err)
+		}
 	}
 
 	validLevels := []string{"debug", "info", "warn", "error"}
@@ -398,6 +407,7 @@ func Load() (*Config, error) {
 			Enabled:           env.Bool("RATE_LIMIT_ENABLED", false), // в дев-режиме выключен
 			RequestsPerMinute: env.Int("RATE_LIMIT_RPM", 100),
 			Burst:             env.Int("RATE_LIMIT_BURST", 200),
+			TrustedProxies:    splitAndTrim(getEnv("TRUSTED_PROXIES", "")),
 		},
 	}
 
