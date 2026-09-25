@@ -392,7 +392,8 @@ paths:
       tags: [tournaments]
       summary: Tournament leaderboard
       description: >-
-        Строка на последнюю версию программы команды в каждой игре турнира.
+        Строка на последнюю готовую (ready) версию программы команды в каждой игре
+        турнира - ту, что играет в раундах.
         Для несуществующего турнира - пустой список.
       operationId: tournamentsGetLeaderboard
       parameters:

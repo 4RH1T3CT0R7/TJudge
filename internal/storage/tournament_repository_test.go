@@ -471,6 +471,10 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_LatestVersionsAndForfeits
 	old1 := s.createTrackedProgram(user1.ID, &team1.ID, &tournament.ID, &game.ID, "BotLBF1v1", 1)
 	new1 := s.createTrackedProgram(user1.ID, &team1.ID, &tournament.ID, &game.ID, "BotLBF1v2", 2)
 	p2 := s.createTrackedProgram(user2.ID, &team2.ID, &tournament.ID, &game.ID, "BotLBF2", 1)
+	// не собравшаяся загрузка не играет, в таблице остаётся new1
+	broken1 := s.createTrackedProgram(user1.ID, &team1.ID, &tournament.ID, &game.ID, "BotLBF1v3", 3)
+	_, err := s.database.ExecContext(ctx, "UPDATE programs SET status = 'failed' WHERE id = $1", broken1.ID)
+	require.NoError(s.T(), err)
 	for _, p := range []*models.Program{old1, new1, p2} {
 		s.createTestParticipant(tournament.ID, p.ID, 1500)
 	}
@@ -495,12 +499,19 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_LatestVersionsAndForfeits
 
 	for _, entries := range [][]*models.LeaderboardEntry{leaderboard, byGame} {
 		for _, e := range entries {
-			assert.NotEqual(s.T(), old1.ID, e.ProgramID)
+			assert.Contains(s.T(), []uuid.UUID{new1.ID, p2.ID}, e.ProgramID)
 			assert.Equal(s.T(), 2, e.TotalGames)
 			assert.Equal(s.T(), e.TotalGames, e.Wins+e.Losses+e.Draws)
 			assert.Equal(s.T(), 1, e.Wins)
 			assert.Equal(s.T(), 1, e.Losses)
 		}
+	}
+
+	cross, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), cross, 2)
+	for _, e := range cross {
+		assert.Contains(s.T(), []uuid.UUID{new1.ID, p2.ID}, e.ProgramID)
 	}
 }
 
