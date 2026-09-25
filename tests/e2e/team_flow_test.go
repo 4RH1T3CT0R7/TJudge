@@ -21,7 +21,6 @@ type TeamResponse struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	TournamentID string `json:"tournament_id"`
-	Code         string `json:"code"`
 	LeaderID     string `json:"leader_id"`
 }
 
@@ -29,7 +28,6 @@ type TeamWithMembersResponse struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	TournamentID string `json:"tournament_id"`
-	Code         string `json:"code"`
 	LeaderID     string `json:"leader_id"`
 	Members      []struct {
 		ID       string `json:"id"`

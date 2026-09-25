@@ -180,13 +180,6 @@ type CreateProgramRequest struct {
 	Name     string `json:"name"`
 	CodePath string `json:"code_path"`
 	Language string `json:"language"`
-	GameType string `json:"game_type"`
-}
-
-type ProgramResponse struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Language string `json:"language"`
 }
 
 // Match DTOs
@@ -270,49 +263,6 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 	})
 
 	// ==========================================================================
-	// Step 2: Create programs for each user
-	// ==========================================================================
-	var program1ID, program2ID, program3ID string
-
-	t.Run("CreatePrograms", func(t *testing.T) {
-		programs := []struct {
-			token     string
-			name      string
-			programID *string
-		}{
-			{user1Token, "Bot Alpha", &program1ID},
-			{user2Token, "Bot Beta", &program2ID},
-			{user3Token, "Bot Gamma", &program3ID},
-		}
-
-		for _, p := range programs {
-			client.SetToken(p.token)
-
-			req := CreateProgramRequest{
-				Name:     p.name,
-				CodePath: "e2e_test_bot",
-				Language: "python",
-				GameType: "tictactoe",
-			}
-
-			resp, err := client.doRequest("POST", "/api/v1/programs", req)
-			require.NoError(t, err)
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				body, _ := io.ReadAll(resp.Body)
-				t.Fatalf("Create program failed: %d - %s", resp.StatusCode, string(body))
-			}
-
-			var programResp ProgramResponse
-			err = client.parseResponse(resp, &programResp)
-			require.NoError(t, err)
-			require.NotEmpty(t, programResp.ID)
-
-			*p.programID = programResp.ID
-		}
-	})
-
-	// ==========================================================================
 	// Step 2.5: Promote user1 to admin (tournament creation requires admin role)
 	// ==========================================================================
 	t.Run("PromoteUser1ToAdmin", func(t *testing.T) {
@@ -352,39 +302,14 @@ func TestE2E_FullTournamentFlow(t *testing.T) {
 	})
 
 	// ==========================================================================
-	// Step 4: Create teams and join tournament with programs
+	// Step 4: Create teams in the tournament (programs are uploaded as
+	// multipart into an active tournament, see TestE2E_ProgramManagement)
 	// ==========================================================================
-	t.Run("CreateTeamsAndJoinTournament", func(t *testing.T) {
-		joins := []struct {
-			token     string
-			programID string
-		}{
-			{user1Token, program1ID},
-			{user2Token, program2ID},
-			{user3Token, program3ID},
-		}
-
-		successCount := 0
-		for _, j := range joins {
-			client.SetToken(j.token)
-
-			// Create team in tournament
+	t.Run("CreateTeams", func(t *testing.T) {
+		for _, token := range []string{user1Token, user2Token, user3Token} {
+			client.SetToken(token)
 			createTeamHelper(t, client, tournamentID)
-
-			joinReq := map[string]string{"program_id": j.programID}
-			resp, err := client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
-			require.NoError(t, err)
-
-			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
-				successCount++
-			} else {
-				body, _ := io.ReadAll(resp.Body)
-				t.Logf("Join tournament response: %d - %s", resp.StatusCode, string(body))
-			}
-			resp.Body.Close()
 		}
-		// At least one join should succeed
-		assert.GreaterOrEqual(t, successCount, 1, "At least one program should join the tournament")
 	})
 
 	// ==========================================================================
@@ -655,41 +580,17 @@ func TestE2E_ProgramManagement(t *testing.T) {
 		client.SetToken(accessToken)
 	})
 
-	var programID string
-
-	// Create program
-	t.Run("CreateProgram", func(t *testing.T) {
-		req := CreateProgramRequest{
+	// Programs are created only by multipart upload into an active tournament:
+	// JSON with code_path is rejected, PUT /programs/{id} does not exist
+	t.Run("CreateProgramJSONRejected", func(t *testing.T) {
+		resp, err := client.doRequest("POST", "/api/v1/programs", CreateProgramRequest{
 			Name:     "Test Bot",
 			CodePath: "e2e_test_bot",
 			Language: "python",
-			GameType: "tictactoe",
-		}
-
-		resp, err := client.doRequest("POST", "/api/v1/programs", req)
+		})
 		require.NoError(t, err)
-		require.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var programResp ProgramResponse
-		err = client.parseResponse(resp, &programResp)
-		require.NoError(t, err)
-
-		programID = programResp.ID
-		assert.NotEmpty(t, programID)
-		assert.Equal(t, "Test Bot", programResp.Name)
-	})
-
-	// Get program
-	t.Run("GetProgram", func(t *testing.T) {
-		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/programs/%s", programID), nil)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		var programResp ProgramResponse
-		err = client.parseResponse(resp, &programResp)
-		require.NoError(t, err)
-
-		assert.Equal(t, programID, programResp.ID)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
 	// List programs
@@ -698,41 +599,6 @@ func TestE2E_ProgramManagement(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		resp.Body.Close()
-	})
-
-	// Update program
-	t.Run("UpdateProgram", func(t *testing.T) {
-		updateReq := map[string]string{
-			"name":      "Updated Bot",
-			"code_path": "e2e_test_bot_updated",
-		}
-
-		resp, err := client.doRequest("PUT", fmt.Sprintf("/api/v1/programs/%s", programID), updateReq)
-		require.NoError(t, err)
-
-		if resp.StatusCode == http.StatusOK {
-			var programResp ProgramResponse
-			err = client.parseResponse(resp, &programResp)
-			require.NoError(t, err)
-			assert.Equal(t, "Updated Bot", programResp.Name)
-		}
-	})
-
-	// Delete program
-	t.Run("DeleteProgram", func(t *testing.T) {
-		resp, err := client.doRequest("DELETE", fmt.Sprintf("/api/v1/programs/%s", programID), nil)
-		require.NoError(t, err)
-		assert.Contains(t, []int{http.StatusOK, http.StatusNoContent}, resp.StatusCode)
-		resp.Body.Close()
-	})
-
-	// Verify deletion
-	t.Run("VerifyDeletion", func(t *testing.T) {
-		resp, err := client.doRequest("GET", fmt.Sprintf("/api/v1/programs/%s", programID), nil)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 }
 
@@ -925,49 +791,14 @@ func TestE2E_TournamentLeaderboardAfterStart(t *testing.T) {
 	})
 
 	// =========================================================================
-	// Step 4: Each user creates a team, program, and joins the tournament
+	// Step 4: Each user creates a team in the tournament
 	// =========================================================================
-	t.Run("CreateTeamsProgramsAndJoin", func(t *testing.T) {
+	t.Run("CreateTeams", func(t *testing.T) {
 		require.NotEmpty(t, tournamentID, "tournament must be created first")
 
-		for i, u := range users {
+		for _, u := range users {
 			client.SetToken(u.token)
-
-			// Create team in tournament
 			createTeamHelper(t, client, tournamentID)
-
-			// Create program
-			progReq := CreateProgramRequest{
-				Name:     fmt.Sprintf("LB Bot %d", i),
-				CodePath: "e2e_test_bot",
-				Language: "python",
-				GameType: "tictactoe",
-			}
-
-			resp, err := client.doRequest("POST", "/api/v1/programs", progReq)
-			require.NoError(t, err)
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				t.Fatalf("Create program for user %d failed: %d - %s", i, resp.StatusCode, string(body))
-			}
-
-			var programResp ProgramResponse
-			err = client.parseResponse(resp, &programResp)
-			require.NoError(t, err)
-			require.NotEmpty(t, programResp.ID)
-
-			// Join tournament
-			joinReq := map[string]string{"program_id": programResp.ID}
-			resp, err = client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
-			require.NoError(t, err)
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				body, _ := io.ReadAll(resp.Body)
-				t.Logf("Join tournament for user %d response: %d - %s", i, resp.StatusCode, string(body))
-			}
-			resp.Body.Close()
 		}
 	})
 
@@ -1105,47 +936,14 @@ func TestE2E_CrossGameLeaderboard(t *testing.T) {
 	})
 
 	// =========================================================================
-	// Step 4: Users create teams, programs, and join tournament
+	// Step 4: Users create teams in the tournament
 	// =========================================================================
-	t.Run("CreateTeamsProgramsAndJoin", func(t *testing.T) {
+	t.Run("CreateTeams", func(t *testing.T) {
 		require.NotEmpty(t, tournamentID, "tournament must be created first")
 
-		for i, u := range users {
+		for _, u := range users {
 			client.SetToken(u.token)
-
-			// Create team in tournament
 			createTeamHelper(t, client, tournamentID)
-
-			progReq := CreateProgramRequest{
-				Name:     fmt.Sprintf("CGL Bot %d", i),
-				CodePath: "e2e_test_bot",
-				Language: "python",
-				GameType: "tictactoe",
-			}
-
-			resp, err := client.doRequest("POST", "/api/v1/programs", progReq)
-			require.NoError(t, err)
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				t.Fatalf("Create program for user %d failed: %d - %s", i, resp.StatusCode, string(body))
-			}
-
-			var programResp ProgramResponse
-			err = client.parseResponse(resp, &programResp)
-			require.NoError(t, err)
-			require.NotEmpty(t, programResp.ID)
-
-			joinReq := map[string]string{"program_id": programResp.ID}
-			resp, err = client.doRequest("POST", fmt.Sprintf("/api/v1/tournaments/%s/join", tournamentID), joinReq)
-			require.NoError(t, err)
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				body, _ := io.ReadAll(resp.Body)
-				t.Logf("Join tournament for user %d response: %d - %s", i, resp.StatusCode, string(body))
-			}
-			resp.Body.Close()
 		}
 	})
 
