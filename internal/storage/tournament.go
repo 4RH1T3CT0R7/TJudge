@@ -6,11 +6,22 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 )
+
+// utc - время для колонок TIMESTAMP без зоны: смещение postgres молча отбрасывает,
+// поэтому в бд пишется UTC, как и у NOW() в сессии с timezone=UTC
+func utc(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
+}
 
 // TournamentRepository - репозиторий для работы с турнирами
 type TournamentRepository struct {
@@ -44,8 +55,8 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *models.To
 		tournament.MaxTeamSize,
 		tournament.IsPermanent,
 		tournament.CreatorID,
-		tournament.StartTime,
-		tournament.EndTime,
+		utc(tournament.StartTime),
+		utc(tournament.EndTime),
 		metadata,
 	).Scan(&tournament.CreatedAt, &tournament.UpdatedAt, &tournament.Version)
 
@@ -210,8 +221,8 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *models.To
 		tournament.MaxParticipants,
 		tournament.MaxTeamSize,
 		tournament.IsPermanent,
-		tournament.StartTime,
-		tournament.EndTime,
+		utc(tournament.StartTime),
+		utc(tournament.EndTime),
 		metadata,
 		tournament.Version,
 	).Scan(&tournament.UpdatedAt, &tournament.Version)
