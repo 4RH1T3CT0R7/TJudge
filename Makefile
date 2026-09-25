@@ -189,7 +189,7 @@ fmt:
 # Run integration tests
 test-integration:
 	@echo "Running integration tests..."
-	go test -v -tags=integration ./tests/integration/...
+	go test -v -p 1 -tags=integration ./internal/storage/... ./tests/integration/...
 
 # Run E2E tests
 test-e2e:
