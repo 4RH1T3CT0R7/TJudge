@@ -129,6 +129,25 @@ func (s *Server) idempotency() func(http.Handler) http.Handler {
 	return middleware.Idempotency(s.idempStore, s.log)
 }
 
+// auth - Auth плюс перепроверка админской роли по базе (если чекер задан),
+// чтобы проверки админа в хендлерах не верили одному jwt
+func (s *Server) auth() func(http.Handler) http.Handler {
+	return s.withVerifiedRole(middleware.Auth(s.authService, s.log))
+}
+
+// optionalAuth - то же для публичных ручек с необязательным токеном
+func (s *Server) optionalAuth() func(http.Handler) http.Handler {
+	return s.withVerifiedRole(middleware.OptionalAuth(s.authService, s.log))
+}
+
+func (s *Server) withVerifiedRole(authMW func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	if s.adminChecker == nil {
+		return authMW
+	}
+	verify := s.adminChecker.VerifyRole()
+	return func(next http.Handler) http.Handler { return authMW(verify(next)) }
+}
+
 // requireAdmin - проверка админа из бд если чекер задан, иначе только по jwt
 func (s *Server) requireAdmin() func(http.Handler) http.Handler {
 	if s.adminChecker != nil {
@@ -209,7 +228,7 @@ func (s *Server) setupRoutes() {
 
 	// swagger только под админом
 	s.router.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(s.authService, s.log))
+		r.Use(s.auth())
 		r.Use(s.requireAdmin())
 		r.Get("/swagger/*", httpSwagger.Handler(
 			httpSwagger.URL("/swagger/doc.json"),
@@ -219,7 +238,7 @@ func (s *Server) setupRoutes() {
 	// pprof тоже за админом - он раскрывает внутренности процесса,
 	// но для диагностики cpu/heap в проде вещь незаменимая
 	s.router.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(s.authService, s.log))
+		r.Use(s.auth())
 		r.Use(s.requireAdmin())
 		r.HandleFunc("/debug/pprof/", pprof.Index)
 		r.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
@@ -247,7 +266,7 @@ func (s *Server) setupRoutes() {
 
 			// под токеном
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.auth())
 				r.Post("/logout", s.authHandler.Logout)
 				r.Get("/me", s.authHandler.Me)
 				r.Put("/profile", s.authHandler.UpdateProfile)
@@ -277,7 +296,7 @@ func (s *Server) setupRoutes() {
 			}
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.auth())
 
 				r.Post("/{id}/join", s.tournamentHandler.Join)
 				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
@@ -320,7 +339,7 @@ func (s *Server) setupRoutes() {
 			r.With(middleware.CacheControl(60)).Get("/name/{name}", s.gameHandler.GetByName)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.auth())
 				r.Use(s.requireAdmin())
 				r.Use(s.auditMiddleware())
 
@@ -332,7 +351,7 @@ func (s *Server) setupRoutes() {
 
 		r.Route("/teams", func(r chi.Router) {
 			r.Use(bodyLimit)
-			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(s.auth())
 
 			r.Post("/", s.teamHandler.Create)
 			r.Post("/join", s.teamHandler.JoinByCode)
@@ -354,7 +373,7 @@ func (s *Server) setupRoutes() {
 
 		// программы - всё под токеном, лимит тела больше из-за загрузки файлов
 		r.Route("/programs", func(r chi.Router) {
-			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(s.auth())
 			r.Use(middleware.MaxBodySize(10 << 20)) // 10MB for file uploads
 
 			// Idempotency-Key на аплоаде: клиент с флаки-сетью не создаст дубль
@@ -371,7 +390,7 @@ func (s *Server) setupRoutes() {
 			r.Use(bodyLimit)
 			// публичные с опциональной авторизацией - админ увидит полные ошибки
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.OptionalAuth(s.authService, s.log))
+				r.Use(s.optionalAuth())
 				r.Get("/", s.matchHandler.List)
 				r.Get("/statistics", s.matchHandler.GetStatistics)
 				r.Get("/{id}", s.matchHandler.Get)
@@ -379,7 +398,7 @@ func (s *Server) setupRoutes() {
 
 			// управление очередью - только админ
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.auth())
 				r.Use(s.requireAdmin())
 				r.Use(s.auditMiddleware())
 
@@ -390,7 +409,7 @@ func (s *Server) setupRoutes() {
 		})
 
 		r.Route("/ws", func(r chi.Router) {
-			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(s.auth())
 
 			r.Get("/tournaments/{id}", s.wsHandler.HandleTournament)
 			r.Get("/stats", s.wsHandler.GetStats)
@@ -398,7 +417,7 @@ func (s *Server) setupRoutes() {
 
 		r.Route("/system", func(r chi.Router) {
 			r.Use(bodyLimit)
-			r.Use(middleware.Auth(s.authService, s.log))
+			r.Use(s.auth())
 			r.Use(s.requireAdmin())
 			// кнопки восстановления ниже - самые инвазивные действия оператора
 			r.Use(s.auditMiddleware())
@@ -422,7 +441,7 @@ func (s *Server) setupRoutes() {
 		if s.auditHandler != nil {
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(bodyLimit)
-				r.Use(middleware.Auth(s.authService, s.log))
+				r.Use(s.auth())
 				r.Use(s.requireAdmin())
 
 				r.Get("/audit", s.auditHandler.List)

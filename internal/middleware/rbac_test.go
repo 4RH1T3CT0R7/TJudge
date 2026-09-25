@@ -502,3 +502,24 @@ func TestVerifiedAdminChecker_CacheHitRevokedAdmin(t *testing.T) {
 	// БД вызывается только один раз - второй запрос обслуживается из кэша
 	mockRepo.AssertNumberOfCalls(t, "GetByID", 1)
 }
+
+// разжалованный админ с живым jwt внутри хендлеров видится обычным юзером
+func TestVerifiedAdminChecker_VerifyRole(t *testing.T) {
+	mockRepo := new(MockUserRoleChecker)
+	checker := middleware.NewVerifiedAdminChecker(mockRepo, 5*time.Minute)
+
+	admin, revoked := uuid.New(), uuid.New()
+	mockRepo.On("GetByID", mock.Anything, admin).Return(&models.User{ID: admin, Role: models.RoleAdmin}, nil)
+	mockRepo.On("GetByID", mock.Anything, revoked).Return(&models.User{ID: revoked, Role: models.RoleUser}, nil)
+
+	for id, want := range map[uuid.UUID]models.Role{admin: models.RoleAdmin, revoked: models.RoleUser} {
+		var got models.Role
+		handler := checker.VerifyRole()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got, _ = r.Context().Value(middleware.RoleKey).(models.Role)
+		}))
+		req := httptest.NewRequest("GET", "/", nil)
+		req = req.WithContext(verifiedAdminCtx(models.RoleAdmin, id, true, true))
+		handler.ServeHTTP(httptest.NewRecorder(), req)
+		assert.Equal(t, want, got)
+	}
+}
