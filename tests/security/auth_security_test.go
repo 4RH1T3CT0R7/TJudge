@@ -141,13 +141,56 @@ var protectedEndpoints = []struct {
 	{"GET", "/api/v1/auth/me"},
 }
 
-// adminEndpoints returns endpoints that require admin role.
+// adminEndpoints - ручки из admin-групп routes.go. роль проверяет только
+// requireAdmin на группе, так что перенос ручки в обычную группу ловится здесь.
+// id случайные: мидлварь отвечает раньше хендлера
+const (
+	secTournament = "/api/v1/tournaments/00000000-0000-0000-0000-000000000001"
+	secGame       = secTournament + "/games/00000000-0000-0000-0000-000000000002"
+	secTeam       = "/api/v1/teams/00000000-0000-0000-0000-000000000003"
+)
+
 var adminEndpoints = []struct {
 	method string
 	path   string
 }{
 	{"POST", "/api/v1/tournaments"},
+	{"POST", secTournament + "/start"},
+	{"POST", secTournament + "/complete"},
+	{"POST", secTournament + "/matches"},
+	{"DELETE", secTournament},
+	{"DELETE", secGame},
+	{"GET", secGame + "/programs"},
+	{"GET", secTournament + "/programs/download-zip"},
+	{"POST", secGame + "/complete-round"},
+	{"POST", secGame + "/reset-round"},
+	{"POST", secGame + "/auto-round"},
+	{"GET", secGame + "/auto-round"},
+	{"POST", secTournament + "/active-game"},
+	{"POST", secTournament + "/games/deactivate-all"},
+	{"POST", secTournament + "/run-matches"},
+	{"POST", secTournament + "/run-game-matches"},
+	{"POST", secTournament + "/retry-matches"},
+	{"POST", secTournament + "/programs/clear-errors"},
 	{"POST", "/api/v1/games"},
+	{"PUT", "/api/v1/games/00000000-0000-0000-0000-000000000002"},
+	{"DELETE", "/api/v1/games/00000000-0000-0000-0000-000000000002"},
+	{"DELETE", secTeam},
+	{"POST", secTeam + "/disqualify"},
+	{"POST", secTeam + "/restore"},
+	{"GET", "/api/v1/matches/queue/stats"},
+	{"POST", "/api/v1/matches/queue/clear"},
+	{"POST", "/api/v1/matches/queue/purge"},
+	{"GET", "/api/v1/system/metrics"},
+	{"GET", "/api/v1/system/health"},
+	{"GET", "/api/v1/system/status"},
+	{"POST", "/api/v1/system/recovery/outbox-retry"},
+	{"POST", "/api/v1/system/recovery/requeue-compiling"},
+	{"POST", "/api/v1/system/recovery/reset-stuck-matches"},
+	{"POST", "/api/v1/system/recovery/clear-dead-letter"},
+	{"GET", "/api/v1/admin/audit"},
+	{"GET", "/swagger/index.html"},
+	{"GET", "/debug/pprof/"},
 }
 
 // =============================================================================
@@ -282,6 +325,18 @@ func TestSecurity_AdminEndpointWithoutAdminRole(t *testing.T) {
 
 			assert.Equal(t, http.StatusForbidden, resp.StatusCode,
 				"regular user on %s %s should return 403", ep.method, ep.path)
+		})
+	}
+
+	anon := newTestClient()
+	for _, ep := range adminEndpoints {
+		t.Run("anonymous_"+ep.method+"_"+ep.path, func(t *testing.T) {
+			resp, err := anon.doRequest(ep.method, ep.path, nil)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+				"%s %s without JWT should return 401", ep.method, ep.path)
 		})
 	}
 }
