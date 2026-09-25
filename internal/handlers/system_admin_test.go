@@ -155,7 +155,7 @@ func recoveryResponse(t *testing.T, h http.HandlerFunc, path string) map[string]
 
 func TestRecovery_RetryOutboxErrors(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	h := NewSystemRecoveryHandler(&stubRecoveryOutbox{retried: 3}, nil, nil, nil, nil, log)
+	h := NewSystemRecoveryHandler(&stubRecoveryOutbox{retried: 3}, nil, nil, nil, nil, 2*time.Minute, log)
 
 	data := recoveryResponse(t, h.RetryOutboxErrors, "/system/recovery/outbox-retry")
 	assert.Equal(t, int64(3), data["retried"])
@@ -165,7 +165,7 @@ func TestRecovery_RequeueCompiling(t *testing.T) {
 	log, _ := logger.New("error", "json")
 	programs := []*models.Program{{ID: uuid.New()}, {ID: uuid.New()}}
 	cq := &stubRecoveryCompileQueue{}
-	h := NewSystemRecoveryHandler(nil, &stubRecoveryPrograms{programs: programs}, cq, nil, nil, log)
+	h := NewSystemRecoveryHandler(nil, &stubRecoveryPrograms{programs: programs}, cq, nil, nil, 2*time.Minute, log)
 
 	data := recoveryResponse(t, h.RequeueCompiling, "/system/recovery/requeue-compiling")
 	assert.Equal(t, int64(2), data["requeued"])
@@ -180,7 +180,7 @@ func TestRecovery_ResetStuckMatches(t *testing.T) {
 	}
 	mr := &stubRecoveryMatches{stuck: stuck}
 	qm := &stubRecoveryQueue{}
-	h := NewSystemRecoveryHandler(nil, nil, nil, mr, qm, log)
+	h := NewSystemRecoveryHandler(nil, nil, nil, mr, qm, 2*time.Minute, log)
 
 	data := recoveryResponse(t, h.ResetStuckMatches, "/system/recovery/reset-stuck-matches")
 	assert.Equal(t, int64(2), data["reset"])
@@ -194,7 +194,7 @@ func TestRecovery_ResetStuckMatches(t *testing.T) {
 
 func TestRecovery_ClearDeadLetter(t *testing.T) {
 	log, _ := logger.New("error", "json")
-	h := NewSystemRecoveryHandler(nil, nil, nil, nil, &stubRecoveryQueue{cleared: 7}, log)
+	h := NewSystemRecoveryHandler(nil, nil, nil, nil, &stubRecoveryQueue{cleared: 7}, 2*time.Minute, log)
 
 	data := recoveryResponse(t, h.ClearDeadLetter, "/system/recovery/clear-dead-letter")
 	assert.Equal(t, int64(7), data["cleared"])

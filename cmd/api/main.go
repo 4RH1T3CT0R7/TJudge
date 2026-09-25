@@ -267,6 +267,7 @@ func main() {
 		compileQueue,
 		wsHub,
 		redisCache,
+		cfg.Worker.StuckThreshold(),
 		log,
 	)
 	recoveryHandler := handlers.NewSystemRecoveryHandler(
@@ -275,6 +276,7 @@ func main() {
 		compileQueue,
 		matchRepo,
 		queueManager,
+		cfg.Worker.StuckThreshold(),
 		log,
 	)
 	ratingHistoryHandler := handlers.NewRatingHistoryHandler(

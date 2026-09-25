@@ -315,7 +315,7 @@ type QueueStatus struct {
 // матчи по статусам
 type MatchesStatus struct {
 	ByStatus map[string]int64 `json:"by_status"`
-	// StuckRunning — матчи в running дольше 2 минут: признак умершего
+	// StuckRunning — матчи в running дольше порога зависания: признак умершего
 	// worker'а; чинится кнопкой «Сбросить зависшие матчи».
 	StuckRunning    int64      `json:"stuck_running"`
 	LastCompletedAt *time.Time `json:"last_completed_at,omitempty"`
@@ -328,7 +328,9 @@ type SystemStatusHandler struct {
 	compileQueue StatusCompileQueue
 	wsHub        StatusWSHub
 	redis        StatusRedisPinger
-	log          *logger.Logger
+	// порог зависания running-матча, тот же что у recovery воркера
+	stuckThreshold time.Duration
+	log            *logger.Logger
 }
 
 // NewSystemStatusHandler создаёт handler полного статуса системы
@@ -338,15 +340,17 @@ func NewSystemStatusHandler(
 	compileQueue StatusCompileQueue,
 	wsHub StatusWSHub,
 	redis StatusRedisPinger,
+	stuckThreshold time.Duration,
 	log *logger.Logger,
 ) *SystemStatusHandler {
 	return &SystemStatusHandler{
-		statusRepo:   statusRepo,
-		queueManager: queueManager,
-		compileQueue: compileQueue,
-		wsHub:        wsHub,
-		redis:        redis,
-		log:          log,
+		statusRepo:     statusRepo,
+		queueManager:   queueManager,
+		compileQueue:   compileQueue,
+		wsHub:          wsHub,
+		redis:          redis,
+		stuckThreshold: stuckThreshold,
+		log:            log,
 	}
 }
 
@@ -438,7 +442,7 @@ func (h *SystemStatusHandler) GetFullStatus(w http.ResponseWriter, r *http.Reque
 			status.Matches.LastCompletedAt = last
 		}
 
-		if stuck, err := h.statusRepo.StuckRunningCount(ctx, recoveryStuckThreshold); err == nil {
+		if stuck, err := h.statusRepo.StuckRunningCount(ctx, h.stuckThreshold); err == nil {
 			status.Matches.StuckRunning = stuck
 		}
 
