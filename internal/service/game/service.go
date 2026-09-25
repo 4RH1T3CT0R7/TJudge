@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"regexp"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -54,11 +55,17 @@ func NewService(gameRepo GameRepository, log *logger.Logger) *Service {
 // nameRegex — имя игры: только буквы в нижнем регистре, цифры и подчёркивание
 var nameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
+// длину display_name ограничивает бд (VARCHAR(255) -> 400), пустое проверяется тут
+var errDisplayNameRequired = errors.ErrValidation.WithMessage("display_name is required")
+
 // Create создаёт игру
 func (s *Service) Create(ctx context.Context, req *CreateRequest) (*models.Game, error) {
 	// проверка имени, елси кривое — сразу отказ
 	if !nameRegex.MatchString(req.Name) {
 		return nil, errors.ErrValidation.WithMessage("game name must contain only lowercase letters, digits and underscores")
+	}
+	if strings.TrimSpace(req.DisplayName) == "" {
+		return nil, errDisplayNameRequired
 	}
 
 	// имя должно быть уникальным
@@ -118,6 +125,10 @@ func (s *Service) List(ctx context.Context, filter models.GameFilter) ([]*models
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req *UpdateRequest) (*models.Game, error) {
+	if strings.TrimSpace(req.DisplayName) == "" {
+		return nil, errDisplayNameRequired
+	}
+
 	game, err := s.gameRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
