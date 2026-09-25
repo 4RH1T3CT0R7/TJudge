@@ -40,6 +40,7 @@ type TournamentRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 	List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error)
 	Update(ctx context.Context, tournament *models.Tournament) error
+	Complete(ctx context.Context, tournament *models.Tournament) (int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
@@ -59,7 +60,6 @@ type MatchRepository interface {
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
-	CancelActiveByTournament(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
 }
 
@@ -398,19 +398,13 @@ func (s *Service) Complete(ctx context.Context, tournamentID uuid.UUID) error {
 			return errors.ErrConflict.WithMessage("tournament is not active")
 		}
 
-		// отмена до смены статуса: если смена не пройдёт, турнир останется активным
-		// и завершение можно повторить, а обратный порядок оставил бы в очереди
-		// матчи уже завершённого турнира
-		cancelled, err := s.matchRepo.CancelActiveByTournament(ctx, tournamentID)
-		if err != nil {
-			return fmt.Errorf("failed to cancel active matches: %w", err)
-		}
-
 		now := time.Now()
 		tournament.Status = models.TournamentCompleted
 		tournament.EndTime = &now
 
-		if err := s.tournamentRepo.Update(ctx, tournament); err != nil {
+		// смена статуса и отмена недоигранных матчей - одна транзакция
+		cancelled, err := s.tournamentRepo.Complete(ctx, tournament)
+		if err != nil {
 			return fmt.Errorf("failed to complete tournament: %w", err)
 		}
 
