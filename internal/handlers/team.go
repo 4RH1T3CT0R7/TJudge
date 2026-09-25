@@ -173,6 +173,7 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	hideMemberContacts(r, t.Members)
 
 	writeJSON(w, http.StatusOK, t)
 }
@@ -197,8 +198,28 @@ func (h *TeamHandler) GetMembers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	hideMemberContacts(r, t.Members)
 
 	writeJSON(w, http.StatusOK, t.Members)
+}
+
+// hideMemberContacts стирает email и роль участников для посторонних: id
+// команд публичны, и иначе перебором собирались бы почты всех студентов.
+// видят их только сама команда и админ
+func hideMemberContacts(r *http.Request, members []models.User) {
+	if role, _ := r.Context().Value(middleware.RoleKey).(models.Role); role == models.RoleAdmin {
+		return
+	}
+	userID, _ := middleware.GetUserID(r.Context())
+	for _, m := range members {
+		if m.ID == userID {
+			return
+		}
+	}
+	for i := range members {
+		members[i].Email = ""
+		members[i].Role = ""
+	}
 }
 
 type UpdateNameRequest struct {

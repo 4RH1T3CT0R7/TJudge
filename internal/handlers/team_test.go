@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
@@ -355,6 +356,30 @@ func TestTeamHandler_RemoveMember_Forbidden(t *testing.T) {
 	h.RemoveMember(rr, req)
 
 	assert.Equal(t, http.StatusForbidden, rr.Code)
+}
+
+// --- email участников ---
+
+func TestTeamHandler_Get_HidesContactsFromOutsiders(t *testing.T) {
+	teamID, member := uuid.New(), uuid.New()
+
+	for _, tc := range []struct {
+		caller  uuid.UUID
+		visible bool
+	}{{member, true}, {uuid.New(), false}} {
+		h, svc := newTestTeamHandler()
+		svc.On("GetTeamWithMembers", mock.Anything, teamID).Return(&models.TeamWithMembers{
+			Members: []models.User{{ID: member, Email: "member@uni.ru", Role: models.RoleUser}},
+		}, nil)
+
+		req := withChiParam(httptest.NewRequest("GET", "/", nil), "id", teamID.String())
+		req = withUserID(req, tc.caller)
+		rr := httptest.NewRecorder()
+		h.Get(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, tc.visible, strings.Contains(rr.Body.String(), "member@uni.ru"))
+	}
 }
 
 // --- GetInviteLink ---
