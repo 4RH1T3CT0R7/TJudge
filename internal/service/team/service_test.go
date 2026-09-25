@@ -236,6 +236,38 @@ func TestService_JoinTeamByCode_Success(t *testing.T) {
 	assert.Equal(t, teamID, result.ID)
 }
 
+// recordingLock запоминает ключи взятых локов
+type recordingLock struct{ keys []string }
+
+func (l *recordingLock) WithLock(ctx context.Context, key string, _ time.Duration, fn func(ctx context.Context) error) error {
+	l.keys = append(l.keys, key)
+	return fn(ctx)
+}
+
+// лимит команды держится локом на команду, а create и join одного пользователя в
+// турнире - общим ключом; лок только на пользователя пропускал параллельные вступления
+func TestService_TeamMembershipLockKeys(t *testing.T) {
+	teamRepo := new(MockTeamRepository)
+	tournamentRepo := new(MockTournamentRepository)
+	log, _ := logger.New("error", "json")
+	lock := &recordingLock{}
+	svc := NewService(teamRepo, tournamentRepo, lock, log)
+	ctx := context.Background()
+	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByCode", ctx, "ABC123").Return(&models.Team{ID: teamID, TournamentID: tID, Code: "ABC123"}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 5}, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(true, nil)
+
+	_, _ = svc.JoinTeamByCode(ctx, &JoinTeamRequest{Code: "ABC123", UserID: userID})
+	_, _ = svc.CreateTeam(ctx, &CreateTeamRequest{TournamentID: tID, Name: "T", UserID: userID})
+
+	require.Len(t, lock.keys, 3)
+	assert.Equal(t, "team:join:"+teamID.String(), lock.keys[1])
+	assert.Equal(t, lock.keys[0], lock.keys[2], "create и join одного пользователя должны делить лок")
+}
+
 func TestService_JoinTeamByCode_CodeNotFound(t *testing.T) {
 	svc, teamRepo, _ := newTestTeamService(t)
 	ctx := context.Background()

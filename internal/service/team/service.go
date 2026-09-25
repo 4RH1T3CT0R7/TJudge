@@ -76,6 +76,13 @@ func NewService(teamRepo TeamRepository, tournamentRepo TournamentRepository, lo
 	}
 }
 
+// membershipLockKey - лок на пару турнир+пользователь, общий для CreateTeam и
+// JoinTeamByCode: параллельные create и join не должны завести одного человека в две
+// команды турнира
+func membershipLockKey(tournamentID, userID uuid.UUID) string {
+	return fmt.Sprintf("team:membership:%s:%s", tournamentID, userID)
+}
+
 // CreateTeam создаёт команду в турнире.
 // под локом на юзера+турнир, чтобы параллельными запросами один человек
 // не наплодил две команды в одном турнире
@@ -90,11 +97,9 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*mode
 		return nil, errors.ErrBadRequest.WithMessage("cannot create team in active or completed tournament")
 	}
 
-	lockKey := fmt.Sprintf("team:create:%s:%s", req.TournamentID.String(), req.UserID.String())
 	var result *models.Team
 
-	// TODO: 10 секунд на лок захардкожено, вынести бы в конфиг
-	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
+	lockErr := s.lock.WithLock(ctx, membershipLockKey(req.TournamentID, req.UserID), 10*time.Second, func(ctx context.Context) error {
 		// проверка "не состоит в другой команде" уже под локом
 		inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, req.TournamentID, req.UserID)
 		if err != nil {
@@ -163,43 +168,14 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*mo
 		return nil, errors.ErrBadRequest.WithMessage("cannot join team in active or completed tournament")
 	}
 
-	// лок на юзера+турнир держит сразу две гонки:
-	// - параллельные join'ы не перепрыгнут MaxTeamSize
-	// - юзер не влезет сразу в несколько команд одного турнира
-	lockKey := fmt.Sprintf("team:join:%s:%s", team.TournamentID.String(), req.UserID.String())
-	var result *models.Team
-
-	lockErr := s.lock.WithLock(ctx, lockKey, 10*time.Second, func(ctx context.Context) error {
-		// лимит считается под локом, поэтому он честный
-		memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
-		if err != nil {
-			return errors.Wrap(err, "failed to get member count")
-		}
-
-		if tournament.MaxTeamSize > 0 && memberCount >= tournament.MaxTeamSize {
-			return errors.ErrBadRequest.WithMessage("team is full")
-		}
-
-		inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, team.TournamentID, req.UserID)
-		if err != nil {
-			return errors.Wrap(err, "failed to check user team membership")
-		}
-		if inTeam {
-			return errors.ErrConflict.WithMessage("user already in a team in this tournament")
-		}
-
-		member := &models.TeamMember{
-			ID:     uuid.New(),
-			TeamID: team.ID,
-			UserID: req.UserID,
-		}
-
-		if err := s.teamRepo.AddMember(ctx, member); err != nil {
-			return errors.Wrap(err, "failed to add team member")
-		}
-
-		result = team
-		return nil
+	// два лока на две гонки: лок пары турнир+пользователь не пускает юзера сразу
+	// в несколько команд турнира (общий с CreateTeam), лок команды не даёт
+	// параллельным вступлениям разных людей перепрыгнуть MaxTeamSize.
+	// порядок взятия всегда один, поэтому взаимной блокировки нет
+	lockErr := s.lock.WithLock(ctx, membershipLockKey(team.TournamentID, req.UserID), 10*time.Second, func(ctx context.Context) error {
+		return s.lock.WithLock(ctx, "team:join:"+team.ID.String(), 10*time.Second, func(ctx context.Context) error {
+			return s.joinLocked(ctx, team, tournament, req.UserID)
+		})
 	})
 
 	if lockErr != nil {
@@ -208,7 +184,40 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*mo
 
 	s.log.Info("User joined team", zap.String("team_id", team.ID.String()), zap.String("user_id", req.UserID.String()))
 
-	return result, nil
+	return team, nil
+}
+
+// joinLocked - проверки лимита и членства и сама вставка, зовётся под локами JoinTeamByCode
+func (s *Service) joinLocked(ctx context.Context, team *models.Team, tournament *models.Tournament, userID uuid.UUID) error {
+	// лимит считается под локом команды, поэтому он честный
+	memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get member count")
+	}
+
+	if tournament.MaxTeamSize > 0 && memberCount >= tournament.MaxTeamSize {
+		return errors.ErrBadRequest.WithMessage("team is full")
+	}
+
+	inTeam, err := s.teamRepo.IsUserInAnyTeamInTournament(ctx, team.TournamentID, userID)
+	if err != nil {
+		return errors.Wrap(err, "failed to check user team membership")
+	}
+	if inTeam {
+		return errors.ErrConflict.WithMessage("user already in a team in this tournament")
+	}
+
+	member := &models.TeamMember{
+		ID:     uuid.New(),
+		TeamID: team.ID,
+		UserID: userID,
+	}
+
+	if err := s.teamRepo.AddMember(ctx, member); err != nil {
+		return errors.Wrap(err, "failed to add team member")
+	}
+
+	return nil
 }
 
 // LeaveTeam — юзер выходит из команды
