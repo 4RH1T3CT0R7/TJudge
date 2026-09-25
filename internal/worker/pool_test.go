@@ -36,8 +36,8 @@ func NewMockQueueManager() *MockQueueManager {
 	}
 }
 
-func (m *MockQueueManager) Enqueue(ctx context.Context, match *models.Match) error {
-	args := m.Called(ctx, match)
+func (m *MockQueueManager) EnqueueBatch(ctx context.Context, matches []*models.Match) error {
+	args := m.Called(ctx, matches)
 	return args.Error(0)
 }
 

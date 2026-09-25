@@ -17,7 +17,7 @@ import (
 
 // QueueManager - очередь матчей (recovery ещё и кладёт в неё)
 type QueueManager interface {
-	Enqueue(ctx context.Context, match *models.Match) error
+	EnqueueBatch(ctx context.Context, matches []*models.Match) error
 	Dequeue(ctx context.Context) (*models.Match, error)
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }

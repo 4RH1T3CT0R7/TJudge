@@ -5,9 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -37,7 +35,7 @@ type RecoveryConfig struct {
 }
 
 // NewRecoveryService создаёт сервис. реальные пороги задаются из main
-// (120с > таймаута воркера), дефолты тут скорее на всякий случай
+// (порог застревания - WorkerConfig.StuckThreshold), дефолты тут на всякий случай
 func NewRecoveryService(
 	matchRepo MatchRepository,
 	queueManager QueueManager,
@@ -104,42 +102,28 @@ func (s *RecoveryService) RecoverOnStartup(ctx context.Context) error {
 // FIXME: если застрявших больше batchSize, за раз берётся только первая пачка,
 // остальные подождут следующего тика
 func (s *RecoveryService) recoverStuckRunning(ctx context.Context) (int, error) {
-	stuckMatches, err := s.matchRepo.GetStuckRunning(ctx, s.stuckDuration, s.batchSize)
+	recovered, err := s.matchRepo.ResetStuckRunning(ctx, s.stuckDuration, s.batchSize)
 	if err != nil {
 		return 0, err
 	}
 
-	if len(stuckMatches) == 0 {
-		s.log.Info("No stuck running matches found")
+	if recovered == 0 {
+		s.log.Debug("No stuck running matches found")
 		return 0, nil
 	}
 
-	s.log.Info("Found stuck running matches",
-		zap.Int("count", len(stuckMatches)),
+	s.log.Info("Reset stuck matches to pending",
+		zap.Int64("count", recovered),
 		zap.Duration("stuck_threshold", s.stuckDuration),
 	)
 
-	matchIDs := make([]uuid.UUID, len(stuckMatches))
-	for i, match := range stuckMatches {
-		matchIDs[i] = match.ID
-		s.log.Debug("Recovering stuck match",
-			zap.String("match_id", match.ID.String()),
-			zap.Time("started_at", *match.StartedAt),
-		)
-	}
-
-	if err := s.matchRepo.BatchUpdateStatus(ctx, matchIDs, models.MatchPending); err != nil {
-		return 0, err
-	}
-
-	s.log.Info("Reset stuck matches to pending",
-		zap.Int("count", len(matchIDs)),
-	)
-
-	return len(matchIDs), nil
+	return int(recovered), nil
 }
 
-// enqueuePendingMatches закидывает pending матчи из базы в очередь редиса
+// enqueuePendingMatches закидывает pending матчи из базы в очередь редиса.
+// повтор безопасен: матч, который уже лежит в очереди, отсекает dedup-ключ.
+// ponytail: берётся только первая пачка (batchSize) по приоритету и возрасту;
+// выпавшие из очереди матчи старше остальных, поэтому попадают в неё первыми
 func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error) {
 	pendingMatches, err := s.matchRepo.GetPending(ctx, s.batchSize)
 	if err != nil {
@@ -147,32 +131,19 @@ func (s *RecoveryService) enqueuePendingMatches(ctx context.Context) (int, error
 	}
 
 	if len(pendingMatches) == 0 {
-		s.log.Info("No pending matches to enqueue")
+		s.log.Debug("No pending matches to enqueue")
 		return 0, nil
 	}
 
-	s.log.Info("Found pending matches to enqueue",
+	if err := s.queueManager.EnqueueBatch(ctx, pendingMatches); err != nil {
+		return 0, err
+	}
+
+	s.log.Info("Pending matches passed to queue",
 		zap.Int("count", len(pendingMatches)),
 	)
 
-	// ошибка на одном матче не валит остальные
-	enqueued := 0
-	for _, match := range pendingMatches {
-		if err := s.queueManager.Enqueue(ctx, match); err != nil {
-			s.log.LogError("Failed to enqueue match during recovery", err,
-				zap.String("match_id", match.ID.String()),
-			)
-			continue
-		}
-		enqueued++
-	}
-
-	s.log.Info("Enqueued pending matches",
-		zap.Int("enqueued", enqueued),
-		zap.Int("total", len(pendingMatches)),
-	)
-
-	return enqueued, nil
+	return len(pendingMatches), nil
 }
 
 // Start запускает периодическую проверку в фоне
@@ -213,22 +184,22 @@ func (s *RecoveryService) runPeriodicRecovery() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// периодика трогает только застрявшие running - pending уже в очереди
-	// после startup-восстановления
 	stuckRecovered, err := s.recoverStuckRunning(ctx)
 	if err != nil {
 		s.log.LogError("Periodic recovery failed", err)
+		// pending всё равно стоит прогнать
+	}
+
+	// pending ставятся в очередь на каждом тике, а не только после сброса
+	// застрявших: матч, исчерпавший ретраи пула на инфра-ошибке, остаётся
+	// pending вне очереди и без этого ждал бы рестарта воркера
+	enqueued, err := s.enqueuePendingMatches(ctx)
+	if err != nil {
+		s.log.LogError("Failed to enqueue pending matches", err)
 		return
 	}
 
 	if stuckRecovered > 0 {
-		// появились новые сброшенные - их надо и в очередь
-		enqueued, err := s.enqueuePendingMatches(ctx)
-		if err != nil {
-			s.log.LogError("Failed to enqueue recovered matches", err)
-			return
-		}
-
 		s.log.Info("Periodic recovery completed",
 			zap.Int("stuck_recovered", stuckRecovered),
 			zap.Int("enqueued", enqueued),

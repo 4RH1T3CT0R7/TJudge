@@ -35,18 +35,12 @@ func TestNewRecoveryService_Defaults(t *testing.T) {
 func TestRecoveryService_RecoverOnStartup_Success(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
-	now := time.Now().Add(-20 * time.Minute)
-	stuckMatch := &models.Match{ID: uuid.New(), StartedAt: &now}
-	pendingMatch := &models.Match{ID: uuid.New()}
+	pending := []*models.Match{{ID: uuid.New()}}
 
 	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{stuckMatch}, nil)
-	matchRepo.On("BatchUpdateStatus", mock.Anything, []uuid.UUID{stuckMatch.ID}, models.MatchPending).
-		Return(nil)
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return([]*models.Match{pendingMatch}, nil)
-	queueMgr.On("Enqueue", mock.Anything, pendingMatch).Return(nil)
+	matchRepo.On("ResetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).Return(int64(1), nil)
+	matchRepo.On("GetPending", mock.Anything, svc.batchSize).Return(pending, nil)
+	queueMgr.On("EnqueueBatch", mock.Anything, pending).Return(nil)
 
 	err := svc.RecoverOnStartup(context.Background())
 	assert.NoError(t, err)
@@ -59,10 +53,8 @@ func TestRecoveryService_RecoverOnStartup_QueueSizeError_Continues(t *testing.T)
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
 	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), fmt.Errorf("redis error"))
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{}, nil)
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return([]*models.Match{}, nil)
+	matchRepo.On("ResetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).Return(int64(0), nil)
+	matchRepo.On("GetPending", mock.Anything, svc.batchSize).Return([]*models.Match{}, nil)
 
 	err := svc.RecoverOnStartup(context.Background())
 	assert.NoError(t, err)
@@ -73,10 +65,9 @@ func TestRecoveryService_RecoverOnStartup_StuckRecoveryError_Continues(t *testin
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
 	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return(nil, fmt.Errorf("db error"))
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return([]*models.Match{}, nil)
+	matchRepo.On("ResetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
+		Return(int64(0), fmt.Errorf("db error"))
+	matchRepo.On("GetPending", mock.Anything, svc.batchSize).Return([]*models.Match{}, nil)
 
 	err := svc.RecoverOnStartup(context.Background())
 	assert.NoError(t, err)
@@ -87,52 +78,25 @@ func TestRecoveryService_RecoverOnStartup_EnqueueFails(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
 	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{}, nil)
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return(nil, fmt.Errorf("db error"))
+	matchRepo.On("ResetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).Return(int64(0), nil)
+	matchRepo.On("GetPending", mock.Anything, svc.batchSize).Return(nil, fmt.Errorf("db error"))
 
 	err := svc.RecoverOnStartup(context.Background())
 	assert.Error(t, err)
 }
 
-// частичный сбой enqueue логируется, а не возвращается
-func TestRecoveryService_RecoverOnStartup_PartialEnqueueFailure(t *testing.T) {
+// периодика ставит pending в очередь и без застрявших: матч, исчерпавший
+// ретраи пула на инфра-ошибке, лежит pending вне очереди
+func TestRecoveryService_Periodic_EnqueuesPendingWithoutStuck(t *testing.T) {
 	svc, matchRepo, queueMgr := newTestRecoveryService(t, RecoveryConfig{})
 
-	m1 := &models.Match{ID: uuid.New()}
-	m2 := &models.Match{ID: uuid.New()}
+	orphan := []*models.Match{{ID: uuid.New(), Status: models.MatchPending}}
+	matchRepo.On("ResetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).Return(int64(0), nil)
+	matchRepo.On("GetPending", mock.Anything, svc.batchSize).Return(orphan, nil)
+	queueMgr.On("EnqueueBatch", mock.Anything, orphan).Return(nil)
 
-	queueMgr.On("GetTotalQueueSize", mock.Anything).Return(int64(0), nil)
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{}, nil)
-	matchRepo.On("GetPending", mock.Anything, svc.batchSize).
-		Return([]*models.Match{m1, m2}, nil)
-	queueMgr.On("Enqueue", mock.Anything, m1).Return(fmt.Errorf("redis error"))
-	queueMgr.On("Enqueue", mock.Anything, m2).Return(nil)
-
-	err := svc.RecoverOnStartup(context.Background())
-	assert.NoError(t, err)
+	svc.runPeriodicRecovery()
 	queueMgr.AssertExpectations(t)
-}
-
-// в pending переводятся именно найденные зависшие матчи
-func TestRecoveryService_RecoverStuckRunning_VerifiesMatchIDs(t *testing.T) {
-	svc, matchRepo, _ := newTestRecoveryService(t, RecoveryConfig{})
-
-	now := time.Now().Add(-15 * time.Minute)
-	m1 := &models.Match{ID: uuid.New(), StartedAt: &now}
-	m2 := &models.Match{ID: uuid.New(), StartedAt: &now}
-
-	matchRepo.On("GetStuckRunning", mock.Anything, svc.stuckDuration, svc.batchSize).
-		Return([]*models.Match{m1, m2}, nil)
-	matchRepo.On("BatchUpdateStatus", mock.Anything, []uuid.UUID{m1.ID, m2.ID}, models.MatchPending).
-		Return(nil)
-
-	count, err := svc.recoverStuckRunning(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, 2, count)
-	matchRepo.AssertExpectations(t)
 }
 
 // Stop не блокируется при работающем периодическом цикле

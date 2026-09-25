@@ -750,25 +750,42 @@ func (s *MatchRepositorySuite) TestGetStuckRunning() {
 	assert.False(s.T(), foundRecent, "should NOT find the recently started match")
 }
 
-func (s *MatchRepositorySuite) TestBatchUpdateStatus() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("batus")
-
-	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-
+// сбрасываются только running старше порога: свежий running и завершённый
+// матч с давним started_at не трогаются
+func (s *MatchRepositorySuite) TestResetStuckRunning() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("rstst")
 	ctx := context.Background()
-	matchIDs := []uuid.UUID{m1.ID, m2.ID, m3.ID}
 
-	err := s.repo.BatchUpdateStatus(ctx, matchIDs, models.MatchCompleted)
-	require.NoError(s.T(), err)
-
-	// все три должны стать completed
-	for _, id := range matchIDs {
-		result, err := s.repo.GetByID(ctx, id)
+	setState := func(m *models.Match, status models.MatchStatus, startedAgo string) {
+		_, err := s.database.ExecContext(ctx,
+			"UPDATE matches SET status = $2, started_at = NOW() - $3::interval WHERE id = $1",
+			m.ID, status, startedAgo)
 		require.NoError(s.T(), err)
-		assert.Equal(s.T(), models.MatchCompleted, result.Status)
 	}
+
+	stuck := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
+	setState(stuck, models.MatchRunning, "2 hours")
+	recent := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
+	setState(recent, models.MatchRunning, "1 second")
+	done := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
+	setState(done, models.MatchCompleted, "2 hours")
+
+	n, err := s.repo.ResetStuckRunning(ctx, time.Hour, 100)
+	require.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), n, int64(1))
+
+	got, err := s.repo.GetByID(ctx, stuck.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchPending, got.Status)
+	assert.Nil(s.T(), got.StartedAt)
+
+	got, err = s.repo.GetByID(ctx, recent.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchRunning, got.Status)
+
+	got, err = s.repo.GetByID(ctx, done.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchCompleted, got.Status)
 }
 
 func (s *MatchRepositorySuite) TestBatchUpdateResults() {

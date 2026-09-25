@@ -36,17 +36,9 @@ func (m *MockMatchRepository) GetPending(ctx context.Context, limit int) ([]*mod
 	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
-func (m *MockMatchRepository) GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error) {
+func (m *MockMatchRepository) ResetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) (int64, error) {
 	args := m.Called(ctx, stuckDuration, limit)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.Match), args.Error(1)
-}
-
-func (m *MockMatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error {
-	args := m.Called(ctx, matchIDs, status)
-	return args.Error(0)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockMatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error {
