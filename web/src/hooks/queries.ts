@@ -47,7 +47,7 @@ export function useLeaderboard(tournamentId: string, opts: PollOption = {}) {
 export function useCrossGameLeaderboard(tournamentId: string, opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.crossGameLeaderboard(tournamentId),
-    queryFn: () => api.getCrossGameLeaderboard(tournamentId),
+    queryFn: ({ signal }) => api.getCrossGameLeaderboard(tournamentId, signal),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
   });
@@ -56,7 +56,7 @@ export function useCrossGameLeaderboard(tournamentId: string, opts: PollOption =
 export function useMatchesByRounds(tournamentId: string, opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.matchesByRounds(tournamentId),
-    queryFn: () => api.getMatchesByRounds(tournamentId),
+    queryFn: ({ signal }) => api.getMatchesByRounds(tournamentId, signal),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
   });
@@ -75,8 +75,8 @@ export function useRoundMatches(
 ) {
   return useQuery({
     queryKey: [...queryKeys.matchesByRounds(tournamentId), round, gameType, page] as const,
-    queryFn: () =>
-      api.getRoundMatches(tournamentId, round, gameType, ROUND_PAGE_SIZE, page * ROUND_PAGE_SIZE),
+    queryFn: ({ signal }) =>
+      api.getRoundMatches(tournamentId, round, gameType, ROUND_PAGE_SIZE, page * ROUND_PAGE_SIZE, signal),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
     placeholderData: keepPreviousData,
@@ -94,7 +94,7 @@ export function useTournamentGames(tournamentId: string) {
 export function useTournamentGamesStatus(tournamentId: string, opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.tournamentGamesStatus(tournamentId),
-    queryFn: () => api.getTournamentGamesStatus(tournamentId),
+    queryFn: ({ signal }) => api.getTournamentGamesStatus(tournamentId, signal),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
   });
@@ -136,7 +136,7 @@ export function useGame(id: string, opts: PollOption = {}) {
 export function useGameLeaderboard(tournamentId: string, gameId: string, opts: PollOption = {}) {
   return useQuery({
     queryKey: queryKeys.gameLeaderboard(tournamentId, gameId),
-    queryFn: () => api.getGameLeaderboard(tournamentId, gameId),
+    queryFn: ({ signal }) => api.getGameLeaderboard(tournamentId, gameId, undefined, signal),
     enabled: (opts.enabled ?? true) && !!tournamentId && !!gameId,
     refetchInterval: opts.pollInterval ?? false,
   });

@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import { api } from './client';
+import { useToastStore } from '../store/toastStore';
 
 // Node 25+ держит свой глобальный localStorage (без --localstorage-file он
 // undefined), и тот закрывает хранилище happy-dom.
@@ -124,4 +125,17 @@ describe('ApiClient refresh', () => {
     expect(localStorage.getItem('refresh_token')).toBe('r2');
     expect(onAuthFailure).not.toHaveBeenCalled();
   });
+});
+
+it('отменённый запрос не ретраится и не показывает тост', async () => {
+  calls.length = 0;
+  useToastStore.setState({ toasts: [] });
+  serve(() => ({ status: 200, data: [] }));
+  const controller = new AbortController();
+  controller.abort();
+
+  const err = await api.getMatchesByRounds('t1', controller.signal).catch((e: unknown) => e);
+  expect(axios.isCancel(err)).toBe(true);
+  expect(calls).toHaveLength(0);
+  expect(useToastStore.getState().toasts).toHaveLength(0);
 });
