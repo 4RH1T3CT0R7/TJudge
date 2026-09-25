@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/executor"
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -67,7 +66,6 @@ type Processor struct {
 	programRepo   ProgramRepository
 	ratingService RatingService
 	executor      Executor
-	matchCache    *cache.MatchCache
 	log           *logger.Logger
 }
 
@@ -77,7 +75,6 @@ func NewProcessor(
 	programRepo ProgramRepository,
 	ratingService RatingService,
 	executor Executor,
-	matchCache *cache.MatchCache,
 	log *logger.Logger,
 ) *Processor {
 	return &Processor{
@@ -86,7 +83,6 @@ func NewProcessor(
 		programRepo:   programRepo,
 		ratingService: ratingService,
 		executor:      executor,
-		matchCache:    matchCache,
 		log:           log,
 	}
 }
@@ -179,13 +175,6 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	// результат + outbox-задача «обновить рейтинг» одной транзакцией
 	if err := p.matchRepo.UpdateResultWithOutbox(writeCtx, match.ID, result); err != nil {
 		return fmt.Errorf("failed to update match result: %w", err)
-	}
-
-	// кэш - best effort, ошибка только логируется
-	if p.matchCache != nil {
-		if err := p.matchCache.Set(ctx, match.ID, result); err != nil {
-			p.log.LogError("Failed to cache match result", err)
-		}
 	}
 
 	// fast-path рейтинга. если тут что-то упадёт - не страшно, outbox-задача

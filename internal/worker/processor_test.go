@@ -164,7 +164,6 @@ func newTestProcessor(t *testing.T) (*Processor, *MockMatchRepository, *MockRati
 		programRepo:   programRepo,
 		ratingService: ratingService,
 		executor:      executor,
-		matchCache:    nil, // nil-кэш: тесты не доходят до вызовов кэша
 		log:           log,
 	}
 

@@ -97,8 +97,7 @@ func main() {
 	ratingRepo := storage.NewRatingRepository(database)
 	programRepo := storage.NewProgramRepository(database)
 
-	// кэши с метриками
-	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
+	// кэш лидерборда с метриками
 	leaderboardCache := cache.NewLeaderboardCache(redisCache).WithMetrics(m)
 
 	// queue manager
@@ -156,7 +155,6 @@ func main() {
 		programRepo,
 		ratingService,
 		exec,
-		matchCache,
 		log,
 	)
 

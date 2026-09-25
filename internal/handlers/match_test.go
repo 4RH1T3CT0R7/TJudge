@@ -55,37 +55,6 @@ func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	return args.Get(0).([]*models.Match), args.Error(1)
 }
 
-// MockMatchCache - мок кэша матчей
-type MockMatchCache struct {
-	mock.Mock
-}
-
-func (m *MockMatchCache) Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error) {
-	args := m.Called(ctx, matchID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.MatchResult), args.Error(1)
-}
-
-func (m *MockMatchCache) Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error {
-	args := m.Called(ctx, matchID, result)
-	return args.Error(0)
-}
-
-func (m *MockMatchCache) GetMatch(ctx context.Context, matchID uuid.UUID) (*models.Match, error) {
-	args := m.Called(ctx, matchID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Match), args.Error(1)
-}
-
-func (m *MockMatchCache) SetMatch(ctx context.Context, match *models.Match) error {
-	args := m.Called(ctx, match)
-	return args.Error(0)
-}
-
 // MockMatchQueueManager - мок менеджера очереди
 type MockMatchQueueManager struct {
 	mock.Mock
@@ -133,41 +102,9 @@ func getWithRouteContext(matchID string) *http.Request {
 func TestMatchHandler_Get(t *testing.T) {
 	log, _ := logger.New("error", "json")
 
-	t.Run("попадание в кэш", func(t *testing.T) {
+	t.Run("чтение из базы", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
-
-		matchID := uuid.New()
-		cachedMatch := &models.Match{
-			ID:           matchID,
-			TournamentID: uuid.New(),
-			Program1ID:   uuid.New(),
-			Program2ID:   uuid.New(),
-			GameType:     "chess",
-			Status:       models.MatchCompleted,
-		}
-
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(cachedMatch, nil)
-
-		w := httptest.NewRecorder()
-		handler.Get(w, getWithRouteContext(matchID.String()))
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response models.Match
-		decodeJSONData(t, w.Body, &response)
-		assert.Equal(t, cachedMatch.ID, response.ID)
-
-		mockCache.AssertExpectations(t)
-		// при попадании в кэш репозиторий не трогается
-		mockRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
-	})
-
-	t.Run("промах кэша - чтение из базы", func(t *testing.T) {
-		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		matchID := uuid.New()
 		dbMatch := &models.Match{
@@ -179,7 +116,6 @@ func TestMatchHandler_Get(t *testing.T) {
 			Status:       models.MatchRunning,
 		}
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(dbMatch, nil)
 
 		w := httptest.NewRecorder()
@@ -191,7 +127,6 @@ func TestMatchHandler_Get(t *testing.T) {
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, dbMatch.ID, response.ID)
 
-		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
 }
@@ -201,8 +136,7 @@ func TestMatchHandler_List(t *testing.T) {
 
 	t.Run("список матчей с дефолтной пагинацией", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		expectedMatches := []*models.Match{
 			{ID: uuid.New(), TournamentID: uuid.New(), Program1ID: uuid.New(), Program2ID: uuid.New(), GameType: "chess", Status: models.MatchCompleted},
@@ -230,8 +164,7 @@ func TestMatchHandler_List(t *testing.T) {
 
 	t.Run("фильтр по турниру прокидывается в репозиторий", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		tournamentID := uuid.New()
 		expectedMatches := []*models.Match{
@@ -253,8 +186,7 @@ func TestMatchHandler_List(t *testing.T) {
 
 	t.Run("битый tournament_id даёт 400", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?tournament_id=invalid", nil)
 		w := httptest.NewRecorder()
@@ -270,8 +202,7 @@ func TestMatchHandler_GetStatistics(t *testing.T) {
 
 	t.Run("статистика по всем матчам", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		expectedStats := &storage.MatchStatistics{
 			Total:     100,
@@ -304,10 +235,9 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 
 	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, nil, mockQueue, log)
 
 		expectedStats := &queue.QueueStats{
 			High:   5,
@@ -337,10 +267,9 @@ func TestMatchHandler_GetQueueStats(t *testing.T) {
 
 	t.Run("без менеджера очереди - 500", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 
 		// queueManager == nil, хендлер должен деградировать в 500
-		handler := NewMatchHandler(mockRepo, mockCache, nil, nil, log)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches/queue/stats", nil)
 		w := httptest.NewRecorder()
@@ -356,10 +285,9 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 
 	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, nil, mockQueue, log)
 
 		mockQueue.On("Clear", mock.Anything).Return(nil)
 
@@ -383,10 +311,9 @@ func TestMatchHandler_PurgeInvalidMatches(t *testing.T) {
 
 	t.Run("успех", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockQueue := new(MockMatchQueueManager)
 
-		handler := NewMatchHandler(mockRepo, mockCache, nil, mockQueue, log)
+		handler := NewMatchHandler(mockRepo, nil, mockQueue, log)
 
 		mockQueue.On("PurgeInvalidMatches", mock.Anything, mock.AnythingOfType("func(string) bool")).Return(int64(7), nil)
 
@@ -425,16 +352,14 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 
 	t.Run("админ видит полный текст ошибки", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
+		handler := NewMatchHandler(mockRepo, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		errorMsg := "runtime error: index out of bounds at line 42"
 		match := getFailedMatch(matchID, uuid.New(), uuid.New(), 1, errorMsg)
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		req := getWithRouteContext(matchID.String())
@@ -452,16 +377,14 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
-		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("владелец упавшей программы видит свою ошибку", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
+		handler := NewMatchHandler(mockRepo, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		ownerID := uuid.New()
@@ -473,7 +396,6 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
 		failedProgram := &models.Program{ID: program2ID, UserID: ownerID, Name: "my-bot"}
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
@@ -492,17 +414,15 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, errorMsg, *response.ErrorMessage)
 
-		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 		mockProgramLookup.AssertExpectations(t)
 	})
 
 	t.Run("чужой пользователь видит обезличенное сообщение", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
+		handler := NewMatchHandler(mockRepo, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		programOwnerID := uuid.New()
@@ -515,7 +435,6 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		match := getFailedMatch(matchID, program1ID, program2ID, 1, errorMsg)
 		failedProgram := &models.Program{ID: program2ID, UserID: programOwnerID, Name: "opponent-bot"}
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 		mockProgramLookup.On("GetByID", mock.Anything, program2ID).Return(failedProgram, nil)
 
@@ -534,17 +453,15 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		require.NotNil(t, response.ErrorMessage)
 		assert.Equal(t, "Программа оппонента завершилась с ошибкой", *response.ErrorMessage)
 
-		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 		mockProgramLookup.AssertExpectations(t)
 	})
 
 	t.Run("без победителя ошибка скрыта", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
-		mockCache := new(MockMatchCache)
 		mockProgramLookup := new(MockMatchProgramLookup)
 
-		handler := NewMatchHandler(mockRepo, mockCache, mockProgramLookup, nil, log)
+		handler := NewMatchHandler(mockRepo, mockProgramLookup, nil, log)
 
 		matchID := uuid.New()
 		userID := uuid.New()
@@ -561,7 +478,6 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 			ErrorMessage: &errorMsg,
 		}
 
-		mockCache.On("GetMatch", mock.Anything, matchID).Return(nil, nil)
 		mockRepo.On("GetByID", mock.Anything, matchID).Return(match, nil)
 
 		req := getWithRouteContext(matchID.String())
@@ -580,7 +496,6 @@ func TestMatchHandler_ErrorFiltering(t *testing.T) {
 		// упавшую программу не определить, поэтому текст скрыт
 		assert.Equal(t, "Ошибка выполнения матча", *response.ErrorMessage)
 
-		mockCache.AssertExpectations(t)
 		mockRepo.AssertExpectations(t)
 	})
 }

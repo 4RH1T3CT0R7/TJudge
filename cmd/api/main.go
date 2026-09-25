@@ -140,7 +140,6 @@ func main() {
 	teamRepo := storage.NewTeamRepository(database)
 
 	// кэши с метриками
-	matchCache := cache.NewMatchCache(redisCache).WithMetrics(m)
 	leaderboardCache := cache.NewLeaderboardCache(redisCache).WithMetrics(m)
 	tournamentCache := cache.NewTournamentCache(redisCache)
 	tokenBlacklist := cache.NewTokenBlacklistCache(redisCache)
@@ -240,7 +239,7 @@ func main() {
 		compileQueue,
 		cfg.Storage.ProgramsPath, log,
 	)
-	matchHandler := handlers.NewMatchHandler(matchRepo, matchCache, programRepo, queueManager, log)
+	matchHandler := handlers.NewMatchHandler(matchRepo, programRepo, queueManager, log)
 	gameHandler := handlers.NewGameHandler(
 		gameService, tournamentRepo, matchRepo, tournamentRepo,
 		programRepo, gameRepo, notifier, cfg.Storage.ProgramsPath, log,

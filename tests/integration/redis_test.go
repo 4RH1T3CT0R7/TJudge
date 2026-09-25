@@ -13,7 +13,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
-	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +24,6 @@ import (
 type RedisTestSuite struct {
 	suite.Suite
 	cache            *cache.Cache
-	matchCache       *cache.MatchCache
 	leaderboardCache *cache.LeaderboardCache
 	ctx              context.Context
 }
@@ -54,7 +52,6 @@ func (s *RedisTestSuite) SetupSuite() {
 	}, log, m)
 	require.NoError(s.T(), err)
 
-	s.matchCache = cache.NewMatchCache(s.cache)
 	s.leaderboardCache = cache.NewLeaderboardCache(s.cache)
 }
 
@@ -138,87 +135,6 @@ func (s *RedisTestSuite) TestCache_Exists() {
 	require.NoError(s.T(), err)
 
 	exists, err = s.cache.Exists(s.ctx, key)
-	require.NoError(s.T(), err)
-	assert.True(s.T(), exists)
-}
-
-// =============================================================================
-// Match Cache Tests
-// =============================================================================
-
-func (s *RedisTestSuite) TestMatchCache_SetGetMatch() {
-	match := &models.Match{
-		ID:       uuid.New(),
-		Status:   models.MatchPending,
-		GameType: "tictactoe",
-		Priority: models.PriorityMedium,
-	}
-
-	err := s.matchCache.SetMatch(s.ctx, match)
-	require.NoError(s.T(), err)
-
-	found, err := s.matchCache.GetMatch(s.ctx, match.ID)
-	require.NoError(s.T(), err)
-	require.NotNil(s.T(), found)
-	assert.Equal(s.T(), match.ID, found.ID)
-	assert.Equal(s.T(), match.Status, found.Status)
-}
-
-func (s *RedisTestSuite) TestMatchCache_SetGetResult() {
-	matchID := uuid.New()
-	result := &models.MatchResult{
-		MatchID:  matchID,
-		Winner:   1,
-		Score1:   10,
-		Score2:   5,
-		Duration: 5 * time.Second,
-	}
-
-	err := s.matchCache.Set(s.ctx, matchID, result)
-	require.NoError(s.T(), err)
-
-	found, err := s.matchCache.Get(s.ctx, matchID)
-	require.NoError(s.T(), err)
-	require.NotNil(s.T(), found)
-	assert.Equal(s.T(), result.MatchID, found.MatchID)
-	assert.Equal(s.T(), result.Winner, found.Winner)
-	assert.Equal(s.T(), result.Score1, found.Score1)
-}
-
-func (s *RedisTestSuite) TestMatchCache_Delete() {
-	match := &models.Match{
-		ID:       uuid.New(),
-		Status:   models.MatchPending,
-		GameType: "tictactoe",
-	}
-
-	err := s.matchCache.SetMatch(s.ctx, match)
-	require.NoError(s.T(), err)
-
-	err = s.matchCache.Delete(s.ctx, match.ID)
-	require.NoError(s.T(), err)
-
-	found, err := s.matchCache.GetMatch(s.ctx, match.ID)
-	require.NoError(s.T(), err)
-	assert.Nil(s.T(), found)
-}
-
-func (s *RedisTestSuite) TestMatchCache_Exists() {
-	matchID := uuid.New()
-
-	exists, err := s.matchCache.Exists(s.ctx, matchID)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), exists)
-
-	match := &models.Match{
-		ID:       matchID,
-		Status:   models.MatchPending,
-		GameType: "tictactoe",
-	}
-	err = s.matchCache.SetMatch(s.ctx, match)
-	require.NoError(s.T(), err)
-
-	exists, err = s.matchCache.Exists(s.ctx, matchID)
 	require.NoError(s.T(), err)
 	assert.True(s.T(), exists)
 }

@@ -30,13 +30,6 @@ type MatchQueueManager interface {
 	PurgeInvalidMatches(ctx context.Context, validator func(matchID string) bool) (int64, error)
 }
 
-type MatchCache interface {
-	Get(ctx context.Context, matchID uuid.UUID) (*models.MatchResult, error)
-	Set(ctx context.Context, matchID uuid.UUID, result *models.MatchResult) error
-	GetMatch(ctx context.Context, matchID uuid.UUID) (*models.Match, error)
-	SetMatch(ctx context.Context, match *models.Match) error
-}
-
 // поиск владельца программы для фильтрации текста ошибок
 type MatchProgramLookup interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
@@ -45,7 +38,6 @@ type MatchProgramLookup interface {
 // MatchHandler обслуживает запросы к матчам
 type MatchHandler struct {
 	matchRepo     MatchRepository
-	matchCache    MatchCache
 	programLookup MatchProgramLookup
 	queueManager  MatchQueueManager
 	log           *logger.Logger
@@ -54,10 +46,9 @@ type MatchHandler struct {
 // NewMatchHandler собирает хендлер матчей. programLookup и queueManager
 // опциональны и могут быть nil - без них хендлер продолжает работать,
 // просто отключая связанные с ними возможности
-func NewMatchHandler(matchRepo MatchRepository, matchCache MatchCache, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
+func NewMatchHandler(matchRepo MatchRepository, programLookup MatchProgramLookup, queueManager MatchQueueManager, log *logger.Logger) *MatchHandler {
 	return &MatchHandler{
 		matchRepo:     matchRepo,
-		matchCache:    matchCache,
 		programLookup: programLookup,
 		queueManager:  queueManager,
 		log:           log,
@@ -134,22 +125,6 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// сначала проверяется кэш - это дешевле похода в базу
-	cachedMatch, cacheErr := h.matchCache.GetMatch(r.Context(), id)
-	if cacheErr == nil && cachedMatch != nil {
-		h.log.Info("Match from cache",
-			zap.String("match_id", id.String()),
-		)
-		// даже кэшированный матч прогоняется через фильтр ошибок по правам
-		userID, _ := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-		userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
-		isAdmin := userRole == models.RoleAdmin
-		cachedMatch = h.filterMatchError(r.Context(), cachedMatch, userID, isAdmin)
-		writeJSON(w, http.StatusOK, cachedMatch)
-		return
-	}
-
-	// промах кэша - матч берётся из базы
 	match, err := h.matchRepo.GetByID(r.Context(), id)
 	if err != nil {
 		h.log.LogError("Failed to get match", err,
