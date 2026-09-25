@@ -94,6 +94,25 @@ func TestRedisEventPublisher_Handle(t *testing.T) {
 	assert.Equal(t, event.Winner, received.Winner)
 }
 
+// отменённый контекст запроса не мешает отправить событие
+func TestRedisEventPublisher_IgnoresCancel(t *testing.T) {
+	client, _ := newTestRedisClient(t)
+	pub := NewRedisEventPublisher(&redisCacheAdapter{client: client}, newTestLogger(t))
+
+	pubsub := client.Subscribe(t.Context(), defaultChannel)
+	defer pubsub.Close()
+	_, err := pubsub.Receive(t.Context())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.NoError(t, pub.Publish(ctx, "TournamentStarted", TournamentStarted{TournamentID: uuid.New()}))
+
+	msg, err := pubsub.ReceiveMessage(t.Context())
+	require.NoError(t, err)
+	assert.Contains(t, msg.Payload, "TournamentStarted")
+}
+
 func TestRedisEventSubscriber_ReceivesAndRepublishes(t *testing.T) {
 	client, _ := newTestRedisClient(t)
 	log := newTestLogger(t)
