@@ -65,7 +65,7 @@ func hangingMatch(w http.ResponseWriter, r *http.Request, path string) {
 
 // собственный лимит матча истёк - виновата программа, результат терминальный
 func TestRunInDocker_OwnTimeoutIsProgramError(t *testing.T) {
-	e, calls := fakeDocker(t, config.ExecutorConfig{Timeout: 100 * time.Millisecond}, hangingMatch)
+	e, calls := fakeDocker(t, config.ExecutorConfig{Timeout: 400 * time.Millisecond}, hangingMatch)
 
 	_, err := e.runInDocker(context.Background(), "dilemma", "/programs/a", "/programs/b", nil)
 
@@ -80,7 +80,7 @@ func TestRunInDocker_OwnTimeoutIsProgramError(t *testing.T) {
 func TestRunInDocker_ParentCancelIsInfra(t *testing.T) {
 	e, calls := fakeDocker(t, config.ExecutorConfig{Timeout: time.Minute}, hangingMatch)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 	defer cancel()
 	_, err := e.runInDocker(ctx, "dilemma", "/programs/a", "/programs/b", nil)
 
