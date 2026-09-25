@@ -2,12 +2,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { throttle } from './useTournamentLive';
 
-// Node 25+ держит свой глобальный localStorage (без --localstorage-file он
-// undefined), и тот закрывает хранилище happy-dom.
-vi.hoisted(() => {
-  if (typeof localStorage === 'undefined') vi.stubGlobal('localStorage', new Storage());
-});
-
 describe('throttle', () => {
   afterEach(() => {
     vi.useRealTimers();

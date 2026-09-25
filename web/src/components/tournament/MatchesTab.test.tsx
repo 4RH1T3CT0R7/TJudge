@@ -6,12 +6,6 @@ import { MatchesTab } from './MatchesTab';
 import api from '../../api/client';
 import type { MatchRound } from '../../types';
 
-// Node 25+ держит свой глобальный localStorage (без --localstorage-file он
-// undefined), и тот закрывает хранилище happy-dom.
-vi.hoisted(() => {
-  if (typeof localStorage === 'undefined') vi.stubGlobal('localStorage', new Storage());
-});
-
 const round: MatchRound = {
   round_number: 1,
   game_type: 'dilemma',

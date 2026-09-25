@@ -3,12 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useWebSocket, reconnectDelay } from './useWebSocket';
 
-// Node 25+ держит свой глобальный localStorage (без --localstorage-file он
-// undefined), и тот закрывает хранилище happy-dom.
-vi.hoisted(() => {
-  if (typeof localStorage === 'undefined') vi.stubGlobal('localStorage', new Storage());
-});
-
 // Управляемый WebSocket: тест сам решает, когда сокет открылся или упал.
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
