@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WSMessage } from '../types';
 
+// Потолок backoff переподключения. Лимита попыток нет: после деплоя или
+// потери сети соединение должно вернуться само, без F5.
+const MAX_RECONNECT_DELAY_MS = 30000;
+
+/** Задержка перед попыткой attempt (с 1): 1s, 2s, 4s, ... до 30s. */
+export function reconnectDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS);
+}
+
 interface UseWebSocketOptions {
   tournamentId: string;
   onMessage?: (message: WSMessage) => void;
@@ -28,7 +37,6 @@ export function useWebSocket({
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
   const mountedRef = useRef(true);
-  const maxReconnectAttempts = 5;
 
   // Храним значения в refs, чтобы не пересоздавать функции
   const tournamentIdRef = useRef(tournamentId);
@@ -68,9 +76,17 @@ export function useWebSocket({
       return;
     }
 
-    // Закрываем существующее соединение, если есть
+    // Отложенный reconnect больше не нужен: соединение открывается сейчас
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    // Закрываем существующее соединение, если есть. Его обработчики дальше
+    // игнорируются (проверка wsRef.current !== ws), так что close без кода
+    // не запланирует лишний reconnect.
     if (wsRef.current) {
-      wsRef.current.close();
+      wsRef.current.close(1000);
       wsRef.current = null;
     }
 
@@ -84,8 +100,8 @@ export function useWebSocket({
     const ws = new WebSocket(wsUrl, [`access_token.${token}`]);
 
     ws.onopen = () => {
-      if (!mountedRef.current) {
-        ws.close();
+      if (!mountedRef.current || wsRef.current !== ws) {
+        ws.close(1000);
         return;
       }
       setIsConnected(true);
@@ -94,28 +110,30 @@ export function useWebSocket({
     };
 
     ws.onclose = (event) => {
-      if (!mountedRef.current) return;
+      // Закрылся старый сокет, уже заменённый новым: состояние принадлежит новому
+      if (!mountedRef.current || wsRef.current !== ws) return;
 
       setIsConnected(false);
       wsRef.current = null;
       onCloseRef.current?.();
 
-      // Не реконнектимся, если закрыто чисто (code 1000) или достигнут лимит попыток
-      if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+      // Чистое закрытие (1000) - по инициативе клиента, переподключение не нужно
+      if (event.code !== 1000) {
         reconnectAttempts.current++;
-        // Экспоненциальный backoff: 1s, 2s, 4s, 8s, 16s
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 16000);
-        reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
+        reconnectTimeoutRef.current = setTimeout(
+          () => connectRef.current(),
+          reconnectDelay(reconnectAttempts.current)
+        );
       }
     };
 
     ws.onerror = (error) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || wsRef.current !== ws) return;
       onErrorRef.current?.(error);
     };
 
     ws.onmessage = (event) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || wsRef.current !== ws) return;
       try {
         const message = JSON.parse(event.data) as WSMessage;
         onMessageRef.current?.(message);
@@ -180,7 +198,9 @@ export function useWebSocket({
       if (enabled && tournamentIdRef.current) {
         reconnectAttempts.current = 0;
         // Небольшая задержка, чтобы не биться в ещё не готовый network stack.
-        setTimeout(() => connectRef.current(), 250);
+        // Через reconnectTimeoutRef: connect() и disconnect() его снимают.
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), 250);
       }
     };
 
