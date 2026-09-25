@@ -173,13 +173,13 @@ func (s *WebSocketTestSuite) TestWebSocket_BroadcastToTournament() {
 	received2 := make(chan bool, 1)
 
 	go func() {
-		conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, _, err := conn1.ReadMessage()
 		received1 <- err == nil
 	}()
 
 	go func() {
-		conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, _, err := conn2.ReadMessage()
 		received2 <- err == nil
 	}()
@@ -214,13 +214,13 @@ func (s *WebSocketTestSuite) TestWebSocket_BroadcastIsolation() {
 	received2 := make(chan bool, 1)
 
 	go func() {
-		conn1.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = conn1.SetReadDeadline(time.Now().Add(1 * time.Second))
 		_, _, err := conn1.ReadMessage()
 		received1 <- err == nil
 	}()
 
 	go func() {
-		conn2.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = conn2.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		_, _, err := conn2.ReadMessage()
 		received2 <- err == nil
 	}()
@@ -253,7 +253,7 @@ func (s *WebSocketTestSuite) TestWebSocket_MessageFormat() {
 	s.hub.Broadcast(tournamentID, "match_completed", payload)
 
 	// Read and verify message format
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, data, err := conn.ReadMessage()
 	require.NoError(s.T(), err)
 
@@ -289,8 +289,8 @@ func (s *WebSocketTestSuite) TestWebSocket_PingPong() {
 
 	// Start read loop in background to process pong
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		conn.ReadMessage()
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, _, _ = conn.ReadMessage()
 	}()
 
 	// Wait for pong
@@ -379,7 +379,7 @@ func (s *WebSocketTestSuite) TestWebSocket_ConcurrentBroadcasts() {
 
 	// Read messages (some might be batched or dropped)
 	received := 0
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 	for {
 		_, _, err := conn.ReadMessage()

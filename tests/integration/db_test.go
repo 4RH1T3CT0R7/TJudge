@@ -81,9 +81,9 @@ func (s *DBTestSuite) SetupTest() {
 
 func (s *DBTestSuite) cleanupTestData() {
 	// Clean up in reverse order of dependencies
-	s.db.ExecContext(s.ctx, "DELETE FROM matches WHERE game_type = 'integration_test'")
-	s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE code_path LIKE 'integration_test%'")
-	s.db.ExecContext(s.ctx, "DELETE FROM users WHERE username LIKE 'integration_test_%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM matches WHERE game_type = 'integration_test'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM programs WHERE code_path LIKE 'integration_test%'")
+	_, _ = s.db.ExecContext(s.ctx, "DELETE FROM users WHERE username LIKE 'integration_test_%'")
 }
 
 // =============================================================================

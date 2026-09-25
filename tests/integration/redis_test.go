@@ -61,16 +61,16 @@ func (s *RedisTestSuite) SetupSuite() {
 func (s *RedisTestSuite) TearDownSuite() {
 	if s.cache != nil {
 		// Clean up test keys
-		s.cache.Del(s.ctx, "test:*")
+		_ = s.cache.Del(s.ctx, "test:*")
 		s.cache.Close()
 	}
 }
 
 func (s *RedisTestSuite) SetupTest() {
 	// Clean up test data before each test
-	s.cache.Del(s.ctx, "match:*")
-	s.cache.Del(s.ctx, "leaderboard:*")
-	s.cache.Del(s.ctx, "test:*")
+	_ = s.cache.Del(s.ctx, "match:*")
+	_ = s.cache.Del(s.ctx, "leaderboard:*")
+	_ = s.cache.Del(s.ctx, "test:*")
 }
 
 // =============================================================================
