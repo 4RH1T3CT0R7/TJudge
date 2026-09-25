@@ -147,8 +147,8 @@ func (p *Processor) play(ctx context.Context, match *models.Match) error {
 	if err != nil {
 		// тут важно различать два вида ошибок. инфраструктурная (докер лёг,
 		// образа нет) - программа не виновата, матч возвращается в pending,
-		// его повторит ретрай пула или recovery. а ошибка самой программы (упала, мусор
-		// в выводе) - терминальная, матч помечается failed
+		// его повторит ретрай пула или recovery. а ошибка самой программы
+		// (упала, мусор в выводе) - терминальная, матч помечается failed
 		if executor.IsInfraError(err) {
 			return fmt.Errorf("transient executor error: %w", err)
 		}
