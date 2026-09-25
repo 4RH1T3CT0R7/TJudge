@@ -33,10 +33,8 @@ type ProgramRepository interface {
 	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
 
-// TournamentRepo - добавление участника и чтение турнира. это один и тот же
-// репозиторий, держать под него два интерфейса было незачем
+// TournamentRepo - чтение турнира
 type TournamentRepo interface {
-	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
@@ -834,36 +832,6 @@ func (h *ProgramHandler) validateProgramSource(language, filePath string) *strin
 	return nil
 }
 
-// registerTournamentParticipant регистрирует программу как участника турнира;
-// ошибки логируются, но upload не проваливают (участие опционально)
-func (h *ProgramHandler) registerTournamentParticipant(ctx context.Context, program *models.Program, tournamentID uuid.UUID) {
-	if h.tournamentRepo == nil {
-		return
-	}
-
-	// берётся program.ID (а не локальный programID), т.к. CreateWithAtomicVersion может перегенерировать его при retry
-	participant := &models.TournamentParticipant{
-		ID:           uuid.New(),
-		TournamentID: tournamentID,
-		ProgramID:    program.ID,
-		Rating:       1500, // стартовый рейтинг ELO
-	}
-
-	if err := h.tournamentRepo.AddParticipant(ctx, participant); err != nil {
-		h.log.Warn("Failed to add program as tournament participant (may already exist)",
-			zap.Error(err),
-			zap.String("program_id", program.ID.String()),
-			zap.String("tournament_id", tournamentID.String()),
-		)
-		// ошибка не возвращается — программа уже создана, участие опционально
-	} else {
-		h.log.Info("Program registered as tournament participant",
-			zap.String("program_id", program.ID.String()),
-			zap.String("tournament_id", tournamentID.String()),
-		)
-	}
-}
-
 // handleFileUpload — основной путь загрузки бота: multipart -> проверки доступа
 // и блокировок -> запись на диск -> codescan -> запись в БД -> очередь компиляции.
 //
@@ -946,6 +914,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		ErrorMessage: scanError,
 	}
 
+	// запись программы и регистрация её участником турнира - один запрос
 	if err := h.programRepo.CreateWithAtomicVersion(r.Context(), program); err != nil {
 		h.log.LogError("Failed to create program", err)
 		// удаление загруженного файла при ошибке
@@ -953,9 +922,6 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		writeError(w, err)
 		return
 	}
-
-	// программа автоматически регистрируется как участник турнира
-	h.registerTournamentParticipant(r.Context(), program, form.tournamentID)
 
 	// программа ставится в очередь компиляции. при ошибке enqueue ничего не
 	// теряется: compile-worker периодически возвращает в очередь программы,

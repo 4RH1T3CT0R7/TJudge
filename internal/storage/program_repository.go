@@ -58,18 +58,27 @@ func (r *ProgramRepository) Create(ctx context.Context, program *models.Program)
 // CreateWithAtomicVersion создаёт программу и сам считает версию:
 // COALESCE(MAX(version),0)+1 прямо внутри INSERT, без отдельного запроса.
 // если две загрузки прилетели одновременно — уникальный индекс ругнётся,
-// тогда повтор с новым id, до 3 раз
+// тогда повтор с новым id, до 3 раз.
+// программа турнира тем же запросом регистрируется участником: по отдельности сбой
+// между двумя INSERT оставлял готовую версию без строки tournament_participants, и
+// команда молча выпадала из раундов игры
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
 		program.Status = models.ProgramReady
 	}
 
 	query := `
-		INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-			COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
+		WITH p AS (
+			INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+				COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
+			)
+			RETURNING id, tournament_id, version, created_at, updated_at
+		), tp AS (
+			INSERT INTO tournament_participants (tournament_id, program_id, rating)
+			SELECT tournament_id, id, 1500 FROM p WHERE tournament_id IS NOT NULL
 		)
-		RETURNING version, created_at, updated_at
+		SELECT version, created_at, updated_at FROM p
 	`
 
 	const maxRetries = 3

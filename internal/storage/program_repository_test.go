@@ -404,3 +404,29 @@ func (s *ProgramRepositorySuite) TestCreate_Timestamps() {
 	assert.True(s.T(), program.UpdatedAt.After(before), "updated_at should be after test start")
 	assert.True(s.T(), program.UpdatedAt.Before(after), "updated_at should be before test end")
 }
+
+// загрузка в турнир: версия считается атомарно, а участник турнира появляется тем
+// же запросом, что и программа
+func (s *ProgramRepositorySuite) TestCreateWithAtomicVersion_RegistersParticipant() {
+	ctx := context.Background()
+	user := s.createUser("prog_atomic")
+	tournament := s.createTournament("TPATOM", user.ID)
+	game := s.createGame("atomic_game")
+	team := s.createTeam(tournament.ID, user.ID, "TATOM1")
+
+	for want := 1; want <= 2; want++ {
+		p := &models.Program{
+			ID: uuid.New(), UserID: user.ID, TeamID: &team.ID, TournamentID: &tournament.ID, GameID: &game.ID,
+			Name: "atomic", CodePath: "/tmp/atomic.py", Language: "python", Status: models.ProgramCompiling,
+		}
+		require.NoError(s.T(), s.repo.CreateWithAtomicVersion(ctx, p))
+		s.programIDs = append(s.programIDs, p.ID)
+		assert.Equal(s.T(), want, p.Version)
+
+		var rating int
+		require.NoError(s.T(), s.database.QueryRowContext(ctx,
+			"SELECT rating FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+			tournament.ID, p.ID).Scan(&rating))
+		assert.Equal(s.T(), 1500, rating)
+	}
+}
