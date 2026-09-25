@@ -76,11 +76,14 @@ func TestGetTimeoutForRequest_SchedulingIsHeavy(t *testing.T) {
 		"/api/v1/tournaments/x/run-game-matches",
 		"/api/v1/tournaments/x/retry-matches",
 		"/api/v1/tournaments/x/games/y/reset-round",
+		"/api/v1/tournaments/x/complete",
 	} {
 		req := httptest.NewRequest("POST", path, nil)
 		assert.Equal(t, config.Heavy, getTimeoutForRequest(req, config), path)
 	}
 	// обычная запись остаётся короткой
-	req := httptest.NewRequest("POST", "/api/v1/teams", nil)
-	assert.Equal(t, config.Cache, getTimeoutForRequest(req, config))
+	for _, path := range []string{"/api/v1/teams", "/api/v1/tournaments/x/games/y/complete-round"} {
+		req := httptest.NewRequest("POST", path, nil)
+		assert.Equal(t, config.Cache, getTimeoutForRequest(req, config), path)
+	}
 }
