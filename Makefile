@@ -82,7 +82,7 @@ test-coverage:
 # Run linters
 lint:
 	@echo "Running linters..."
-	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4)
 	golangci-lint run ./... --timeout=5m
 
 # Run API server
