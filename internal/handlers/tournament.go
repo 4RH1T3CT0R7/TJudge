@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -27,7 +28,7 @@ type TournamentService interface {
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
-	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error)
 }
 
 // SchedulingService раскладывает пары round-robin и толкает матчи в очередь
@@ -410,12 +411,21 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetMatchesByRounds группирует матчи турнира по раундам round-robin.
+//
+// без параметров отдаются только счётчики раундов. матчи раунда приходят
+// постранично по round+game_type: в раунде N*(N-1) матчей на игру, и полный
+// список на каждый запрос страницы турнира клал бы API.
 // @Summary Матчи по раундам
-// @Description Возвращает матчи турнира, сгруппированные по раундам
+// @Description Счётчики по раундам; с round и game_type - один раунд и страница его матчей
 // @Tags tournaments
 // @Produce json
 // @Param id path string true "Tournament ID" format(uuid)
+// @Param round query int false "Номер раунда (вместе с game_type)"
+// @Param game_type query string false "Тип игры (вместе с round)"
+// @Param limit query int false "Лимит матчей раунда" default(50)
+// @Param offset query int false "Смещение" default(0)
 // @Success 200 {array} models.MatchRound
+// @Failure 400 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
 // @Router /tournaments/{id}/matches/rounds [get]
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
@@ -424,7 +434,19 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID)
+	var page *models.RoundPage
+	q := r.URL.Query()
+	if q.Has("round") || q.Has("game_type") {
+		round, err := strconv.Atoi(q.Get("round"))
+		if err != nil || round < 1 || q.Get("game_type") == "" {
+			writeError(w, errors.ErrInvalidInput.WithMessage("round and game_type must be set together"))
+			return
+		}
+		pg := pagination.ParseLimitOffset(r, 50, 0)
+		page = &models.RoundPage{RoundNumber: round, GameType: q.Get("game_type"), Limit: pg.Limit, Offset: pg.Offset}
+	}
+
+	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID, page)
 	if err != nil {
 		h.log.LogError("Failed to get matches by rounds", err,
 			zap.String("tournament_id", tournamentID.String()),

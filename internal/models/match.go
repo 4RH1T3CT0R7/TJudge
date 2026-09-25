@@ -65,8 +65,19 @@ type MatchRound struct {
 	PendingCount   int       `json:"pending_count"`
 	RunningCount   int       `json:"running_count"`
 	FailedCount    int       `json:"failed_count"`
-	Matches        []*Match  `json:"matches"`
+	Wins1          int       `json:"wins1"`
+	Wins2          int       `json:"wins2"`
+	Matches        []*Match  `json:"matches,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+// страница матчей одного раунда игры: в раунде до N*(N-1) матчей,
+// поэтому целиком они не отдаются
+type RoundPage struct {
+	RoundNumber int
+	GameType    string
+	Limit       int
+	Offset      int
 }
 
 type RatingHistory struct {

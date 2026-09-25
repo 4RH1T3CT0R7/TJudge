@@ -277,7 +277,13 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Matches grouped by rounds */
+        /**
+         * Matches grouped by rounds
+         * @description Without parameters returns only per-round counters, `matches` is omitted.
+         *     With `round` and `game_type` (both required together) returns that single
+         *     round with one page of its matches (`limit` capped at 100); `total_matches`
+         *     is the size of the whole round.
+         */
         get: operations["tournamentsGetMatchesByRounds"];
         put?: never;
         post?: never;
@@ -1694,6 +1700,11 @@ export interface components {
             pending_count?: number;
             running_count?: number;
             failed_count?: number;
+            /** @description Completed matches won by program1 */
+            wins1?: number;
+            /** @description Completed matches won by program2 */
+            wins2?: number;
+            /** @description Only when round and game_type are requested */
             matches?: components["schemas"]["Match"][];
             /** Format: date-time */
             created_at?: string;
@@ -2481,7 +2492,16 @@ export interface operations {
     };
     tournamentsGetMatchesByRounds: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Round number (together with game_type) */
+                round?: number;
+                /** @description Game type (together with round) */
+                game_type?: string;
+                /** @description Page size for round matches */
+                limit?: number;
+                /** @description Number of records to skip */
+                offset?: components["parameters"]["Offset"];
+            };
             header?: never;
             path: {
                 /** @description Tournament UUID */
@@ -2500,6 +2520,7 @@ export interface operations {
                     "application/json": components["schemas"]["MatchRoundListEnvelope"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
         };
     };

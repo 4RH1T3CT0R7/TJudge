@@ -1,18 +1,24 @@
 import { useState } from 'react';
 import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
-import type { MatchRound } from '../../types';
+import { useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
+import type { Match, MatchRound } from '../../types';
 
-// Matches Tab Component - отображает матчи, сгруппированные по раундам
+// Matches Tab Component - отображает матчи, сгруппированные по раундам.
+// rounds - только счётчики; матчи раунда грузятся страницами при раскрытии.
 export function MatchesTab({
+  tournamentId,
   rounds,
   onRefresh,
   isRefreshing,
-  isAdmin
+  isAdmin,
+  pollInterval,
 }: {
+  tournamentId: string;
   rounds: MatchRound[];
   onRefresh: () => void;
   isRefreshing: boolean;
   isAdmin: boolean;
+  pollInterval: number | false;
 }) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -225,6 +231,8 @@ export function MatchesTab({
             return (
               <RoundCard
                 key={roundKey}
+                tournamentId={tournamentId}
+                pollInterval={pollInterval}
                 round={round}
                 isExpanded={expandedRounds.has(roundKey)}
                 onToggle={() => toggleRound(roundKey)}
@@ -251,12 +259,16 @@ const getGameDisplayName = (gameType: string) => gameDisplayNames[gameType] || g
 
 // Компонент карточки раунда
 function RoundCard({
+  tournamentId,
+  pollInterval,
   round,
   isExpanded,
   onToggle,
   isAdmin,
   onHide,
 }: {
+  tournamentId: string;
+  pollInterval: number | false;
   round: MatchRound;
   isExpanded: boolean;
   onToggle: () => void;
@@ -276,18 +288,8 @@ function RoundCard({
     return Math.round((round.completed_count / round.total_matches) * 100);
   };
 
-  // Подсчёт статистики по победам/ничьим
-  const matchStats = round.matches.reduce(
-    (acc, match) => {
-      if (match.status === 'completed') {
-        if (match.winner === 1) acc.wins1++;
-        else if (match.winner === 2) acc.wins2++;
-        else acc.draws++;
-      }
-      return acc;
-    },
-    { wins1: 0, wins2: 0, draws: 0 }
-  );
+  // Победы считает сервер по всему раунду, ничьи - остаток завершённых
+  const draws = round.completed_count - round.wins1 - round.wins2;
 
   return (
     <div className={`card p-0 border-l-4 ${getStatusColor()} overflow-hidden`}>
@@ -374,45 +376,93 @@ function RoundCard({
             {round.completed_count > 0 && (
               <>
                 <span className="text-emerald-400">
-                  Побед P1: <strong>{matchStats.wins1}</strong>
+                  Побед P1: <strong>{round.wins1}</strong>
                 </span>
                 <span className="text-blue-400">
-                  Побед P2: <strong>{matchStats.wins2}</strong>
+                  Побед P2: <strong>{round.wins2}</strong>
                 </span>
                 <span className="text-gray-300">
-                  Ничьих: <strong>{matchStats.draws}</strong>
+                  Ничьих: <strong>{draws}</strong>
                 </span>
               </>
             )}
           </div>
 
-          {/* Matches table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-800/50">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium text-gray-300">Статус</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 1</th>
-                  <th className="px-4 py-2 text-center font-medium text-gray-300">Счёт</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 2</th>
-                  <th className="px-4 py-2 text-left font-medium text-gray-300">Игра</th>
-                </tr>
-              </thead>
-              <tbody>
-                {round.matches.map((match) => (
-                  <MatchRow key={match.id} match={match} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <RoundMatches tournamentId={tournamentId} round={round} pollInterval={pollInterval} />
         </div>
       )}
     </div>
   );
 }
 
+// Таблица матчей раунда: монтируется только в раскрытом раунде и грузит одну страницу
+function RoundMatches({
+  tournamentId,
+  round,
+  pollInterval,
+}: {
+  tournamentId: string;
+  round: MatchRound;
+  pollInterval: number | false;
+}) {
+  const [page, setPage] = useState(0);
+  const { data: matches = [], isPending } = useRoundMatches(
+    tournamentId,
+    round.round_number,
+    round.game_type,
+    page,
+    { pollInterval }
+  );
+  const pageCount = Math.max(1, Math.ceil(round.total_matches / ROUND_PAGE_SIZE));
+
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-800/50">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Статус</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 1</th>
+              <th className="px-4 py-2 text-center font-medium text-gray-300">Счёт</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 2</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Игра</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map((match) => (
+              <MatchRow key={match.id} match={match} />
+            ))}
+          </tbody>
+        </table>
+        {isPending && <p className="px-4 py-3 text-sm text-gray-400">Загрузка...</p>}
+      </div>
+      {pageCount > 1 && (
+        <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-gray-800">
+          <button
+            onClick={() => setPage((p) => p - 1)}
+            disabled={page === 0}
+            className="btn btn-secondary text-sm disabled:opacity-50"
+          >
+            Назад
+          </button>
+          <span className="text-sm text-gray-400 px-4">
+            Страница {page + 1} из {pageCount}
+          </span>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page + 1 >= pageCount}
+            className="btn btn-secondary text-sm disabled:opacity-50"
+          >
+            Вперёд
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // Компонент строки матча
-function MatchRow({ match }: { match: MatchRound['matches'][0] }) {
+function MatchRow({ match }: { match: Match }) {
   const getStatusBadge = () => {
     switch (match.status) {
       case 'completed':

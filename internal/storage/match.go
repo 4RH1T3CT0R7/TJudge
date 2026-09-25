@@ -298,7 +298,9 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 	return matches, nil
 }
 
-func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
+// GetMatchesByRounds отдаёт счётчики по раундам турнира без самих матчей.
+// с page выбирается только этот раунд игры вместе со страницей его матчей.
+func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
 	query := `
 		SELECT
 			round_number,
@@ -308,14 +310,23 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 			COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
 			COUNT(*) FILTER (WHERE status = 'running') as running_count,
 			COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+			COUNT(*) FILTER (WHERE status = 'completed' AND winner = 1) as wins1,
+			COUNT(*) FILTER (WHERE status = 'completed' AND winner = 2) as wins2,
 			MIN(created_at) as created_at
 		FROM matches
 		WHERE tournament_id = $1
+	`
+	args := []any{tournamentID}
+	if page != nil {
+		query += " AND round_number = $2 AND game_type = $3"
+		args = append(args, page.RoundNumber, page.GameType)
+	}
+	query += `
 		GROUP BY round_number, game_type
 		ORDER BY MIN(created_at) DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get rounds")
 	}
@@ -332,6 +343,8 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 			&round.PendingCount,
 			&round.RunningCount,
 			&round.FailedCount,
+			&round.Wins1,
+			&round.Wins2,
 			&round.CreatedAt,
 		)
 		if err != nil {
@@ -344,31 +357,28 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 
-	// тянутся все матчи турнира разом чтобы не делать N+1
+	if page == nil || len(rounds) == 0 {
+		return rounds, nil
+	}
+
+	// id в сортировке нужен для стабильных страниц: матчи раунда
+	// вставляются пачкой с одинаковым created_at
 	matchQuery := `
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 		FROM matches
-		WHERE tournament_id = $1
-		ORDER BY round_number, game_type, created_at ASC
+		WHERE tournament_id = $1 AND round_number = $2 AND game_type = $3
+		ORDER BY created_at, id
+		LIMIT $4 OFFSET $5
 	`
 
-	matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID)
+	matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, page.RoundNumber, page.GameType, page.Limit, page.Offset)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get matches")
 	}
 	defer matchRows.Close()
 
-	// раунды индексируются по (round_number, game_type) чтобы быстро раскидать матчи
-	type roundKey struct {
-		roundNumber int
-		gameType    string
-	}
-	roundIndex := make(map[roundKey]*models.MatchRound, len(rounds))
-	for _, round := range rounds {
-		roundIndex[roundKey{round.RoundNumber, round.GameType}] = round
-	}
-
+	round := rounds[0]
 	for matchRows.Next() {
 		var match models.Match
 		err := matchRows.Scan(
@@ -392,10 +402,7 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
-		key := roundKey{match.RoundNumber, match.GameType}
-		if round, ok := roundIndex[key]; ok {
-			round.Matches = append(round.Matches, &match)
-		}
+		round.Matches = append(round.Matches, &match)
 	}
 	if err := matchRows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)

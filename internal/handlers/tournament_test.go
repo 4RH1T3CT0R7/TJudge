@@ -100,8 +100,8 @@ func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tou
 	return args.Get(0).([]*models.CrossGameLeaderboardEntry), args.Error(1)
 }
 
-func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID) ([]*models.MatchRound, error) {
-	args := m.Called(ctx, tournamentID)
+func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
+	args := m.Called(ctx, tournamentID, page)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -648,7 +648,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 			},
 		}
 
-		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID).Return(expectedRounds, nil)
+		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, (*models.RoundPage)(nil)).Return(expectedRounds, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches/rounds", nil)
 		req = withTournamentID(req, tournamentID.String())
@@ -667,6 +667,43 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
+
+	// матчи раунда отдаются только страницей, лимит сверх потолка обрезается до него
+	t.Run("round page", func(t *testing.T) {
+		mockService := new(MockTournamentService)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), nil, log)
+
+		tournamentID := uuid.New()
+		page := &models.RoundPage{RoundNumber: 1, GameType: "prisoners_dilemma", Limit: 100, Offset: 100}
+		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, page).Return([]*models.MatchRound{}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+
+			"/matches/rounds?round=1&game_type=prisoners_dilemma&limit=100000&offset=100", nil)
+		req = withTournamentID(req, tournamentID.String())
+		w := httptest.NewRecorder()
+
+		handler.GetMatchesByRounds(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockService.AssertExpectations(t)
+	})
+
+	for _, query := range []string{"round=1", "game_type=prisoners_dilemma", "round=abc&game_type=x", "round=0&game_type=x"} {
+		t.Run("bad round params "+query, func(t *testing.T) {
+			mockService := new(MockTournamentService)
+			handler := NewTournamentHandler(mockService, new(MockSchedulingService), nil, log)
+
+			tournamentID := uuid.New()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches/rounds?"+query, nil)
+			req = withTournamentID(req, tournamentID.String())
+			w := httptest.NewRecorder()
+
+			handler.GetMatchesByRounds(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			mockService.AssertNotCalled(t, "GetMatchesByRounds")
+		})
+	}
 }
 
 func TestTournamentHandler_CreateMatch(t *testing.T) {

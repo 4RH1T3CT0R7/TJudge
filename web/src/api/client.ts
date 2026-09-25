@@ -384,11 +384,27 @@ class ApiClient {
     return data;
   }
 
+  // Только счётчики раундов, без матчей.
   async getMatchesByRounds(tournamentId: string): Promise<MatchRound[]> {
     const { data } = await this.client.get<MatchRound[]>(
       `/tournaments/${tournamentId}/matches/rounds`
     );
     return data;
+  }
+
+  // Страница матчей одного раунда игры.
+  async getRoundMatches(
+    tournamentId: string,
+    round: number,
+    gameType: string,
+    limit: number,
+    offset: number
+  ): Promise<Match[]> {
+    const { data } = await this.client.get<MatchRound[]>(
+      `/tournaments/${tournamentId}/matches/rounds`,
+      { params: { round, game_type: gameType, limit, offset } }
+    );
+    return data[0]?.matches ?? [];
   }
 
   async getMyTeam(tournamentId: string): Promise<Team | null> {

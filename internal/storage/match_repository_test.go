@@ -474,22 +474,59 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("mbrnd")
 
 	// матчи по нескольким раундам и играм
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+	won := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", models.MatchCompleted, models.PriorityMedium, 1)
 	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 2)
 
+	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchFailed, models.PriorityMedium, 1)
+
 	ctx := context.Background()
-	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID)
+	_, err := s.database.ExecContext(ctx, "UPDATE matches SET winner = 2 WHERE id = $1", won.ID)
 	require.NoError(s.T(), err)
 
-	// три группы: (раунд 1, prisoners_dilemma), (раунд 1, tug_of_war), (раунд 2, prisoners_dilemma)
-	assert.Len(s.T(), rounds, 3)
+	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, nil)
+	require.NoError(s.T(), err)
 
+	// три группы: (раунд 1, prisoners_dilemma), (раунд 1, tug_of_war), (раунд 2, prisoners_dilemma);
+	// без страницы матчи не выбираются, только счётчики
+	assert.Len(s.T(), rounds, 3)
 	for _, round := range rounds {
-		assert.NotEmpty(s.T(), round.Matches, "round %d/%s should have matches", round.RoundNumber, round.GameType)
-		assert.Equal(s.T(), round.TotalMatches, len(round.Matches))
+		assert.Empty(s.T(), round.Matches)
+		assert.Positive(s.T(), round.TotalMatches)
 	}
+
+	// страница одного раунда: счётчики всего раунда, матчей не больше лимита
+	page := &models.RoundPage{RoundNumber: 1, GameType: "prisoners_dilemma", Limit: 2}
+	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, page)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), rounds, 1)
+	assert.Equal(s.T(), 3, rounds[0].TotalMatches)
+	assert.Equal(s.T(), 1, rounds[0].FailedCount)
+	assert.Equal(s.T(), 0, rounds[0].Wins1)
+	assert.Equal(s.T(), 1, rounds[0].Wins2)
+	require.Len(s.T(), rounds[0].Matches, 2)
+
+	page.Offset = 2
+	rest, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, page)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), rest, 1)
+	require.Len(s.T(), rest[0].Matches, 1)
+
+	// страницы не пересекаются и покрывают весь раунд
+	seen := map[uuid.UUID]bool{}
+	for _, m := range append(rounds[0].Matches, rest[0].Matches...) {
+		assert.Equal(s.T(), "prisoners_dilemma", m.GameType)
+		assert.Equal(s.T(), 1, m.RoundNumber)
+		assert.False(s.T(), seen[m.ID], "match %s on two pages", m.ID)
+		seen[m.ID] = true
+	}
+	assert.Len(s.T(), seen, 3)
+
+	// несуществующий раунд - пусто, без ошибки
+	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, &models.RoundPage{RoundNumber: 9, GameType: "prisoners_dilemma", Limit: 10})
+	require.NoError(s.T(), err)
+	assert.Empty(s.T(), rounds)
 }
 
 func (s *MatchRepositorySuite) TestGetStatistics() {
