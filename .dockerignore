@@ -28,20 +28,29 @@ docs/
 bin/
 dist/
 build/
+/api
+/worker
+/benchmark
+internal/web/dist/
+**/node_modules
 
 # Test files
 *_test.go
 testdata/
-coverage.txt
-coverage.html
+coverage*
+*.out
 *.test
 
 # Development
-.env
-.env.local
-.env.*.local
+.env*
 tmp/
 temp/
+.claude/
+.agents/
+
+# Секреты и дампы БД self-hosted
+secrets/
+backups/
 
 # Docker
 docker-compose*.yml
