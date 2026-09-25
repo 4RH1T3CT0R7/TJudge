@@ -159,6 +159,13 @@ func (p *Processor) play(ctx context.Context, match *models.Match) error {
 			ErrorMessage: err.Error(),
 		}
 		if dbErr := p.matchRepo.UpdateResult(writeCtx, match.ID, errorResult); dbErr != nil {
+			if stderrors.Is(dbErr, models.ErrMatchAlreadyProcessed) {
+				// матч отменили или удалили, пока он играл, - штатный случай
+				p.log.Info("Match is no longer running, error result discarded",
+					zap.String("match_id", match.ID.String()),
+				)
+				return nil
+			}
 			p.log.Error("Failed to save error result to database",
 				zap.String("match_id", match.ID.String()),
 				zap.Error(dbErr),

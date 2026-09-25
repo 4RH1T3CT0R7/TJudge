@@ -321,6 +321,21 @@ func TestProcessor_Process_NoLongerRunning_DiscardsResult(t *testing.T) {
 	err := p.Process(context.Background(), match)
 	assert.NoError(t, err)
 	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything)
+
+	t.Run("ошибка программы", func(t *testing.T) {
+		p, matchRepo, programRepo, _, executor := newTestProcessor(t)
+		matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
+		programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+			Return(twoPrograms(match), nil)
+		executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").
+			Return(nil, fmt.Errorf("invalid output format"))
+		matchRepo.On("UpdateResult", mock.Anything, match.ID, mock.AnythingOfType("*models.MatchResult")).
+			Return(models.ErrMatchAlreadyProcessed)
+
+		// отменённый во время игры матч - не сбой: пул не считает его failed
+		assert.NoError(t, p.Process(context.Background(), match))
+		matchRepo.AssertNotCalled(t, "ResetToPending", mock.Anything, mock.Anything)
+	})
 }
 
 func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
