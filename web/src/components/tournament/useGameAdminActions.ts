@@ -4,7 +4,7 @@ import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
-import { waitForMatchesAndAutoRetry } from './helpers';
+import { extractErrorMessage, waitForMatchesAndAutoRetry } from './helpers';
 import type { Game, Tournament } from '../../types';
 
 // Админ-действия над играми турнира (запуск раунда, активная игра, сброс раунда).
@@ -64,8 +64,7 @@ export function useGameAdminActions({
       void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to run game matches:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось запустить матчи');
+      setActionError(extractErrorMessage(err, 'Не удалось запустить матчи'));
     } finally {
       setRunningGameId(null);
     }
@@ -83,8 +82,7 @@ export function useGameAdminActions({
       await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to set active game:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось установить активную игру');
+      setActionError(extractErrorMessage(err, 'Не удалось установить активную игру'));
     } finally {
       setSettingActiveGameId(null);
     }
@@ -124,8 +122,7 @@ export function useGameAdminActions({
       void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
     } catch (err: unknown) {
       console.error('Failed to reset game round:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось сбросить раунд');
+      setActionError(extractErrorMessage(err, 'Не удалось сбросить раунд'));
     } finally {
       setResettingGameId(null);
     }

@@ -5,6 +5,7 @@ import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
 import { getGameConfig } from '../../utils/gameConfig';
+import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
 import { statusLabels } from './types';
 import type { AdminReactionSetter, TournamentFormState } from './types';
@@ -83,8 +84,7 @@ export function TournamentsTab({
       setActionError(null);
     } catch (err: unknown) {
       console.error('Failed to delete tournament:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось удалить турнир');
+      setActionError(extractErrorMessage(err, 'Не удалось удалить турнир'));
     }
   };
 
@@ -99,9 +99,7 @@ export function TournamentsTab({
       ]);
     } catch (err: unknown) {
       console.error('Failed to start tournament:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      const message = axiosErr.response?.data?.message || 'Не удалось запустить турнир';
-      setActionError(message);
+      setActionError(extractErrorMessage(err, 'Не удалось запустить турнир'));
     }
   };
 
@@ -227,8 +225,7 @@ export function TournamentsTab({
       await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(managingTournamentId) });
     } catch (err: unknown) {
       console.error('Failed to set active game:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось установить активную игру');
+      setActionError(extractErrorMessage(err, 'Не удалось установить активную игру'));
     } finally {
       setSettingActiveGame(null);
     }
@@ -288,8 +285,7 @@ export function TournamentsTab({
       );
     } catch (err: unknown) {
       console.error('Failed to reset game round:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось сбросить раунд');
+      setActionError(extractErrorMessage(err, 'Не удалось сбросить раунд'));
     } finally {
       setResettingGame(null);
     }
@@ -315,8 +311,7 @@ export function TournamentsTab({
       useToastStore.getState().addToast(`Запущено ${result.enqueued} матчей для "${gameName}"`, 'success');
     } catch (err: unknown) {
       console.error('Failed to run game matches:', err);
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setActionError(axiosErr.response?.data?.message || 'Не удалось запустить матчи');
+      setActionError(extractErrorMessage(err, 'Не удалось запустить матчи'));
     } finally {
       setRunningGameMatches(null);
     }
@@ -765,8 +760,7 @@ export function TournamentsTab({
                               setAdminReaction('salute', '// турнир окончен', 3000);
                             } catch (err: unknown) {
                               console.error('Failed to complete tournament:', err);
-                              const axiosErr = err as { response?: { data?: { message?: string } } };
-                              setActionError(axiosErr.response?.data?.message || 'Не удалось завершить турнир');
+                              setActionError(extractErrorMessage(err, 'Не удалось завершить турнир'));
                             }
                           }}
                           className="btn btn-secondary text-sm"

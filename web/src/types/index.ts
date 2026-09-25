@@ -179,9 +179,9 @@ export interface CrossGameLeaderboardEntry {
 }
 
 // API response types
+// Тело ошибки бэкенда (handlers/responses.go writeError)
 export interface ApiError {
-  code: number;
-  message: string;
+  error: string;
 }
 
 export interface PaginatedResponse<T> {
