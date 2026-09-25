@@ -19,11 +19,11 @@ export interface MatchResultPayload {
   winner: number;
 }
 
+// Текста ошибки компиляции тут нет: он виден только команде через REST.
 export interface ProgramUpdatePayload {
   program_id: string;
   team_id: string;
   status: 'compiling' | 'ready' | 'failed';
-  error_message: string | null;
 }
 
 /** Discriminated union всех серверных WS-сообщений турнира. */
