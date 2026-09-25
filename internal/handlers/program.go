@@ -41,11 +41,6 @@ type TournamentRepo interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 }
 
-// MatchScheduler планирует матчи для новой программы
-type MatchScheduler interface {
-	ScheduleNewProgramMatches(ctx context.Context, tournamentID, gameID, newProgramID, teamID uuid.UUID) error
-}
-
 // GameLookup отдаёт информацию об игре
 type GameLookup interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Game, error)
@@ -84,7 +79,6 @@ type CompileEnqueuer interface {
 type ProgramHandler struct {
 	programRepo    ProgramRepository
 	tournamentRepo TournamentRepo
-	matchScheduler MatchScheduler
 	gameLookup     GameLookup
 	matchChecker   MatchExistenceChecker
 	roundChecker   RoundCompletionChecker
@@ -99,7 +93,6 @@ type ProgramHandler struct {
 func NewProgramHandler(
 	programRepo ProgramRepository,
 	tournamentRepo TournamentRepo,
-	matchScheduler MatchScheduler,
 	gameLookup GameLookup,
 	matchChecker MatchExistenceChecker,
 	roundChecker RoundCompletionChecker,
@@ -119,7 +112,6 @@ func NewProgramHandler(
 	return &ProgramHandler{
 		programRepo:    programRepo,
 		tournamentRepo: tournamentRepo,
-		matchScheduler: matchScheduler,
 		gameLookup:     gameLookup,
 		matchChecker:   matchChecker,
 		roundChecker:   roundChecker,

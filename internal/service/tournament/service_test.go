@@ -211,14 +211,6 @@ func (m *MockGameRepository) HasActiveMatchesForGame(ctx context.Context, id uui
 	return args.Bool(0), args.Error(1)
 }
 
-type MockProgramRepository struct{ mock.Mock }
-
-func (m *MockProgramRepository) GetByTournamentAndGame(ctx context.Context, id, gameID uuid.UUID) ([]*models.Program, error) {
-	args := m.Called(ctx, id, gameID)
-	v, _ := args.Get(0).([]*models.Program)
-	return v, args.Error(1)
-}
-
 // setupTestRedisCache - кэш на miniredis, живёт в рамках теста
 func setupTestRedisCache(t *testing.T) *cache.Cache {
 	t.Helper()
@@ -900,101 +892,6 @@ func TestService_generateRoundRobinMatchesForGame(t *testing.T) {
 		empty, err := service.generateRoundRobinMatchesForGame(tournament, participants, "chess", 3, models.PriorityMedium, allPlayed)
 		require.NoError(t, err)
 		assert.Len(t, empty, 0)
-	})
-}
-
-func TestService_ScheduleNewProgramMatches(t *testing.T) {
-	t.Run("success_skips_own_team", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, queueManager, distributedLock, _ := newTestSchedulingService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		gameID := uuid.New()
-		teamID := uuid.New()
-		otherTeamID := uuid.New()
-		newProgramID := uuid.New()
-		sameTeamProgramID := uuid.New()
-		otherTeamProgramID := uuid.New()
-
-		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
-		// новая прога, сокомандник и чужая прога. матчи только против чужой
-		programs := []*models.Program{
-			{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID},
-			{ID: sameTeamProgramID, Name: "Teammate Bot", GameType: "chess", TeamID: &teamID},
-			{ID: otherTeamProgramID, Name: "Opponent Bot", GameType: "chess", TeamID: &otherTeamID},
-		}
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-
-		programRepo := new(MockProgramRepository)
-		programRepo.On("GetByTournamentAndGame", ctx, id, gameID).Return(programs, nil)
-		matchRepo.On("CreateBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
-		queueManager.On("EnqueueBatch", ctx, mock.AnythingOfType("[]*models.Match")).Return(nil)
-
-		req := &ScheduleNewProgramMatchesRequest{TournamentID: id, GameID: gameID, NewProgramID: newProgramID, TeamID: teamID}
-		err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
-		require.NoError(t, err)
-
-		// ровно 2 матча против чужой проги (обе стороны), сокомандник исключён
-		matchRepo.AssertCalled(t, "CreateBatch", ctx, mock.MatchedBy(func(matches []*models.Match) bool {
-			if len(matches) != 2 {
-				return false
-			}
-			hasForward, hasReverse := false, false
-			for _, m := range matches {
-				if m.Program1ID == sameTeamProgramID || m.Program2ID == sameTeamProgramID {
-					return false
-				}
-				if m.Program1ID == newProgramID && m.Program2ID == otherTeamProgramID {
-					hasForward = true
-				}
-				if m.Program1ID == otherTeamProgramID && m.Program2ID == newProgramID {
-					hasReverse = true
-				}
-			}
-			return hasForward && hasReverse
-		}))
-		queueManager.AssertNumberOfCalls(t, "EnqueueBatch", 1)
-	})
-
-	t.Run("completed_tournament", func(t *testing.T) {
-		service, tournamentRepo, _, _, distributedLock, _ := newTestSchedulingService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		tournament := &models.Tournament{ID: id, Name: "Completed", GameType: "chess", Status: models.TournamentCompleted}
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-
-		req := &ScheduleNewProgramMatchesRequest{TournamentID: id, GameID: uuid.New(), NewProgramID: uuid.New(), TeamID: uuid.New()}
-		err := service.ScheduleNewProgramMatches(ctx, req, new(MockProgramRepository))
-		appErr := errors.GetAppError(err)
-		require.NotNil(t, appErr)
-		assert.Equal(t, 409, appErr.Code)
-		assert.Contains(t, appErr.Message, "cannot schedule matches for completed tournament")
-	})
-
-	t.Run("no_opponents", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestSchedulingService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		gameID := uuid.New()
-		newProgramID := uuid.New()
-		teamID := uuid.New()
-		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
-		// в турнире только новая прога, играть не с кем
-		programs := []*models.Program{{ID: newProgramID, Name: "New Bot", GameType: "chess", TeamID: &teamID}}
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-
-		programRepo := new(MockProgramRepository)
-		programRepo.On("GetByTournamentAndGame", ctx, id, gameID).Return(programs, nil)
-
-		req := &ScheduleNewProgramMatchesRequest{TournamentID: id, GameID: gameID, NewProgramID: newProgramID, TeamID: teamID}
-		err := service.ScheduleNewProgramMatches(ctx, req, programRepo)
-		require.NoError(t, err)
-		matchRepo.AssertNotCalled(t, "CreateBatch", mock.Anything, mock.Anything)
 	})
 }
 
