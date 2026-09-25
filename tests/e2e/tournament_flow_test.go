@@ -25,10 +25,10 @@ func promoteToAdmin(t *testing.T, client *TestClient, userID, username, password
 	t.Helper()
 
 	dbHost := getEnv("DB_HOST", "localhost")
-	dbPort := getEnv("DB_PORT", "5432")
+	dbPort := getEnv("DB_PORT", "5433")
 	dbUser := getEnv("DB_USER", "tjudge")
 	dbPass := getEnv("DB_PASSWORD", "secret")
-	dbName := getEnv("DB_NAME", "tjudge_test")
+	dbName := getEnv("DB_NAME", "tjudge")
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPass, dbName)
@@ -37,8 +37,12 @@ func promoteToAdmin(t *testing.T, client *TestClient, userID, username, password
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec("UPDATE users SET role = 'admin' WHERE id = $1", userID)
+	res, err := db.Exec("UPDATE users SET role = 'admin' WHERE id = $1", userID)
 	require.NoError(t, err)
+	// 0 строк - тест смотрит не в ту БД, что API; иначе дальше будет невнятный 403
+	affected, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, affected, "пользователь %s не найден в %s:%s/%s - DB_* должны указывать на БД API", userID, dbHost, dbPort, dbName)
 
 	// Re-login to get a token with admin role
 	resp, err := client.doRequest("POST", "/api/v1/auth/login", LoginRequest{

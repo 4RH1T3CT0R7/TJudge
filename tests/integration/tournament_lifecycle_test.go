@@ -43,10 +43,10 @@ func (s *TournamentLifecycleSuite) SetupSuite() {
 	s.ctx = context.Background()
 
 	host := getEnv("DB_HOST", "localhost")
-	port := getEnvInt("DB_PORT", 5432)
+	port := getEnvInt("DB_PORT", 5433)
 	user := getEnv("DB_USER", "tjudge")
 	password := getEnv("DB_PASSWORD", "secret")
-	dbName := getEnv("DB_NAME", "tjudge_test")
+	dbName := getEnv("DB_NAME", "tjudge")
 
 	log, _ := logger.New("debug", "json")
 	m := metrics.New()
