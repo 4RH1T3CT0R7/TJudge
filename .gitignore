@@ -20,7 +20,14 @@ vendor/
 # Go compiled binaries
 /api
 /worker
+/benchmark
 web/api
+
+# Локальные инструкции и настройки ИИ-ассистентов
+/CLAUDE.md
+/AGENTS.md
+.agents/
+.claude/
 
 # Environment and secrets
 .env
