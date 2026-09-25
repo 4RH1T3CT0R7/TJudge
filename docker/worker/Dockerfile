@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o /app/worker ./cmd/worker
 
 # Final stage
-FROM alpine:3.20
+FROM alpine:3.23
 
 # DOCKER_GID должен совпадать с GID группы docker на ХОСТЕ (часто 999 на Ubuntu,
 # 0 при Docker Desktop на macOS). Передавайте через --build-arg DOCKER_GID=$(getent group docker | cut -d: -f3).
@@ -43,7 +43,7 @@ RUN apk --no-cache add docker-cli ca-certificates
 #   user: "${WORKER_UID:-1000}:${DOCKER_GID:-999}".
 #
 # UR bug_021: DOCKER_GID=0 (macOS Docker Desktop часто использует root group)
-# конфликтует с уже существующей root-группой alpine. В Alpine 3.20 GID 999
+# конфликтует с уже существующей root-группой alpine. В Alpine GID 999
 # занят группой `ping`. Логика: если группа с нужным GID уже существует —
 # переиспользуем её; иначе создаём docker-группу.
 RUN addgroup -g 1000 appuser && \
