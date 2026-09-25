@@ -134,12 +134,13 @@ func (n *SyncNotifier) ProgramCompiled(ctx context.Context, e ProgramCompiled) {
 	if n.Redis != nil {
 		n.logErr("ProgramCompiled", n.Redis.Publish(ctx, "ProgramCompiled", e))
 	}
+	// лог компилятора цитирует исходник, а hub рассылает всем подписчикам
+	// турнира. текст ошибки команда получает через GET /programs с проверкой доступа
 	if n.Broadcaster != nil {
 		n.Broadcaster.Broadcast(e.TournamentID, "program_update", map[string]any{
-			"program_id":    e.ProgramID.String(),
-			"team_id":       e.TeamID.String(),
-			"status":        e.Status,
-			"error_message": e.ErrorMessage,
+			"program_id": e.ProgramID.String(),
+			"team_id":    e.TeamID.String(),
+			"status":     e.Status,
 		})
 	}
 }

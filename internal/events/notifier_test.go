@@ -144,7 +144,8 @@ func TestSyncNotifier_WsTopology(t *testing.T) {
 
 	tid := uuid.New()
 	n.MatchResultProcessed(ctx, MatchResultProcessed{Version: 1, TournamentID: tid, MatchID: uuid.New(), NewRating1: 1500, NewRating2: 1500, Winner: 0})
-	n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid, ProgramID: uuid.New(), TeamID: uuid.New(), Status: "failed"})
+	compileLog := "bot.c:3: error: 'secret' undeclared"
+	n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid, ProgramID: uuid.New(), TeamID: uuid.New(), Status: "failed", ErrorMessage: &compileLog})
 
 	require.Len(t, br.calls, 2)
 	assert.Equal(t, "match_result", br.calls[0].messageType)
@@ -154,6 +155,8 @@ func TestSyncNotifier_WsTopology(t *testing.T) {
 	for _, k := range []string{"match_id", "program1_id", "program2_id", "new_rating1", "new_rating2", "winner"} {
 		assert.Contains(t, mp, k)
 	}
+	// лог компиляции с кусками исходника не уходит всем подписчикам турнира
+	assert.NotContains(t, br.calls[1].payload.(map[string]any), "error_message")
 }
 
 // nil-коллабораторы просто пропускаются, ничего не паникует

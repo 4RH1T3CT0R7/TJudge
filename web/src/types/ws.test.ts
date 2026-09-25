@@ -15,7 +15,7 @@ describe('parseTournamentWSMessage', () => {
   });
 
   it('сохраняет payload без изменений', () => {
-    const payload = { program_id: 'p1', team_id: 't1', status: 'ready', error_message: null };
+    const payload = { program_id: 'p1', team_id: 't1', status: 'ready' };
     const msg = parseTournamentWSMessage({ type: 'program_update', payload });
     expect(msg?.payload).toEqual(payload);
   });
