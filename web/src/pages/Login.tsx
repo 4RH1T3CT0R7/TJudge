@@ -123,25 +123,6 @@ export function Login() {
     return null;
   }, [focusedField]);
 
-  // Маскирование пароля - type="text" показывает символы *
-  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      setPassword(prev => prev.slice(0, -1));
-    } else if (e.key === 'Delete') {
-      e.preventDefault();
-    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      setPassword(prev => prev + e.key);
-    }
-  };
-
-  const handlePasswordPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text');
-    setPassword(prev => prev + pasted);
-  };
-
   const wrapperFocus = (el: HTMLElement | null) => {
     if (el) {
       el.style.borderColor = '#8b5cf6';
@@ -235,7 +216,7 @@ export function Login() {
             </div>
           </div>
 
-          {/* Password - кастомное маскирование астерисками */}
+          {/* Password */}
           <div>
             <label htmlFor="password" className="block text-sm text-gray-500 mb-1" style={monoFont}>
               {'// пароль'}
@@ -245,23 +226,11 @@ export function Login() {
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-primary-400 text-sm shrink-0" style={monoFont}>{'>'}</span>
-              {/* Hidden real password input for browser autocomplete */}
               <input
                 type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={() => {}}
-                tabIndex={-1}
-                aria-hidden="true"
-                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-              />
-              <input
-                type="text"
                 id="password"
-                value={'*'.repeat(password.length)}
-                onKeyDown={handlePasswordKeyDown}
-                onPaste={handlePasswordPaste}
-                onChange={() => {}}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 onFocus={(e) => {
                   setFocusedField('password');
                   setValidationError(null);
@@ -273,6 +242,7 @@ export function Login() {
                 }}
                 className="flex-1 text-gray-100 placeholder:text-gray-600 bg-transparent"
                 style={{ border: 'none', boxShadow: 'none', ...monoFont }}
+                autoComplete="current-password"
                 placeholder="********"
                 aria-label="Пароль"
                 aria-required="true"
