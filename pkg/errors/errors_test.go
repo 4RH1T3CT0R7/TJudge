@@ -145,3 +145,23 @@ func TestIsNotFound(t *testing.T) {
 	assert.False(t, IsNotFound(fmt.Errorf("regular error")))
 	assert.False(t, IsNotFound(nil))
 }
+
+// pgError - ошибка драйвера postgres (lib/pq, pgx отдают SQLState)
+type pgError string
+
+func (e pgError) Error() string    { return "pq: " + string(e) }
+func (e pgError) SQLState() string { return string(e) }
+
+func TestToAppError_PostgresConstraints(t *testing.T) {
+	cases := map[string]int{
+		"23505": http.StatusConflict,
+		"23503": http.StatusConflict,
+		"22001": http.StatusBadRequest,
+		"23514": http.StatusBadRequest,
+		"40001": http.StatusInternalServerError,
+	}
+	for code, want := range cases {
+		err := Wrap(pgError(code), "failed to create")
+		assert.Equal(t, want, ToAppError(err).Code, code)
+	}
+}
