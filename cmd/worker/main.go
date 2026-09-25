@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -132,6 +133,13 @@ func main() {
 	}
 	imageCancel()
 
+	// контейнеры матчей и сборок, брошенные прошлым процессом (SIGKILL на деплое)
+	if removed, err := exec.RemoveOrphans(context.Background()); err != nil {
+		log.Warn("Failed to remove orphan containers", zap.Error(err))
+	} else if removed > 0 {
+		log.Info("Removed orphan containers", zap.Int("count", removed))
+	}
+
 	log.Info("Executor initialized",
 		zap.Int64("cpu_quota", cfg.Executor.CPUQuota),
 		zap.Int64("memory_limit", cfg.Executor.MemoryLimit),
@@ -257,17 +265,13 @@ func main() {
 	<-quit
 	log.Info("Shutting down worker pool...")
 
-	// остановка recovery service
-	recoveryService.Stop()
-
-	// остановка outbox-диспетчера
-	outboxDispatcher.Stop()
-
-	// остановка compile-worker
-	compileWorker.Stop()
-
-	// остановка worker pool
-	pool.Stop()
+	// всё гасится параллельно: пул сразу перестаёт брать матчи, а не ждёт,
+	// пока остановятся outbox и сборки (docker шлёт SIGKILL через stop_grace_period)
+	var stopWg sync.WaitGroup
+	for _, stop := range []func(){recoveryService.Stop, outboxDispatcher.Stop, compileWorker.Stop, pool.Stop} {
+		stopWg.Go(stop)
+	}
+	stopWg.Wait()
 
 	// ожидание завершения worker pool
 	pool.Wait()
