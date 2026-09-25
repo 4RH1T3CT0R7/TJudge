@@ -36,6 +36,7 @@ type GameRoundHandler struct {
 	matchRepo                GameMatchRepository
 	programRepo              GameProgramRepository
 	tournamentGameStatusRepo TournamentGameStatusRepository
+	roundResetter            GameRoundResetter
 	notifier                 events.Notifier
 	uploadDir                string
 	log                      *logger.Logger
@@ -48,6 +49,7 @@ func NewGameRoundHandler(
 	matchRepo GameMatchRepository,
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
+	roundResetter GameRoundResetter,
 	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
@@ -58,6 +60,7 @@ func NewGameRoundHandler(
 		matchRepo:                matchRepo,
 		programRepo:              programRepo,
 		tournamentGameStatusRepo: tournamentGameStatusRepo,
+		roundResetter:            roundResetter,
 		notifier:                 notifier,
 		uploadDir:                uploadDir,
 		log:                      log,
@@ -512,7 +515,9 @@ type ResetGameRoundResponse struct {
 //
 // это самая разрушительная операция во всём хендлере, поэтому всё делается аккуратно:
 //  1. игра резолвится, чтобы получить её game_type (сброс работает по типу, не по id)
-//  2. одной транзакцией в репозитории сносятся матчи, обнуляются участники и история рейтинга
+//  2. под локом планирования турнира одной транзакцией сносятся матчи, обнуляются
+//     участники и история рейтинга (лок не даёт снести раунд, который параллельно
+//     запустил админ или авто-раунд)
 //  3. логируется сколько чего снесли (пригодится при разборе жалоб «куда делись очки»)
 //  4. уходит событие GameRoundReset, чтобы подписчики сбросили кэши и лидерборды
 //
@@ -528,6 +533,7 @@ type ResetGameRoundResponse struct {
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
+// @Failure 409 {object} object{error=string}
 // @Router /tournaments/{id}/games/{gameId}/reset-round [post]
 func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
@@ -535,8 +541,8 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if h.tournamentGameStatusRepo == nil {
-		writeError(w, errors.ErrInternal.WithMessage("tournament game status repository not configured"))
+	if h.roundResetter == nil {
+		writeError(w, errors.ErrInternal.WithMessage("round resetter not configured"))
 		return
 	}
 
@@ -552,7 +558,7 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 
 	// вся зачистка происходит в одной транзакции внутри репозитория,
 	// наружу отдаются только счётчики удалённого
-	matchesDeleted, participantsReset, ratingHistoryDeleted, err := h.tournamentGameStatusRepo.ResetGameRoundFull(r.Context(), tournamentID, gameID, g.Name)
+	matchesDeleted, participantsReset, ratingHistoryDeleted, err := h.roundResetter.ResetGameRound(r.Context(), tournamentID, g.Name)
 	if err != nil {
 		h.log.LogError("Failed to reset game round", err,
 			zap.String("tournament_id", tournamentID.String()),

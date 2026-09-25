@@ -106,7 +106,7 @@ func newTestGameHandler(t *testing.T) (*GameHandler, *MockGameService) {
 	t.Helper()
 	svc := new(MockGameService)
 	log, _ := logger.New("error", "json")
-	return NewGameHandler(svc, nil, nil, nil, nil, nil, events.NoopNotifier{}, "", log), svc
+	return NewGameHandler(svc, nil, nil, nil, nil, nil, nil, events.NoopNotifier{}, "", log), svc
 }
 
 func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGameService, *MockGameTournamentRepository) {
@@ -114,7 +114,7 @@ func newTestGameHandlerWithTournamentRepo(t *testing.T) (*GameHandler, *MockGame
 	svc := new(MockGameService)
 	tournamentRepo := new(MockGameTournamentRepository)
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, events.NoopNotifier{}, "", log)
+	handler := NewGameHandler(svc, nil, nil, tournamentRepo, nil, nil, nil, events.NoopNotifier{}, "", log)
 	return handler, svc, tournamentRepo
 }
 
@@ -517,8 +517,10 @@ func (m *MockTournamentGameStatusRepository) GetActiveGame(ctx context.Context, 
 	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
-func (m *MockTournamentGameStatusRepository) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, int64, int64, error) {
-	args := m.Called(ctx, tournamentID, gameID, gameType)
+type MockGameRoundResetter struct{ mock.Mock }
+
+func (m *MockGameRoundResetter) ResetGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, int64, int64, error) {
+	args := m.Called(ctx, tournamentID, gameType)
 	return args.Get(0).(int64), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
 }
 
@@ -562,7 +564,7 @@ func newGameHandlerWithAllRepos(t *testing.T) (
 	tgsRepo := new(MockTournamentGameStatusRepository)
 
 	log, _ := logger.New("error", "json")
-	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, events.NoopNotifier{}, "", log)
+	handler := NewGameHandler(svc, leaderboardRepo, matchRepo, nil, programRepo, tgsRepo, nil, events.NoopNotifier{}, "", log)
 
 	return handler, svc, leaderboardRepo, matchRepo, programRepo, tgsRepo
 }
@@ -747,14 +749,23 @@ func TestGameHandler_DeactivateAllGames_Success(t *testing.T) {
 
 // --- ResetGameRound success ---
 
+// newResetGameRoundHandler - хендлер только с сервисом игр и сбросом раунда
+func newResetGameRoundHandler(t *testing.T) (*GameHandler, *MockGameService, *MockGameRoundResetter) {
+	t.Helper()
+	svc := new(MockGameService)
+	resetter := new(MockGameRoundResetter)
+	log, _ := logger.New("error", "json")
+	return NewGameHandler(svc, nil, nil, nil, nil, nil, resetter, events.NoopNotifier{}, "", log), svc, resetter
+}
+
 func TestGameHandler_ResetGameRound_Success(t *testing.T) {
-	handler, svc, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
+	handler, svc, resetter := newResetGameRoundHandler(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
 		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
-	tgsRepo.On("ResetGameRoundFull", mock.Anything, tournamentID, gameID, "dilemma").
+	resetter.On("ResetGameRound", mock.Anything, tournamentID, "dilemma").
 		Return(int64(10), int64(3), int64(5), nil)
 
 	req := httptest.NewRequest("POST", "/", nil)
@@ -775,13 +786,13 @@ func TestGameHandler_ResetGameRound_Success(t *testing.T) {
 }
 
 func TestGameHandler_ResetGameRound_TransactionError(t *testing.T) {
-	handler, svc, _, _, _, tgsRepo := newGameHandlerWithAllRepos(t)
+	handler, svc, resetter := newResetGameRoundHandler(t)
 	tournamentID := uuid.New()
 	gameID := uuid.New()
 
 	svc.On("GetByID", mock.Anything, gameID).
 		Return(&models.Game{ID: gameID, Name: "dilemma"}, nil)
-	tgsRepo.On("ResetGameRoundFull", mock.Anything, tournamentID, gameID, "dilemma").
+	resetter.On("ResetGameRound", mock.Anything, tournamentID, "dilemma").
 		Return(int64(0), int64(0), int64(0), fmt.Errorf("transaction failed"))
 
 	req := httptest.NewRequest("POST", "/", nil)

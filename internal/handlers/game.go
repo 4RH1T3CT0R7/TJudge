@@ -49,6 +49,11 @@ type GameProgramRepository interface {
 	GetByTournamentAndGame(ctx context.Context, tournamentID, gameID uuid.UUID) ([]*models.Program, error)
 }
 
+// GameRoundResetter - ручной сброс раунда игры под общим локом планирования турнира.
+type GameRoundResetter interface {
+	ResetGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
+}
+
 // TournamentGameStatusRepository - интерфейс управления статусом игр и раундами.
 type TournamentGameStatusRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
@@ -56,7 +61,6 @@ type TournamentGameStatusRepository interface {
 	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error)
-	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
 	// авто-раунд
 	SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error
@@ -83,6 +87,7 @@ func NewGameHandler(
 	tournamentRepo GameTournamentRepository,
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
+	roundResetter GameRoundResetter,
 	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
@@ -90,7 +95,7 @@ func NewGameHandler(
 	return &GameHandler{
 		GameCRUDHandler:       NewGameCRUDHandler(gameService, log),
 		TournamentGameHandler: NewTournamentGameHandler(gameService, tournamentRepo, log),
-		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, notifier, uploadDir, log),
+		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, roundResetter, notifier, uploadDir, log),
 	}
 }
 
