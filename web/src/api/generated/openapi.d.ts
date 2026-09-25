@@ -947,7 +947,7 @@ export interface paths {
         };
         /**
          * Get invite link
-         * @description Only the team leader can retrieve the invite link.
+         * @description Only the team leader can retrieve the invite link. The invite code is not included in any other team response.
          */
         get: operations["teamsGetInviteLink"];
         put?: never;
@@ -1597,8 +1597,6 @@ export interface components {
             /** Format: uuid */
             tournament_id?: string;
             name?: string;
-            /** @description Unique 6-8 character invite code */
-            code?: string;
             /** Format: uuid */
             leader_id?: string;
             is_disqualified?: boolean;

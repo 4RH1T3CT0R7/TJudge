@@ -39,7 +39,6 @@ export interface Team {
   id: string;
   tournament_id: string;
   name: string;
-  code: string;
   leader_id: string;
   is_disqualified: boolean;
   disqualified_at: string | null;
