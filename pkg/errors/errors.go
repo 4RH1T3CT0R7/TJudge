@@ -106,7 +106,8 @@ func GetAppError(err error) *AppError {
 }
 
 // ToAppError достаёт AppError из ошибки, а если это не своя ошибка -
-// заворачивает в 500
+// заворачивает в 500. нарушение ограничений бд - ошибка запроса клиента, поэтому
+// 4xx: так все хранилища получают маппинг разом, без проверок в каждом
 func ToAppError(err error) *AppError {
 	if err == nil {
 		return nil
@@ -114,6 +115,21 @@ func ToAppError(err error) *AppError {
 
 	if appErr := GetAppError(err); appErr != nil {
 		return appErr
+	}
+
+	// SQLState есть у ошибок lib/pq и pgx - драйвер импортировать не нужно
+	var pgErr interface{ SQLState() string }
+	if errors.As(err, &pgErr) {
+		switch pgErr.SQLState() {
+		case "23505": // unique_violation
+			return ErrAlreadyExists.WithError(err)
+		case "23503": // foreign_key_violation: ссылка на несуществующее или удаление используемого
+			return ErrConflict.WithMessage("Related resource is missing or still in use").WithError(err)
+		case "22001": // string_data_right_truncation
+			return ErrValidation.WithMessage("Value is too long").WithError(err)
+		case "23514": // check_violation
+			return ErrValidation.WithError(err)
+		}
 	}
 
 	return ErrInternal.WithError(err)
