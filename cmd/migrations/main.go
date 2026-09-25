@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -43,6 +44,11 @@ func main() {
 		fmt.Println("Migrations applied successfully")
 
 	case "down":
+		// на пустой схеме Steps(-1) отвечает невнятным "file does not exist"
+		if _, _, err := m.Version(); errors.Is(err, migrate.ErrNilVersion) {
+			fmt.Println("Nothing to roll back")
+			return
+		}
 		// ровно один шаг: m.Down() откатил бы все миграции до пустой схемы
 		if err := m.Steps(-1); err != nil {
 			log.Fatalf("Failed to rollback migration: %v", err)
