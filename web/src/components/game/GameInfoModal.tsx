@@ -30,7 +30,12 @@ export function GameInfoModal({
         </span>
       }
     >
-      <div className="overflow-y-auto max-h-[calc(85vh-80px)] space-y-6">
+      {/* tabIndex: блок прокрутки входит в цикл Tab модалки и листается стрелками */}
+      <div
+        tabIndex={0}
+        aria-label="Описание игры"
+        className="overflow-y-auto max-h-[calc(85vh-80px)] space-y-6"
+      >
         <div>
           <h3 className="text-sm font-bold text-primary-400 uppercase tracking-wide mb-3">
             История
