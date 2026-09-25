@@ -116,7 +116,7 @@ func (r *GameRepository) List(ctx context.Context, filter models.GameFilter) ([]
 		argCount++
 	}
 
-	query += " ORDER BY display_name ASC"
+	query += " ORDER BY display_name ASC, id ASC"
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d", argCount)
