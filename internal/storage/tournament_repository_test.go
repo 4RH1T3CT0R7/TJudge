@@ -524,13 +524,15 @@ func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 
 	team := s.createTrackedTeam(tournament.ID, user.ID, "TLPG01")
 
+	ctx := context.Background()
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game1.ID))
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game2.ID))
+
 	prog1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game1.ID, "BotLPG1", 1)
 	prog2 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game2.ID, "BotLPG2", 1)
 
 	s.createTestParticipant(tournament.ID, prog1.ID, 1500)
 	s.createTestParticipant(tournament.ID, prog2.ID, 1600)
-
-	ctx := context.Background()
 
 	// фильтр по game1 - только участник с prog1
 	participants1, err := s.repo.GetLatestParticipantsByGame(ctx, tournament.ID, game1.Name)
@@ -543,4 +545,35 @@ func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), participants2, 1)
 	assert.Equal(s.T(), prog2.ID, participants2[0].ProgramID)
+}
+
+// v1 ready, v2 failed: в раунд идёт v1; программа игры, не привязанной к турниру, не участвует
+func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame_UsesLatestReadyVersion() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_lrv")
+	tournament := s.createTrackedTournament("TPLRV1", user.ID)
+	game := s.createTrackedGame("lrv_game")
+	detached := s.createTrackedGame("lrv_detached")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+	team := s.createTrackedTeam(tournament.ID, user.ID, "TLRV01")
+
+	v1 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotLRV1", 1)
+	v2 := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &game.ID, "BotLRV2", 2)
+	_, err := s.database.ExecContext(ctx, "UPDATE programs SET status = 'failed' WHERE id = $1", v2.ID)
+	require.NoError(s.T(), err)
+	other := s.createTrackedProgram(user.ID, &team.ID, &tournament.ID, &detached.ID, "BotLRV3", 1)
+
+	s.createTestParticipant(tournament.ID, v1.ID, 1500)
+	s.createTestParticipant(tournament.ID, v2.ID, 1500)
+	s.createTestParticipant(tournament.ID, other.ID, 1500)
+
+	participants, err := s.repo.GetLatestParticipantsByGame(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), participants, 1)
+	assert.Equal(s.T(), v1.ID, participants[0].ProgramID)
+
+	byGame, err := s.repo.GetLatestParticipantsGroupedByGame(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), byGame, 1)
+	assert.NotContains(s.T(), byGame, detached.Name)
 }

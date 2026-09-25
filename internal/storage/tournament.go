@@ -531,25 +531,36 @@ func (r *TournamentRepository) GetLatestParticipants(ctx context.Context, tourna
 	return participants, nil
 }
 
-// ParticipantWithGameType - участник с типом игры для группировки
-type ParticipantWithGameType struct {
-	models.TournamentParticipant
-	GameType string `json:"game_type" db:"game_type"`
-}
-
 // GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)
 func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error) {
-	// выбираются участники с последней готовой версией программы и их game_type
-	// только status='ready', тк compiling ещё не собралась, failed не собралась
-	// вообще. если новая версия сломана, команда продолжает играть предыдущей
-	// рабочей версией (MAX(version) берётся среди ready)
+	return r.latestReadyParticipants(ctx, tournamentID, "")
+}
+
+// GetLatestParticipantsByGame - участники одной игры турнира
+func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error) {
+	byGame, err := r.latestReadyParticipants(ctx, tournamentID, gameType)
+	if err != nil {
+		return nil, err
+	}
+	return byGame[gameType], nil
+}
+
+// latestReadyParticipants - общий запрос участников для планировщика (RunAll, RunGame,
+// авто-раунд). берётся последняя готовая версия программы команды по каждой игре:
+// compiling ещё не собралась, failed не собралась вообще, поэтому при сломанной новой
+// версии команда играет предыдущей рабочей (MAX(version) среди ready).
+// программы игр, не привязанных к турниру, отсекаются JOIN'ом с tournament_games.
+// gameType == "" - все игры
+func (r *TournamentRepository) latestReadyParticipants(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string][]*models.TournamentParticipant, error) {
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at, g.name as game_type
 		FROM tournament_participants tp
 		INNER JOIN programs p ON p.id = tp.program_id
 		INNER JOIN games g ON g.id = p.game_id
+		INNER JOIN tournament_games tg ON tg.tournament_id = tp.tournament_id AND tg.game_id = p.game_id
 		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 		WHERE tp.tournament_id = $1
+		  AND ($2 = '' OR g.name = $2)
 		  AND p.status = 'ready'
 		  AND p.version = (
 		      SELECT MAX(p2.version)
@@ -562,16 +573,16 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 		ORDER BY g.name, tp.created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, tournamentID)
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get participants grouped by game")
+		return nil, errors.Wrap(err, "failed to get latest participants")
 	}
 	defer rows.Close()
 
 	result := make(map[string][]*models.TournamentParticipant)
 	for rows.Next() {
 		var p models.TournamentParticipant
-		var gameType string
+		var game string
 		err := rows.Scan(
 			&p.ID,
 			&p.TournamentID,
@@ -581,12 +592,12 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 			&p.Losses,
 			&p.Draws,
 			&p.CreatedAt,
-			&gameType,
+			&game,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan participant with game type")
 		}
-		result[gameType] = append(result[gameType], &p)
+		result[game] = append(result[game], &p)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -594,59 +605,6 @@ func (r *TournamentRepository) GetLatestParticipantsGroupedByGame(ctx context.Co
 	}
 
 	return result, nil
-}
-
-func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error) {
-	var participants []*models.TournamentParticipant
-
-	// выбираются только участники с программами для конкретной игры (последняя версия)
-	query := `
-		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at
-		FROM tournament_participants tp
-		INNER JOIN programs p ON p.id = tp.program_id
-		INNER JOIN games g ON g.id = p.game_id
-		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
-		WHERE tp.tournament_id = $1
-		  AND g.name = $2
-		  AND p.version = (
-		      SELECT MAX(p2.version)
-		      FROM programs p2
-		      WHERE p2.team_id = p.team_id
-		        AND p2.game_id = p.game_id
-		        AND p2.tournament_id = p.tournament_id
-		  )
-		ORDER BY tp.created_at ASC
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get participants by game")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var p models.TournamentParticipant
-		err := rows.Scan(
-			&p.ID,
-			&p.TournamentID,
-			&p.ProgramID,
-			&p.Rating,
-			&p.Wins,
-			&p.Losses,
-			&p.Draws,
-			&p.CreatedAt,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan participant")
-		}
-		participants = append(participants, &p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return participants, nil
 }
 
 // GetParticipantsByTournamentIDs тянет участников сразу для нескольких турниров одним запросом,
