@@ -159,10 +159,13 @@ func TestOutboxDispatcher_StartStop(t *testing.T) {
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{}, nil).Maybe()
+	// чистка done-задач идёт сразу при старте, не через час
+	outbox.On("PurgeDone", mock.Anything, outboxRetention).Return(int64(0), nil).Once()
 
 	d.Start()
 	time.Sleep(35 * time.Millisecond)
 	d.Stop() // не должен зависнуть
+	outbox.AssertExpectations(t)
 
 	select {
 	case <-d.done:
