@@ -44,7 +44,8 @@ describe('authStore', () => {
   });
 
   it('logout оставляет стор инициализированным и чистит кэш запросов', async () => {
-    vi.spyOn(api, 'logout').mockResolvedValueOnce();
+    // выход работает и когда сервер отвечает 401 на истёкший access
+    vi.spyOn(api, 'logout').mockRejectedValueOnce(httpError(401));
     queryClient.setQueryData(['tournament', 't1', 'my-team'], { id: 'team' });
     useAuthStore.setState({ isAuthenticated: true, isInitialized: true });
 

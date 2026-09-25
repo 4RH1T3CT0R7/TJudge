@@ -50,6 +50,9 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           await api.logout();
+        } catch {
+          // Истёкший access (401) или недоступный API не мешают выйти локально:
+          // токены уже стёрты в api.logout, а исключение оборвало бы переход на /login
         } finally {
           // isInitialized остаётся true: initialize() зовётся один раз при старте,
           // и с false защищённые маршруты висели бы на «Загрузка...».
