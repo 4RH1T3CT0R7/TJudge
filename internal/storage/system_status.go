@@ -4,15 +4,47 @@ import (
 	"context"
 	"database/sql"
 	stderrors "errors"
+	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
+// statusCacheTTL - агрегаты по matches и match_outbox считаются проходом по
+// всей таблице, а админка опрашивает статус каждые 10с, поэтому результат
+// переиспользуется между запросами
+const statusCacheTTL = 30 * time.Second
+
 // SystemStatusRepository - агрегированные показатели состояния системы
 // для admin-эндпоинта /system/status, CLI-команды make status и Grafana.
 type SystemStatusRepository struct {
 	db *DB
+
+	matchCounts cachedAggregate[map[string]int64]
+	outbox      cachedAggregate[*OutboxStatus]
+}
+
+// cachedAggregate - значение, которое пересчитывается не чаще раза в
+// statusCacheTTL. пересчёт под мьютексом, так что параллельные запросы
+// не гоняют один и тот же агрегат одновременно
+type cachedAggregate[T any] struct {
+	mu  sync.Mutex
+	val T
+	at  time.Time
+}
+
+func (c *cachedAggregate[T]) get(ctx context.Context, load func(context.Context) (T, error)) (T, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.at.IsZero() && time.Since(c.at) < statusCacheTTL {
+		return c.val, nil
+	}
+	val, err := load(ctx)
+	if err != nil {
+		return val, err
+	}
+	c.val, c.at = val, time.Now()
+	return val, nil
 }
 
 func NewSystemStatusRepository(database *DB) *SystemStatusRepository {
@@ -32,9 +64,11 @@ func (r *SystemStatusRepository) SchemaVersion(ctx context.Context) (version int
 	return version, dirty, nil
 }
 
-// MatchCountsByStatus возвращает число матчей в каждом статусе.
+// MatchCountsByStatus возвращает число матчей в каждом статусе (кэш statusCacheTTL).
 func (r *SystemStatusRepository) MatchCountsByStatus(ctx context.Context) (map[string]int64, error) {
-	return r.countsByStatus(ctx, "SELECT status, COUNT(*) FROM matches GROUP BY status")
+	return r.matchCounts.get(ctx, func(ctx context.Context) (map[string]int64, error) {
+		return r.countsByStatus(ctx, "SELECT status, COUNT(*) FROM matches GROUP BY status")
+	})
 }
 
 // ProgramCountsByStatus возвращает число программ в каждом статусе
@@ -73,7 +107,12 @@ type OutboxStatus struct {
 
 // OutboxStats возвращает состояние match_outbox: зависшие pending-задачи
 // и терминальные ошибки - прямой сигнал, что рейтинги могли не примениться.
+// кэш statusCacheTTL
 func (r *SystemStatusRepository) OutboxStats(ctx context.Context) (*OutboxStatus, error) {
+	return r.outbox.get(ctx, r.outboxStats)
+}
+
+func (r *SystemStatusRepository) outboxStats(ctx context.Context) (*OutboxStatus, error) {
 	query := `
 		SELECT
 			COUNT(*) FILTER (WHERE status = 'pending')                                        AS pending,

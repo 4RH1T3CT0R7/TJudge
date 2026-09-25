@@ -40,6 +40,11 @@ func (m *MockOutboxStore) MarkFailed(ctx context.Context, id int64, errMsg strin
 	return args.Error(0)
 }
 
+func (m *MockOutboxStore) PurgeDone(ctx context.Context, olderThan time.Duration) (int64, error) {
+	args := m.Called(ctx, olderThan)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // capturingNotifier собирает опубликованные события (и результаты матчей, и компиляцию),
 // тесты дальше сами разбирают их по типу
 type capturingNotifier struct {

@@ -88,6 +88,18 @@ func (r *OutboxRepository) MarkFailed(ctx context.Context, id int64, errMsg stri
 	return nil
 }
 
+// PurgeDone удаляет выполненные задачи старше olderThan: иначе таблица растёт
+// на N·(N-1) строк за раунд каждой игры. error-задачи не трогаются, их
+// возвращает в работу кнопка восстановления
+func (r *OutboxRepository) PurgeDone(ctx context.Context, olderThan time.Duration) (int64, error) {
+	query := `DELETE FROM match_outbox WHERE status = 'done' AND processed_at < NOW() - make_interval(secs => $1)`
+	result, err := r.db.ExecContext(ctx, query, olderThan.Seconds())
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to purge done outbox entries")
+	}
+	return result.RowsAffected()
+}
+
 // RetryErrors возвращает застрявшие в error задачи обратно в pending со
 // сбросом счётчика. дёргается кнопкой восстановления в админке: после того
 // как починили причину (например бд), рейтинги добьёт OutboxDispatcher
