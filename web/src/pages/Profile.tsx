@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { handleTabListKeyDown } from '../components/ui/tabs';
 
 export function Profile() {
   const { user, updateProfile, login, isLoading } = useAuthStore();
@@ -97,8 +98,11 @@ export function Profile() {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-700 mb-6">
+        <div className="flex border-b border-gray-700 mb-6" role="tablist" onKeyDown={handleTabListKeyDown}>
           <button
+            role="tab"
+            aria-selected={activeTab === 'email'}
+            tabIndex={activeTab === 'email' ? 0 : -1}
             onClick={() => setActiveTab('email')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === 'email'
@@ -109,6 +113,9 @@ export function Profile() {
             Email
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'password'}
+            tabIndex={activeTab === 'password' ? 0 : -1}
             onClick={() => setActiveTab('password')}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === 'password'

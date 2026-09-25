@@ -24,6 +24,7 @@ import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
 import { SystemTab } from '../components/admin/SystemTab';
+import { handleTabListKeyDown } from '../components/ui/tabs';
 import type { Game, LeaderboardEntry, Program } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
@@ -453,10 +454,13 @@ export function AdminPanel() {
 
       {/* Tabs */}
       <div className="border-b border-gray-700 mb-6">
-        <nav className="-mb-px flex gap-4">
+        <nav className="-mb-px flex gap-4" role="tablist" onKeyDown={handleTabListKeyDown}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              tabIndex={activeTab === tab.id ? 0 : -1}
               onClick={() => handleTabChange(tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
