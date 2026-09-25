@@ -481,7 +481,7 @@ func (h *ProgramHandler) validateUploadQuota(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	if version >= maxVersionsPerTeamGame {
-		writeError(w, errors.ErrForbidden.WithMessage(fmt.Sprintf("достигнут лимит версий программы: %d", maxVersionsPerTeamGame)))
+		writeError(w, errors.ErrConflict.WithMessage(fmt.Sprintf("достигнут лимит версий программы для этой игры: %d", maxVersionsPerTeamGame)))
 		return false
 	}
 	return true

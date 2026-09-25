@@ -831,9 +831,10 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		for name, tc := range map[string]struct {
 			teamTournament uuid.UUID
 			version        int
+			code           int
 		}{
-			"foreign tournament": {uuid.New(), 0},
-			"quota reached":      {tournamentID, maxVersionsPerTeamGame},
+			"foreign tournament": {uuid.New(), 0, http.StatusForbidden},
+			"quota reached":      {tournamentID, maxVersionsPerTeamGame, http.StatusConflict},
 		} {
 			mockRepo := new(MockProgramRepository)
 			mockTeamChecker := new(MockTeamMembershipChecker)
@@ -853,7 +854,7 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 			w := httptest.NewRecorder()
 			handler.Create(w, req)
 
-			assert.Equal(t, http.StatusForbidden, w.Code, name)
+			assert.Equal(t, tc.code, w.Code, name)
 			mockRepo.AssertNotCalled(t, "CreateWithAtomicVersion", mock.Anything, mock.Anything)
 		}
 	})
