@@ -1,5 +1,5 @@
 import { useEffect, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
@@ -19,6 +19,7 @@ const pageImports = {
   GameView: () => import('./pages/GameView'),
   Games: () => import('./pages/Games'),
   TeamManagement: () => import('./pages/TeamManagement'),
+  JoinTeam: () => import('./pages/JoinTeam'),
   AdminPanel: () => import('./pages/AdminPanel'),
   NotFound: () => import('./pages/NotFound'),
 };
@@ -32,6 +33,7 @@ const GameDetail = lazy(() => pageImports.GameDetail().then(m => ({ default: m.G
 const GameView = lazy(() => pageImports.GameView().then(m => ({ default: m.GameView })));
 const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
 const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
+const JoinTeam = lazy(() => pageImports.JoinTeam().then(m => ({ default: m.JoinTeam })));
 const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
 
@@ -71,6 +73,7 @@ function prefetchCriticalPages() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized } = useAuthStore();
+  const location = useLocation();
 
   // Полноэкранный лоадер показываем ТОЛЬКО до первичной инициализации auth.
   // Раньше здесь был ещё `|| isLoading`, из-за чего любое фоновое действие,
@@ -85,7 +88,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // после логина Login вернёт сюда (нужно ссылке-приглашению /join/:code)
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
   return <>{children}</>;
@@ -148,6 +152,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <TeamManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="join/:code"
+          element={
+            <ProtectedRoute>
+              <JoinTeam />
             </ProtectedRoute>
           }
         />
