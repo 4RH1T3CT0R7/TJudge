@@ -314,6 +314,23 @@ func TestProcessor_Process_Success(t *testing.T) {
 	ratingService.AssertExpectations(t)
 }
 
+// матч отменили или удалили пока он играл: результат не пишется, рейтинг не трогается
+func TestProcessor_Process_NoLongerRunning_DiscardsResult(t *testing.T) {
+	p, matchRepo, _, programRepo, ratingService, executor := newTestProcessor(t)
+	match := testProcessorMatch()
+	result := &models.MatchResult{MatchID: match.ID, Winner: 1}
+
+	matchRepo.On("UpdateStatus", mock.Anything, match.ID, models.MatchRunning).Return(nil)
+	programRepo.On("GetByIDs", mock.Anything, []uuid.UUID{match.Program1ID, match.Program2ID}).
+		Return(twoPrograms(match), nil)
+	executor.On("Execute", mock.Anything, match, "/path/p1", "/path/p2").Return(result, nil)
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, match.ID, result).Return(models.ErrMatchAlreadyProcessed)
+
+	err := p.Process(context.Background(), match)
+	assert.NoError(t, err)
+	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
 func TestProcessor_Process_RatingFailureNonFatal(t *testing.T) {
 	p, matchRepo, ratingRepo, programRepo, _, executor := newTestProcessor(t)
 	match := testProcessorMatch()

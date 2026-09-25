@@ -1004,12 +1004,15 @@ func (r *MatchRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 	return nil
 }
 
+// UpdateResult пишет результат только поверх running: матч, отменённый
+// дисквалификацией или удалённый сбросом раунда, пока он играл, не воскресает.
+// 0 строк = ErrMatchAlreadyProcessed
 func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
 	query := `
 		UPDATE matches
 		SET status = $2, score1 = $3, score2 = $4, winner = $5,
 		    error_code = $6, error_message = $7, completed_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND status = 'running'
 	`
 
 	status := models.MatchCompleted
@@ -1027,7 +1030,7 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 		errorMsg = &result.ErrorMessage
 	}
 
-	_, err := r.db.ExecWithMetrics(ctx, "match_update_result", query,
+	res, err := r.db.ExecWithMetrics(ctx, "match_update_result", query,
 		id,
 		status,
 		result.Score1,
@@ -1036,9 +1039,16 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 		errorCode,
 		errorMsg,
 	)
-
 	if err != nil {
 		return errors.Wrap(err, "failed to update match result")
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to get rows affected")
+	}
+	if rows == 0 {
+		return models.ErrMatchAlreadyProcessed
 	}
 
 	return nil
@@ -1046,7 +1056,9 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 
 // UpdateResultWithOutbox пишет результат матча и в той же транзакции кладёт
 // outbox-задачу на пересчёт рейтинга. смысл: если результат сохранён, рейтинг
-// точно посчитается - сразу воркером или потом аутбокс-диспетчером после сбоя
+// точно посчитается - сразу воркером или потом аутбокс-диспетчером после сбоя.
+// как и UpdateResult, пишет только поверх running, иначе ErrMatchAlreadyProcessed
+// и никакой outbox-задачи
 func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UUID, result *models.MatchResult) error {
 	status := models.MatchCompleted
 	if result.ErrorCode != 0 {
@@ -1068,12 +1080,20 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 			UPDATE matches
 			SET status = $2, score1 = $3, score2 = $4, winner = $5,
 			    error_code = $6, error_message = $7, completed_at = NOW()
-			WHERE id = $1
+			WHERE id = $1 AND status = 'running'
 		`
-		if _, err := tx.ExecContext(ctx, updateQuery,
+		res, err := tx.ExecContext(ctx, updateQuery,
 			id, status, result.Score1, result.Score2, result.Winner, errorCode, errorMsg,
-		); err != nil {
+		)
+		if err != nil {
 			return errors.Wrap(err, "failed to update match result")
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return errors.Wrap(err, "failed to get rows affected")
+		}
+		if rows == 0 {
+			return models.ErrMatchAlreadyProcessed
 		}
 
 		// outbox только для успешных матчей с победителем/ничьёй (winner>=0)
