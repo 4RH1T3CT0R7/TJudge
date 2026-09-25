@@ -62,16 +62,16 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
   const scheduleMatchInvalidation = useMemo(
     () =>
       throttle(() => {
-        // cancelRefetch: false - идущий запрос не перезапускается: иначе при
-        // медленном ответе результат выбрасывается и запросы копятся на сервере.
-        const opts = { cancelRefetch: false };
-        void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) }, opts);
+        // Идущий запрос отменяется и уходит заново: его ответ мог не застать
+        // события окна. Запросы этих ключей передают signal в axios, так что
+        // отмена обрывает HTTP и запросы на сервере не копятся.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
         // Счётчики раундов и открытые страницы матчей (ключи вложены).
-        void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) }, opts);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
         // Ключи страницы игры: лидерборд, матчи, head-to-head.
-        void queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'game'] }, opts);
+        void queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'game'] });
         // Авто-раунд сдвигает current_round и last_run_at, отдельного события нет.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) }, opts);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
       }, INVALIDATE_THROTTLE_MS),
     [queryClient, tournamentId]
   );

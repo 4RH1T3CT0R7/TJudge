@@ -144,6 +144,9 @@ class ApiClient {
         return response;
       },
       async (error: AxiosError<ApiError>) => {
+        // Запрос отменил сам клиент (TanStack Query при перезапросе): не ретраится и без тоста
+        if (axios.isCancel(error)) return Promise.reject(error);
+
         const originalRequest = error.config;
 
         // Refresh пропускается для ручек из NO_REFRESH_AUTH_ENDPOINT,
@@ -397,9 +400,10 @@ class ApiClient {
     return data;
   }
 
-  async getCrossGameLeaderboard(tournamentId: string): Promise<CrossGameLeaderboardEntry[]> {
+  async getCrossGameLeaderboard(tournamentId: string, signal?: AbortSignal): Promise<CrossGameLeaderboardEntry[]> {
     const { data } = await this.client.get<CrossGameLeaderboardEntry[]>(
-      `/tournaments/${tournamentId}/cross-game-leaderboard`
+      `/tournaments/${tournamentId}/cross-game-leaderboard`,
+      { signal }
     );
     return data;
   }
@@ -434,9 +438,10 @@ class ApiClient {
   }
 
   // Только счётчики раундов, без матчей.
-  async getMatchesByRounds(tournamentId: string): Promise<MatchRound[]> {
+  async getMatchesByRounds(tournamentId: string, signal?: AbortSignal): Promise<MatchRound[]> {
     const { data } = await this.client.get<MatchRound[]>(
-      `/tournaments/${tournamentId}/matches/rounds`
+      `/tournaments/${tournamentId}/matches/rounds`,
+      { signal }
     );
     return data;
   }
@@ -447,11 +452,12 @@ class ApiClient {
     round: number,
     gameType: string,
     limit: number,
-    offset: number
+    offset: number,
+    signal?: AbortSignal
   ): Promise<Match[]> {
     const { data } = await this.client.get<MatchRound[]>(
       `/tournaments/${tournamentId}/matches/rounds`,
-      { params: { round, game_type: gameType, limit, offset } }
+      { params: { round, game_type: gameType, limit, offset }, signal }
     );
     return data[0]?.matches ?? [];
   }
@@ -471,9 +477,10 @@ class ApiClient {
     return data;
   }
 
-  async getTournamentGamesStatus(tournamentId: string): Promise<TournamentGameWithDetails[]> {
+  async getTournamentGamesStatus(tournamentId: string, signal?: AbortSignal): Promise<TournamentGameWithDetails[]> {
     const { data } = await this.client.get<TournamentGameWithDetails[]>(
-      `/tournaments/${tournamentId}/games/status`
+      `/tournaments/${tournamentId}/games/status`,
+      { signal }
     );
     return data;
   }
@@ -616,10 +623,15 @@ class ApiClient {
     await this.client.delete(`/tournaments/${tournamentId}/games/${gameId}`);
   }
 
-  async getGameLeaderboard(tournamentId: string, gameId: string, limit = 100): Promise<LeaderboardEntry[]> {
+  async getGameLeaderboard(
+    tournamentId: string,
+    gameId: string,
+    limit = 100,
+    signal?: AbortSignal
+  ): Promise<LeaderboardEntry[]> {
     const { data } = await this.client.get<LeaderboardEntry[]>(
       `/tournaments/${tournamentId}/games/${gameId}/leaderboard`,
-      { params: { limit } }
+      { params: { limit }, signal }
     );
     return data;
   }
@@ -648,13 +660,14 @@ class ApiClient {
     gameId: string,
     status?: string,
     limit = 50,
-    offset = 0
+    offset = 0,
+    signal?: AbortSignal
   ): Promise<Match[]> {
     const params: Record<string, unknown> = { limit, offset };
     if (status) params.status = status;
     const { data } = await this.client.get<Match[]>(
       `/tournaments/${tournamentId}/games/${gameId}/matches`,
-      { params }
+      { params, signal }
     );
     return data;
   }

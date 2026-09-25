@@ -90,13 +90,14 @@ export function GameDetail() {
   // запрашивается на один матч больше: лишний означает, что есть следующая страница.
   const matchesQuery = useQuery({
     queryKey: [...queryKeys.gameMatches(tournamentId ?? '', gameId ?? ''), currentPage] as const,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.getGameMatches(
         tournamentId ?? '',
         gameId ?? '',
         undefined,
         matchesPerPage + 1,
-        (currentPage - 1) * matchesPerPage
+        (currentPage - 1) * matchesPerPage,
+        signal
       ),
     enabled: !!tournamentId && !!gameId,
     placeholderData: keepPreviousData,
