@@ -10,6 +10,7 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -316,6 +317,51 @@ func (s *TournamentRepositorySuite) TestUpdate() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "Updated Name", result.Name)
 	assert.Equal(s.T(), intPtr(200), result.MaxParticipants)
+}
+
+// завершение: статус и отмена pending/running одной транзакцией, сыгранные не трогаются.
+// устаревшая версия турнира не меняет ни турнир, ни матчи
+func (s *TournamentRepositorySuite) TestComplete() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_cmpl")
+	created := s.createTrackedTournament("TPCMPL", user.ID)
+	p1 := s.createTrackedProgram(user.ID, nil, nil, nil, "BotCmpl1", 1)
+	p2 := s.createTrackedProgram(user.ID, nil, nil, nil, "BotCmpl2", 1)
+	pending := s.createTrackedMatch(created.ID, p1.ID, p2.ID, "prisoners_dilemma", models.MatchPending)
+	running := s.createTrackedMatch(created.ID, p2.ID, p1.ID, "prisoners_dilemma", models.MatchRunning)
+	done := s.createTrackedMatch(created.ID, p1.ID, p2.ID, "prisoners_dilemma", models.MatchCompleted)
+
+	tournament, err := s.repo.GetByID(ctx, created.ID)
+	require.NoError(s.T(), err)
+	now := time.Now()
+	tournament.EndTime = &now
+
+	stale := *tournament
+	stale.Version++
+	_, err = s.repo.Complete(ctx, &stale)
+	assert.ErrorIs(s.T(), err, errors.ErrConcurrentUpdate)
+	got, err := s.matchRepo.GetByID(ctx, pending.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchPending, got.Status)
+
+	cancelled, err := s.repo.Complete(ctx, tournament)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), cancelled)
+
+	result, err := s.repo.GetByID(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.TournamentCompleted, result.Status)
+	assert.NotNil(s.T(), result.EndTime)
+
+	for id, want := range map[uuid.UUID]models.MatchStatus{
+		pending.ID: models.MatchCancelled,
+		running.ID: models.MatchCancelled,
+		done.ID:    models.MatchCompleted,
+	} {
+		got, err := s.matchRepo.GetByID(ctx, id)
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), want, got.Status)
+	}
 }
 
 func (s *TournamentRepositorySuite) TestDelete() {

@@ -31,6 +31,10 @@ func (m *MockTournamentRepository) Create(ctx context.Context, t *models.Tournam
 func (m *MockTournamentRepository) Update(ctx context.Context, t *models.Tournament) error {
 	return m.Called(ctx, t).Error(0)
 }
+func (m *MockTournamentRepository) Complete(ctx context.Context, t *models.Tournament) (int64, error) {
+	args := m.Called(ctx, t)
+	return int64(args.Int(0)), args.Error(1)
+}
 func (m *MockTournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error {
 	return m.Called(ctx, id, status).Error(0)
 }
@@ -115,11 +119,6 @@ func (m *MockMatchRepository) GetPendingByTournamentAndGame(ctx context.Context,
 }
 
 func (m *MockMatchRepository) ResetFailedMatches(ctx context.Context, id uuid.UUID) (int64, error) {
-	args := m.Called(ctx, id)
-	return int64(args.Int(0)), args.Error(1)
-}
-
-func (m *MockMatchRepository) CancelActiveByTournament(ctx context.Context, id uuid.UUID) (int64, error) {
 	args := m.Called(ctx, id)
 	return int64(args.Int(0)), args.Error(1)
 }
@@ -440,38 +439,35 @@ func TestService_Start(t *testing.T) {
 }
 
 func TestService_Complete(t *testing.T) {
-	t.Run("success_cancels_active_matches", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	t.Run("success", func(t *testing.T) {
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		id := uuid.New()
 		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
 		distributedLock.On("WithLock", anyLock()...).Return(nil)
 		tournamentRepo.On("GetByID", mock.Anything, id).Return(tournament, nil)
-		matchRepo.On("CancelActiveByTournament", mock.Anything, id).Return(5, nil)
-		tournamentRepo.On("Update", mock.Anything, mock.AnythingOfType("*models.Tournament")).Return(nil)
+		tournamentRepo.On("Complete", mock.Anything, mock.MatchedBy(func(tt *models.Tournament) bool {
+			return tt.ID == id && tt.EndTime != nil
+		})).Return(5, nil)
 
-		err := service.Complete(ctx, id)
-		require.NoError(t, err)
-		matchRepo.AssertCalled(t, "CancelActiveByTournament", mock.Anything, id)
-		tournamentRepo.AssertCalled(t, "Update", mock.Anything, mock.MatchedBy(func(tt *models.Tournament) bool {
-			return tt.Status == models.TournamentCompleted && tt.EndTime != nil
-		}))
+		require.NoError(t, service.Complete(ctx, id))
 	})
 
-	t.Run("cancel_error_keeps_tournament_active", func(t *testing.T) {
-		service, tournamentRepo, matchRepo, _, distributedLock, _ := newTestService(t)
+	t.Run("concurrent_update", func(t *testing.T) {
+		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
 		ctx := context.Background()
 
 		id := uuid.New()
 		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
 		distributedLock.On("WithLock", anyLock()...).Return(nil)
 		tournamentRepo.On("GetByID", mock.Anything, id).Return(tournament, nil)
-		matchRepo.On("CancelActiveByTournament", mock.Anything, id).Return(0, fmt.Errorf("db down"))
+		tournamentRepo.On("Complete", mock.Anything, mock.Anything).Return(0, errors.ErrConcurrentUpdate)
 
 		err := service.Complete(ctx, id)
-		require.Error(t, err)
-		tournamentRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 409, appErr.Code)
 	})
 
 	t.Run("not_active", func(t *testing.T) {

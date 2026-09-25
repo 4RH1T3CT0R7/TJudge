@@ -11,6 +11,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 // utc - время для колонок TIMESTAMP без зоны: смещение postgres молча отбрасывает,
@@ -235,6 +236,41 @@ func (r *TournamentRepository) Update(ctx context.Context, tournament *models.To
 	}
 
 	return nil
+}
+
+// Complete завершает турнир одной транзакцией: статус completed с end_time (optimistic
+// lock по version, как в Update) и отмена pending и running матчей. при ошибке не
+// меняется ничего: ни активного турнира с отменённым раундом, ни завершённого с
+// матчами в очереди. pending воркер пропустит (в running переводит только из pending).
+// возвращает число отменённых матчей
+func (r *TournamentRepository) Complete(ctx context.Context, tournament *models.Tournament) (int64, error) {
+	var cancelled int64
+	err := r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		err := tx.QueryRowContext(ctx, `
+			UPDATE tournaments
+			SET status = 'completed', end_time = $2, version = version + 1
+			WHERE id = $1 AND version = $3
+			RETURNING updated_at, version
+		`, tournament.ID, utc(tournament.EndTime), tournament.Version).Scan(&tournament.UpdatedAt, &tournament.Version)
+		if stderrors.Is(err, sql.ErrNoRows) {
+			return errors.ErrConcurrentUpdate
+		}
+		if err != nil {
+			return errors.Wrap(err, "failed to complete tournament")
+		}
+
+		res, err := tx.ExecContext(ctx, `
+			UPDATE matches
+			SET status = 'cancelled', error_message = 'Tournament completed'
+			WHERE tournament_id = $1 AND status IN ('pending', 'running')
+		`, tournament.ID)
+		if err != nil {
+			return errors.Wrap(err, "failed to cancel active matches")
+		}
+		cancelled, err = res.RowsAffected()
+		return err
+	})
+	return cancelled, err
 }
 
 func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error {

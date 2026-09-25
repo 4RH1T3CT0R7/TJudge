@@ -684,26 +684,3 @@ func (s *MatchRepositorySuite) TestCancelPending() {
 	// отменённый матч воркер уже не возьмёт
 	assert.ErrorIs(s.T(), s.repo.UpdateStatus(ctx, pending.ID, models.MatchRunning), models.ErrMatchAlreadyProcessed)
 }
-
-// завершение турнира: pending и running отменяются, сыгранные не трогаются
-func (s *MatchRepositorySuite) TestCancelActiveByTournament() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("cancel")
-	pending := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	running := s.createMatch(tournament.ID, prog2.ID, prog1.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
-	done := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
-
-	ctx := context.Background()
-	cancelled, err := s.repo.CancelActiveByTournament(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), cancelled)
-
-	for id, want := range map[uuid.UUID]models.MatchStatus{
-		pending.ID: models.MatchCancelled,
-		running.ID: models.MatchCancelled,
-		done.ID:    models.MatchCompleted,
-	} {
-		got, err := s.repo.GetByID(ctx, id)
-		require.NoError(s.T(), err)
-		assert.Equal(s.T(), want, got.Status)
-	}
-}
