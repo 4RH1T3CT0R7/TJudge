@@ -1144,43 +1144,26 @@ func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID u
 	return rows, nil
 }
 
-func (r *MatchRepository) BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error {
-	if len(matchIDs) == 0 {
-		return nil
-	}
-
-	tx, err := r.db.BeginTx(ctx, nil)
+// ResetStuckRunning возвращает в pending матчи, зависшие в running дольше
+// stuckDuration (воркер умер посреди матча). выборка и сброс одним запросом по
+// часам бд: матч, успевший завершиться или заново стартовать, не трогается
+func (r *MatchRepository) ResetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) (int64, error) {
+	query := `
+		UPDATE matches
+		SET status = 'pending', started_at = NULL
+		WHERE id IN (
+			SELECT id FROM matches
+			WHERE status = 'running' AND started_at < NOW() - make_interval(secs => $1)
+			ORDER BY started_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+	`
+	result, err := r.db.ExecWithMetrics(ctx, "match_reset_stuck", query, stuckDuration.Seconds(), limit)
 	if err != nil {
-		return errors.Wrap(err, "failed to begin transaction")
+		return 0, errors.Wrap(err, "failed to reset stuck running matches")
 	}
-	defer func() { _ = tx.Rollback() }()
-
-	var query string
-	if status == models.MatchRunning {
-		// тот же guard что в UpdateStatus, только пачкой
-		query = `
-			UPDATE matches
-			SET status = $1, started_at = NOW()
-			WHERE id = ANY($2) AND status = 'pending'
-		`
-	} else {
-		query = `
-			UPDATE matches
-			SET status = $1
-			WHERE id = ANY($2)
-		`
-	}
-
-	_, err = tx.ExecContext(ctx, query, status, pq.Array(matchIDs))
-	if err != nil {
-		return errors.Wrap(err, "failed to batch update match status")
-	}
-
-	if err := tx.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return result.RowsAffected()
 }
 
 func (r *MatchRepository) BatchUpdateResults(ctx context.Context, results map[uuid.UUID]*models.MatchResult) error {

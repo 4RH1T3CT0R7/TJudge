@@ -27,9 +27,8 @@ var ErrProgramFailed = stderrors.New("match failed: program error")
 type MatchRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error)
 	GetPending(ctx context.Context, limit int) ([]*models.Match, error)
-	GetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) ([]*models.Match, error)
+	ResetStuckRunning(ctx context.Context, stuckDuration time.Duration, limit int) (int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.MatchStatus) error
-	BatchUpdateStatus(ctx context.Context, matchIDs []uuid.UUID, status models.MatchStatus) error
 	UpdateResult(ctx context.Context, id uuid.UUID, result *models.MatchResult) error
 	// результат + outbox-задача рейтинга в одной транзакции, чтобы рейтинг
 	// не потерялся при падении
