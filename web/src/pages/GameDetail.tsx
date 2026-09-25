@@ -148,8 +148,8 @@ export function GameDetail() {
     fileInputRef.current?.click();
   };
 
-  // Supported file extensions
-  const supportedExtensions = ['.py', '.cpp', '.c', '.go', '.rs', '.java'];
+  // Как detectLanguage в internal/handlers/program.go
+  const supportedExtensions = ['.py', '.cpp', '.cc', '.cxx', '.c', '.go', '.rs', '.java', '.js', '.rb', '.php', '.lua'];
 
   const isValidFile = (file: File) => {
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -596,7 +596,7 @@ export function GameDetail() {
                   ref={fileInputRef}
                   onChange={handleFileUpload}
                   className="hidden"
-                  accept=".py,.cpp,.c,.go,.rs,.java"
+                  accept={supportedExtensions.join(',')}
                   aria-label="Загрузить файл программы"
                 />
 
@@ -680,7 +680,7 @@ export function GameDetail() {
                 )}
 
                 <p className="text-xs text-gray-400 text-center">
-                  Поддерживаемые форматы: .py, .cpp, .c, .go, .rs, .java
+                  Поддерживаемые форматы: {supportedExtensions.join(', ')}
                 </p>
               </div>
 
