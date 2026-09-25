@@ -127,6 +127,24 @@ func TestService_Create_InvalidNames(t *testing.T) {
 	}
 }
 
+// пустой или пробельный display_name - 400 до похода в бд
+func TestService_DisplayNameRequired(t *testing.T) {
+	svc, repo := newTestGameService(t)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, &CreateRequest{Name: "chess", DisplayName: "  "})
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 400, appErr.Code)
+
+	_, err = svc.Update(ctx, uuid.New(), &UpdateRequest{DisplayName: ""})
+	appErr = errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 400, appErr.Code)
+	repo.AssertNotCalled(t, "Exists", mock.Anything, mock.Anything)
+	repo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
+
 func TestService_Create_ValidNames(t *testing.T) {
 	validNames := []string{"chess", "prisoners_dilemma", "game123", "a", "game_1_v2"}
 
