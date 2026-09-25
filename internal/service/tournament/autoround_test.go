@@ -37,9 +37,9 @@ func TestAutoRoundScheduler_processGame(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ss, _, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+			ss, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
 			log, _ := logger.New("error", "json")
-			s := NewAutoRoundScheduler(ss, gameRepo, distLock, log, time.Second)
+			s := NewAutoRoundScheduler(ss, gameRepo, log, time.Second)
 			ctx := context.Background()
 
 			g := &models.AutoRoundGameInfo{
@@ -58,6 +58,7 @@ func TestAutoRoundScheduler_processGame(t *testing.T) {
 				// pending уже есть - RunGameMatches просто ставит их в очередь
 				pending := []*models.Match{{ID: uuid.New(), TournamentID: g.TournamentID, GameType: g.GameType}}
 				distLock.On("WithLock", anyLock()...).Return(nil)
+				tournamentRepo.On("GetByID", ctx, g.TournamentID).Return(activeTournament(g.TournamentID), nil)
 				matchRepo.On("GetPendingByTournamentAndGame", ctx, g.TournamentID, g.GameType).Return(pending, nil)
 				queueManager.On("EnqueueBatch", ctx, pending).Return(nil)
 				gameRepo.On("UpdateAutoRoundLastRun", ctx, g.TournamentID, g.GameID).Return(nil)
@@ -82,9 +83,9 @@ func TestAutoRoundScheduler_processGame(t *testing.T) {
 // ошибка RunGameMatches: время последнего запуска не сдвигается, иначе раунд
 // потерялся бы до следующего cooldown
 func TestAutoRoundScheduler_processGame_RunErrorKeepsLastRun(t *testing.T) {
-	ss, _, matchRepo, _, distLock, gameRepo := newTestSchedulingService(t)
+	ss, tournamentRepo, matchRepo, _, distLock, gameRepo := newTestSchedulingService(t)
 	log, _ := logger.New("error", "json")
-	s := NewAutoRoundScheduler(ss, gameRepo, distLock, log, time.Second)
+	s := NewAutoRoundScheduler(ss, gameRepo, log, time.Second)
 	ctx := context.Background()
 
 	g := &models.AutoRoundGameInfo{TournamentID: uuid.New(), GameID: uuid.New(), GameType: "dilemma", IntervalSeconds: 60}
@@ -92,6 +93,7 @@ func TestAutoRoundScheduler_processGame_RunErrorKeepsLastRun(t *testing.T) {
 	gameRepo.On("HasActiveMatchesForGame", ctx, g.TournamentID, g.GameType).Return(false, nil)
 	gameRepo.On("HasNewProgramsSince", ctx, g.TournamentID, g.GameType, time.Time{}).Return(true, nil)
 	distLock.On("WithLock", anyLock()...).Return(nil)
+	tournamentRepo.On("GetByID", ctx, g.TournamentID).Return(activeTournament(g.TournamentID), nil)
 	matchRepo.On("GetPendingByTournamentAndGame", ctx, g.TournamentID, g.GameType).Return(nil, errors.New("db down"))
 
 	s.processGame(ctx, g)
@@ -101,9 +103,9 @@ func TestAutoRoundScheduler_processGame_RunErrorKeepsLastRun(t *testing.T) {
 
 // tick обходит все игры с авто-раундом, Stop идемпотентен и гасит run
 func TestAutoRoundScheduler_TickAndStop(t *testing.T) {
-	ss, _, _, _, distLock, gameRepo := newTestSchedulingService(t)
+	ss, _, _, _, _, gameRepo := newTestSchedulingService(t)
 	log, _ := logger.New("error", "json")
-	s := NewAutoRoundScheduler(ss, gameRepo, distLock, log, time.Hour)
+	s := NewAutoRoundScheduler(ss, gameRepo, log, time.Hour)
 	ctx := context.Background()
 
 	games := []*models.AutoRoundGameInfo{
@@ -131,4 +133,8 @@ func TestAutoRoundScheduler_TickAndStop(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("run не завершился после Stop")
 	}
+}
+
+func activeTournament(id uuid.UUID) *models.Tournament {
+	return &models.Tournament{ID: id, Status: models.TournamentActive}
 }
