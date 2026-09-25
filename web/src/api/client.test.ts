@@ -4,12 +4,6 @@ import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig }
 import { api } from './client';
 import { useToastStore } from '../store/toastStore';
 
-// Node 25+ держит свой глобальный localStorage (без --localstorage-file он
-// undefined), и тот закрывает хранилище happy-dom.
-vi.hoisted(() => {
-  if (typeof localStorage === 'undefined') vi.stubGlobal('localStorage', new Storage());
-});
-
 type Handler = (config: InternalAxiosRequestConfig) => { status: number; data?: unknown } | 'network';
 
 const calls: { method: string; url: string; auth: string }[] = [];

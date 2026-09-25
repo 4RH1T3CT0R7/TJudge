@@ -5,12 +5,6 @@ import { useAuthStore } from './authStore';
 import api from '../api/client';
 import { queryClient } from '../api/queryClient';
 
-// Node 25+ держит свой глобальный localStorage (без --localstorage-file он
-// undefined), и тот закрывает хранилище happy-dom.
-vi.hoisted(() => {
-  if (typeof localStorage === 'undefined') vi.stubGlobal('localStorage', new Storage());
-});
-
 const config = { headers: new AxiosHeaders() };
 const httpError = (status?: number) =>
   new AxiosError('fail', undefined, config, null, status
