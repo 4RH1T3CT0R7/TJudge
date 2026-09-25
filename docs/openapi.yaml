@@ -1596,6 +1596,7 @@ paths:
     delete:
       tags: [programs]
       summary: Delete program
+      description: Not allowed (409) while the program's tournament is active or completed.
       operationId: programsDelete
       security:
         - BearerAuth: []
@@ -1608,6 +1609,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /programs/{id}/download:
     parameters:

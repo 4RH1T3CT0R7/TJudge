@@ -145,7 +145,7 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Удалить программу
-// @Description Удаляет программу и связанный файл
+// @Description Удаляет программу и связанный файл; в идущем или завершённом турнире - 409
 // @Tags programs
 // @Param id path string true "Program ID" format(uuid)
 // @Security BearerAuth
@@ -153,6 +153,7 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} object{error=string}
 // @Failure 403 {object} object{error=string}
 // @Failure 404 {object} object{error=string}
+// @Failure 409 {object} object{error=string}
 // @Router /programs/{id} [delete]
 func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
@@ -182,6 +183,21 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		h.log.LogError("Failed to get program", err)
 		writeError(w, err)
 		return
+	}
+
+	// в идущем или завершённом турнире программа не удаляется: каскад снёс бы
+	// все её матчи вместе с очками соперников, итоги поменялись бы задним числом
+	if program.TournamentID != nil && h.tournamentRepo != nil {
+		t, err := h.tournamentRepo.GetByID(r.Context(), *program.TournamentID)
+		if err != nil {
+			h.log.LogError("Failed to get tournament status", err)
+			writeError(w, err)
+			return
+		}
+		if t.Status != models.TournamentPending {
+			writeError(w, errors.ErrConflict.WithMessage("нельзя удалить программу идущего или завершённого турнира"))
+			return
+		}
 	}
 
 	if err := h.programRepo.Delete(r.Context(), id); err != nil {
