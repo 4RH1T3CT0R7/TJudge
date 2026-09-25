@@ -415,7 +415,7 @@ func TestProgramHandler_Delete(t *testing.T) {
 			handler := NewProgramHandler(mockRepo, tournamentRepo, nil, nil, nil, nil, nil, "", log)
 
 			userID, programID, tournamentID := uuid.New(), uuid.New(), uuid.New()
-				mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: userID, TournamentID: &tournamentID}, nil)
+			mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: userID, TournamentID: &tournamentID}, nil)
 			tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(&models.Tournament{ID: tournamentID, Status: status}, nil)
 
 			req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
