@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { CinematicOverlay } from '../components/CinematicOverlay';
@@ -28,6 +28,8 @@ export function Login() {
   const [showCinematic, setShowCinematic] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
+  // ProtectedRoute кладёт сюда страницу, с которой отправил на логин
+  const from = (useLocation().state as { from?: string } | null)?.from ?? '/';
 
   const monoFont = { fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace" } as const;
 
@@ -98,7 +100,7 @@ export function Login() {
           setSpeechBubble('{ доступ: "открыт" }');
           setLoginSuccess(true);
         }, 500);
-        setTimeout(() => navigate('/'), 1400);
+        setTimeout(() => navigate(from), 1400);
       }
     } catch {
       setError('// неверный логин или пароль');
@@ -112,8 +114,8 @@ export function Login() {
   };
 
   const handleCinematicComplete = useCallback(() => {
-    navigate('/');
-  }, [navigate]);
+    navigate(from);
+  }, [navigate, from]);
 
   // Eye override based on focused field
   const getEyeOverride = useCallback(() => {
