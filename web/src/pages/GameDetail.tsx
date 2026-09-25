@@ -49,11 +49,15 @@ export function GameDetail() {
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Живые обновления, как на странице турнира: WS-события инвалидируют ключи
-  // игры, без WS (аноним, обрыв) работает поллинг.
-  const live = useTournamentLive({ tournamentId: tournamentId ?? '', enabled: isAuthenticated });
+  // игры, без WS (аноним, обрыв) у идущего турнира работает поллинг.
+  const tournamentQuery = useTournament(tournamentId ?? '');
+  const live = useTournamentLive({
+    tournamentId: tournamentId ?? '',
+    enabled: isAuthenticated,
+    active: tournamentQuery.data?.status === 'active',
+  });
 
   // Базовые данные страницы
-  const tournamentQuery = useTournament(tournamentId ?? '');
   const gameQuery = useGame(gameId ?? '');
   const gamesStatusQuery = useTournamentGamesStatus(tournamentId ?? '', { pollInterval: live.pollInterval });
   const leaderboardQuery = useGameLeaderboard(tournamentId ?? '', gameId ?? '', { pollInterval: live.pollInterval });

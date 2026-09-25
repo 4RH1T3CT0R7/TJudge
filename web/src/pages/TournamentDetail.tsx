@@ -58,10 +58,14 @@ export function TournamentDetail() {
 
   // Живые обновления: WS-события точечно инвалидируют кэш (useTournamentLive),
   // а pollInterval включается только как fallback, когда WS недоступен.
-  const live = useTournamentLive({ tournamentId, enabled: isAuthenticated });
+  const tournamentQuery = useTournament(tournamentId);
+  const live = useTournamentLive({
+    tournamentId,
+    enabled: isAuthenticated,
+    active: tournamentQuery.data?.status === 'active',
+  });
   const { isConnected } = live;
 
-  const tournamentQuery = useTournament(tournamentId);
   const teamsQuery = useTournamentTeams(tournamentId);
   const gamesQuery = useTournamentGames(tournamentId);
   const leaderboardQuery = useCrossGameLeaderboard(tournamentId, { pollInterval: live.pollInterval });
