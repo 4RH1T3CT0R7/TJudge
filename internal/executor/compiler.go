@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -55,6 +56,11 @@ const matchContainerPath = "/programs"
 // compileLogLimit - максимальная длина сообщения компилятора, сохраняемого
 // в program.error_message и показываемого пользователю.
 const compileLogLimit = 1500
+
+// maxArtifactSize - предел суммарного размера собранного артефакта. честный
+// бинарник бота весит единицы мегабайт, а `char a[400<<20] = {1};` в пару
+// строк без предела забивал бы диск каталога программ
+const maxArtifactSize = 32 << 20
 
 // javaClassesSuffix - каталог .class рядом с java-wrapper'ом: <wrapper>_classes.
 const javaClassesSuffix = "_classes"
@@ -234,6 +240,16 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 		return &CompileResult{OK: false, Log: logMsg}, nil
 	}
 
+	if plan.ArtifactName != "" {
+		size, err := dirSize(buildDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to measure artifact: %w", err)
+		}
+		if size > maxArtifactSize {
+			return &CompileResult{OK: false, Log: fmt.Sprintf("результат сборки больше %d МБ", maxArtifactSize>>20)}, nil
+		}
+	}
+
 	execPath, err := c.installArtifact(program, plan, buildDir, sourcePath, className)
 	if err != nil {
 		return nil, err
@@ -360,7 +376,7 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 }
 
 // buildBuilderHostConfig собирает hostConfig для builder-контейнера. отличается
-// от матч-sandbox осознанно (память 1гб, pids 256, tmpfs 512м, без cpuset/ulimits,
+// от матч-sandbox осознанно (память 1гб, pids 256, tmpfs 512м, без cpuset,
 // без seccomp-хука, /build:rw) - компиляторам нужен ресурс пожирнее, объединять с
 // матчем не надо. вынесено ради теста флагов
 func buildBuilderHostConfig(hostBuildDir string) *container.HostConfig {
@@ -370,6 +386,13 @@ func buildBuilderHostConfig(hostBuildDir string) *container.HostConfig {
 			Memory:     1 << 30, // 1GB: компиляторам (rustc, go) нужно больше, чем матчам
 			MemorySwap: 1 << 30,
 			PidsLimit:  &pidsLimit,
+			// одно ядро: шаблонная бомба на 120с не должна съедать весь хост
+			NanoCPUs: 1e9,
+			Ulimits: []*container.Ulimit{
+				// файл больше 64мб компилятор не запишет (бинарник-бомба на диск хоста)
+				{Name: "fsize", Soft: 64 << 20, Hard: 64 << 20},
+				{Name: "nofile", Soft: 4096, Hard: 4096},
+			},
 		},
 		Binds: []string{
 			fmt.Sprintf("%s:%s:rw", hostBuildDir, buildContainerPath),
@@ -417,6 +440,23 @@ func stripDockerLogHeaders(data []byte) string {
 		data = data[size:]
 	}
 	return sb.String()
+}
+
+// dirSize - суммарный размер обычных файлов в каталоге
+func dirSize(dir string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, err
 }
 
 // copyFile копирует файл с правами 0640.

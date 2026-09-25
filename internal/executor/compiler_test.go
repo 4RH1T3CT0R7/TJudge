@@ -1,6 +1,8 @@
 package executor
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,4 +135,20 @@ func TestStripDockerLogHeaders(t *testing.T) {
 	// пустой и неполный ввод не паникуют
 	assert.Equal(t, "", stripDockerLogHeaders(nil))
 	assert.Equal(t, "", stripDockerLogHeaders([]byte{1, 0, 0}))
+}
+
+// размер артефакта считается по всем файлам сборки, включая вложенные
+// (javac кладёт Foo$Bar.class рядом, а бинарник-бомба весит сотни мегабайт)
+func TestDirSize(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Main.class"), []byte("cafe"), 0o600))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o750))
+	f, err := os.Create(filepath.Join(dir, "sub", "out"))
+	require.NoError(t, err)
+	require.NoError(t, f.Truncate(maxArtifactSize)) // разреженный файл, диск не тратит
+	require.NoError(t, f.Close())
+
+	size, err := dirSize(dir)
+	require.NoError(t, err)
+	assert.Equal(t, int64(maxArtifactSize+4), size)
 }
