@@ -79,6 +79,7 @@ type GameRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	StartNewRound(ctx context.Context, tournamentID uuid.UUID, gameTypes []string, matches []*models.Match) error
+	ResetGameRoundFull(ctx context.Context, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	// авто-раунд
 	GetAutoRoundEnabledGames(ctx context.Context) ([]*models.AutoRoundGameInfo, error)
 	UpdateAutoRoundLastRun(ctx context.Context, tournamentID, gameID uuid.UUID) error

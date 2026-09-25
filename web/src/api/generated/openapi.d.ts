@@ -736,7 +736,7 @@ export interface paths {
         put?: never;
         /**
          * Reset game round (admin)
-         * @description Fully resets the round -- deletes matches, resets ratings and stats.
+         * @description Fully resets the round -- deletes matches, resets ratings and stats. 409 while matches of the game are running.
          */
         post: operations["tournamentGameResetRound"];
         delete?: never;
@@ -3253,6 +3253,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     tournamentGameAutoRoundGet: {

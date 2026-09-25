@@ -53,8 +53,9 @@ func NewSchedulingService(
 }
 
 // scheduleLockKey - общий лок планирования турнира. RunAll, RunGame (и авто-раунд через
-// него), повтор упавших и завершение турнира под ним не пересекаются: иначе игра может
-// получить два раунда, а завершённый турнир - новые матчи
+// него), повтор упавших, ручной сброс раунда и завершение турнира под ним не
+// пересекаются: иначе игра может получить два раунда, сброс - снести только что
+// поставленный в очередь раунд, а завершённый турнир - новые матчи
 func scheduleLockKey(tournamentID uuid.UUID) string {
 	return "tournament:schedule:" + tournamentID.String()
 }
@@ -267,6 +268,16 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models
 	}
 
 	return matches, nil
+}
+
+// ResetGameRound - ручной сброс раунда игры (кнопка админа) под локом планирования
+func (ss *SchedulingService) ResetGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
+	err = ss.distributedLock.WithLock(ctx, scheduleLockKey(tournamentID), 60*time.Second, func(ctx context.Context) error {
+		var resetErr error
+		matchesDeleted, participantsReset, ratingHistoryDeleted, resetErr = ss.gameRepo.ResetGameRoundFull(ctx, tournamentID, gameType)
+		return resetErr
+	})
+	return
 }
 
 // RetryFailedMatches - переводит упавшие матчи обратно в pending и ставит в очередь.

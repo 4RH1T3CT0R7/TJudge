@@ -214,6 +214,17 @@ func (s *MatchRepositorySuite) TestStartNewRound() {
 	assert.Equal(s.T(), 409, appErr.Code)
 	_, err = s.repo.GetByID(ctx, round[1].ID)
 	require.NoError(s.T(), err)
+
+	// ручной сброс идёт через тот же resetGame: при running тоже 409, иначе сносит раунд
+	_, _, _, err = gameRepo.ResetGameRoundFull(ctx, tournament.ID, game.Name)
+	appErr = errors.GetAppError(err)
+	require.NotNil(s.T(), appErr)
+	assert.Equal(s.T(), 409, appErr.Code)
+	_, err = s.database.ExecContext(ctx, "UPDATE matches SET status = 'completed' WHERE id = $1", round[0].ID)
+	require.NoError(s.T(), err)
+	deleted, _, _, err := gameRepo.ResetGameRoundFull(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), deleted)
 }
 
 func (s *MatchRepositorySuite) TestGetByTournamentID() {

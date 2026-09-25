@@ -1077,7 +1077,7 @@ paths:
     post:
       tags: [games]
       summary: Reset game round (admin)
-      description: Fully resets the round -- deletes matches, resets ratings and stats.
+      description: Fully resets the round -- deletes matches, resets ratings and stats. 409 while matches of the game are running.
       operationId: tournamentGameResetRound
       security:
         - BearerAuth: []
@@ -1099,6 +1099,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /tournaments/{id}/games/{gameId}/auto-round:
     parameters:

@@ -78,11 +78,6 @@ func (m *MockTournamentGameStatusRepo) GetActiveGame(ctx context.Context, tourna
 	return args.Get(0).(*models.TournamentGame), args.Error(1)
 }
 
-func (m *MockTournamentGameStatusRepo) ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (int64, int64, int64, error) {
-	args := m.Called(ctx, tournamentID, gameID, gameType)
-	return args.Get(0).(int64), args.Get(1).(int64), args.Get(2).(int64), args.Error(3)
-}
-
 func (m *MockTournamentGameStatusRepo) DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error {
 	return m.Called(ctx, tournamentID).Error(0)
 }
@@ -118,7 +113,7 @@ func newTestGameRoundHandler(
 		sr = statusRepo
 	}
 
-	return NewGameRoundHandler(gameSvc, nil, mr, nil, sr, events.NoopNotifier{}, "", log)
+	return NewGameRoundHandler(gameSvc, nil, mr, nil, sr, nil, events.NoopNotifier{}, "", log)
 }
 
 func withTwoChiParams(r *http.Request, key1, val1, key2, val2 string) *http.Request {

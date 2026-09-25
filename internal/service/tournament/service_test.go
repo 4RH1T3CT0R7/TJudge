@@ -157,6 +157,10 @@ func (m *MockGameRepository) SetActiveGame(ctx context.Context, id, gameID uuid.
 func (m *MockGameRepository) StartNewRound(ctx context.Context, id uuid.UUID, gameTypes []string, matches []*models.Match) error {
 	return m.Called(ctx, id, gameTypes, matches).Error(0)
 }
+func (m *MockGameRepository) ResetGameRoundFull(ctx context.Context, id uuid.UUID, gameType string) (int64, int64, int64, error) {
+	args := m.Called(ctx, id, gameType)
+	return int64(args.Int(0)), int64(args.Int(1)), int64(args.Int(2)), args.Error(3)
+}
 func (m *MockGameRepository) UpdateAutoRoundLastRun(ctx context.Context, id, gameID uuid.UUID) error {
 	return m.Called(ctx, id, gameID).Error(0)
 }
@@ -851,11 +855,12 @@ func TestScheduling_SharedLockKey(t *testing.T) {
 	_, _ = service.RunAllMatches(ctx, id)
 	_, _ = service.RunGameMatches(ctx, id, "dilemma")
 	_, _ = service.RetryFailedMatches(ctx, id)
+	_, _, _, _ = service.ResetGameRound(ctx, id, "dilemma")
 
-	require.Len(t, keys, 3)
-	assert.Equal(t, scheduleLockKey(id), keys[0])
-	assert.Equal(t, keys[0], keys[1])
-	assert.Equal(t, keys[0], keys[2])
+	require.Len(t, keys, 4)
+	for _, key := range keys {
+		assert.Equal(t, scheduleLockKey(id), key)
+	}
 }
 
 func TestService_RetryFailedMatches(t *testing.T) {
