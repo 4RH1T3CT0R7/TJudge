@@ -3,6 +3,7 @@ package handlers
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -27,9 +28,11 @@ func isProductionEnvLookup() bool {
 // к этому ws от его имени (CSWSH)
 //
 // правила:
-//   - в проде wildcard "*" и пустой список запрещены, Origin должен точно
-//     совпасть с одним из разрешённых. пустой Origin пропускается только для
-//     не-браузерных клиентов (нет Sec-Fetch-Site)
+//   - при явном списке Origin должен точно совпасть с одним из разрешённых
+//   - в проде при wildcard "*" или пустом списке пускается только свой origin
+//     (хост из Origin равен Host запроса)
+//   - пустой Origin в проде пропускается только для не-браузерных клиентов
+//     (нет Sec-Fetch-Site)
 //   - в dev wildcard/пустой список разрешают всё, для локалки
 func checkWebSocketOrigin(r *http.Request) bool {
 	allowedOrigins := os.Getenv("WEBSOCKET_ALLOWED_ORIGINS")
@@ -37,11 +40,12 @@ func checkWebSocketOrigin(r *http.Request) bool {
 		allowedOrigins = os.Getenv("CORS_ALLOWED_ORIGINS")
 	}
 	trimmed := strings.TrimSpace(allowedOrigins)
+	wildcard := trimmed == "" || trimmed == "*"
 
 	prod := isProductionEnvLookup()
 
-	if trimmed == "" || trimmed == "*" {
-		return !prod
+	if wildcard && !prod {
+		return true
 	}
 
 	origin := r.Header.Get("Origin")
@@ -53,6 +57,14 @@ func checkWebSocketOrigin(r *http.Request) bool {
 			return false
 		}
 		return true
+	}
+
+	if wildcard {
+		// сравниваются имена хостов без порта: nginx проксирует Host как $host,
+		// а он порт отбрасывает
+		u, err := url.Parse(origin)
+		return err == nil && u.Hostname() != "" &&
+			strings.EqualFold(u.Hostname(), (&url.URL{Host: r.Host}).Hostname())
 	}
 
 	for allowed := range strings.SplitSeq(allowedOrigins, ",") {
