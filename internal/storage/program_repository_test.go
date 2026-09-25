@@ -207,6 +207,23 @@ func (s *ProgramRepositorySuite) TestGetByUserID() {
 		"programs should be ordered by created_at DESC")
 }
 
+// сокомандник видит программы команды, загруженные не им
+func (s *ProgramRepositorySuite) TestGetByUserID_Teammate() {
+	leader := s.createUser("prog_team_leader")
+	mate := s.createUser("prog_team_mate")
+	tournament := s.createTournament("PRTEAM", leader.ID)
+	team := s.createTeam(tournament.ID, leader.ID, "PRTM01")
+	ctx := context.Background()
+	require.NoError(s.T(), s.teamRepo.AddMember(ctx, &models.TeamMember{ID: uuid.New(), TeamID: team.ID, UserID: mate.ID}))
+
+	program := s.createProgram(leader.ID, &team.ID, &tournament.ID, nil, "Team Bot", 1)
+
+	programs, err := s.repo.GetByUserID(ctx, mate.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), programs, 1)
+	assert.Equal(s.T(), program.ID, programs[0].ID)
+}
+
 func (s *ProgramRepositorySuite) TestGetByUserID_Empty() {
 	ctx := context.Background()
 

@@ -25,7 +25,7 @@ type ProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
+	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
 	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error)
 	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
@@ -167,21 +167,8 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
-	if err != nil {
-		h.log.LogError("Failed to check ownership", err)
-		writeError(w, err)
-		return
-	}
-	if !isOwner {
-		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
-		return
-	}
-
-	program, err := h.programRepo.GetByID(r.Context(), id)
-	if err != nil {
-		h.log.LogError("Failed to get program", err)
-		writeError(w, err)
+	program, ok := h.getAccessibleProgram(w, r, id, userID)
+	if !ok {
 		return
 	}
 
@@ -830,8 +817,49 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, program)
 }
 
+// isAdmin - роль из контекста; в роутере её уже сверил с базой VerifyRole
+func isAdmin(ctx context.Context) bool {
+	role, _ := ctx.Value(middleware.RoleKey).(models.Role)
+	return role == models.RoleAdmin
+}
+
+// canAccessProgram - автор, любой член команды программы или админ.
+// программа командная: сокомандник должен видеть и качать версии, которые
+// загрузил не он
+func (h *ProgramHandler) canAccessProgram(ctx context.Context, p *models.Program, userID uuid.UUID) (bool, error) {
+	if p.UserID == userID || isAdmin(ctx) {
+		return true, nil
+	}
+	if p.TeamID == nil || h.teamChecker == nil {
+		return false, nil
+	}
+	return h.teamChecker.IsUserInTeam(ctx, *p.TeamID, userID)
+}
+
+// getAccessibleProgram достаёт программу и проверяет доступ. false — ответ записан
+func (h *ProgramHandler) getAccessibleProgram(w http.ResponseWriter, r *http.Request, id, userID uuid.UUID) (*models.Program, bool) {
+	program, err := h.programRepo.GetByID(r.Context(), id)
+	if err != nil {
+		h.log.LogError("Failed to get program", err, zap.String("program_id", id.String()))
+		writeError(w, err)
+		return nil, false
+	}
+
+	ok, err := h.canAccessProgram(r.Context(), program, userID)
+	if err != nil {
+		h.log.LogError("Failed to check team membership", err)
+		writeError(w, err)
+		return nil, false
+	}
+	if !ok {
+		writeError(w, errors.ErrForbidden.WithMessage("you don't have access to this program"))
+		return nil, false
+	}
+	return program, true
+}
+
 // @Summary Мои программы
-// @Description Возвращает список программ текущего пользователя
+// @Description Возвращает программы текущего пользователя и всех его команд
 // @Tags programs
 // @Produce json
 // @Security BearerAuth
@@ -858,7 +886,7 @@ func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Получить программу
-// @Description Возвращает программу по ID (владелец или админ)
+// @Description Возвращает программу по ID (автор, член её команды или админ)
 // @Tags programs
 // @Produce json
 // @Param id path string true "Program ID" format(uuid)
@@ -880,19 +908,8 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	program, err := h.programRepo.GetByID(r.Context(), id)
-	if err != nil {
-		h.log.LogError("Failed to get program", err,
-			zap.String("program_id", id.String()),
-		)
-		writeError(w, err)
-		return
-	}
-
-	// админы видят любую программу, остальные — только свои
-	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
-	if userRole != models.RoleAdmin && program.UserID != userID {
-		writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
+	program, ok := h.getAccessibleProgram(w, r, id, userID)
+	if !ok {
 		return
 	}
 
@@ -900,7 +917,7 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Скачать программу
-// @Description Скачивает файл программы (владелец или админ)
+// @Description Скачивает файл программы (автор, член её команды или админ)
 // @Tags programs
 // @Produce application/octet-stream
 // @Param id path string true "Program ID" format(uuid)
@@ -922,26 +939,8 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// админы скачивают любую программу
-	userRole, _ := r.Context().Value(middleware.RoleKey).(models.Role)
-	if userRole != models.RoleAdmin {
-		// остальным проверяется владение
-		isOwner, err := h.programRepo.CheckOwnership(r.Context(), id, userID)
-		if err != nil {
-			h.log.LogError("Failed to check ownership", err)
-			writeError(w, err)
-			return
-		}
-		if !isOwner {
-			writeError(w, errors.ErrForbidden.WithMessage("you don't own this program"))
-			return
-		}
-	}
-
-	program, err := h.programRepo.GetByID(r.Context(), id)
-	if err != nil {
-		h.log.LogError("Failed to get program", err)
-		writeError(w, err)
+	program, ok := h.getAccessibleProgram(w, r, id, userID)
+	if !ok {
 		return
 	}
 
@@ -1056,24 +1055,22 @@ func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// версии команды видит вся команда, а не только те, кто сам что-то загружал
+	hasAccess, err := h.canAccessProgram(r.Context(), &models.Program{TeamID: &teamID}, userID)
+	if err != nil {
+		h.log.LogError("Failed to check team membership", err)
+		writeError(w, err)
+		return
+	}
+	if !hasAccess {
+		writeError(w, errors.ErrForbidden.WithMessage("you don't have access to these programs"))
+		return
+	}
+
 	programs, err := h.programRepo.GetAllVersionsByTeamAndGame(r.Context(), teamID, gameID)
 	if err != nil {
 		h.log.LogError("Failed to get program versions", err)
 		writeError(w, err)
-		return
-	}
-
-	// достаточно, чтобы хотя бы одна версия принадлежала пользователю
-	hasAccess := false
-	for _, p := range programs {
-		if p.UserID == userID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess && len(programs) > 0 {
-		writeError(w, errors.ErrForbidden.WithMessage("you don't have access to these programs"))
 		return
 	}
 
