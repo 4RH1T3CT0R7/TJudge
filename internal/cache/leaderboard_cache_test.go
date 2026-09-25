@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/google/uuid"
@@ -74,6 +75,26 @@ func TestLeaderboardCache_FullLeaderboard(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+// запись с другим limit не продлевает жизнь уже лежащим полям
+func TestLeaderboardCache_FullLeaderboard_TTLNotExtended(t *testing.T) {
+	c, mr := setupTestCacheWithMR(t)
+	defer c.Close()
+
+	lc := NewLeaderboardCache(c)
+	ctx := context.Background()
+	tournamentID := uuid.New()
+	entries := []*models.LeaderboardEntry{{Rank: 1, ProgramID: uuid.New(), Rating: 2000}}
+
+	require.NoError(t, lc.SetFullLeaderboard(ctx, tournamentID, 100, entries))
+	mr.FastForward(fullLeaderboardTTL - time.Second)
+	require.NoError(t, lc.SetFullLeaderboard(ctx, tournamentID, 50, entries))
+	mr.FastForward(time.Second)
+
+	result, err := lc.GetFullLeaderboard(ctx, tournamentID, 100)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
 func TestLeaderboardCache_FullCrossGameLeaderboard(t *testing.T) {
 	c, mr := setupTestCacheWithMR(t)
 	defer c.Close()
@@ -111,14 +132,14 @@ func TestLeaderboardCache_GetFullLeaderboard_CorruptJSON(t *testing.T) {
 	ctx := context.Background()
 	tournamentID := uuid.New()
 
-	// формат ключа полного лидерборда: "leaderboard:full:<id>:<limit>"
+	// полные лидерборды - hash "leaderboard:full:<id>", поле = limit
 	limit := 100
-	key := fmt.Sprintf("leaderboard:full:%s:%d", tournamentID.String(), limit)
-	require.NoError(t, mr.Set(key, "not-json{{{"))
+	key := fmt.Sprintf("leaderboard:full:%s", tournamentID.String())
+	mr.HSet(key, "100", "not-json{{{")
 
 	// битый json автоудаляется, наружу nil без ошибки
 	result, err := lc.GetFullLeaderboard(ctx, tournamentID, limit)
 	assert.NoError(t, err)
 	assert.Nil(t, result)
-	assert.False(t, mr.Exists(key), "битый ключ должен быть удалён")
+	assert.False(t, mr.Exists(key), "битое поле должно быть удалено")
 }

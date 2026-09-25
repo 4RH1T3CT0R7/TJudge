@@ -13,7 +13,9 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/config"
 	"github.com/bmstu-itstech/tjudge/internal/metrics"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -136,6 +138,31 @@ func (s *RedisTestSuite) TestCache_Exists() {
 	exists, err = s.cache.Exists(s.ctx, key)
 	require.NoError(s.T(), err)
 	assert.True(s.T(), exists)
+}
+
+// =============================================================================
+// Leaderboard Cache Tests
+// =============================================================================
+
+// кэш лидерборда на живом редисе: hash с ttl (EXPIRE NX) и инвалидация одним DEL
+func (s *RedisTestSuite) TestLeaderboardCache_Invalidate() {
+	tournamentID := uuid.New()
+	entries := []*models.LeaderboardEntry{{Rank: 1, ProgramID: uuid.New(), Rating: 1500}}
+
+	require.NoError(s.T(), s.leaderboardCache.SetFullLeaderboard(s.ctx, tournamentID, 100, entries))
+	require.NoError(s.T(), s.leaderboardCache.SetFullLeaderboard(s.ctx, tournamentID, 50, entries))
+
+	found, err := s.leaderboardCache.GetFullLeaderboard(s.ctx, tournamentID, 50)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), found, 1)
+
+	require.NoError(s.T(), s.leaderboardCache.InvalidateFullLeaderboard(s.ctx, tournamentID))
+
+	for _, limit := range []int{100, 50} {
+		found, err := s.leaderboardCache.GetFullLeaderboard(s.ctx, tournamentID, limit)
+		require.NoError(s.T(), err)
+		assert.Nil(s.T(), found)
+	}
 }
 
 // =============================================================================
