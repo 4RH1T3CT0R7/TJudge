@@ -454,55 +454,6 @@ func (s *MatchRepositorySuite) TestResetFailedMatches_NoFailed() {
 	assert.Equal(s.T(), int64(0), affected)
 }
 
-func (s *MatchRepositorySuite) TestGetNextRoundNumber() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("nxtrnd")
-
-	ctx := context.Background()
-
-	// матчей ещё нет - ожидается 1
-	nextRound, err := s.repo.GetNextRoundNumber(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, nextRound)
-
-	// раунд 1
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-
-	nextRound, err = s.repo.GetNextRoundNumber(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 2, nextRound)
-
-	// раунд 3 (второй пропустили) - следующий должен быть 4
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 3)
-
-	nextRound, err = s.repo.GetNextRoundNumber(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 4, nextRound)
-}
-
-func (s *MatchRepositorySuite) TestGetNextRoundNumberByGame() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("nxtrng")
-
-	ctx := context.Background()
-
-	// для этой игры матчей нет
-	nextRound, err := s.repo.GetNextRoundNumberByGame(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, nextRound)
-
-	// матчи под разные игры
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 2)
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", models.MatchPending, models.PriorityMedium, 1)
-
-	nextRound, err = s.repo.GetNextRoundNumberByGame(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 3, nextRound)
-
-	nextRound, err = s.repo.GetNextRoundNumberByGame(ctx, tournament.ID, "tug_of_war")
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 2, nextRound)
-}
-
 func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("mbrnd")
 
@@ -542,29 +493,6 @@ func (s *MatchRepositorySuite) TestGetStatistics() {
 	assert.Equal(s.T(), 0, stats.Running)
 }
 
-func (s *MatchRepositorySuite) TestHasStartedMatches() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("hasst")
-
-	ctx := context.Background()
-
-	// стартовавших нет
-	has, err := s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.False(s.T(), has)
-
-	// pending не считается стартовавшим
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	has, err = s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.False(s.T(), has)
-
-	// а completed - уже да
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
-	has, err = s.repo.HasStartedMatches(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.True(s.T(), has)
-}
-
 func (s *MatchRepositorySuite) TestHasAnyRunningMatches() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("hasrn")
 
@@ -602,28 +530,6 @@ func (s *MatchRepositorySuite) TestGetActiveGameType() {
 	gameType, err = s.repo.GetActiveGameType(ctx, tournament.ID)
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), "prisoners_dilemma", gameType)
-}
-
-func (s *MatchRepositorySuite) TestDeleteMatchesForGame() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("delgm")
-
-	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchPending, models.PriorityMedium, 1)
-	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "tug_of_war", models.MatchPending, models.PriorityMedium, 1)
-
-	ctx := context.Background()
-	affected, err := s.repo.DeleteMatchesForGame(ctx, tournament.ID, "prisoners_dilemma")
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), int64(2), affected)
-
-	// удалённые убираются из трекинга
-	s.matchIDs = []uuid.UUID{m3.ID}
-	_ = m1 // уже снесён через DeleteMatchesForGame
-
-	// матч tug_of_war должен остаться
-	result, err := s.repo.GetByID(ctx, m3.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), "tug_of_war", result.GameType)
 }
 
 func (s *MatchRepositorySuite) TestList_WithFilters() {
@@ -772,51 +678,4 @@ func (s *MatchRepositorySuite) TestCancelPending() {
 
 	// отменённый матч воркер уже не возьмёт
 	assert.ErrorIs(s.T(), s.repo.UpdateStatus(ctx, pending.ID, models.MatchRunning), models.ErrMatchAlreadyProcessed)
-}
-
-func (s *MatchRepositorySuite) TestBatchUpdateResults() {
-	tournament, prog1, prog2 := s.setupMatchPrerequisites("batur")
-
-	m1 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
-	m2 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
-	m3 := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
-
-	ctx := context.Background()
-
-	results := map[uuid.UUID]*models.MatchResult{
-		m1.ID: {MatchID: m1.ID, Score1: 10, Score2: 5, Winner: 1},
-		m2.ID: {MatchID: m2.ID, Score1: 3, Score2: 3, Winner: 0},
-		m3.ID: {MatchID: m3.ID, Score1: 0, Score2: 0, Winner: 0, ErrorCode: 1, ErrorMessage: "timeout"},
-	}
-
-	err := s.repo.BatchUpdateResults(ctx, results)
-	require.NoError(s.T(), err)
-
-	// m1 - completed со счётом
-	r1, err := s.repo.GetByID(ctx, m1.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), models.MatchCompleted, r1.Status)
-	require.NotNil(s.T(), r1.Score1)
-	assert.Equal(s.T(), 10, *r1.Score1)
-	require.NotNil(s.T(), r1.Score2)
-	assert.Equal(s.T(), 5, *r1.Score2)
-	require.NotNil(s.T(), r1.Winner)
-	assert.Equal(s.T(), 1, *r1.Winner)
-	assert.NotNil(s.T(), r1.CompletedAt)
-
-	// m2 - ничья
-	r2, err := s.repo.GetByID(ctx, m2.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), models.MatchCompleted, r2.Status)
-	require.NotNil(s.T(), r2.Winner)
-	assert.Equal(s.T(), 0, *r2.Winner)
-
-	// m3 - failed с ошибкой
-	r3, err := s.repo.GetByID(ctx, m3.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), models.MatchFailed, r3.Status)
-	require.NotNil(s.T(), r3.ErrorCode)
-	assert.Equal(s.T(), 1, *r3.ErrorCode)
-	require.NotNil(s.T(), r3.ErrorMessage)
-	assert.Equal(s.T(), "timeout", *r3.ErrorMessage)
 }

@@ -29,7 +29,6 @@ type ProgramRepository interface {
 	Update(ctx context.Context, program *models.Program) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error)
-	GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error)
 	GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error)
 	ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error)
 }
@@ -48,7 +47,6 @@ type GameLookup interface {
 
 // MatchExistenceChecker проверяет наличие и активность матчей турнира
 type MatchExistenceChecker interface {
-	HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error)
 	HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error)
 	GetActiveGameType(ctx context.Context, tournamentID uuid.UUID) (string, error)
 }

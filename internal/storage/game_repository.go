@@ -470,23 +470,6 @@ func (r *GameRepository) IsRoundCompleted(ctx context.Context, tournamentID, gam
 	return completed, nil
 }
 
-func (r *GameRepository) IncrementCurrentRound(ctx context.Context, tournamentID, gameID uuid.UUID) (int, error) {
-	var newRound int
-	query := `
-		UPDATE tournament_games
-		SET current_round = COALESCE(current_round, 0) + 1
-		WHERE tournament_id = $1 AND game_id = $2
-		RETURNING current_round
-	`
-
-	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&newRound)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to increment current round")
-	}
-
-	return newRound, nil
-}
-
 // SetActiveGame делает игру активной, остальные в турнире гасит
 func (r *GameRepository) SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error {
 	// одной транзакцией, чтобы атомарно
@@ -577,49 +560,6 @@ func (r *GameRepository) GetActiveGame(ctx context.Context, tournamentID uuid.UU
 	}
 
 	return &tg, nil
-}
-
-func (r *GameRepository) IsGameActive(ctx context.Context, tournamentID, gameID uuid.UUID) (bool, error) {
-	var isActive bool
-	query := `
-		SELECT COALESCE(is_active, false)
-		FROM tournament_games
-		WHERE tournament_id = $1 AND game_id = $2
-	`
-
-	err := r.db.QueryRowContext(ctx, query, tournamentID, gameID).Scan(&isActive)
-	if stderrors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, errors.Wrap(err, "failed to check game active status")
-	}
-
-	return isActive, nil
-}
-
-func (r *GameRepository) ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error {
-	query := `
-		UPDATE tournament_games
-		SET current_round = 0, round_completed = false, round_completed_at = NULL
-		WHERE tournament_id = $1 AND game_id = $2
-	`
-
-	result, err := r.db.ExecContext(ctx, query, tournamentID, gameID)
-	if err != nil {
-		return errors.Wrap(err, "failed to reset game round")
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return errors.Wrap(err, "failed to get rows affected")
-	}
-
-	if rows == 0 {
-		return errors.ErrNotFound.WithMessage("tournament game not found")
-	}
-
-	return nil
 }
 
 // ResetGameRoundFull полный сброс раунда одной транзакцией:

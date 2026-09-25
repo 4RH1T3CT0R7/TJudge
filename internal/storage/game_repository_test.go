@@ -482,56 +482,7 @@ func (s *GameRepositorySuite) TestIsRoundCompleted_NoLink() {
 	assert.False(s.T(), completed)
 }
 
-func (s *GameRepositorySuite) TestResetGameRound() {
-	game := s.createGame("reset_round")
-	tournament := s.createTournamentForGame("13")
-
-	ctx := context.Background()
-	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
-
-	// раунд закрывается и инкрементится
-	require.NoError(s.T(), s.repo.MarkRoundCompleted(ctx, tournament.ID, game.ID))
-	_, err := s.repo.IncrementCurrentRound(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-
-	// сброс
-	err = s.repo.ResetGameRound(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-
-	tg, err := s.repo.GetTournamentGame(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), tg.RoundCompleted)
-	assert.Nil(s.T(), tg.RoundCompletedAt)
-	assert.Equal(s.T(), 0, tg.CurrentRound)
-}
-
-func (s *GameRepositorySuite) TestResetGameRound_NotFound() {
-	ctx := context.Background()
-
-	err := s.repo.ResetGameRound(ctx, uuid.New(), uuid.New())
-	assert.Error(s.T(), err)
-	assert.True(s.T(), errors.IsNotFound(err))
-}
-
-// --- IncrementCurrentRound ---
-
-func (s *GameRepositorySuite) TestIncrementCurrentRound() {
-	game := s.createGame("incr_round")
-	tournament := s.createTournamentForGame("14")
-
-	ctx := context.Background()
-	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
-
-	round1, err := s.repo.IncrementCurrentRound(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 1, round1)
-
-	round2, err := s.repo.IncrementCurrentRound(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 2, round2)
-}
-
-// --- SetActiveGame / GetActiveGame / IsGameActive / DeactivateAllGames ---
+// --- SetActiveGame / GetActiveGame / DeactivateAllGames ---
 
 func (s *GameRepositorySuite) TestSetActiveGame() {
 	game1 := s.createGame("active_a")
@@ -560,9 +511,9 @@ func (s *GameRepositorySuite) TestSetActiveGame() {
 	assert.Equal(s.T(), game2.ID, active.GameID)
 
 	// game1 больше не активна
-	isActive, err := s.repo.IsGameActive(ctx, tournament.ID, game1.ID)
+	tg1, err := s.repo.GetTournamentGame(ctx, tournament.ID, game1.ID)
 	require.NoError(s.T(), err)
-	assert.False(s.T(), isActive)
+	assert.False(s.T(), tg1.IsActive)
 }
 
 func (s *GameRepositorySuite) TestSetActiveGame_NotInTournament() {
@@ -586,28 +537,6 @@ func (s *GameRepositorySuite) TestGetActiveGame_NoActive() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
-func (s *GameRepositorySuite) TestIsGameActive_True() {
-	game := s.createGame("isactive_t")
-	tournament := s.createTournamentForGame("18")
-
-	ctx := context.Background()
-	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
-	require.NoError(s.T(), s.repo.SetActiveGame(ctx, tournament.ID, game.ID))
-
-	isActive, err := s.repo.IsGameActive(ctx, tournament.ID, game.ID)
-	require.NoError(s.T(), err)
-	assert.True(s.T(), isActive)
-}
-
-func (s *GameRepositorySuite) TestIsGameActive_NoLink() {
-	ctx := context.Background()
-
-	// связки турнир-игра нет - возвращается false, а не ошибку
-	isActive, err := s.repo.IsGameActive(ctx, uuid.New(), uuid.New())
-	require.NoError(s.T(), err)
-	assert.False(s.T(), isActive)
-}
-
 func (s *GameRepositorySuite) TestDeactivateAllGames() {
 	game1 := s.createGame("deact_a")
 	game2 := s.createGame("deact_b")
@@ -626,11 +555,9 @@ func (s *GameRepositorySuite) TestDeactivateAllGames() {
 	assert.True(s.T(), errors.IsNotFound(err))
 
 	// обе неактивны
-	a1, err := s.repo.IsGameActive(ctx, tournament.ID, game1.ID)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), a1)
-
-	a2, err := s.repo.IsGameActive(ctx, tournament.ID, game2.ID)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), a2)
+	for _, g := range []*models.Game{game1, game2} {
+		tg, err := s.repo.GetTournamentGame(ctx, tournament.ID, g.ID)
+		require.NoError(s.T(), err)
+		assert.False(s.T(), tg.IsActive)
+	}
 }

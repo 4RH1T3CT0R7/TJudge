@@ -65,11 +65,6 @@ func (m *MockProgramRepository) CheckOwnership(ctx context.Context, programID, u
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID uuid.UUID) (int, error) {
-	args := m.Called(ctx, teamID, gameID)
-	return args.Int(0), args.Error(1)
-}
-
 func (m *MockProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
 	args := m.Called(ctx, teamID, gameID)
 	if args.Get(0) == nil {
@@ -116,11 +111,6 @@ func (m *MockRoundCompletionChecker) IsAutoRoundEnabled(ctx context.Context, tou
 // MockMatchExistenceChecker — мок чекера существования матчей
 type MockMatchExistenceChecker struct {
 	mock.Mock
-}
-
-func (m *MockMatchExistenceChecker) HasStartedMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (bool, error) {
-	args := m.Called(ctx, tournamentID, gameType)
-	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockMatchExistenceChecker) HasAnyRunningMatches(ctx context.Context, tournamentID uuid.UUID) (bool, error) {

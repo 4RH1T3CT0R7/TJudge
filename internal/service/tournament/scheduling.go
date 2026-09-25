@@ -126,9 +126,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 				continue
 			}
 
-			roundNumber := 1
-
-			gameMatches, err := ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, models.PriorityMedium, nil)
+			gameMatches, err := ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, models.PriorityMedium)
 			if err != nil {
 				return 0, fmt.Errorf("failed to generate matches for game %s: %w", gameType, err)
 			}
@@ -156,7 +154,6 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 			ss.log.Info("Generated new round of matches for game",
 				zap.String("tournament_id", tournamentID.String()),
 				zap.String("game_type", gameType),
-				zap.Int("round_number", roundNumber),
 				zap.Int("matches_count", len(gameMatches)),
 			)
 		}
@@ -245,11 +242,8 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 			return 0, errors.ErrValidation.WithMessage("need at least 2 participants with programs for this game")
 		}
 
-		// после сброса раунд всегда начинается с 1
-		roundNumber := 1
-
 		// ручной запуск - высокий приоритет
-		matches, err = ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, roundNumber, models.PriorityHigh, nil)
+		matches, err = ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, models.PriorityHigh)
 		if err != nil {
 			return 0, fmt.Errorf("failed to generate matches: %w", err)
 		}
@@ -267,7 +261,6 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		ss.log.Info("Generated new round of matches for game",
 			zap.String("tournament_id", tournamentID.String()),
 			zap.String("game_type", gameType),
-			zap.Int("round_number", roundNumber),
 			zap.Int("matches_count", len(matches)),
 		)
 	}
@@ -304,8 +297,8 @@ func (ss *SchedulingService) getLatestParticipantsByGame(ctx context.Context, to
 }
 
 // generateRoundRobinMatchesForGame - собирает матчи для одной игры.
-// playedPairs это уже сыгранные пары "program1_id|program2_id", они пропускаются
-func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models.Tournament, participants []*models.TournamentParticipant, gameType string, roundNumber int, priority models.MatchPriority, playedPairs map[string]struct{}) ([]*models.Match, error) {
+// раунд всегда первый: новый раунд начинается со сброса прошлых результатов игры
+func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models.Tournament, participants []*models.TournamentParticipant, gameType string, priority models.MatchPriority) ([]*models.Match, error) {
 	var matches []*models.Match
 	now := time.Now()
 
@@ -319,12 +312,6 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models
 				continue
 			}
 
-			// пары что уже игрались с теми же программами - скипаются
-			pairKey := participants[i].ProgramID.String() + "|" + participants[j].ProgramID.String()
-			if _, played := playedPairs[pairKey]; played {
-				continue
-			}
-
 			match := &models.Match{
 				ID:           uuid.New(),
 				TournamentID: tournament.ID,
@@ -333,7 +320,7 @@ func (ss *SchedulingService) generateRoundRobinMatchesForGame(tournament *models
 				GameType:     gameType,
 				Status:       models.MatchPending,
 				Priority:     priority,
-				RoundNumber:  roundNumber,
+				RoundNumber:  1,
 				CreatedAt:    now,
 			}
 

@@ -56,7 +56,6 @@ type TournamentGameStatusRepository interface {
 	MarkRoundCompleted(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	SetActiveGame(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	GetActiveGame(ctx context.Context, tournamentID uuid.UUID) (*models.TournamentGame, error)
-	ResetGameRound(ctx context.Context, tournamentID, gameID uuid.UUID) error
 	ResetGameRoundFull(ctx context.Context, tournamentID, gameID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 	DeactivateAllGames(ctx context.Context, tournamentID uuid.UUID) error
 	// авто-раунд
