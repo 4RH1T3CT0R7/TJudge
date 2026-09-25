@@ -403,8 +403,24 @@ func TestService_LeaveTeam_LeaderLastMember_ActiveTournament(t *testing.T) {
 
 	err := svc.LeaveTeam(ctx, teamID, leaderID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot delete team during active tournament")
+	assert.Contains(t, err.Error(), "cannot delete team of active or completed tournament")
 	teamRepo.AssertExpectations(t)
+}
+
+// и в завершённом тоже: иначе команда задним числом пропала бы из итогов
+func TestService_LeaveTeam_LeaderLastMember_CompletedTournament(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, TournamentID: tID}, nil)
+	teamRepo.On("IsUserInTeam", ctx, teamID, leaderID).Return(true, nil)
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(1, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentCompleted}, nil)
+
+	err := svc.LeaveTeam(ctx, teamID, leaderID)
+	assert.Error(t, err)
+	teamRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 }
 
 // елси уходит лидер, а в команде есть ещё люди — лидерство переходит первому не-лидеру

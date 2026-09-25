@@ -270,9 +270,10 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 		}
 
 		if memberCount == 1 {
-			// в команде он один — но во время активного турнира сносить нельзя
-			if tournament.Status == models.TournamentActive {
-				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
+			// в команде он один — но в идущем турнире сносить нельзя:
+			// команда пропала бы из итоговой таблицы
+			if tournament.Status != models.TournamentPending {
+				return errors.ErrConflict.WithMessage("cannot delete team of active or completed tournament")
 			}
 
 			// последний участник ушёл — команда удаляется
@@ -305,8 +306,8 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 		if !transferred {
 			// гонка: пока считали и тянули список, остальные тоже вышли.
 			// команда по факту пустая — удаляется (проверка на активный турнир повторяется)
-			if tournament.Status == models.TournamentActive {
-				return errors.ErrConflict.WithMessage("cannot delete team during active tournament")
+			if tournament.Status != models.TournamentPending {
+				return errors.ErrConflict.WithMessage("cannot delete team of active or completed tournament")
 			}
 
 			if err := s.teamRepo.Delete(ctx, teamID); err != nil {

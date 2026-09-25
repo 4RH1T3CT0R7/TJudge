@@ -78,6 +78,23 @@ func (m *MockProgramRepository) ClearErrorMessages(ctx context.Context, tourname
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// MockProgramTournamentRepo — мок TournamentRepo хендлера программ
+type MockProgramTournamentRepo struct {
+	mock.Mock
+}
+
+func (m *MockProgramTournamentRepo) AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error {
+	return m.Called(ctx, participant).Error(0)
+}
+
+func (m *MockProgramTournamentRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Tournament), args.Error(1)
+}
+
 // MockTeamMembershipChecker — мок чекера членства в команде
 type MockTeamMembershipChecker struct {
 	mock.Mock
@@ -387,6 +404,32 @@ func TestProgramHandler_Delete(t *testing.T) {
 
 		mockRepo.AssertExpectations(t)
 	})
+
+	// каскад снёс бы матчи и очки соперников, итоги поменялись бы задним числом
+	for _, status := range []models.TournamentStatus{models.TournamentActive, models.TournamentCompleted} {
+		t.Run("conflict in "+string(status)+" tournament", func(t *testing.T) {
+			mockRepo := new(MockProgramRepository)
+			tournamentRepo := new(MockProgramTournamentRepo)
+			handler := NewProgramHandler(mockRepo, tournamentRepo, nil, nil, nil, nil, nil, nil, "", log)
+
+			userID, programID, tournamentID := uuid.New(), uuid.New(), uuid.New()
+			mockRepo.On("CheckOwnership", mock.Anything, programID, userID).Return(true, nil)
+			mockRepo.On("GetByID", mock.Anything, programID).Return(&models.Program{ID: programID, UserID: userID, TournamentID: &tournamentID}, nil)
+			tournamentRepo.On("GetByID", mock.Anything, tournamentID).Return(&models.Tournament{ID: tournamentID, Status: status}, nil)
+
+			req := httptest.NewRequest(http.MethodDelete, "/api/v1/programs/"+programID.String(), nil)
+			ctx := context.WithValue(req.Context(), middleware.UserIDKey, userID)
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", programID.String())
+			req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+			w := httptest.NewRecorder()
+			handler.Delete(w, req)
+
+			assert.Equal(t, http.StatusConflict, w.Code)
+			mockRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+		})
+	}
 }
 
 func TestProgramHandler_GetVersions(t *testing.T) {

@@ -1043,7 +1043,10 @@ export interface paths {
         get: operations["programsGet"];
         put?: never;
         post?: never;
-        /** Delete program */
+        /**
+         * Delete program
+         * @description Not allowed (409) while the program's tournament is active or completed.
+         */
         delete: operations["programsDelete"];
         options?: never;
         head?: never;
@@ -3748,6 +3751,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     programsDownload: {
