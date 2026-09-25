@@ -48,19 +48,21 @@ groups:
   - name: tjudge-queue
     rules:
       # Большая очередь на старте раунда - штатная ситуация, тревожно только
-      # когда матчи в работе есть, а завершений (включая failed) нет.
+      # когда воркеры заняты матчами, а завершений (включая failed) нет.
       # WORKER_TIMEOUT 90s, так что 10 минут без завершений - зависание.
       # tjudge_queue_size сюда не годится: гейдж обновляется только на
       # непустом Dequeue/Enqueue и после разбора очереди залипает.
+      # tjudge_matches_in_progress тоже: после паники в обработке матча
+      # Dec не выполняется, и гейдж остаётся ненулевым до рестарта worker'а.
       - alert: QueueStuck
         expr: |
-          sum(tjudge_matches_in_progress) > 0
+          sum(tjudge_active_workers) > 0
             unless on() sum(increase(tjudge_matches_total[10m])) > 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Матчи в работе, но ни один не завершился за 10 минут"
+          summary: "Воркеры заняты, но ни один матч не завершился за 10 минут"
           description: "Матчи не разбираются: проверь worker и Docker daemon."
 
       - alert: DeadLetterGrowing
