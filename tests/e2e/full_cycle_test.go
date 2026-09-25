@@ -150,7 +150,9 @@ func uploadProgram(t *testing.T, c *TestClient, tournamentID, gameID, teamID, fi
 		requireStatus(t, resp, http.StatusCreated)
 	}
 
-	var prog ProgramResponse
+	var prog struct {
+		ID string `json:"id"`
+	}
 	require.NoError(t, c.parseResponse(resp, &prog))
 	require.NotEmpty(t, prog.ID)
 	return prog.ID
