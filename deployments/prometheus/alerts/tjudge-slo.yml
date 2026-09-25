@@ -47,15 +47,20 @@ groups:
 
   - name: tjudge-queue
     rules:
-      # SLO: queue oldest age < 5 min. Прямой метрики возраста нет -
-      # проксируем застревание через размер high-priority очереди.
+      # Большая очередь на старте раунда - штатная ситуация, тревожно только
+      # когда матчи в работе есть, а завершений (включая failed) нет.
+      # WORKER_TIMEOUT 90s, так что 10 минут без завершений - зависание.
+      # tjudge_queue_size сюда не годится: гейдж обновляется только на
+      # непустом Dequeue/Enqueue и после разбора очереди залипает.
       - alert: QueueStuck
-        expr: tjudge_queue_size{priority="high"} > 500
+        expr: |
+          sum(tjudge_matches_in_progress) > 0
+            unless on() sum(increase(tjudge_matches_total[10m])) > 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "High-priority очередь > 500 матчей 5 минут подряд"
+          summary: "Матчи в работе, но ни один не завершился за 10 минут"
           description: "Матчи не разбираются: проверь worker и Docker daemon."
 
       - alert: DeadLetterGrowing
@@ -66,29 +71,8 @@ groups:
           summary: "Dead-letter очередь растёт (>10 за 10 минут)"
           description: "Повреждённые задачи в очереди: смотри логи worker'а."
 
-      # SLO: match pickup lag < 30s (p85). Большое время ожидания в очереди.
-      - alert: MatchPickupLagHigh
-        expr: |
-          histogram_quantile(0.85,
-            sum(rate(tjudge_queue_wait_time_seconds_bucket[10m])) by (le)) > 30
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "85-й перцентиль ожидания матча в очереди > 30s"
-
   - name: tjudge-worker
     rules:
-      # SLO: worker respawns 0/24h - любая паника воркера тревожна.
-      - alert: WorkerPoolSaturated
-        expr: |
-          tjudge_active_workers / clamp_min(tjudge_worker_pool_size, 1) > 0.9
-        for: 15m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Пул воркеров насыщен > 90% в течение 15 минут"
-
       - alert: WorkerDrainTooSlow
         expr: |
           histogram_quantile(0.99,
@@ -111,10 +95,15 @@ groups:
 
   - name: tjudge-db
     rules:
+      # Лимит общий на сервер: сумма по всем репликам api и worker против
+      # max_connections Postgres. Экспортёра Postgres нет, поэтому 100 -
+      # дефолт postgres:15, compose его не переопределяет; при смене
+      # max_connections порог правится вместе с ним.
       - alert: DBConnectionsNearLimit
-        expr: tjudge_db_connections{state="open"} / 50 > 0.85
+        expr: sum(tjudge_db_connections{state="open"}) > 0.85 * 100
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "Использовано > 85% пула соединений БД"
+          summary: "Открыто > 85% от max_connections Postgres"
+          description: "При исчерпании Postgres отвечает too many clients: уменьшить DB_MAX_CONNECTIONS или реплики."
