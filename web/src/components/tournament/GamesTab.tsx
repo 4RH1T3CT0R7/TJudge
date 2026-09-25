@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
@@ -5,6 +6,7 @@ import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
 import { PlayIcon, PuzzlePieceIcon } from '../icons';
 import { AutoRoundCountdown } from './AutoRoundCountdown';
+import { Modal } from '../ui/Modal';
 import type {
   Team,
   Game,
@@ -44,6 +46,9 @@ export function GamesTab({
   matchRounds?: MatchRound[];
 }) {
   const queryClient = useQueryClient();
+  // Игра, для которой спрашивается интервал авто-раунда
+  const [autoRoundGameId, setAutoRoundGameId] = useState<string | null>(null);
+  const [autoRoundInterval, setAutoRoundInterval] = useState('60');
 
   const handleRunMatches = async (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
@@ -74,28 +79,34 @@ export function GamesTab({
     const isEnabled = currentStatus?.auto_round_enabled ?? false;
 
     if (!isEnabled) {
-      const intervalStr = window.prompt('Интервал авто-раунда (секунды, 10-3600):', '60');
-      if (!intervalStr) return;
-      const interval = parseInt(intervalStr, 10);
-      if (isNaN(interval) || interval < 10 || interval > 3600) {
-        useToastStore.getState().addToast('Интервал должен быть от 10 до 3600 секунд', 'error');
-        return;
-      }
-      try {
-        await api.setAutoRound(tournamentId, gameId, true, interval);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
-      } catch (err) {
-        console.error('Failed to enable auto-round:', err);
-        useToastStore.getState().addToast('Не удалось включить авто-раунд', 'error');
-      }
-    } else {
-      try {
-        await api.setAutoRound(tournamentId, gameId, false, currentStatus?.auto_round_interval_seconds ?? 60);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
-      } catch (err) {
-        console.error('Failed to disable auto-round:', err);
-        useToastStore.getState().addToast('Не удалось выключить авто-раунд', 'error');
-      }
+      setAutoRoundGameId(gameId);
+      return;
+    }
+    try {
+      await api.setAutoRound(tournamentId, gameId, false, currentStatus?.auto_round_interval_seconds ?? 60);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
+    } catch (err) {
+      console.error('Failed to disable auto-round:', err);
+      useToastStore.getState().addToast('Не удалось выключить авто-раунд', 'error');
+    }
+  };
+
+  const handleEnableAutoRound = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const gameId = autoRoundGameId;
+    if (!gameId) return;
+    const interval = parseInt(autoRoundInterval, 10);
+    if (isNaN(interval) || interval < 10 || interval > 3600) {
+      useToastStore.getState().addToast('Интервал должен быть от 10 до 3600 секунд', 'error');
+      return;
+    }
+    setAutoRoundGameId(null);
+    try {
+      await api.setAutoRound(tournamentId, gameId, true, interval);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
+    } catch (err) {
+      console.error('Failed to enable auto-round:', err);
+      useToastStore.getState().addToast('Не удалось включить авто-раунд', 'error');
     }
   };
 
@@ -270,6 +281,32 @@ export function GamesTab({
           );
         })}
       </div>
+
+      <Modal open={autoRoundGameId !== null} onClose={() => setAutoRoundGameId(null)} title="Авто-раунд">
+        <form onSubmit={handleEnableAutoRound}>
+          <label htmlFor="auto-round-interval" className="block text-sm font-medium mb-1 text-gray-300">
+            Интервал, секунд (10-3600)
+          </label>
+          <input
+            id="auto-round-interval"
+            type="number"
+            min={10}
+            max={3600}
+            value={autoRoundInterval}
+            onChange={(e) => setAutoRoundInterval(e.target.value)}
+            className="input w-full"
+            autoFocus
+          />
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" className="btn btn-secondary" onClick={() => setAutoRoundGameId(null)}>
+              Отмена
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Включить
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
