@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/executor"
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -25,6 +26,14 @@ type ProgramCompiler interface {
 	Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error)
 }
 
+// compileLockTTL - ttl лока сборки. WithLock продлевает его, пока сборка идёт,
+// а у убитого воркера лок протухает и программу можно собрать снова
+const compileLockTTL = 30 * time.Second
+
+func compileLockKey(programID uuid.UUID) string {
+	return "compile:" + programID.String()
+}
+
 // CompileWorker разбирает очередь компиляции: задача -> сборка в песочнице ->
 // статус compiling -> ready/failed.
 // заодно периодически возвращает в очередь программы, зависшие в compiling
@@ -34,6 +43,7 @@ type CompileWorker struct {
 	queue       CompileQueue
 	programRepo ProgramRepository
 	compiler    ProgramCompiler
+	lock        *cache.DistributedLock
 	notifier    events.Notifier
 	log         *logger.Logger
 
@@ -52,16 +62,19 @@ func NewCompileWorker(
 	q CompileQueue,
 	programRepo ProgramRepository,
 	compiler ProgramCompiler,
+	lock *cache.DistributedLock,
 	notifier events.Notifier,
 	log *logger.Logger,
+	workers int,
 ) *CompileWorker {
 	return &CompileWorker{
 		queue:            q,
 		programRepo:      programRepo,
 		compiler:         compiler,
+		lock:             lock,
 		notifier:         notifier,
 		log:              log,
-		workers:          2,
+		workers:          workers,
 		stuckInterval:    60 * time.Second,
 		stuckOlderThan:   2 * time.Minute,
 		stuckBatchSize:   100,
@@ -129,7 +142,22 @@ func (w *CompileWorker) runWorker(ctx context.Context, id int) {
 	}
 }
 
+// processTask собирает программу под локом: одну программу не собирают
+// параллельно (дубль задачи, соседняя реплика). дубль не ждёт - идущая сборка
+// сама запишет итог, а статус внутри лока перечитывается, так что поздняя
+// копия не перезапишет его
 func (w *CompileWorker) processTask(ctx context.Context, workerID int, task *queue.CompileTask) {
+	err := w.lock.WithLock(ctx, compileLockKey(task.ProgramID), compileLockTTL, func(ctx context.Context) error {
+		w.compile(ctx, workerID, task)
+		return nil
+	})
+	if err != nil {
+		w.log.Info("Compile task skipped: program is already being compiled",
+			zap.String("program_id", task.ProgramID.String()), zap.Error(err))
+	}
+}
+
+func (w *CompileWorker) compile(ctx context.Context, workerID int, task *queue.CompileTask) {
 	program, err := w.programRepo.GetByID(ctx, task.ProgramID)
 	if err != nil {
 		if isNotFoundError(err) {
@@ -231,6 +259,11 @@ func (w *CompileWorker) recoverStuck(ctx context.Context) {
 
 	w.log.Info("Re-enqueueing stuck compiling programs", zap.Int("count", len(programs)))
 	for _, p := range programs {
+		// идущую сборку не дублировать; задачу, уже лежащую в очереди,
+		// отсекает дедуп самой очереди
+		if locked, err := w.lock.IsLocked(ctx, compileLockKey(p.ID)); err == nil && locked {
+			continue
+		}
 		if err := w.queue.Enqueue(ctx, p.ID); err != nil {
 			w.log.LogError("Failed to re-enqueue stuck program", err,
 				zap.String("program_id", p.ID.String()))

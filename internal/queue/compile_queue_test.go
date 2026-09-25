@@ -62,3 +62,28 @@ func TestCompileQueue_DequeueDropsCorruptTask(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, size)
 }
+
+// пока задача лежит в очереди, повторный Enqueue (recovery нескольких реплик,
+// админский requeue) не добавляет копию; после извлечения программу снова
+// можно поставить
+func TestCompileQueue_EnqueueDedup(t *testing.T) {
+	q, _ := setupTestCompileQueue(t)
+	ctx := context.Background()
+	id := uuid.New()
+
+	require.NoError(t, q.Enqueue(ctx, id))
+	require.NoError(t, q.Enqueue(ctx, id))
+	size, err := q.Size(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+
+	task, err := q.Dequeue(ctx, time.Second)
+	require.NoError(t, err)
+	require.NotNil(t, task)
+	assert.Equal(t, id, task.ProgramID)
+
+	require.NoError(t, q.Enqueue(ctx, id))
+	size, err = q.Size(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}

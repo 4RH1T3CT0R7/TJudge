@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/bmstu-itstech/tjudge/internal/cache"
 	"github.com/bmstu-itstech/tjudge/internal/events"
 	"github.com/bmstu-itstech/tjudge/internal/executor"
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -13,8 +15,10 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // --- Моки ---
@@ -55,7 +59,9 @@ func newTestCompileWorker(t *testing.T) (*CompileWorker, *MockCompileQueue, *Moc
 	compiler := new(MockProgramCompiler)
 	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
-	w := NewCompileWorker(q, repo, compiler, bus, log)
+	mr := miniredis.RunT(t)
+	lock := cache.NewDistributedLock(cache.NewFromClient(redis.NewClient(&redis.Options{Addr: mr.Addr()})))
+	w := NewCompileWorker(q, repo, compiler, lock, bus, log, 2)
 	return w, q, repo, compiler, bus
 }
 
@@ -176,6 +182,53 @@ func TestCompileWorker_RecoverStuck(t *testing.T) {
 	w.recoverStuck(context.Background())
 
 	q.AssertExpectations(t)
+}
+
+// пока программа собирается (лок держит другая горутина или реплика), дубль
+// задачи не запускает вторую сборку и не трогает статус
+func TestCompileWorker_ProcessTask_SkipsWhileCompiling(t *testing.T) {
+	w, _, repo, compiler, bus := newTestCompileWorker(t)
+	program := compilingProgram()
+	_, err := w.lock.Lock(context.Background(), compileLockKey(program.ID), time.Minute)
+	require.NoError(t, err)
+
+	w.processTask(context.Background(), 1, &queue.CompileTask{ProgramID: program.ID})
+
+	repo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+	compiler.AssertNotCalled(t, "Compile", mock.Anything, mock.Anything)
+	assert.Empty(t, bus.published)
+}
+
+// лок снимается после сборки, следующая задача той же программы не блокируется
+func TestCompileWorker_ProcessTask_ReleasesLock(t *testing.T) {
+	w, _, repo, compiler, _ := newTestCompileWorker(t)
+	program := compilingProgram()
+	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
+	compiler.On("Compile", mock.Anything, program).Return(nil, fmt.Errorf("daemon unreachable"))
+
+	w.processTask(context.Background(), 1, &queue.CompileTask{ProgramID: program.ID})
+
+	locked, err := w.lock.IsLocked(context.Background(), compileLockKey(program.ID))
+	require.NoError(t, err)
+	assert.False(t, locked)
+}
+
+// stuck-recovery не переотправляет программу, которая прямо сейчас собирается
+func TestCompileWorker_RecoverStuck_SkipsCompiling(t *testing.T) {
+	w, q, repo, _, _ := newTestCompileWorker(t)
+	building := compilingProgram()
+	lost := compilingProgram()
+	_, err := w.lock.Lock(context.Background(), compileLockKey(building.ID), time.Minute)
+	require.NoError(t, err)
+
+	repo.On("GetStuckCompiling", mock.Anything, w.stuckOlderThan, w.stuckBatchSize).
+		Return([]*models.Program{building, lost}, nil)
+	q.On("Enqueue", mock.Anything, lost.ID).Return(nil)
+
+	w.recoverStuck(context.Background())
+
+	q.AssertExpectations(t)
+	q.AssertNotCalled(t, "Enqueue", mock.Anything, building.ID)
 }
 
 func TestCompileWorker_StartStop(t *testing.T) {

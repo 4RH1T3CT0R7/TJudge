@@ -14,6 +14,14 @@ import (
 
 const compileQueueKey = "queue:compile"
 
+// пока задача программы лежит в очереди, повторный Enqueue её не дублирует
+// (stuck-recovery каждой реплики, админский requeue). ttl - страховка на
+// случай, если ключ не сняли при извлечении
+const (
+	compileDedupPrefix = "queue:compile:dedup:"
+	compileDedupTTL    = 10 * time.Minute
+)
+
 type CompileTask struct {
 	ProgramID uuid.UUID `json:"program_id"`
 }
@@ -36,7 +44,18 @@ func (q *CompileQueue) Enqueue(ctx context.Context, programID uuid.UUID) error {
 		return fmt.Errorf("failed to marshal compile task: %w", err)
 	}
 
+	dedupKey := compileDedupPrefix + programID.String()
+	isNew, err := q.cache.SetNX(ctx, dedupKey, "1", compileDedupTTL)
+	if err != nil {
+		return fmt.Errorf("failed to check compile dedup: %w", err)
+	}
+	if !isNew {
+		return nil // задача уже в очереди
+	}
+
 	if err := q.cache.LPush(ctx, compileQueueKey, string(payload)); err != nil {
+		// откат, иначе следующие Enqueue молча пропускались бы до ttl
+		_ = q.cache.Del(ctx, dedupKey)
 		return fmt.Errorf("failed to enqueue compile task: %w", err)
 	}
 
@@ -62,6 +81,11 @@ func (q *CompileQueue) Dequeue(ctx context.Context, timeout time.Duration) (*Com
 			zap.String("payload", result[1]),
 		)
 		return nil, nil // повреждённая задача: stuck-recovery вернёт программу в очередь
+	}
+
+	if err := q.cache.Del(ctx, compileDedupPrefix+task.ProgramID.String()); err != nil {
+		q.log.Warn("Failed to remove compile dedup key", zap.Error(err),
+			zap.String("program_id", task.ProgramID.String()))
 	}
 
 	return &task, nil
