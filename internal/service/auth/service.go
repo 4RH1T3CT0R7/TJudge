@@ -296,6 +296,9 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 
 	// email трогается только если он реально другой
 	if req.Email != "" && req.Email != user.Email {
+		if err := models.ValidateEmail(req.Email); err != nil {
+			return nil, errors.ErrValidation.WithError(err)
+		}
 		existingUser, existErr := s.userRepo.GetByEmail(ctx, req.Email)
 		if existErr != nil && !errors.IsNotFound(existErr) {
 			return nil, fmt.Errorf("failed to check email uniqueness: %w", existErr)

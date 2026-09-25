@@ -3,7 +3,9 @@ package team
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -41,18 +43,28 @@ type TournamentRepository interface {
 }
 
 type CreateTeamRequest struct {
-	TournamentID uuid.UUID `json:"tournament_id" validate:"required"`
-	Name         string    `json:"name" validate:"required,min=1,max=255"`
+	TournamentID uuid.UUID `json:"tournament_id"`
+	Name         string    `json:"name"`
 	UserID       uuid.UUID `json:"-"` // ставится из контекста авторизации, не из json
 }
 
 type JoinTeamRequest struct {
-	Code   string    `json:"code" validate:"required,min=6,max=8"`
+	Code   string    `json:"code"`
 	UserID uuid.UUID `json:"-"` // ставится из контекста авторизации, не из json
 }
 
 type UpdateTeamRequest struct {
-	Name string `json:"name" validate:"required,min=1,max=255"`
+	Name string `json:"name"`
+}
+
+// normalizeTeamName обрезает пробелы и проверяет длину: пустое имя раньше
+// принималось, а длиннее колонки (VARCHAR(255)) давало 500
+func normalizeTeamName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if n := utf8.RuneCountInString(name); n == 0 || n > 255 {
+		return "", errors.ErrValidation.WithMessage("team name must be 1-255 characters")
+	}
+	return name, nil
 }
 
 // DistributedLock — распределённый лок (редис), нужен чтобы разруливать гонки
@@ -87,6 +99,11 @@ func membershipLockKey(tournamentID, userID uuid.UUID) string {
 // под локом на юзера+турнир, чтобы параллельными запросами один человек
 // не наплодил две команды в одном турнире
 func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*models.Team, error) {
+	name, err := normalizeTeamName(req.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	tournament, err := s.tournamentRepo.GetByID(ctx, req.TournamentID)
 	if err != nil {
 		return nil, err
@@ -117,7 +134,7 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*mode
 		team := &models.Team{
 			ID:           uuid.New(),
 			TournamentID: req.TournamentID,
-			Name:         req.Name,
+			Name:         name,
 			Code:         code,
 			LeaderID:     req.UserID,
 		}
@@ -346,6 +363,11 @@ func (s *Service) RemoveMember(ctx context.Context, teamID, memberUserID, leader
 
 // UpdateTeamName — лидер меняет название команды
 func (s *Service) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error) {
+	name, err := normalizeTeamName(name)
+	if err != nil {
+		return nil, err
+	}
+
 	team, err := s.teamRepo.GetByID(ctx, teamID)
 	if err != nil {
 		return nil, err

@@ -566,6 +566,22 @@ func TestService_UpdateProfile_Success(t *testing.T) {
 	userRepo.AssertExpectations(t)
 }
 
+// смена email проходит ту же проверку формата, что и регистрация
+func TestService_UpdateProfile_InvalidEmail(t *testing.T) {
+	service, userRepo, _ := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	userRepo.On("GetByID", ctx, userID).Return(&models.User{ID: userID, Email: "old@example.com"}, nil)
+
+	_, err := service.UpdateProfile(ctx, userID.String(), &UpdateProfileRequest{Email: "not-an-email"})
+
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 400, appErr.Code)
+	userRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+}
+
 func TestService_UpdateProfile_EmailAlreadyInUse(t *testing.T) {
 	service, userRepo, _ := newTestService(t)
 	ctx := context.Background()
