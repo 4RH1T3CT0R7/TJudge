@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -266,6 +267,10 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// redisPoolReserve - соединения редиса сверх WORKER_MAX: публикация событий,
+// кэш, автоскейлер, outbox, компиляция
+const redisPoolReserve = 20
+
 // пул подбирается под воркеров, но не больше дефолтного лимита постгреса (100).
 // если DB_MAX_CONNECTIONS задан явно - берётся он, это только дефолт
 func recommendedDBPoolSize(workerMax int) int {
@@ -283,8 +288,10 @@ func Load() (*Config, error) {
 	// .env подхватывается если есть, нет так нет
 	_ = godotenv.Load()
 
-	// дефолт для пула бд считается от WORKER_MAX
-	workerMax := getEnvInt("WORKER_MAX", 1000)
+	// по умолчанию воркеров столько же, сколько ядер: каждый держит матч-контейнер
+	// с квотой в ядро, больше - переподписка CPU и ложные таймауты программ.
+	// от WORKER_MAX же считаются дефолты пулов бд и редиса
+	workerMax := getEnvInt("WORKER_MAX", runtime.NumCPU())
 	defaultPoolSize := recommendedDBPoolSize(workerMax)
 
 	cfg := &Config{
@@ -313,11 +320,13 @@ func Load() (*Config, error) {
 			Port:     getEnvInt("REDIS_PORT", 6379),
 			Password: getEnvOrFile("REDIS_PASSWORD", ""),
 			DB:       getEnvInt("REDIS_DB", 0),
-			PoolSize: getEnvInt("REDIS_POOL_SIZE", 100),
+			// простаивающий воркер держит соединение на BRPOP, поэтому пул не
+			// меньше WORKER_MAX плюс запас на остальные команды
+			PoolSize: max(getEnvInt("REDIS_POOL_SIZE", 100), workerMax+redisPoolReserve),
 		},
 		Worker: WorkerConfig{
-			MinWorkers:        getEnvInt("WORKER_MIN", 10),
-			MaxWorkers:        getEnvInt("WORKER_MAX", 1000),
+			MinWorkers:        getEnvInt("WORKER_MIN", min(2, workerMax)),
+			MaxWorkers:        workerMax,
 			QueueSize:         getEnvInt("WORKER_QUEUE_SIZE", 10000),
 			Timeout:           getEnvDuration("WORKER_TIMEOUT", 90*time.Second),
 			RetryAttempts:     getEnvInt("WORKER_RETRY_ATTEMPTS", 3),
