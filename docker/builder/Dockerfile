@@ -9,7 +9,11 @@
 # Сборка: make docker-build-builder
 # Конфиг: EXECUTOR_BUILDER_IMAGE (по умолчанию tjudge-builder:latest).
 
-FROM alpine:3.23
+# Образы с кодом участников (этот и docker/tjudge) держатся на одной ветке
+# alpine и отстают от api/worker: в 3.23 gcc 15 со стандартом C gnu23, на
+# котором часть старых C-сабмитов перестаёт собираться. Поднимать между
+# турнирами, прогнав эталонные программы всех языков.
+FROM alpine:3.22
 
 # Компиляторы: gcc/g++ (c, cpp), go, rust, openjdk (java).
 # Интерпретаторы для проверки синтаксиса: python3, nodejs, ruby, php, lua.

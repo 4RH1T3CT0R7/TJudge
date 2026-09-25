@@ -21,7 +21,9 @@ RUN cargo build --release --target $(uname -m)-unknown-linux-musl \
     && cp target/$(uname -m)-unknown-linux-musl/release/tjudge-cli /usr/local/bin/tjudge-cli
 
 # Stage 2: Runtime образ с поддержкой всех языков
-FROM alpine:3.23
+# Ветка alpine совпадает с docker/builder: там компилируются программы,
+# здесь они исполняются.
+FROM alpine:3.22
 
 # Устанавливаем интерпретаторы и компиляторы для всех поддерживаемых языков
 RUN apk add --no-cache \
