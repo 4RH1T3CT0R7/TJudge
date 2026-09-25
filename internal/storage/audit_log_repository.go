@@ -37,7 +37,7 @@ func (r *AuditLogRepository) List(ctx context.Context, limit int) ([]*models.Aud
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	// актор мог быть удалён (actor_id NULL, миграция 000048) - тогда нулевой UUID
+	// актор мог быть удалён (actor_id NULL, миграция 000044) - тогда нулевой UUID
 	const query = `
 		SELECT id, COALESCE(actor_id, '00000000-0000-0000-0000-000000000000') AS actor_id, actor_role, action, target_type, target_id,
 		       method, path, status_code, ip, user_agent, created_at
