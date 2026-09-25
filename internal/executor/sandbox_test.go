@@ -1,9 +1,12 @@
 package executor
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +21,8 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 		PidsLimit:   100,
 		CPUSetCPUs:  "",
 	}
-	hc := buildMatchHostConfig(cfg, "/host/programs", "/programs")
+	binds := []string{"/host/programs/a:/programs/a:ro", "/host/programs/b:/programs/b:ro"}
+	hc := buildMatchHostConfig(cfg, binds)
 
 	assert.Equal(t, []string{"ALL"}, []string(hc.CapDrop), "должны сниматься все capabilities")
 	assert.Equal(t, "none", string(hc.NetworkMode), "сеть должна быть отключена")
@@ -39,9 +43,8 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	assert.Contains(t, tmp, "nosuid")
 	assert.Contains(t, tmp, "size=64m")
 
-	// программы монтируются только на чтение
-	require.Len(t, hc.Binds, 1)
-	assert.Equal(t, "/host/programs:/programs:ro", hc.Binds[0])
+	// монтируются только переданные файлы программ, на чтение
+	assert.Equal(t, binds, hc.Binds)
 
 	// без профилей в конфиге - только no-new-privileges
 	assert.Equal(t, []string{"no-new-privileges:true"}, hc.SecurityOpt)
@@ -63,12 +66,45 @@ func TestBuildMatchHostConfig_ProfilesOptional(t *testing.T) {
 		SeccompProfile:  "/sec/seccomp.json",
 		AppArmorProfile: "tjudge-profile",
 	}
-	hc := buildMatchHostConfig(cfg, "/p", "/programs")
+	hc := buildMatchHostConfig(cfg, nil)
 	assert.Equal(t, []string{
 		"no-new-privileges:true",
 		"seccomp=/sec/seccomp.json",
 		"apparmor=tjudge-profile",
 	}, hc.SecurityOpt)
+}
+
+// в матч монтируются только файлы двух программ (и классы java), а не весь
+// каталог программ со всеми командами
+func TestProgramMounts_OnlyMatchPrograms(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"t1_g_p1", "t1_g_p1.c", "t2_g_p2", "t2_g_p2.java", "t3_g_p3.py"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600))
+	}
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "t2_g_p2_classes"), 0o750))
+
+	log, _ := logger.New("error", "json")
+	e := &Executor{programsPath: dir, hostProgramsPath: "/host/programs", containerPath: "/programs", log: log}
+
+	paths, binds, err := e.programMounts(filepath.Join(dir, "t1_g_p1"), filepath.Join(dir, "t2_g_p2"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/programs/t1_g_p1", "/programs/t2_g_p2"}, paths)
+	assert.Equal(t, []string{
+		"/host/programs/t1_g_p1:/programs/t1_g_p1:ro",
+		"/host/programs/t2_g_p2:/programs/t2_g_p2:ro",
+		"/host/programs/t2_g_p2_classes:/programs/t2_g_p2_classes:ro",
+	}, binds)
+
+	// одна и та же программа с обеих сторон - один bind, иначе докер откажет
+	_, binds, err = e.programMounts(filepath.Join(dir, "t3_g_p3.py"), filepath.Join(dir, "t3_g_p3.py"))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/host/programs/t3_g_p3.py:/programs/t3_g_p3.py:ro"}, binds)
+
+	// сам каталог программ и отсутствующий файл не монтируются
+	_, _, err = e.programMounts(dir, filepath.Join(dir, "t1_g_p1"))
+	assert.Error(t, err)
+	_, _, err = e.programMounts(filepath.Join(dir, "gone"), filepath.Join(dir, "t1_g_p1"))
+	assert.Error(t, err)
 }
 
 // builder жирнее матча (память/pids/tmpfs), но так же изолирован
