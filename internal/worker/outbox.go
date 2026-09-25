@@ -74,6 +74,10 @@ func (d *OutboxDispatcher) Start() {
 		purge := time.NewTicker(time.Hour)
 		defer purge.Stop()
 
+		// первая чистка сразу: рестарт процесса сбрасывает часовой тикер, и при
+		// частых деплоях до него дело могло бы не доходить
+		d.purgeDone(ctx)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -83,14 +87,19 @@ func (d *OutboxDispatcher) Start() {
 					d.log.Info("Outbox dispatcher processed stale entries", zap.Int("count", n))
 				}
 			case <-purge.C:
-				if n, err := d.outbox.PurgeDone(ctx, outboxRetention); err != nil {
-					d.log.LogError("Outbox: failed to purge done entries", err)
-				} else if n > 0 {
-					d.log.Info("Outbox: purged done entries", zap.Int64("count", n))
-				}
+				d.purgeDone(ctx)
 			}
 		}
 	}()
+}
+
+// purgeDone удаляет старые выполненные задачи. повтор из второй реплики безвреден
+func (d *OutboxDispatcher) purgeDone(ctx context.Context) {
+	if n, err := d.outbox.PurgeDone(ctx, outboxRetention); err != nil {
+		d.log.LogError("Outbox: failed to purge done entries", err)
+	} else if n > 0 {
+		d.log.Info("Outbox: purged done entries", zap.Int64("count", n))
+	}
 }
 
 // Stop гасит диспетчер и ждёт пока дообработается текущий цикл
