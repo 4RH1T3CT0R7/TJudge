@@ -28,8 +28,10 @@ type RatingRepository interface {
 	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
 	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
 	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
-	// оба участника в одной транзакции - иначе рейтинг разъедется
-	ProcessMatchResultAtomic(ctx context.Context, update1, update2 *ParticipantUpdate) error
+	// рейтинг за матч применяется ровно один раз: репозиторий в одной транзакции
+	// гасит outbox-задачу, блокирует рейтинги обоих участников и отдаёт их в calc.
+	// false - рейтинг уже применён (fast path и диспетчер разошлись) или матча нет
+	ApplyMatchResult(ctx context.Context, match *models.Match, calc func(rating1, rating2 int) (*ParticipantUpdate, *ParticipantUpdate)) (bool, error)
 }
 
 type Service struct {
@@ -48,23 +50,13 @@ func NewService(repo RatingRepository, notifier events.Notifier, log *logger.Log
 	}
 }
 
-// ProcessMatchResult считает новые рейтинги и обновляет обоих участников
-func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, rating1, rating2 int) error {
+// ProcessMatchResult считает новые рейтинги и обновляет обоих участников.
+// рейтинги до матча читаются под блокировкой внутри транзакции репозитория,
+// поэтому параллельные матчи одной программы считаются от актуальных значений
+func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match) error {
 	if match.Winner == nil {
 		return errors.ErrValidation.WithMessage("match has no winner")
 	}
-
-	newRating1, newRating2, change1, change2 := s.calculator.ProcessMatch(rating1, rating2, *match.Winner)
-
-	s.log.Info("Processing match result",
-		zap.String("match_id", match.ID.String()),
-		zap.Int("rating1_old", rating1),
-		zap.Int("rating1_new", newRating1),
-		zap.Int("rating1_change", change1),
-		zap.Int("rating2_old", rating2),
-		zap.Int("rating2_new", newRating2),
-		zap.Int("rating2_change", change2),
-	)
 
 	winner := *match.Winner
 
@@ -80,45 +72,66 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, r
 		won2 = true
 	}
 
-	// оба апдейта в одной транзакции: если один упадёт - второй откатится
-	update1 := &ParticipantUpdate{
-		ProgramID:    match.Program1ID,
-		TournamentID: match.TournamentID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
+	var newRating1, newRating2 int
+	applied, err := s.repo.ApplyMatchResult(ctx, match, func(rating1, rating2 int) (*ParticipantUpdate, *ParticipantUpdate) {
+		var change1, change2 int
+		newRating1, newRating2, change1, change2 = s.calculator.ProcessMatch(rating1, rating2, winner)
+
+		s.log.Info("Processing match result",
+			zap.String("match_id", match.ID.String()),
+			zap.Int("rating1_old", rating1),
+			zap.Int("rating1_new", newRating1),
+			zap.Int("rating1_change", change1),
+			zap.Int("rating2_old", rating2),
+			zap.Int("rating2_new", newRating2),
+			zap.Int("rating2_change", change2),
+		)
+
+		update1 := &ParticipantUpdate{
 			ProgramID:    match.Program1ID,
 			TournamentID: match.TournamentID,
-			OldRating:    rating1,
-			NewRating:    newRating1,
-			Change:       change1,
-			MatchID:      &match.ID,
-			CreatedAt:    time.Now(),
-		},
-		RatingDelta: change1,
-		Won:         won1,
-		Draw:        draw1,
-	}
+			History: &models.RatingHistory{
+				ID:           uuid.New(),
+				ProgramID:    match.Program1ID,
+				TournamentID: match.TournamentID,
+				OldRating:    rating1,
+				NewRating:    newRating1,
+				Change:       change1,
+				MatchID:      &match.ID,
+				CreatedAt:    time.Now(),
+			},
+			RatingDelta: change1,
+			Won:         won1,
+			Draw:        draw1,
+		}
 
-	update2 := &ParticipantUpdate{
-		ProgramID:    match.Program2ID,
-		TournamentID: match.TournamentID,
-		History: &models.RatingHistory{
-			ID:           uuid.New(),
+		update2 := &ParticipantUpdate{
 			ProgramID:    match.Program2ID,
 			TournamentID: match.TournamentID,
-			OldRating:    rating2,
-			NewRating:    newRating2,
-			Change:       change2,
-			MatchID:      &match.ID,
-			CreatedAt:    time.Now(),
-		},
-		RatingDelta: change2,
-		Won:         won2,
-		Draw:        draw2,
-	}
-
-	if err := s.repo.ProcessMatchResultAtomic(ctx, update1, update2); err != nil {
+			History: &models.RatingHistory{
+				ID:           uuid.New(),
+				ProgramID:    match.Program2ID,
+				TournamentID: match.TournamentID,
+				OldRating:    rating2,
+				NewRating:    newRating2,
+				Change:       change2,
+				MatchID:      &match.ID,
+				CreatedAt:    time.Now(),
+			},
+			RatingDelta: change2,
+			Won:         won2,
+			Draw:        draw2,
+		}
+		return update1, update2
+	})
+	if err != nil {
 		return err
+	}
+	if !applied {
+		s.log.Info("Match rating already applied, skipping",
+			zap.String("match_id", match.ID.String()),
+		)
+		return nil
 	}
 
 	// событие уходит только после успешного апдейта, от него зависит кэш и вебсокет
@@ -130,7 +143,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match, r
 		Program2ID:   match.Program2ID,
 		NewRating1:   newRating1,
 		NewRating2:   newRating2,
-		Winner:       *match.Winner,
+		Winner:       winner,
 	})
 
 	return nil

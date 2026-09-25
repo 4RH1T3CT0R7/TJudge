@@ -55,17 +55,15 @@ func (n *capturingNotifier) ProgramCompiled(_ context.Context, e events.ProgramC
 	n.published = append(n.published, e)
 }
 
-func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockMatchRepository, *MockRatingRepository, *MockRatingService, *capturingNotifier) {
+func newTestDispatcher(t *testing.T) (*OutboxDispatcher, *MockOutboxStore, *MockMatchRepository, *MockRatingService) {
 	t.Helper()
 	outbox := new(MockOutboxStore)
 	matchRepo := new(MockMatchRepository)
-	ratingRepo := new(MockRatingRepository)
 	ratingService := new(MockRatingService)
-	bus := &capturingNotifier{}
 	log, _ := logger.New("error", "json")
 
-	d := NewOutboxDispatcher(outbox, matchRepo, ratingRepo, ratingService, bus, log)
-	return d, outbox, matchRepo, ratingRepo, ratingService, bus
+	d := NewOutboxDispatcher(outbox, matchRepo, ratingService, log)
+	return d, outbox, matchRepo, ratingService
 }
 
 func completedMatch() *models.Match {
@@ -83,18 +81,15 @@ func completedMatch() *models.Match {
 // --- Тесты ---
 
 func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
-	d, outbox, matchRepo, ratingRepo, ratingService, _ := newTestDispatcher(t)
+	d, outbox, matchRepo, ratingService := newTestDispatcher(t)
 	match := completedMatch()
 	entry := &storage.OutboxEntry{ID: 1, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	// рейтинг ещё не применялся: history пустая
-	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*models.RatingHistory{}, nil)
-	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
-		Return(1200, 1000, nil)
-	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).Return(nil)
+	// повторное применение отсекает сам ProcessMatchResult, диспетчер просто зовёт его
+	ratingService.On("ProcessMatchResult", mock.Anything, match).Return(nil)
 	outbox.On("MarkDone", mock.Anything, int64(1)).Return(nil)
 
 	processed := d.RunOnce(context.Background())
@@ -103,39 +98,8 @@ func TestOutboxDispatcher_RunOnce_ProcessesStaleEntry(t *testing.T) {
 	ratingService.AssertExpectations(t)
 }
 
-func TestOutboxDispatcher_RunOnce_IdempotentSkipRepublishesEvent(t *testing.T) {
-	d, outbox, matchRepo, ratingRepo, ratingService, bus := newTestDispatcher(t)
-	match := completedMatch()
-	entry := &storage.OutboxEntry{ID: 2, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
-
-	history := []*models.RatingHistory{
-		{ProgramID: match.Program1ID, NewRating: 1216, MatchID: &match.ID},
-		{ProgramID: match.Program2ID, NewRating: 984, MatchID: &match.ID},
-	}
-
-	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
-		Return([]*storage.OutboxEntry{entry}, nil)
-	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	// рейтинг уже применён (краш после коммита): повторять нельзя
-	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return(history, nil)
-	outbox.On("MarkDone", mock.Anything, int64(2)).Return(nil)
-
-	processed := d.RunOnce(context.Background())
-	assert.Equal(t, 1, processed)
-
-	// рейтинг не пересчитывается...
-	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	// ...но потерянное событие переотправляется с точными рейтингами из history
-	assert.Len(t, bus.published, 1)
-	evt, ok := bus.published[0].(events.MatchResultProcessed)
-	assert.True(t, ok)
-	assert.Equal(t, 1216, evt.NewRating1)
-	assert.Equal(t, 984, evt.NewRating2)
-	assert.Equal(t, match.ID, evt.MatchID)
-}
-
 func TestOutboxDispatcher_RunOnce_MatchDeleted(t *testing.T) {
-	d, outbox, matchRepo, _, _, _ := newTestDispatcher(t)
+	d, outbox, matchRepo, _ := newTestDispatcher(t)
 	matchID := uuid.New()
 	entry := &storage.OutboxEntry{ID: 3, MatchID: matchID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
 
@@ -151,17 +115,14 @@ func TestOutboxDispatcher_RunOnce_MatchDeleted(t *testing.T) {
 }
 
 func TestOutboxDispatcher_RunOnce_ErrorMarksFailed(t *testing.T) {
-	d, outbox, matchRepo, ratingRepo, ratingService, _ := newTestDispatcher(t)
+	d, outbox, matchRepo, ratingService := newTestDispatcher(t)
 	match := completedMatch()
 	entry := &storage.OutboxEntry{ID: 4, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 3}
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).
 		Return([]*storage.OutboxEntry{entry}, nil)
 	matchRepo.On("GetByID", mock.Anything, match.ID).Return(match, nil)
-	ratingRepo.On("GetByMatchID", mock.Anything, match.ID).Return([]*models.RatingHistory{}, nil)
-	ratingRepo.On("GetParticipantRatings", mock.Anything, match.TournamentID, match.Program1ID, match.Program2ID).
-		Return(1200, 1000, nil)
-	ratingService.On("ProcessMatchResult", mock.Anything, match, 1200, 1000).
+	ratingService.On("ProcessMatchResult", mock.Anything, match).
 		Return(fmt.Errorf("db connection lost"))
 	outbox.On("MarkFailed", mock.Anything, int64(4), "db connection lost").Return(nil)
 
@@ -172,7 +133,7 @@ func TestOutboxDispatcher_RunOnce_ErrorMarksFailed(t *testing.T) {
 }
 
 func TestOutboxDispatcher_RunOnce_FailedMatchSkipped(t *testing.T) {
-	d, outbox, matchRepo, _, ratingService, _ := newTestDispatcher(t)
+	d, outbox, matchRepo, ratingService := newTestDispatcher(t)
 	match := completedMatch()
 	match.Status = models.MatchFailed
 	entry := &storage.OutboxEntry{ID: 5, MatchID: match.ID, Kind: storage.OutboxKindRatingUpdate, Attempts: 1}
@@ -184,11 +145,11 @@ func TestOutboxDispatcher_RunOnce_FailedMatchSkipped(t *testing.T) {
 
 	processed := d.RunOnce(context.Background())
 	assert.Equal(t, 1, processed)
-	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	ratingService.AssertNotCalled(t, "ProcessMatchResult", mock.Anything, mock.Anything)
 }
 
 func TestOutboxDispatcher_StartStop(t *testing.T) {
-	d, outbox, _, _, _, _ := newTestDispatcher(t)
+	d, outbox, _, _ := newTestDispatcher(t)
 	d.interval = 10 * time.Millisecond
 
 	outbox.On("ClaimPending", mock.Anything, mock.Anything, mock.Anything).

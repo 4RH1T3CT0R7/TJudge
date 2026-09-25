@@ -90,26 +90,6 @@ func (r *RatingRepository) GetByProgramAndTournament(ctx context.Context, progra
 	return history, nil
 }
 
-// GetByMatchID - записи истории рейтинга по матчу. OutboxDispatcher юзает
-// как идемпотентный guard: если по матчу уже есть rating_history значит
-// рейтинг посчитан, второй раз применять нельзя (иначе задвоится)
-func (r *RatingRepository) GetByMatchID(ctx context.Context, matchID uuid.UUID) ([]*models.RatingHistory, error) {
-	var history []*models.RatingHistory
-
-	query := `
-		SELECT id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at
-		FROM rating_history
-		WHERE match_id = $1
-	`
-
-	err := r.db.QueryWithMetrics(ctx, "rating_get_by_match", &history, query, matchID)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get rating history by match")
-	}
-
-	return history, nil
-}
-
 func (r *RatingRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.RatingHistory, error) {
 	var history []*models.RatingHistory
 
@@ -217,34 +197,6 @@ func (r *RatingRepository) GetParticipantRating(ctx context.Context, tournamentI
 	return rating, nil
 }
 
-func (r *RatingRepository) GetParticipantRatings(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID) (rating1, rating2 int, err error) {
-	query := `
-		SELECT rating
-		FROM tournament_participants
-		WHERE tournament_id = $1 AND program_id = $2
-	`
-
-	// рейтинг первого участника
-	err = r.db.QueryRowContext(ctx, query, tournamentID, program1ID).Scan(&rating1)
-	if stderrors.Is(err, sql.ErrNoRows) {
-		return 0, 0, errors.ErrNotFound.WithMessage("program1 not found in tournament")
-	}
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "failed to get program1 rating")
-	}
-
-	// рейтинг второго участника
-	err = r.db.QueryRowContext(ctx, query, tournamentID, program2ID).Scan(&rating2)
-	if stderrors.Is(err, sql.ErrNoRows) {
-		return 0, 0, errors.ErrNotFound.WithMessage("program2 not found in tournament")
-	}
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "failed to get program2 rating")
-	}
-
-	return rating1, rating2, nil
-}
-
 // ResetParticipantsForGame сбрасывает рейтинг и статистику участников по игре
 func (r *RatingRepository) ResetParticipantsForGame(ctx context.Context, tournamentID, gameID uuid.UUID) (int64, error) {
 	// апдейт только участников, чьи программы этой игры
@@ -304,18 +256,63 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 	return nil
 }
 
-// ProcessMatchResultAtomic обновляет рейтинг и статистику обоих участников
-// матча в одной транзакции. падает любая операция - откатывается всё
-// (за счёт этого дельты за матч дают нулевую сумму)
-func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1, update2 *rating.ParticipantUpdate) error {
-	return r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+// ApplyMatchResult применяет рейтинг за матч ровно один раз, всё в одной транзакции:
+//  1. outbox-задача матча гасится (pending -> done). строка блокируется, поэтому
+//     fast path воркера и OutboxDispatcher сериализуются на ней, и второй видит
+//     done. заодно проверяется, что матч ещё completed (не удалён сбросом раунда)
+//  2. рейтинги обоих участников читаются FOR UPDATE в порядке program_id: общий
+//     порядок блокировок исключает дедлок параллельных матчей AB и BA
+//  3. calc считает обновления от заблокированных значений, они пишутся в историю
+//     и в tournament_participants
+//
+// false - применять нечего: рейтинг уже применён или матча больше нет
+func (r *RatingRepository) ApplyMatchResult(ctx context.Context, match *models.Match, calc func(rating1, rating2 int) (*rating.ParticipantUpdate, *rating.ParticipantUpdate)) (bool, error) {
+	applied := false
+	err := r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		claim, err := tx.ExecContext(ctx, `
+			UPDATE match_outbox SET status = 'done', processed_at = NOW()
+			WHERE match_id = $1 AND kind = $2 AND status = 'pending'
+			  AND EXISTS (SELECT 1 FROM matches WHERE id = $1 AND status = 'completed' FOR KEY SHARE)
+		`, match.ID, OutboxKindRatingUpdate)
+		if err != nil {
+			return errors.Wrap(err, "failed to claim rating outbox entry")
+		}
+		claimed, err := claim.RowsAffected()
+		if err != nil {
+			return errors.Wrap(err, "failed to get rows affected")
+		}
+		if claimed == 0 {
+			return nil
+		}
+
+		var rows []struct {
+			ProgramID uuid.UUID `db:"program_id"`
+			Rating    int       `db:"rating"`
+		}
+		if err := tx.SelectContext(ctx, &rows, `
+			SELECT program_id, rating FROM tournament_participants
+			WHERE tournament_id = $1 AND program_id IN ($2, $3)
+			ORDER BY program_id
+			FOR UPDATE
+		`, match.TournamentID, match.Program1ID, match.Program2ID); err != nil {
+			return errors.Wrap(err, "failed to lock participant ratings")
+		}
+		ratings := make(map[uuid.UUID]int, len(rows))
+		for _, row := range rows {
+			ratings[row.ProgramID] = row.Rating
+		}
+		rating1, ok1 := ratings[match.Program1ID]
+		rating2, ok2 := ratings[match.Program2ID]
+		if !ok1 || !ok2 {
+			return errors.ErrNotFound.WithMessage("tournament participant not found")
+		}
+
+		update1, update2 := calc(rating1, rating2)
 		for _, u := range []*rating.ParticipantUpdate{update1, update2} {
-			// пишется запись в историю рейтингов
-			insertQuery := `
+			if _, err := tx.ExecContext(ctx, `
 				INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			`
-			_, err := tx.ExecContext(ctx, insertQuery,
+			`,
 				u.History.ID,
 				u.History.ProgramID,
 				u.History.TournamentID,
@@ -324,12 +321,10 @@ func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1
 				u.History.Change,
 				u.History.MatchID,
 				u.History.CreatedAt,
-			)
-			if err != nil {
+			); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("failed to create rating history for program %s", u.ProgramID))
 			}
 
-			// атомарно обновляется рейтинг и статистика участника
 			var statsField string
 			if u.Won {
 				statsField = "wins = wins + 1"
@@ -344,23 +339,18 @@ func (r *RatingRepository) ProcessMatchResultAtomic(ctx context.Context, update1
 				SET rating = GREATEST(0, rating + $3), %s
 				WHERE tournament_id = $1 AND program_id = $2
 			`, statsField)
-
-			result, err := tx.ExecContext(ctx, updateQuery, u.TournamentID, u.ProgramID, u.RatingDelta)
-			if err != nil {
+			if _, err := tx.ExecContext(ctx, updateQuery, u.TournamentID, u.ProgramID, u.RatingDelta); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("failed to update participant rating and stats for program %s", u.ProgramID))
-			}
-
-			rows, err := result.RowsAffected()
-			if err != nil {
-				return errors.Wrap(err, "failed to get rows affected")
-			}
-			if rows == 0 {
-				return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament participant not found: program %s", u.ProgramID))
 			}
 		}
 
+		applied = true
 		return nil
 	})
+	if err != nil {
+		return false, err
+	}
+	return applied, nil
 }
 
 func (r *RatingRepository) DeleteRatingHistoryForGame(ctx context.Context, tournamentID uuid.UUID, gameType string) (int64, error) {
