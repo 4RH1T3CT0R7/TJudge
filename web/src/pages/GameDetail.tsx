@@ -106,27 +106,18 @@ export function GameDetail() {
   const hasNextPage = pageData.length > matchesPerPage;
   const matches = hasNextPage ? pageData.slice(0, matchesPerPage) : pageData;
 
-  // Программы команды: поллинг каждые 10с, пока какая-то версия
-  // компилируется (бейдж статуса обновится сам)
+  // Версии команды по игре, кто бы из участников их ни загрузил: в матчах
+  // играет последняя версия команды, а не последняя своя. Поллинг каждые 10с,
+  // пока какая-то версия компилируется (бейдж статуса обновится сам)
   const myTeamId = myTeam?.id;
   const programsQuery = useQuery({
-    queryKey: queryKeys.programs,
-    queryFn: () => api.getPrograms(),
-    enabled: isAuthenticated && !!myTeamId,
-    refetchInterval: (query) => {
-      const hasCompiling = query.state.data?.some(
-        (p) => p.team_id === myTeamId && p.game_id === gameId && p.status === 'compiling'
-      );
-      return hasCompiling ? 10000 : false;
-    },
+    queryKey: queryKeys.programVersions(myTeamId ?? '', gameId ?? ''),
+    queryFn: () => api.getProgramVersions(myTeamId!, gameId!),
+    enabled: isAuthenticated && !!myTeamId && !!gameId,
+    refetchInterval: (query) =>
+      query.state.data?.some((p) => p.status === 'compiling') ? 10000 : false,
   });
-  const programs = useMemo(
-    () =>
-      (programsQuery.data ?? []).filter(
-        (p) => p.team_id === myTeamId && p.game_id === gameId
-      ),
-    [programsQuery.data, myTeamId, gameId]
-  );
+  const programs = useMemo(() => programsQuery.data ?? [], [programsQuery.data]);
   const currentProgram = useMemo(
     () =>
       programs.length > 0
