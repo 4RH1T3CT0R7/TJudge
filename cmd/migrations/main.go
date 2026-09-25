@@ -43,10 +43,11 @@ func main() {
 		fmt.Println("Migrations applied successfully")
 
 	case "down":
-		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
-			log.Fatalf("Failed to rollback migrations: %v", err)
+		// ровно один шаг: m.Down() откатил бы все миграции до пустой схемы
+		if err := m.Steps(-1); err != nil {
+			log.Fatalf("Failed to rollback migration: %v", err)
 		}
-		fmt.Println("Migrations rolled back successfully")
+		fmt.Println("Last migration rolled back successfully")
 
 	case "force":
 		if len(os.Args) < 3 {
@@ -80,7 +81,7 @@ func printUsage() {
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  up      - Apply all pending migrations")
-	fmt.Println("  down    - Rollback all migrations")
+	fmt.Println("  down    - Rollback the last applied migration")
 	fmt.Println("  force N - Force database version to N")
 	fmt.Println("  version - Show current migration version")
 }
