@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -53,6 +54,11 @@ func (m *MockMatchRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*models.Match), args.Error(1)
+}
+
+func (m *MockMatchRepository) CancelPending(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // MockMatchQueueManager - мок менеджера очереди
@@ -289,6 +295,8 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 
 		handler := NewMatchHandler(mockRepo, nil, mockQueue, log)
 
+		// pending отменяются и в бд, иначе recovery воркера вернёт их в очередь
+		mockRepo.On("CancelPending", mock.Anything).Return(int64(3), nil)
 		mockQueue.On("Clear", mock.Anything).Return(nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/clear", nil)
@@ -302,7 +310,25 @@ func TestMatchHandler_ClearQueue(t *testing.T) {
 		decodeJSONData(t, w.Body, &response)
 		assert.Equal(t, "All queues cleared successfully", response["message"])
 
+		mockRepo.AssertExpectations(t)
 		mockQueue.AssertExpectations(t)
+	})
+
+	t.Run("ошибка отмены в бд", func(t *testing.T) {
+		mockRepo := new(MockMatchRepository)
+		mockQueue := new(MockMatchQueueManager)
+
+		handler := NewMatchHandler(mockRepo, nil, mockQueue, log)
+
+		mockRepo.On("CancelPending", mock.Anything).Return(int64(0), fmt.Errorf("db down"))
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/matches/queue/clear", nil)
+		w := httptest.NewRecorder()
+
+		handler.ClearQueue(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		mockQueue.AssertNotCalled(t, "Clear", mock.Anything)
 	})
 }
 

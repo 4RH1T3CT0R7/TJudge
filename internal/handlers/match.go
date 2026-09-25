@@ -21,6 +21,7 @@ type MatchRepository interface {
 	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
 	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Match, error)
+	CancelPending(ctx context.Context) (int64, error)
 }
 
 // управление очередью матчей
@@ -272,7 +273,7 @@ func (h *MatchHandler) GetQueueStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary Очистить очередь матчей
-// @Description Очищает все очереди матчей (только для админов)
+// @Description Отменяет все pending-матчи и очищает очереди (только для админов)
 // @Tags matches
 // @Produce json
 // @Security BearerAuth
@@ -287,13 +288,23 @@ func (h *MatchHandler) ClearQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// сначала отмена в бд, иначе recovery воркера вернёт pending в очередь.
+	// то, что останется в редисе при сбое Clear, воркер пропустит: в running
+	// он переводит только из pending
+	cancelled, err := h.matchRepo.CancelPending(r.Context())
+	if err != nil {
+		h.log.LogError("Failed to cancel pending matches", err)
+		writeError(w, err)
+		return
+	}
+
 	if err := h.queueManager.Clear(r.Context()); err != nil {
 		h.log.LogError("Failed to clear queue", err)
 		writeError(w, err)
 		return
 	}
 
-	h.log.Info("Queue cleared by admin")
+	h.log.Info("Queue cleared by admin", zap.Int64("cancelled", cancelled))
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "All queues cleared successfully",
