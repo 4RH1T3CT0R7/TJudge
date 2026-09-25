@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,6 +61,22 @@ func TestWriteError_ValidationWithMessage(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	assert.Contains(t, rr.Body.String(), "invalid email format")
+}
+
+// детали валидации полей доходят до клиента, а не голое «Validation failed»
+func TestWriteError_ValidationDetails(t *testing.T) {
+	rr := httptest.NewRecorder()
+	errs := models.ValidationErrors{}
+	errs.Add("name", "name is required")
+	errs.Add("game_type", "game_type is required")
+	writeError(rr, errors.ErrValidation.WithError(errs))
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Validation failed: name: name is required; game_type: game_type is required")
+
+	rr = httptest.NewRecorder()
+	writeError(rr, errors.ErrValidation.WithError(models.ValidateEmail("bad")))
+	assert.Contains(t, rr.Body.String(), "email: invalid email format")
 }
 
 func TestWriteError_PlainError(t *testing.T) {

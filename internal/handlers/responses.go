@@ -3,10 +3,13 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	stderrors "errors"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 )
 
@@ -92,10 +95,29 @@ func writeError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.Code)
 
-	data, marshalErr := json.Marshal(ErrorResponse{Error: appErr.Message})
+	data, marshalErr := json.Marshal(ErrorResponse{Error: publicMessage(appErr)})
 	if marshalErr != nil {
 		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
 		return
 	}
 	_, _ = w.Write(data)
+}
+
+// publicMessage - текст ошибки для клиента. внутренняя ошибка наружу не отдаётся,
+// кроме ошибок валидации полей: в них нет внутренностей, а без них клиент видит
+// голое «Validation failed» и не знает, что исправить
+func publicMessage(appErr *errors.AppError) string {
+	var fieldErrs models.ValidationErrors
+	var fieldErr *models.ValidationError
+	switch {
+	case stderrors.As(appErr.Err, &fieldErrs):
+		details := make([]string, 0, len(fieldErrs))
+		for _, e := range fieldErrs {
+			details = append(details, e.Error())
+		}
+		return appErr.Message + ": " + strings.Join(details, "; ")
+	case stderrors.As(appErr.Err, &fieldErr):
+		return appErr.Message + ": " + fieldErr.Error()
+	}
+	return appErr.Message
 }

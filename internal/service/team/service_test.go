@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -218,6 +219,25 @@ func TestService_CreateTeam_UserAlreadyInTeam(t *testing.T) {
 }
 
 // --- JoinTeamByCode ---
+
+// пустое и слишком длинное имя команды отсекаются до похода в бд
+func TestService_CreateTeam_InvalidName(t *testing.T) {
+	svc, _, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+
+	for _, name := range []string{"", "   ", strings.Repeat("я", 256)} {
+		_, err := svc.CreateTeam(ctx, &CreateTeamRequest{TournamentID: uuid.New(), Name: name, UserID: uuid.New()})
+		appErr := errors.GetAppError(err)
+		require.NotNil(t, appErr)
+		assert.Equal(t, 400, appErr.Code)
+	}
+	tournamentRepo.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+
+	// 255 символов кириллицей - это 510 байт, но в VARCHAR(255) помещается
+	name, err := normalizeTeamName(" " + strings.Repeat("я", 255) + " ")
+	require.NoError(t, err)
+	assert.Equal(t, strings.Repeat("я", 255), name)
+}
 
 func TestService_JoinTeamByCode_Success(t *testing.T) {
 	svc, teamRepo, tournamentRepo := newTestTeamService(t)

@@ -27,14 +27,14 @@ type GameRepository interface {
 
 // CreateRequest — тело запроса на создание игры
 type CreateRequest struct {
-	Name        string `json:"name" validate:"required,min=1,max=50"`
-	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
 	Rules       string `json:"rules"`
 }
 
 // UpdateRequest — тело запроса на обновление
 type UpdateRequest struct {
-	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
+	DisplayName string `json:"display_name"`
 	Rules       string `json:"rules"`
 }
 
