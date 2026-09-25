@@ -232,7 +232,7 @@ export interface paths {
         };
         /**
          * Tournament leaderboard
-         * @description Строка на последнюю версию программы команды в каждой игре турнира. Для несуществующего турнира - пустой список.
+         * @description Строка на последнюю готовую (ready) версию программы команды в каждой игре турнира - ту, что играет в раундах. Для несуществующего турнира - пустой список.
          */
         get: operations["tournamentsGetLeaderboard"];
         put?: never;

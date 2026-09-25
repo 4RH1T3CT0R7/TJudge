@@ -16,9 +16,10 @@ import (
 // сходились между ними
 const playedMatch = `(m.status = 'completed' OR (m.status = 'failed' AND m.winner IN (1, 2)))`
 
-// GetLeaderboard - живой лидерборд турнира: строка на последнюю версию программы
-// команды в каждой игре турнира, статистика - по всем версиям команды в этой игре
-// (как в лидерборде игры). рейтинг это сумма очков.
+// GetLeaderboard - живой лидерборд турнира: строка на последнюю готовую (ready) версию
+// программы команды в каждой игре турнира - ту, что играет в раундах; статистика - по
+// всем версиям команды в этой игре (как в лидерборде игры). рейтинг это сумма очков.
+// команда без готовой версии в таблицу не попадает, как и в раунды.
 // матчи разворачиваются в стороны через UNION ALL, а не JOIN с OR по program1_id/program2_id:
 // OR-join ломал index scan и читал партиции matches целиком
 func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error) {
@@ -35,7 +36,7 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 			INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false
 			INNER JOIN games g ON g.id = p.game_id
 			INNER JOIN tournament_games tg ON tg.tournament_id = p.tournament_id AND tg.game_id = p.game_id
-			WHERE p.tournament_id = $1
+			WHERE p.tournament_id = $1 AND p.status = 'ready'
 			ORDER BY p.team_id, p.game_id, p.version DESC
 		),
 		match_sides AS (
@@ -112,7 +113,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 	// team_id используется для связи матчей (чтобы учитывать все версии программ команды)
 	query := `
 		WITH latest_programs AS (
-			-- последние версии программ для отображения имени
+			-- последние готовые версии программ (они играют) для отображения имени
 			SELECT DISTINCT ON (p.team_id, p.game_id)
 				p.id as program_id,
 				p.name as program_name,
@@ -125,7 +126,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			INNER JOIN teams t ON p.team_id = t.id AND t.is_disqualified = false
 			INNER JOIN games g ON p.game_id = g.id
 			INNER JOIN tournament_games tg ON tg.tournament_id = p.tournament_id AND tg.game_id = p.game_id
-			WHERE p.tournament_id = $1 AND p.team_id IS NOT NULL
+			WHERE p.tournament_id = $1 AND p.team_id IS NOT NULL AND p.status = 'ready'
 			ORDER BY p.team_id, p.game_id, p.version DESC
 		),
 		match_sides AS (
@@ -272,7 +273,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 	// team_id используется для агрегации (чтобы учитывать все версии программ команды)
 	query := `
 		WITH latest_programs AS (
-			-- последние версии программ для отображения имени
+			-- последние готовые версии программ (они играют) для отображения имени
 			SELECT DISTINCT ON (p.team_id)
 				p.id as program_id,
 				p.name as program_name,
@@ -285,6 +286,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			WHERE p.tournament_id = $1
 			  AND g.name = $2
 			  AND p.team_id IS NOT NULL
+			  AND p.status = 'ready'
 			ORDER BY p.team_id, p.version DESC
 		),
 		match_sides AS (
