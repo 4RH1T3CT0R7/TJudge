@@ -1000,7 +1000,8 @@ export interface paths {
          *     The caller must be a member of the team, and the team must belong to the tournament.
          *     The server chooses the file path; there is no way to set it from the client.
          *
-         *     Maximum file size: 10 MB.
+         *     Maximum file size: 10 MB. A team can upload at most 100 versions per game,
+         *     after that the server returns 409.
          */
         post: operations["programsCreate"];
         delete?: never;
@@ -3675,6 +3676,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     programsGetVersions: {
