@@ -144,10 +144,11 @@ Vite дополнительно разделяет бандл на чанки ч
 | Чанк | Содержимое |
 |------|------------|
 | `three` | Three.js |
-| `vendor-react` | react, react-dom, react-router-dom |
+| `vendor-react` | react, react-dom, react/jsx-runtime, react-router-dom |
 | `vendor-data` | axios, zustand |
-| `vendor-markdown` | react-markdown, remark-gfm |
 | `vendor-motion` | motion (Framer Motion) |
+
+react-markdown и remark-gfm своего чанка не имеют: Vite кладёт их в ленивый чанк, который грузят только GameView и GameDetail.
 
 ## Маскот и геймификация
 
