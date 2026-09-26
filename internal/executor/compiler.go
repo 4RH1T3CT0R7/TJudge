@@ -195,7 +195,7 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 	// Java: имя класса нужно до построения плана.
 	className := ""
 	if program.Language == langJava {
-		// sourcePath сервер формирует из uuid-компонентов, не из пользовательского ввода
+		// #nosec G304 -- sourcePath сервер формирует из uuid-компонентов, не из пользовательского ввода
 		srcBytes, err := os.ReadFile(sourcePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read source: %w", err)
@@ -299,17 +299,19 @@ func (c *Compiler) installArtifact(program *models.Program, plan *compilePlan, b
 
 		containerClassDir := matchContainerPath + "/" + classDirName
 		wrapper := fmt.Sprintf("#!/bin/sh\nexec java -cp '%s' %s \"$@\"\n", containerClassDir, className)
-		// wrapper должен быть исполняемым, 0o750 = owner+group
+		// #nosec G306 G703 -- wrapper должен быть исполняемым, 0o750 = owner+group;
+		// binPath выведен из пути исходника, который сервер собрал из uuid
 		if err := os.WriteFile(binPath, []byte(wrapper), 0o750); err != nil {
 			return "", fmt.Errorf("failed to write java wrapper: %w", err)
 		}
 		return binPath, nil
 	}
 
+	// #nosec G703 -- buildDir, имя артефакта и binPath собраны сервером
 	if err := os.Rename(filepath.Join(buildDir, plan.ArtifactName), binPath); err != nil {
 		return "", fmt.Errorf("failed to move binary: %w", err)
 	}
-	// бинарник гоняется в докер-песочнице, 0o750 = owner+group
+	// #nosec G302 -- бинарник гоняется в докер-песочнице, 0o750 = owner+group
 	if err := os.Chmod(binPath, 0o750); err != nil {
 		c.log.Warn("Failed to chmod compiled binary", zap.Error(err), zap.String("path", binPath))
 	}
@@ -473,7 +475,7 @@ func dirSize(dir string) (int64, error) {
 
 // copyFile копирует файл с правами 0640.
 func copyFile(src, dst string) error {
-	// оба пути сервер формирует из uuid-компонентов
+	// #nosec G304 -- оба пути сервер формирует из uuid-компонентов
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -482,6 +484,7 @@ func copyFile(src, dst string) error {
 
 	// 0o600: исходник в build-каталоге читает только процесс worker'а
 	// (builder-контейнер монтирует каталог от того же uid).
+	// #nosec G304 G703 -- dst тоже собран сервером
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err

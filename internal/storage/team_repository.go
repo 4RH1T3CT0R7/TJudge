@@ -568,12 +568,12 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	for rows.Next() {
 		var pid uuid.UUID
 		if err := rows.Scan(&pid); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, 0, 0, errors.Wrap(err, "failed to scan program id")
 		}
 		programIDs = append(programIDs, pid)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to iterate program ids")
 	}

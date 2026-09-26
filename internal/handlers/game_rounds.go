@@ -687,17 +687,17 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 
 			zf, err := zipWriter.Create(entryName)
 			if err != nil {
-				f.Close()
+				_ = f.Close()
 				h.log.Error("Failed to create ZIP entry", zap.Error(err))
 				continue
 			}
 
 			if _, err := io.Copy(zf, f); err != nil {
-				f.Close()
+				_ = f.Close()
 				h.log.Error("Failed to write program to ZIP", zap.Error(err))
 				continue
 			}
-			f.Close()
+			_ = f.Close()
 			filesAdded++
 		}
 	}

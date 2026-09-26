@@ -589,7 +589,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	if shebang != "" && !bytes.HasPrefix(fileContent, []byte("#!")) {
 		if _, err := dst.WriteString(shebang); err != nil {
 			h.log.Error("Failed to write shebang", zap.Error(err))
-			os.Remove(filePath)
+			_ = os.Remove(filePath)
 			writeError(w, errors.ErrInternal.WithMessage("не удалось сохранить файл"))
 			return false
 		}
@@ -598,7 +598,7 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	if _, err := dst.Write(fileContent); err != nil {
 		h.log.Error("Failed to write file", zap.Error(err))
 		// подчищается частично записанный файл
-		os.Remove(filePath)
+		_ = os.Remove(filePath)
 		writeError(w, errors.ErrInternal.WithMessage("failed to save file"))
 		return false
 	}
@@ -694,7 +694,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 	if err := h.programRepo.CreateWithAtomicVersion(r.Context(), program); err != nil {
 		h.log.LogError("Failed to create program", err)
 		// удаление загруженного файла при ошибке
-		os.Remove(filePath)
+		_ = os.Remove(filePath)
 		writeError(w, err)
 		return
 	}

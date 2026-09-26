@@ -122,6 +122,8 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 
 	renewCtx, renewCancel := context.WithCancel(ctx)
 	renewDone := make(chan struct{})
+	// #nosec G118 -- Background внутри renewLoop только для таймаута одного EVAL,
+	// сама горутина живёт по renewCtx
 	go dl.renewLoop(renewCtx, key, token, ttl, renewDone, func() { fnCancel(ErrLockLost) })
 
 	defer func() {

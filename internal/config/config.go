@@ -497,7 +497,7 @@ func getEnvOrFile(key, defaultValue string) string {
 
 	fileKey := key + "_FILE"
 	if filePath := os.Getenv(fileKey); filePath != "" {
-		content, err := os.ReadFile(filePath) // #nosec G304 -- путь из env, это docker secrets
+		content, err := os.ReadFile(filePath) // #nosec G304 G703 -- путь из env, это docker secrets
 		if err == nil {
 			return strings.TrimSpace(string(content)) // убирается хвостовой перевод строки
 		}
