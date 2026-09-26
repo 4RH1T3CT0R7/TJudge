@@ -752,9 +752,8 @@ func (r *GameRepository) IsAutoRoundEnabled(ctx context.Context, tournamentID, g
 // HasNewProgramsSince - стала ли последняя готовая версия какой-то команды в игре
 // готовой после since. смотрится updated_at (момент перехода в ready после компиляции),
 // а не created_at: иначе раунд стартовал бы до окончания компиляции, а неудачная
-// загрузка сбрасывала бы игру. только последняя ready-версия (та, что играет): правка
-// старой версии раунд не перезапускает. правка последней (PUT /programs/{id}, триггер
-// двигает updated_at) перезапускает - она может сменить код
+// загрузка сбрасывала бы игру. только последняя ready-версия (та, что играет): раунд
+// перезапускает новая версия, ставшая ready (UpdateCompileResult двигает updated_at)
 func (r *GameRepository) HasNewProgramsSince(ctx context.Context, tournamentID uuid.UUID, gameType string, since time.Time) (bool, error) {
 	var exists bool
 	query := `
