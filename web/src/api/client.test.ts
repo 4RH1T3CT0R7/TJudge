@@ -119,6 +119,19 @@ describe('ApiClient refresh', () => {
     expect(localStorage.getItem('refresh_token')).toBe('r2');
     expect(onAuthFailure).not.toHaveBeenCalled();
   });
+
+  it('истёкший токен соседней вкладки не заменяет refresh', async () => {
+    login('a0', 'r1');
+    const expired = `h.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 60 }))}.s`;
+    localStorage.setItem('access_token', expired);
+    serve((c) => {
+      if (c.url === '/auth/refresh') return { status: 200, data: { access_token: 'a2', refresh_token: 'r2', user } };
+      return c.headers.Authorization === 'Bearer a2' ? { status: 200, data: user } : { status: 401 };
+    });
+
+    await expect(api.getMe()).resolves.toEqual(user);
+    expect(calls.map((c) => c.url)).toEqual(['/auth/me', '/auth/refresh', '/auth/me']);
+  });
 });
 
 it('отменённый запрос не ретраится и не показывает тост', async () => {

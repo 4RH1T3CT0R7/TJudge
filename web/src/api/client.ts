@@ -78,6 +78,20 @@ function humanErrorMessage(
 // должен обновляться, как и на остальных ручках.
 const NO_REFRESH_AUTH_ENDPOINT = /\/auth\/(login|register|refresh|logout)$/;
 
+// Запас на расхождение часов клиента и сервера.
+const TOKEN_EXPIRY_SKEW_MS = 30000;
+
+// true, если exp из JWT уже прошёл. Нечитаемый токен считается живым: решит сервер.
+export function isTokenExpired(token: string): boolean {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp === 'number' && exp * 1000 - TOKEN_EXPIRY_SKEW_MS <= Date.now();
+  } catch {
+    return false;
+  }
+}
+
 // Сессия недействительна только по отказу сервера (401) или без refresh-токена.
 // Сеть, 5xx и сбои браузера (Web Locks, localStorage) - временные: токены
 // не стираются, пользователь не разлогинивается.
@@ -319,10 +333,11 @@ class ApiClient {
     }
   }
 
-  // Берёт access-токен, сохранённый другой вкладкой, если он новее своего.
+  // Берёт живой access-токен, сохранённый другой вкладкой, если он новее своего.
+  // Истёкший не годится: повтор с ним снова получит 401 уже без refresh.
   private adoptStoredAccessToken(): boolean {
     const stored = localStorage.getItem('access_token');
-    if (stored && stored !== this.accessToken) {
+    if (stored && stored !== this.accessToken && !isTokenExpired(stored)) {
       this.accessToken = stored;
       return true;
     }

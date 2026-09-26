@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WSMessage } from '../types';
-import api from '../api/client';
+import api, { isTokenExpired } from '../api/client';
 
 // Потолок backoff переподключения. Лимита попыток нет: после деплоя или
 // потери сети соединение должно вернуться само, без F5.
@@ -9,20 +9,6 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 /** Задержка перед попыткой attempt (с 1): 1s, 2s, 4s, ... до 30s. */
 export function reconnectDelay(attempt: number): number {
   return Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS);
-}
-
-// Запас на расхождение часов клиента и сервера.
-const TOKEN_EXPIRY_SKEW_MS = 30000;
-
-// true, если exp из JWT уже прошёл. Нечитаемый токен считается живым: решит сервер.
-function isTokenExpired(token: string): boolean {
-  try {
-    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
-    return typeof exp === 'number' && exp * 1000 - TOKEN_EXPIRY_SKEW_MS <= Date.now();
-  } catch {
-    return false;
-  }
 }
 
 interface UseWebSocketOptions {
