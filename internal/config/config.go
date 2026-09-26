@@ -208,7 +208,6 @@ type CORSConfig struct {
 type RateLimitConfig struct {
 	Enabled           bool
 	RequestsPerMinute int
-	Burst             int
 	// CIDR прокси, по которым разбирается X-Forwarded-For. пусто - от соседа
 	// из loopback и приватных сетей берётся только X-Real-IP. нужен и при
 	// выключенном лимите (аудит, логи)
@@ -407,7 +406,6 @@ func Load() (*Config, error) {
 		RateLimit: RateLimitConfig{
 			Enabled:           env.Bool("RATE_LIMIT_ENABLED", false), // в дев-режиме выключен
 			RequestsPerMinute: env.Int("RATE_LIMIT_RPM", 100),
-			Burst:             env.Int("RATE_LIMIT_BURST", 200),
 			TrustedProxies:    splitAndTrim(getEnv("TRUSTED_PROXIES", "")),
 		},
 	}
