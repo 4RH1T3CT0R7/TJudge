@@ -94,6 +94,30 @@ func TestRunInDocker_ParentCancelIsInfra(t *testing.T) {
 	assert.Contains(t, calls(), "DELETE /containers/c1")
 }
 
+// точка входа песочницы и root заданы явно: без них образ запустил бы
+// tjudge-cli и ботов под одним uid
+func TestRunInDocker_SandboxEntrypoint(t *testing.T) {
+	type createBody struct {
+		Entrypoint []string
+		User       string
+	}
+	created := make(chan createBody, 1)
+	e, _ := fakeDocker(t, config.ExecutorConfig{Timeout: 200 * time.Millisecond}, func(w http.ResponseWriter, r *http.Request, path string) {
+		if path == "/containers/create" {
+			var body createBody
+			assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			created <- body
+		}
+		hangingMatch(w, r, path)
+	})
+
+	_, _ = e.runInDocker(context.Background(), "dilemma", "/programs/a", "/programs/b", nil)
+
+	body := <-created
+	assert.Equal(t, []string{sandboxEntrypoint}, body.Entrypoint)
+	assert.Equal(t, "0:0", body.User)
+}
+
 // compilerOn - компилятор на том же подставном докере, каталог программ временный
 func compilerOn(e *Executor, dir string, timeout time.Duration) *Compiler {
 	return &Compiler{dockerClient: e.dockerClient, programsPath: dir, hostPrograms: dir, compileTimeout: timeout, log: e.log}
