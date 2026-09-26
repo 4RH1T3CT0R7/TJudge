@@ -256,16 +256,6 @@ func (s *DBTestSuite) TestProgramRepository_CRUD() {
 	require.NoError(s.T(), err)
 	assert.Len(s.T(), programs, 1)
 
-	// Update
-	program.Name = "Updated Program"
-	err = s.programRepo.Update(s.ctx, program)
-	require.NoError(s.T(), err)
-
-	// Verify update
-	found, err = s.programRepo.GetByID(s.ctx, program.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), "Updated Program", found.Name)
-
 	// Delete
 	err = s.programRepo.Delete(s.ctx, program.ID)
 	require.NoError(s.T(), err)

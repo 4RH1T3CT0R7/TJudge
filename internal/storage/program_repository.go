@@ -224,32 +224,6 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	return programs, nil
 }
 
-func (r *ProgramRepository) Update(ctx context.Context, program *models.Program) error {
-	query := `
-		UPDATE programs
-		SET name = $2, code_path = $3, language = $4, error_message = $5
-		WHERE id = $1
-		RETURNING updated_at
-	`
-
-	err := r.db.QueryRowContext(ctx, query,
-		program.ID,
-		program.Name,
-		program.CodePath,
-		program.Language,
-		program.ErrorMessage,
-	).Scan(&program.UpdatedAt)
-
-	if stderrors.Is(err, sql.ErrNoRows) {
-		return errors.ErrProgramNotFound
-	}
-	if err != nil {
-		return errors.Wrap(err, "failed to update program")
-	}
-
-	return nil
-}
-
 // UpdateCompileResult пишет итог компиляции: статус, путь к бинарю
 // (или к исходнику для интерпретируемых языков) и текст ошибки.
 // зовётся из compile-worker'а после сборки в докер-песочнице. пишется только
@@ -314,24 +288,6 @@ func (r *ProgramRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
-}
-
-func (r *ProgramRepository) CheckOwnership(ctx context.Context, programID, userID uuid.UUID) (bool, error) {
-	var exists bool
-
-	query := `
-		SELECT EXISTS(
-			SELECT 1 FROM programs
-			WHERE id = $1 AND user_id = $2
-		)
-	`
-
-	err := r.db.QueryRowContext(ctx, query, programID, userID).Scan(&exists)
-	if err != nil {
-		return false, errors.Wrap(err, "failed to check program ownership")
-	}
-
-	return exists, nil
 }
 
 func (r *ProgramRepository) ClearErrorMessages(ctx context.Context, tournamentID uuid.UUID) (int64, error) {

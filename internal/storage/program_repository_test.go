@@ -302,43 +302,6 @@ func (s *ProgramRepositorySuite) TestGetLatestVersion() {
 	assert.Equal(s.T(), 2, ver)
 }
 
-func (s *ProgramRepositorySuite) TestUpdate() {
-	user := s.createUser("prog_update")
-	program := s.createProgram(user.ID, nil, nil, nil, "Original Bot", 1)
-
-	ctx := context.Background()
-	program.Name = "Updated Bot"
-	program.CodePath = "/tmp/updated/bot.py"
-	program.Language = "go"
-	errMsg := "compilation error"
-	program.ErrorMessage = &errMsg
-
-	err := s.repo.Update(ctx, program)
-	require.NoError(s.T(), err)
-
-	result, err := s.repo.GetByID(ctx, program.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), "Updated Bot", result.Name)
-	assert.Equal(s.T(), "/tmp/updated/bot.py", result.CodePath)
-	assert.Equal(s.T(), "go", result.Language)
-	assert.NotNil(s.T(), result.ErrorMessage)
-	assert.Equal(s.T(), "compilation error", *result.ErrorMessage)
-}
-
-func (s *ProgramRepositorySuite) TestUpdate_NotFound() {
-	ctx := context.Background()
-	program := &models.Program{
-		ID:       uuid.New(),
-		Name:     "Ghost",
-		CodePath: "/ghost",
-		Language: "python",
-	}
-
-	err := s.repo.Update(ctx, program)
-	assert.Error(s.T(), err)
-	assert.True(s.T(), errors.IsNotFound(err))
-}
-
 // итог сборки пишется только поверх compiling: поздний дубль не перетирает первый
 func (s *ProgramRepositorySuite) TestUpdateCompileResult_OnlyFromCompiling() {
 	ctx := context.Background()
@@ -394,23 +357,6 @@ func (s *ProgramRepositorySuite) TestDelete_NotFound() {
 	err := s.repo.Delete(ctx, uuid.New())
 	assert.Error(s.T(), err)
 	assert.True(s.T(), errors.IsNotFound(err))
-}
-
-func (s *ProgramRepositorySuite) TestCheckOwnership() {
-	user := s.createUser("prog_ownership")
-	program := s.createProgram(user.ID, nil, nil, nil, "Owned Bot", 1)
-
-	ctx := context.Background()
-
-	// свой владелец
-	owned, err := s.repo.CheckOwnership(ctx, program.ID, user.ID)
-	require.NoError(s.T(), err)
-	assert.True(s.T(), owned)
-
-	// чужой
-	owned, err = s.repo.CheckOwnership(ctx, program.ID, uuid.New())
-	require.NoError(s.T(), err)
-	assert.False(s.T(), owned)
 }
 
 func (s *ProgramRepositorySuite) TestClearErrorMessages() {

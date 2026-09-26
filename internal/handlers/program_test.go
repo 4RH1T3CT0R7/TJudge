@@ -50,11 +50,6 @@ func (m *MockProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUI
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func (m *MockProgramRepository) Update(ctx context.Context, program *models.Program) error {
-	args := m.Called(ctx, program)
-	return args.Error(0)
-}
-
 func (m *MockProgramRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

@@ -651,8 +651,8 @@ func (s *TournamentRepositorySuite) TestHasNewProgramsSince() {
 	assert.True(s.T(), hasNew(since), "ready")
 
 	since = dbNow()
-	v1.Name = "BotHNP1_renamed"
-	require.NoError(s.T(), s.programRepo.Update(ctx, v1))
+	_, err = s.database.ExecContext(ctx, "UPDATE programs SET name = 'BotHNP1_renamed', updated_at = NOW() WHERE id = $1", v1.ID)
+	require.NoError(s.T(), err)
 	assert.False(s.T(), hasNew(since), "правка старой версии")
 }
 

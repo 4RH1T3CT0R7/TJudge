@@ -341,15 +341,6 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_UploadProgram() {
 	require.NoError(s.T(), err)
 	require.Len(s.T(), programs, 1)
 	assert.Equal(s.T(), program.ID, programs[0].ID)
-
-	// Verify ownership
-	isOwner, err := s.programRepo.CheckOwnership(s.ctx, program.ID, leader.ID)
-	require.NoError(s.T(), err)
-	assert.True(s.T(), isOwner)
-
-	notOwner, err := s.programRepo.CheckOwnership(s.ctx, program.ID, creator.ID)
-	require.NoError(s.T(), err)
-	assert.False(s.T(), notOwner)
 }
 
 // =============================================================================
