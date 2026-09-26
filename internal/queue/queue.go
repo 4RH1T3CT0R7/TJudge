@@ -314,6 +314,11 @@ func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 
 // updateQueueSizeMetrics - обновляет гейджи размеров, не чаще раза в секунду
 func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
+	// воркер, снятый автоскейлером, выходит из BRPOP с уже отменённым ctx:
+	// LLEN по нему только засоряет лог ошибками
+	if ctx.Err() != nil {
+		return
+	}
 	qm.metricsMu.Lock()
 	if time.Since(qm.lastMetricsUpdate) < time.Second {
 		qm.metricsMu.Unlock()

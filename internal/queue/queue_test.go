@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/bmstu-itstech/tjudge/internal/cache"
@@ -439,6 +440,24 @@ func TestQueueManager_Dequeue_Metrics(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, m)
 	assert.Equal(t, 0.0, readMetric(t, size).GetGauge().GetValue())
+}
+
+// воркер, снятый автоскейлером, приходит с отменённым ctx: такой вызов не
+// должен занимать секундное окно троттлинга гейджа
+func TestQueueManager_UpdateQueueSizeMetrics_CanceledCtx(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+	for range 3 {
+		require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityHigh)))
+	}
+	qm.lastMetricsUpdate = time.Time{}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	qm.updateQueueSizeMetrics(canceled)
+	qm.updateQueueSizeMetrics(ctx)
+
+	assert.Equal(t, 3.0, readMetric(t, qm.metrics.QueueSize.WithLabelValues("high")).GetGauge().GetValue())
 }
 
 func TestQueueManager_PurgeInvalidMatches_SomeInvalid(t *testing.T) {
