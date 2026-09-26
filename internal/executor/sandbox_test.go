@@ -27,7 +27,7 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 
 	assert.Equal(t, []string{"ALL"}, []string(hc.CapDrop), "должны сниматься все capabilities")
 	// только то, что нужно точке входа и tjudge-cli для ботов под своими uid
-	assert.ElementsMatch(t, []string{"CHOWN", "DAC_READ_SEARCH", "SETUID", "SETGID", "KILL"}, []string(hc.CapAdd))
+	assert.ElementsMatch(t, []string{"CHOWN", "DAC_OVERRIDE", "SETUID", "SETGID", "KILL"}, []string(hc.CapAdd))
 	assert.Equal(t, "none", string(hc.NetworkMode), "сеть должна быть отключена")
 	assert.True(t, hc.ReadonlyRootfs, "корень только на чтение")
 	assert.Equal(t, cfg.MemoryLimit, hc.Memory)

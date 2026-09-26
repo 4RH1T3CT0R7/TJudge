@@ -273,8 +273,10 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 		// кроме нужных точке входа (скопировать программы из /mnt/programs,
 		// отдать их uid ботов и сбросить root до этих uid) и tjudge-cli (KILL:
 		// добить бота под чужим uid, иначе он ждёт его выхода до таймаута матча).
-		// сами боты работают без capabilities
-		CapAdd: []string{"CHOWN", "DAC_READ_SEARCH", "SETUID", "SETGID", "KILL"},
+		// сами боты работают без capabilities. чтение чужих файлов через
+		// DAC_OVERRIDE: DAC_READ_SEARCH открыла бы в дефолтном seccomp докера
+		// open_by_handle_at, а с ним любой файл хостовой ФС за bind-ами
+		CapAdd: []string{"CHOWN", "DAC_OVERRIDE", "SETUID", "SETGID", "KILL"},
 		Tmpfs: map[string]string{
 			"/tmp": "rw,nosuid,size=64m", // writable /tmp, но nosuid (без эскалации) и капнут
 			// копии программ под uid ботов: две программы до 32мб (maxArtifactSize).

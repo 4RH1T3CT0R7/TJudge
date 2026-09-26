@@ -5,7 +5,7 @@
 # Аргументы как у tjudge-cli: <игра> [опции] <программа1> <программа2>, где
 # программа - путь /programs/<имя>. Файлы программ (у java ещё <имя>_classes)
 # примонтированы в /mnt/programs, куда пускают только root. Скрипт стартует
-# от root с CHOWN, DAC_READ_SEARCH, SETUID, SETGID и KILL (см.
+# от root с CHOWN, DAC_OVERRIDE, SETUID, SETGID и KILL (см.
 # buildMatchHostConfig в internal/executor), копирует каждую программу в tmpfs
 # /programs с владельцем - своим uid и правами 0500 и отдаёт tjudge-cli вместо
 # неё лаунчер, который сбрасывает root до этого uid. Бот остаётся без
