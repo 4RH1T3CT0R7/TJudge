@@ -93,6 +93,7 @@ web/
 │   │   ├── Games.tsx
 │   │   ├── GameView.tsx
 │   │   ├── TeamManagement.tsx
+│   │   ├── JoinTeam.tsx
 │   │   ├── AdminPanel.tsx
 │   │   └── NotFound.tsx
 │   ├── store/                  # Zustand сторы
@@ -129,6 +130,7 @@ web/
 | Games | `/games` | Каталог игр |
 | Game View | `/games/:id` | Просмотр правил отдельной игры |
 | Team Management | `/teams/:id` | Управление командой (требует авторизации) |
+| Join Team | `/join/:code` | Вступление в команду по ссылке-приглашению (требует авторизации) |
 | Admin Panel | `/admin` | Админ-панель (только для admin) |
 | Not Found | `*` | Страница 404 |
 
