@@ -38,16 +38,6 @@ func NewAuthHandler(authService AuthService, log *logger.Logger) *AuthHandler {
 	}
 }
 
-// @Summary Регистрация пользователя
-// @Description Создаёт нового пользователя и возвращает JWT токены
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body auth.RegisterRequest true "Данные регистрации"
-// @Success 201 {object} auth.AuthResponse
-// @Failure 400 {object} object{error=string}
-// @Failure 409 {object} object{error=string} "Пользователь уже существует"
-// @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req auth.RegisterRequest
 	// TODO: разбор тела и writeError повторяются во всех хендлерах — вынести в общий хелпер
@@ -72,16 +62,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// @Summary Вход в систему
-// @Description Аутентификация по username/email и паролю, возвращает JWT токены
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body auth.LoginRequest true "Данные для входа"
-// @Success 200 {object} auth.AuthResponse
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string} "Неверные учётные данные"
-// @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req auth.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -106,15 +86,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// @Summary Обновление токенов
-// @Description Обновляет access и refresh токены по refresh token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body object{refresh_token=string} true "Refresh token"
-// @Success 200 {object} auth.AuthResponse
-// @Failure 401 {object} object{error=string} "Невалидный refresh token"
-// @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -141,16 +112,6 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// @Summary Выход из системы
-// @Description Инвалидирует access и refresh токены
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body object{refresh_token=string} false "Refresh token (опционально)"
-// @Security BearerAuth
-// @Success 200 {object} object{message=string}
-// @Failure 401 {object} object{error=string}
-// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	accessToken := middleware.ExtractToken(r)
 	if accessToken == "" {
@@ -182,14 +143,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// @Summary Текущий пользователь
-// @Description Возвращает информацию о текущем аутентифицированном пользователе
-// @Tags auth
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} models.User
-// @Failure 401 {object} object{error=string}
-// @Router /auth/me [get]
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// токен уже проверен auth-middleware, здесь только достаётся юзер
 	token := middleware.ExtractToken(r)
@@ -208,17 +161,6 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
-// @Summary Обновление профиля
-// @Description Обновляет профиль текущего пользователя (email, username)
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body auth.UpdateProfileRequest true "Данные для обновления профиля"
-// @Security BearerAuth
-// @Success 200 {object} models.User
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Router /auth/profile [put]
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	// userID кладёт в контекст auth-middleware
 	userID, err := middleware.RequireUserID(r.Context())
