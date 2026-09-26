@@ -13,7 +13,7 @@ set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 BACKUP_FILE="${1:-}"
-TEST_CONTAINER="tjudge-restore-test-$$"
+TEST_CONTAINER="${TEST_CONTAINER:-tjudge-restore-test-$$}"
 PG_IMAGE="${PG_IMAGE:-postgres:15-alpine}"
 
 GREEN='\033[0;32m'
@@ -24,7 +24,7 @@ log()  { echo -e "${GREEN}[$(date '+%H:%M:%S')]${NC} $1"; }
 fail() { echo -e "${RED}[$(date '+%H:%M:%S')] FAIL:${NC} $1"; cleanup; exit 1; }
 
 cleanup() {
-    docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
+    docker rm -fv "$TEST_CONTAINER" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
