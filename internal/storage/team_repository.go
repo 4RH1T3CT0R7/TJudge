@@ -597,11 +597,45 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		fmt.Fprintf(&placeholders, "$%d", i+2) // $2, $3, ...
 	}
 
-	// 3. снос rating_history по сыгранным матчам с программами команды.
-	// failed тоже: форфейт (упала программа) даёт сопернику победу в лидербордах.
-	// рейтинг и wins соперников в tournament_participants не пересчитываются -
-	// лидерборды считаются живым запросом по matches, эти поля не канонические
+	// 3. ELO соперников (виден на графике истории рейтинга) освобождается от
+	// матчей с командой: рейтинг участника и более поздние точки его истории
+	// сдвигаются на сумму удалённых дельт. wins/losses/draws участников нигде не
+	// читаются (лидерборды считаются живым запросом по matches), пересчёт не нужен
+	// ponytail: снимается только прямой вклад матчей, последующие дельты не
+	// пересчитываются заново; точный вариант - replay ELO по оставшимся матчам
 	args := append([]any{tournamentID}, pidStrings...)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		WITH removed AS (
+			SELECT rh.program_id, rh.change, rh.created_at
+			FROM rating_history rh
+			JOIN matches m ON m.id = rh.match_id AND m.tournament_id = $1
+			WHERE rh.tournament_id = $1
+			AND m.status IN ('completed', 'failed')
+			AND (m.program1_id IN (%[1]s) OR m.program2_id IN (%[1]s))
+			AND rh.program_id NOT IN (%[1]s)
+		), shifted AS (
+			UPDATE rating_history rh
+			SET old_rating = rh.old_rating - s.shift, new_rating = rh.new_rating - s.shift
+			FROM (
+				SELECT h.id, h.created_at, SUM(r.change) AS shift
+				FROM rating_history h
+				JOIN removed r ON r.program_id = h.program_id AND r.created_at < h.created_at
+				WHERE h.tournament_id = $1
+				GROUP BY h.id, h.created_at
+			) s
+			WHERE rh.id = s.id AND rh.created_at = s.created_at
+		)
+		UPDATE tournament_participants tp
+		SET rating = GREATEST(0, tp.rating - t.total)
+		FROM (SELECT program_id, SUM(change) AS total FROM removed GROUP BY program_id) t
+		WHERE tp.tournament_id = $1 AND tp.program_id = t.program_id
+	`, placeholders.String()), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to revert opponents rating")
+	}
+
+	// 4. снос rating_history по сыгранным матчам с программами команды.
+	// failed тоже: форфейт (упала программа) даёт сопернику победу в лидербордах
 	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM rating_history
 		WHERE tournament_id = $1
@@ -617,7 +651,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	ratingHistoryDeleted, _ = result.RowsAffected()
 
-	// 4. снос самих сыгранных матчей
+	// 5. снос самих сыгранных матчей
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM matches
 		WHERE tournament_id = $1
@@ -629,7 +663,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesDeleted, _ = result.RowsAffected()
 
-	// 5. отмена pending и running (running воркер сам пропустит на финализации)
+	// 6. отмена pending и running (running воркер сам пропустит на финализации)
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE matches
 		SET status = 'cancelled', error_message = 'Team disqualified'
@@ -642,7 +676,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesCancelled, _ = result.RowsAffected()
 
-	// 6. обнуление статистики только у этой команды
+	// 7. обнуление статистики только у этой команды
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE tournament_participants
 		SET rating = 1500, wins = 0, losses = 0, draws = 0

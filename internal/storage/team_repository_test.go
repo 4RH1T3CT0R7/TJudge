@@ -667,3 +667,79 @@ func (s *TeamRepositorySuite) TestDisqualifyTeamFull_RemovesPlayedMatches() {
 		assert.Equal(s.T(), models.MatchCancelled, m.Status)
 	}
 }
+
+// ELO соперника освобождается от матчей с дисквалифицированной командой:
+// рейтинг участника и поздние точки истории сдвигаются на удалённую дельту
+func (s *TeamRepositorySuite) TestDisqualifyTeamFull_RevertsOpponentRating() {
+	ctx := context.Background()
+	user := s.createTeamUser("dqr1")
+	opponent := s.createTeamUser("dqr2")
+	third := s.createTeamUser("dqr3")
+	tournament := s.createTeamTournament("TTEAMDQR", user.ID)
+	team := s.createTeam("Test Team DQR", "TDQR01", tournament.ID, user.ID)
+	oppTeam := s.createTeam("Test Team DQR Opp", "TDQR02", tournament.ID, opponent.ID)
+	thirdTeam := s.createTeam("Test Team DQR Third", "TDQR03", tournament.ID, third.ID)
+
+	programRepo := storage.NewProgramRepository(s.database)
+	matchRepo := storage.NewMatchRepository(s.database)
+	newProgram := func(owner, teamID uuid.UUID, name string, rating int) *models.Program {
+		p := &models.Program{
+			ID: uuid.New(), UserID: owner, TeamID: &teamID, TournamentID: &tournament.ID,
+			Name: name, GameType: "dilemma", CodePath: "/tmp/" + name, Language: "python", Version: 1,
+		}
+		require.NoError(s.T(), programRepo.Create(ctx, p))
+		require.NoError(s.T(), s.tournamentRepo.AddParticipant(ctx, &models.TournamentParticipant{
+			ID: uuid.New(), TournamentID: tournament.ID, ProgramID: p.ID, Rating: rating,
+		}))
+		s.T().Cleanup(func() {
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM tournament_participants WHERE program_id = $1", p.ID)
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", p.ID)
+		})
+		return p
+	}
+	dq := newProgram(user.ID, team.ID, "dqr_bot", 1484)
+	opp := newProgram(opponent.ID, oppTeam.ID, "dqr_opp", 1530)
+	thr := newProgram(third.ID, thirdTeam.ID, "dqr_third", 1486)
+
+	// матч с командой (+16 сопернику), затем матч с третьей командой (+14)
+	start := time.Now().Add(-time.Hour)
+	played := func(p1, p2 *models.Program, at time.Time, history map[uuid.UUID][2]int) {
+		m := &models.Match{
+			ID: uuid.New(), TournamentID: tournament.ID, Program1ID: p1.ID, Program2ID: p2.ID,
+			GameType: "dilemma", Status: models.MatchCompleted, Priority: models.PriorityMedium, RoundNumber: 1, CreatedAt: at,
+		}
+		require.NoError(s.T(), matchRepo.Create(ctx, m))
+		s.T().Cleanup(func() {
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE match_id = $1", m.ID)
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", m.ID)
+		})
+		for pid, r := range history {
+			_, err := s.database.ExecContext(ctx, `
+				INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+				uuid.New(), pid, tournament.ID, r[0], r[1], r[1]-r[0], m.ID, at)
+			require.NoError(s.T(), err)
+		}
+	}
+	played(dq, opp, start, map[uuid.UUID][2]int{dq.ID: {1500, 1484}, opp.ID: {1500, 1516}})
+	played(opp, thr, start.Add(time.Minute), map[uuid.UUID][2]int{opp.ID: {1516, 1530}, thr.ID: {1500, 1486}})
+
+	_, _, _, err := s.repo.DisqualifyTeamFull(ctx, team.ID, tournament.ID)
+	require.NoError(s.T(), err)
+
+	rating := func(pid uuid.UUID) int {
+		var r int
+		require.NoError(s.T(), s.database.QueryRowContext(ctx,
+			"SELECT rating FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+			tournament.ID, pid).Scan(&r))
+		return r
+	}
+	assert.Equal(s.T(), 1514, rating(opp.ID))
+	assert.Equal(s.T(), 1486, rating(thr.ID))
+
+	var oldR, newR int
+	require.NoError(s.T(), s.database.QueryRowContext(ctx,
+		"SELECT old_rating, new_rating FROM rating_history WHERE program_id = $1", opp.ID).Scan(&oldR, &newR))
+	assert.Equal(s.T(), 1500, oldR)
+	assert.Equal(s.T(), 1514, newR)
+}
