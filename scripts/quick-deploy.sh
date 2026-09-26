@@ -68,23 +68,20 @@ fi
 
 log_info "Using profile: $PROFILE ($ENV_FILE)"
 
+# 2. Host paths: абсолютный путь к программам нужен песочницам worker'а,
+# GID docker.sock - worker'у без root. значения хоста пишутся в .env один раз,
+# оттуда их берут и этот скрипт, и ручной docker compose
+touch .env
+[ -z "$(tail -c1 .env)" ] || echo >> .env   # без перевода строки строки бы склеились
+grep -q '^HOST_PROGRAMS_PATH=' .env || echo "HOST_PROGRAMS_PATH=$PROJECT_DIR/data/programs" >> .env
+grep -q '^DOCKER_GID=' .env || echo "DOCKER_GID=${DOCKER_GID:-$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 999)}" >> .env
+
 # явный --env-file отключает автозагрузку .env, поэтому он передаётся первым
-ENV_ARGS=()
-[ -f .env ] && ENV_ARGS+=(--env-file .env)
-ENV_ARGS+=(--env-file "$ENV_FILE")
+ENV_ARGS=(--env-file .env --env-file "$ENV_FILE")
 compose() { docker compose -f "$COMPOSE_FILE_NAME" "${ENV_ARGS[@]}" "$@"; }
 
-# 2. Secrets: existing files are kept
+# 3. Secrets (existing files are kept) and data directories
 ./scripts/init-secrets.sh
-
-# 3. Host paths: абсолютный путь к программам нужен песочницам worker'а,
-# GID docker.sock - worker'у без root
-export HOST_PROGRAMS_PATH="$PROJECT_DIR/data/programs"
-log_info "HOST_PROGRAMS_PATH: $HOST_PROGRAMS_PATH"
-if [ -z "${DOCKER_GID:-}" ]; then
-    DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 999)
-    export DOCKER_GID
-fi
 ./scripts/prepare-data.sh "$COMPOSE_FILE_NAME"
 
 # 4. Build images
