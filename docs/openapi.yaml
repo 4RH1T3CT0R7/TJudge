@@ -51,7 +51,7 @@ info:
 servers:
   - url: http://localhost:8080/api/v1
     description: Development
-  - url: https://api.tjudge.example.com/api/v1
+  - url: https://tjudge.example.com/api/v1
     description: Production
 
 tags:
@@ -1455,7 +1455,12 @@ paths:
     post:
       tags: [teams]
       summary: Disqualify team (admin)
-      description: Disqualifies the team and cancels its pending matches.
+      description: |
+        Only in an active tournament. In one transaction: deletes the team's completed and
+        failed matches in the tournament with their rating history, subtracts the ELO deltas
+        of those matches from the opponents' rating and later history points, cancels pending
+        and running matches and resets the team's participant stats. Restore does not bring
+        the deleted matches back.
       operationId: teamsDisqualify
       security:
         - BearerAuth: []
@@ -1471,6 +1476,8 @@ paths:
                     properties:
                       data:
                         $ref: '#/components/schemas/DisqualifyResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

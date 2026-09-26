@@ -958,7 +958,11 @@ export interface paths {
         put?: never;
         /**
          * Disqualify team (admin)
-         * @description Disqualifies the team and cancels its pending matches.
+         * @description Only in an active tournament. In one transaction: deletes the team's completed and
+         *     failed matches in the tournament with their rating history, subtracts the ELO deltas
+         *     of those matches from the opponents' rating and later history points, cancels pending
+         *     and running matches and resets the team's participant stats. Restore does not bring
+         *     the deleted matches back.
          */
         post: operations["teamsDisqualify"];
         delete?: never;
@@ -3611,6 +3615,7 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
