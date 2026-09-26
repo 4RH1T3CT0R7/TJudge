@@ -3,13 +3,13 @@ set -euo pipefail
 
 # TJudge: ручной бэкап - дамп БД и архив каталога программ с общей меткой
 # времени (restore.sh находит пару по ней). Файлы программ принадлежат
-# uid 1000, запускать от него или от root.
+# uid 1000, запускать от него или от root. Старые файлы не удаляет: в том же
+# каталоге ретенцию ведёт контейнер backup (BACKUP_RETENTION_DAYS).
 # Usage: ./scripts/backup.sh [backup_dir]
 #   POSTGRES_CONTAINER=tjudge-postgres-prod для prod, PROGRAMS_DIR - каталог программ
 #   (HOST_PROGRAMS_PATH из .env, иначе ./data/programs)
 
 BACKUP_DIR="${1:-${BACKUP_DIR:-./backups}}"
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-tjudge-postgres}"
 if [ -z "${PROGRAMS_DIR:-}" ] && [ -f .env ]; then
     PROGRAMS_DIR=$(sed -n 's/^HOST_PROGRAMS_PATH=//p' .env | tail -1)
@@ -111,11 +111,5 @@ send_to_telegram() {
 
 send_to_telegram "$BACKUP_FILE"
 send_to_telegram "$PROGRAMS_FILE"
-
-log_info "Cleaning up backups older than ${RETENTION_DAYS} days..."
-DELETED=$(find "$BACKUP_DIR" -maxdepth 1 \( -name "tjudge_*.sql.gz" -o -name "programs_*.tar.gz" \) -mtime +"$RETENTION_DAYS" -delete -print | wc -l)
-if [ "$DELETED" -gt 0 ]; then
-    log_info "Deleted $DELETED old backup file(s)"
-fi
 
 log_info "Backup process completed."
