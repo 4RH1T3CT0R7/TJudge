@@ -95,11 +95,9 @@ make admin EMAIL=admin@example.com                   # первый админ (
 
 Откат: `export VERSION=<прошлая версия>` и `P up -d`. Down-миграции для этого не нужны.
 
-**Blue-green.** `scripts/blue-green-deploy.sh <версия>`, `switch-traffic.sh`, `smoke-test.sh` и `rollback.sh` в release.yml не используются. Они рассчитаны на `/opt/tjudge`, `docker-compose` v1 и образы из `deployments/blue-green/*.yml` (по умолчанию `ghcr.io/bmstu-itstech/...`). Blue/green-стеки миграции не применяют, поэтому сначала `P run --rm migrate`, потом переключение.
-
 ### 7.1 Очистка диска после релизов
 
-`release.yml` после выкладки делает `docker image prune -f` и `docker builder prune -f`: удаляются только dangling-образы и build-кэш. `scripts/deploy.sh` и `scripts/blue-green-deploy.sh` оставляют N последних тегов каждого `tjudge-*` образа (`TJUDGE_IMAGE_KEEP`, по умолчанию 3).
+`release.yml` после выкладки делает `docker image prune -f` и `docker builder prune -f`: удаляются только dangling-образы и build-кэш.
 
 Не запускать на проде `docker image prune -af` без фильтров. Образ исполнителя матчей нужен только во время матча, в остальное время на нём нет контейнеров, и prune его удалит. Без него матчи уходят в повтор, пока worker не скачает образ заново. `docker system prune -af --volumes` и `docker volume prune` при остановленных postgres/redis удалят volume с БД.
 
