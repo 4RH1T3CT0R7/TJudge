@@ -71,7 +71,12 @@ docker exec -it tjudge-api ./tjudge-admin promote admin@example.com   # перв
 
 ## 7. Обновление (blue-green)
 
+Blue/green-стеки миграции не применяют (сервиса `migrate` в них нет, база общая), поэтому первым шагом схема обновляется из `docker-compose.prod.yml`: `migrate` собирается из текущего checkout.
+
 ```bash
+git fetch --tags && git checkout <new-tag>
+docker compose -f docker-compose.prod.yml run --rm --build migrate            # миграции до переключения
+docker compose -f docker-compose.prod.yml run --rm migrate ./migrate version  # dirty: false
 ./scripts/blue-green-deploy.sh <new-tag>
 ./scripts/smoke-test.sh              # готовность нового стека
 ./scripts/switch-traffic.sh          # переключение nginx-upstream
@@ -79,7 +84,9 @@ docker exec -it tjudge-api ./tjudge-admin promote admin@example.com   # перв
 ./scripts/blue-green-deploy.sh cleanup
 ```
 
-Откат: `./scripts/rollback.sh`.
+Откат: `./scripts/rollback.sh`, down-миграции для него не нужны.
+
+Порядок «сначала миграции, потом переключение» безопасен, пока новые миграции совместимы с работающей версией: 000042–000045 добавляют nullable-столбец, меняют инвайт-коды и удаляют индексы-дубли, старый код с ними работает. Без шага миграций новый код после переключения отдаёт 500 на refresh токенов и админских ручках (`column password_changed_at does not exist`).
 
 ### 7.1 Очистка диска после релизов
 
