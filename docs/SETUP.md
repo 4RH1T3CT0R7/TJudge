@@ -15,7 +15,7 @@ make docker-up                      # создаёт сеть monitoring и по
 curl http://localhost:8080/health   # OK
 ```
 
-Compose собирает api, worker, `tjudge-cli` и `tjudge-builder`, миграции применяет сервис `migrate`. Веб и API — http://localhost:8080 (`/api/v1`), метрики api — :9090/metrics, worker — :9091/metrics. Мониторинг (Prometheus :9092, Grafana :3000 admin/admin, Alertmanager :9093, Pushgateway :9094) поднимается отдельно: `make monitoring-up`. Сеть `monitoring` объявлена внешней: без `make docker-up` её нужно создать руками (`docker network create monitoring`).
+Compose собирает api, worker, `tjudge-cli` и `tjudge-builder`, миграции применяет сервис `migrate`. Веб и API — http://localhost:8080 (`/api/v1`), метрики api — :9090/metrics, worker — :9091/metrics. Мониторинг (Prometheus :9092, Grafana :3000, логин admin, пароль в `secrets/grafana_admin_password.txt`, Alertmanager :9093, Pushgateway :9094) поднимается отдельно: `make monitoring-up`. Сеть `monitoring` объявлена внешней: без `make docker-up` её нужно создать руками (`docker network create monitoring`).
 
 ## Локальная разработка
 
@@ -64,9 +64,9 @@ E2E_FULL_CYCLE=true go test -tags=e2e -run TestE2E_FullCycle ./tests/e2e/   # к
 - В production (`ENVIRONMENT=production`) `JWT_SECRET` не короче 32 байт и не из списка заглушек.
 - Секреты `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` можно передать файлом: `DB_PASSWORD_FILE` и т.д. (Docker secrets).
 
-Неочевидные дефолты: `WORKER_MAX` = число ядер, `WORKER_MIN` = min(2, `WORKER_MAX`), пул БД считается от `WORKER_MAX` (не больше 100), пул Redis не меньше `WORKER_MAX` + 20, `JWT_ACCESS_TTL=1h`, `JWT_REFRESH_TTL=168h`, `RATE_LIMIT_ENABLED=false`, `EXECUTOR_COMPILE_WORKERS=2`. `EXECUTOR_SECCOMP_PROFILE` — путь к JSON-профилю (`deployments/security/seccomp-executor.json`), битый файл роняет старт worker'а. `EXECUTOR_APPARMOR_PROFILE` — имя профиля, загруженного на хосте (`deployments/security/apparmor-executor`). Трейсинг включается `OTEL_EXPORTER_OTLP_ENDPOINT`.
+Неочевидные дефолты: `WORKER_MAX` = число ядер, `WORKER_MIN` = min(2, `WORKER_MAX`), пул БД считается от `WORKER_MAX` (не больше 100), пул Redis не меньше `WORKER_MAX` + 20, `JWT_ACCESS_TTL=1h`, `JWT_REFRESH_TTL=168h`, `RATE_LIMIT_ENABLED=false`, `EXECUTOR_COMPILE_WORKERS=2`. `EXECUTOR_SECCOMP_PROFILE` — путь к JSON-профилю (`deployments/security/seccomp-executor.json`), битый файл роняет старт worker'а. `EXECUTOR_APPARMOR_PROFILE` — имя AppArmor-профиля, заранее загруженного на хосте (в репозитории профиля нет). Трейсинг включается `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
-IP клиента для лимитов, аудита и логов определяет `middleware.RealIP`. Если `TRUSTED_PROXIES` пуст, от соседа из loopback или приватной сети берётся только `X-Real-IP`. Если список задан, `X-Forwarded-For` разбирается справа налево по нему. `WEBSOCKET_ALLOWED_ORIGINS` (или `CORS_ALLOWED_ORIGINS`, если первая пуста): в production пусто или `*` пускает только свой хост.
+IP клиента для лимитов, аудита и логов определяет `middleware.RealIP`. Если `TRUSTED_PROXIES` пуст, от соседа из loopback или приватной сети берётся только `X-Real-IP`. Если список задан, `X-Forwarded-For` разбирается справа налево по нему. `WEBSOCKET_ALLOWED_ORIGINS` (или `CORS_ALLOWED_ORIGINS`, если первая пуста): в production `*` или пустые обе пускают только свой хост; compose по умолчанию делает `CORS_ALLOWED_ORIGINS` равным `BASE_URL`.
 
 ## Схема БД
 
@@ -106,10 +106,10 @@ SELECT create_rating_history_partition_if_needed();
 
 ## Мониторинг и CI
 
-`make monitoring-up` поднимает `docker-compose.monitoring.yml`: Prometheus (:9092, правила в `deployments/prometheus/alerts/tjudge-slo.yml` и `tjudge-doctor.yml`, тест правил — `promtool test rules deployments/prometheus/tjudge-slo.test.yml`), Alertmanager (:9093, по умолчанию получатель `null`, Telegram включается в `deployments/alertmanager/alertmanager.yml`), Pushgateway (:9094) и Grafana (:3000, дашборды «TJudge — Обзор системы» и «TJudge — Doctor»).
+`make monitoring-up` поднимает `docker-compose.monitoring.yml`: Prometheus (:9092, правила в `deployments/prometheus/alerts/tjudge-slo.yml` и `tjudge-doctor.yml`, тест правил — `promtool test rules deployments/prometheus/tjudge-slo.test.yml`), Alertmanager (:9093, без Telegram получатель `null`; `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` в `.env` включают получатель telegram, файлы править не нужно), Pushgateway (:9094) и Grafana (:3000, дашборды «TJudge — Обзор системы» и «TJudge — Doctor»).
 
 ```promql
-sum(tjudge_queue_size)                                                  # матчей в очередях
+sum(max by (priority) (tjudge_queue_size{job="tjudge-worker"}))       # матчей в очередях (гейдж api не информативен)
 sum(tjudge_active_workers)                                              # занятых воркеров
 histogram_quantile(0.99, sum by (le) (rate(tjudge_http_request_duration_seconds_bucket[5m])))  # http p99
 sum(rate(tjudge_matches_total[5m]))                                     # завершённых матчей

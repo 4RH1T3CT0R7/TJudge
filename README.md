@@ -33,7 +33,7 @@ make docker-up        # создаёт внешнюю сеть monitoring и п�
 |--------|-----|
 | Веб-приложение и API | http://localhost:8080 |
 | Метрики api / worker | http://localhost:9090/metrics, http://localhost:9091/metrics |
-| Grafana, Prometheus | http://localhost:3000 (admin/admin), http://localhost:9092 — после `make monitoring-up` |
+| Grafana, Prometheus | http://localhost:3000 (логин admin, пароль в `secrets/grafana_admin_password.txt`), http://localhost:9092 — после `make monitoring-up` |
 
 Назначение администратора (сначала зарегистрируйтесь через веб-интерфейс):
 
