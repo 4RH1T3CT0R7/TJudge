@@ -382,13 +382,14 @@ func (r *TournamentRepository) GetLatestParticipantsByGame(ctx context.Context, 
 // авто-раунд). берётся последняя готовая версия программы команды по каждой игре:
 // compiling ещё не собралась, failed не собралась вообще, поэтому при сломанной новой
 // версии команда играет предыдущей рабочей (MAX(version) среди ready).
-// программы игр, не привязанных к турниру, отсекаются JOIN'ом с tournament_games.
+// программы игр, не привязанных к турниру, отсекаются JOIN'ом с tournament_games,
+// программы чужого турнира - условием p.tournament_id = tp.tournament_id.
 // gameType == "" - все игры
 func (r *TournamentRepository) latestReadyParticipants(ctx context.Context, tournamentID uuid.UUID, gameType string) (map[string][]*models.TournamentParticipant, error) {
 	query := `
 		SELECT tp.id, tp.tournament_id, tp.program_id, tp.rating, tp.wins, tp.losses, tp.draws, tp.created_at, g.name as game_type
 		FROM tournament_participants tp
-		INNER JOIN programs p ON p.id = tp.program_id
+		INNER JOIN programs p ON p.id = tp.program_id AND p.tournament_id = tp.tournament_id
 		INNER JOIN games g ON g.id = p.game_id
 		INNER JOIN tournament_games tg ON tg.tournament_id = tp.tournament_id AND tg.game_id = p.game_id
 		INNER JOIN teams t ON t.id = p.team_id AND t.is_disqualified = false

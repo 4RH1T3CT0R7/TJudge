@@ -656,6 +656,31 @@ func (s *TournamentRepositorySuite) TestHasNewProgramsSince() {
 	assert.False(s.T(), hasNew(since), "правка старой версии")
 }
 
+// программа чужого турнира в раунд не попадает, даже если записана участником
+func (s *TournamentRepositorySuite) TestGetLatestParticipants_ExcludesForeignTournamentPrograms() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_foreign")
+	tournament := s.createTrackedTournament("TPFRN1", user.ID)
+	foreign := s.createTrackedTournament("TPFRN2", user.ID)
+	game := s.createTrackedGame("frn_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, foreign.ID, game.ID))
+
+	own := s.createTeamEntrant(tournament.ID, game.ID, "TFRN01")
+	alien := s.createTeamEntrant(foreign.ID, game.ID, "TFRN02")
+	s.createTestParticipant(tournament.ID, alien.ID, 1500)
+
+	participants, err := s.repo.GetLatestParticipantsByGame(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), participants, 1)
+	assert.Equal(s.T(), own.ID, participants[0].ProgramID)
+
+	byGame, err := s.repo.GetLatestParticipantsGroupedByGame(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), byGame[game.Name], 1)
+	assert.Equal(s.T(), own.ID, byGame[game.Name][0].ProgramID)
+}
+
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame_UsesLatestReadyVersion() {
 	ctx := context.Background()
 	user := s.createTrackedUser("tp_lrv")
