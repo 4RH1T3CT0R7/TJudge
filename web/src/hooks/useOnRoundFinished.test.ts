@@ -4,29 +4,22 @@ import { renderHook } from '@testing-library/react';
 import { useOnRoundFinished } from './useOnRoundFinished';
 
 describe('useOnRoundFinished', () => {
-  it('срабатывает раз за раунд и ждёт перечитанных данных', () => {
+  it('срабатывает раз за раунд и не срабатывает на уже сыгранном', () => {
     const onFinish = vi.fn();
-    const { rerender } = renderHook(
-      ({ running, settled }) => useOnRoundFinished(running, settled, onFinish),
-      { initialProps: { running: false, settled: true } }
-    );
-    // раунд уже сыгран при открытии страницы
+    const { rerender } = renderHook(({ running }) => useOnRoundFinished(running, onFinish), {
+      initialProps: { running: false },
+    });
+    rerender({ running: false });
     expect(onFinish).not.toHaveBeenCalled();
 
-    rerender({ running: true, settled: true });
-    rerender({ running: false, settled: false });
-    expect(onFinish).not.toHaveBeenCalled();
-
-    rerender({ running: false, settled: true });
+    rerender({ running: true });
+    rerender({ running: true });
+    rerender({ running: false });
+    rerender({ running: false });
     expect(onFinish).toHaveBeenCalledTimes(1);
 
-    // повторное перечитывание без нового раунда
-    rerender({ running: false, settled: false });
-    rerender({ running: false, settled: true });
-    expect(onFinish).toHaveBeenCalledTimes(1);
-
-    rerender({ running: true, settled: true });
-    rerender({ running: false, settled: true });
+    rerender({ running: true });
+    rerender({ running: false });
     expect(onFinish).toHaveBeenCalledTimes(2);
   });
 });

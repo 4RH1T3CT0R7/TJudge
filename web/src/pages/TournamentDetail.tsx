@@ -160,12 +160,17 @@ export function TournamentDetail() {
   }, [leaderboardData, flashWsInvader]);
 
   // «#1» - только по итогам раунда: посреди раунда суммы частичные. Лидерборд
-  // перечитывается тем же событием, что и раунды, поэтому место проверяется,
-  // когда матчи доиграны и его запрос завершён
+  // перечитывается уже после того, как раунды показали конец: запрошенный вместе
+  // с ними мог не застать последние матчи
   const roundRunning = (matchRoundsQuery.data ?? []).some(r => r.pending_count > 0 || r.running_count > 0);
-  useOnRoundFinished(roundRunning, !leaderboardQuery.isFetching, () => {
-    const mine = myTeam ? leaderboardData?.find(e => e.team_id === myTeam.id) : undefined;
-    if (mine?.rank === 1 && myTeam) setTop1Banner(`> ${myTeam.name} — #1 по итогам раунда`);
+  const refetchLeaderboardData = leaderboardQuery.refetch;
+  useOnRoundFinished(roundRunning, () => {
+    if (!myTeam) return;
+    void refetchLeaderboardData().then(({ data }) => {
+      if (data?.find(e => e.team_id === myTeam.id)?.rank === 1) {
+        setTop1Banner(`> ${myTeam.name} — #1 по итогам раунда`);
+      }
+    });
   });
   useEffect(() => {
     if (!top1Banner) return;
