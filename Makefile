@@ -195,8 +195,7 @@ test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
 
-# Security scan. копия allowlist и фильтра живёт в шаге govulncheck в ci.yml, пока
-# тот не переведён на make vulncheck, править оба места вместе.
+# Security scan.
 # у github.com/docker/docker фикса в этом пути модуля нет, обе уязвимости про демон,
 # а не клиентский SDK
 VULN_ALLOWLIST := GO-2026-4887|GO-2026-4883
