@@ -2592,7 +2592,7 @@ export interface operations {
                         data?: {
                             /** @example started */
                             status?: string;
-                            /** @example prisoners_dilemma */
+                            /** @example dilemma */
                             game_type?: string;
                             /** @example 10 */
                             enqueued?: number;

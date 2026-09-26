@@ -561,7 +561,7 @@ paths:
                             example: started
                           game_type:
                             type: string
-                            example: prisoners_dilemma
+                            example: dilemma
                           enqueued:
                             type: integer
                             example: 10
