@@ -39,7 +39,8 @@ export function GameDetail() {
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
+  // id загруженной версии: сообщение об успехе снимается, если её сборка упала
+  const [uploadedId, setUploadedId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadInvaderBubble, setUploadInvaderBubble] = useState<string | null>('// жду код...');
   const [uploadInvaderShake, setUploadInvaderShake] = useState(false);
@@ -156,7 +157,7 @@ export function GameDetail() {
 
   // Process uploaded file (used by both input and drag-drop)
   const processFile = async (file: File) => {
-    setUploadSuccess(false);
+    setUploadedId(null);
     if (!tournamentId || !gameId || !myTeam) {
       setUploadError('Не удалось загрузить: отсутствуют данные команды');
       return;
@@ -188,11 +189,11 @@ export function GameDetail() {
         // Program uploaded but has syntax error - show warning
         setUploadError(`⚠️ Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
       } else {
-        setUploadSuccess(true);
+        setUploadedId(program.id);
         setUploadInvaderBubble('{ загружено: true }');
         setUploadInvaderJump(true);
         setTimeout(() => setUploadInvaderJump(false), 100);
-        // сообщение об успехе держится до следующей загрузки, реплика маскота - 3 с
+        // сообщение об успехе держится до следующей загрузки или провала сборки, реплика маскота - 3 с
         setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
       }
 
@@ -244,7 +245,7 @@ export function GameDetail() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    setUploadSuccess(false);
+    setUploadedId(null);
 
     if (tournament?.status === 'completed') {
       setUploadError('Турнир завершён, загрузка программ закрыта');
@@ -663,7 +664,7 @@ export function GameDetail() {
                   )}
                 </div>
 
-                {uploadSuccess && (
+                {uploadedId && programs.find((p) => p.id === uploadedId)?.status !== 'failed' && (
                   <div role="status" className="p-2 bg-green-900/30 border border-green-700 rounded text-sm text-green-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
