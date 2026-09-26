@@ -330,6 +330,41 @@ func TestService_RefreshTokens_RevokedByPasswordChange(t *testing.T) {
 	blacklist.AssertNotCalled(t, "AddIfNotExists", mock.Anything, mock.Anything, mock.Anything)
 }
 
+// токен выписан в ту же секунду, что и смена пароля, но до неё: тоже отзывается
+func TestService_RefreshTokens_RevokedWithinSameSecond(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
+	changedAt := time.Now()
+	userRepo.On("GetByID", ctx, userID).Return(&models.User{ID: userID, PasswordChangedAt: &changedAt}, nil)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	blacklist.AssertNotCalled(t, "AddIfNotExists", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// вход сразу после смены пароля (Profile перелогинивает) даёт рабочую сессию
+func TestService_RefreshTokens_IssuedAfterPasswordChange(t *testing.T) {
+	service, userRepo, blacklist := newTestService(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+	changedAt := time.Now()
+	time.Sleep(2 * time.Millisecond)
+	refreshToken, _ := service.jwtManager.GenerateRefreshToken(userID)
+	userRepo.On("GetByID", ctx, userID).Return(&models.User{ID: userID, Username: "testuser", PasswordChangedAt: &changedAt}, nil)
+	blacklist.On("AddIfNotExists", ctx, refreshToken, mock.AnythingOfType("time.Duration")).Return(true, nil)
+
+	resp, err := service.RefreshTokens(ctx, refreshToken)
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.RefreshToken)
+}
+
 func TestService_RefreshTokens_InvalidToken(t *testing.T) {
 	service, _, _ := newTestService(t)
 

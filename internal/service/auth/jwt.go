@@ -16,6 +16,12 @@ const (
 	tokenTypeRefresh = "refresh"
 )
 
+// iat с миллисекундами: по нему смена пароля отзывает refresh-токены, а с
+// точностью до секунды токен, выписанный в ту же секунду до смены, её переживал
+func init() {
+	jwt.TimePrecision = time.Millisecond
+}
+
 // Claims — то что лежит в access токене помимо стандартных полей: id юзера, ник и роль
 type Claims struct {
 	UserID    uuid.UUID   `json:"user_id"`
