@@ -93,6 +93,8 @@ jobs:
             # образы песочниц не сервисы compose, pull их не тянет
             docker pull "ghcr.io/4rh1t3ct0r7/tjudge-executor:$VERSION"
             docker pull "ghcr.io/4rh1t3ct0r7/tjudge-builder:$VERSION"
+            # перенос программ из старого volume; пустой каталог при непустой БД валит деплой
+            ./scripts/prepare-data.sh docker-compose.prod.yml
             $P up -d --remove-orphans
             # проверка что api реально работает на запрошенной версии
             requested="ghcr.io/4rh1t3ct0r7/tjudge-api:$VERSION"

@@ -172,8 +172,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # тот же каталог хоста монтируют песочницы worker'а (HOST_PROGRAMS_PATH),
+    # его готовит scripts/prepare-data.sh
     volumes:
-      - programs_data:/data/programs
+      - ${HOST_PROGRAMS_PATH:?HOST_PROGRAMS_PATH - абсолютный путь к data/programs}:/data/programs
     networks:
       - tjudge-network
       - monitoring
@@ -247,7 +249,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - programs_data:/data/programs
+      - ${HOST_PROGRAMS_PATH:?HOST_PROGRAMS_PATH - абсолютный путь к data/programs}:/data/programs
     # Доступ non-root пользователя (1000) к docker.sock: GID группы docker
     # ХОСТА добавляется как supplementary group. В образ запечён дефолт 999
     # (build-arg DOCKER_GID), но GID хоста может отличаться - задайте в .env:
@@ -307,7 +309,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  programs_data:
   backups_data:
 
 networks:
