@@ -122,18 +122,6 @@ func NewGameCRUDHandler(gameService GameCRUDService, log *logger.Logger) *GameCR
 	}
 }
 
-// @Summary Создать игру
-// @Description Создаёт новую игру (только для админов)
-// @Tags games
-// @Accept json
-// @Produce json
-// @Param request body game.CreateRequest true "Данные игры"
-// @Security BearerAuth
-// @Success 201 {object} models.Game
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /games [post]
 func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req game.CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -157,15 +145,6 @@ func (h *GameCRUDHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, g)
 }
 
-// @Summary Список игр
-// @Description Возвращает список доступных игр с фильтрацией и пагинацией
-// @Tags games
-// @Produce json
-// @Param name query string false "Фильтр по имени"
-// @Param limit query int false "Лимит записей" default(50)
-// @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} models.Game
-// @Router /games [get]
 func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := models.GameFilter{}
 	filter.Name = r.URL.Query().Get("name")
@@ -184,14 +163,6 @@ func (h *GameCRUDHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, games)
 }
 
-// @Summary Получить игру
-// @Description Возвращает игру по ID
-// @Tags games
-// @Produce json
-// @Param id path string true "Game ID" format(uuid)
-// @Success 200 {object} models.Game
-// @Failure 404 {object} object{error=string}
-// @Router /games/{id} [get]
 func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
@@ -207,15 +178,6 @@ func (h *GameCRUDHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// @Summary Получить игру по имени
-// @Description Возвращает игру по системному имени
-// @Tags games
-// @Produce json
-// @Param name path string true "Имя игры"
-// @Success 200 {object} models.Game
-// @Failure 400 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /games/name/{name} [get]
 func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
@@ -232,20 +194,6 @@ func (h *GameCRUDHandler) GetByName(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// @Summary Обновить игру
-// @Description Обновляет параметры игры (только для админов)
-// @Tags games
-// @Accept json
-// @Produce json
-// @Param id path string true "Game ID" format(uuid)
-// @Param request body game.UpdateRequest true "Данные для обновления"
-// @Security BearerAuth
-// @Success 200 {object} models.Game
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /games/{id} [put]
 func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
@@ -271,16 +219,6 @@ func (h *GameCRUDHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, g)
 }
 
-// @Summary Удалить игру
-// @Description Удаляет игру по ID (только для админов)
-// @Tags games
-// @Param id path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 204 "Игра удалена"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /games/{id} [delete]
 func (h *GameCRUDHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUIDParam(w, r, "id", "game")
 	if !ok {
@@ -328,14 +266,6 @@ func NewTournamentGameHandler(
 	}
 }
 
-// @Summary Игры турнира
-// @Description Возвращает список игр, привязанных к турниру
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} models.Game
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games [get]
 func (h *TournamentGameHandler) GetTournamentGames(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -358,18 +288,6 @@ type AddGameToTournamentRequest struct {
 }
 
 // AddGameToTournament добавляет игру в турнир.
-// @Summary Добавить игру в турнир
-// @Description Привязывает игру к турниру (админ или создатель турнира)
-// @Tags games
-// @Accept json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param request body AddGameToTournamentRequest true "ID игры"
-// @Security BearerAuth
-// @Success 204 "Игра добавлена"
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /tournaments/{id}/games [post]
 func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -425,17 +343,6 @@ func (h *TournamentGameHandler) AddGameToTournament(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// @Summary Удалить игру из турнира
-// @Description Отвязывает игру от турнира (только для админов)
-// @Tags games
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 204 "Игра удалена из турнира"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId} [delete]
 func (h *TournamentGameHandler) RemoveGameFromTournament(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {

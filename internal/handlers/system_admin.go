@@ -30,14 +30,6 @@ func NewAuditHandler(repo AuditLogReader, log *logger.Logger) *AuditHandler {
 }
 
 // List возвращает последние N записей audit log'а
-// @Summary Получить audit log (admin-only)
-// @Description Возвращает последние записи admin-действий.
-// @Tags admin
-// @Produce json
-// @Param limit query int false "Лимит записей (1-500, default 100)"
-// @Success 200 {array} models.AuditLogEntry
-// @Security BearerAuth
-// @Router /admin/audit [get]
 func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -121,12 +113,6 @@ func NewSystemRecoveryHandler(
 }
 
 // RetryOutboxErrors возвращает ошибочные outbox-задачи в обработку
-// @Summary Повторить ошибочные outbox-задачи (admin)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{retried=int}
-// @Router /system/recovery/outbox-retry [post]
 func (h *SystemRecoveryHandler) RetryOutboxErrors(w http.ResponseWriter, r *http.Request) {
 	retried, err := h.outboxRepo.RetryErrors(r.Context())
 	if err != nil {
@@ -140,12 +126,6 @@ func (h *SystemRecoveryHandler) RetryOutboxErrors(w http.ResponseWriter, r *http
 }
 
 // RequeueCompiling возвращает все compiling-программы в очередь компиляции
-// @Summary Перезапустить зависшую компиляцию (admin)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{requeued=int}
-// @Router /system/recovery/requeue-compiling [post]
 func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.Request) {
 	// olderThan=0: берутся все compiling-программы — кнопка жмётся осознанно,
 	// дедупликацию дублей обеспечивает идемпотентность compile-worker'а
@@ -172,12 +152,6 @@ func (h *SystemRecoveryHandler) RequeueCompiling(w http.ResponseWriter, r *http.
 
 // ResetStuckMatches сбрасывает зависшие running-матчи в pending. в очередь их
 // ставит периодический recovery воркера (раз в минуту)
-// @Summary Сбросить зависшие матчи (admin)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{reset=int}
-// @Router /system/recovery/reset-stuck-matches [post]
 func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http.Request) {
 	// выборка и сброс одним запросом по часам бд: матч, который успел
 	// завершиться или заново стартовать, не трогается
@@ -193,12 +167,6 @@ func (h *SystemRecoveryHandler) ResetStuckMatches(w http.ResponseWriter, r *http
 }
 
 // ClearDeadLetter очищает dead-letter очередь
-// @Summary Очистить dead-letter очередь (admin)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{cleared=int}
-// @Router /system/recovery/clear-dead-letter [post]
 func (h *SystemRecoveryHandler) ClearDeadLetter(w http.ResponseWriter, r *http.Request) {
 	cleared, err := h.queueManager.ClearDeadLetter(r.Context())
 	if err != nil {

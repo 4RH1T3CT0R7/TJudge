@@ -99,15 +99,6 @@ func NewSystemHandler(log *logger.Logger) *SystemHandler {
 }
 
 // GetMetrics возвращает системные метрики
-// @Summary Системные метрики
-// @Description Возвращает метрики CPU, памяти, диска, Go runtime (только для админов)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} SystemMetrics
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /system/metrics [get]
 func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := SystemMetrics{}
 
@@ -196,15 +187,6 @@ func (h *SystemHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetHealth возвращает статус здоровья системы
-// @Summary Состояние системы
-// @Description Возвращает статус здоровья системы (только для админов)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{status=string,timestamp=string,hostname=string,pid=int}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /system/health [get]
 func (h *SystemHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 	health := map[string]any{
 		"status":    "healthy",
@@ -390,15 +372,6 @@ func appVersion() (revision, buildTime string, dirty bool) {
 // GetFullStatus возвращает полное состояние системы.
 // Деградирует мягко: недоступный компонент помечается unhealthy/нулями,
 // а не валит весь ответ — статус нужен именно тогда, когда что-то сломано.
-// @Summary Полное состояние системы
-// @Description Версия, БД, Redis, очереди, матчи, программы, outbox, WebSocket (только для админов)
-// @Tags system
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} FullSystemStatus
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /system/status [get]
 func (h *SystemStatusHandler) GetFullStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

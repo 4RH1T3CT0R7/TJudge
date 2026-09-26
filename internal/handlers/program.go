@@ -116,22 +116,6 @@ func NewProgramHandler(
 	}
 }
 
-// @Summary Загрузить программу
-// @Description Загружает новую версию программы команды (multipart/form-data)
-// @Tags programs
-// @Accept multipart/form-data
-// @Produce json
-// @Param file formData file true "Файл программы"
-// @Param team_id formData string true "Team ID" format(uuid)
-// @Param tournament_id formData string true "Tournament ID" format(uuid)
-// @Param game_id formData string true "Game ID" format(uuid)
-// @Param name formData string false "Название программы"
-// @Security BearerAuth
-// @Success 201 {object} models.Program
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /programs [post]
 func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -144,17 +128,6 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 	h.handleFileUpload(w, r, userID)
 }
 
-// @Summary Удалить программу
-// @Description Удаляет программу и связанный файл; в идущем или завершённом турнире - 409
-// @Tags programs
-// @Param id path string true "Program ID" format(uuid)
-// @Security BearerAuth
-// @Success 204 "Программа удалена"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Failure 409 {object} object{error=string}
-// @Router /programs/{id} [delete]
 func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -210,17 +183,6 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// @Summary Очистить ошибки программ
-// @Description Очищает все сообщения об ошибках для программ в турнире (только для админов)
-// @Tags programs
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {object} object{cleared=int,message=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/programs/clear-errors [post]
 func (h *ProgramHandler) ClearProgramErrors(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -837,14 +799,6 @@ func (h *ProgramHandler) getAccessibleProgram(w http.ResponseWriter, r *http.Req
 	return program, true
 }
 
-// @Summary Мои программы
-// @Description Возвращает программы текущего пользователя и всех его команд
-// @Tags programs
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {array} models.Program
-// @Failure 401 {object} object{error=string}
-// @Router /programs [get]
 func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -864,17 +818,6 @@ func (h *ProgramHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, programs)
 }
 
-// @Summary Получить программу
-// @Description Возвращает программу по ID (автор, член её команды или админ)
-// @Tags programs
-// @Produce json
-// @Param id path string true "Program ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {object} models.Program
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /programs/{id} [get]
 func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -895,17 +838,6 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, program)
 }
 
-// @Summary Скачать программу
-// @Description Скачивает файл программы (автор, член её команды или админ)
-// @Tags programs
-// @Produce application/octet-stream
-// @Param id path string true "Program ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {file} binary "Файл программы"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /programs/{id}/download [get]
 func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {
@@ -1005,18 +937,6 @@ func (h *ProgramHandler) Download(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// @Summary Версии программ
-// @Description Возвращает все версии программ для команды и игры
-// @Tags programs
-// @Produce json
-// @Param team_id query string true "Team ID" format(uuid)
-// @Param game_id query string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {array} models.Program
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /programs/versions [get]
 func (h *ProgramHandler) GetVersions(w http.ResponseWriter, r *http.Request) {
 	userID, err := middleware.RequireUserID(r.Context())
 	if err != nil {

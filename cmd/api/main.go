@@ -29,14 +29,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// @title TJudge API
-// @version 1.0
-// @description Tournament system for game theory competitions
-// @BasePath /api/v1
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-// @description JWT Bearer token (format: "Bearer {token}")
 func main() {
 	// загрузка конфигурации
 	cfg, err := config.Load()

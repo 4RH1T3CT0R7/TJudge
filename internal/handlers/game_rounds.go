@@ -97,15 +97,6 @@ type TournamentGameWithDetails struct {
 }
 
 // GetTournamentGamesWithStatus возвращает игры с их round-статусом.
-// @Summary Статус игр турнира
-// @Description Возвращает игры турнира с информацией о раундах и авто-раунде
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {array} TournamentGameWithDetails
-// @Failure 404 {object} object{error=string}
-// @Failure 500 {object} object{error=string}
-// @Router /tournaments/{id}/games/status [get]
 func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -153,14 +144,6 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 }
 
 // GetActiveGame возвращает текущую активную игру турнира.
-// @Summary Активная игра турнира
-// @Description Возвращает текущую активную игру турнира (null если нет)
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Success 200 {object} TournamentGameWithDetails
-// @Failure 500 {object} object{error=string}
-// @Router /tournaments/{id}/active-game [get]
 func (h *GameRoundHandler) GetActiveGame(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -222,18 +205,6 @@ type SetActiveGameRequest struct {
 }
 
 // SetActiveGame устанавливает активную игру турнира.
-// @Summary Установить активную игру
-// @Description Устанавливает активную игру для турнира (только для админов)
-// @Tags games
-// @Accept json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param request body SetActiveGameRequest true "ID игры"
-// @Security BearerAuth
-// @Success 204 "Активная игра установлена"
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /tournaments/{id}/active-game [post]
 func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -270,16 +241,6 @@ func (h *GameRoundHandler) SetActiveGame(w http.ResponseWriter, r *http.Request)
 }
 
 // GetGameLeaderboard возвращает leaderboard для конкретной игры в турнире.
-// @Summary Рейтинг по игре
-// @Description Возвращает таблицу лидеров для конкретной игры в турнире
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Param limit query int false "Лимит записей" default(100)
-// @Success 200 {array} models.LeaderboardEntry
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/leaderboard [get]
 func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -319,15 +280,6 @@ func (h *GameRoundHandler) GetGameLeaderboard(w http.ResponseWriter, r *http.Req
 // репозиторий уже сливает обе ориентации матча (AB и BA) в одну ячейку, так что
 // на выходе плоский список ячеек, а не полноценная матрица - фронт сам раскладывает
 // её по строкам и столбцам, здесь только отдаётся агрегат как есть
-// @Summary Head-to-head матрица по игре
-// @Description Агрегат личных встреч всех пар команд (обе ориентации матчей слиты)
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Success 200 {array} models.HeadToHeadCell
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/head-to-head [get]
 func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -362,19 +314,6 @@ func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request)
 }
 
 // GetGameMatches возвращает матчи для конкретной игры в турнире.
-// @Summary Матчи по игре
-// @Description Возвращает матчи для конкретной игры в турнире с фильтрацией по статусу
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Param status query string false "Фильтр по статусу (pending, running, completed, failed, cancelled)"
-// @Param limit query int false "Лимит записей" default(50)
-// @Param offset query int false "Смещение" default(0)
-// @Success 200 {array} models.Match
-// @Failure 400 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/matches [get]
 func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -429,18 +368,6 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 }
 
 // GetGamePrograms возвращает программы для конкретной игры в турнире.
-// @Summary Программы по игре
-// @Description Возвращает программы для конкретной игры в турнире (только для админов)
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {array} models.Program
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/programs [get]
 func (h *GameRoundHandler) GetGamePrograms(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -466,17 +393,6 @@ func (h *GameRoundHandler) GetGamePrograms(w http.ResponseWriter, r *http.Reques
 }
 
 // MarkGameRoundCompleted помечает раунд игры как завершённый.
-// @Summary Завершить раунд игры
-// @Description Отмечает текущий раунд игры как завершённый (только для админов)
-// @Tags games
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 204 "Раунд завершён"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/complete-round [post]
 func (h *GameRoundHandler) MarkGameRoundCompleted(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -523,19 +439,6 @@ type ResetGameRoundResponse struct {
 //  4. уходит событие GameRoundReset, чтобы подписчики сбросили кэши и лидерборды
 //
 // возврата назад нет - удалённые матчи не восстановить, так что ручка только для админов
-// @Summary Сбросить раунд игры
-// @Description Полностью сбрасывает раунд: удаляет матчи, обнуляет рейтинги и статистику (только для админов)
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {object} ResetGameRoundResponse
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Failure 409 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/reset-round [post]
 func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -593,20 +496,6 @@ func (h *GameRoundHandler) ResetGameRound(w http.ResponseWriter, r *http.Request
 }
 
 // SetAutoRound включает или выключает авто-раунд для игры в турнире.
-// @Summary Настроить авто-раунд
-// @Description Включает или выключает автоматический запуск раундов для игры (только для админов)
-// @Tags games
-// @Accept json
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Param request body object{enabled=bool,interval_seconds=int} true "Настройки авто-раунда"
-// @Security BearerAuth
-// @Success 200 {object} object{enabled=bool,interval_seconds=int}
-// @Failure 400 {object} object{error=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/auto-round [post]
 func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -661,18 +550,6 @@ func (h *GameRoundHandler) SetAutoRound(w http.ResponseWriter, r *http.Request) 
 }
 
 // GetAutoRound возвращает статус авто-раунда для игры в турнире.
-// @Summary Статус авто-раунда
-// @Description Возвращает текущие настройки авто-раунда для игры (только для админов)
-// @Tags games
-// @Produce json
-// @Param id path string true "Tournament ID" format(uuid)
-// @Param gameId path string true "Game ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {object} object{enabled=bool,interval_seconds=int,last_run_at=string}
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/{gameId}/auto-round [get]
 func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
 	if !ok {
@@ -697,17 +574,6 @@ func (h *GameRoundHandler) GetAutoRound(w http.ResponseWriter, r *http.Request) 
 }
 
 // DownloadAllPrograms стримит ZIP-архив со всеми программами турнира.
-// @Summary Скачать все программы
-// @Description Скачивает ZIP-архив со всеми программами турнира (только для админов)
-// @Tags games
-// @Produce application/zip
-// @Param id path string true "Tournament ID" format(uuid)
-// @Security BearerAuth
-// @Success 200 {file} binary "ZIP-архив программ"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/programs/download-zip [get]
 func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -843,16 +709,6 @@ func (h *GameRoundHandler) DownloadAllPrograms(w http.ResponseWriter, r *http.Re
 }
 
 // DeactivateAllGames деактивирует все игры в турнире.
-// @Summary Деактивировать все игры
-// @Description Деактивирует все игры в турнире (только для админов)
-// @Tags games
-// @Param id path string true "Tournament ID" format(uuid)
-// @Security BearerAuth
-// @Success 204 "Все игры деактивированы"
-// @Failure 401 {object} object{error=string}
-// @Failure 403 {object} object{error=string}
-// @Failure 404 {object} object{error=string}
-// @Router /tournaments/{id}/games/deactivate-all [post]
 func (h *GameRoundHandler) DeactivateAllGames(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {

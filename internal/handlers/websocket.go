@@ -95,14 +95,6 @@ func NewWebSocketHandler(hub *ws.Hub, log *logger.Logger) *WebSocketHandler {
 }
 
 // HandleTournament обрабатывает подключение к турниру
-// @Summary WebSocket подключение к турниру
-// @Description Устанавливает WebSocket соединение для получения real-time обновлений турнира
-// @Tags websocket
-// @Param id path string true "Tournament ID" format(uuid)
-// @Security BearerAuth
-// @Success 101 "WebSocket соединение установлено"
-// @Failure 401 {object} object{error=string}
-// @Router /ws/tournaments/{id} [get]
 func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -162,14 +154,6 @@ func (h *WebSocketHandler) HandleTournament(w http.ResponseWriter, r *http.Reque
 }
 
 // GetStats возвращает статистику WebSocket подключений
-// @Summary Статистика WebSocket
-// @Description Возвращает количество активных WebSocket подключений
-// @Tags websocket
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} object{total_clients=int,tournaments=int}
-// @Failure 401 {object} object{error=string}
-// @Router /ws/stats [get]
 func (h *WebSocketHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats := h.hub.GetStats()
 	writeJSON(w, http.StatusOK, stats)
