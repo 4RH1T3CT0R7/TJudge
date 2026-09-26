@@ -545,7 +545,7 @@ func (s *TeamRepositorySuite) TestGenerateUniqueCode() {
 	code, err := s.repo.GenerateUniqueCode(ctx)
 	require.NoError(s.T(), err)
 
-	assert.Len(s.T(), code, 6)
+	assert.Len(s.T(), code, 8)
 	for _, c := range code {
 		assert.Contains(s.T(), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", string(c))
 	}
