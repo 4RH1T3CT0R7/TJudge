@@ -10,8 +10,6 @@
 
 // Базовые примитивные проверки.
 const isString = (v: unknown): v is string => typeof v === 'string';
-const isNumber = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v);
-const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -85,12 +83,4 @@ export function validateGame(v: unknown): void {
   check(isString(g.id), 'game.id', g.id);
   check(isString(g.name), 'game.name', g.name);
   check(isString(g.display_name), 'game.display_name', g.display_name);
-}
-
-/** LeaderboardEntry - компактный validator для list-response. */
-export function validateLeaderboardEntry(v: unknown): void {
-  check(isObject(v), 'leaderboardEntry', v);
-  const e = v as Record<string, unknown>;
-  check(isNumber(e.rating), 'leaderboardEntry.rating', e.rating);
-  check(isBool(e.wins !== undefined || true), 'leaderboardEntry', e); // wins optional
 }
