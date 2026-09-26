@@ -60,6 +60,7 @@
         "fsync",
         "ftruncate",
         "futex",
+        "getcpu",
         "getcwd",
         "getdents",
         "getdents64",
