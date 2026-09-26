@@ -17,7 +17,9 @@ const (
 )
 
 // iat с миллисекундами: по нему смена пароля отзывает refresh-токены, а с
-// точностью до секунды токен, выписанный в ту же секунду до смены, её переживал
+// точностью до секунды токен, выписанный в ту же секунду до смены, её переживал.
+// nbf в токенах нет: nbf = iat с миллисекундами отвергал бы свежий токен на
+// реплике, чьи часы отстают на пару миллисекунд
 func init() {
 	jwt.TimePrecision = time.Millisecond
 }
@@ -63,7 +65,6 @@ func (jm *JWTManager) GenerateAccessToken(userID uuid.UUID, username string, rol
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(jm.accessTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
 			Subject:   userID.String(),
 		},
 	}
@@ -80,7 +81,6 @@ func (jm *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(jm.refreshTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
 			Subject:   userID.String(),
 			ID:        uuid.New().String(), // jti, чтобы каждый рефреш был уникальным
 		},
