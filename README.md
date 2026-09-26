@@ -103,7 +103,7 @@ make deploy-strong       # 8+ ядер, 16+ ГБ RAM
 | Database | PostgreSQL 15 (миграции 000001–000045), живые лидерборды по партиционированным `matches` |
 | Cache/Queue | Redis 7 — кэш турниров и лидерборда, очереди матчей и компиляции, распределённые локи, rate limiting |
 | Monitoring | Prometheus, Grafana, Alertmanager, Pushgateway (`make monitoring-up`); прод-стек — отдельное репо infra-monitoring |
-| Executor | Компиляция в песочнице `tjudge-builder`, матчи в [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust), оба без сети |
+| Executor | Компиляция в песочнице `tjudge-builder`, матчи в [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust), оба без сети; боты матча под разными uid |
 
 ## Разработка
 
@@ -131,12 +131,12 @@ cd web && npm run dev                  # фронтенд с hot reload, http://
 | Тесты | `make test` / `make test-race` | Unit / с детектором гонок |
 | | `make test-coverage` | С HTML-отчётом покрытия |
 | | `RUN_INTEGRATION=true make test-integration` | Интеграционные (PostgreSQL + Redis) |
-| | `make test-e2e` | End-to-end (запущенный сервер) |
+| | `make test-e2e` / `make test-security` | End-to-end / security (запущенный сервер) |
 | Сборка | `make build` / `make docker-build` | Бинарники / Docker образы |
 | Качество | `make lint` / `make fmt` / `make security` | golangci-lint / формат / gosec + govulncheck |
 | БД | `make migrate-up` / `make migrate-down` | Применить все / откатить одну миграцию |
 | | `make admin EMAIL=...` | Назначить администратора |
-| Бэкапы | `make backup` / `make restore BACKUP=...` | Создать / восстановить бэкап БД |
+| Бэкапы | `sudo make backup` / `sudo make restore BACKUP=...` | Создать / восстановить бэкап БД и программ |
 | Диагностика | `make status` / `make doctor` | Статус в терминале / глубокая проверка |
 
 Тесты: unit рядом с кодом, integration (`-tags=integration`: репозитории
@@ -145,7 +145,7 @@ cd web && npm run dev                  # фронтенд с hot reload, http://
 
 CI/CD (GitHub Actions): `ci` на push в main и PR (фронтенд, npm audit, vet, линт,
 govulncheck, миграции up→down→up, тесты с -race, интеграционные, e2e и security),
-`nightly` (полный цикл компиляция → матч на dev-compose) и `release` по тегу `v*` —
+`nightly` (на dev-compose: изоляция песочницы, полный цикл компиляция → матч, бэкап и restore) и `release` по тегу `v*` —
 сборка образов, выкладка на сервер, проверка запущенной версии и пост-деплойный doctor.
 
 ## API

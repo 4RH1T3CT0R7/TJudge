@@ -37,7 +37,7 @@ cd web && npm run dev                       # терминал 3, http://localho
 
 Фронтенд: React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, TanStack Query 5, Zustand 5. Скрипты `web/`: `dev`, `build`, `lint`, `test` (vitest), `generate:api`. Типы API в `web/src/api/generated` генерируются из `docs/openapi.yaml`. После правки спеки нужен `npm run generate:api`, иначе CI упадёт на проверке свежести.
 
-Make-таргеты разработки: `dev` (API с hot reload через air), `run-api`, `run-worker`, `build`, `docker-build`, `docker-build-executor`, `docker-build-builder`, `lint` (golangci-lint v2.11.4 с тегами integration, e2e, security), `fmt`, `security` (gosec + govulncheck), `migrate-up`, `migrate-down` (откат одной миграции), `migrate-create` (спрашивает имя интерактивно, нужен CLI golang-migrate), `admin EMAIL=x@y.z`, `create-user EMAIL= USERNAME= PASSWORD= [ADMIN=1]`.
+Make-таргеты разработки: `dev` (API с hot reload через air), `run-api`, `run-worker`, `build`, `docker-build`, `docker-build-executor`, `docker-build-builder`, `lint` (golangci-lint v2.11.4 с тегами integration, e2e, security), `fmt`, `security` (gosec + `vulncheck`), `vulncheck` (govulncheck, падает на находках вне `VULN_ALLOWLIST` в Makefile; его же вызывает CI), `migrate-up`, `migrate-down` (откат одной миграции), `migrate-create` (спрашивает имя интерактивно, нужен CLI golang-migrate), `admin EMAIL=x@y.z`, `create-user EMAIL= USERNAME= PASSWORD= [ADMIN=1]`.
 
 ## Тестирование
 
@@ -46,8 +46,9 @@ make test                     # unit
 make test-race                # unit с детектором гонок
 TZ=UTC RUN_INTEGRATION=true make test-integration   # -tags=integration: ./internal/storage/... и ./tests/integration/... (-p 1)
 make test-e2e                 # -tags=e2e, нужен запущенный API
-go test -tags=security ./tests/security/...        # authn/authz и лимиты, нужен запущенный API
+make test-security           # -tags=security: authn/authz и лимиты, нужен запущенный API
 E2E_FULL_CYCLE=true go test -tags=e2e -run TestE2E_FullCycle ./tests/e2e/   # компиляция и матч, нужны worker и образы песочниц
+TJUDGE_SANDBOX_IMAGE=tjudge-cli:latest go test -count=1 -tags=integration -run TestSandbox_BotsIsolated ./internal/executor/   # изоляция ботов в образе матча, нужен Docker
 ```
 
 - Интеграционные, e2e и security тесты по умолчанию подключаются к БД dev-compose: `DB_HOST=localhost`, `DB_PORT=5433`, `DB_NAME=tjudge`, `DB_USER=tjudge`, `DB_PASSWORD=secret`; Redis — `localhost:6379`. API для e2e и security — `E2E_API_URL` (по умолчанию http://localhost:8080). E2E повышают своего пользователя до админа прямо в БД, поэтому `DB_*` должны смотреть в базу этого API.
@@ -64,7 +65,7 @@ E2E_FULL_CYCLE=true go test -tags=e2e -run TestE2E_FullCycle ./tests/e2e/   # к
 - В production (`ENVIRONMENT=production`) `JWT_SECRET` не короче 32 байт и не из списка заглушек.
 - Секреты `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` можно передать файлом: `DB_PASSWORD_FILE` и т.д. (Docker secrets).
 
-Неочевидные дефолты: `WORKER_MAX` = число ядер, `WORKER_MIN` = min(2, `WORKER_MAX`), пул БД считается от `WORKER_MAX` (не больше 100), пул Redis не меньше `WORKER_MAX` + 20, `JWT_ACCESS_TTL=1h`, `JWT_REFRESH_TTL=168h`, `RATE_LIMIT_ENABLED=false`, `EXECUTOR_COMPILE_WORKERS=2`. `EXECUTOR_SECCOMP_PROFILE` — путь к JSON-профилю (`deployments/security/seccomp-executor.json`), битый файл роняет старт worker'а. `EXECUTOR_APPARMOR_PROFILE` — имя AppArmor-профиля, заранее загруженного на хосте (в репозитории профиля нет). Трейсинг включается `OTEL_EXPORTER_OTLP_ENDPOINT`.
+Неочевидные дефолты: `WORKER_MAX` = число ядер, `WORKER_MIN` = min(2, `WORKER_MAX`), пул БД считается от `WORKER_MAX` (не больше 100), пул Redis не меньше `WORKER_MAX` + 20, `JWT_ACCESS_TTL=1h`, `JWT_REFRESH_TTL=168h`, `RATE_LIMIT_ENABLED=false`, `EXECUTOR_COMPILE_WORKERS=2`. `EXECUTOR_SECCOMP_PROFILE` — путь к JSON-профилю (`deployments/security/seccomp-executor.json`, в compose не включён, OPERATIONS §12), битый файл роняет старт worker'а. `EXECUTOR_APPARMOR_PROFILE` — имя AppArmor-профиля, заранее загруженного на хосте (в репозитории профиля нет). Трейсинг включается `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 IP клиента для лимитов, аудита и логов определяет `middleware.RealIP`. Если `TRUSTED_PROXIES` пуст, от соседа из loopback или приватной сети берётся только `X-Real-IP`. Если список задан, `X-Forwarded-For` разбирается справа налево по нему. `WEBSOCKET_ALLOWED_ORIGINS` (или `CORS_ALLOWED_ORIGINS`, если первая пуста): в production `*` или пустые обе пускают только свой хост; compose по умолчанию делает `CORS_ALLOWED_ORIGINS` равным `BASE_URL`.
 
@@ -113,9 +114,10 @@ sum(max by (priority) (tjudge_queue_size{job="tjudge-worker"}))       # матч
 sum(tjudge_active_workers)                                              # занятых воркеров
 histogram_quantile(0.99, sum by (le) (rate(tjudge_http_request_duration_seconds_bucket[5m])))  # http p99
 sum(rate(tjudge_matches_total[5m]))                                     # завершённых матчей
+histogram_quantile(0.95, sum by (le) (rate(tjudge_queue_wait_time_seconds_bucket[5m])))  # ожидание матча в очереди p95
 ```
 
-CI (`.github/workflows/`): `ci.yml` на push в main и PR — фронтенд (npm ci, свежесть openapi-кодгена, lint, test, build), npm audit, Go (vet и golangci-lint с тегами integration, e2e, security; govulncheck; миграции up→down→up; `go test -race`; интеграционные с `-p 1`; e2e и security против `bin/api`). `nightly.yml` — ежедневно в 03:00 UTC и вручную, полный цикл на dev-compose (`E2E_FULL_CYCLE=true`). `release.yml` — образы и деплой по тегу `v*`. Зависимости обновляет Dependabot (`.github/dependabot.yml`).
+CI (`.github/workflows/`): `ci.yml` на push в main и PR — фронтенд (npm ci, свежесть openapi-кодгена, lint, test, build), npm audit, Go (vet и golangci-lint с тегами integration, e2e, security; govulncheck; миграции up→down→up; `go test -race`; интеграционные с `-p 1`; e2e и security против `bin/api`). `nightly.yml` — ежедневно в 03:00 UTC и вручную на dev-compose: изоляция песочницы матча, полный цикл (`E2E_FULL_CYCLE=true`), бэкап и `restore-test.sh`. `release.yml` — образы и деплой по тегу `v*`. Зависимости обновляет Dependabot (`.github/dependabot.yml`).
 
 Перед пушем: `make lint`, `make test-race`, `make build`, в `web/` — `npm run lint && npm test && npm run build`.
 
