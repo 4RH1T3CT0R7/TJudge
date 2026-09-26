@@ -24,7 +24,7 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
   ];
 
   return (
-    <div className="mb-8 p-6 bg-gradient-to-b from-primary-900/30 via-primary-800/20 to-transparent rounded-2xl">
+    <div className="mb-8 p-4 sm:p-6 bg-gradient-to-b from-primary-900/30 via-primary-800/20 to-transparent rounded-2xl">
       <div className="text-center mb-6">
         <h3 className="text-2xl font-bold text-gray-100 mb-1">
           🏆 Победители турнира 🏆
@@ -32,11 +32,11 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
         <p className="text-gray-400">Поздравляем финалистов!</p>
       </div>
 
-      <div className="flex items-end justify-center gap-4 max-w-2xl mx-auto">
+      <div className="flex items-end justify-center gap-2 sm:gap-4 max-w-2xl mx-auto">
         {podiumData.map(({ entry, place, height, delay, bgGradient, textColor, medal }) => (
           <div
             key={place}
-            className={`flex-1 max-w-48 transition-[transform,opacity] duration-700 ease-out ${
+            className={`flex-1 min-w-0 max-w-48 transition-[transform,opacity] duration-700 ease-out ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             } ${delay}`}
           >
@@ -50,7 +50,7 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
               <div className="font-bold text-lg text-gray-100 truncate px-2">
                 {entry.team_name || entry.program_name}
               </div>
-              <div className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
+              <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
                 {entry.total_rating.toLocaleString()}
               </div>
               <div className="text-xs text-gray-400">

@@ -199,8 +199,8 @@ export function GamesTab({
           ) : (
             <div className="space-y-4">
               {games.map((game) => (
-                <div key={game.id} className="card flex justify-between items-start">
-                  <div>
+                <div key={game.id} className="card flex flex-wrap justify-between items-start gap-3">
+                  <div className="min-w-0">
                     <h3 className="font-semibold text-gray-100">{game.display_name}</h3>
                     <p className="text-sm text-gray-400">
                       <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
@@ -211,7 +211,7 @@ export function GamesTab({
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => startEditGame(game)}
                       className="btn btn-secondary text-sm"

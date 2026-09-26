@@ -110,7 +110,8 @@ export function Layout() {
                 <div className="flex items-center gap-3">
                   <Link
                     to="/profile"
-                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200"
+                    title={user?.username}
+                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200 truncate max-w-[4.5rem] min-[360px]:max-w-[7rem] sm:max-w-[12rem]"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}

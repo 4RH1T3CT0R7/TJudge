@@ -1,7 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import axios from 'axios';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../api/client';
@@ -20,13 +18,13 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
 import { handleTabListKeyDown } from '../components/ui/tabs';
 import { LineChart } from '../components/ui/LineChart';
+import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
 import { ChartBarIcon } from '../components/icons';
 import { getGameConfig } from '../utils/gameConfig';
 import type { Program, Match } from '../types';
 
-const remarkPlugins = [remarkGfm];
 
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
@@ -372,14 +370,14 @@ export function GameDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content Section */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           {activeTab === 'rules' && (
             <div className="card">
               <h2 className="text-lg font-semibold mb-4 text-gray-100">Правила игры</h2>
               {game.rules ? (
                 <div className="prose max-w-none prose-invert">
                   <div className="markdown-content text-gray-300">
-                    <ReactMarkdown remarkPlugins={remarkPlugins}>{game.rules}</ReactMarkdown>
+                    <Markdown>{game.rules}</Markdown>
                   </div>
                 </div>
               ) : (
@@ -484,7 +482,7 @@ export function GameDetail() {
         </div>
 
         {/* Program Upload Section */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 min-w-0">
           {isAuthenticated && myTeam ? (
             <div className="card">
               <h2 className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>

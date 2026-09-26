@@ -417,14 +417,15 @@ export function AdminPanel() {
         <h1 className={`text-2xl font-bold ${sudoMode ? 'sudo-text' : 'text-gray-100'}`}>
           {sudoMode ? 'root@tjudge:~# admin' : 'Панель администратора'}
         </h1>
-        <div className="relative">
+        {/* на узком экране реплика маскота вылезала бы за край */}
+        <div className="relative hidden sm:block">
           <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} colorOverride={sudoMode ? '#00ff41' : null} />
         </div>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-700 mb-6">
-        <nav className="-mb-px flex gap-4" role="tablist" onKeyDown={handleTabListKeyDown}>
+        <nav className="-mb-px flex gap-4 overflow-x-auto" role="tablist" onKeyDown={handleTabListKeyDown}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -432,7 +433,7 @@ export function AdminPanel() {
               aria-selected={activeTab === tab.id}
               tabIndex={activeTab === tab.id ? 0 : -1}
               onClick={() => handleTabChange(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary-500 text-primary-400'
                   : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'

@@ -162,21 +162,21 @@ export function TeamManagement() {
   const isMember = members.some((m) => m.id === user?.id);
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto w-full">
       {/* Breadcrumb */}
-      <nav className="mb-4 text-sm">
+      <nav className="mb-4 text-sm flex flex-wrap items-center gap-x-2">
         <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
           Турниры
         </Link>
-        <span className="mx-2 text-gray-600">/</span>
+        <span className="text-gray-600">/</span>
         <Link
           to={`/tournaments/${teamData.tournament_id}`}
           className="text-gray-400 hover:text-gray-300"
         >
           Турнир
         </Link>
-        <span className="mx-2 text-gray-600">/</span>
-        <span className="text-gray-200">{teamData.name}</span>
+        <span className="text-gray-600">/</span>
+        <span className="text-gray-200 break-words min-w-0">{teamData.name}</span>
       </nav>
 
       {/* Team Header */}

@@ -1,13 +1,11 @@
 import { useParams, Link } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useGame } from '../hooks/queries';
 import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { Markdown } from '../components/ui/Markdown';
 
-const remarkPlugins = [remarkGfm];
 
 export function GameView() {
   const { id } = useParams<{ id: string }>();
@@ -63,13 +61,13 @@ export function GameView() {
       {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Rules */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <div className="card">
             <h2 className="text-xl font-semibold mb-4 text-gray-100">Правила игры</h2>
             {game.rules ? (
               <div className="prose max-w-none prose-invert">
                 <div className="markdown-content text-gray-300">
-                  <ReactMarkdown remarkPlugins={remarkPlugins}>{game.rules}</ReactMarkdown>
+                  <Markdown>{game.rules}</Markdown>
                 </div>
               </div>
             ) : (
@@ -79,7 +77,7 @@ export function GameView() {
         </div>
 
         {/* Sidebar */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 min-w-0">
           <div className="card">
             <h2 className="text-lg font-semibold mb-4 text-gray-100">Участие</h2>
             <p className="text-gray-400 mb-4">

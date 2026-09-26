@@ -67,23 +67,23 @@ export function Profile() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto w-full">
       <div className="card">
         <h1 className="text-2xl font-bold mb-6 text-gray-100">Профиль</h1>
 
         {/* User info */}
         <div className="mb-6 p-4 bg-gray-800 rounded-lg">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-primary-900/50 rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 shrink-0 bg-primary-900/50 rounded-full flex items-center justify-center">
               <span className="text-2xl font-bold text-primary-400">
                 {user?.username?.charAt(0).toUpperCase()}
               </span>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-100">
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold text-gray-100 break-all">
                 {user?.username}
               </h2>
-              <p className="text-gray-400">
+              <p className="text-gray-400 break-all">
                 {user?.email || 'Email не указан'}
               </p>
               <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${
