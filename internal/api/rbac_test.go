@@ -19,6 +19,8 @@ const (
 	guardPublic = "public" // без токена, в том числе с необязательным
 	guardUser   = "user"   // нужен токен
 	guardAdmin  = "admin"  // нужен токен админа
+	// без мидлвари, токен проверяет сам хендлер: logout принимает и протухший
+	guardHandler = "handler"
 )
 
 // защита каждого маршрута роутера. маршрут без записи тут валит тест:
@@ -29,7 +31,7 @@ var routeGuards = map[string]string{
 	"POST /api/v1/auth/register": guardPublic,
 	"POST /api/v1/auth/login":    guardPublic,
 	"POST /api/v1/auth/refresh":  guardPublic,
-	"POST /api/v1/auth/logout":   guardPublic,
+	"POST /api/v1/auth/logout":   guardHandler,
 	"GET /api/v1/auth/me":        guardUser,
 	"PUT /api/v1/auth/profile":   guardUser,
 
@@ -128,8 +130,8 @@ func guardFor(method, route string) (string, bool) {
 
 var routeParam = regexp.MustCompile(`\{[^}]+\}`)
 
-// обход настоящего роутера: без токена защищённый маршрут отдаёт 401,
-// админский с токеном обычного пользователя - 403
+// обход настоящего роутера: без токена защищённый маршрут отдаёт 401, публичный
+// нет, админский с токеном обычного пользователя - 403
 func TestRouter_RBAC(t *testing.T) {
 	log, err := logger.New("error", "json")
 	require.NoError(t, err)
@@ -174,11 +176,16 @@ func TestRouter_RBAC(t *testing.T) {
 		}
 		seen[method+" "+route] = true
 		// у маршрутов на все методы хватает GET
-		if guard == guardPublic || (strings.HasPrefix(route, "/debug/pprof/") && method != http.MethodGet) {
+		if guard == guardHandler || (strings.HasPrefix(route, "/debug/pprof/") && method != http.MethodGet) {
 			return nil
 		}
 
 		path := routeParam.ReplaceAllString(route, uuid.NewString())
+		// пустой хендлер публичной ручки падает в Recoverer (500), важно лишь не 401
+		if guard == guardPublic {
+			assert.NotEqual(t, http.StatusUnauthorized, status(method, path, ""), "%s %s публичный", method, route)
+			return nil
+		}
 		assert.Equal(t, http.StatusUnauthorized, status(method, path, ""), "%s %s без токена", method, route)
 		if guard == guardAdmin {
 			assert.Equal(t, http.StatusForbidden, status(method, path, "user"), "%s %s с токеном пользователя", method, route)
