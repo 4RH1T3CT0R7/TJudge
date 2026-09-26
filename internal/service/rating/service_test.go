@@ -22,30 +22,6 @@ type MockRatingRepository struct {
 	update1, update2 *ParticipantUpdate
 }
 
-func (m *MockRatingRepository) Create(ctx context.Context, history *models.RatingHistory) error {
-	return m.Called(ctx, history).Error(0)
-}
-
-func (m *MockRatingRepository) GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error) {
-	args := m.Called(ctx, programID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*models.RatingHistory), args.Error(1)
-}
-
-func (m *MockRatingRepository) UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error {
-	return m.Called(ctx, tournamentID, programID, ratingDelta).Error(0)
-}
-
-func (m *MockRatingRepository) UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error {
-	return m.Called(ctx, tournamentID, programID, won, draw).Error(0)
-}
-
-func (m *MockRatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error {
-	return m.Called(ctx, tournamentID, programID, ratingDelta, won, draw).Error(0)
-}
-
 func (m *MockRatingRepository) ApplyMatchResult(ctx context.Context, match *models.Match, calc func(rating1, rating2 int) (*ParticipantUpdate, *ParticipantUpdate)) (bool, error) {
 	args := m.Called(ctx, match)
 	// репозиторий отдаёт в calc рейтинги, прочитанные под блокировкой
@@ -70,66 +46,6 @@ func newTestRatingService(t *testing.T) (*Service, *MockRatingRepository) {
 	repo := new(MockRatingRepository)
 	log, _ := logger.New("error", "json")
 	return NewService(repo, events.NoopNotifier{}, log), repo
-}
-
-// --- GetRatingHistory ---
-
-func TestService_GetRatingHistory_Success(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	programID := uuid.New()
-
-	expected := []*models.RatingHistory{{ID: uuid.New(), ProgramID: programID}}
-	repo.On("GetByProgramID", ctx, programID).Return(expected, nil)
-
-	result, err := svc.GetRatingHistory(ctx, programID)
-	require.NoError(t, err)
-	assert.Len(t, result, 1)
-}
-
-func TestService_GetRatingHistory_Error(t *testing.T) {
-	svc, repo := newTestRatingService(t)
-	ctx := context.Background()
-	programID := uuid.New()
-
-	repo.On("GetByProgramID", ctx, programID).Return(nil, errors.ErrInternal)
-
-	_, err := svc.GetRatingHistory(ctx, programID)
-	assert.Error(t, err)
-}
-
-// --- CalculateExpectedScore ---
-
-func TestService_CalculateExpectedScore_EqualRatings(t *testing.T) {
-	svc, _ := newTestRatingService(t)
-
-	score := svc.CalculateExpectedScore(1500, 1500)
-	assert.InDelta(t, 0.5, score, 0.001)
-}
-
-func TestService_CalculateExpectedScore_Asymmetric(t *testing.T) {
-	svc, _ := newTestRatingService(t)
-
-	// у кого рейтинг выше - ожидание больше 0.5, у кого ниже - меньше
-	higher := svc.CalculateExpectedScore(1800, 1500)
-	assert.Greater(t, higher, 0.5)
-	assert.Less(t, higher, 1.0)
-
-	lower := svc.CalculateExpectedScore(1200, 1500)
-	assert.Less(t, lower, 0.5)
-	assert.Greater(t, lower, 0.0)
-}
-
-func TestService_CalculateExpectedScore_Symmetry(t *testing.T) {
-	svc, _ := newTestRatingService(t)
-
-	scoreA := svc.CalculateExpectedScore(1600, 1400)
-	scoreB := svc.CalculateExpectedScore(1400, 1600)
-
-	// два ожидания в сумме дают ~1.0
-	assert.InDelta(t, 1.0, scoreA+scoreB, 0.001)
-	// разница в 200 очков -> ~0.76
-	assert.InDelta(t, 0.76, scoreA, 0.01)
 }
 
 // --- ProcessMatchResult ---

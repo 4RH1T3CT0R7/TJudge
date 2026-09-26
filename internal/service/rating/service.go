@@ -23,11 +23,6 @@ type ParticipantUpdate struct {
 }
 
 type RatingRepository interface {
-	Create(ctx context.Context, history *models.RatingHistory) error
-	GetByProgramID(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error)
-	UpdateParticipantRating(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int) error
-	UpdateParticipantStats(ctx context.Context, tournamentID, programID uuid.UUID, won bool, draw bool) error
-	UpdateParticipantRatingAndStats(ctx context.Context, tournamentID, programID uuid.UUID, ratingDelta int, won bool, draw bool) error
 	// рейтинг за матч применяется ровно один раз: репозиторий в одной транзакции
 	// гасит outbox-задачу, блокирует рейтинги обоих участников и отдаёт их в calc.
 	// false - рейтинг уже применён (fast path и диспетчер разошлись) или матча нет
@@ -147,12 +142,4 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match) e
 	})
 
 	return nil
-}
-
-func (s *Service) GetRatingHistory(ctx context.Context, programID uuid.UUID) ([]*models.RatingHistory, error) {
-	return s.repo.GetByProgramID(ctx, programID)
-}
-
-func (s *Service) CalculateExpectedScore(rating1, rating2 int) float64 {
-	return s.calculator.CalculateExpectedScore(rating1, rating2)
 }
