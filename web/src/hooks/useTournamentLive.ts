@@ -4,7 +4,9 @@
 // Поллинг включается только как fallback, когда WS-соединения нет
 // (pollInterval из этого хука). Это касается и анонимов: /ws требует токен,
 // поэтому у них живых событий нет и данные обновляет поллинг. У не идущего
-// турнира матчи не меняются, и поллинга нет.
+// турнира матчи не меняются, и поллинга нет. Статус турнира без WS
+// перечитывается редко: иначе открытая до старта вкладка так и не узнала бы,
+// что турнир пошёл, а после завершения продолжала бы поллинг.
 
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,14 +14,14 @@ import { useWebSocket } from './useWebSocket';
 import { parseTournamentWSMessage } from '../types/ws';
 import type { WSMessage, Program } from '../types';
 import { queryKeys } from '../api/queryKeys';
-import { FALLBACK_POLL_INTERVAL } from './queries';
+import { FALLBACK_POLL_INTERVAL, useTournament } from './queries';
 
 interface UseTournamentLiveOptions {
   tournamentId: string;
   enabled?: boolean;
-  /** Турнир идёт: только тогда без WS включается поллинг. */
-  active: boolean;
 }
+
+export const TOURNAMENT_STATUS_POLL_INTERVAL = 30_000;
 
 // Во время раунда match_result идут непрерывно (по событию на матч), а каждая
 // инвалидация - это запросы лидерборда и раундов. Окно 5с держит вкладку
@@ -59,7 +61,7 @@ export function throttle(fn: () => void, ms: number) {
   return call;
 }
 
-export function useTournamentLive({ tournamentId, enabled = true, active }: UseTournamentLiveOptions) {
+export function useTournamentLive({ tournamentId, enabled = true }: UseTournamentLiveOptions) {
   const queryClient = useQueryClient();
 
   const scheduleMatchInvalidation = useMemo(
@@ -129,6 +131,12 @@ export function useTournamentLive({ tournamentId, enabled = true, active }: UseT
     enabled,
     onMessage: handleMessage,
   });
+
+  // Тот же ключ, что у страницы: TanStack сводит оба observer'а в один запрос.
+  const tournament = useTournament(tournamentId, {
+    pollInterval: isConnected ? false : TOURNAMENT_STATUS_POLL_INTERVAL,
+  });
+  const active = tournament.data?.status === 'active';
 
   // Fallback-поллинг: только когда живых обновлений нет, в том числе без WS вовсе.
   const pollInterval: number | false = active && !isConnected ? FALLBACK_POLL_INTERVAL : false;

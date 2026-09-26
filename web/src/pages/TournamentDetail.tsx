@@ -63,7 +63,6 @@ export function TournamentDetail() {
   const live = useTournamentLive({
     tournamentId,
     enabled: isAuthenticated,
-    active: tournamentQuery.data?.status === 'active',
   });
   const { isConnected } = live;
 
