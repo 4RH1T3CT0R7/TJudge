@@ -7,10 +7,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -812,6 +814,37 @@ func TestProgramHandler_FileUpload(t *testing.T) {
 		assert.Equal(t, models.ProgramCompiling, response.Status)
 
 		mockRepo.AssertExpectations(t)
+	})
+
+	// игра не подключена к турниру: 400 с понятным текстом, загруженный файл удалён
+	t.Run("game not in tournament", func(t *testing.T) {
+		userID, teamID, tournamentID, gameID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+		mockRepo := new(MockProgramRepository)
+		mockTeamChecker := new(MockTeamMembershipChecker)
+		uploadDir := t.TempDir()
+		handler := &ProgramHandler{programRepo: mockRepo, teamChecker: mockTeamChecker, uploadDir: uploadDir, maxFileSize: 1 << 20, log: log}
+
+		mockTeamChecker.On("IsUserInTeam", mock.Anything, teamID, userID).Return(true, nil)
+		mockTeamChecker.On("GetByID", mock.Anything, teamID).Return(&models.Team{ID: teamID, TournamentID: tournamentID}, nil)
+		mockRepo.On("GetLatestVersion", mock.Anything, teamID, gameID).Return(0, nil)
+		mockRepo.On("CreateWithAtomicVersion", mock.Anything, mock.Anything).
+			Return(errors.ErrInvalidInput.WithMessage("игра не подключена к этому турниру"))
+
+		req := createMultipartRequest(t, map[string]string{
+			"team_id":       teamID.String(),
+			"tournament_id": tournamentID.String(),
+			"game_id":       gameID.String(),
+		}, "strategy.py", []byte("print('hello')"))
+		req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+
+		w := httptest.NewRecorder()
+		handler.Create(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "игра не подключена к этому турниру")
+		files, err := os.ReadDir(uploadDir)
+		require.NoError(t, err)
+		assert.Empty(t, files)
 	})
 
 	// член команды турнира X не загрузит программу в турнир Y, и команда
