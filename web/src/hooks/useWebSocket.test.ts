@@ -46,6 +46,7 @@ describe('useWebSocket', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     localStorage.clear();
   });
 
@@ -55,20 +56,32 @@ describe('useWebSocket', () => {
     ]);
   });
 
-  it('переподключается без лимита попыток', () => {
-    renderHook(() => useWebSocket({ tournamentId: 't1', enabled: true }));
-    act(() => {
-      vi.advanceTimersByTime(100);
+  it('переподключается без лимита попыток, обновляя токен раз между открытиями', async () => {
+    const refresh = vi.spyOn(api, 'refreshSession').mockImplementation(async () => {
+      localStorage.setItem('access_token', 'token2');
     });
+    renderHook(() => useWebSocket({ tournamentId: 't1', enabled: true }));
+    await act(() => vi.advanceTimersByTimeAsync(100));
     expect(FakeWebSocket.instances).toHaveLength(1);
 
+    // Сокет ни разу не открылся: сервер мог отклонить токен, живой по часам клиента
     for (let attempt = 1; attempt <= 10; attempt++) {
-      act(() => {
-        last().drop(1006);
-        vi.advanceTimersByTime(reconnectDelay(attempt));
-      });
+      act(() => last().drop(1006));
+      await act(() => vi.advanceTimersByTimeAsync(reconnectDelay(attempt)));
     }
     expect(FakeWebSocket.instances).toHaveLength(11);
+    expect(FakeWebSocket.instances[1].protocols).toEqual(['access_token.token2']);
+    expect(refresh).toHaveBeenCalledOnce();
+
+    // Обрыв открытого сокета токен не обновляет, следующий отказ на хендшейке - снова да
+    act(() => last().open());
+    act(() => last().drop(1006));
+    await act(() => vi.advanceTimersByTimeAsync(reconnectDelay(1)));
+    expect(refresh).toHaveBeenCalledOnce();
+    act(() => last().drop(1006));
+    await act(() => vi.advanceTimersByTimeAsync(reconnectDelay(2)));
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(FakeWebSocket.instances).toHaveLength(13);
   });
 
   it('onclose заменённого сокета не трогает текущий', () => {

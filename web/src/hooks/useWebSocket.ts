@@ -40,6 +40,8 @@ export function useWebSocket({
   const mountedRef = useRef(true);
   // Номер последнего connect: connect после refresh сверяется с ним
   const connectSeqRef = useRef(0);
+  // false, если с последнего открытия сокета токен уже обновлялся
+  const refreshAllowedRef = useRef(true);
 
   // Храним значения в refs, чтобы не пересоздавать функции
   const tournamentIdRef = useRef(tournamentId);
@@ -49,7 +51,7 @@ export function useWebSocket({
   const onErrorRef = useRef(onError);
 
   // Ref для connect-функции, чтобы onclose мог ссылаться на неё без forward declaration
-  const connectRef = useRef<(afterRefresh?: boolean) => void>(() => {});
+  const connectRef = useRef<(refresh?: boolean) => void>(() => {});
 
   // Обновляем refs при смене значений
   useEffect(() => {
@@ -60,7 +62,9 @@ export function useWebSocket({
     onErrorRef.current = onError;
   }, [tournamentId, onMessage, onOpen, onClose, onError]);
 
-  const connect = useCallback((afterRefresh = false) => {
+  // refresh: true - обновить токен перед подключением, false - не обновлять,
+  // не задан - обновить, только если exp уже прошёл
+  const connect = useCallback((refresh?: boolean) => {
     // Не коннектимся, если компонент размонтирован
     if (!mountedRef.current) {
       return;
@@ -85,17 +89,19 @@ export function useWebSocket({
       reconnectTimeoutRef.current = null;
     }
 
-    // Истёкший токен сервер отклонит на хендшейке, а браузер покажет это обычным
-    // обрывом 1006, поэтому токен обновляется заранее общим с REST single-flight.
+    // Отказ по токену браузер показывает обычным обрывом 1006, поэтому токен
+    // обновляется общим с REST single-flight заранее, если exp прошёл, и после
+    // сокета, так и не открывшегося (часы клиента отстают, токен отозван).
     // После сетевой ошибки refresh сокет открывается со старым токеном и уходит
     // в backoff; отказ refresh завершает сессию, и токена уже нет.
     const seq = ++connectSeqRef.current;
-    if (!afterRefresh && isTokenExpired(token)) {
+    if (refresh ?? isTokenExpired(token)) {
+      refreshAllowedRef.current = false;
       void api
         .refreshSession()
         .catch(() => {})
         .then(() => {
-          if (seq === connectSeqRef.current) connectRef.current(true);
+          if (seq === connectSeqRef.current) connectRef.current(false);
         });
       return;
     }
@@ -116,12 +122,15 @@ export function useWebSocket({
     // Передаём токен через Sec-WebSocket-Protocol header вместо URL query string,
     // чтобы не светить JWT в истории браузера, server logs и referrer headers
     const ws = new WebSocket(wsUrl, [`access_token.${token}`]);
+    let opened = false;
 
     ws.onopen = () => {
       if (!mountedRef.current || wsRef.current !== ws) {
         ws.close(1000);
         return;
       }
+      opened = true;
+      refreshAllowedRef.current = true;
       setIsConnected(true);
       reconnectAttempts.current = 0;
       onOpenRef.current?.();
@@ -137,9 +146,13 @@ export function useWebSocket({
 
       // Чистое закрытие (1000) - по инициативе клиента, переподключение не нужно
       if (event.code !== 1000) {
+        // Так и не открывшийся сокет обновляет токен не чаще раза между
+        // открытиями: не помог refresh - дело не в токене (сервер лежит,
+        // Origin не пропущен), а истёкший exp обновится и так
+        const refresh = !opened && refreshAllowedRef.current ? true : undefined;
         reconnectAttempts.current++;
         reconnectTimeoutRef.current = setTimeout(
-          () => connectRef.current(),
+          () => connectRef.current(refresh),
           reconnectDelay(reconnectAttempts.current)
         );
       }
