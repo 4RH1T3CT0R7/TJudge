@@ -14,14 +14,14 @@ set -uo pipefail
 #
 # Что проверяется:
 #   1. Контейнеры (docker compose ps)
-#   2. Образы: наличие tjudge-cli/tjudge-builder и НЕ устарели ли запущенные
-#      контейнеры относительно локально собранных образов (нужен ли restart)
+#   2. Образы песочниц (EXECUTOR_DOCKER_IMAGE/EXECUTOR_BUILDER_IMAGE запущенного
+#      worker'а) и не устарели ли запущенные api/worker (нужен ли restart)
 #   3. API /health и worker /health
 #   4. Полный статус из API (с ADMIN_TOKEN): БД, миграции, Redis, очереди,
 #      матчи, программы, outbox, WebSocket
 
 API_URL="${API_URL:-http://localhost:8080}"
-WORKER_METRICS_URL="${WORKER_METRICS_URL:-http://localhost:9090}"
+WORKER_METRICS_URL="${WORKER_METRICS_URL:-http://localhost:9091}"
 
 # Подхватываем .env, если есть (для ADMIN_TOKEN/портов).
 if [ -f .env ]; then
@@ -59,12 +59,18 @@ fi
 # ------------------------------------------------------------------- образы
 hdr "── Образы ────────────────────────────────────────────────"
 if command -v docker >/dev/null 2>&1; then
-    for entry in "tjudge-cli:latest=make docker-build-executor" "tjudge-builder:latest=make docker-build-builder"; do
+    # имена образов - из env запущенного worker'а (prod: ghcr-образы версии релиза)
+    worker_ctr=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-worker(-[0-9]+)?$' | head -1)
+    worker_env() { [ -n "$worker_ctr" ] && docker inspect "$worker_ctr" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -n "s/^$1=//p"; }
+    executor=$(worker_env EXECUTOR_DOCKER_IMAGE); executor="${executor:-${EXECUTOR_DOCKER_IMAGE:-tjudge-cli:latest}}"
+    builder=$(worker_env EXECUTOR_BUILDER_IMAGE); builder="${builder:-${EXECUTOR_BUILDER_IMAGE:-tjudge-builder:latest}}"
+    for entry in "$executor=make docker-build-executor" "$builder=make docker-build-builder"; do
         img="${entry%%=*}"; hint="${entry#*=}"
+        case "$img" in */*) hint="docker pull $img" ;; esac
         if created=$(docker image inspect "$img" --format '{{.Created}}' 2>/dev/null); then
             ok "$img (создан: ${created%T*} ${created:11:8})"
         else
-            bad "$img ОТСУТСТВУЕТ — соберите: $hint"
+            bad "$img ОТСУТСТВУЕТ — $hint"
             FAILURES=$((FAILURES+1))
         fi
     done
@@ -72,7 +78,7 @@ if command -v docker >/dev/null 2>&1; then
     # Контейнер запущен на устаревшем образе? Сравниваем image ID запущенного
     # контейнера с ID локального образа того же тега: разошлись — образ
     # пересобран, но контейнер не перезапущен (нужен docker compose up -d).
-    for ctr in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-(api|worker)$' || true); do
+    for ctr in $(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-(api|worker)(-[0-9]+)?$' || true); do
         running_img=$(docker inspect "$ctr" --format '{{.Image}}' 2>/dev/null)
         tag=$(docker inspect "$ctr" --format '{{.Config.Image}}' 2>/dev/null)
         latest_img=$(docker image inspect "$tag" --format '{{.Id}}' 2>/dev/null)
@@ -89,7 +95,7 @@ fi
 
 # ------------------------------------------------------------------ healthz
 hdr "── Health ────────────────────────────────────────────────"
-if resp=$(curl -sf --max-time 3 "$API_URL/health" 2>/dev/null); then
+if curl -sf --max-time 3 "$API_URL/health" >/dev/null 2>&1; then
     ok "API $API_URL/health"
 else
     bad "API $API_URL/health недоступен"

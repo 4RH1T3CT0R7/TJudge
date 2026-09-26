@@ -10,11 +10,11 @@ set -uo pipefail
 #
 # Что проверяет (каждая проверка независима, с подсказкой «куда смотреть»):
 #   1. Контейнеры: запущены, healthy, не рестартятся в цикле
-#   2. Образы: tjudge-cli/tjudge-builder существуют; api/worker не работают
-#      на устаревшем образе (пересобран, но не перезапущен)
+#   2. Образы песочниц (EXECUTOR_DOCKER_IMAGE/EXECUTOR_BUILDER_IMAGE запущенного
+#      worker'а) есть на хосте; api/worker не работают на устаревшем образе
 #   3. Health-эндпоинты API и worker'а
-#   4. Полный статус /system/status (ADMIN_TOKEN): БД+миграции, Redis,
-#      dead-letter, outbox целостности рейтингов, зависшая компиляция
+#   4. Полный статус /system/status (ADMIN_TOKEN): БД и версия миграций против
+#      migrations/, Redis, dead-letter, outbox рейтингов, зависшая компиляция
 #   5. Prometheus: целевые up-метрики, 5xx-rate, активные алерты
 #      (firing-алерты попадают в отчёт как есть - с их описаниями)
 #   6. Логи api/worker за DOCTOR_LOG_WINDOW: количество error/panic,
@@ -31,7 +31,7 @@ set -uo pipefail
 #
 # Конфиг (ENV или .env):
 #   API_URL=http://localhost:8080
-#   WORKER_METRICS_URL=http://localhost:9090
+#   WORKER_METRICS_URL=http://localhost:9091
 #   PROMETHEUS_URL=http://localhost:9092
 #   PUSHGATEWAY_URL=http://localhost:9094      # дефолт; недоступен - тихий скип
 #   ADMIN_USER=<логин или email админа>        # авто-логин для /system/status
@@ -52,7 +52,7 @@ cd "$(dirname "$0")/.." 2>/dev/null || true
 if [ -f .env ]; then set -a; . ./.env 2>/dev/null; set +a; fi
 
 API_URL="${API_URL:-http://localhost:8080}"
-WORKER_METRICS_URL="${WORKER_METRICS_URL:-http://localhost:9090}"
+WORKER_METRICS_URL="${WORKER_METRICS_URL:-http://localhost:9091}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9092}"
 # Дефолт - стандартный порт pushgateway из infra-monitoring (127.0.0.1:9094);
 # если его нет (dev-машина), push тихо скипается с одной строчкой в выводе.
@@ -130,15 +130,27 @@ check_containers() {
 }
 
 # -------------------------------------------------------------------- 2. образы
+# переменная из env запущенного worker'а (prod: ghcr-образы версии релиза)
+worker_env() { # worker_env <VAR>
+    local ctr
+    ctr=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E '^tjudge-worker(-[0-9]+)?$' | head -1)
+    [ -n "$ctr" ] && docker inspect "$ctr" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -n "s/^$1=//p"
+}
+
 check_images() {
     have docker || return 0
 
-    for entry in "tjudge-cli:latest=make docker-build-executor" "tjudge-builder:latest=make docker-build-builder"; do
-        local img="${entry%%=*}" hint="${entry#*=}"
+    local executor builder
+    executor=$(worker_env EXECUTOR_DOCKER_IMAGE); executor="${executor:-${EXECUTOR_DOCKER_IMAGE:-tjudge-cli:latest}}"
+    builder=$(worker_env EXECUTOR_BUILDER_IMAGE); builder="${builder:-${EXECUTOR_BUILDER_IMAGE:-tjudge-builder:latest}}"
+    for entry in "executor=$executor=make docker-build-executor" "builder=$builder=make docker-build-builder"; do
+        local role="${entry%%=*}" rest="${entry#*=}"
+        local img="${rest%%=*}" hint="${rest#*=}"
+        case "$img" in */*) hint="docker pull $img" ;; esac
         if docker image inspect "$img" >/dev/null 2>&1; then
-            add ok "image:${img%%:*}" "образ есть"
+            add ok "image:$role" "образ $img есть"
         else
-            add crit "image:${img%%:*}" "образ $img отсутствует" "$hint (без него матчи/компиляция не работают)"
+            add crit "image:$role" "образ $img отсутствует" "$hint (без него матчи/компиляция не работают)"
         fi
     done
 
@@ -212,6 +224,13 @@ check_system_status() {
 
     [ "$(q '.data.database.schema_dirty')" = "true" ] \
         && add crit db-schema "миграции в состоянии DIRTY" "незавершённая миграция: golang-migrate требует ручного вмешательства (см. docs/OPERATIONS.md)"
+
+    # миграции из checkout (в prod - тег релиза) должны быть применены
+    local applied latest
+    applied=$(q '.data.database.schema_version')
+    latest=$(find migrations -name '*.up.sql' 2>/dev/null | sed 's|.*/0*\([0-9][0-9]*\)_.*|\1|' | sort -n | tail -1)
+    [ -n "$applied" ] && [ -n "$latest" ] && [ "$applied" -lt "$latest" ] 2>/dev/null \
+        && add crit db-schema "схема на миграции $applied, в migrations/ есть $latest" "сервис migrate не отработал: docker logs tjudge-migrate-prod (self-hosted: tjudge-migrate)"
 
     [ "$(q '.data.redis.healthy')" = "true" ] \
         && add ok redis "Redis healthy" \
@@ -407,7 +426,8 @@ send_telegram() {
     if [ "$DOCTOR_TELEGRAM" = "auto" ] && [ "$VERDICT" = "HEALTHY" ]; then return 0; fi
 
     local icon="✅"; [ "$VERDICT" = "DEGRADED" ] && icon="⚠️"; [ "$VERDICT" = "CRITICAL" ] && icon="🔥"
-    local msg="$icon <b>TJudge Doctor: $VERDICT</b> ($(hostname), $(date '+%Y-%m-%d %H:%M'))"
+    local msg
+    msg="$icon <b>TJudge Doctor: $VERDICT</b> ($(hostname), $(date '+%Y-%m-%d %H:%M'))"
     msg="$msg
 ok: $OKS, warn: $WARNS, crit: $CRITS"
 
