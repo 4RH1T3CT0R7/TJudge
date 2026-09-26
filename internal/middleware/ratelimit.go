@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -91,6 +94,12 @@ const readLimitMultiplier = 10
 // name разводит счётчики разных лимитов. при недоступном редисе лимитер не
 // открывается нараспашку, а падает на in-memory fallback (вдвое строже)
 func RateLimit(limiter RateLimiter, name string, limit int, window time.Duration, tokens AuthService, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
+	subject := func(r *http.Request, ip string) string { return rateLimitSubject(r, tokens, ip) }
+	return RateLimitBy(limiter, name, limit, window, subject, log, stopCh...)
+}
+
+// RateLimitBy - RateLimit со своим выбором клиента: subject получает запрос и ip
+func RateLimitBy(limiter RateLimiter, name string, limit int, window time.Duration, subject func(r *http.Request, ip string) string, log *logger.Logger, stopCh ...chan struct{}) func(http.Handler) http.Handler {
 	writeFallback := newFallbackLimiter(limit, window)
 	readFallback := newFallbackLimiter(limit*readLimitMultiplier, window)
 
@@ -128,7 +137,7 @@ func RateLimit(limiter RateLimiter, name string, limit int, window time.Duration
 			if r.Method == http.MethodGet || r.Method == http.MethodHead {
 				l, bucket, fallback = limit*readLimitMultiplier, name+":read", readFallback
 			}
-			key := fmt.Sprintf("ratelimit:%s:%s", bucket, rateLimitSubject(r, tokens, ip))
+			key := fmt.Sprintf("ratelimit:%s:%s", bucket, subject(r, ip))
 
 			allowed, err := limiter.Allow(r.Context(), key, l, window)
 			if err != nil {
@@ -171,6 +180,32 @@ func rateLimitSubject(r *http.Request, tokens AuthService, ip string) string {
 		}
 	}
 	return "ip:" + ip
+}
+
+// максимальная длина логина в ключе лимита: тело до мегабайта, а ключ живёт в редисе
+const maxLoginKeyLen = 64
+
+// LoginSubject - ip плюс логин (email или username, как ищет auth-сервис) из
+// json-тела. тело возвращается на место для хендлера вместе с ошибкой чтения,
+// если она была (превышение MaxBodySize)
+func LoginSubject(r *http.Request, ip string) string {
+	body, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), r.Body))
+
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	_ = json.Unmarshal(body, &req)
+	login := req.Username
+	if req.Email != "" {
+		login = req.Email
+	}
+	login = strings.ToLower(strings.TrimSpace(login))
+	if len(login) > maxLoginKeyLen {
+		login = login[:maxLoginKeyLen]
+	}
+	return "ip:" + ip + ":login:" + login
 }
 
 func isLocalhost(ip string) bool {

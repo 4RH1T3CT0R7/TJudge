@@ -164,6 +164,23 @@ func (s *Server) rateLimit(name string, tokens middleware.AuthService) func(http
 	return middleware.RateLimit(s.rateLimiter, name, s.rateLimitConfig.RequestsPerMinute, time.Minute, tokens, s.log, s.rateLimitStopCh)
 }
 
+// во сколько раз потолок входа с одного ip выше лимита на один логин
+const loginIPMultiplier = 5
+
+// loginRateLimit - лимит входа: счётчик на пару ip+логин и потолок на ip в
+// loginIPMultiplier раз выше. аудитория за одним NAT не выбивает вход друг
+// другу, перебор паролей одного аккаунта упирается в прежний лимит на ip,
+// перебор по многим аккаунтам - в потолок
+func (s *Server) loginRateLimit() func(http.Handler) http.Handler {
+	if !s.rateLimitConfig.Enabled {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	rpm := s.rateLimitConfig.RequestsPerMinute
+	perLogin := middleware.RateLimitBy(s.rateLimiter, "login", rpm, time.Minute, middleware.LoginSubject, s.log, s.rateLimitStopCh)
+	perIP := middleware.RateLimit(s.rateLimiter, "login", rpm*loginIPMultiplier, time.Minute, nil, s.log, s.rateLimitStopCh)
+	return func(next http.Handler) http.Handler { return perIP(perLogin(next)) }
+}
+
 // auditMiddleware пишет admin-действия в аудит-лог, без логгера - пустышка
 func (s *Server) auditMiddleware() func(http.Handler) http.Handler {
 	if s.auditLogger == nil {
@@ -238,206 +255,214 @@ func (s *Server) setupRoutes() {
 	bodyLimit := middleware.MaxBodySize(1 << 20)
 
 	s.router.Route("/api/v1", func(r chi.Router) {
-		// статика spa и /health под лимит не попадают: они дешёвые, а в общем
-		// счётчике выбивали бы лимит всей аудитории
-		r.Use(s.rateLimit("api", s.authService))
+		apiLimit := s.rateLimit("api", s.authService)
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(bodyLimit)
-			// публичные
-			// логин и регистрация всегда считаются по ip: по user id каждый
-			// новый аккаунт давал бы перебору паролей свой счётчик
-			authLimit := s.rateLimit("auth", nil)
-			r.With(authLimit).Post("/register", s.authHandler.Register)
-			r.With(authLimit).Post("/login", s.authHandler.Login)
-			r.Post("/refresh", s.authHandler.Refresh)
-			// без auth-мидлвари: вкладка с протухшим access иначе получала 401,
-			// и refresh-токен оставался жить на сервере
-			r.Post("/logout", s.authHandler.Logout)
-
-			// под токеном
-			r.Group(func(r chi.Router) {
-				r.Use(s.auth())
-				r.Get("/me", s.authHandler.Me)
-				r.Put("/profile", s.authHandler.UpdateProfile)
-			})
-		})
-
-		r.Route("/tournaments", func(r chi.Router) {
-			r.Use(bodyLimit)
-			// публичные
-			r.Get("/", s.tournamentHandler.List)
-			r.Get("/{id}", s.tournamentHandler.Get)
-			r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
-			r.Get("/{id}/cross-game-leaderboard", s.tournamentHandler.GetCrossGameLeaderboard)
-			// токен необязателен: своей команде текст ошибок матчей виден целиком
-			r.With(s.optionalAuth()).Get("/{id}/matches", s.tournamentHandler.GetMatches)
-			r.With(s.optionalAuth()).Get("/{id}/matches/rounds", s.tournamentHandler.GetMatchesByRounds)
-			r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
-			r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
-
-			// по конкретной игре турнира
-			r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
-			r.Get("/{id}/games/{gameId}/head-to-head", s.gameHandler.GetHeadToHead)
-			r.With(s.optionalAuth()).Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
-			r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
-			r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
-			if s.ratingHistoryHandler != nil {
-				r.Get("/{id}/programs/{programId}/rating-history", s.ratingHistoryHandler.GetProgramRatingHistory)
-			}
+			// вход и регистрация не под общим лимитом api: там аноним считается
+			// по ip, и аудитория за одним NAT выбивала бы вход друг другу.
+			// регистрация по ip: по user id каждый новый аккаунт давал бы
+			// перебору паролей свой счётчик
+			r.With(s.rateLimit("auth", nil)).Post("/register", s.authHandler.Register)
+			r.With(s.loginRateLimit()).Post("/login", s.authHandler.Login)
 
 			r.Group(func(r chi.Router) {
-				r.Use(s.auth())
+				r.Use(apiLimit)
+				r.Post("/refresh", s.authHandler.Refresh)
+				// без auth-мидлвари: вкладка с протухшим access иначе получала 401,
+				// и refresh-токен оставался жить на сервере
+				r.Post("/logout", s.authHandler.Logout)
 
-				r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
-
-				// добавить игру может админ или создатель турнира, проверка в хендлере
-				r.With(s.auditMiddleware()).Post("/{id}/games", s.gameHandler.AddGameToTournament)
-
-				// админские
+				// под токеном
 				r.Group(func(r chi.Router) {
-					r.Use(s.requireAdmin())
-					r.Use(s.auditMiddleware())
-					// Idempotency-Key на создании - ретрай не даст дубль
-					r.With(s.idempotency()).Post("/", s.tournamentHandler.Create)
-					r.Post("/{id}/start", s.tournamentHandler.Start)
-					r.Post("/{id}/complete", s.tournamentHandler.Complete)
-					r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
-					r.Delete("/{id}", s.tournamentHandler.Delete)
-					r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
-					r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
-					r.Get("/{id}/programs/download-zip", s.gameHandler.DownloadAllPrograms)
-					r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
-					r.Post("/{id}/games/{gameId}/reset-round", s.gameHandler.ResetGameRound)
-					r.Post("/{id}/games/{gameId}/auto-round", s.gameHandler.SetAutoRound)
-					r.Get("/{id}/games/{gameId}/auto-round", s.gameHandler.GetAutoRound)
-					r.Post("/{id}/active-game", s.gameHandler.SetActiveGame)
-					r.Post("/{id}/games/deactivate-all", s.gameHandler.DeactivateAllGames)
-					r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
-					r.Post("/{id}/run-game-matches", s.tournamentHandler.RunGameMatches)
-					r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)
-					r.Post("/{id}/programs/clear-errors", s.programHandler.ClearProgramErrors)
+					r.Use(s.auth())
+					r.Get("/me", s.authHandler.Me)
+					r.Put("/profile", s.authHandler.UpdateProfile)
 				})
 			})
 		})
 
-		r.Route("/games", func(r chi.Router) {
-			r.Use(bodyLimit)
-			// публичные read-only: браузер ревалидирует по etag на каждом запросе
-			r.With(middleware.CacheControl()).Get("/", s.gameHandler.List)
-			r.With(middleware.CacheControl()).Get("/{id}", s.gameHandler.Get)
-			r.With(middleware.CacheControl()).Get("/name/{name}", s.gameHandler.GetByName)
+		// остальное под общим лимитом api. статика spa и /health под него не
+		// попадают: они дешёвые, а в общем счётчике выбивали бы лимит всей аудитории
+		r.Group(func(r chi.Router) {
+			r.Use(apiLimit)
 
-			r.Group(func(r chi.Router) {
+			r.Route("/tournaments", func(r chi.Router) {
+				r.Use(bodyLimit)
+				// публичные
+				r.Get("/", s.tournamentHandler.List)
+				r.Get("/{id}", s.tournamentHandler.Get)
+				r.Get("/{id}/leaderboard", s.tournamentHandler.GetLeaderboard)
+				r.Get("/{id}/cross-game-leaderboard", s.tournamentHandler.GetCrossGameLeaderboard)
+				// токен необязателен: своей команде текст ошибок матчей виден целиком
+				r.With(s.optionalAuth()).Get("/{id}/matches", s.tournamentHandler.GetMatches)
+				r.With(s.optionalAuth()).Get("/{id}/matches/rounds", s.tournamentHandler.GetMatchesByRounds)
+				r.Get("/{id}/games", s.gameHandler.GetTournamentGames)
+				r.Get("/{id}/teams", s.teamHandler.GetTournamentTeams)
+
+				// по конкретной игре турнира
+				r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
+				r.Get("/{id}/games/{gameId}/head-to-head", s.gameHandler.GetHeadToHead)
+				r.With(s.optionalAuth()).Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
+				r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
+				r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
+				if s.ratingHistoryHandler != nil {
+					r.Get("/{id}/programs/{programId}/rating-history", s.ratingHistoryHandler.GetProgramRatingHistory)
+				}
+
+				r.Group(func(r chi.Router) {
+					r.Use(s.auth())
+
+					r.Get("/{id}/my-team", s.teamHandler.GetMyTeam)
+
+					// добавить игру может админ или создатель турнира, проверка в хендлере
+					r.With(s.auditMiddleware()).Post("/{id}/games", s.gameHandler.AddGameToTournament)
+
+					// админские
+					r.Group(func(r chi.Router) {
+						r.Use(s.requireAdmin())
+						r.Use(s.auditMiddleware())
+						// Idempotency-Key на создании - ретрай не даст дубль
+						r.With(s.idempotency()).Post("/", s.tournamentHandler.Create)
+						r.Post("/{id}/start", s.tournamentHandler.Start)
+						r.Post("/{id}/complete", s.tournamentHandler.Complete)
+						r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
+						r.Delete("/{id}", s.tournamentHandler.Delete)
+						r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)
+						r.Get("/{id}/games/{gameId}/programs", s.gameHandler.GetGamePrograms)
+						r.Get("/{id}/programs/download-zip", s.gameHandler.DownloadAllPrograms)
+						r.Post("/{id}/games/{gameId}/complete-round", s.gameHandler.MarkGameRoundCompleted)
+						r.Post("/{id}/games/{gameId}/reset-round", s.gameHandler.ResetGameRound)
+						r.Post("/{id}/games/{gameId}/auto-round", s.gameHandler.SetAutoRound)
+						r.Get("/{id}/games/{gameId}/auto-round", s.gameHandler.GetAutoRound)
+						r.Post("/{id}/active-game", s.gameHandler.SetActiveGame)
+						r.Post("/{id}/games/deactivate-all", s.gameHandler.DeactivateAllGames)
+						r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
+						r.Post("/{id}/run-game-matches", s.tournamentHandler.RunGameMatches)
+						r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)
+						r.Post("/{id}/programs/clear-errors", s.programHandler.ClearProgramErrors)
+					})
+				})
+			})
+
+			r.Route("/games", func(r chi.Router) {
+				r.Use(bodyLimit)
+				// публичные read-only: браузер ревалидирует по etag на каждом запросе
+				r.With(middleware.CacheControl()).Get("/", s.gameHandler.List)
+				r.With(middleware.CacheControl()).Get("/{id}", s.gameHandler.Get)
+				r.With(middleware.CacheControl()).Get("/name/{name}", s.gameHandler.GetByName)
+
+				r.Group(func(r chi.Router) {
+					r.Use(s.auth())
+					r.Use(s.requireAdmin())
+					r.Use(s.auditMiddleware())
+
+					r.Post("/", s.gameHandler.Create)
+					r.Put("/{id}", s.gameHandler.Update)
+					r.Delete("/{id}", s.gameHandler.Delete)
+				})
+			})
+
+			r.Route("/teams", func(r chi.Router) {
+				r.Use(bodyLimit)
 				r.Use(s.auth())
-				r.Use(s.requireAdmin())
-				r.Use(s.auditMiddleware())
 
-				r.Post("/", s.gameHandler.Create)
-				r.Put("/{id}", s.gameHandler.Update)
-				r.Delete("/{id}", s.gameHandler.Delete)
-			})
-		})
+				r.Post("/", s.teamHandler.Create)
+				// вступление по ip, как логин: по user id каждый новый аккаунт давал
+				// бы перебору инвайт-кодов свой счётчик
+				r.With(s.rateLimit("join", nil)).Post("/join", s.teamHandler.JoinByCode)
+				r.Get("/{id}", s.teamHandler.Get)
+				r.Put("/{id}", s.teamHandler.UpdateName)
+				r.Get("/{id}/members", s.teamHandler.GetMembers)
+				r.Post("/{id}/leave", s.teamHandler.Leave)
+				r.Delete("/{id}/members/{userId}", s.teamHandler.RemoveMember)
+				r.Get("/{id}/invite", s.teamHandler.GetInviteLink)
 
-		r.Route("/teams", func(r chi.Router) {
-			r.Use(bodyLimit)
-			r.Use(s.auth())
-
-			r.Post("/", s.teamHandler.Create)
-			// вступление по ip, как логин: по user id каждый новый аккаунт давал
-			// бы перебору инвайт-кодов свой счётчик
-			r.With(s.rateLimit("join", nil)).Post("/join", s.teamHandler.JoinByCode)
-			r.Get("/{id}", s.teamHandler.Get)
-			r.Put("/{id}", s.teamHandler.UpdateName)
-			r.Get("/{id}/members", s.teamHandler.GetMembers)
-			r.Post("/{id}/leave", s.teamHandler.Leave)
-			r.Delete("/{id}/members/{userId}", s.teamHandler.RemoveMember)
-			r.Get("/{id}/invite", s.teamHandler.GetInviteLink)
-
-			r.Group(func(r chi.Router) {
-				r.Use(s.requireAdmin())
-				r.Use(s.auditMiddleware())
-				r.Delete("/{id}", s.teamHandler.Delete)
-				r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
-				r.Post("/{id}/restore", s.teamHandler.Restore)
-			})
-		})
-
-		// программы - всё под токеном, лимит тела больше из-за загрузки файлов
-		r.Route("/programs", func(r chi.Router) {
-			r.Use(s.auth())
-			r.Use(middleware.MaxBodySize(10 << 20)) // 10MB for file uploads
-
-			// Idempotency-Key на аплоаде: клиент с флаки-сетью не создаст дубль
-			r.With(s.idempotency()).Post("/", s.programHandler.Create)
-			r.Get("/", s.programHandler.List)
-			r.Get("/versions", s.programHandler.GetVersions) // Список версий программ команды
-			r.Get("/{id}", s.programHandler.Get)
-			r.Get("/{id}/download", s.programHandler.Download)
-			r.Delete("/{id}", s.programHandler.Delete)
-		})
-
-		r.Route("/matches", func(r chi.Router) {
-			r.Use(bodyLimit)
-			// публичные с опциональной авторизацией - админ увидит полные ошибки
-			r.Group(func(r chi.Router) {
-				r.Use(s.optionalAuth())
-				r.Get("/", s.matchHandler.List)
-				r.Get("/statistics", s.matchHandler.GetStatistics)
-				r.Get("/{id}", s.matchHandler.Get)
+				r.Group(func(r chi.Router) {
+					r.Use(s.requireAdmin())
+					r.Use(s.auditMiddleware())
+					r.Delete("/{id}", s.teamHandler.Delete)
+					r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
+					r.Post("/{id}/restore", s.teamHandler.Restore)
+				})
 			})
 
-			// управление очередью - только админ
-			r.Group(func(r chi.Router) {
+			// программы - всё под токеном, лимит тела больше из-за загрузки файлов
+			r.Route("/programs", func(r chi.Router) {
 				r.Use(s.auth())
-				r.Use(s.requireAdmin())
-				r.Use(s.auditMiddleware())
+				r.Use(middleware.MaxBodySize(10 << 20)) // 10MB for file uploads
 
-				r.Get("/queue/stats", s.matchHandler.GetQueueStats)
-				r.Post("/queue/clear", s.matchHandler.ClearQueue)
-				r.Post("/queue/purge", s.matchHandler.PurgeInvalidMatches)
+				// Idempotency-Key на аплоаде: клиент с флаки-сетью не создаст дубль
+				r.With(s.idempotency()).Post("/", s.programHandler.Create)
+				r.Get("/", s.programHandler.List)
+				r.Get("/versions", s.programHandler.GetVersions) // Список версий программ команды
+				r.Get("/{id}", s.programHandler.Get)
+				r.Get("/{id}/download", s.programHandler.Download)
+				r.Delete("/{id}", s.programHandler.Delete)
 			})
-		})
 
-		r.Route("/ws", func(r chi.Router) {
-			r.Use(s.auth())
+			r.Route("/matches", func(r chi.Router) {
+				r.Use(bodyLimit)
+				// публичные с опциональной авторизацией - админ увидит полные ошибки
+				r.Group(func(r chi.Router) {
+					r.Use(s.optionalAuth())
+					r.Get("/", s.matchHandler.List)
+					r.Get("/statistics", s.matchHandler.GetStatistics)
+					r.Get("/{id}", s.matchHandler.Get)
+				})
 
-			r.Get("/tournaments/{id}", s.wsHandler.HandleTournament)
-			r.Get("/stats", s.wsHandler.GetStats)
-		})
+				// управление очередью - только админ
+				r.Group(func(r chi.Router) {
+					r.Use(s.auth())
+					r.Use(s.requireAdmin())
+					r.Use(s.auditMiddleware())
 
-		r.Route("/system", func(r chi.Router) {
-			r.Use(bodyLimit)
-			r.Use(s.auth())
-			r.Use(s.requireAdmin())
-			// кнопки восстановления ниже - самые инвазивные действия оператора
-			r.Use(s.auditMiddleware())
+					r.Get("/queue/stats", s.matchHandler.GetQueueStats)
+					r.Post("/queue/clear", s.matchHandler.ClearQueue)
+					r.Post("/queue/purge", s.matchHandler.PurgeInvalidMatches)
+				})
+			})
 
-			r.Get("/metrics", s.systemHandler.GetMetrics)
-			r.Get("/health", s.systemHandler.GetHealth)
+			r.Route("/ws", func(r chi.Router) {
+				r.Use(s.auth())
 
-			if s.statusHandler != nil {
-				r.Get("/status", s.statusHandler.GetFullStatus)
-			}
+				r.Get("/tournaments/{id}", s.wsHandler.HandleTournament)
+				r.Get("/stats", s.wsHandler.GetStats)
+			})
 
-			// кнопки восстановления из админки
-			if s.recoveryHandler != nil {
-				r.Post("/recovery/outbox-retry", s.recoveryHandler.RetryOutboxErrors)
-				r.Post("/recovery/requeue-compiling", s.recoveryHandler.RequeueCompiling)
-				r.Post("/recovery/reset-stuck-matches", s.recoveryHandler.ResetStuckMatches)
-				r.Post("/recovery/clear-dead-letter", s.recoveryHandler.ClearDeadLetter)
-			}
-		})
-
-		if s.auditHandler != nil {
-			r.Route("/admin", func(r chi.Router) {
+			r.Route("/system", func(r chi.Router) {
 				r.Use(bodyLimit)
 				r.Use(s.auth())
 				r.Use(s.requireAdmin())
+				// кнопки восстановления ниже - самые инвазивные действия оператора
+				r.Use(s.auditMiddleware())
 
-				r.Get("/audit", s.auditHandler.List)
+				r.Get("/metrics", s.systemHandler.GetMetrics)
+				r.Get("/health", s.systemHandler.GetHealth)
+
+				if s.statusHandler != nil {
+					r.Get("/status", s.statusHandler.GetFullStatus)
+				}
+
+				// кнопки восстановления из админки
+				if s.recoveryHandler != nil {
+					r.Post("/recovery/outbox-retry", s.recoveryHandler.RetryOutboxErrors)
+					r.Post("/recovery/requeue-compiling", s.recoveryHandler.RequeueCompiling)
+					r.Post("/recovery/reset-stuck-matches", s.recoveryHandler.ResetStuckMatches)
+					r.Post("/recovery/clear-dead-letter", s.recoveryHandler.ClearDeadLetter)
+				}
 			})
-		}
+
+			if s.auditHandler != nil {
+				r.Route("/admin", func(r chi.Router) {
+					r.Use(bodyLimit)
+					r.Use(s.auth())
+					r.Use(s.requireAdmin())
+
+					r.Get("/audit", s.auditHandler.List)
+				})
+			}
+		})
 	})
 
 	// статика фронта, spa с фолбэком на index.html

@@ -2,8 +2,10 @@ package middleware_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -316,4 +318,20 @@ func TestRateLimit_SubjectAndReadBucket(t *testing.T) {
 		handler.ServeHTTP(httptest.NewRecorder(), req)
 	}
 	mockLimiter.AssertExpectations(t)
+}
+
+// ключ входа - ip и логин (email важнее username, как в auth-сервисе),
+// а хендлер получает тело целиком
+func TestLoginSubject(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"username":"Anya","password":"x"}`:                 "ip:10.0.0.1:login:anya",
+		`{"username":"anya","email":"A@b.c","password":"x"}`: "ip:10.0.0.1:login:a@b.c",
+		`not json`: "ip:10.0.0.1:login:",
+	} {
+		req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+		assert.Equal(t, want, middleware.LoginSubject(req, "10.0.0.1"))
+		rest, err := io.ReadAll(req.Body)
+		assert.NoError(t, err)
+		assert.Equal(t, body, string(rest))
+	}
 }

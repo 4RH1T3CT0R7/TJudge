@@ -33,8 +33,10 @@ info:
     ## Rate Limiting
     Enabled by `RATE_LIMIT_ENABLED`, applies to `/api/v1` only. `RATE_LIMIT_RPM` (default 100)
     requests per minute per user (valid token) or per client IP otherwise; GET and HEAD
-    have a separate counter with 10x the limit. `/auth/login`, `/auth/register` and
-    `/teams/join` have their own per-IP counters with `RATE_LIMIT_RPM`.
+    have a separate counter with 10x the limit. `/auth/register` and `/teams/join` have
+    their own per-IP counters with `RATE_LIMIT_RPM`. `/auth/login` is counted per IP and
+    login (`RATE_LIMIT_RPM`) under a per-IP ceiling of 5x, so an audience behind one NAT
+    does not lock each other out; login and register are not part of the general counter.
     Exceeding the limit returns 429 with headers `X-RateLimit-Limit`, `X-RateLimit-Window`
     and `Retry-After`. Outside production localhost is not limited.
 

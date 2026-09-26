@@ -31,28 +31,28 @@ func (s stubTokens) GetUserFromToken(context.Context, string) (*models.User, err
 
 func (stubTokens) IsTokenBlacklisted(context.Context, string) (bool, error) { return false, nil }
 
-// запоминает ключи и отказывает счётчику по ip, чтобы до хендлера не дойти
+// запоминает ключи и отказывает счётчику с deny в ключе, чтобы до хендлера не дойти
 type keyRecorder struct {
 	mu   sync.Mutex
 	keys []string
+	deny string
 }
 
 func (k *keyRecorder) Allow(_ context.Context, key string, _ int, _ time.Duration) (bool, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.keys = append(k.keys, key)
-	return !strings.Contains(key, ":ip:"), nil
+	return !strings.HasSuffix(key, k.deny), nil
 }
 
-// логин с чужим bearer-токеном всё равно считается по ip: иначе каждый
-// зарегистрированный аккаунт давал бы перебору паролей свой счётчик
-// шлёт POST с bearer-токеном и возвращает код ответа и ключи лимитера
-func postWithToken(t *testing.T, path string) (int, []string, uuid.UUID) {
+// шлёт POST с bearer-токеном и возвращает код ответа и ключи лимитера.
+// лимитер отказывает первому ключу с суффиксом deny
+func postWithToken(t *testing.T, path, body, deny string) (int, []string, uuid.UUID) {
 	t.Helper()
 	log, err := logger.New("error", "json")
 	require.NoError(t, err)
 	userID := uuid.New()
-	limiter := &keyRecorder{}
+	limiter := &keyRecorder{deny: deny}
 	s := NewServer(ServerDeps{
 		// хендлеры не вызываются, но у GameHandler встроенные указатели
 		GameHandler: &handlers.GameHandler{
@@ -67,7 +67,7 @@ func postWithToken(t *testing.T, path string) (int, []string, uuid.UUID) {
 	})
 	defer s.Close()
 
-	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.RemoteAddr = "203.0.113.9:5000"
 	req.Header.Set("Authorization", "Bearer token")
 	rec := httptest.NewRecorder()
@@ -75,20 +75,31 @@ func postWithToken(t *testing.T, path string) (int, []string, uuid.UUID) {
 	return rec.Code, limiter.keys, userID
 }
 
-func TestAuthRateLimit_KeyedByIP(t *testing.T) {
-	code, keys, userID := postWithToken(t, "/api/v1/auth/login")
+// вход считается по паре ip+логин под общим потолком на ip и не попадает в
+// общий лимит api: аудитория за одним NAT не выбивает вход друг другу.
+// чужой bearer-токен ключ не меняет
+func TestLoginRateLimit_KeyedByIPAndLogin(t *testing.T) {
+	code, keys, _ := postWithToken(t, "/api/v1/auth/login", `{"username":" Anya "}`, ":login:anya")
 
 	assert.Equal(t, http.StatusTooManyRequests, code)
 	assert.Equal(t, []string{
-		"ratelimit:api:user:" + userID.String(),
-		"ratelimit:auth:ip:203.0.113.9",
+		"ratelimit:login:ip:203.0.113.9",
+		"ratelimit:login:ip:203.0.113.9:login:anya",
 	}, keys)
+}
+
+// регистрация по ip: по user id каждый новый аккаунт давал бы перебору свой счётчик
+func TestRegisterRateLimit_KeyedByIP(t *testing.T) {
+	code, keys, _ := postWithToken(t, "/api/v1/auth/register", "{}", ":ip:203.0.113.9")
+
+	assert.Equal(t, http.StatusTooManyRequests, code)
+	assert.Equal(t, []string{"ratelimit:auth:ip:203.0.113.9"}, keys)
 }
 
 // вступление по коду тоже по ip: иначе пачка аккаунтов с одного адреса
 // перебирала бы инвайт-коды каждый в своём счётчике
 func TestJoinRateLimit_KeyedByIP(t *testing.T) {
-	code, keys, userID := postWithToken(t, "/api/v1/teams/join")
+	code, keys, userID := postWithToken(t, "/api/v1/teams/join", "{}", ":ip:203.0.113.9")
 
 	assert.Equal(t, http.StatusTooManyRequests, code)
 	assert.Equal(t, []string{
