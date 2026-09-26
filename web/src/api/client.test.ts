@@ -146,3 +146,11 @@ it('отменённый запрос не ретраится и не показ
   expect(calls).toHaveLength(0);
   expect(useToastStore.getState().toasts).toHaveLength(0);
 });
+
+it('ошибка входа не показывает тост: её выводит форма', async () => {
+  useToastStore.setState({ toasts: [] });
+  serve(() => ({ status: 429 }));
+
+  await expect(api.login('u', 'p')).rejects.toBeInstanceOf(AxiosError);
+  expect(useToastStore.getState().toasts).toHaveLength(0);
+});

@@ -77,6 +77,7 @@ function humanErrorMessage(
 // /auth/me и /auth/profile сюда не входят: истёкший access на них
 // должен обновляться, как и на остальных ручках.
 const NO_REFRESH_AUTH_ENDPOINT = /\/auth\/(login|register|refresh|logout)$/;
+const LOGIN_ENDPOINT = /\/auth\/login$/;
 
 // Запас на расхождение часов клиента и сервера.
 const TOKEN_EXPIRY_SKEW_MS = 30000;
@@ -209,8 +210,9 @@ class ApiClient {
         }
 
         // Показываем глобальный error-toast для не-401 ошибок
-        // (401 обрабатываются логикой refresh токена выше)
-        if (error.response?.status !== 401) {
+        // (401 обрабатываются логикой refresh токена выше).
+        // Ошибки входа форма показывает сама
+        if (error.response?.status !== 401 && !LOGIN_ENDPOINT.test(originalRequest?.url ?? '')) {
           const responseData = error.response?.data as
             | Record<string, unknown>
             | undefined;

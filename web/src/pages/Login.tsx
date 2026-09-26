@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { CinematicOverlay } from '../components/CinematicOverlay';
@@ -13,20 +14,35 @@ const GREETINGS = [
   '// рад тебя видеть',
 ];
 
+// Текст ошибки входа по ответу сервера. retryAfter - секунды до повтора при 429
+function describeLoginError(err: unknown): { text: string; code: string; retryAfter?: number } {
+  if (!axios.isAxiosError(err) || !err.response) {
+    return { text: '// нет связи с сервером, проверьте сеть', code: 'сети' };
+  }
+  const { status, headers } = err.response;
+  if (status === 401) return { text: '// неверный логин или пароль', code: '401' };
+  if (status === 429) {
+    const retryAfter = Number(headers['retry-after']) || 60;
+    return { text: `// слишком много попыток входа, подождите ${retryAfter} с`, code: '429', retryAfter };
+  }
+  if (status >= 500) return { text: '// сервер недоступен, попробуйте через минуту', code: String(status) };
+  return { text: `// не удалось войти (код ${status})`, code: String(status) };
+}
+
 export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   // позиция каретки в поле пароля, null - поле не в фокусе
   const [passwordCaret, setPasswordCaret] = useState<number | null>(null);
+  // ошибка входа держится до правки полей, 429 - до конца отсчёта
   const [error, setError] = useState('');
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [validationError, setValidationError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
   const [shakeInvader, setShakeInvader] = useState(false);
-  const [jumpInvader, setJumpInvader] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
   const speechTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const errorTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [showCinematic, setShowCinematic] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
@@ -65,9 +81,29 @@ export function Login() {
     }
   }, [username]);
 
+  useEffect(() => {
+    if (retryAt === null) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= retryAt) {
+        setRetryAt(null);
+        setError('');
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [retryAt]);
+  const retryIn = retryAt !== null ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : 0;
+
+  // правка поля снимает ошибку входа, кроме отсчёта после 429
+  const clearFieldError = () => {
+    setValidationError(null);
+    if (retryAt === null) setError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    clearTimeout(errorTimerRef.current);
+    if (retryAt !== null) return;
     setError('');
     setValidationError(null);
 
@@ -95,20 +131,17 @@ export function Login() {
         localStorage.setItem(cinematicKey, '1');
         setShowCinematic(true);
       } else {
-        setSpeechBubble('<3');
-        setJumpInvader(true);
-        setTimeout(() => setJumpInvader(false), 700);
-        setTimeout(() => {
-          setSpeechBubble('{ доступ: "открыт" }');
-          setLoginSuccess(true);
-        }, 500);
-        setTimeout(() => navigate(from), 1400);
+        navigate(from);
       }
-    } catch {
-      setError('// неверный логин или пароль');
-      clearTimeout(errorTimerRef.current);
-      errorTimerRef.current = setTimeout(() => setError(''), 3000);
-      setSpeechBubble('// ошибка 401');
+    } catch (err) {
+      const { text, code, retryAfter } = describeLoginError(err);
+      setError(text);
+      if (retryAfter) {
+        const t = Date.now();
+        setNow(t);
+        setRetryAt(t + retryAfter * 1000);
+      }
+      setSpeechBubble(`// ошибка ${code}`);
       speechTimerRef.current = setTimeout(() => setSpeechBubble(null), 3000);
       setShakeInvader(true);
       setTimeout(() => setShakeInvader(false), 600);
@@ -153,13 +186,12 @@ export function Login() {
     <div className="flex-1 flex flex-col items-center justify-center pb-12">
       <div className="w-full max-w-sm mx-auto py-2">
         {/* Invader - z-index выше фиксированного header (z-50), чтобы speech bubble не обрезался */}
-        <div className={`flex justify-center mb-3 relative z-[60] ${loginSuccess ? 'animate-login-success' : ''}`}>
+        <div className="flex justify-center mb-3 relative z-[60]">
           <SpaceInvader
             size="md"
             interactive
-            eyeOverride={loginSuccess ? 'wide' : getEyeOverride()}
+            eyeOverride={getEyeOverride()}
             shake={shakeInvader}
-            jump={jumpInvader}
             speechBubble={speechBubble}
           />
         </div>
@@ -197,7 +229,7 @@ export function Login() {
                 type="text"
                 id="username"
                 value={username}
-                onChange={(e) => { setUsername(e.target.value); setValidationError(null); }}
+                onChange={(e) => { setUsername(e.target.value); clearFieldError(); }}
                 onFocus={(e) => {
                   setFocusedField('username');
                   wrapperFocus(e.currentTarget.parentElement);
@@ -238,6 +270,7 @@ export function Login() {
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setPasswordCaret(e.target.selectionStart);
+                    clearFieldError();
                   }}
                   onSelect={(e) => setPasswordCaret(e.currentTarget.selectionStart)}
                   onFocus={(e) => {
@@ -276,11 +309,11 @@ export function Login() {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || retryIn > 0}
             className="w-full btn btn-primary py-2.5"
             style={monoFont}
           >
-            {isLoading ? '// загрузка...' : 'auth.login()'}
+            {isLoading ? '// загрузка...' : retryIn > 0 ? `// повтор через ${retryIn} с` : 'auth.login()'}
           </button>
         </form>
       </div>
