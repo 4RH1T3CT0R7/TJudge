@@ -38,8 +38,11 @@ export function AutoRoundCountdown({ status, tournamentActive }: AutoRoundCountd
   const nextAt = lastRunAt ? new Date(lastRunAt).getTime() + status.auto_round_interval_seconds * 1000 : null;
   const msLeft = nextAt !== null ? nextAt - now : null;
   const waitText = status.auto_round_wait ? WAIT_TEXT[status.auto_round_wait] : undefined;
-  // отсчёт кончился, причины нет: статус перечитывается, пока планировщик не ответит
-  const awaitingCheck = enabled && !waitText && msLeft !== null && msLeft <= 0;
+  // статус перечитывается, пока планировщик не ответит (отсчёт кончился, причины нет)
+  // и пока идёт раунд: последний match_result мог перечитать статус раньше, чем
+  // планировщик сменил matches_running, а других событий может не быть
+  const awaitingCheck =
+    enabled && (status.auto_round_wait === 'matches_running' || (!waitText && msLeft !== null && msLeft <= 0));
 
   useEffect(() => {
     if (!awaitingCheck) return;

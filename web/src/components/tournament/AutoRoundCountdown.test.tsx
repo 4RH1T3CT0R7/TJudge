@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, cleanup, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AutoRoundCountdown } from './AutoRoundCountdown';
+import { queryKeys } from '../../api/queryKeys';
 import type { TournamentGameWithDetails } from '../../types';
 
 const status = (over: Partial<TournamentGameWithDetails>): TournamentGameWithDetails => ({
@@ -33,5 +34,22 @@ describe('AutoRoundCountdown', () => {
     const now = new Date().toISOString();
     expect(text(status({ auto_round_last_run_at: now, auto_round_wait: 'interval' }))).toMatch(/^следующий раунд через (00:59|01:00)$/);
     expect(text(status({ auto_round_last_run_at: now }), false)).toBe('');
+  });
+
+  it('пока идёт раунд, статус перечитывается: причина сменится без событий', () => {
+    vi.useFakeTimers();
+    try {
+      const client = new QueryClient();
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+      render(
+        <QueryClientProvider client={client}>
+          <AutoRoundCountdown status={status({ auto_round_last_run_at: new Date().toISOString(), auto_round_wait: 'matches_running' })} tournamentActive />
+        </QueryClientProvider>
+      );
+      act(() => { vi.advanceTimersByTime(6000); });
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tournamentGamesStatus('t1') });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
