@@ -30,6 +30,8 @@
 
 /* Glow CSS custom properties */
 :root {
+  /* единое кольцо фокуса для всех элементов */
+  --focus: var(--color-primary-400);
   --glow-primary: 0 0 20px rgba(139,92,246,0.4);
   --glow-primary-strong: 0 0 40px rgba(139,92,246,0.6);
   --glow-green: 0 0 20px rgba(74,222,128,0.3);
@@ -158,14 +160,18 @@
   }
 
   *:focus-visible {
-    @apply outline-none ring-2 ring-primary-500 ring-offset-1;
-    ring-offset-color: #0a0a0b;
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 
-  /* Inputs use background/border transitions, not ring */
-  input:focus-visible,
+  /* списки вкладок прокручиваются по ширине и обрезали бы внешнее кольцо */
+  [role="tab"]:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* текстовые поля показывают фокус рамкой и фоном, кольцо им не нужно */
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]):focus-visible,
   textarea:focus-visible {
-    @apply ring-0 ring-offset-0;
     outline: none;
   }
 
@@ -179,13 +185,11 @@
   /* Buttons - ghost/outline style (moshi-like) */
   .btn {
     @apply px-4 py-2 rounded-lg font-medium inline-flex items-center justify-center gap-2;
-    @apply focus:outline-none focus:ring-2 focus:ring-offset-1;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     @apply transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out;
     @apply active:scale-[0.98];
     position: relative;
     overflow: hidden;
-    ring-offset-color: #0a0a0b;
   }
 
   .btn::after {
@@ -214,9 +218,6 @@
     box-shadow: 0 0 50px rgba(139,92,246,0.25), 0 10px 40px -10px rgba(139,92,246,0.3);
     transform: translateY(-2px);
   }
-  .btn-primary:focus {
-    @apply ring-primary-400;
-  }
 
   .btn-secondary {
     background: transparent;
@@ -230,9 +231,6 @@
     box-shadow: 0 0 30px rgba(156,163,175,0.15);
     transform: translateY(-1px);
   }
-  .btn-secondary:focus {
-    @apply ring-gray-400;
-  }
 
   .btn-danger {
     background: transparent;
@@ -243,9 +241,6 @@
     background: rgba(248,113,113,0.08);
     border-color: #dc2626;
     box-shadow: 0 0 20px rgba(248,113,113,0.3);
-  }
-  .btn-danger:focus {
-    @apply ring-red-400;
   }
 
   .btn-warning {
@@ -258,9 +253,6 @@
     border-color: #d97706;
     box-shadow: 0 0 20px rgba(251,191,36,0.3);
   }
-  .btn-warning:focus {
-    @apply ring-amber-400;
-  }
 
   .btn-success {
     background: transparent;
@@ -272,9 +264,6 @@
     border-color: #22c55e;
     box-shadow: var(--glow-green);
   }
-  .btn-success:focus {
-    @apply ring-green-400;
-  }
 
   .btn-warning {
     background: transparent;
@@ -285,9 +274,6 @@
     background: rgba(251,191,36,0.08);
     border-color: #f59e0b;
     box-shadow: 0 0 20px rgba(251,191,36,0.3);
-  }
-  .btn-warning:focus {
-    @apply ring-amber-400;
   }
 
   /* Inputs - transparent moshi-style */
@@ -1153,10 +1139,6 @@
     @apply transition-transform duration-200 ease-out hover:-translate-y-1;
   }
 
-  /* Focus ring animation */
-  .focus-ring {
-    @apply focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-2 transition-shadow duration-150;
-  }
 
   /* Reveal on scroll */
   .reveal-on-scroll {
