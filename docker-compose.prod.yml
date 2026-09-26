@@ -74,11 +74,9 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  # Database migrations
+  # Миграции из образа той же версии, что api и worker
   migrate:
-    build:
-      context: .
-      dockerfile: docker/migrate/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-migrate:${VERSION:-latest}
     container_name: tjudge-migrate-prod
     environment:
       - DB_HOST=tjudge-postgres-prod
@@ -233,6 +231,7 @@ services:
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - EXECUTOR_DOCKER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-executor:${VERSION:-latest}
+      - EXECUTOR_BUILDER_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER:-4rh1t3ct0r7}/tjudge-builder:${VERSION:-latest}
       - EXECUTOR_TIMEOUT=60s
       - EXECUTOR_DEFAULT_ITERATIONS=1000
       - PROGRAMS_PATH=/data/programs

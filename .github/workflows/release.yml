@@ -5,13 +5,22 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 # ghcr требует lowercase, поэтому owner прописан руками
 env:
   REG: ghcr.io/4rh1t3ct0r7
 
 jobs:
+  # тег мог не пройти ci (ci идёт только на main и pr), поэтому те же
+  # проверки гоняются на нём до сборки образов
+  test:
+    uses: ./.github/workflows/ci.yml
+
   images:
     runs-on: ubuntu-latest
+    needs: test
     permissions:
       contents: read
       packages: write
@@ -29,16 +38,17 @@ jobs:
       - name: build
         run: |
           V=${GITHUB_REF_NAME#v}
-          docker build -t $REG/tjudge-api:$V --build-arg VERSION=$GITHUB_REF_NAME -f docker/api/Dockerfile .
-          docker build -t $REG/tjudge-worker:$V -f docker/worker/Dockerfile .
-          docker build -t $REG/tjudge-executor:$V -f docker/tjudge/Dockerfile .
-          docker build -t $REG/tjudge-builder:$V -f docker/builder/Dockerfile .
+          docker build -t "$REG/tjudge-api:$V" --build-arg VERSION="$GITHUB_REF_NAME" -f docker/api/Dockerfile .
+          docker build -t "$REG/tjudge-worker:$V" -f docker/worker/Dockerfile .
+          docker build -t "$REG/tjudge-migrate:$V" -f docker/migrate/Dockerfile .
+          docker build -t "$REG/tjudge-executor:$V" -f docker/tjudge/Dockerfile .
+          docker build -t "$REG/tjudge-builder:$V" -f docker/builder/Dockerfile .
 
       - name: push
         run: |
           V=${GITHUB_REF_NAME#v}
-          for img in tjudge-api tjudge-worker tjudge-executor tjudge-builder; do
-            docker push $REG/$img:$V
+          for img in tjudge-api tjudge-worker tjudge-migrate tjudge-executor tjudge-builder; do
+            docker push "$REG/$img:$V"
           done
 
       # latest только для финальных релизов: прод-compose без VERSION берёт его
@@ -46,9 +56,9 @@ jobs:
         if: ${{ !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
         run: |
           V=${GITHUB_REF_NAME#v}
-          for img in tjudge-api tjudge-worker tjudge-executor tjudge-builder; do
-            docker tag $REG/$img:$V $REG/$img:latest
-            docker push $REG/$img:latest
+          for img in tjudge-api tjudge-worker tjudge-migrate tjudge-executor tjudge-builder; do
+            docker tag "$REG/$img:$V" "$REG/$img:latest"
+            docker push "$REG/$img:latest"
           done
 
   deploy:
@@ -58,34 +68,43 @@ jobs:
 
     steps:
       - name: deploy
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,TAG
-          script_stop: true
           script: |
             set -e
             cd ~/TJudge
-            git pull origin main
+            # compose, скрипты и конфиги той же версии, что и образы
+            git fetch --tags --force origin
+            git checkout -q --detach "$TAG"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
             export GITHUB_REPOSITORY_OWNER=4rh1t3ct0r7
-            export HOST_PROGRAMS_PATH="$(pwd)/data/programs"
-            mkdir -p data/programs
-            # gid docker.sock у каждого хоста свой, пишется в .env один раз
+            export HOST_PROGRAMS_PATH="$PWD/data/programs"
+            # значения хоста пишутся в .env один раз, их же берёт ручной docker compose
             grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
+            grep -q '^HOST_PROGRAMS_PATH=' .env 2>/dev/null || echo "HOST_PROGRAMS_PATH=$HOST_PROGRAMS_PATH" >> .env
             ./scripts/init-secrets.sh
-            V=${TAG#v}
-            VERSION=$V docker compose -f docker-compose.prod.yml pull
-            VERSION=$V docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            export VERSION=${TAG#v}
+            P="docker compose -f docker-compose.prod.yml"
+            $P pull
+            # образы песочниц не сервисы compose, pull их не тянет
+            docker pull "ghcr.io/4rh1t3ct0r7/tjudge-executor:$VERSION"
+            docker pull "ghcr.io/4rh1t3ct0r7/tjudge-builder:$VERSION"
+            $P up -d --remove-orphans
             # проверка что api реально работает на запрошенной версии
-            requested="ghcr.io/4rh1t3ct0r7/tjudge-api:$V"
+            requested="ghcr.io/4rh1t3ct0r7/tjudge-api:$VERSION"
             running=$(docker inspect tjudge-api-1 --format '{{.Image}}' 2>/dev/null || true)
             expected=$(docker image inspect "$requested" --format '{{.Id}}' 2>/dev/null || true)
             if [ -z "$expected" ] || [ "$running" != "$expected" ]; then
               echo "api работает не на $requested — деплой не применился"
               exit 1
+            fi
+            # бэкап в профиле: включённый пересобирается из этой версии
+            if [ -n "$(docker ps -q -f name=^tjudge-backup$)" ]; then
+              $P --profile backup up -d --build backup
             fi
             docker image prune -f
             docker builder prune -f
