@@ -65,6 +65,7 @@ Worker на старте проверяет образы `EXECUTOR_DOCKER_IMAGE`
 ```bash
 cd ~/TJudge
 git fetch --tags --force origin && git checkout -q --detach v<версия>
+touch .env && { [ -z "$(tail -c1 .env)" ] || echo >> .env; }   # перевод строки перед дописыванием
 grep -q '^DOCKER_SOCK_GID=' .env || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
 grep -q '^HOST_PROGRAMS_PATH=' .env || echo "HOST_PROGRAMS_PATH=$PWD/data/programs" >> .env
 sed -i '/^VERSION=/d' .env && echo "VERSION=<версия>" >> .env
@@ -82,6 +83,7 @@ make admin EMAIL=admin@example.com                   # первый админ (
 
 До этой версии prod хранил программы в volume `tjudge_programs_data`, а бэкапы — в `tjudge_backups_data`. Один раз, при первой выкладке:
 
+0. Дамп базы на старой версии, не зависящий от скриптов: `docker exec tjudge-postgres-prod pg_dump --no-owner --no-acl -U tjudge tjudge | gzip > ~/tjudge_pre_upgrade.sql.gz`. Старые инвайт-коды после 000043 вернуть можно только из него.
 1. До пуша тега проверить `.env`: `HOST_PROGRAMS_PATH` либо абсолютный, либо строки нет (деплой допишет `$PWD/data/programs`); `BASE_URL=https://<домен>` (CORS и WebSocket по умолчанию берут его, `*` по умолчанию больше нет); `NGINX_BIND` по §2; Telegram по §4 и §5.
 2. Деплой. `prepare-data.sh` останавливает api и worker, копирует volume в `HOST_PROGRAMS_PATH`, сверяет число файлов, отдаёт каталог uid 1000 и ставит в volume отметку `.migrated-from-volume`, поэтому следующие деплои перенос не повторяют. Его ошибки прерывают деплой до `up`:
    - `файлы есть и в volume …, и в …: объедините их вручную` — каталог хоста уже не пуст. Файлы названы по uuid, конфликтов имён нет: скопировать недостающее и поставить отметку, затем повторить деплой.
@@ -98,20 +100,20 @@ make admin EMAIL=admin@example.com                   # первый админ (
    - `в БД программ: N, а … пуст` — таблица `programs` не пуста, а каталог пуст: не тот путь в `.env` или несмонтированный диск.
    - `HOST_PROGRAMS_PATH должен быть абсолютным путём` — исправить `.env`.
 3. Руками: старые бэкапы перенести в `./backups`, где их видят `restore.sh` и ретенция контейнера бэкапа: `docker run --rm -v tjudge_backups_data:/b -v "$PWD/backups":/out alpine sh -c 'cp -p /b/* /out/'`.
-4. После проверки (программы компилируются, матчи идут, бэкапы на месте): `docker volume rm tjudge_programs_data tjudge_backups_data`.
+4. После проверки (программы компилируются, матчи идут, в `./backups` появилась пара новых файлов): `docker volume rm tjudge_programs_data tjudge_backups_data`.
 
 ## 4. Резервное копирование
 
-Контейнер `tjudge-backup`, включение: `P --profile backup up -d backup` (self-hosted: `S --profile backup up -d backup`). Раз в сутки (`BACKUP_INTERVAL_SECONDS`) он пишет в `./backups` пару файлов с общей меткой времени: `tjudge_<время>.sql.gz` (pg_dump) и `programs_<время>.tar.gz` (каталог программ). Хранение 30 дней (`BACKUP_RETENTION_DAYS`). Копия до 50 МБ уходит в Telegram, только если в `.env` заданы `TELEGRAM_BOT_TOKEN` и `BACKUP_TELEGRAM_CHAT_ID` (отдельный чат: в дампе email и хеши паролей).
+Контейнер `tjudge-backup`, включение: `P --profile backup up -d backup` (self-hosted: `S --profile backup up -d backup`). Сразу после старта и дальше раз в сутки (`BACKUP_INTERVAL_SECONDS`) он пишет в `./backups` пару файлов с общей меткой времени: `tjudge_<время>.sql.gz` (pg_dump) и `programs_<время>.tar.gz` (каталог программ). Хранение 30 дней (`BACKUP_RETENTION_DAYS`). Копия до 50 МБ уходит в Telegram, только если в `.env` заданы `TELEGRAM_BOT_TOKEN` и `BACKUP_TELEGRAM_CHAT_ID` (отдельный чат: в дампе email и хеши паролей).
 
-Ручной бэкап — через sudo, файлы программ принадлежат uid 1000: `sudo make backup` (self-hosted) или `sudo POSTGRES_CONTAINER=tjudge-postgres-prod ./scripts/backup.sh ./backups` (prod). Он пишет ту же пару файлов и старые не удаляет. `.env` он не читает, поэтому в Telegram отправляет, только если переменные заданы в окружении. Проверка через сутки: `docker logs tjudge-backup`, `ls -lt backups | head`.
+Ручной бэкап — через sudo, файлы программ принадлежат uid 1000: `sudo make backup` (self-hosted) или `sudo POSTGRES_CONTAINER=tjudge-postgres-prod ./scripts/backup.sh ./backups` (prod). Он пишет ту же пару файлов и старые не удаляет. `.env` он не читает, поэтому в Telegram отправляет, только если переменные заданы в окружении. Проверка: `docker logs tjudge-backup`, `ls -lt backups | head`. При запущенном контейнере `make doctor` ставит CRITICAL, если в `./backups` нет дампа или архива программ моложе `DOCTOR_BACKUP_MAX_AGE_HOURS` (26 ч).
 
 ## 5. Мониторинг
 
-Два режима (`MONITORING_MODE` в `.env`, по умолчанию `standalone`). api и worker из prod-compose подключены к внешней docker-сети `monitoring` с лейблами `prometheus_job: tjudge-api / tjudge-worker`, оба режима скрейпят по этой сети. Оба стека одновременно не поднимать — порты конфликтуют.
+Два режима, по умолчанию `standalone`. api и worker из prod-compose подключены к внешней docker-сети `monitoring` с лейблами `prometheus_job: tjudge-api / tjudge-worker`, оба режима скрейпят по этой сети. Оба стека одновременно не поднимать — порты конфликтуют.
 
 - **standalone** — стек из репо: `make monitoring-up` (= `docker compose -f docker-compose.monitoring.yml up -d`). В self-hosted мониторинг встроен в `docker-compose.selfhosted.yml` профилем `monitoring`.
-- **external** — общий стек infra-monitoring (Prometheus, Grafana, Loki, Alertmanager, Pushgateway на той же сети, авто-дискавери по docker-лейблам): `MONITORING_MODE=external` в `.env`, стек — `cd ~/infra-monitoring && docker compose up -d`.
+- **external** — общий стек infra-monitoring (Prometheus, Grafana, Loki, Alertmanager, Pushgateway на той же сети, авто-дискавери по docker-лейблам): стек — `cd ~/infra-monitoring && docker compose up -d`, `make monitoring-up` здесь не нужен (с `MONITORING_MODE=external` в окружении он ничего не поднимает; `.env` Makefile не читает).
 
 Порты одинаковые, в standalone только на 127.0.0.1 (снаружи — ssh-туннель): Prometheus 9092 (правила — `deployments/prometheus/alerts/`), Alertmanager 9093, Pushgateway 9094 (метрики doctor'а), Grafana 3000 (дашборды «TJudge — Обзор системы» и «TJudge — Doctor»; логин `GF_ADMIN_USER`, по умолчанию `admin`, пароль — в `secrets/grafana_admin_password.txt`, его создаёт `init-secrets.sh`, `make monitoring-up` вызывает его сам). Alertmanager без Telegram шлёт в получатель `null`. С `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` в `.env` получатель telegram добавляется сам и становится основным, файлы править не нужно. Те же переменные нужны отчётам doctor. Если `make doctor` пишет «Prometheus НЕ скрейпит API», почти всегда виноват старый Prometheus в другой docker-сети: остановить его и поднять стек как выше.
 
@@ -134,7 +136,7 @@ make admin EMAIL=admin@example.com                   # первый админ (
 
 Штатное обновление — новый тег (§3): `P up -d` пересоздаёт контейнеры, а `migrate` применяет миграции до старта нового api. Пока идёт миграция, старый api ещё работает, поэтому миграции должны быть совместимы с предыдущей версией. 000042–000045 такие: добавляют nullable-столбец, меняют инвайт-коды и удаляют индексы-дубли. 000045 запускать в окно низкой нагрузки (§9.7). После 000043 капитанам pending-турниров нужно заново раздать инвайт-коды. Проверка схемы: `P run --rm migrate ./migrate version` → `dirty: false`.
 
-Откат — на текущем checkout: `git checkout` тега, выпущенного до перехода на каталог программ хоста, вернёт volume `programs_data` со старыми файлами. Down-миграции не нужны. Образы песочниц той версии скачиваются заранее: worker тянет их без авторизации ghcr.
+Откат — сменой `VERSION` на текущем checkout. `git checkout` тега, выпущенного до перехода на каталог программ хоста, не делать: его compose снова смонтирует volume `programs_data`, и программы, загруженные после переноса, пропадут. Down-миграции не нужны. Worker и образ матча `tjudge-executor` откатываются только вместе, это обеспечивает общая `VERSION`: новый worker со старым образом не может запустить матч (матчи возвращаются в pending), старый worker с новым образом играет без разведения ботов по uid. Образы песочниц той версии скачиваются заранее: worker тянет их без авторизации ghcr.
 
 ```bash
 V=<прошлая версия>
@@ -178,7 +180,7 @@ make doctor                         # терминальный отчёт + tele
 DOCTOR_TELEGRAM=always make doctor  # отчёт в telegram даже когда всё ок
 ```
 
-Проверяет контейнеры (включая crash-loop по RestartCount), образы, health API/worker, глубокий статус (нужны `ADMIN_USER`/`ADMIN_PASSWORD`), Prometheus (up-цели, 5xx против SLO, активные алерты), ошибки в логах api/worker за `DOCTOR_LOG_WINDOW`, диск. Вердикт: HEALTHY / DEGRADED / CRITICAL (exit 1). Отчёт уходит в Telegram (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`) и в Pushgateway (`PUSHGATEWAY_URL`, по умолчанию `http://localhost:9094`) для дашборда «TJudge — Doctor» и алертов `DoctorCritical`/`DoctorDegraded`/`DoctorStale`. Cron: `*/30 * * * * cd ~/TJudge && ./scripts/doctor.sh >/dev/null 2>&1`.
+Проверяет контейнеры (включая crash-loop по RestartCount), образы, health API/worker, глубокий статус (нужны `ADMIN_USER`/`ADMIN_PASSWORD`), Prometheus (up-цели, 5xx против SLO, активные алерты), ошибки в логах api/worker за `DOCTOR_LOG_WINDOW` (уровень error; ответы 4xx api пишет как warn), диск, свежесть бэкапов (§4). Вердикт: HEALTHY / DEGRADED / CRITICAL (exit 1). Отчёт уходит в Telegram (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`) и в Pushgateway (`PUSHGATEWAY_URL`, по умолчанию `http://localhost:9094`) для дашборда «TJudge — Doctor» и алертов `DoctorCritical`/`DoctorDegraded`/`DoctorStale`. Cron: `*/30 * * * * cd ~/TJudge && ./scripts/doctor.sh >/dev/null 2>&1`.
 
 ### Точечные проверки
 
@@ -246,7 +248,7 @@ Rate limiter api переключается на запасной in-memory ли
 
 ### 9.5 Dead-letter и WebSocket
 
-- Растёт `tjudge_queue_deadletter_size` (алерт `DeadLetterGrowing`): задачи, которые не удалось обработать. Причину искать в логах worker'а, очистка — кнопка во вкладке «Система» (`POST /api/v1/system/recovery/clear-dead-letter`).
+- Алерт `DeadLetterGrowing` (больше 10 записей в dead-letter за 10 минут, `tjudge_queue_deadletter_push_total`, размер — `tjudge_queue_deadletter_size`): задачи, которые не удалось разобрать. Причину искать в логах worker'а, очистка — кнопка во вкладке «Система» (`POST /api/v1/system/recovery/clear-dead-letter`).
 - Клиентский flood по WebSocket: у каждого клиента лимит 10 сообщений в секунду (burst 20), нарушитель получает close 1008.
 
 ### 9.6 Расследование admin-действий
@@ -304,6 +306,8 @@ WHERE email = 'foo@bar.com';
 - `WORKER_TIMEOUT` у api и worker должен совпадать: от него считается порог зависшего матча в recovery и в статусе.
 - Рейтинг применяется ровно один раз: outbox-задача и строки участников блокируются в одной транзакции.
 - Worker монтирует `docker.sock` и работает не от root: на хосте нужна группа docker с GID из `DOCKER_SOCK_GID` (prod) или `DOCKER_GID` (self-hosted).
+- Матч-контейнер: без сети, корень только на чтение, два бота под случайной парой uid из 20000–59999 без capabilities. На бота — `(EXECUTOR_PIDS_LIMIT - 4) / 2` процессов и потоков (weak 23, medium и prod 48, strong 98), файлы до 32 МБ, общий `/tmp` 64 МБ. При userns-remap на хосте диапазон subuid должен покрывать uid до 60000.
+- Seccomp-профиль матчей (`deployments/security/seccomp-executor.json`, allowlist) ни в одном compose не включён. Включение: смонтировать файл в worker и задать `EXECUTOR_SECCOMP_PROFILE=<путь в контейнере>`. Запрещённый профилем syscall засчитывается как ошибка программы, поэтому сначала прогнать матчи на всех 10 языках.
 
 ## 13. Профили железа и быстрый self-hosted старт
 
