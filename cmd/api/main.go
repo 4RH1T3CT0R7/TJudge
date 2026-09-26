@@ -51,7 +51,7 @@ func main() {
 
 	log.Info("Starting TJudge API Server",
 		zap.Int("port", cfg.Server.Port),
-		zap.String("env", "production"),
+		zap.String("env", os.Getenv("ENVIRONMENT")),
 	)
 
 	// OpenTelemetry tracing (опционально, если задан OTEL_EXPORTER_OTLP_ENDPOINT).
