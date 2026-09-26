@@ -91,8 +91,15 @@ fi
 log_info "Building Docker images..."
 compose build --parallel
 
-# 5. Start services
+# 5. Start services. POSTGRES_PASSWORD_FILE действует только при создании тома,
+# а в старых установках пароль роли шёл из DB_PASSWORD: источник истины - secrets/
 log_info "Starting services..."
+compose up -d --wait postgres
+# shellcheck disable=SC2016 # $POSTGRES_USER раскрывается в контейнере
+compose exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' <<'SQL'
+\set pw `cat /run/secrets/db_password`
+ALTER ROLE CURRENT_USER PASSWORD :'pw';
+SQL
 compose up -d
 
 # 6. Wait for services: api не публикуется на хост, проверка изнутри контейнера
