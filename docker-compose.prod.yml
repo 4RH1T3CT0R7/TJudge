@@ -169,8 +169,10 @@ services:
       - TRUSTED_PROXIES=172.28.0.0/16
       - PROGRAMS_PATH=/data/programs
       - BASE_URL=${BASE_URL:-https://tjudge.example.com}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
-      - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:-*}
+      # без значения cross-origin запросы запрещены, а websocket в production
+      # пускает только свой хост; фронт отдаётся с того же origin, ему хватает
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:-}
     secrets:
       - db_password
       - redis_password
