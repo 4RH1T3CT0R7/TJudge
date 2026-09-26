@@ -197,15 +197,23 @@ func TestDistributedLock_WithLock_CancelsOnLockLoss(t *testing.T) {
 		assert.Equal(t, "чужой-токен", v)
 	})
 
-	t.Run("редис недоступен дольше ttl", func(t *testing.T) {
+	t.Run("редис недоступен", func(t *testing.T) {
 		cache, mr := setupTestCacheWithMR(t)
 		lock := NewDistributedLock(cache)
 
-		err := lock.WithLock(context.Background(), "test-down", 600*time.Millisecond, func(ctx context.Context) error {
+		// ttl 1.5с, тики раз в 500мс: отмена не позже истечения ключа,
+		// а не после ещё одного тика и таймаута EVAL
+		const ttl = 1500 * time.Millisecond
+		var elapsed time.Duration
+		err := lock.WithLock(context.Background(), "test-down", ttl, func(ctx context.Context) error {
+			start := time.Now()
 			mr.Close()
-			return waitCancel(ctx)
+			err := waitCancel(ctx)
+			elapsed = time.Since(start)
+			return err
 		})
 		require.ErrorIs(t, err, ErrLockLost)
+		assert.Less(t, elapsed, ttl+200*time.Millisecond)
 	})
 }
 

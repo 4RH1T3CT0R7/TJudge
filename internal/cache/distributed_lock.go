@@ -148,7 +148,8 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 }
 
 // renewLoop продлевает ttl лока пока не отменят контекст. onLost вызывается,
-// когда лок точно потерян: чужой токен, ключ протух или редис недоступен дольше ttl
+// когда лок потерян (чужой токен, ключ протух) или протухнет до следующего тика,
+// потому что редис недоступен
 func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token string, ttl time.Duration, done chan struct{}, onLost func()) {
 	defer close(done)
 
@@ -175,7 +176,8 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			renewCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			// EVAL дольше остатка ttl бессмыслен: ключ к этому моменту протухнет
+			renewCtx, cancel := context.WithTimeout(context.Background(), min(2*time.Second, ttl-time.Since(lastRenew)))
 			result, err := dl.cache.Eval(renewCtx, script, []string{lockKey}, token, ttlMs)
 			cancel()
 			if err != nil {
@@ -183,8 +185,8 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 					zap.String("key", key),
 					zap.Error(err),
 				)
-				// без продления дольше ttl ключ уже протух
-				if time.Since(lastRenew) >= ttl {
+				// до следующего тика ключ протухнет, работать дальше без лока нельзя
+				if time.Since(lastRenew)+interval >= ttl {
 					onLost()
 					return
 				}
