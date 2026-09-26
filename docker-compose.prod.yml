@@ -1,5 +1,8 @@
-# Production Docker Compose с Docker Secrets
-# Использование: docker-compose -f docker-compose.prod.yml up -d
+# Production Docker Compose с Docker Secrets.
+# Выкладка - .github/workflows/release.yml по тегу v*. Вручную, из ~/TJudge на
+# checkout нужного тега: ./scripts/init-secrets.sh, ./scripts/prepare-data.sh,
+# VERSION=<версия> docker compose -f docker-compose.prod.yml up -d
+# (HOST_PROGRAMS_PATH и DOCKER_SOCK_GID release.yml пишет в .env)
 
 secrets:
   db_password:
