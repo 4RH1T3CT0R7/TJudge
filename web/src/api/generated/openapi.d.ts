@@ -1004,6 +1004,7 @@ export interface paths {
          * Upload program
          * @description Uploads a new version of the team program as `multipart/form-data`.
          *     The caller must be a member of the team, and the team must belong to the tournament.
+         *     The game must be attached to the tournament, otherwise the server returns 400.
          *     The server chooses the file path; there is no way to set it from the client.
          *
          *     Maximum file size: 10 MB. A team can upload at most 100 versions per game,
