@@ -410,6 +410,33 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	assert.Equal(t, int64(1), size)
 }
 
+// go-redis не прерывает BRPOP по отмене ctx: воркер, снятый во время ожидания,
+// получает матч, и его dedup-ключ всё равно снимается, иначе повторная
+// постановка молча отсекается до истечения dedupTTL
+func TestQueueManager_Dequeue_CanceledDuringWait(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	got := make(chan *models.Match, 1)
+	go func() {
+		m, _ := qm.Dequeue(ctx)
+		got <- m
+	}()
+	time.Sleep(300 * time.Millisecond) // BRPOP уже ждёт
+	cancel()
+
+	match := testMatch(models.PriorityHigh)
+	require.NoError(t, qm.Enqueue(context.Background(), match))
+	dequeued := <-got
+	require.NotNil(t, dequeued)
+	assert.Equal(t, match.ID, dequeued.ID)
+
+	require.NoError(t, qm.Enqueue(context.Background(), match))
+	size, err := qm.GetQueueSize(context.Background(), models.PriorityHigh)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}
+
 // снимок метрики: гейдж или гистограмма
 func readMetric(t *testing.T, m prometheus.Metric) *dto.Metric {
 	t.Helper()

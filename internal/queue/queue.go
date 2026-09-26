@@ -224,6 +224,11 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 		return nil, nil
 	}
 
+	// элемент из Redis уже снят. go-redis не прерывает BRPOP по отмене ctx,
+	// и воркер, снятый во время ожидания, всё равно получает матч: учёт после
+	// выборки (dedup-ключ, dead-letter, метрики) идёт без отмены
+	ctx = context.WithoutCancel(ctx)
+
 	// result[0] - имя очереди, result[1] - данные
 	var entry queuedMatch
 	if err := json.Unmarshal([]byte(result[1]), &entry); err != nil {
@@ -314,8 +319,8 @@ func (qm *QueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 
 // updateQueueSizeMetrics - обновляет гейджи размеров, не чаще раза в секунду
 func (qm *QueueManager) updateQueueSizeMetrics(ctx context.Context) {
-	// воркер, снятый автоскейлером, выходит из BRPOP с уже отменённым ctx:
-	// LLEN по нему только засоряет лог ошибками
+	// воркер, снятый автоскейлером, выходит из пустого BRPOP с уже отменённым
+	// ctx: LLEN по нему только засоряет лог ошибками
 	if ctx.Err() != nil {
 		return
 	}
