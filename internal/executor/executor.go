@@ -247,6 +247,11 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 		securityOpts = append(securityOpts, "apparmor="+cfg.AppArmorProfile)
 	}
 
+	nproc := (cfg.PidsLimit - 4) / 2
+	if cfg.PidsLimit <= 0 { // pids без лимита
+		nproc = 64
+	}
+
 	return &container.HostConfig{
 		Resources: container.Resources{
 			CPUQuota:       cfg.CPUQuota,
@@ -258,10 +263,14 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 			OomKillDisable: new(false), // oom-killer включён, runaway убивается а не висит
 			// BlkioWeight на macOS не поддерживается (cgroups v2)
 			Ulimits: []*container.Ulimit{
-				{Name: "nofile", Soft: 1024, Hard: 1024},        // хватает python + subprocess
-				{Name: "nproc", Soft: 64, Hard: 64},             // хватает на fork
-				{Name: "core", Soft: 0, Hard: 0},                // без core-дампов
-				{Name: "fsize", Soft: 10485760, Hard: 10485760}, // файл максимум 10мб
+				{Name: "nofile", Soft: 1024, Hard: 1024}, // хватает python + subprocess
+				// nproc считается на uid бота: каждому из двух своя половина
+				// PidsLimit за вычетом запаса на tjudge-cli, иначе один бот
+				// выбирает весь бюджет контейнера и соперник не может стартовать
+				{Name: "nproc", Soft: nproc, Hard: nproc},
+				{Name: "core", Soft: 0, Hard: 0}, // без core-дампов
+				// точка входа копирует в /programs артефакт до maxArtifactSize
+				{Name: "fsize", Soft: maxArtifactSize, Hard: maxArtifactSize},
 			},
 		},
 		// только файлы двух программ матча и только на чтение (см. programMounts)

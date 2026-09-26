@@ -65,9 +65,11 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 		limits[u.Name] = [2]int64{u.Soft, u.Hard}
 	}
 	assert.Equal(t, [2]int64{1024, 1024}, limits["nofile"])
-	assert.Equal(t, [2]int64{64, 64}, limits["nproc"])
+	// два бота по nproc и tjudge-cli укладываются в PidsLimit
+	assert.Equal(t, [2]int64{48, 48}, limits["nproc"])
 	assert.Equal(t, [2]int64{0, 0}, limits["core"])
-	assert.Equal(t, [2]int64{10485760, 10485760}, limits["fsize"])
+	// точка входа копирует артефакт любого допустимого сборкой размера
+	assert.Equal(t, [2]int64{maxArtifactSize, maxArtifactSize}, limits["fsize"])
 }
 
 // seccomp/apparmor добавляются в SecurityOpt только когда профиль задан env-ом.
