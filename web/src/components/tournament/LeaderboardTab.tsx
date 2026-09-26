@@ -56,12 +56,14 @@ export function LeaderboardTab({
           </button>
           <button
             onClick={() => onShowCrossGameChange(true)}
+            aria-pressed={showCrossGame}
             className={`btn ${showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
           >
             По играм
           </button>
           <button
             onClick={() => onShowCrossGameChange(false)}
+            aria-pressed={!showCrossGame}
             className={`btn ${!showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
           >
             Общий

@@ -131,6 +131,7 @@ export function GameShowcase() {
           <button
             key={game.id}
             onClick={() => setActiveGame(index)}
+            aria-pressed={activeGame === index}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${
               activeGame === index
                 ? `${colorClasses[game.color].bg} ${colorClasses[game.color].text} ${colorClasses[game.color].border} border-2 shadow-lg scale-105`

@@ -287,75 +287,79 @@ function RoundCard({
 
   return (
     <div className={`card p-0 border-l-4 ${getStatusColor()} overflow-hidden`}>
-      {/* Round header - collapsible */}
-      <button
-        onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-800/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="text-gray-400">
-            {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-          </div>
-          <div className="flex items-center gap-2">
-            <FolderIcon />
-            <span className="font-semibold text-gray-100">
-              Раунд {round.round_number}
+      {/* Round header - collapsible; «✕» рядом с кнопкой, а не внутри неё */}
+      <div className="flex items-center hover:bg-gray-800/50 transition-colors">
+        <button
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <div className="text-gray-400">
+              {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            </div>
+            <div className="flex items-center gap-2">
+              <FolderIcon />
+              <span className="font-semibold text-gray-100">
+                Раунд {round.round_number}
+              </span>
+              <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded-full font-medium">
+                {getGameDisplayName(round.game_type)}
+              </span>
+            </div>
+            <span className="text-sm text-gray-400">
+              {round.total_matches} матчей
             </span>
-            <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded-full font-medium">
-              {getGameDisplayName(round.game_type)}
-            </span>
-          </div>
-          <span className="text-sm text-gray-400">
-            {round.total_matches} матчей
-          </span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {/* Mini stats badges */}
-          <div className="hidden sm:flex items-center gap-2 text-xs">
-            {round.completed_count > 0 && (
-              <span className="px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400">
-                {round.completed_count} завершено
-              </span>
-            )}
-            {round.running_count > 0 && (
-              <span className="px-2 py-1 rounded-full bg-blue-900/30 text-blue-400">
-                {round.running_count} выполняется
-              </span>
-            )}
-            {round.pending_count > 0 && (
-              <span className="px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400">
-                {round.pending_count} в очереди
-              </span>
-            )}
-            {round.failed_count > 0 && (
-              <span className="px-2 py-1 rounded-full bg-red-900/30 text-red-400">
-                {round.failed_count} ошибок
-              </span>
-            )}
           </div>
 
-          {/* Progress bar */}
-          <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-emerald-500 transition-[width] duration-300"
-              style={{ width: `${getProgressPercent()}%` }}
-            />
+          <div className="flex items-center gap-4">
+            {/* Mini stats badges */}
+            <div className="hidden sm:flex items-center gap-2 text-xs">
+              {round.completed_count > 0 && (
+                <span className="px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400">
+                  {round.completed_count} завершено
+                </span>
+              )}
+              {round.running_count > 0 && (
+                <span className="px-2 py-1 rounded-full bg-blue-900/30 text-blue-400">
+                  {round.running_count} выполняется
+                </span>
+              )}
+              {round.pending_count > 0 && (
+                <span className="px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400">
+                  {round.pending_count} в очереди
+                </span>
+              )}
+              {round.failed_count > 0 && (
+                <span className="px-2 py-1 rounded-full bg-red-900/30 text-red-400">
+                  {round.failed_count} ошибок
+                </span>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-[width] duration-300"
+                style={{ width: `${getProgressPercent()}%` }}
+              />
+            </div>
+            <span className="text-sm font-mono text-gray-300 w-12 text-right">
+              {getProgressPercent()}%
+            </span>
           </div>
-          <span className="text-sm font-mono text-gray-300 w-12 text-right">
-            {getProgressPercent()}%
-          </span>
-          {isAdmin && round.failed_count > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onHide(); }}
-              className="ml-2 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
-              title="Скрыть этот раунд"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </button>
+        </button>
+        {isAdmin && round.failed_count > 0 && (
+          <button
+            onClick={onHide}
+            className="mr-4 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition-colors"
+            title="Скрыть этот раунд"
+            aria-label={`Скрыть раунд ${round.round_number}`}
+          >
+            ✕
+          </button>
+        )}
+      </div>
 
       {/* Expanded content */}
       {isExpanded && (

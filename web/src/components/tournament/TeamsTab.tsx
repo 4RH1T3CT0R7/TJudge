@@ -108,6 +108,7 @@ export function TeamsTab({
             <button
               onClick={toggleAllMembers}
               disabled={loadingMembers}
+              aria-expanded={membersExpanded}
               className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-4 h-4 transition-transform ${membersExpanded ? 'rotate-180' : ''}`}>

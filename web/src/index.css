@@ -175,6 +175,15 @@
     outline: none;
   }
 
+  /* в forced-colors фон и цвет кнопок пропадают: выбранное отмечается подчёркиванием */
+  @media (forced-colors: active) {
+    [aria-pressed="true"],
+    [aria-selected="true"] {
+      text-decoration: underline 2px;
+      text-underline-offset: 4px;
+    }
+  }
+
   /* JetBrains Mono for code/mono */
   code, .font-mono, .code-block {
     font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;

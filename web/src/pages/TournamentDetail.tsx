@@ -359,12 +359,14 @@ export function TournamentDetail() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowCrossGameLeaderboard(true)}
+                  aria-pressed={showCrossGameLeaderboard}
                   className={`btn text-sm ${showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
                 >
                   По играм
                 </button>
                 <button
                   onClick={() => setShowCrossGameLeaderboard(false)}
+                  aria-pressed={!showCrossGameLeaderboard}
                   className={`btn text-sm ${!showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
                 >
                   Общий

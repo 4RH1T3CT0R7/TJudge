@@ -82,6 +82,7 @@ export function TugOfWarVisualization() {
             <button
               key={i}
               onClick={() => setCurrentRound(i)}
+              aria-pressed={currentRound === i}
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                 currentRound === i
                   ? 'bg-primary-500 text-white'
