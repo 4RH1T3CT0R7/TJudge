@@ -1,8 +1,8 @@
 # Production Docker Compose с Docker Secrets.
 # Выкладка - .github/workflows/release.yml по тегу v*. Вручную, из ~/TJudge на
 # checkout нужного тега: ./scripts/init-secrets.sh, ./scripts/prepare-data.sh,
-# VERSION=<версия> docker compose -f docker-compose.prod.yml up -d
-# (HOST_PROGRAMS_PATH и DOCKER_SOCK_GID release.yml пишет в .env)
+# docker compose -f docker-compose.prod.yml up -d (VERSION, HOST_PROGRAMS_PATH
+# и DOCKER_SOCK_GID release.yml пишет в .env, см. docs/OPERATIONS.md §3)
 
 secrets:
   db_password:
@@ -300,10 +300,8 @@ services:
         max-size: "100m"
         max-file: "5"
 
-  # Monitoring stack (Prometheus/Grafana/Loki/Alertmanager) вынесен в отдельный
-  # репо infra-monitoring и работает через внешнюю docker-сеть `monitoring`.
-  # Соответствующие папки конфигов в TJudge удалены — старые tjudge-*-prod
-  # контейнеры запускать больше нельзя.
+  # Мониторинг - docker-compose.monitoring.yml или общий стек infra-monitoring,
+  # оба во внешней docker-сети `monitoring` (docs/OPERATIONS.md §5).
 
   # pg_dump и архив программ раз в сутки в ./backups (docker/backup/entrypoint.sh),
   # копия до 50 МБ - в Telegram, только при BACKUP_TELEGRAM_CHAT_ID в .env (дамп с

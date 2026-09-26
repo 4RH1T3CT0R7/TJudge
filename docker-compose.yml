@@ -194,9 +194,8 @@ services:
       prometheus_port: "9090"
       prometheus_service: "worker"
 
-# Monitoring stack (Prometheus, Grafana, Loki, Promtail, Alertmanager)
-# вынесен в deployments/monitoring/docker-compose.yml как отдельный shared-стек,
-# работающий через внешнюю docker-сеть `monitoring`. См. deployments/monitoring/README.md.
+# Мониторинг - docker-compose.monitoring.yml (make monitoring-up) во внешней
+# docker-сети `monitoring`, см. docs/OPERATIONS.md §5.
 
 volumes:
   postgres_data:
