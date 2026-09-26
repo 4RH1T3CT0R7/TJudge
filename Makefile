@@ -45,10 +45,6 @@ help:
 	@echo ""
 	@echo "  make clean         - Clean build artifacts"
 
-# Generate swagger docs
-generate:
-	@which swag > /dev/null 2>&1 && swag init -g cmd/api/main.go -o docs/swagger --parseInternal --quiet || true
-
 # Download dependencies
 deps:
 	@echo "Downloading dependencies..."
