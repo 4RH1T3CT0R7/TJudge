@@ -166,13 +166,14 @@ make doctor                                                       # 4. пров�
 2. `docker compose restart api`.
 3. Не помогло — откат: `./scripts/rollback.sh`.
 
-### 9.2 Растёт очередь матчей
+### 9.2 Матчи не разбираются (QueueStuck)
 
-Триггер: `tjudge_queue_size{priority="high"} > 1000`.
+Триггер: воркеры заняты (`sum(tjudge_active_workers) > 0`), а за 10 минут не завершился ни один матч. Большая очередь в начале раунда штатна, размер очереди (`tjudge_queue_size`) не показатель: гейдж залипает.
 
-1. Размер пула: `curl -s localhost:9090/metrics | grep tjudge_worker_pool_size`.
-2. Увеличить лимит и перезапустить воркер: `echo "WORKER_MAX=50" >> .env`, затем `docker compose up -d worker`.
-3. Матчи падают: `docker logs --tail=300 tjudge-worker | grep ERROR`. Частая причина — нет образа `tjudge-cli`; пересобрать: `docker compose build tjudge-cli`.
+1. Завершения: `increase(tjudge_matches_total[10m])` в Prometheus — ноль подтверждает зависание.
+2. Логи воркера: `docker logs --tail=300 tjudge-worker | grep ERROR`. Частая причина — нет образа `tjudge-cli`; пересобрать: `docker compose build tjudge-cli`.
+3. Docker daemon: `docker info` и `docker ps` на хосте отвечают быстро? Зависший daemon держит воркеры занятыми без результата.
+4. Матчи идут, но медленно: размер пула `curl -s localhost:9090/metrics | grep tjudge_worker_pool_size`; увеличить `WORKER_MAX` в `.env` и `docker compose up -d worker`.
 
 ### 9.3 Postgres недоступен
 
