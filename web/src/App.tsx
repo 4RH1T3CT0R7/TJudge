@@ -71,7 +71,7 @@ function prefetchCriticalPages() {
   });
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized } = useAuthStore();
   const location = useLocation();
 
@@ -88,6 +88,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
+    // AnimatePresence держит уходящую страницу, и её ProtectedRoute
+    // перерисовывается уже на /login: повторный редирект затёр бы from
+    if (location.pathname === '/login') return null;
     // после логина Login вернёт сюда (нужно ссылке-приглашению /join/:code)
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
@@ -96,25 +99,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isInitialized, user } = useAuthStore();
-
-  if (!isInitialized) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Загрузка...</p>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user?.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
+  const user = useAuthStore((s) => s.user);
+  return (
+    <ProtectedRoute>
+      {user?.role === 'admin' ? children : <Navigate to="/" replace />}
+    </ProtectedRoute>
+  );
 }
 
 function AppContent() {
