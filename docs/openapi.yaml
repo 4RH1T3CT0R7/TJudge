@@ -31,8 +31,12 @@ info:
     ```
 
     ## Rate Limiting
-    - 100 requests per minute per IP address.
-    - Rate limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+    Enabled by `RATE_LIMIT_ENABLED`, applies to `/api/v1` only. `RATE_LIMIT_RPM` (default 100)
+    requests per minute per user (valid token) or per client IP otherwise; GET and HEAD
+    have a separate counter with 10x the limit. `/auth/login`, `/auth/register` and
+    `/teams/join` have their own per-IP counters with `RATE_LIMIT_RPM`.
+    Exceeding the limit returns 429 with headers `X-RateLimit-Limit`, `X-RateLimit-Window`
+    and `Retry-After`. Outside production localhost is not limited.
 
     ## WebSocket
     WebSocket connections require JWT authentication via the `Sec-WebSocket-Protocol` subprotocol
@@ -40,7 +44,7 @@ info:
   version: 1.0.0
   contact:
     name: BMSTU ITS Tech
-    url: https://github.com/bmstu-itstech/tjudge
+    url: https://github.com/4RH1T3CT0R7/TJudge
   license:
     name: MIT
 
@@ -366,6 +370,7 @@ paths:
           schema:
             type: integer
             default: 100
+            maximum: 100
       responses:
         '200':
           description: Leaderboard entries
@@ -931,6 +936,7 @@ paths:
           schema:
             type: integer
             default: 100
+            maximum: 100
       responses:
         '200':
           description: Leaderboard for the game
@@ -2191,12 +2197,12 @@ components:
     Limit:
       name: limit
       in: query
-      description: Maximum number of records to return
+      description: Maximum number of records to return, larger values are clamped to the maximum
       schema:
         type: integer
         default: 50
         minimum: 1
-        maximum: 1000
+        maximum: 100
 
     Offset:
       name: offset
