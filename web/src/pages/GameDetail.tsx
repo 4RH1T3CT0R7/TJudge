@@ -55,7 +55,6 @@ export function GameDetail() {
   const live = useTournamentLive({
     tournamentId: tournamentId ?? '',
     enabled: isAuthenticated,
-    active: tournamentQuery.data?.status === 'active',
   });
 
   // Базовые данные страницы
