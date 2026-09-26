@@ -6,10 +6,14 @@ set -euo pipefail
 # uid 1000, запускать от него или от root.
 # Usage: ./scripts/backup.sh [backup_dir]
 #   POSTGRES_CONTAINER=tjudge-postgres-prod для prod, PROGRAMS_DIR - каталог программ
+#   (HOST_PROGRAMS_PATH из .env, иначе ./data/programs)
 
 BACKUP_DIR="${1:-${BACKUP_DIR:-./backups}}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-tjudge-postgres}"
+if [ -z "${PROGRAMS_DIR:-}" ] && [ -f .env ]; then
+    PROGRAMS_DIR=$(sed -n 's/^HOST_PROGRAMS_PATH=//p' .env | tail -1)
+fi
 PROGRAMS_DIR="${PROGRAMS_DIR:-./data/programs}"
 DB_NAME="${DB_NAME:-tjudge}"
 DB_USER="${DB_USER:-tjudge}"

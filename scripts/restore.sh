@@ -5,8 +5,8 @@ set -euo pipefail
 # Usage: ./scripts/restore.sh <tjudge_<время>.sql.gz> [programs_<время>.tar.gz]
 #   Архив программ по умолчанию ищется рядом с дампом по той же метке времени.
 #   prod: COMPOSE_FILE=docker-compose.prod.yml POSTGRES_CONTAINER=tjudge-postgres-prod
-#   PROGRAMS_DIR - каталог программ на хосте (./data/programs). Запускать от root
-#   или uid 1000: файлы программ принадлежат ему.
+#   PROGRAMS_DIR - каталог программ на хосте (HOST_PROGRAMS_PATH из .env, иначе
+#   ./data/programs). Запускать от root или uid 1000: файлы программ принадлежат ему.
 #
 # Дамп заливается одной транзакцией с ON_ERROR_STOP: при любой ошибке база
 # пересоздаётся из страховочного дампа текущего состояния, скрипт падает.
@@ -15,6 +15,9 @@ BACKUP_FILE="${1:-}"
 PROGRAMS_FILE="${2:-}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-tjudge-postgres}"
+if [ -z "${PROGRAMS_DIR:-}" ] && [ -f .env ]; then
+    PROGRAMS_DIR=$(sed -n 's/^HOST_PROGRAMS_PATH=//p' .env | tail -1)
+fi
 PROGRAMS_DIR="${PROGRAMS_DIR:-./data/programs}"
 DB_NAME="${DB_NAME:-tjudge}"
 DB_USER="${DB_USER:-tjudge}"
@@ -137,11 +140,17 @@ if [ -n "$PROGRAMS_FILE" ]; then
     PREVIOUS="${PROGRAMS_DIR%/}.pre_restore_${STAMP}"
     log_info "Restoring programs: $PROGRAMS_FILE (текущие -> $PREVIOUS)"
     mv "$PROGRAMS_DIR" "$PREVIOUS"
-    if ! tar -xzf "$PROGRAMS_FILE" -C "$(dirname "$PROGRAMS_DIR")"; then
+    # верхний каталог архива назван по каталогу на момент бэкапа (в контейнере
+    # бэкапа - programs), поэтому он отбрасывается
+    if ! { mkdir "$PROGRAMS_DIR" && tar -xzf "$PROGRAMS_FILE" -C "$PROGRAMS_DIR" --strip-components=1; }; then
         log_error "Programs restore failed, возвращается прежний каталог; БД уже восстановлена из $BACKUP_FILE"
         rm -rf "$PROGRAMS_DIR"
         mv "$PREVIOUS" "$PROGRAMS_DIR"
         exit 1
+    fi
+    # от root каталог создаётся с владельцем root, а api пишет в него от uid 1000
+    if [ "$(id -u)" -eq 0 ]; then
+        chown 1000:1000 "$PROGRAMS_DIR"
     fi
     log_info "Programs restored."
 fi
