@@ -4,8 +4,9 @@ set -euo pipefail
 # TJudge: проверка восстановимости бэкапа.
 #
 # Непротестированный бэкап - это не бэкап: скрипт разворачивает последний
-# дамп в одноразовый PostgreSQL-контейнер и прогоняет smoke-запросы.
-# Запускается вручную.
+# дамп в одноразовый PostgreSQL-контейнер (одной транзакцией, любая ошибка
+# валит проверку), прогоняет smoke-запросы и проверяет целостность архива
+# программ с той же меткой времени. Запускается вручную и в nightly.
 #
 # Usage: ./scripts/restore-test.sh [backup_file]
 #   Без аргумента берётся самый свежий дамп из $BACKUP_DIR (./backups).
@@ -29,7 +30,8 @@ trap cleanup EXIT
 
 # 1. Находим дамп
 if [ -z "$BACKUP_FILE" ]; then
-    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/tjudge_*.sql.gz 2>/dev/null | head -1 || true)
+    # shellcheck disable=SC2012 # нужен самый свежий по времени, имена без пробелов
+    BACKUP_FILE=$(ls -t "$BACKUP_DIR"/tjudge_[0-9]*.sql.gz 2>/dev/null | head -1 || true)
 fi
 [ -n "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ] || fail "Дамп не найден (BACKUP_DIR=$BACKUP_DIR)"
 log "Проверяем дамп: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
@@ -55,7 +57,7 @@ done
 # 3. Восстановление
 log "Восстанавливаем дамп..."
 RESTORE_ERR=""
-if ! RESTORE_ERR=$(gunzip -c "$BACKUP_FILE" | docker exec -i "$TEST_CONTAINER" psql -U tjudge -d tjudge -q -v ON_ERROR_STOP=0 2>&1 >/dev/null); then
+if ! RESTORE_ERR=$(gunzip -c "$BACKUP_FILE" | docker exec -i "$TEST_CONTAINER" psql -U tjudge -d tjudge -q -v ON_ERROR_STOP=1 --single-transaction 2>&1 >/dev/null); then
     fail "psql завершился с ошибкой при восстановлении: $(echo "$RESTORE_ERR" | tail -3)"
 fi
 
@@ -72,5 +74,12 @@ if ! RESULT=$(docker exec -i "$TEST_CONTAINER" psql -U tjudge -d tjudge -t -v ON
     fail "Smoke-запросы упали: $RESULT"
 fi
 
-echo "$RESULT" | sed 's/^/  /'
+echo "$RESULT"
+
+# 5. Архив программ той же метки времени
+PROGRAMS_FILE="$(dirname "$BACKUP_FILE")/$(basename "$BACKUP_FILE" .sql.gz | sed 's/^tjudge_/programs_/').tar.gz"
+[ -f "$PROGRAMS_FILE" ] || fail "Нет архива программ $PROGRAMS_FILE"
+LIST=$(tar -tzf "$PROGRAMS_FILE") || fail "Архив программ повреждён: $PROGRAMS_FILE"
+log "Архив программ читается: $(grep -vc '/$' <<< "$LIST" || true) файлов"
+
 log "Бэкап восстановим: все ключевые таблицы на месте."

@@ -300,10 +300,9 @@ services:
   # Соответствующие папки конфигов в TJudge удалены — старые tjudge-*-prod
   # контейнеры запускать больше нельзя.
 
-  # P1.14: автоматический pg_dump (prod). Включается профилем "backup":
-  #   docker compose --profile backup up -d backup
-  # Для внешнего storage'а (S3/R2) смонтируйте /backups через external volume
-  # или добавьте rclone-sync в entrypoint.
+  # pg_dump и архив программ раз в сутки в ./backups (docker/backup/entrypoint.sh),
+  # копия до 50 МБ - в Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID в .env).
+  # Включается профилем: docker compose -f docker-compose.prod.yml --profile backup up -d backup
   backup:
     build:
       context: docker/backup
@@ -316,10 +315,13 @@ services:
       - PGDATABASE=tjudge
       - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     secrets:
       - db_password
     volumes:
-      - backups_data:/backups
+      - ./backups:/backups
+      - ${HOST_PROGRAMS_PATH:?HOST_PROGRAMS_PATH - абсолютный путь к data/programs}:/data/programs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -334,7 +336,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  backups_data:
 
 networks:
   tjudge-network:

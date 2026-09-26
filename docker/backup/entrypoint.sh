@@ -1,7 +1,13 @@
 #!/bin/bash
-# P1.14: entrypoint backup-контейнера. Раз в BACKUP_INTERVAL_SECONDS
-# вызывает pg_dump через PGHOST/PGUSER/PGPASSWORD.
-# При падении дампа — ждёт следующей итерации (не падаем, но alert в лог).
+# Entrypoint backup-контейнера. Раз в BACKUP_INTERVAL_SECONDS:
+#   - pg_dump в /backups/tjudge_<время>.sql.gz;
+#   - каталог программ (/data/programs без build/) в programs_<время>.tar.gz,
+#     с той же меткой времени - restore.sh находит пару по ней;
+#   - при заданных TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID копия каждого файла
+#     до 50 МБ (лимит Bot API) уходит в Telegram;
+#   - файлы старше BACKUP_RETENTION_DAYS удаляются.
+# Сбой пишется в лог как ERROR, следующая попытка - по расписанию.
+# Разовый прогон: docker exec tjudge-backup /entrypoint.sh --once
 
 set -euo pipefail
 
@@ -9,8 +15,7 @@ set -euo pipefail
 : "${PGUSER:?PGUSER is required}"
 : "${PGDATABASE:?PGDATABASE is required}"
 
-# Поддержка Docker secrets: если задан PGPASSWORD_FILE — читаем пароль из него.
-# Сам PGPASSWORD экспортируется для libpq.
+# Docker secrets: пароль из PGPASSWORD_FILE, сам PGPASSWORD читает libpq
 if [[ -n "${PGPASSWORD_FILE:-}" && -r "${PGPASSWORD_FILE}" ]]; then
     export PGPASSWORD
     PGPASSWORD=$(< "${PGPASSWORD_FILE}")
@@ -19,37 +24,80 @@ fi
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 BACKUP_INTERVAL_SECONDS="${BACKUP_INTERVAL_SECONDS:-86400}"  # 24h
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+TELEGRAM_MAX_BYTES=50000000
 
 log() {
     echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*"
 }
 
-mkdir -p "$BACKUP_DIR"
+send_to_telegram() {
+    local file=$1 size
+    if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+        return 0
+    fi
+    size=$(stat -c '%s' "$file")
+    if (( size > TELEGRAM_MAX_BYTES )); then
+        log "WARN ${file} больше 50 МБ, в Telegram не отправлен: копия только на хосте"
+        return 0
+    fi
+    if curl -sS --max-time 300 -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@${file}" \
+        "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" | grep -q '"ok":true'; then
+        log "Telegram copy OK: ${file}"
+    else
+        log "ERROR Telegram copy failed: ${file}"
+    fi
+}
 
-while true; do
-    TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-    OUT="$BACKUP_DIR/tjudge_${TIMESTAMP}.sql.gz"
+backup_once() {
+    local ts dump programs
+    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    dump="$BACKUP_DIR/tjudge_${ts}.sql.gz"
+    programs="$BACKUP_DIR/programs_${ts}.tar.gz"
 
-    log "Starting pg_dump -> ${OUT}"
-    if pg_dump --no-owner --no-acl "$PGDATABASE" 2>/tmp/pgdump.err | gzip > "$OUT"; then
-        SIZE=$(stat -c '%s' "$OUT" 2>/dev/null || stat -f '%z' "$OUT")
-        if [[ -s "$OUT" ]]; then
-            log "Backup OK (${SIZE} bytes): ${OUT}"
-        else
-            log "ERROR empty backup, removing ${OUT}"
-            rm -f "$OUT"
-        fi
+    log "Starting pg_dump -> ${dump}"
+    if pg_dump --no-owner --no-acl "$PGDATABASE" 2>/tmp/pgdump.err | gzip > "$dump" && [[ -s "$dump" ]]; then
+        log "Backup OK ($(stat -c '%s' "$dump") bytes): ${dump}"
+        send_to_telegram "$dump"
     else
         log "ERROR pg_dump failed: $(cat /tmp/pgdump.err 2>/dev/null || true)"
-        rm -f "$OUT"
+        rm -f "$dump"
     fi
 
-    # Retention: удаляем файлы старше RETENTION_DAYS дней.
-    log "Retention cleanup (>$RETENTION_DAYS days)"
-    find "$BACKUP_DIR" -name 'tjudge_*.sql.gz' -mtime +"$RETENTION_DAYS" -type f -delete -print | while read -r f; do
+    if [[ ! -d /data/programs ]]; then
+        log "ERROR /data/programs не смонтирован, программы не сохранены"
+        return 0
+    fi
+    # build/ - временные каталоги сборки
+    if tar -czf "$programs" -C /data --exclude=programs/build programs; then
+        log "Programs OK ($(stat -c '%s' "$programs") bytes): ${programs}"
+        send_to_telegram "$programs"
+    else
+        log "ERROR programs archive failed"
+        rm -f "$programs"
+    fi
+}
+
+cleanup_old() {
+    log "Retention cleanup (>${RETENTION_DAYS} days)"
+    find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'tjudge_*.sql.gz' -o -name 'programs_*.tar.gz' \) \
+        -mtime +"$RETENTION_DAYS" -delete -print | while read -r f; do
         log "  removed: $f"
     done
+}
 
+mkdir -p "$BACKUP_DIR"
+
+if [[ "${1:-}" == "--once" ]]; then
+    backup_once
+    cleanup_old
+    exit 0
+fi
+
+trap 'exit 0' TERM INT
+while true; do
+    backup_once
+    cleanup_old
     log "Sleeping ${BACKUP_INTERVAL_SECONDS}s until next backup"
-    sleep "$BACKUP_INTERVAL_SECONDS"
+    sleep "$BACKUP_INTERVAL_SECONDS" &
+    wait $!
 done

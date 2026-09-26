@@ -20,6 +20,7 @@ set -uo pipefail
 #   6. Логи api/worker за DOCTOR_LOG_WINDOW: количество error/panic,
 #      топ повторяющихся сообщений
 #   7. Диск
+#   8. Свежесть бэкапов, если запущен контейнер tjudge-backup
 #
 # Куда отчитывается:
 #   - терминал (всегда), exit-код: 0 здорово/предупреждения, 1 критично
@@ -42,6 +43,7 @@ set -uo pipefail
 #   DOCTOR_LOG_ERROR_THRESHOLD=5               # ошибок в окне до warn
 #   DOCTOR_MAX_RESTARTS=0                      # рестартов контейнера до warn
 #   DOCTOR_DISK_WARN=85 DOCTOR_DISK_CRIT=95    # % использования диска
+#   DOCTOR_BACKUP_MAX_AGE_HOURS=26             # возраст последнего бэкапа до crit
 #   DOCTOR_FAIL_ON_WARN=false                  # exit 1 и на warn
 # ============================================================================
 
@@ -62,6 +64,7 @@ DOCTOR_MAX_RESTARTS="${DOCTOR_MAX_RESTARTS:-0}"
 DOCTOR_DISK_WARN="${DOCTOR_DISK_WARN:-85}"
 DOCTOR_DISK_CRIT="${DOCTOR_DISK_CRIT:-95}"
 DOCTOR_FAIL_ON_WARN="${DOCTOR_FAIL_ON_WARN:-false}"
+DOCTOR_BACKUP_MAX_AGE_HOURS="${DOCTOR_BACKUP_MAX_AGE_HOURS:-26}"
 
 JSON_MODE=false
 [ "${1:-}" = "--json" ] && JSON_MODE=true
@@ -331,6 +334,22 @@ check_disk() {
     fi
 }
 
+# --------------------------------------------------------------------- 8. бэкапы
+check_backups() {
+    have docker || return 0
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx tjudge-backup || return 0
+
+    local pattern fresh
+    for pattern in 'tjudge_*.sql.gz' 'programs_*.tar.gz'; do
+        fresh=$(find backups -maxdepth 1 -name "$pattern" -mmin -"$((DOCTOR_BACKUP_MAX_AGE_HOURS * 60))" 2>/dev/null | head -1)
+        if [ -n "$fresh" ]; then
+            add ok "backup:${pattern%%_*}" "свежий бэкап: $fresh"
+        else
+            add crit "backup:${pattern%%_*}" "нет бэкапа $pattern моложе ${DOCTOR_BACKUP_MAX_AGE_HOURS}ч в ./backups" "docker logs --tail=50 tjudge-backup | grep ERROR"
+        fi
+    done
+}
+
 # ============================================================== запуск проверок
 check_containers
 check_images
@@ -339,6 +358,7 @@ check_system_status
 check_prometheus
 check_logs
 check_disk
+check_backups
 
 # ================================================================== вердикт
 CRITS=0; WARNS=0; OKS=0

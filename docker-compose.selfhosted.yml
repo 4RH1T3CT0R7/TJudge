@@ -274,8 +274,9 @@ services:
       - tjudge-network
     restart: unless-stopped
 
-  # периодический pg_dump в ./backups (BACKUP_INTERVAL_SECONDS), включается
-  # профилем: docker compose ... --profile backup up -d backup
+  # pg_dump и архив программ в ./backups раз в BACKUP_INTERVAL_SECONDS, копия
+  # до 50 МБ - в Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID в .env).
+  # Включается профилем: docker compose ... --profile backup up -d backup
   backup:
     build:
       context: docker/backup
@@ -288,10 +289,13 @@ services:
       - PGDATABASE=${DB_NAME:-tjudge}
       - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
     secrets:
       - db_password
     volumes:
       - ./backups:/backups
+      - ${HOST_PROGRAMS_PATH:-${PWD}/data/programs}:/data/programs:ro
     depends_on:
       postgres:
         condition: service_healthy

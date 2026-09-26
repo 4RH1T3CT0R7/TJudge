@@ -44,6 +44,13 @@ jobs:
           E2E_FULL_CYCLE: 'true'
         run: go test -count=1 -v -tags=e2e -run TestE2E_FullCycle ./tests/e2e/
 
+      # дамп и архив программ после полного цикла, восстановление дампа в
+      # одноразовый postgres. sudo: файлы программ принадлежат uid 1000
+      - name: backup restore test
+        run: |
+          sudo ./scripts/backup.sh ./backups
+          sudo ./scripts/restore-test.sh
+
       - name: logs
         if: failure()
         run: docker compose logs --no-color api worker

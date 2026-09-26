@@ -1,12 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-# TJudge Database Restore Script
-# Usage: ./scripts/restore.sh <backup_file.sql.gz>
+# TJudge: восстановление БД и каталога программ из бэкапа.
+# Usage: ./scripts/restore.sh <tjudge_<время>.sql.gz> [programs_<время>.tar.gz]
+#   Архив программ по умолчанию ищется рядом с дампом по той же метке времени.
+#   prod: COMPOSE_FILE=docker-compose.prod.yml POSTGRES_CONTAINER=tjudge-postgres-prod
+#   PROGRAMS_DIR - каталог программ на хосте (./data/programs). Запускать от root
+#   или uid 1000: файлы программ принадлежат ему.
+#
+# Дамп заливается одной транзакцией с ON_ERROR_STOP: при любой ошибке база
+# пересоздаётся из страховочного дампа текущего состояния, скрипт падает.
 
 BACKUP_FILE="${1:-}"
+PROGRAMS_FILE="${2:-}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-tjudge-postgres}"
+PROGRAMS_DIR="${PROGRAMS_DIR:-./data/programs}"
 DB_NAME="${DB_NAME:-tjudge}"
 DB_USER="${DB_USER:-tjudge}"
 
@@ -28,95 +37,121 @@ log_error() {
     echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
 }
 
-# Show usage if no backup file provided
 if [ -z "$BACKUP_FILE" ]; then
-    echo "Usage: $0 <backup_file.sql.gz>"
+    echo "Usage: $0 <backup_file.sql.gz> [programs_file.tar.gz]"
     echo ""
     echo "Available backups:"
     if ls "$BACKUP_DIR"/tjudge_*.sql.gz 1>/dev/null 2>&1; then
-        ls -lh "$BACKUP_DIR"/tjudge_*.sql.gz | awk '{print "  " $9 " (" $5 ", " $6 " " $7 ")"}'
+        ls -lh "$BACKUP_DIR"/tjudge_*.sql.gz "$BACKUP_DIR"/programs_*.tar.gz 2>/dev/null || true
     else
         echo "  No backups found in $BACKUP_DIR"
     fi
     exit 1
 fi
 
-# Check if backup file exists
 if [ ! -f "$BACKUP_FILE" ]; then
     log_error "Backup file not found: $BACKUP_FILE"
     exit 1
 fi
 
-# Check if container is running
+if [ -z "$PROGRAMS_FILE" ]; then
+    candidate="$(dirname "$BACKUP_FILE")/$(basename "$BACKUP_FILE" .sql.gz | sed 's/^tjudge_/programs_/').tar.gz"
+    [ -f "$candidate" ] && PROGRAMS_FILE="$candidate"
+fi
+if [ -n "$PROGRAMS_FILE" ] && [ ! -f "$PROGRAMS_FILE" ]; then
+    log_error "Programs archive not found: $PROGRAMS_FILE"
+    exit 1
+fi
+
 if ! docker ps --format '{{.Names}}' | grep -q "^${POSTGRES_CONTAINER}$"; then
     log_error "Container '$POSTGRES_CONTAINER' is not running!"
     exit 1
 fi
 
-# Warning and confirmation
+# архив проверяется до того, как что-то удалено
+if [ -n "$PROGRAMS_FILE" ]; then
+    gzip -t "$PROGRAMS_FILE" || { log_error "Programs archive is corrupted: $PROGRAMS_FILE"; exit 1; }
+fi
+gzip -t "$BACKUP_FILE" || { log_error "Backup file is corrupted: $BACKUP_FILE"; exit 1; }
+
 echo ""
 log_warn "This will REPLACE ALL DATA in database '$DB_NAME'!"
 log_warn "Backup file: $BACKUP_FILE"
+if [ -n "$PROGRAMS_FILE" ]; then
+    log_warn "Programs:    $PROGRAMS_FILE -> $PROGRAMS_DIR (текущий каталог сохраняется рядом)"
+else
+    log_warn "Архива программ нет: восстановится только БД, файлы программ останутся текущими"
+fi
 echo ""
-read -p "Are you sure you want to continue? (type 'yes' to confirm): " confirm
+read -r -p "Are you sure you want to continue? (type 'yes' to confirm): " confirm
 
 if [ "$confirm" != "yes" ]; then
     log_info "Restore cancelled."
     exit 0
 fi
 
-# Create a backup of current database before restore
+psql_admin() {
+    docker exec "$POSTGRES_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d postgres -c "$1"
+}
+
+recreate_db() {
+    psql_admin "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();" >/dev/null
+    psql_admin "DROP DATABASE IF EXISTS \"${DB_NAME}\";"
+    psql_admin "CREATE DATABASE \"${DB_NAME}\";"
+}
+
+load_dump() {
+    gunzip -c "$1" | docker exec -i "$POSTGRES_CONTAINER" \
+        psql -q -v ON_ERROR_STOP=1 --single-transaction -U "$DB_USER" -d "$DB_NAME" >/dev/null
+}
+
+STAMP=$(date +%Y%m%d_%H%M%S)
+SAFETY_BACKUP="$BACKUP_DIR/tjudge_pre_restore_${STAMP}.sql.gz"
+mkdir -p "$BACKUP_DIR"
 log_info "Creating safety backup of current database..."
-SAFETY_BACKUP="$BACKUP_DIR/tjudge_pre_restore_$(date +%Y%m%d_%H%M%S).sql.gz"
-if docker exec "$POSTGRES_CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" 2>/dev/null | gzip > "$SAFETY_BACKUP"; then
-    log_info "Safety backup created: $SAFETY_BACKUP"
-else
-    log_warn "Could not create safety backup (database may be empty)"
+if ! docker exec "$POSTGRES_CONTAINER" pg_dump --no-owner --no-acl -U "$DB_USER" "$DB_NAME" | gzip > "$SAFETY_BACKUP"; then
+    log_error "Safety backup failed, restore aborted"
+    rm -f "$SAFETY_BACKUP"
+    exit 1
 fi
+log_info "Safety backup created: $SAFETY_BACKUP"
 
-# Stop dependent services
 log_info "Stopping API and Worker services..."
-docker-compose stop api worker 2>/dev/null || docker compose stop api worker 2>/dev/null || true
+docker compose stop api worker
 
-# Terminate existing connections and drop database
-log_info "Preparing database for restore..."
-docker exec "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d postgres -c "
-    SELECT pg_terminate_backend(pid)
-    FROM pg_stat_activity
-    WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();
-" 2>/dev/null || true
-
-docker exec "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS ${DB_NAME};" 2>/dev/null
-docker exec "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d postgres -c "CREATE DATABASE ${DB_NAME};" 2>/dev/null
-
-# Restore from backup
 log_info "Restoring database from: $BACKUP_FILE"
-if gunzip -c "$BACKUP_FILE" | docker exec -i "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" 2>/dev/null; then
-    log_info "Database restored successfully!"
-else
-    log_error "Restore failed!"
-    log_info "Attempting to restore from safety backup..."
-    if [ -f "$SAFETY_BACKUP" ]; then
-        gunzip -c "$SAFETY_BACKUP" | docker exec -i "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" 2>/dev/null
-        log_info "Restored from safety backup."
+recreate_db
+if ! load_dump "$BACKUP_FILE"; then
+    log_error "Restore failed, database is being returned to the safety backup"
+    recreate_db
+    if load_dump "$SAFETY_BACKUP"; then
+        log_error "Database returned to its state before restore. api и worker остановлены: docker compose start api worker"
+    else
+        log_error "Safety backup did not load either: $SAFETY_BACKUP. api и worker остановлены"
     fi
     exit 1
 fi
+log_info "Database restored."
 
-# Restart services
-log_info "Starting API and Worker services..."
-docker-compose start api worker 2>/dev/null || docker compose start api worker 2>/dev/null || true
-
-# Verify
-log_info "Verifying database connection..."
-if docker exec "$POSTGRES_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" >/dev/null 2>&1; then
-    log_info "Database is accessible."
-else
-    log_error "Database verification failed!"
-    exit 1
+if [ -n "$PROGRAMS_FILE" ]; then
+    PREVIOUS="${PROGRAMS_DIR%/}.pre_restore_${STAMP}"
+    log_info "Restoring programs: $PROGRAMS_FILE (текущие -> $PREVIOUS)"
+    mv "$PROGRAMS_DIR" "$PREVIOUS"
+    if ! tar -xzf "$PROGRAMS_FILE" -C "$(dirname "$PROGRAMS_DIR")"; then
+        log_error "Programs restore failed, возвращается прежний каталог; БД уже восстановлена из $BACKUP_FILE"
+        rm -rf "$PROGRAMS_DIR"
+        mv "$PREVIOUS" "$PROGRAMS_DIR"
+        exit 1
+    fi
+    log_info "Programs restored."
 fi
+
+log_info "Starting API and Worker services..."
+docker compose start api worker
 
 log_info "Restore process completed successfully!"
 echo ""
-log_info "You may want to delete the safety backup if everything looks good:"
+log_info "После проверки можно удалить страховочные копии:"
 echo "  rm $SAFETY_BACKUP"
+[ -n "$PROGRAMS_FILE" ] && echo "  rm -rf ${PROGRAMS_DIR%/}.pre_restore_${STAMP}"
+exit 0
