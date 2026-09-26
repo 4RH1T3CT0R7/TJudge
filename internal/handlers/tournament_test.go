@@ -688,7 +688,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
-	for _, query := range []string{"round=1", "game_type=prisoners_dilemma", "round=abc&game_type=x", "round=0&game_type=x"} {
+	for _, query := range []string{"round=1", "game_type=prisoners_dilemma", "round=abc&game_type=x", "round=-1&game_type=x"} {
 		t.Run("bad round params "+query, func(t *testing.T) {
 			mockService := new(MockTournamentService)
 			handler := NewTournamentHandler(mockService, new(MockSchedulingService), nil, log)

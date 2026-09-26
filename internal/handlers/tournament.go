@@ -438,7 +438,8 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 	q := r.URL.Query()
 	if q.Has("round") || q.Has("game_type") {
 		round, err := strconv.Atoi(q.Get("round"))
-		if err != nil || round < 1 || q.Get("game_type") == "" {
+		// раунд 0 бывает: его пишет ручное создание матча (CreateMatch)
+		if err != nil || round < 0 || q.Get("game_type") == "" {
 			writeError(w, errors.ErrInvalidInput.WithMessage("round and game_type must be set together"))
 			return
 		}
