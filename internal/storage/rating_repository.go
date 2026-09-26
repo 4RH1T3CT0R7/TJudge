@@ -260,6 +260,8 @@ func (r *RatingRepository) UpdateParticipantRatingAndStats(ctx context.Context, 
 //  1. outbox-задача матча гасится (pending -> done). строка блокируется, поэтому
 //     fast path воркера и OutboxDispatcher сериализуются на ней, и второй видит
 //     done. заодно проверяется, что матч ещё completed (не удалён сбросом раунда)
+//     и что истории по нему нет: старый воркер писал рейтинг до закрытия
+//     outbox, и pending-задача с готовой историей после него штатна
 //  2. рейтинги обоих участников читаются FOR UPDATE в порядке program_id: общий
 //     порядок блокировок исключает дедлок параллельных матчей AB и BA
 //  3. calc считает обновления от заблокированных значений, они пишутся в историю
@@ -273,6 +275,7 @@ func (r *RatingRepository) ApplyMatchResult(ctx context.Context, match *models.M
 			UPDATE match_outbox SET status = 'done', processed_at = NOW()
 			WHERE match_id = $1 AND kind = $2 AND status = 'pending'
 			  AND EXISTS (SELECT 1 FROM matches WHERE id = $1 AND status = 'completed' FOR KEY SHARE)
+			  AND NOT EXISTS (SELECT 1 FROM rating_history WHERE match_id = $1)
 		`, match.ID, OutboxKindRatingUpdate)
 		if err != nil {
 			return errors.Wrap(err, "failed to claim rating outbox entry")
