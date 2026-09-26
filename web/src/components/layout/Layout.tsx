@@ -172,7 +172,8 @@ export function Layout() {
       </header>
 
       {/* Main content with top padding for fixed header */}
-      <main id="main-content" className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full">
+      {/* min-h: пока страница грузится, футер остаётся за краем экрана и не прыгает */}
+      <main id="main-content" className="flex-grow flex flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 w-full min-h-[100svh]">
         <AnimatedOutlet />
       </main>
 

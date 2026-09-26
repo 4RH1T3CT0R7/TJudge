@@ -26,6 +26,7 @@ import type { InvaderPose } from '../components/SpaceInvader';
 import { CinematicOverlay } from '../components/CinematicOverlay';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { useOnRoundFinished } from '../hooks/useOnRoundFinished';
 import { InfoTab } from '../components/tournament/InfoTab';
 import {
   LeaderboardTab,
@@ -126,9 +127,11 @@ export function TournamentDetail() {
   const wsInvaderTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Cinematic state
-  const [cinematicType, setCinematicType] = useState<'tournament_victory' | 'top1_leaderboard' | null>(null);
+  const [cinematicType, setCinematicType] = useState<'tournament_victory' | null>(null);
   const [cinematicTeamName, setCinematicTeamName] = useState('');
-  const prevLeaderRankRef = useRef<number | null>(null);
+  const [top1Banner, setTop1Banner] = useState<string | null>(null);
+  // маскот во вкладках реагирует на живые обновления не чаще раза в 15 с
+  const lastLiveFlashRef = useRef(0);
 
   const flashWsInvader = useCallback((pose: InvaderPose, speech: string | null, duration = 2000) => {
     clearTimeout(wsInvaderTimerRef.current);
@@ -150,23 +153,25 @@ export function TournamentDetail() {
     if (!leaderboardData) return;
     const prev = prevLeaderboardDataRef.current;
     prevLeaderboardDataRef.current = leaderboardData;
-    if (prev && prev !== leaderboardData) {
+    if (prev && prev !== leaderboardData && Date.now() - lastLiveFlashRef.current > 15_000) {
+      lastLiveFlashRef.current = Date.now();
       flashWsInvader('attack', '// обновление!', 800);
     }
+  }, [leaderboardData, flashWsInvader]);
 
-    // Check if user's team reached #1
-    if (myTeam && leaderboardData.length > 0) {
-      const userEntry = leaderboardData.find(e => e.team_id === myTeam.id);
-      if (userEntry) {
-        const wasNotFirst = prevLeaderRankRef.current !== null && prevLeaderRankRef.current > 1;
-        if (userEntry.rank === 1 && wasNotFirst) {
-          setCinematicTeamName(myTeam.name);
-          setCinematicType('top1_leaderboard');
-        }
-        prevLeaderRankRef.current = userEntry.rank;
-      }
-    }
-  }, [leaderboardData, myTeam, flashWsInvader]);
+  // «#1» - только по итогам раунда: посреди раунда суммы частичные. Лидерборд
+  // перечитывается тем же событием, что и раунды, поэтому место проверяется,
+  // когда матчи доиграны и его запрос завершён
+  const roundRunning = (matchRoundsQuery.data ?? []).some(r => r.pending_count > 0 || r.running_count > 0);
+  useOnRoundFinished(roundRunning, !leaderboardQuery.isFetching, () => {
+    const mine = myTeam ? leaderboardData?.find(e => e.team_id === myTeam.id) : undefined;
+    if (mine?.rank === 1 && myTeam) setTop1Banner(`> ${myTeam.name} — #1 по итогам раунда`);
+  });
+  useEffect(() => {
+    if (!top1Banner) return;
+    const t = setTimeout(() => setTop1Banner(null), 2500);
+    return () => clearTimeout(t);
+  }, [top1Banner]);
 
   const tournamentStatusValue = tournament?.status;
   const prevTournamentStatusRef = useRef<TournamentStatus | undefined>(undefined);
@@ -187,17 +192,6 @@ export function TournamentDetail() {
       }
     }
   }, [tournamentStatusValue, myTeam, leaderboardData, flashWsInvader]);
-
-  const matchRoundsData = matchRoundsQuery.data;
-  const prevMatchRoundsDataRef = useRef<MatchRound[] | undefined>(undefined);
-  useEffect(() => {
-    if (!matchRoundsData) return;
-    const prev = prevMatchRoundsDataRef.current;
-    prevMatchRoundsDataRef.current = matchRoundsData;
-    if (prev && prev !== matchRoundsData) {
-      flashWsInvader('run', '// матч!', 1000);
-    }
-  }, [matchRoundsData, flashWsInvader]);
 
   // Инвалидация всего поддерева турнира: детали, лидерборды, матчи, games-status, команды, my-team.
   const invalidateTournamentData = useCallback(() => {
@@ -399,7 +393,7 @@ export function TournamentDetail() {
 
   return (
     <div className="animate-fade-in">
-      {/* Cinematic overlay for tournament victory / #1 */}
+      {/* Cinematic overlay for tournament victory */}
       {cinematicType && (
         <CinematicOverlay
           type={cinematicType}
@@ -407,6 +401,15 @@ export function TournamentDetail() {
           onComplete={() => setCinematicType(null)}
         />
       )}
+
+      {/* «#1» по итогам раунда: немодальная строка, таблицу не закрывает */}
+      <div role="status" className="fixed top-20 inset-x-0 z-40 flex justify-center pointer-events-none px-4">
+        {top1Banner && (
+          <p className="px-4 py-2 rounded-lg border border-amber-500/50 bg-gray-900/95 font-mono text-sm text-amber-400 shadow-lg animate-fade-in">
+            {top1Banner}
+          </p>
+        )}
+      </div>
 
       {/* Header */}
       <div className="mb-8">
@@ -521,7 +524,7 @@ export function TournamentDetail() {
       )}
 
       {/* Tabs */}
-      <div className="bg-gray-900 rounded-lg border border-gray-800 mb-6 p-1.5">
+      <div className="relative bg-gray-900 rounded-lg border border-gray-800 mb-6 p-1.5">
         <nav className="flex gap-1 overflow-x-auto items-center" role="tablist" onKeyDown={handleTabListKeyDown}>
           {tabs.map((tab) => {
             const TabIcon = tab.icon;
@@ -550,13 +553,13 @@ export function TournamentDetail() {
               </button>
             );
           })}
-          {/* WS-reactive mini invader */}
-          {isConnected && wsInvaderPose !== 'idle' && (
-            <div className="ml-auto px-2">
-              <SpaceInvader size="sm" controlledPose={wsInvaderPose} speechBubble={wsInvaderSpeech} />
-            </div>
-          )}
         </nav>
+        {/* маскот живых обновлений вне потока: появление не сдвигает вкладки */}
+        {isConnected && wsInvaderPose !== 'idle' && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden md:block">
+            <SpaceInvader size="sm" controlledPose={wsInvaderPose} speechBubble={wsInvaderSpeech} />
+          </div>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -575,7 +578,7 @@ export function TournamentDetail() {
             onToggleFullscreen={toggleFullscreen}
             onRefresh={refreshLeaderboard}
             isRefreshing={isRefreshingLeaderboard}
-            hasActiveMatches={matchRounds.some(r => r.pending_count > 0 || r.running_count > 0)}
+            hasActiveMatches={roundRunning}
             isCompleted={tournament.status === 'completed'}
           />
         )}
