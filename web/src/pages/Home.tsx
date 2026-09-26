@@ -105,6 +105,7 @@ export function Home() {
           <div className="inline-block px-3 py-1 bg-primary-500/20 rounded-full text-sm font-medium text-primary-300 mb-4 border border-primary-500/30">
             Теория игр в действии
           </div>
+          <title>TJudge — турниры по теории игр</title>
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 leading-tight tracking-tight text-white">
             Соревнуйтесь в стратегическом мышлении
           </h1>

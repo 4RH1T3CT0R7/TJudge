@@ -164,6 +164,11 @@
     outline-offset: 2px;
   }
 
+  /* заголовок получает фокус программно при переходе (AnimatedOutlet), кольцо ему не нужно */
+  h1[tabindex="-1"]:focus-visible {
+    outline: none;
+  }
+
   /* списки вкладок прокручиваются по ширине и обрезали бы внешнее кольцо */
   [role="tab"]:focus-visible {
     outline-offset: -2px;

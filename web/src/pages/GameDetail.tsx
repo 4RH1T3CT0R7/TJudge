@@ -310,6 +310,7 @@ export function GameDetail() {
             {getGameConfig(game.name).icon}
           </div>
           <div>
+            <title>{`${game.display_name} — TJudge`}</title>
             <h1 className={`text-2xl font-bold mb-1 text-gray-100`}>{game.display_name}</h1>
             <p className="text-gray-400 flex items-center gap-3 flex-wrap">
               <span>

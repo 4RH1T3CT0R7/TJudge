@@ -35,6 +35,7 @@ export function Games() {
   return (
     <div>
       <div className="mb-8">
+        <title>Игры — TJudge</title>
         <h1 className="text-3xl font-bold text-gray-100">Доступные игры</h1>
         <p className="mt-2 text-gray-400">
           Список игр, в которые можно играть на платформе TJudge

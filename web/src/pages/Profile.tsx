@@ -69,6 +69,7 @@ export function Profile() {
   return (
     <div className="max-w-2xl mx-auto w-full">
       <div className="card">
+        <title>Профиль — TJudge</title>
         <h1 className="text-2xl font-bold mb-6 text-gray-100">Профиль</h1>
 
         {/* User info */}

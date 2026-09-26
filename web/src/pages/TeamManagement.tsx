@@ -163,6 +163,7 @@ export function TeamManagement() {
 
   return (
     <div className="max-w-4xl mx-auto w-full">
+      <title>{`${teamData.name} — TJudge`}</title>
       {/* Breadcrumb */}
       <nav className="mb-4 text-sm flex flex-wrap items-center gap-x-2">
         <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">

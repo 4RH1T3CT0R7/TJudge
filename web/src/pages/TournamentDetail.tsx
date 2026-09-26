@@ -350,6 +350,7 @@ export function TournamentDetail() {
         <div className="p-4 md:p-6">
           <div className="flex justify-between items-center mb-4">
             <div>
+              <title>{`${tournament.name} — TJudge`}</title>
               <h1 className="text-3xl md:text-4xl font-bold mb-2">{tournament.name}</h1>
               <p className="text-gray-400">
                 {showCrossGameLeaderboard ? 'Рейтинг по играм' : 'Общий рейтинг'}
@@ -423,6 +424,7 @@ export function TournamentDetail() {
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3 mb-3">
+              <title>{`${tournament.name} — TJudge`}</title>
               <h1 className="text-3xl font-bold text-gray-100">{tournament.name}</h1>
               <span className={config.badge}>
                 {config.label}

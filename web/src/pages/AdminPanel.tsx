@@ -414,6 +414,7 @@ export function AdminPanel() {
 
       <div className="relative z-[2]">
       <div className="flex items-center justify-between mb-6">
+        <title>Админка — TJudge</title>
         <h1 className={`text-2xl font-bold ${sudoMode ? 'sudo-text' : 'text-gray-100'}`}>
           {sudoMode ? 'root@tjudge:~# admin' : 'Панель администратора'}
         </h1>

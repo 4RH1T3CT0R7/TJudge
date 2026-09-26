@@ -26,6 +26,7 @@ export function Tournaments() {
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
+            <title>Турниры — TJudge</title>
             <h1 className="text-2xl font-bold text-gray-100 mb-1">Турниры</h1>
             <p className="text-gray-400 text-sm">
               Найдите турнир и присоединяйтесь к соревнованию

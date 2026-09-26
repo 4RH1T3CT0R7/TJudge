@@ -50,6 +50,7 @@ export function GameView() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-2">
+          <title>{`${game.display_name} — TJudge`}</title>
           <h1 className="text-3xl font-bold text-gray-100">{game.display_name}</h1>
           <code className="bg-gray-800 text-gray-100 px-3 py-1 rounded font-mono text-sm">{game.name}</code>
         </div>

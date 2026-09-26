@@ -208,6 +208,7 @@ export function Login() {
           >
             {error ? `stderr: ${error}` : validationError || '// авторизация'}
           </p>
+          <title>Вход — TJudge</title>
           <h1 className="text-2xl font-bold text-gray-100">
             <span className="text-primary-400" style={monoFont}>$ ssh </span>
             <span>tjudge.ru</span>

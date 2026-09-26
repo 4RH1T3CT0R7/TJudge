@@ -87,6 +87,7 @@ export function NotFound() {
         />
       </div>
 
+      <title>Страница не найдена — TJudge</title>
       <h1
         className="text-7xl md:text-9xl font-extrabold mb-4 select-none cursor-pointer"
         style={{
