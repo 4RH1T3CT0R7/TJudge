@@ -48,7 +48,7 @@ func (s *RedisTestSuite) SetupSuite() {
 		Host:     host,
 		Port:     port,
 		Password: password,
-		DB:       1, // Use DB 1 for tests
+		DB:       getEnvInt("REDIS_DB", 1),
 		PoolSize: 10,
 	}, log, m)
 	require.NoError(s.T(), err)
@@ -58,17 +58,8 @@ func (s *RedisTestSuite) SetupSuite() {
 
 func (s *RedisTestSuite) TearDownSuite() {
 	if s.cache != nil {
-		// Clean up test keys
-		_ = s.cache.Del(s.ctx, "test:*")
 		s.cache.Close()
 	}
-}
-
-func (s *RedisTestSuite) SetupTest() {
-	// Clean up test data before each test
-	_ = s.cache.Del(s.ctx, "match:*")
-	_ = s.cache.Del(s.ctx, "leaderboard:*")
-	_ = s.cache.Del(s.ctx, "test:*")
 }
 
 // =============================================================================
@@ -126,7 +117,9 @@ func (s *RedisTestSuite) TestCache_TTLExpiration() {
 }
 
 func (s *RedisTestSuite) TestCache_Exists() {
-	key := "test:exists:key"
+	// свой ключ на прогон: ключ прошлого прогона живёт ещё минуту
+	key := "test:exists:" + uuid.NewString()
+	s.T().Cleanup(func() { _ = s.cache.Del(context.Background(), key) })
 
 	exists, err := s.cache.Exists(s.ctx, key)
 	require.NoError(s.T(), err)

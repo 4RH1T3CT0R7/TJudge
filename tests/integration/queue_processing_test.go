@@ -50,7 +50,7 @@ func (s *QueueProcessingSuite) SetupSuite() {
 		Host:     host,
 		Port:     port,
 		Password: password,
-		DB:       1, // Use DB 1 for tests
+		DB:       getEnvInt("REDIS_DB", 1),
 		PoolSize: 10,
 	}, log, m)
 	require.NoError(s.T(), err)
