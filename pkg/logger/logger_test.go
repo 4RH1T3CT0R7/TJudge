@@ -2,12 +2,15 @@ package logger
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	apperrors "github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestNew(t *testing.T) {
@@ -74,6 +77,21 @@ func TestLogger_LogError(t *testing.T) {
 
 	// не должен паниковать
 	log.LogError("test error", assert.AnError, zap.String("context", "test"))
+}
+
+// ошибка клиента (4xx) идёт в warn, остальные - в error; caller - место вызова LogError
+func TestLogger_LogErrorLevelAndCaller(t *testing.T) {
+	core, logs := observer.New(zap.DebugLevel)
+	log := &Logger{Logger: zap.New(core, zap.AddCaller())}
+
+	log.LogError("client", apperrors.ErrValidation)
+	log.LogError("server", assert.AnError)
+
+	entries := logs.All()
+	require.Len(t, entries, 2)
+	assert.Equal(t, zap.WarnLevel, entries[0].Level)
+	assert.Equal(t, zap.ErrorLevel, entries[1].Level)
+	assert.True(t, strings.HasSuffix(entries[1].Caller.File, "logger_test.go"), entries[1].Caller.File)
 }
 
 func TestLogger_BasicLogging(t *testing.T) {

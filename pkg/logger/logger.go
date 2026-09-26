@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	apperrors "github.com/bmstu-itstech/tjudge/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -67,18 +68,24 @@ func NewWithOptions(opts Options) (*Logger, error) {
 
 	core := zapcore.NewCore(encoder, writeSyncer, zapLevel)
 
-	// CallerSkip(1) - вызовы идут через методы обёртки, иначе caller будет врать
 	logger := zap.New(core,
 		zap.AddCaller(),
-		zap.AddCallerSkip(1),
 		zap.AddStacktrace(zapcore.ErrorLevel),
 	)
 
 	return &Logger{Logger: logger}, nil
 }
 
-// LogError логирует ошибку, добавляя её в поле error
+// LogError логирует ошибку, добавляя её в поле error. ошибка клиента (ответ
+// 4xx: неверный пароль, валидация) пишется как warn - это не сбой сервиса,
+// а doctor.sh считает строки уровня error
 func (l *Logger) LogError(msg string, err error, fields ...zap.Field) {
 	fields = append(fields, zap.Error(err))
-	l.Error(msg, fields...)
+	// caller - место вызова LogError, а не сама обёртка
+	log := l.WithOptions(zap.AddCallerSkip(1))
+	if appErr := apperrors.ToAppError(err); appErr != nil && appErr.Code < 500 {
+		log.Warn(msg, fields...)
+		return
+	}
+	log.Error(msg, fields...)
 }
