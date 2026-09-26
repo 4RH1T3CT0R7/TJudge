@@ -147,11 +147,16 @@ services:
       - DB_USER=tjudge
       - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=tjudge
-      - DB_MAX_CONNECTIONS=100
+      # бюджет max_connections postgres (100): api 2x25 + worker 2x15 = 80,
+      # остаток на migrate, бэкап и ручной psql
+      - DB_MAX_CONNECTIONS=25
+      - DB_MAX_IDLE=5
       - REDIS_HOST=tjudge-redis-prod
       - REDIS_PORT=6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      # как у worker: от него считается порог зависшего матча в /system/status
+      - WORKER_TIMEOUT=90s
       - LOG_LEVEL=info
       - LOG_FORMAT=json
       - LOG_ASYNC=true
@@ -221,12 +226,18 @@ services:
       - DB_USER=tjudge
       - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=tjudge
+      - DB_MAX_CONNECTIONS=15
+      - DB_MAX_IDLE=5
       - REDIS_HOST=tjudge-redis-prod
       - REDIS_PORT=6379
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - JWT_SECRET_FILE=/run/secrets/jwt_secret
-      - WORKER_MIN=20
-      - WORKER_MAX=200
+      # на реплику; каждый воркер держит матч-контейнер с квотой в ядро,
+      # поэтому WORKER_MAX x replicas ~ число ядер хоста (задаётся в .env)
+      - WORKER_MIN=2
+      - WORKER_MAX=${WORKER_MAX:-4}
+      # EXECUTOR_TIMEOUT + запас на запуск контейнера и запись результата
+      - WORKER_TIMEOUT=90s
       - LOG_LEVEL=info
       - LOG_FORMAT=json
       - LOG_ASYNC=true
