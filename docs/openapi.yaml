@@ -2574,6 +2574,13 @@ components:
           type: string
           format: date-time
           nullable: true
+        auto_round_wait:
+          type: string
+          enum: [matches_running, interval, new_programs, participants]
+          description: >
+            Why the auto round did not start on the scheduler's last check
+            (only for games with auto round enabled). Absent when there is no
+            reason: the round was started or starts on the next check.
 
     TournamentGameWithDetailsListEnvelope:
       allOf:

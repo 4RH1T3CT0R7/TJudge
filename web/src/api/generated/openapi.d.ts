@@ -1570,6 +1570,11 @@ export interface components {
             auto_round_interval_seconds?: number;
             /** Format: date-time */
             auto_round_last_run_at?: string | null;
+            /**
+             * @description Why the auto round did not start on the scheduler's last check (only for games with auto round enabled). Absent when there is no reason: the round was started or starts on the next check.
+             * @enum {string}
+             */
+            auto_round_wait?: "matches_running" | "interval" | "new_programs" | "participants";
         };
         TournamentGameWithDetailsListEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["TournamentGameWithDetails"][];

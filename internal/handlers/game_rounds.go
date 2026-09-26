@@ -37,6 +37,7 @@ type GameRoundHandler struct {
 	programRepo              GameProgramRepository
 	tournamentGameStatusRepo TournamentGameStatusRepository
 	roundResetter            GameRoundResetter
+	autoRoundWaits           AutoRoundWaitReader // может быть nil
 	notifier                 events.Notifier
 	uploadDir                string
 	log                      *logger.Logger
@@ -50,6 +51,7 @@ func NewGameRoundHandler(
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
 	roundResetter GameRoundResetter,
+	autoRoundWaits AutoRoundWaitReader,
 	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
@@ -61,6 +63,7 @@ func NewGameRoundHandler(
 		programRepo:              programRepo,
 		tournamentGameStatusRepo: tournamentGameStatusRepo,
 		roundResetter:            roundResetter,
+		autoRoundWaits:           autoRoundWaits,
 		notifier:                 notifier,
 		uploadDir:                uploadDir,
 		log:                      log,
@@ -94,6 +97,8 @@ type TournamentGameWithDetails struct {
 	AutoRoundEnabled      bool      `json:"auto_round_enabled"`
 	AutoRoundIntervalSecs int       `json:"auto_round_interval_seconds"`
 	AutoRoundLastRunAt    *string   `json:"auto_round_last_run_at,omitempty"`
+	// почему авто-раунд не стартовал на последней проверке, пусто - причины нет
+	AutoRoundWait string `json:"auto_round_wait,omitempty"`
 }
 
 // GetTournamentGamesWithStatus возвращает игры с их round-статусом.
@@ -136,6 +141,9 @@ func (h *GameRoundHandler) GetTournamentGamesWithStatus(w http.ResponseWriter, r
 		if d.AutoRoundLastRunAt != nil {
 			formatted := d.AutoRoundLastRunAt.Format("2006-01-02T15:04:05Z07:00")
 			item.AutoRoundLastRunAt = &formatted
+		}
+		if d.AutoRoundEnabled && h.autoRoundWaits != nil {
+			item.AutoRoundWait = h.autoRoundWaits.WaitReason(d.TournamentID, d.GameID)
 		}
 		result = append(result, item)
 	}

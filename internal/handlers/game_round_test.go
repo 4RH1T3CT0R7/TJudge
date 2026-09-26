@@ -113,7 +113,7 @@ func newTestGameRoundHandler(
 		sr = statusRepo
 	}
 
-	return NewGameRoundHandler(gameSvc, nil, mr, nil, sr, nil, events.NoopNotifier{}, "", log)
+	return NewGameRoundHandler(gameSvc, nil, mr, nil, sr, nil, nil, events.NoopNotifier{}, "", log)
 }
 
 func withTwoChiParams(r *http.Request, key1, val1, key2, val2 string) *http.Request {

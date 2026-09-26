@@ -9,6 +9,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -24,13 +25,14 @@ func TestAutoRoundScheduler_processGame(t *testing.T) {
 		hasActive  bool
 		activeErr  error
 		hasNew     bool
-		wantNewChk bool // дошло ли до HasNewProgramsSince
-		wantRun    bool // запущен ли раунд
+		wantNewChk bool   // дошло ли до HasNewProgramsSince
+		wantRun    bool   // запущен ли раунд
+		wantWait   string // причина ожидания для /games/status
 	}{
-		{name: "active_matches_wait", hasActive: true},
+		{name: "active_matches_wait", hasActive: true, wantWait: AutoRoundWaitMatches},
 		{name: "active_check_error", activeErr: errors.New("db down")},
-		{name: "cooldown_not_elapsed", lastRunAt: &recent},
-		{name: "no_new_programs_after_last_run", lastRunAt: &old, wantNewChk: true},
+		{name: "cooldown_not_elapsed", lastRunAt: &recent, wantWait: AutoRoundWaitInterval},
+		{name: "no_new_programs_after_last_run", lastRunAt: &old, wantNewChk: true, wantWait: AutoRoundWaitPrograms},
 		{name: "new_programs_after_last_run", lastRunAt: &old, hasNew: true, wantNewChk: true, wantRun: true},
 		{name: "first_run_without_new_programs", wantNewChk: true, wantRun: true},
 	}
@@ -66,6 +68,7 @@ func TestAutoRoundScheduler_processGame(t *testing.T) {
 
 			s.processGame(ctx, g)
 
+			assert.Equal(t, tt.wantWait, s.WaitReason(g.TournamentID, g.GameID))
 			gameRepo.AssertExpectations(t)
 			matchRepo.AssertExpectations(t)
 			queueManager.AssertExpectations(t)
@@ -98,6 +101,30 @@ func TestAutoRoundScheduler_processGame_RunErrorKeepsLastRun(t *testing.T) {
 
 	s.processGame(ctx, g)
 
+	gameRepo.AssertNotCalled(t, "UpdateAutoRoundLastRun", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// меньше двух готовых программ: раунд не стартует, и таймер говорит почему
+func TestAutoRoundScheduler_processGame_NotEnoughParticipants(t *testing.T) {
+	ss, tournamentRepo, matchRepo, _, distLock, gameRepo := newTestSchedulingService(t)
+	log, _ := logger.New("error", "json")
+	s := NewAutoRoundScheduler(ss, gameRepo, log, time.Second)
+	ctx := context.Background()
+
+	g := &models.AutoRoundGameInfo{TournamentID: uuid.New(), GameID: uuid.New(), GameType: "dilemma", IntervalSeconds: 60}
+
+	gameRepo.On("HasActiveMatchesForGame", ctx, g.TournamentID, g.GameType).Return(false, nil)
+	gameRepo.On("HasNewProgramsSince", ctx, g.TournamentID, g.GameType, time.Time{}).Return(true, nil)
+	distLock.On("WithLock", anyLock()...).Return(nil)
+	tournamentRepo.On("GetByID", ctx, g.TournamentID).Return(activeTournament(g.TournamentID), nil)
+	matchRepo.On("GetPendingByTournamentAndGame", ctx, g.TournamentID, g.GameType).Return([]*models.Match{}, nil)
+	tournamentRepo.On("GetLatestParticipantsByGame", ctx, g.TournamentID, g.GameType).Return([]*models.TournamentParticipant{
+		{ID: uuid.New(), TournamentID: g.TournamentID, ProgramID: uuid.New()},
+	}, nil)
+
+	s.processGame(ctx, g)
+
+	assert.Equal(t, AutoRoundWaitParticipants, s.WaitReason(g.TournamentID, g.GameID))
 	gameRepo.AssertNotCalled(t, "UpdateAutoRoundLastRun", mock.Anything, mock.Anything, mock.Anything)
 }
 

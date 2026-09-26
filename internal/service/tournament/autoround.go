@@ -2,13 +2,24 @@ package tournament
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
+)
+
+// причины, по которым авто-раунд не стартовал на последней проверке.
+// отдаются в /games/status, чтобы таймер не обещал «вот-вот» бесконечно
+const (
+	AutoRoundWaitMatches      = "matches_running" // идёт прошлый раунд
+	AutoRoundWaitInterval     = "interval"        // не прошёл интервал с прошлого запуска
+	AutoRoundWaitPrograms     = "new_programs"    // с прошлого раунда нет новых программ
+	AutoRoundWaitParticipants = "participants"    // меньше двух готовых программ
 )
 
 // AutoRoundScheduler - раз в N секунд смотрит игры с включённым авто-раундом
@@ -21,6 +32,22 @@ type AutoRoundScheduler struct {
 	pollInterval time.Duration
 	stopCh       chan struct{}
 	stopOnce     sync.Once
+
+	// причина последней проверки по игре: ключ tournamentID/gameID.
+	// у каждой реплики api свой планировщик, и каждая проверяет все игры
+	waits sync.Map
+}
+
+// WaitReason - почему авто-раунд игры не стартовал на последней проверке;
+// пустая строка - причины нет (раунд запущен или стартует на ближайшей проверке)
+func (s *AutoRoundScheduler) WaitReason(tournamentID, gameID uuid.UUID) string {
+	reason, _ := s.waits.Load(tournamentID.String() + "/" + gameID.String())
+	r, _ := reason.(string)
+	return r
+}
+
+func (s *AutoRoundScheduler) setWait(g *models.AutoRoundGameInfo, reason string) {
+	s.waits.Store(g.TournamentID.String()+"/"+g.GameID.String(), reason)
 }
 
 func NewAutoRoundScheduler(
@@ -103,6 +130,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return
 	}
 	if hasActive {
+		s.setWait(g, AutoRoundWaitMatches)
 		return // ещё крутятся, надо ждать
 	}
 
@@ -110,6 +138,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 	if g.LastRunAt != nil {
 		elapsed := time.Since(*g.LastRunAt)
 		if elapsed < time.Duration(g.IntervalSeconds)*time.Second {
+			s.setWait(g, AutoRoundWaitInterval)
 			return // рано ещё
 		}
 	}
@@ -129,6 +158,7 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return
 	}
 	if !hasNew && g.LastRunAt != nil {
+		s.setWait(g, AutoRoundWaitPrograms)
 		return // новых прог нет, перезапускать нечего
 	}
 
@@ -140,6 +170,11 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		logFn := s.log.Warn
 		if appErr := errors.GetAppError(err); appErr != nil && appErr.Code < 500 {
 			logFn = s.log.Debug
+			// 400 здесь - только нехватка участников; лок и неактивный турнир
+			// причину не меняют: первое временно, второе фронт видит по статусу
+			if appErr.Code == http.StatusBadRequest {
+				s.setWait(g, AutoRoundWaitParticipants)
+			}
 		}
 		logFn("Auto-round: round not started",
 			zap.Error(err),
@@ -148,6 +183,8 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		)
 		return
 	}
+
+	s.setWait(g, "")
 
 	// обновляется время последнего запуска
 	if updateErr := s.gameRepo.UpdateAutoRoundLastRun(ctx, g.TournamentID, g.GameID); updateErr != nil {

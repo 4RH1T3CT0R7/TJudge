@@ -55,6 +55,11 @@ type GameRoundResetter interface {
 	ResetGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error)
 }
 
+// AutoRoundWaitReader - почему авто-раунд игры не стартовал на последней проверке планировщика.
+type AutoRoundWaitReader interface {
+	WaitReason(tournamentID, gameID uuid.UUID) string
+}
+
 // TournamentGameStatusRepository - интерфейс управления статусом игр и раундами.
 type TournamentGameStatusRepository interface {
 	GetTournamentGames(ctx context.Context, tournamentID uuid.UUID) ([]*models.TournamentGame, error)
@@ -89,6 +94,7 @@ func NewGameHandler(
 	programRepo GameProgramRepository,
 	tournamentGameStatusRepo TournamentGameStatusRepository,
 	roundResetter GameRoundResetter,
+	autoRoundWaits AutoRoundWaitReader,
 	notifier events.Notifier,
 	uploadDir string,
 	log *logger.Logger,
@@ -96,7 +102,7 @@ func NewGameHandler(
 	return &GameHandler{
 		GameCRUDHandler:       NewGameCRUDHandler(gameService, log),
 		TournamentGameHandler: NewTournamentGameHandler(gameService, tournamentRepo, log),
-		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, roundResetter, notifier, uploadDir, log),
+		GameRoundHandler:      NewGameRoundHandler(gameService, leaderboardRepo, matchRepo, programRepo, tournamentGameStatusRepo, roundResetter, autoRoundWaits, notifier, uploadDir, log),
 	}
 }
 
