@@ -487,6 +487,32 @@ func (s *RatingRepositorySuite) TestApplyMatchResult_MatchDeleted() {
 	assert.Equal(s.T(), 0, wins1)
 }
 
+// история есть, а outbox pending: так оставлял старый воркер, писавший рейтинг
+// до закрытия задачи. повторно рейтинг не применяется
+func (s *RatingRepositorySuite) TestApplyMatchResult_HistoryWithPendingOutbox() {
+	tournament, program1 := s.setupRatingPrerequisites("aphist")
+	user2 := s.createUser("rating_aphist2")
+	program2 := s.createProgram(user2.ID, "RatingBot_aphist2")
+	s.addParticipant(tournament.ID, program1.ID, 1516)
+	s.addParticipant(tournament.ID, program2.ID, 1484)
+
+	ctx := context.Background()
+	match := s.completedMatch(tournament.ID, program1.ID, program2.ID, 1)
+	s.createRatingHistory(program1.ID, tournament.ID, 1500, 1516, 16, &match.ID)
+	s.createRatingHistory(program2.ID, tournament.ID, 1500, 1484, -16, &match.ID)
+
+	require.NoError(s.T(), s.ratingService().ProcessMatchResult(ctx, match))
+
+	r1, wins1, _ := s.stats(tournament.ID, program1.ID)
+	assert.Equal(s.T(), 1516, r1)
+	assert.Equal(s.T(), 0, wins1)
+
+	var historyRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &historyRows,
+		"SELECT COUNT(*) FROM rating_history WHERE match_id = $1", match.ID))
+	assert.Equal(s.T(), 2, historyRows)
+}
+
 // fast path и диспетчер одновременно по одному матчу: применяется ровно один раз
 func (s *RatingRepositorySuite) TestApplyMatchResult_ConcurrentSameMatch() {
 	tournament, program1 := s.setupRatingPrerequisites("apcc")
