@@ -67,6 +67,9 @@ COPY --chmod=0755 docker/tjudge/sandbox.sh /usr/local/bin/sandbox
 RUN mkdir -m 0700 /mnt/programs
 WORKDIR /programs
 
-# Пользователя нет: точка входа стартует от root с минимумом capabilities
-# и запускает каждого бота под своим uid
+# executor запускает точку входа от root с минимумом capabilities, и она
+# разводит ботов по своим uid. tjudge (uid 1000) - для старого executor'а,
+# который User не задаёт (см. sandbox.sh)
+RUN adduser -D -H -s /sbin/nologin tjudge
+USER tjudge
 ENTRYPOINT ["/usr/local/bin/sandbox"]
