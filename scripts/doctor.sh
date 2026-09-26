@@ -358,11 +358,20 @@ check_backups() {
     have docker || return 0
     docker ps --format '{{.Names}}' 2>/dev/null | grep -qx tjudge-backup || return 0
 
-    local pattern fresh
+    local pattern fresh started young=false
+    # первый прогон идёт сразу после старта контейнера, деплой его пересоздаёт.
+    # date -d есть только в GNU date, на macOS проверка возраста остаётся строгой
+    if started=$(docker inspect -f '{{.State.StartedAt}}' tjudge-backup 2>/dev/null) \
+        && started=$(date -d "$started" +%s 2>/dev/null) \
+        && [ $(( $(date +%s) - started )) -lt 3600 ]; then
+        young=true
+    fi
     for pattern in 'tjudge_*.sql.gz' 'programs_*.tar.gz'; do
         fresh=$(find backups -maxdepth 1 -name "$pattern" -mmin -"$((DOCTOR_BACKUP_MAX_AGE_HOURS * 60))" 2>/dev/null | head -1)
         if [ -n "$fresh" ]; then
             add ok "backup:${pattern%%_*}" "свежий бэкап: $fresh"
+        elif $young; then
+            add ok "backup:${pattern%%_*}" "контейнер бэкапа запущен меньше часа назад, первый прогон в работе"
         else
             add crit "backup:${pattern%%_*}" "нет бэкапа $pattern моложе ${DOCTOR_BACKUP_MAX_AGE_HOURS}ч в ./backups" "docker logs --tail=50 tjudge-backup | grep ERROR"
         fi
