@@ -31,7 +31,7 @@ func (s stubTokens) GetUserFromToken(context.Context, string) (*models.User, err
 
 func (stubTokens) IsTokenBlacklisted(context.Context, string) (bool, error) { return false, nil }
 
-// запоминает ключи и отказывает счётчику auth, чтобы до хендлера не дойти
+// запоминает ключи и отказывает счётчику по ip, чтобы до хендлера не дойти
 type keyRecorder struct {
 	mu   sync.Mutex
 	keys []string
@@ -41,12 +41,14 @@ func (k *keyRecorder) Allow(_ context.Context, key string, _ int, _ time.Duratio
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.keys = append(k.keys, key)
-	return !strings.HasPrefix(key, "ratelimit:auth:"), nil
+	return !strings.Contains(key, ":ip:"), nil
 }
 
 // логин с чужим bearer-токеном всё равно считается по ip: иначе каждый
 // зарегистрированный аккаунт давал бы перебору паролей свой счётчик
-func TestAuthRateLimit_KeyedByIP(t *testing.T) {
+// шлёт POST с bearer-токеном и возвращает код ответа и ключи лимитера
+func postWithToken(t *testing.T, path string) (int, []string, uuid.UUID) {
+	t.Helper()
 	log, err := logger.New("error", "json")
 	require.NoError(t, err)
 	userID := uuid.New()
@@ -65,15 +67,32 @@ func TestAuthRateLimit_KeyedByIP(t *testing.T) {
 	})
 	defer s.Close()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader("{}"))
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}"))
 	req.RemoteAddr = "203.0.113.9:5000"
 	req.Header.Set("Authorization", "Bearer token")
 	rec := httptest.NewRecorder()
 	s.router.ServeHTTP(rec, req)
+	return rec.Code, limiter.keys, userID
+}
 
-	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+func TestAuthRateLimit_KeyedByIP(t *testing.T) {
+	code, keys, userID := postWithToken(t, "/api/v1/auth/login")
+
+	assert.Equal(t, http.StatusTooManyRequests, code)
 	assert.Equal(t, []string{
 		"ratelimit:api:user:" + userID.String(),
 		"ratelimit:auth:ip:203.0.113.9",
-	}, limiter.keys)
+	}, keys)
+}
+
+// вступление по коду тоже по ip: иначе пачка аккаунтов с одного адреса
+// перебирала бы инвайт-коды каждый в своём счётчике
+func TestJoinRateLimit_KeyedByIP(t *testing.T) {
+	code, keys, userID := postWithToken(t, "/api/v1/teams/join")
+
+	assert.Equal(t, http.StatusTooManyRequests, code)
+	assert.Equal(t, []string{
+		"ratelimit:api:user:" + userID.String(),
+		"ratelimit:join:ip:203.0.113.9",
+	}, keys)
 }
