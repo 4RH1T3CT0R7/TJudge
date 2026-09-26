@@ -73,6 +73,9 @@ jobs:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # дефолт 10m: первый pull builder'а (тулчейны на гигабайты), перенос
+          # программ и остановка worker'ов по 120s в него не укладываются
+          command_timeout: 30m
           envs: GHCR_TOKEN,TAG
           script: |
             set -e
@@ -82,10 +85,10 @@ jobs:
             git checkout -q --detach "$TAG"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
             export GITHUB_REPOSITORY_OWNER=4rh1t3ct0r7
-            export HOST_PROGRAMS_PATH="$PWD/data/programs"
-            # значения хоста пишутся в .env один раз, их же берёт ручной docker compose
+            # значения хоста пишутся в .env один раз, оттуда их берут и деплой,
+            # и ручной docker compose
             grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
-            grep -q '^HOST_PROGRAMS_PATH=' .env 2>/dev/null || echo "HOST_PROGRAMS_PATH=$HOST_PROGRAMS_PATH" >> .env
+            grep -q '^HOST_PROGRAMS_PATH=' .env 2>/dev/null || echo "HOST_PROGRAMS_PATH=$PWD/data/programs" >> .env
             ./scripts/init-secrets.sh
             export VERSION=${TAG#v}
             P="docker compose -f docker-compose.prod.yml"
