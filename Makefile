@@ -83,7 +83,7 @@ test-coverage:
 lint:
 	@echo "Running linters..."
 	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4)
-	golangci-lint run ./... --timeout=5m
+	golangci-lint run --timeout=5m --build-tags=integration,e2e,security ./...
 
 # Run API server
 run-api:
@@ -189,7 +189,7 @@ fmt:
 # Run integration tests
 test-integration:
 	@echo "Running integration tests..."
-	go test -v -p 1 -tags=integration ./internal/storage/... ./tests/integration/...
+	go test -v -race -count=1 -p 1 -tags=integration ./internal/storage/... ./tests/integration/...
 
 # Run E2E tests
 test-e2e:
