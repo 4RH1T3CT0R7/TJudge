@@ -1,12 +1,12 @@
 # Dependencies caching stage
-FROM golang:1.26.8-alpine AS deps
+FROM golang:1.27.1-alpine AS deps
 
 WORKDIR /deps
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Build stage
-FROM golang:1.26.8-alpine AS builder
+FROM golang:1.27.1-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git make
