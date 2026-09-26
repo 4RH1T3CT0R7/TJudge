@@ -16,6 +16,8 @@ const GREETINGS = [
 export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  // позиция каретки в поле пароля, null - поле не в фокусе
+  const [passwordCaret, setPasswordCaret] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
@@ -226,29 +228,49 @@ export function Login() {
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-primary-400 text-sm shrink-0" style={monoFont}>{'>'}</span>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={(e) => {
-                  setFocusedField('password');
-                  setValidationError(null);
-                  wrapperFocus(e.currentTarget.parentElement);
-                }}
-                onBlur={(e) => {
-                  setFocusedField(null);
-                  wrapperBlur(e.currentTarget.parentElement);
-                }}
-                className="flex-1 text-gray-100 placeholder:text-gray-600 bg-transparent"
-                style={{ border: 'none', boxShadow: 'none', ...monoFont }}
-                autoComplete="current-password"
-                placeholder="********"
-                aria-label="Пароль"
-                aria-required="true"
-                aria-invalid={!!validationError && validationError.includes('пароль')}
-                aria-describedby={validationError ? 'login-error' : undefined}
-              />
+              {/* нативное поле пароля (автозаполнение, IME) с прозрачным текстом,
+                  поверх - звёздочки и своя каретка: в моноширинном шрифте '*' шириной 1ch */}
+              <div className="relative flex-1">
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setPasswordCaret(e.target.selectionStart);
+                  }}
+                  onSelect={(e) => setPasswordCaret(e.currentTarget.selectionStart)}
+                  onFocus={(e) => {
+                    setFocusedField('password');
+                    setValidationError(null);
+                    setPasswordCaret(e.currentTarget.selectionStart);
+                    wrapperFocus(e.currentTarget.parentElement?.parentElement ?? null);
+                  }}
+                  onBlur={(e) => {
+                    setFocusedField(null);
+                    setPasswordCaret(null);
+                    wrapperBlur(e.currentTarget.parentElement?.parentElement ?? null);
+                  }}
+                  className="w-full text-transparent placeholder:text-gray-600 bg-transparent selection:bg-transparent"
+                  style={{ border: 'none', boxShadow: 'none', caretColor: 'transparent', letterSpacing: 0, ...monoFont }}
+                  autoComplete="current-password"
+                  placeholder="********"
+                  aria-label="Пароль"
+                  aria-required="true"
+                  aria-invalid={!!validationError && validationError.includes('пароль')}
+                  aria-describedby={validationError ? 'login-error' : undefined}
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre text-gray-100"
+                  style={{ letterSpacing: 0, ...monoFont }}
+                >
+                  {'*'.repeat(password.length)}
+                  {passwordCaret !== null && (
+                    <span className="absolute h-[1.1em] w-px bg-gray-100 animate-pulse" style={{ left: `${passwordCaret}ch` }} />
+                  )}
+                </span>
+              </div>
             </div>
           </div>
 
