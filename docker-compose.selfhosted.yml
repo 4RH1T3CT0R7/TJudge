@@ -275,7 +275,8 @@ services:
     restart: unless-stopped
 
   # pg_dump и архив программ в ./backups раз в BACKUP_INTERVAL_SECONDS, копия
-  # до 50 МБ - в Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID в .env).
+  # до 50 МБ - в Telegram, только при BACKUP_TELEGRAM_CHAT_ID в .env (дамп с
+  # персональными данными, чат задаётся отдельно от алертов).
   # Включается профилем: docker compose ... --profile backup up -d backup
   backup:
     build:
@@ -290,7 +291,7 @@ services:
       - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - BACKUP_TELEGRAM_CHAT_ID=${BACKUP_TELEGRAM_CHAT_ID:-}
     secrets:
       - db_password
     volumes:

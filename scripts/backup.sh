@@ -70,13 +70,14 @@ else
     exit 1
 fi
 
-# Off-site копия в Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID, env или .env).
+# Off-site копия в Telegram (TELEGRAM_BOT_TOKEN + BACKUP_TELEGRAM_CHAT_ID из env):
+# в дампе email и хеши паролей, поэтому чат задаётся отдельно от алертов.
 # Лимит Bot API на документ - 50MB, больший файл остаётся только локально.
 send_to_telegram() {
     local file="$1"
 
-    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-        log_warn "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID не заданы - off-site копия $file не отправлена"
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${BACKUP_TELEGRAM_CHAT_ID:-}" ]; then
+        log_warn "TELEGRAM_BOT_TOKEN/BACKUP_TELEGRAM_CHAT_ID не заданы - off-site копия $file не отправлена"
         return 0
     fi
 
@@ -90,7 +91,7 @@ send_to_telegram() {
     log_info "Отправка $file в Telegram..."
     local response
     if response=$(curl -sS --max-time 120 \
-        -F "chat_id=${TELEGRAM_CHAT_ID}" \
+        -F "chat_id=${BACKUP_TELEGRAM_CHAT_ID}" \
         -F "document=@${file}" \
         -F "caption=TJudge backup $(date '+%Y-%m-%d %H:%M:%S') ($(du -h "$file" | cut -f1 | tr -d ' '))" \
         "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"); then

@@ -3,8 +3,9 @@
 #   - pg_dump в /backups/tjudge_<время>.sql.gz;
 #   - каталог программ (/data/programs без build/) в programs_<время>.tar.gz,
 #     с той же меткой времени - restore.sh находит пару по ней;
-#   - при заданных TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID копия каждого файла
-#     до 50 МБ (лимит Bot API) уходит в Telegram;
+#   - при заданных TELEGRAM_BOT_TOKEN и BACKUP_TELEGRAM_CHAT_ID копия каждого
+#     файла до 50 МБ (лимит Bot API) уходит в Telegram. в дампе email и хеши
+#     паролей, поэтому чат задаётся отдельно от алертов и только явно;
 #   - файлы старше BACKUP_RETENTION_DAYS удаляются.
 # Сбой пишется в лог как ERROR, следующая попытка - по расписанию.
 # Разовый прогон: docker exec tjudge-backup /entrypoint.sh --once
@@ -32,7 +33,7 @@ log() {
 
 send_to_telegram() {
     local file=$1 size
-    if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+    if [[ -z "${TELEGRAM_BOT_TOKEN:-}" || -z "${BACKUP_TELEGRAM_CHAT_ID:-}" ]]; then
         return 0
     fi
     size=$(stat -c '%s' "$file")
@@ -40,7 +41,7 @@ send_to_telegram() {
         log "WARN ${file} больше 50 МБ, в Telegram не отправлен: копия только на хосте"
         return 0
     fi
-    if curl -sS --max-time 300 -F "chat_id=${TELEGRAM_CHAT_ID}" -F "document=@${file}" \
+    if curl -sS --max-time 300 -F "chat_id=${BACKUP_TELEGRAM_CHAT_ID}" -F "document=@${file}" \
         "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" | grep -q '"ok":true'; then
         log "Telegram copy OK: ${file}"
     else
