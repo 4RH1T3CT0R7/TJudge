@@ -138,7 +138,8 @@ func TestStripDockerLogHeaders(t *testing.T) {
 }
 
 // размер артефакта считается по всем файлам сборки, включая вложенные
-// (javac кладёт Foo$Bar.class рядом, а бинарник-бомба весит сотни мегабайт)
+// (javac кладёт Foo$Bar.class рядом, а бинарник-бомба весит сотни мегабайт),
+// и в страницах tmpfs: 4-байтовый файл занимает там 4 КиБ
 func TestDirSize(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "Main.class"), []byte("cafe"), 0o600))
@@ -150,5 +151,5 @@ func TestDirSize(t *testing.T) {
 
 	size, err := dirSize(dir)
 	require.NoError(t, err)
-	assert.Equal(t, int64(maxArtifactSize+4), size)
+	assert.Equal(t, int64(maxArtifactSize+4096), size)
 }

@@ -456,8 +456,11 @@ func stripDockerLogHeaders(data []byte) string {
 	return sb.String()
 }
 
-// dirSize - суммарный размер обычных файлов в каталоге
+// dirSize - место, которое файлы каталога займут в tmpfs /programs матча.
+// там каждый непустой файл занимает целые страницы, и тысячи однобайтовых
+// .class по видимому размеру проходили бы лимит, а tmpfs переполняли
 func dirSize(dir string) (int64, error) {
+	const page = 4096
 	var total int64
 	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil || !d.Type().IsRegular() {
@@ -467,7 +470,7 @@ func dirSize(dir string) (int64, error) {
 		if err != nil {
 			return err
 		}
-		total += info.Size()
+		total += (info.Size() + page - 1) / page * page
 		return nil
 	})
 	return total, err
