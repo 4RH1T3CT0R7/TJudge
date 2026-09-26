@@ -353,7 +353,9 @@ func (s *Server) setupRoutes() {
 			r.Use(s.auth())
 
 			r.Post("/", s.teamHandler.Create)
-			r.Post("/join", s.teamHandler.JoinByCode)
+			// вступление по ip, как логин: по user id каждый новый аккаунт давал
+			// бы перебору инвайт-кодов свой счётчик
+			r.With(s.rateLimit("join", nil)).Post("/join", s.teamHandler.JoinByCode)
 			r.Get("/{id}", s.teamHandler.Get)
 			r.Put("/{id}", s.teamHandler.UpdateName)
 			r.Get("/{id}/members", s.teamHandler.GetMembers)
