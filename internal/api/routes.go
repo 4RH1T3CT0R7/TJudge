@@ -13,10 +13,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 
-	_ "github.com/bmstu-itstech/tjudge/docs/swagger"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // Server - http сервер со всеми хендлерами и роутером
@@ -223,16 +221,7 @@ func (s *Server) setupRoutes() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	// swagger только под админом
-	s.router.Group(func(r chi.Router) {
-		r.Use(s.auth())
-		r.Use(s.requireAdmin())
-		r.Get("/swagger/*", httpSwagger.Handler(
-			httpSwagger.URL("/swagger/doc.json"),
-		))
-	})
-
-	// pprof тоже за админом - он раскрывает внутренности процесса,
+	// pprof за админом - он раскрывает внутренности процесса,
 	// но для диагностики cpu/heap в проде вещь незаменимая
 	s.router.Group(func(r chi.Router) {
 		r.Use(s.auth())

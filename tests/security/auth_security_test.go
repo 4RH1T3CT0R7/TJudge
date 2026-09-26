@@ -189,7 +189,6 @@ var adminEndpoints = []struct {
 	{"POST", "/api/v1/system/recovery/reset-stuck-matches"},
 	{"POST", "/api/v1/system/recovery/clear-dead-letter"},
 	{"GET", "/api/v1/admin/audit"},
-	{"GET", "/swagger/index.html"},
 	{"GET", "/debug/pprof/"},
 }
 
