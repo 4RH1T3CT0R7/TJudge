@@ -31,6 +31,8 @@ help:
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
+	@echo "  make test-security - Run security tests against E2E_API_URL"
+	@echo "  make security      - gosec + govulncheck with CI allowlist"
 	@echo ""
 	@echo "  === Docker ==="
 	@echo "  make docker-build  - Build all Docker images"
@@ -192,13 +194,27 @@ test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
 
-# Security scan
+# Security scan. allowlist govulncheck тот же, что в ci.yml: у github.com/docker/docker
+# фикса в этом пути модуля нет, обе уязвимости про демон, а не клиентский SDK
+VULN_ALLOWLIST := GO-2026-4887|GO-2026-4883
+# сканеры ставятся в bin/tools текущим тулчейном: собранный старым go gosec
+# не разбирает новый синтаксис, а govulncheck из PATH может быть не той версии
+TOOLS_BIN := $(CURDIR)/bin/tools
+
 security:
 	@echo "Running security scan..."
-	@which gosec > /dev/null || (echo "Installing gosec..." && go install github.com/securego/gosec/v2/cmd/gosec@latest)
-	gosec ./...
-	@which govulncheck > /dev/null || (echo "Installing govulncheck..." && go install golang.org/x/vuln/cmd/govulncheck@latest)
-	govulncheck ./...
+	GOBIN=$(TOOLS_BIN) go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+	GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+	$(TOOLS_BIN)/gosec -quiet ./...
+	@rc=0; out=$$($(TOOLS_BIN)/govulncheck ./...) || rc=$$?; echo "$$out"; \
+	if [ "$$rc" -ne 0 ] && [ "$$rc" -ne 3 ]; then exit "$$rc"; fi; \
+	new=$$(echo "$$out" | grep -oE '^Vulnerability #[0-9]+: GO-[0-9]+-[0-9]+' | awk '{print $$3}' | grep -vxE '$(VULN_ALLOWLIST)' || true); \
+	if [ -n "$$new" ]; then echo "уязвимости вне allowlist:"; echo "$$new"; exit 1; fi
+
+# Security-тесты против запущенного API (E2E_API_URL, по умолчанию http://localhost:8080)
+test-security:
+	@echo "Running security tests..."
+	go test -count=1 -tags=security ./tests/security/...
 
 # Make user admin by email. Auto-detects postgres container (local or prod).
 admin:
