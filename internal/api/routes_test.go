@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	stderrors "errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -64,6 +65,56 @@ func TestServer_WebSocketHandshakeWithGzip(t *testing.T) {
 
 	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
 	assert.Empty(t, resp.Header.Get("Content-Encoding"))
+}
+
+// отклоняет любой токен, как протухший
+type expiredTokens struct{}
+
+func (expiredTokens) ValidateToken(string) (*auth.Claims, error) {
+	return nil, stderrors.New("token is expired")
+}
+
+func (expiredTokens) GetUserFromToken(context.Context, string) (*models.User, error) {
+	return nil, stderrors.New("token is expired")
+}
+
+func (expiredTokens) IsTokenBlacklisted(context.Context, string) (bool, error) { return false, nil }
+
+type logoutRecorder struct {
+	handlers.AuthService
+	refresh string
+}
+
+func (l *logoutRecorder) Logout(_ context.Context, _, refreshToken string) error {
+	l.refresh = refreshToken
+	return nil
+}
+
+// logout с протухшим access доходит до хендлера: иначе refresh из тела не
+// отзывался и жил на сервере до конца срока
+func TestServer_LogoutWithExpiredAccess(t *testing.T) {
+	log, err := logger.New("error", "json")
+	require.NoError(t, err)
+	svc := &logoutRecorder{}
+	srv := NewServer(ServerDeps{
+		AuthHandler: handlers.NewAuthHandler(svc, log),
+		GameHandler: &handlers.GameHandler{
+			GameCRUDHandler:       &handlers.GameCRUDHandler{},
+			TournamentGameHandler: &handlers.TournamentGameHandler{},
+			GameRoundHandler:      &handlers.GameRoundHandler{},
+		},
+		AuthService: expiredTokens{},
+		Log:         log,
+	})
+	t.Cleanup(srv.Close)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", strings.NewReader(`{"refresh_token":"r1"}`))
+	req.Header.Set("Authorization", "Bearer expired")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Equal(t, "r1", svc.refresh)
 }
 
 // TestServer_Close_Idempotent - регрессия на идемпотентность Close().

@@ -273,8 +273,12 @@ func (s *Service) Logout(ctx context.Context, accessToken, refreshToken string) 
 	}
 
 	if refreshToken != "" {
-		// рефреш кладётся на полный ttl, тк его срок может быть позже чем у access
-		if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
+		// ручка публичная: в блеклист идёт только подписанный refresh, иначе
+		// аноним забивал бы редис произвольными строками. рефреш кладётся на
+		// полный ttl, тк его срок может быть позже чем у access
+		if _, _, err := s.jwtManager.ValidateRefreshToken(refreshToken); err != nil {
+			s.log.Info("Refresh token validation failed during logout", zap.Error(err))
+		} else if err := s.tokenBlacklist.Add(ctx, refreshToken, s.jwtManager.RefreshTokenTTL()); err != nil {
 			s.log.LogError("Failed to blacklist refresh token", err)
 			return fmt.Errorf("failed to blacklist refresh token: %w", err)
 		}

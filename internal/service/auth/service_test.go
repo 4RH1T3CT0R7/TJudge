@@ -481,6 +481,17 @@ func TestService_Logout_RefreshBlacklistError(t *testing.T) {
 	blacklist.AssertExpectations(t)
 }
 
+// в блеклист не идёт строка, не являющаяся refresh-токеном: ручка публичная
+func TestService_Logout_InvalidRefreshNotBlacklisted(t *testing.T) {
+	service, _, blacklist := newTestService(t)
+	accessToken, _ := service.jwtManager.GenerateAccessToken(uuid.New(), "testuser", models.RoleUser)
+
+	err := service.Logout(context.Background(), "", accessToken)
+
+	assert.NoError(t, err)
+	blacklist.AssertNotCalled(t, "Add", mock.Anything, mock.Anything, mock.Anything)
+}
+
 // --- токены и юзер по токену ---
 
 func TestService_IsTokenBlacklisted(t *testing.T) {
