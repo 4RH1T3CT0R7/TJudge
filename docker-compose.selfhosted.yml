@@ -53,7 +53,7 @@ services:
       --appendonly yes
       --appendfsync everysec
       --maxmemory ${REDIS_MAXMEMORY:-512mb}
-      --maxmemory-policy volatile-lru
+      --maxmemory-policy noeviction
       --save 900 1
       --save 300 10
       --save 60 10000
@@ -206,6 +206,14 @@ services:
       - ./data/programs:/data/programs
     networks:
       - tjudge-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    # матчи в работе доигрываются до WORKER_TIMEOUT (до 120s в профиле weak)
+    stop_grace_period: 150s
     restart: unless-stopped
 
   # Nginx reverse proxy

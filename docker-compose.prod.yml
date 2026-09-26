@@ -42,7 +42,8 @@ services:
         max-size: "100m"
         max-file: "5"
 
-  # Redis Cache
+  # Redis: очереди, локи, blacklist токенов и кэш. вытеснение ключей потеряло бы
+  # матчи и локи, поэтому noeviction: при нехватке памяти запись падает с ошибкой
   redis:
     image: redis:7-alpine
     container_name: tjudge-redis-prod
@@ -51,7 +52,7 @@ services:
       --requirepass "$$(cat /run/secrets/redis_password)"
       --appendonly yes
       --maxmemory 1gb
-      --maxmemory-policy allkeys-lru'
+      --maxmemory-policy noeviction'
     labels:
       # Guardian: как и postgres - только уведомления (AOF-load при старте).
       guardian.enabled: "true"
@@ -272,6 +273,15 @@ services:
       - monitoring
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # на старте worker проверяет образы песочниц и убирает осиротевшие контейнеры
+      start_period: 120s
+    # на остановке матчи в работе доигрываются до WORKER_TIMEOUT, потом отмена
+    stop_grace_period: 120s
     deploy:
       replicas: 2
     restart: always
