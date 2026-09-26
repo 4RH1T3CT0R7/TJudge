@@ -158,6 +158,7 @@ export function GameDetail() {
 
   // Process uploaded file (used by both input and drag-drop)
   const processFile = async (file: File) => {
+    setUploadSuccess(false);
     if (!tournamentId || !gameId || !myTeam) {
       setUploadError('Не удалось загрузить: отсутствуют данные команды');
       return;
@@ -170,7 +171,6 @@ export function GameDetail() {
 
     setIsUploading(true);
     setUploadError(null);
-    setUploadSuccess(false);
     setUploadInvaderBubble('// загружаю...');
 
     try {
@@ -194,11 +194,8 @@ export function GameDetail() {
         setUploadInvaderBubble('{ загружено: true }');
         setUploadInvaderJump(true);
         setTimeout(() => setUploadInvaderJump(false), 100);
-        // Hide success message after 3 seconds
-        setTimeout(() => {
-          setUploadSuccess(false);
-          setUploadInvaderBubble('// жду код...');
-        }, 3000);
+        // сообщение об успехе держится до следующей загрузки, реплика маскота - 3 с
+        setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
       }
 
       // Clear file input
@@ -249,6 +246,7 @@ export function GameDetail() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    setUploadSuccess(false);
 
     if (tournament?.status === 'completed') {
       setUploadError('Турнир завершён, загрузка программ закрыта');
@@ -671,7 +669,7 @@ export function GameDetail() {
                 </div>
 
                 {uploadSuccess && (
-                  <div className="p-2 bg-green-900/30 border border-green-700 rounded text-sm text-green-300 flex items-center gap-2">
+                  <div role="status" className="p-2 bg-green-900/30 border border-green-700 rounded text-sm text-green-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
@@ -680,7 +678,7 @@ export function GameDetail() {
                 )}
 
                 {uploadError && (
-                  <div className="p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300 flex items-center gap-2">
+                  <div role="alert" className="p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                     </svg>
