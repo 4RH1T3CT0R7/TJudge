@@ -262,11 +262,13 @@ func (s *Server) setupRoutes() {
 			r.With(authLimit).Post("/register", s.authHandler.Register)
 			r.With(authLimit).Post("/login", s.authHandler.Login)
 			r.Post("/refresh", s.authHandler.Refresh)
+			// без auth-мидлвари: вкладка с протухшим access иначе получала 401,
+			// и refresh-токен оставался жить на сервере
+			r.Post("/logout", s.authHandler.Logout)
 
 			// под токеном
 			r.Group(func(r chi.Router) {
 				r.Use(s.auth())
-				r.Post("/logout", s.authHandler.Logout)
 				r.Get("/me", s.authHandler.Me)
 				r.Put("/profile", s.authHandler.UpdateProfile)
 			})
