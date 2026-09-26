@@ -317,19 +317,6 @@ func (r *TournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *TournamentRepository) GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
-	var count int
-
-	query := `SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = $1`
-
-	err := r.db.QueryRowContext(ctx, query, tournamentID).Scan(&count)
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get participants count")
-	}
-
-	return count, nil
-}
-
 func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error) {
 	var count int
 
@@ -341,27 +328,6 @@ func (r *TournamentRepository) GetTeamsCount(ctx context.Context, tournamentID u
 	}
 
 	return count, nil
-}
-
-func (r *TournamentRepository) AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error {
-	query := `
-		INSERT INTO tournament_participants (id, tournament_id, program_id, rating)
-		VALUES ($1, $2, $3, $4)
-		RETURNING created_at
-	`
-
-	err := r.db.QueryRowContext(ctx, query,
-		participant.ID,
-		participant.TournamentID,
-		participant.ProgramID,
-		participant.Rating,
-	).Scan(&participant.CreatedAt)
-
-	if err != nil {
-		return errors.Wrap(err, "failed to add tournament participant")
-	}
-
-	return nil
 }
 
 // GetLatestParticipantsGroupedByGame - участники турнира, сгруппированные по играм (map game_type -> участники)

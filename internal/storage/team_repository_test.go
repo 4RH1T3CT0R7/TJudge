@@ -689,9 +689,7 @@ func (s *TeamRepositorySuite) TestDisqualifyTeamFull_RevertsOpponentRating() {
 			Name: name, GameType: "dilemma", CodePath: "/tmp/" + name, Language: "python", Version: 1,
 		}
 		require.NoError(s.T(), programRepo.Create(ctx, p))
-		require.NoError(s.T(), s.tournamentRepo.AddParticipant(ctx, &models.TournamentParticipant{
-			ID: uuid.New(), TournamentID: tournament.ID, ProgramID: p.ID, Rating: rating,
-		}))
+		addTestParticipant(s.T(), s.database, tournament.ID, p.ID, rating)
 		s.T().Cleanup(func() {
 			_, _ = s.database.ExecContext(ctx, "DELETE FROM tournament_participants WHERE program_id = $1", p.ID)
 			_, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", p.ID)
@@ -763,10 +761,7 @@ func (s *TeamRepositorySuite) TestDisqualifyTeamFull_WaitsForRatingApply() {
 			Name: name, GameType: "dilemma", CodePath: "/tmp/" + name, Language: "python", Version: 1,
 		}
 		require.NoError(s.T(), programRepo.Create(ctx, p))
-		_, err := s.database.ExecContext(ctx,
-			"INSERT INTO tournament_participants (tournament_id, program_id, rating) VALUES ($1, $2, $3)",
-			tournament.ID, p.ID, rating)
-		require.NoError(s.T(), err)
+		addTestParticipant(s.T(), s.database, tournament.ID, p.ID, rating)
 		s.T().Cleanup(func() {
 			_, _ = s.database.ExecContext(ctx, "DELETE FROM tournament_participants WHERE program_id = $1", p.ID)
 			_, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", p.ID)

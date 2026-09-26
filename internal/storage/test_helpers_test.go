@@ -122,6 +122,18 @@ func createTestTournamentWithUser(t *testing.T, tournamentRepo *storage.Tourname
 
 // чтение env с дефолтом
 
+// addTestParticipant - строка tournament_participants для фикстур, в проде её
+// вставляет CreateWithAtomicVersion вместе с программой
+func addTestParticipant(t *testing.T, db *storage.DB, tournamentID, programID uuid.UUID, rating int) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	_, err := db.ExecContext(context.Background(),
+		"INSERT INTO tournament_participants (id, tournament_id, program_id, rating) VALUES ($1, $2, $3, $4)",
+		id, tournamentID, programID, rating)
+	require.NoError(t, err)
+	return id
+}
+
 func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

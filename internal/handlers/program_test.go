@@ -78,10 +78,6 @@ type MockProgramTournamentRepo struct {
 	mock.Mock
 }
 
-func (m *MockProgramTournamentRepo) AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error {
-	return m.Called(ctx, participant).Error(0)
-}
-
 func (m *MockProgramTournamentRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {

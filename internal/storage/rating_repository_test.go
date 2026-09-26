@@ -109,18 +109,8 @@ func (s *RatingRepositorySuite) createProgram(userID uuid.UUID, name string) *mo
 	return program
 }
 
-func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID, rating int) *models.TournamentParticipant {
-	ctx := context.Background()
-	participant := &models.TournamentParticipant{
-		ID:           uuid.New(),
-		TournamentID: tournamentID,
-		ProgramID:    programID,
-		Rating:       rating,
-	}
-	err := s.tournamentRepo.AddParticipant(ctx, participant)
-	require.NoError(s.T(), err)
-	s.participantIDs = append(s.participantIDs, participant.ID)
-	return participant
+func (s *RatingRepositorySuite) addParticipant(tournamentID, programID uuid.UUID, rating int) {
+	s.participantIDs = append(s.participantIDs, addTestParticipant(s.T(), s.database, tournamentID, programID, rating))
 }
 
 func (s *RatingRepositorySuite) createRatingHistory(programID, tournamentID uuid.UUID, oldRating, newRating, change int, matchID *uuid.UUID) *models.RatingHistory {

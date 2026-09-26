@@ -170,11 +170,19 @@ func (s *TournamentLifecycleSuite) createTestProgram(user *models.User, team *mo
 		GameType:     game.Name,
 		CodePath:     fmt.Sprintf("lifecycle_test_%s", suffix),
 		Language:     "python",
-		Version:      1,
 	}
-	err := s.programRepo.Create(s.ctx, program)
+	// как при загрузке: версия и строка tournament_participants тем же запросом
+	err := s.programRepo.CreateWithAtomicVersion(s.ctx, program)
 	require.NoError(s.T(), err)
 	return program
+}
+
+func (s *TournamentLifecycleSuite) participantsCount(tournamentID uuid.UUID) int {
+	s.T().Helper()
+	var count int
+	err := s.db.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = $1", tournamentID).Scan(&count)
+	require.NoError(s.T(), err)
+	return count
 }
 
 // =============================================================================
@@ -407,30 +415,18 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 		{leader3, team3},
 	} {
 		for j, game := range []*models.Game{game1, game2} {
-			prog := s.createTestProgram(
+			s.createTestProgram(
 				teamInfo.leader,
 				teamInfo.team,
 				tournament,
 				game,
 				fmt.Sprintf("full_t%d_g%d", i+1, j+1),
 			)
-
-			// Add as tournament participant
-			participant := &models.TournamentParticipant{
-				ID:           uuid.New(),
-				TournamentID: tournament.ID,
-				ProgramID:    prog.ID,
-				Rating:       1500,
-			}
-			err = s.tournamentRepo.AddParticipant(s.ctx, participant)
-			require.NoError(s.T(), err)
 		}
 	}
 
 	// Verify all participants
-	participantsCount, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 6, participantsCount) // 3 teams * 2 games
+	assert.Equal(s.T(), 6, s.participantsCount(tournament.ID)) // 3 teams * 2 games
 
 	// Step 5: Activate tournament
 	err = s.tournamentRepo.UpdateStatus(s.ctx, tournament.ID, models.TournamentActive)
@@ -442,9 +438,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_FullFlow() {
 	assert.Equal(s.T(), models.TournamentActive, updatedTournament.Status)
 
 	// Step 6: Verify participants count
-	count, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 6, count)
+	assert.Equal(s.T(), 6, s.participantsCount(tournament.ID))
 
 	// Step 7: Verify tournament games state
 	tournamentGames, err := s.gameRepo.GetTournamentGames(s.ctx, tournament.ID)
@@ -551,22 +545,9 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 				GameType:     game.Name,
 				CodePath:     fmt.Sprintf("lifecycle_test_concurrent_%d", idx),
 				Language:     "python",
-				Version:      1,
 			}
-			if err := s.programRepo.Create(s.ctx, program); err != nil {
+			if err := s.programRepo.CreateWithAtomicVersion(s.ctx, program); err != nil {
 				errs <- fmt.Errorf("program create %d: %w", idx, err)
-				return
-			}
-
-			// Add as participant
-			participant := &models.TournamentParticipant{
-				ID:           uuid.New(),
-				TournamentID: tournament.ID,
-				ProgramID:    program.ID,
-				Rating:       1500,
-			}
-			if err := s.tournamentRepo.AddParticipant(s.ctx, participant); err != nil {
-				errs <- fmt.Errorf("participant add %d: %w", idx, err)
 				return
 			}
 		}(i)
@@ -586,9 +567,7 @@ func (s *TournamentLifecycleSuite) TestTournamentLifecycle_ConcurrentRegistratio
 	assert.Len(s.T(), teams, numTeams)
 
 	// Verify participant count
-	count, err := s.tournamentRepo.GetParticipantsCount(s.ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), numTeams, count)
+	assert.Equal(s.T(), numTeams, s.participantsCount(tournament.ID))
 }
 
 // =============================================================================

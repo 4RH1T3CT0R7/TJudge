@@ -152,18 +152,8 @@ func (s *TournamentRepositorySuite) createTrackedProgram(userID uuid.UUID, teamI
 	return program
 }
 
-func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programID uuid.UUID, rating int) *models.TournamentParticipant {
-	ctx := context.Background()
-	participant := &models.TournamentParticipant{
-		ID:           uuid.New(),
-		TournamentID: tournamentID,
-		ProgramID:    programID,
-		Rating:       rating,
-	}
-	err := s.repo.AddParticipant(ctx, participant)
-	require.NoError(s.T(), err)
-	s.participantIDs = append(s.participantIDs, participant.ID)
-	return participant
+func (s *TournamentRepositorySuite) createTestParticipant(tournamentID, programID uuid.UUID, rating int) {
+	s.participantIDs = append(s.participantIDs, addTestParticipant(s.T(), s.database, tournamentID, programID, rating))
 }
 
 func (s *TournamentRepositorySuite) createTrackedMatch(tournamentID, program1ID, program2ID uuid.UUID, gameType string, status models.MatchStatus) *models.Match {
@@ -376,51 +366,6 @@ func (s *TournamentRepositorySuite) TestDelete() {
 }
 
 // --- участники ---
-
-func (s *TournamentRepositorySuite) TestAddParticipant_Success() {
-	user := s.createTrackedUser("tp_add")
-	tournament := s.createTrackedTournament("TPADD1", user.ID)
-	program := s.createTrackedProgram(user.ID, nil, nil, nil, "BotAdd", 1)
-
-	ctx := context.Background()
-	participant := &models.TournamentParticipant{
-		ID:           uuid.New(),
-		TournamentID: tournament.ID,
-		ProgramID:    program.ID,
-		Rating:       1500,
-	}
-
-	err := s.repo.AddParticipant(ctx, participant)
-	require.NoError(s.T(), err)
-	s.participantIDs = append(s.participantIDs, participant.ID)
-
-	assert.NotZero(s.T(), participant.CreatedAt)
-}
-
-func (s *TournamentRepositorySuite) TestGetParticipantsCount_Zero() {
-	user := s.createTrackedUser("tp_gcz")
-	tournament := s.createTrackedTournament("TPGCZ1", user.ID)
-
-	ctx := context.Background()
-	count, err := s.repo.GetParticipantsCount(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 0, count)
-}
-
-func (s *TournamentRepositorySuite) TestGetParticipantsCount_AfterAdding() {
-	user := s.createTrackedUser("tp_gca")
-	tournament := s.createTrackedTournament("TPGCA1", user.ID)
-
-	for i := 0; i < 5; i++ {
-		prog := s.createTrackedProgram(user.ID, nil, nil, nil, fmt.Sprintf("BotGCA%d", i), 1)
-		s.createTestParticipant(tournament.ID, prog.ID, 1500)
-	}
-
-	ctx := context.Background()
-	count, err := s.repo.GetParticipantsCount(ctx, tournament.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), 5, count)
-}
 
 func (s *TournamentRepositorySuite) TestGetLeaderboard_OrderedByRating() {
 	ctx := context.Background()
