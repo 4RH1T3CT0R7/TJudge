@@ -97,14 +97,15 @@ services:
       - tjudge-network
     restart: "no"
 
-  # Nginx load balancer in front of API replicas.
-  # Replaces the per-replica `ports:` mapping (which conflicts when replicas>1)
-  # with a single ingress on host port 8080 fronting both API instances.
+  # Балансировщик перед репликами api. Порт только на 127.0.0.1: TLS держит
+  # прокси на этом же хосте, а nginx.prod.conf верит X-Forwarded-For от шлюза
+  # docker-сети. Для прокси на другом хосте - NGINX_BIND=0.0.0.0 в .env и его
+  # адрес в set_real_ip_from
   nginx:
     image: nginx:1.30-alpine
     container_name: tjudge-nginx-prod
     ports:
-      - "8080:80"
+      - "${NGINX_BIND:-127.0.0.1}:8080:80"
     labels:
       # Guardian: stateless, безопасно рестартить при unhealthy.
       guardian.enabled: "true"
