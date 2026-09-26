@@ -14,7 +14,9 @@
 # ботов под чужими uid.
 #
 # Код выхода 125 - сбой подготовки песочницы, executor считает его
-# инфраструктурной ошибкой, а не ошибкой программы.
+# инфраструктурной ошибкой, а не ошибкой программы. Программа, которую не
+# удалось скопировать в tmpfs, проигрывает с кодом своей стороны (1 или 2,
+# как у tjudge-cli): иначе её матчи вечно возвращались бы в очередь.
 set -eEuo pipefail
 
 fail() {
@@ -22,6 +24,11 @@ fail() {
     exit 125
 }
 trap 'fail "line $LINENO: command failed"' ERR
+
+copy_failed() {
+    echo "sandbox: program $name: copy failed" >&2
+    exit $((i + 1))
+}
 
 (($# >= 3)) || fail "usage: sandbox <game> [options] <program1> <program2>"
 args=("${@:1:$#-2}")
@@ -53,10 +60,10 @@ for i in 0 1; do
     [[ -f /mnt/programs/$name ]] || fail "program not mounted: $name"
 
     uid=$((base + i))
-    cp /mnt/programs/"$name" "$prog"
+    cp /mnt/programs/"$name" "$prog" || copy_failed
     chmod 0500 "$prog"
     if [[ -d /mnt/programs/${name}_classes ]]; then
-        cp -R /mnt/programs/"${name}_classes" "${prog}_classes"
+        cp -R /mnt/programs/"${name}_classes" "${prog}_classes" || copy_failed
         chmod -R u=rX,go= "${prog}_classes"
         chown -R "$uid:$uid" "${prog}_classes"
     fi
