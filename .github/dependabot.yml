@@ -16,6 +16,17 @@ updates:
       interval: weekly
 
   - package-ecosystem: docker
-    directories: ["/docker/api", "/docker/worker", "/docker/migrate", "/docker/builder", "/docker/tjudge"]
+    directories: ["/docker/api", "/docker/worker", "/docker/migrate"]
     schedule:
       interval: weekly
+
+  # образы с кодом участников держатся на alpine 3.22: в 3.23 gcc 15 с gnu23
+  # не собирает часть старых C-сабмитов, а песочница сборки и рантайм матчей
+  # должны быть на одной ветке. alpine поднимается руками между турнирами
+  - package-ecosystem: docker
+    directories: ["/docker/builder", "/docker/tjudge"]
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: alpine
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
