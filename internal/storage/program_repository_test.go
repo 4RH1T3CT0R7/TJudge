@@ -339,6 +339,34 @@ func (s *ProgramRepositorySuite) TestUpdate_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
+// итог сборки пишется только поверх compiling: поздний дубль не перетирает первый
+func (s *ProgramRepositorySuite) TestUpdateCompileResult_OnlyFromCompiling() {
+	ctx := context.Background()
+	user := s.createUser("prog_compile")
+	program := s.createProgram(user.ID, nil, nil, nil, "Compile Bot", 1)
+	_, err := s.database.ExecContext(ctx, "UPDATE programs SET status = 'compiling' WHERE id = $1", program.ID)
+	require.NoError(s.T(), err)
+
+	applied, err := s.repo.UpdateCompileResult(ctx, program.ID, models.ProgramReady, "/tmp/test/bot.bin", nil)
+	require.NoError(s.T(), err)
+	assert.True(s.T(), applied)
+
+	msg := "late duplicate"
+	applied, err = s.repo.UpdateCompileResult(ctx, program.ID, models.ProgramFailed, program.CodePath, &msg)
+	require.NoError(s.T(), err)
+	assert.False(s.T(), applied)
+
+	got, err := s.repo.GetByID(ctx, program.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.ProgramReady, got.Status)
+	assert.Equal(s.T(), "/tmp/test/bot.bin", got.CodePath)
+	assert.Nil(s.T(), got.ErrorMessage)
+
+	applied, err = s.repo.UpdateCompileResult(ctx, uuid.New(), models.ProgramReady, "/ghost", nil)
+	require.NoError(s.T(), err)
+	assert.False(s.T(), applied)
+}
+
 func (s *ProgramRepositorySuite) TestDelete() {
 	user := s.createUser("prog_delete")
 	program := s.createProgram(user.ID, nil, nil, nil, "Delete Bot", 1)

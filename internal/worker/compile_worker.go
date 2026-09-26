@@ -209,8 +209,14 @@ func (w *CompileWorker) compile(ctx context.Context, workerID int, task *queue.C
 		errMsg = &result.Log
 	}
 
-	if err := w.programRepo.UpdateCompileResult(ctx, program.ID, status, codePath, errMsg); err != nil {
+	applied, err := w.programRepo.UpdateCompileResult(ctx, program.ID, status, codePath, errMsg)
+	if err != nil {
 		w.log.LogError("Failed to save compile result", err,
+			zap.String("program_id", program.ID.String()))
+		return
+	}
+	if !applied {
+		w.log.Debug("Compile result discarded: program is no longer compiling",
 			zap.String("program_id", program.ID.String()))
 		return
 	}

@@ -639,11 +639,15 @@ func (s *TournamentRepositorySuite) TestHasNewProgramsSince() {
 
 	v2 := compiling(2)
 	assert.False(s.T(), hasNew(since), "compiling")
-	require.NoError(s.T(), s.programRepo.UpdateCompileResult(ctx, v2.ID, models.ProgramFailed, v2.CodePath, nil))
+	applied, err := s.programRepo.UpdateCompileResult(ctx, v2.ID, models.ProgramFailed, v2.CodePath, nil)
+	require.NoError(s.T(), err)
+	require.True(s.T(), applied)
 	assert.False(s.T(), hasNew(since), "failed")
 
 	v3 := compiling(3)
-	require.NoError(s.T(), s.programRepo.UpdateCompileResult(ctx, v3.ID, models.ProgramReady, v3.CodePath, nil))
+	applied, err = s.programRepo.UpdateCompileResult(ctx, v3.ID, models.ProgramReady, v3.CodePath, nil)
+	require.NoError(s.T(), err)
+	require.True(s.T(), applied)
 	assert.True(s.T(), hasNew(since), "ready")
 
 	since = dbNow()

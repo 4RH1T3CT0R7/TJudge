@@ -252,28 +252,26 @@ func (r *ProgramRepository) Update(ctx context.Context, program *models.Program)
 
 // UpdateCompileResult пишет итог компиляции: статус, путь к бинарю
 // (или к исходнику для интерпретируемых языков) и текст ошибки.
-// зовётся из compile-worker'а после сборки в докер-песочнице
-func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
+// зовётся из compile-worker'а после сборки в докер-песочнице. пишется только
+// поверх compiling: при дубле сборки (редис потерял лок и dedup) побеждает
+// первый итог. false - программа уже не в compiling или удалена
+func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) (bool, error) {
 	query := `
 		UPDATE programs
 		SET status = $2, code_path = $3, error_message = $4, updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1 AND status = 'compiling'
 	`
 
 	result, err := r.db.ExecWithMetrics(ctx, "program_update_compile_result", query, id, status, codePath, errorMessage)
 	if err != nil {
-		return errors.Wrap(err, "failed to update compile result")
+		return false, errors.Wrap(err, "failed to update compile result")
 	}
 
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return errors.Wrap(err, "failed to get rows affected")
+		return false, errors.Wrap(err, "failed to get rows affected")
 	}
-	if rows == 0 {
-		return errors.ErrProgramNotFound
-	}
-
-	return nil
+	return rows > 0, nil
 }
 
 // GetStuckCompiling достаёт программы, застрявшие в compiling дольше olderThan —

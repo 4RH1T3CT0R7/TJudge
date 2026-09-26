@@ -105,9 +105,9 @@ func (m *MockProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) (
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func (m *MockProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error {
+func (m *MockProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) (bool, error) {
 	args := m.Called(ctx, id, status, codePath, errorMessage)
-	return args.Error(0)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {

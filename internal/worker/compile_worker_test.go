@@ -91,7 +91,7 @@ func TestCompileWorker_ProcessTask_Success(t *testing.T) {
 	compiler.On("Compile", mock.Anything, program).
 		Return(&executor.CompileResult{OK: true, ExecPath: "/data/programs/abc"}, nil)
 	repo.On("UpdateCompileResult", mock.Anything, program.ID, models.ProgramReady, "/data/programs/abc", (*string)(nil)).
-		Return(nil)
+		Return(true, nil)
 
 	w.processTask(context.Background(), 1, task)
 
@@ -116,7 +116,7 @@ func TestCompileWorker_ProcessTask_CompileError(t *testing.T) {
 		Return(&executor.CompileResult{OK: false, Log: "main.c:1: error: expected ';'"}, nil)
 	repo.On("UpdateCompileResult", mock.Anything, program.ID, models.ProgramFailed, program.CodePath, mock.MatchedBy(func(msg *string) bool {
 		return msg != nil && *msg == "main.c:1: error: expected ';'"
-	})).Return(nil)
+	})).Return(true, nil)
 
 	w.processTask(context.Background(), 1, task)
 
@@ -125,6 +125,23 @@ func TestCompileWorker_ProcessTask_CompileError(t *testing.T) {
 	evt := bus.published[0].(events.ProgramCompiled)
 	assert.Equal(t, "failed", evt.Status)
 	assert.NotNil(t, evt.ErrorMessage)
+}
+
+// поздний дубль сборки: итог не записан, событие не публикуется
+func TestCompileWorker_ProcessTask_ResultNotApplied(t *testing.T) {
+	w, _, repo, compiler, bus := newTestCompileWorker(t)
+	program := compilingProgram()
+
+	repo.On("GetByID", mock.Anything, program.ID).Return(program, nil)
+	compiler.On("Compile", mock.Anything, program).
+		Return(&executor.CompileResult{OK: true, ExecPath: "/data/programs/abc"}, nil)
+	repo.On("UpdateCompileResult", mock.Anything, program.ID, models.ProgramReady, "/data/programs/abc", (*string)(nil)).
+		Return(false, nil)
+
+	w.processTask(context.Background(), 1, &queue.CompileTask{ProgramID: program.ID})
+
+	repo.AssertExpectations(t)
+	assert.Empty(t, bus.published)
 }
 
 func TestCompileWorker_ProcessTask_InfraErrorLeavesCompiling(t *testing.T) {

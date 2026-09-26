@@ -50,7 +50,7 @@ type Executor interface {
 type ProgramRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Program, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error)
-	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) error
+	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) (bool, error)
 	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
 }
 
