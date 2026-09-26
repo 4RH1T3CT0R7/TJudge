@@ -96,9 +96,6 @@ type MockMatchRepository struct{ mock.Mock }
 func (m *MockMatchRepository) Create(ctx context.Context, match *models.Match) error {
 	return m.Called(ctx, match).Error(0)
 }
-func (m *MockMatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
-	return m.Called(ctx, ids).Error(0)
-}
 
 func (m *MockMatchRepository) GetByTournamentID(ctx context.Context, id uuid.UUID, limit, offset int) ([]*models.Match, error) {
 	args := m.Called(ctx, id, limit, offset)
@@ -679,7 +676,6 @@ func TestService_RunAllMatches(t *testing.T) {
 		require.NotNil(t, appErr)
 		assert.Equal(t, 409, appErr.Code)
 		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
-		matchRepo.AssertNotCalled(t, "DeleteBatch", mock.Anything, mock.Anything)
 	})
 
 	// висящие pending завершённого турнира (завершён до отмены pending при Complete)
@@ -722,7 +718,9 @@ func TestService_RunAllMatches(t *testing.T) {
 		assert.Contains(t, appErr.Message, "at least 2 participants")
 	})
 
-	t.Run("enqueue_error_rolls_back_created", func(t *testing.T) {
+	// сброс прошлого раунда уже закоммичен: при сбое очереди новый раунд остаётся
+	// в бд, его поставит в очередь recovery воркера
+	t.Run("enqueue_error_keeps_round", func(t *testing.T) {
 		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
 		ctx := context.Background()
 
@@ -740,13 +738,11 @@ func TestService_RunAllMatches(t *testing.T) {
 		tournamentRepo.On("GetLatestParticipantsGroupedByGame", ctx, id).Return(participants, nil)
 		gameRepo.On("StartNewRound", ctx, id, []string{"chess"}, mock.AnythingOfType("[]*models.Match")).Return(nil)
 		queueManager.On("EnqueueBatch", mock.Anything, mock.AnythingOfType("[]*models.Match")).Return(fmt.Errorf("redis pipeline error"))
-		// матчи из этого вызова обязаны откатиться
-		matchRepo.On("DeleteBatch", mock.Anything, mock.AnythingOfType("[]uuid.UUID")).Return(nil)
 
 		count, err := service.RunAllMatches(ctx, id)
-		assert.Error(t, err)
-		assert.Equal(t, 0, count)
-		matchRepo.AssertCalled(t, "DeleteBatch", mock.Anything, mock.AnythingOfType("[]uuid.UUID"))
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+		gameRepo.AssertCalled(t, "StartNewRound", ctx, id, []string{"chess"}, mock.AnythingOfType("[]*models.Match"))
 	})
 
 	// раунд закоммичен, а запрос отменён (клиент ушёл): постановка в очередь всё равно идёт
