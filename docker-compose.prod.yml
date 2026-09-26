@@ -173,9 +173,10 @@ services:
       - TRUSTED_PROXIES=172.28.0.0/16
       - PROGRAMS_PATH=/data/programs
       - BASE_URL=${BASE_URL:-https://tjudge.example.com}
-      # без значения cross-origin запросы запрещены, а websocket в production
-      # пускает только свой хост; фронт отдаётся с того же origin, ему хватает
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      # фронт отдаётся с того же origin. CORS по умолчанию - только BASE_URL
+      # (пустое значение дало бы dev-дефолт localhost:3000), websocket в
+      # production без списка пускает только свой хост
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-${BASE_URL:-https://tjudge.example.com}}
       - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:-}
     secrets:
       - db_password
