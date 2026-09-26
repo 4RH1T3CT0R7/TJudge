@@ -195,6 +195,20 @@ API сам переключается на fallback rate-limiter (0.5× от о�
 
 `curl -sH "Authorization: Bearer <admin-jwt>" 'http://localhost:8080/api/v1/admin/audit?limit=500' | jq`, в БД — `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200;`.
 
+### 9.7 Миграция в состоянии DIRTY
+
+Упавшая миграция оставляет схему в `dirty`, и каждый следующий `migrate up` падает с `Dirty database version N. Fix and force version.`; api и worker в prod-compose ждут `migrate` и не стартуют. 000045 падает так намеренно: DROP INDEX на партиционированных таблицах ждёт лок не дольше 5 с (`lock_timeout`), и транзакция откатывается целиком. Лок держат pg_dump бэкапа, трафик старого цвета при blue-green и долгие запросы лидербордов.
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm migrate ./migrate version   # Current version: 45 (dirty: true)
+docker compose -f docker-compose.prod.yml run --rm migrate ./migrate force 44  # 000045 откатилась целиком
+# повтор в окно низкой нагрузки, когда не идёт pg_dump бэкапа
+docker compose -f docker-compose.prod.yml run --rm migrate
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Для другой миграции N `force N-1` верен, только если её изменения не применились: файл выполняется одной транзакцией, так что при ошибке это обычно так, но стоит сверить схему.
+
 ## 10. Восстановление из backup
 
 ```bash
