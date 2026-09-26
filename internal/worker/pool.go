@@ -265,7 +265,7 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	p.activeWorkers.Add(1)
 	defer p.activeWorkers.Add(-1)
 
-	p.log.Info("Processing match",
+	p.log.Debug("Processing match",
 		zap.Int32("worker_id", workerID),
 		zap.String("match_id", match.ID.String()),
 		zap.String("priority", string(match.Priority)),
@@ -297,7 +297,7 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 
 	p.metrics.RecordMatchComplete(match.GameType, status, duration)
 
-	p.log.Info("Match processed",
+	p.log.Debug("Match processed",
 		zap.Int32("worker_id", workerID),
 		zap.String("match_id", match.ID.String()),
 		zap.String("status", status),
@@ -323,7 +323,7 @@ func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error 
 				)
 				delay = maxRetryDelay
 			}
-			p.log.Info("Retrying match",
+			p.log.Debug("Retrying match",
 				zap.String("match_id", match.ID.String()),
 				zap.Int("attempt", attempt),
 				zap.Duration("delay", delay),
@@ -343,7 +343,7 @@ func (p *Pool) processWithRetry(ctx context.Context, match *models.Match) error 
 		// матча нет в базе (удалили вместе с турниром) - пропуск без ретраев,
 		// и это не ошибка
 		if errors.Is(err, ErrMatchNotFound) {
-			p.log.Info("Match skipped (not found in database)",
+			p.log.Debug("Match skipped (not found in database)",
 				zap.String("match_id", match.ID.String()),
 			)
 			return nil

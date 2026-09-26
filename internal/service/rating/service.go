@@ -77,7 +77,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match) e
 		var change1, change2 int
 		newRating1, newRating2, change1, change2 = s.calculator.ProcessMatch(rating1, rating2, winner)
 
-		s.log.Info("Processing match result",
+		s.log.Debug("Processing match result",
 			zap.String("match_id", match.ID.String()),
 			zap.Int("rating1_old", rating1),
 			zap.Int("rating1_new", newRating1),
@@ -128,7 +128,7 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match) e
 		return err
 	}
 	if !applied {
-		s.log.Info("Match rating already applied, skipping",
+		s.log.Debug("Match rating already applied, skipping",
 			zap.String("match_id", match.ID.String()),
 		)
 		return nil

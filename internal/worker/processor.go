@@ -81,7 +81,7 @@ func NewProcessor(
 
 // Process обрабатывает один матч
 func (p *Processor) Process(ctx context.Context, match *models.Match) error {
-	p.log.Info("Processing match",
+	p.log.Debug("Processing match",
 		zap.String("match_id", match.ID.String()),
 		zap.String("tournament_id", match.TournamentID.String()),
 	)
@@ -90,7 +90,7 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 	// дубль, второй перевод не пройдёт и матч просто пропускается
 	if err := p.matchRepo.UpdateStatus(ctx, match.ID, models.MatchRunning); err != nil {
 		if stderrors.Is(err, models.ErrMatchAlreadyProcessed) {
-			p.log.Info("Match already processed or in progress, skipping duplicate",
+			p.log.Debug("Match already processed or in progress, skipping duplicate",
 				zap.String("match_id", match.ID.String()),
 			)
 			return nil
@@ -198,7 +198,7 @@ func (p *Processor) play(ctx context.Context, match *models.Match) error {
 		}
 	}
 
-	p.log.Info("Match processed successfully",
+	p.log.Debug("Match processed successfully",
 		zap.String("match_id", match.ID.String()),
 		zap.Int("winner", result.Winner),
 	)

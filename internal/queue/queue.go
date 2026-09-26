@@ -64,7 +64,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 		)
 		// на ошибке дедупа падать не стоит - лучше дубль чем потерять матч
 	} else if !isNew {
-		qm.log.Info("Match already enqueued, skipping",
+		qm.log.Debug("Match already enqueued, skipping",
 			zap.String("match_id", matchIDStr),
 		)
 		return nil
@@ -88,7 +88,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 
 	qm.updateQueueSizeMetrics(ctx)
 
-	qm.log.Info("Match enqueued",
+	qm.log.Debug("Match enqueued",
 		zap.String("match_id", match.ID.String()),
 		zap.String("priority", string(match.Priority)),
 	)
@@ -168,7 +168,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 	}
 
 	if len(grouped) == 0 {
-		qm.log.Info("All matches already enqueued, skipping batch",
+		qm.log.Debug("All matches already enqueued, skipping batch",
 			zap.Int("skipped", skipped),
 		)
 		return nil
@@ -264,7 +264,7 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	// обновление метрик
 	qm.updateQueueSizeMetrics(ctx)
 
-	qm.log.Info("Match dequeued",
+	qm.log.Debug("Match dequeued",
 		zap.String("match_id", match.ID.String()),
 		zap.String("priority", string(match.Priority)),
 	)
