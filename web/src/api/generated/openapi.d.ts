@@ -69,7 +69,7 @@ export interface paths {
         put?: never;
         /**
          * Log out
-         * @description Blacklists the current access token and optionally the refresh token.
+         * @description Blacklists the access token (if still valid) and the refresh token. An expired access token is accepted, so a stale tab can still revoke its refresh token.
          */
         post: operations["authLogout"];
         delete?: never;
