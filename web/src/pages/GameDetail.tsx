@@ -998,6 +998,8 @@ function MatchStatusBadge({ status }: { status: string }) {
       return <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">Завершён</span>;
     case 'failed':
       return <span className="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded">Ошибка</span>;
+    case 'cancelled':
+      return <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">Отменён</span>;
     default:
       return null;
   }

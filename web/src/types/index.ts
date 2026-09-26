@@ -103,7 +103,7 @@ export interface Program {
 }
 
 // Match types
-export type MatchStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type MatchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface Match {
   id: string;

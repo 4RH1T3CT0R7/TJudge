@@ -266,17 +266,20 @@ function RoundCard({
   isAdmin: boolean;
   onHide: () => void;
 }) {
+  // Отменённые матчи (очистка очереди, дисквалификация) не входят ни в один
+  // счётчик, поэтому раунд закрыт, когда ничего не ждёт и не идёт
   const getStatusColor = () => {
     if (round.failed_count > 0) return 'border-l-red-500';
     if (round.running_count > 0) return 'border-l-blue-500';
     if (round.pending_count > 0) return 'border-l-yellow-500';
-    if (round.completed_count === round.total_matches) return 'border-l-emerald-500';
+    if (round.total_matches > 0) return 'border-l-emerald-500';
     return 'border-l-gray-600';
   };
 
   const getProgressPercent = () => {
     if (round.total_matches === 0) return 0;
-    return Math.round((round.completed_count / round.total_matches) * 100);
+    const done = round.total_matches - round.pending_count - round.running_count;
+    return Math.round((done / round.total_matches) * 100);
   };
 
   // Победы считает сервер по всему раунду, ничьи - остаток завершённых
@@ -464,6 +467,8 @@ function MatchRow({ match }: { match: Match }) {
         return <span className="badge badge-yellow text-xs">В очереди</span>;
       case 'failed':
         return <span className="badge badge-red text-xs">Ошибка</span>;
+      case 'cancelled':
+        return <span className="badge badge-gray text-xs">Отменён</span>;
       default:
         return <span className="badge badge-gray text-xs">{match.status}</span>;
     }

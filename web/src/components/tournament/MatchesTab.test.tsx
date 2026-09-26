@@ -46,4 +46,23 @@ describe('MatchesTab', () => {
     fireEvent.click(screen.getByText('Вперёд'));
     await waitFor(() => expect(getRoundMatches).toHaveBeenCalledWith('t1', 1, 'dilemma', 50, 50, expect.any(AbortSignal)));
   });
+
+  it('раунд с отменёнными матчами закрыт на 100%', () => {
+    // 20 отменённых после очистки очереди ни в один счётчик не входят
+    const cancelledRound = { ...round, pending_count: 0 };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MatchesTab
+          tournamentId="t1"
+          rounds={[cancelledRound]}
+          onRefresh={() => {}}
+          isRefreshing={false}
+          isAdmin={false}
+          pollInterval={false}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText('100%')).toBeTruthy();
+  });
 });
