@@ -149,12 +149,14 @@ jobs:
           new=$(grep -oE '^Vulnerability #[0-9]+: GO-[0-9]+-[0-9]+' vuln.txt | awk '{print $3}' | grep -vxE 'GO-2026-4887|GO-2026-4883' || true)
           if [ -n "$new" ]; then echo "уязвимости вне allowlist:"; echo "$new"; exit 1; fi
 
-      # up -> down -> up: down-миграции тоже должны работать
+      # up -> откат до пустой схемы -> up: down-миграции тоже должны работать.
+      # down откатывает один шаг, version на пустой схеме завершается с ошибкой
       - name: migrations
         run: |
-          go run ./cmd/migrations up
-          go run ./cmd/migrations down
-          go run ./cmd/migrations up
+          go build -o bin/migrate ./cmd/migrations
+          bin/migrate up
+          while bin/migrate version >/dev/null 2>&1; do bin/migrate down; done
+          bin/migrate up
 
       - name: tests
         run: go test -race -count=1 ./...
