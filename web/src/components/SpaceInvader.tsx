@@ -808,6 +808,8 @@ export function SpaceInvader({
         return;
       }
       if (spinPhaseRef.current === 'decelerating') return;
+      // жест забрала прокрутка страницы (touch-action: pan-y): это не свайп по маскоту
+      if (upEvent.type === 'pointercancel') return;
 
       // Quick swipe detection: use pointerup position vs pointerdown position
       const down = pointerDownPos.current;
@@ -1279,7 +1281,8 @@ export function SpaceInvader({
       className={`${className} ${animClass}`}
       role="img"
       aria-label="Интерактивный space invader"
-      style={{ display: 'inline-block', position: 'relative', userSelect: 'none', touchAction: 'none', WebkitUserSelect: 'none' }}
+      // pan-y: вертикальный свайп по маскоту прокручивает страницу, горизонтальный крутит его
+      style={{ display: 'inline-block', position: 'relative', userSelect: 'none', touchAction: 'pan-y pinch-zoom', WebkitUserSelect: 'none' }}
       draggable={false}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
