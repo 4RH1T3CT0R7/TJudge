@@ -1,19 +1,9 @@
-# Alertmanager TJudge: доставка алертов в Telegram.
+# Alertmanager TJudge.
 #
-# Из коробки алерты уходят в пустой получатель null: Alertmanager не
-# принимает telegram_configs с chat_id 0, а без рабочего конфига не
-# стартует вовсе.
-#
-# Включение Telegram:
-#   1. Создайте бота через @BotFather, получите токен.
-#   2. Узнайте свой chat_id (напишите боту @userinfobot или используйте
-#      https://api.telegram.org/bot<TOKEN>/getUpdates после сообщения боту).
-#   3. Запишите токен одной строкой в deployments/alertmanager/telegram_token
-#      (файл в .gitignore - не коммитится).
-#   4. Раскомментируйте получатель telegram ниже, подставьте chat_id
-#      (Alertmanager не разворачивает переменные окружения в конфиге -
-#      значение должно быть литералом) и поменяйте в route
-#      receiver: 'null' на receiver: telegram.
+# Получатель выбирается на старте в entrypoint.sh: при заданных в .env
+# TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID (тот же бот, что у doctor и бэкапов)
+# алерты уходят в Telegram, без них - в пустой получатель null.
+# receivers - последний раздел файла: entrypoint.sh дописывает в него telegram.
 
 route:
   receiver: 'null'
@@ -28,22 +18,12 @@ route:
       group_wait: 10s
       repeat_interval: 1h
 
-receivers:
-  - name: 'null'
-  # - name: telegram
-  #   telegram_configs:
-  #     - bot_token_file: /etc/alertmanager/telegram_token
-  #       chat_id: 123456789
-  #       parse_mode: HTML
-  #       message: |-
-  #         {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>{{ .CommonLabels.alertname }}</b> [{{ .CommonLabels.severity }}]
-  #         {{ range .Alerts }}{{ .Annotations.summary }}
-  #         {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
-  #         {{ end }}
-
 inhibit_rules:
   # Когда API лежит целиком, не спамить latency/error-rate алертами.
   - source_matchers:
       - alertname = APIDown
     target_matchers:
       - alertname =~ "APIHighErrorRate|APIHighLatencyP99"
+
+receivers:
+  - name: 'null'

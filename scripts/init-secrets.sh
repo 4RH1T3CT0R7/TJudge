@@ -35,3 +35,4 @@ create_secret() {
 create_secret "db_password"
 create_secret "jwt_secret" 48
 create_secret "redis_password"
+create_secret "grafana_admin_password"
