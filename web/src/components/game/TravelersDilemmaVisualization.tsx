@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { GAME_PAYOFFS } from '../../utils/gameConfig';
 
 // Traveler's Dilemma Visualization
 export function TravelersDilemmaVisualization() {
   const [claimA, setClaimA] = useState(80);
   const [claimB, setClaimB] = useState(80);
-  const R = 2;
+  const { min, max, bonus: R } = GAME_PAYOFFS.travelers_dilemma;
 
   const computePayoffs = () => {
     if (claimA === claimB) {
@@ -19,14 +20,14 @@ export function TravelersDilemmaVisualization() {
 
   const { payoffA, payoffB } = computePayoffs();
   const isEqual = claimA === claimB;
-  const isNash = claimA === 2 && claimB === 2;
-  const isCooperative = claimA === 100 && claimB === 100;
+  const isNash = claimA === min && claimB === min;
+  const isCooperative = claimA === max && claimB === max;
 
   const adjustClaim = (player: 'A' | 'B', delta: number) => {
     if (player === 'A') {
-      setClaimA((prev) => Math.max(2, Math.min(100, prev + delta)));
+      setClaimA((prev) => Math.max(min, Math.min(max, prev + delta)));
     } else {
-      setClaimB((prev) => Math.max(2, Math.min(100, prev + delta)));
+      setClaimB((prev) => Math.max(min, Math.min(max, prev + delta)));
     }
   };
 
@@ -42,7 +43,7 @@ export function TravelersDilemmaVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustClaim('A', -10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
-              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimA - 2) / 98) * 100}%` }} />
+              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimA - min) / (max - min)) * 100}%` }} />
             </div>
             <button onClick={() => adjustClaim('A', 10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">+</button>
           </div>
@@ -55,7 +56,7 @@ export function TravelersDilemmaVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustClaim('B', -10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
-              <div className="h-full bg-purple-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimB - 2) / 98) * 100}%` }} />
+              <div className="h-full bg-purple-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimB - min) / (max - min)) * 100}%` }} />
             </div>
             <button onClick={() => adjustClaim('B', 10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">+</button>
           </div>

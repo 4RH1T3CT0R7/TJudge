@@ -6,6 +6,9 @@ import { TugOfWarVisualization } from './TugOfWarVisualization';
 import { TravelersDilemmaVisualization } from './TravelersDilemmaVisualization';
 import { PublicGoodsVisualization } from './PublicGoodsVisualization';
 import { DollarAuctionVisualization } from './DollarAuctionVisualization';
+import { GAME_PAYOFFS } from '../../utils/gameConfig';
+
+const { dilemma, tug_of_war, travelers_dilemma, public_goods, dollar_auction } = GAME_PAYOFFS;
 
 // Game Showcase Component with tabs
 export function GameShowcase() {
@@ -21,9 +24,9 @@ export function GameShowcase() {
       color: 'purple',
       description: 'Классическая задача теории игр, демонстрирующая конфликт между индивидуальной и коллективной рациональностью.',
       rules: [
-        { text: 'Взаимное сотрудничество', result: 'оба получают по 3 очка', color: 'green' },
-        { text: 'Предательство', result: 'предатель получает 5, жертва — 0', color: 'red' },
-        { text: 'Взаимное предательство', result: 'оба получают по 1 очку', color: 'yellow' },
+        { text: 'Взаимное сотрудничество', result: `оба получают по ${dilemma.cc[0]} очков`, color: 'green' },
+        { text: 'Предательство', result: `предатель получает ${dilemma.dc[0]}, жертва — ${dilemma.dc[1]}`, color: 'red' },
+        { text: 'Взаимное предательство', result: `оба получают по ${dilemma.dd[0]} очку`, color: 'yellow' },
       ],
       insight: 'Равновесие Нэша: взаимное предательство — ни один игрок не может улучшить результат в одностороннем порядке.',
       visualization: <PrisonersDilemmaMatrix />,
@@ -35,7 +38,7 @@ export function GameShowcase() {
       color: 'green',
       description: 'Стратегическая игра на распределение ресурсов. Распределите силы по раундам, чтобы победить.',
       rules: [
-        { text: 'У каждого игрока 100 единиц силы', result: 'на все раунды', color: 'blue' },
+        { text: `У каждого игрока ${tug_of_war.energy} единиц силы`, result: 'на все раунды', color: 'blue' },
         { text: 'В каждом раунде выигрывает', result: 'кто выделил больше силы', color: 'green' },
         { text: 'Побеждает тот, кто выиграл', result: 'больше раундов', color: 'purple' },
       ],
@@ -53,7 +56,7 @@ export function GameShowcase() {
         { text: 'Разные заявки', result: 'оба получают минимум, но скромный получает бонус +R', color: 'blue' },
         { text: 'Жадный получает штраф', result: '-R от минимальной суммы', color: 'red' },
       ],
-      insight: 'Равновесие Нэша: оба называют минимум (2) — но в турнирах стратегии с заявкой ~90 побеждают.',
+      insight: `Равновесие Нэша: оба называют минимум (${travelers_dilemma.min}) — но в турнирах стратегии с заявкой ~90 побеждают.`,
       visualization: <TravelersDilemmaVisualization />,
     },
     {
@@ -63,11 +66,11 @@ export function GameShowcase() {
       color: 'orange',
       description: 'Каждый решает, сколько вложить в общий пул. Пул умножается и делится поровну — но зачем вкладывать, если можно получить бесплатно?',
       rules: [
-        { text: 'Каждый начинает с 20 токенов', result: 'и решает, сколько вложить в пул', color: 'blue' },
-        { text: 'Пул умножается на 1.5x', result: 'и делится поровну между игроками', color: 'green' },
+        { text: `Каждый начинает с ${public_goods.endowment} токенов`, result: 'и решает, сколько вложить в пул', color: 'blue' },
+        { text: `Пул умножается на ${public_goods.multiplier}x`, result: 'и делится поровну между игроками', color: 'green' },
         { text: 'Безбилетник выигрывает', result: 'но если оба так поступят — оба проиграют', color: 'red' },
       ],
-      insight: 'Равновесие Нэша: не вкладывать ничего (каждый получает 20). Но если оба вложат все — каждый получит 30.',
+      insight: `Равновесие Нэша: не вкладывать ничего (каждый получает ${public_goods.endowment}). Но если оба вложат все — каждый получит ${public_goods.endowment * public_goods.multiplier}.`,
       visualization: <PublicGoodsVisualization />,
     },
     {
@@ -77,7 +80,7 @@ export function GameShowcase() {
       color: 'yellow',
       description: 'Приз выставляется на торги, но проигравший тоже платит свою ставку. Классическая ловушка эскалации.',
       rules: [
-        { text: 'Приз стоит 100 очков', result: 'ставки делаются поочередно', color: 'blue' },
+        { text: `Приз стоит ${dollar_auction.prize} очков`, result: 'ставки делаются поочередно', color: 'blue' },
         { text: 'Оба игрока платят свои ставки', result: 'но приз получает только победитель', color: 'red' },
         { text: 'Можно спасовать (0)', result: 'торги заканчиваются', color: 'green' },
       ],

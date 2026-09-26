@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GAME_PAYOFFS } from '../../utils/gameConfig';
 
 // Tug of War Visualization
 export function TugOfWarVisualization() {
@@ -7,14 +8,14 @@ export function TugOfWarVisualization() {
   const [showResults, setShowResults] = useState(false);
   const [currentRound, setCurrentRound] = useState(0);
 
-  const totalForce = 100;
+  const totalForce = GAME_PAYOFFS.tug_of_war.energy;
   const usedForce = rounds.reduce((a, b) => a + b, 0);
   const remaining = totalForce - usedForce;
 
   const adjustRound = (index: number, delta: number) => {
     const newRounds = [...rounds];
     const newValue = newRounds[index] + delta;
-    if (newValue >= 0 && newValue <= 100 && usedForce + delta <= totalForce) {
+    if (newValue >= 0 && newValue <= totalForce && usedForce + delta <= totalForce) {
       newRounds[index] = newValue;
       setRounds(newRounds);
       setShowResults(false);

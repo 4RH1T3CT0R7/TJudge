@@ -1,16 +1,18 @@
 import { useState } from 'react';
+import { GAME_PAYOFFS } from '../../utils/gameConfig';
 
 // Public Goods Visualization
 export function PublicGoodsVisualization() {
   const [contribA, setContribA] = useState(10);
   const [contribB, setContribB] = useState(10);
-  const ENDOWMENT = 20;
-  const MULTIPLIER = 1.5;
+  const { endowment: ENDOWMENT, multiplier: MULTIPLIER } = GAME_PAYOFFS.public_goods;
 
   const pool = (contribA + contribB) * MULTIPLIER;
   const share = pool / 2;
-  const payoffA = (ENDOWMENT - contribA) + share;
-  const payoffB = (ENDOWMENT - contribB) + share;
+  // выплата усекается до целого, как в tjudge-cli
+  const payoffA = Math.trunc((ENDOWMENT - contribA) + share);
+  const payoffB = Math.trunc((ENDOWMENT - contribB) + share);
+  const coopPayoff = ENDOWMENT * MULTIPLIER;
 
   const adjustContrib = (player: 'A' | 'B', delta: number) => {
     if (player === 'A') {
@@ -72,7 +74,7 @@ export function PublicGoodsVisualization() {
           <span className="text-gray-300 font-bold">{contribA + contribB}</span>
           <span className="text-green-400 font-bold">x{MULTIPLIER}</span>
           <span className="text-gray-500">=</span>
-          <span className="text-green-400 font-bold text-lg">{pool.toFixed(0)}</span>
+          <span className="text-green-400 font-bold text-lg">{pool}</span>
         </div>
         <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
           <div
@@ -88,18 +90,18 @@ export function PublicGoodsVisualization() {
           isFreeRiderA ? 'bg-red-900/20 border-red-700/50' : 'bg-gray-800 border-gray-700'
         }`}>
           <div className="text-xs text-gray-400 mb-1">Выигрыш A</div>
-          <div className="text-2xl font-bold text-blue-400">{payoffA.toFixed(1)}</div>
+          <div className="text-2xl font-bold text-blue-400">{payoffA}</div>
           <div className="text-xs text-gray-500 mt-1">
-            {ENDOWMENT - contribA} + {share.toFixed(1)}
+            {ENDOWMENT - contribA} + {share}
           </div>
         </div>
         <div className={`rounded-xl p-3 border text-center ${
           isFreeRiderB ? 'bg-red-900/20 border-red-700/50' : 'bg-gray-800 border-gray-700'
         }`}>
           <div className="text-xs text-gray-400 mb-1">Выигрыш B</div>
-          <div className="text-2xl font-bold text-orange-400">{payoffB.toFixed(1)}</div>
+          <div className="text-2xl font-bold text-orange-400">{payoffB}</div>
           <div className="text-xs text-gray-500 mt-1">
-            {ENDOWMENT - contribB} + {share.toFixed(1)}
+            {ENDOWMENT - contribB} + {share}
           </div>
         </div>
       </div>
@@ -108,12 +110,12 @@ export function PublicGoodsVisualization() {
       <div className="flex justify-center gap-2 flex-wrap">
         {isNash && (
           <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded-full border border-cyan-700/50">
-            Равновесие Нэша: оба по 20
+            Равновесие Нэша: оба по {ENDOWMENT}
           </span>
         )}
         {isFullCoop && (
           <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded-full border border-green-700/50">
-            Полная кооперация: оба по 30!
+            Полная кооперация: оба по {coopPayoff}!
           </span>
         )}
         {(isFreeRiderA || isFreeRiderB) && (
@@ -123,7 +125,7 @@ export function PublicGoodsVisualization() {
         )}
         {!isNash && !isFullCoop && !isFreeRiderA && !isFreeRiderB && (
           <span className="text-xs text-gray-500">
-            Нэш: (0, 0) = по 20 | Кооперация: (20, 20) = по 30
+            Нэш: (0, 0) = по {ENDOWMENT} | Кооперация: ({ENDOWMENT}, {ENDOWMENT}) = по {coopPayoff}
           </span>
         )}
       </div>

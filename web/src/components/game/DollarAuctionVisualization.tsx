@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { GAME_PAYOFFS } from '../../utils/gameConfig';
 
 // Dollar Auction Visualization
-const AUCTION_PRIZE = 100;
+const AUCTION_PRIZE = GAME_PAYOFFS.dollar_auction.prize;
 const AUCTION_SCENARIO = [
   { player: 'A', bid: 10 },
   { player: 'B', bid: 15 },

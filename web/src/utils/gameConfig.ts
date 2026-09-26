@@ -70,3 +70,14 @@ const defaultGameConfig: GameConfig = {
 
 export const getGameConfig = (gameName: string): GameConfig =>
   gameConfig[gameName] || defaultGameConfig;
+
+// Выплаты и параметры игр по умолчанию, как в tjudge-cli (правила - миграция 000029).
+// Витрина на главной берёт числа только отсюда. Дилемма: [очки A, очки B]
+// для ходов A/B (c - сотрудничать, d - предать)
+export const GAME_PAYOFFS = {
+  dilemma: { cc: [5, 5], cd: [0, 10], dc: [10, 0], dd: [1, 1] },
+  tug_of_war: { energy: 100 },
+  travelers_dilemma: { min: 2, max: 100, bonus: 2 },
+  public_goods: { endowment: 20, multiplier: 1.5 },
+  dollar_auction: { prize: 100 },
+} as const;
