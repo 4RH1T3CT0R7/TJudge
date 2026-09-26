@@ -287,27 +287,29 @@ function RoundCard({
 
   return (
     <div className={`card p-0 border-l-4 ${getStatusColor()} overflow-hidden`}>
-      {/* Round header - collapsible; «✕» рядом с кнопкой, а не внутри неё */}
+      {/* Round header - collapsible; «✕» рядом с кнопкой, а не внутри неё.
+          На узкой ширине заголовок переносится, а не уходит под «✕»;
+          кольцо фокуса внутри: карточка с overflow-hidden обрезала бы внешнее */}
       <div className="flex items-center hover:bg-gray-800/50 transition-colors">
         <button
           onClick={onToggle}
           aria-expanded={isExpanded}
-          className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between"
+          className="flex-1 min-w-0 px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-left focus-visible:outline-offset-[-2px]"
         >
-          <div className="flex items-center gap-3">
-            <div className="text-gray-400">
-              {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-            </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
             <div className="flex items-center gap-2">
+              <div className="mr-1 text-gray-400">
+                {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+              </div>
               <FolderIcon />
               <span className="font-semibold text-gray-100">
                 Раунд {round.round_number}
               </span>
-              <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded-full font-medium">
-                {getGameDisplayName(round.game_type)}
-              </span>
             </div>
-            <span className="text-sm text-gray-400">
+            <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded-full font-medium">
+              {getGameDisplayName(round.game_type)}
+            </span>
+            <span className="ml-1 text-sm text-gray-400">
               {round.total_matches} матчей
             </span>
           </div>
