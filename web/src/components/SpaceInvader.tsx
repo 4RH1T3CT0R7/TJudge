@@ -149,6 +149,14 @@ function renderEyeSegment(content: string): ReactNode[] {
   return parts;
 }
 
+// Снимает inline-стили вращения с контейнера спина.
+function clearSpinStyles(el: HTMLElement | null) {
+  if (!el) return;
+  el.style.transition = '';
+  el.style.transform = '';
+  el.style.animation = '';
+}
+
 // --- Main component ---
 export function SpaceInvader({
   size = 'md',
@@ -320,7 +328,7 @@ export function SpaceInvader({
       if (spinPhaseRef.current === 'spinning') {
         clearTimeout(flickTimerRef.current);
         clearTimeout(spinDecelTimerRef.current);
-        clearSpinStyles();
+        clearSpinStyles(spinContainerRef.current);
         spinPhaseRef.current = 'idle';
         ++spinGenRef.current; // invalidate stale callbacks
         setPose('idle');
@@ -671,23 +679,14 @@ export function SpaceInvader({
   const spinDecelTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const spinGenRef = useRef(0);
 
-  const clearSpinStyles = useCallback(() => {
-    const el = spinContainerRef.current;
-    if (el) {
-      el.style.transition = '';
-      el.style.transform = '';
-      el.style.animation = '';
-    }
-  }, []);
-
   const startSpin = useCallback(() => {
     clearTimeout(spinDecelTimerRef.current);
     clearTimeout(flickTimerRef.current);
-    clearSpinStyles();
+    clearSpinStyles(spinContainerRef.current);
     spinPhaseRef.current = 'spinning';
     ++spinGenRef.current;
     setPose('spin');
-  }, [clearSpinStyles]);
+  }, []);
 
   // Smooth deceleration: continue at current speed, ease-out to stop
   // Spin animation = 0.5s/turn = 720°/s. Decel arc = speed * time / 2 (for ease-out).
@@ -722,7 +721,7 @@ export function SpaceInvader({
         el.style.transform = `rotate(${target}deg)`;
         spinDecelTimerRef.current = setTimeout(() => {
           if (spinGenRef.current !== gen) return;
-          clearSpinStyles();
+          clearSpinStyles(el);
           spinPhaseRef.current = 'idle';
           setPose('idle');
         }, dur * 1000 + 20);
@@ -731,7 +730,7 @@ export function SpaceInvader({
       spinPhaseRef.current = 'idle';
     }
     setPose('spinStop');
-  }, [clearSpinStyles]);
+  }, []);
 
   // Auto-spin: запускается быстрым свайпом (flick-жест) - мгновенное плавное замедление.
   // Без фазы full-speed: сразу в ease-out вращение, пропорциональное скорости.
@@ -739,7 +738,7 @@ export function SpaceInvader({
   const flickSpin = useCallback((velocity: number) => {
     clearTimeout(spinDecelTimerRef.current);
     clearTimeout(flickTimerRef.current);
-    clearSpinStyles();
+    clearSpinStyles(spinContainerRef.current);
 
     const gen = ++spinGenRef.current;
     spinPhaseRef.current = 'decelerating';
@@ -774,12 +773,12 @@ export function SpaceInvader({
       el.style.transform = `rotate(${target}deg)`;
       spinDecelTimerRef.current = setTimeout(() => {
         if (spinGenRef.current !== gen) return;
-        clearSpinStyles();
+        clearSpinStyles(el);
         spinPhaseRef.current = 'idle';
         setPose('idle');
       }, dur * 1000 + 20);
     });
-  }, [clearSpinStyles]);
+  }, []);
 
   const pressCleanupRef = useRef<(() => void) | null>(null);
 
