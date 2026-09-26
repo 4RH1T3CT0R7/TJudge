@@ -14,8 +14,8 @@ help:
 	@echo "  make detect-profile - Detect recommended profile for your hardware"
 	@echo ""
 	@echo "  === Backup & Restore ==="
-	@echo "  make backup        - Create database backup"
-	@echo "  make restore       - Restore from backup (BACKUP=path/to/file.sql.gz)"
+	@echo "  make backup        - Backup database and programs (sudo: files are uid 1000)"
+	@echo "  make restore       - Restore from backup (BACKUP=path/to/file.sql.gz, sudo)"
 	@echo "  make backup-list   - List available backups"
 	@echo ""
 	@echo "  === Development ==="
@@ -122,6 +122,7 @@ monitoring-up:
 		echo "MONITORING_MODE=external: мониторинг обеспечивает общий стек infra-monitoring"; \
 		echo "(api/worker уже подключены к сети monitoring; поднимите стек в репо infra-monitoring)"; \
 	else \
+		./scripts/init-secrets.sh >/dev/null || exit 1; \
 		docker network create monitoring 2>/dev/null || true; \
 		docker compose -f docker-compose.monitoring.yml up -d; \
 	fi
