@@ -109,7 +109,6 @@ web/
 ├── index.html                  # HTML шаблон
 ├── package.json
 ├── vite.config.ts
-├── tailwind.config.js
 ├── postcss.config.js
 ├── eslint.config.js
 ├── tsconfig.json
@@ -209,7 +208,7 @@ await api.uploadProgram(formData);
 
 ## WebSocket
 
-Хук для real-time обновлений таблицы лидеров:
+Хук для real-time событий турнира (типы сообщений — `src/types/ws.ts`: `tournament_update`, `match_result`, `program_update`). Лидерборд сервер не присылает: после `match_result` его нужно перечитать через REST, так делает `useTournamentLive`.
 
 ```typescript
 import { useWebSocket } from './hooks/useWebSocket';
@@ -217,8 +216,8 @@ import { useWebSocket } from './hooks/useWebSocket';
 const { isConnected } = useWebSocket({
   tournamentId: '123',
   onMessage: (message) => {
-    if (message.type === 'leaderboard_update') {
-      setLeaderboard(message.payload.entries);
+    if (message.type === 'match_result') {
+      refetchLeaderboard();
     }
   },
 });

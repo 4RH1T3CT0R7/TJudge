@@ -1210,13 +1210,10 @@ export interface paths {
          * @description Upgrades to a WebSocket connection for real-time tournament updates.
          *     Authentication via subprotocol header: `Sec-WebSocket-Protocol: access_token.<jwt>`.
          *
-         *     **Server-sent message types:**
-         *     - `match_completed` -- a match has finished
-         *     - `leaderboard_updated` -- leaderboard changed
-         *     - `tournament_started` -- tournament transitioned to active
-         *     - `tournament_completed` -- tournament finished
-         *     - `round_completed` -- a game round was completed
-         *     - `round_reset` -- a game round was reset
+         *     **Server-sent messages** (`{"type": ..., "payload": {...}}`, see web/src/types/ws.ts):
+         *     - `tournament_update` -- tournament started or completed; payload: `status`, `start_time` or `end_time`
+         *     - `match_result` -- a match result was applied; payload: `match_id`, `program1_id`, `program2_id`, `new_rating1`, `new_rating2`, `winner`
+         *     - `program_update` -- compilation finished; payload: `program_id`, `team_id`, `status`
          */
         get: operations["wsTournament"];
         put?: never;
