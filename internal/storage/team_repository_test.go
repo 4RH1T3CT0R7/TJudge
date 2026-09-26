@@ -4,6 +4,7 @@ package storage_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -742,4 +743,114 @@ func (s *TeamRepositorySuite) TestDisqualifyTeamFull_RevertsOpponentRating() {
 		"SELECT old_rating, new_rating FROM rating_history WHERE program_id = $1", opp.ID).Scan(&oldR, &newR))
 	assert.Equal(s.T(), 1500, oldR)
 	assert.Equal(s.T(), 1514, newR)
+}
+
+// дисквалификация во время применения рейтинга матча с командой: ждёт его
+// коммита и откатывает и его дельту, без взаимной блокировки на участниках
+func (s *TeamRepositorySuite) TestDisqualifyTeamFull_WaitsForRatingApply() {
+	ctx := context.Background()
+	user := s.createTeamUser("dqw1")
+	opponent := s.createTeamUser("dqw2")
+	tournament := s.createTeamTournament("TTEAMDQW", user.ID)
+	team := s.createTeam("Test Team DQW", "TDQW01", tournament.ID, user.ID)
+	oppTeam := s.createTeam("Test Team DQW Opp", "TDQW02", tournament.ID, opponent.ID)
+
+	programRepo := storage.NewProgramRepository(s.database)
+	matchRepo := storage.NewMatchRepository(s.database)
+	newProgram := func(owner, teamID uuid.UUID, name string, rating int) *models.Program {
+		p := &models.Program{
+			ID: uuid.New(), UserID: owner, TeamID: &teamID, TournamentID: &tournament.ID,
+			Name: name, GameType: "dilemma", CodePath: "/tmp/" + name, Language: "python", Version: 1,
+		}
+		require.NoError(s.T(), programRepo.Create(ctx, p))
+		_, err := s.database.ExecContext(ctx,
+			"INSERT INTO tournament_participants (tournament_id, program_id, rating) VALUES ($1, $2, $3)",
+			tournament.ID, p.ID, rating)
+		require.NoError(s.T(), err)
+		s.T().Cleanup(func() {
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM tournament_participants WHERE program_id = $1", p.ID)
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM programs WHERE id = $1", p.ID)
+		})
+		return p
+	}
+	dq := newProgram(user.ID, team.ID, "dqw_bot", 1484)
+	opp := newProgram(opponent.ID, oppTeam.ID, "dqw_opp", 1516)
+
+	start := time.Now().Add(-time.Hour)
+	newMatch := func(at time.Time) uuid.UUID {
+		m := &models.Match{
+			ID: uuid.New(), TournamentID: tournament.ID, Program1ID: dq.ID, Program2ID: opp.ID,
+			GameType: "dilemma", Status: models.MatchCompleted, Priority: models.PriorityMedium, RoundNumber: 1, CreatedAt: at,
+		}
+		require.NoError(s.T(), matchRepo.Create(ctx, m))
+		s.T().Cleanup(func() {
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE match_id = $1", m.ID)
+			_, _ = s.database.ExecContext(ctx, "DELETE FROM matches WHERE id = $1", m.ID)
+		})
+		return m.ID
+	}
+	insertHistory := func(q interface {
+		ExecContext(context.Context, string, ...any) (sql.Result, error)
+	}, matchID, pid uuid.UUID, oldR, newR int, at time.Time) {
+		_, err := q.ExecContext(ctx, `
+			INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			uuid.New(), pid, tournament.ID, oldR, newR, newR-oldR, matchID, at)
+		require.NoError(s.T(), err)
+	}
+
+	// первый матч уже применён: соперник +16
+	first := newMatch(start)
+	insertHistory(s.database, first, dq.ID, 1500, 1484, start)
+	insertHistory(s.database, first, opp.ID, 1500, 1516, start)
+
+	// второй применяется прямо сейчас: шаги ApplyMatchResult в том же порядке блокировок
+	second := newMatch(start.Add(time.Minute))
+	tx, err := s.database.BeginTx(ctx, nil)
+	require.NoError(s.T(), err)
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx, "SELECT 1 FROM matches WHERE id = $1 FOR KEY SHARE", second)
+	require.NoError(s.T(), err)
+
+	done := make(chan error, 1)
+	go func() {
+		_, _, _, err := s.repo.DisqualifyTeamFull(ctx, team.ID, tournament.ID)
+		done <- err
+	}()
+	require.Eventually(s.T(), func() bool {
+		var waiting int
+		_ = s.database.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'").Scan(&waiting)
+		return waiting > 0
+	}, 5*time.Second, 20*time.Millisecond)
+
+	_, err = tx.ExecContext(ctx, `
+		SELECT rating FROM tournament_participants
+		WHERE tournament_id = $1 AND program_id IN ($2, $3)
+		ORDER BY program_id FOR UPDATE`, tournament.ID, dq.ID, opp.ID)
+	require.NoError(s.T(), err)
+	at := start.Add(time.Minute)
+	insertHistory(tx, second, dq.ID, 1484, 1470, at)
+	insertHistory(tx, second, opp.ID, 1516, 1530, at)
+	_, err = tx.ExecContext(ctx,
+		"UPDATE tournament_participants SET rating = rating + 14 WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, opp.ID)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), tx.Commit())
+
+	select {
+	case err := <-done:
+		require.NoError(s.T(), err)
+	case <-time.After(10 * time.Second):
+		s.T().Fatal("дисквалификация не завершилась")
+	}
+
+	var rating, history int
+	require.NoError(s.T(), s.database.QueryRowContext(ctx,
+		"SELECT rating FROM tournament_participants WHERE tournament_id = $1 AND program_id = $2",
+		tournament.ID, opp.ID).Scan(&rating))
+	assert.Equal(s.T(), 1500, rating)
+	require.NoError(s.T(), s.database.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM rating_history WHERE program_id = $1", opp.ID).Scan(&history))
+	assert.Zero(s.T(), history)
 }

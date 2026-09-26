@@ -597,13 +597,29 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		fmt.Fprintf(&placeholders, "$%d", i+2) // $2, $3, ...
 	}
 
-	// 3. ELO соперников (виден на графике истории рейтинга) освобождается от
+	// 3. матчи команды блокируются до чтения истории. ApplyMatchResult держит
+	// FOR KEY SHARE на матче, поэтому идущий применяется целиком до снимка
+	// removed и его дельта откатывается, а новый ждёт коммита и матча уже не
+	// находит. порядок matches -> tournament_participants тот же, что у него,
+	// так что взаимной блокировки нет
+	args := append([]any{tournamentID}, pidStrings...)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		SELECT id FROM matches
+		WHERE tournament_id = $1
+		AND (program1_id IN (%[1]s) OR program2_id IN (%[1]s))
+		ORDER BY id
+		FOR UPDATE
+	`, placeholders.String()), args...)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to lock team matches")
+	}
+
+	// 4. ELO соперников (виден на графике истории рейтинга) освобождается от
 	// матчей с командой: рейтинг участника и более поздние точки его истории
 	// сдвигаются на сумму удалённых дельт. wins/losses/draws участников нигде не
-	// читаются (лидерборды считаются живым запросом по matches), пересчёт не нужен
+	// читаются (лидерборды считаются живым запросом по matches), пересчёт не нужен.
 	// ограничение: снимается только прямой вклад матчей, последующие дельты не
 	// пересчитываются заново; точный вариант - replay ELO по оставшимся матчам
-	args := append([]any{tournamentID}, pidStrings...)
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		WITH removed AS (
 			SELECT rh.program_id, rh.change, rh.created_at
@@ -634,7 +650,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 		return 0, 0, 0, errors.Wrap(err, "failed to revert opponents rating")
 	}
 
-	// 4. снос rating_history по сыгранным матчам с программами команды.
+	// 5. снос rating_history по сыгранным матчам с программами команды.
 	// failed тоже: форфейт (упала программа) даёт сопернику победу в лидербордах
 	result, err := tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM rating_history
@@ -651,7 +667,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	ratingHistoryDeleted, _ = result.RowsAffected()
 
-	// 5. снос самих сыгранных матчей
+	// 6. снос самих сыгранных матчей
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		DELETE FROM matches
 		WHERE tournament_id = $1
@@ -663,7 +679,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesDeleted, _ = result.RowsAffected()
 
-	// 6. отмена pending и running (running воркер сам пропустит на финализации)
+	// 7. отмена pending и running (running воркер сам пропустит на финализации)
 	result, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE matches
 		SET status = 'cancelled', error_message = 'Team disqualified'
@@ -676,7 +692,7 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	}
 	matchesCancelled, _ = result.RowsAffected()
 
-	// 7. обнуление статистики только у этой команды
+	// 8. обнуление статистики только у этой команды
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		UPDATE tournament_participants
 		SET rating = 1500, wins = 0, losses = 0, draws = 0
