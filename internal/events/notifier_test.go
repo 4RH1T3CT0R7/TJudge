@@ -95,12 +95,9 @@ func TestSyncNotifier_ApiTopology(t *testing.T) {
 	n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: tid})
 	assert.Equal(t, []uuid.UUID{tid}, lb.invalidateFull)
 
-	n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: tid, ProgramID: uuid.New(), InitialRating: 1500})
-	assert.Len(t, lb.invalidateFull, 2)
-
 	n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid, GameID: uuid.New()})
 	// сброс раунда тоже чистит лидерборд
-	assert.Len(t, lb.invalidateFull, 3)
+	assert.Len(t, lb.invalidateFull, 2)
 
 	// в редис ушли только события для вебсокета, в порядке вызова
 	var types []string
@@ -177,7 +174,6 @@ func TestSyncNotifier_NilCollaborators(t *testing.T) {
 		n.TournamentCreated(ctx, TournamentCreated{Version: 1, Tournament: &models.Tournament{ID: tid}})
 		n.TournamentStarted(ctx, TournamentStarted{Version: 1, TournamentID: tid})
 		n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: tid})
-		n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: tid})
 		n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: tid})
 		n.MatchResultProcessed(ctx, MatchResultProcessed{Version: 1, TournamentID: tid})
 		n.ProgramCompiled(ctx, ProgramCompiled{Version: 1, TournamentID: tid})
@@ -193,7 +189,7 @@ func TestSyncNotifier_CacheErrorSwallowed(t *testing.T) {
 
 	assert.NotPanics(t, func() {
 		n.TournamentDeleted(ctx, TournamentDeleted{Version: 1, TournamentID: uuid.New()})
-		n.ParticipantJoined(ctx, ParticipantJoined{Version: 1, TournamentID: uuid.New()})
+		n.GameRoundReset(ctx, GameRoundReset{Version: 1, TournamentID: uuid.New()})
 	})
 }
 
@@ -205,7 +201,6 @@ func TestNoopNotifier(t *testing.T) {
 		n.TournamentStarted(ctx, TournamentStarted{})
 		n.TournamentCompleted(ctx, TournamentCompleted{})
 		n.TournamentDeleted(ctx, TournamentDeleted{})
-		n.ParticipantJoined(ctx, ParticipantJoined{})
 		n.GameRoundReset(ctx, GameRoundReset{})
 		n.MatchResultProcessed(ctx, MatchResultProcessed{})
 		n.ProgramCompiled(ctx, ProgramCompiled{})

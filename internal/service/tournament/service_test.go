@@ -41,9 +41,6 @@ func (m *MockTournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUI
 func (m *MockTournamentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.Called(ctx, id).Error(0)
 }
-func (m *MockTournamentRepository) AddParticipant(ctx context.Context, p *models.TournamentParticipant) error {
-	return m.Called(ctx, p).Error(0)
-}
 
 func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
@@ -55,11 +52,6 @@ func (m *MockTournamentRepository) List(ctx context.Context, filter models.Tourn
 	args := m.Called(ctx, filter)
 	v, _ := args.Get(0).([]*models.Tournament)
 	return v, args.Error(1)
-}
-
-func (m *MockTournamentRepository) GetParticipantsCount(ctx context.Context, id uuid.UUID) (int, error) {
-	args := m.Called(ctx, id)
-	return args.Int(0), args.Error(1)
 }
 
 func (m *MockTournamentRepository) GetTeamsCount(ctx context.Context, id uuid.UUID) (int, error) {
@@ -329,59 +321,6 @@ func TestService_List(t *testing.T) {
 
 		tournamentRepo.AssertCalled(t, "List", ctx, models.TournamentFilter{Limit: 50})
 		tournamentRepo.AssertCalled(t, "List", ctx, models.TournamentFilter{Limit: 100})
-	})
-}
-
-func TestService_Join(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		maxParticipants := 10
-		tournament := &models.Tournament{ID: id, Name: "T", GameType: "chess", Status: models.TournamentPending, MaxParticipants: &maxParticipants}
-
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-		tournamentRepo.On("GetParticipantsCount", ctx, id).Return(5, nil)
-		tournamentRepo.On("AddParticipant", ctx, mock.AnythingOfType("*models.TournamentParticipant")).Return(nil)
-
-		programID := uuid.New()
-		err := service.Join(ctx, &JoinRequest{TournamentID: id, ProgramID: programID})
-		require.NoError(t, err)
-
-		// участник добавлен со стартовым рейтингом 1500
-		tournamentRepo.AssertCalled(t, "AddParticipant", ctx, mock.MatchedBy(func(p *models.TournamentParticipant) bool {
-			return p.TournamentID == id && p.ProgramID == programID && p.Rating == 1500
-		}))
-	})
-
-	t.Run("not_pending", func(t *testing.T) {
-		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		tournament := &models.Tournament{ID: id, Name: "Active", GameType: "chess", Status: models.TournamentActive}
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-
-		err := service.Join(ctx, &JoinRequest{TournamentID: id, ProgramID: uuid.New()})
-		assert.Equal(t, errors.ErrTournamentStarted, err)
-	})
-
-	t.Run("full", func(t *testing.T) {
-		service, tournamentRepo, _, _, distributedLock, _ := newTestService(t)
-		ctx := context.Background()
-
-		id := uuid.New()
-		maxParticipants := 5
-		tournament := &models.Tournament{ID: id, Name: "Full", GameType: "chess", Status: models.TournamentPending, MaxParticipants: &maxParticipants}
-		distributedLock.On("WithLock", anyLock()...).Return(nil)
-		tournamentRepo.On("GetByID", ctx, id).Return(tournament, nil)
-		tournamentRepo.On("GetParticipantsCount", ctx, id).Return(5, nil)
-
-		err := service.Join(ctx, &JoinRequest{TournamentID: id, ProgramID: uuid.New()})
-		assert.Equal(t, errors.ErrTournamentFull, err)
 	})
 }
 
@@ -992,69 +931,6 @@ func TestGenerateCode(t *testing.T) {
 // -----------------------------------------------------------------------------
 // конкурентные тесты - тут реальный лок через miniredis, не мок
 // -----------------------------------------------------------------------------
-
-// конкурентный join не должен пробить лимит участников
-func TestConcurrentJoin(t *testing.T) {
-	tournamentRepo := new(MockTournamentRepository)
-
-	var participantCount int64
-	maxParticipants := 10
-
-	id := uuid.New()
-	tournament := &models.Tournament{ID: id, Name: "T", GameType: "chess", Status: models.TournamentPending, MaxParticipants: &maxParticipants}
-	tournamentRepo.On("GetByID", mock.Anything, id).Return(tournament, nil)
-
-	// счётчик участников через atomic
-	getCountCall := tournamentRepo.On("GetParticipantsCount", mock.Anything, id)
-	getCountCall.Run(func(args mock.Arguments) {
-		getCountCall.ReturnArguments = mock.Arguments{int(atomic.LoadInt64(&participantCount)), nil}
-	}).Return(0, nil)
-
-	// добавление участника инкрементит счётчик, но не выше лимита
-	addCall := tournamentRepo.On("AddParticipant", mock.Anything, mock.AnythingOfType("*models.TournamentParticipant"))
-	addCall.Run(func(args mock.Arguments) {
-		count := atomic.AddInt64(&participantCount, 1)
-		if count > int64(maxParticipants) {
-			atomic.AddInt64(&participantCount, -1)
-			addCall.ReturnArguments = mock.Arguments{errors.ErrTournamentFull}
-		} else {
-			addCall.ReturnArguments = mock.Arguments{nil}
-		}
-	}).Return(nil)
-
-	testCache := setupTestRedisCache(t)
-	defer testCache.Close()
-
-	log, _ := logger.New("error", "json")
-	service := NewService(
-		tournamentRepo, new(MockMatchRepository), new(MockQueueManager), nil,
-		cache.NewTournamentCache(testCache), cache.NewLeaderboardCache(testCache),
-		events.NoopNotifier{}, cache.NewDistributedLock(testCache), log,
-	)
-
-	var wg sync.WaitGroup
-	successCount := int64(0)
-	errorCount := int64(0)
-	concurrentJoins := 20
-
-	for range concurrentJoins {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			req := &JoinRequest{TournamentID: id, ProgramID: uuid.New()}
-			if err := service.Join(context.Background(), req); err == nil {
-				atomic.AddInt64(&successCount, 1)
-			} else {
-				atomic.AddInt64(&errorCount, 1)
-			}
-		}()
-	}
-	wg.Wait()
-
-	assert.LessOrEqual(t, successCount, int64(maxParticipants), "лимит участников пробит")
-	assert.Equal(t, successCount, participantCount)
-	assert.Equal(t, int64(concurrentJoins), successCount+errorCount, "все join должны завершиться")
-}
 
 // стартануть турнир дважды нельзя даже конкурентно
 func TestConcurrentStart(t *testing.T) {

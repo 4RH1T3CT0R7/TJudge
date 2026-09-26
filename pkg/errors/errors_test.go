@@ -64,8 +64,6 @@ func TestPredefinedErrors(t *testing.T) {
 		{ErrForbidden, http.StatusForbidden, "Forbidden"},
 		{ErrRateLimitExceeded, http.StatusTooManyRequests, "Rate limit exceeded"},
 		{ErrInternal, http.StatusInternalServerError, "Internal server error"},
-		{ErrTournamentFull, http.StatusConflict, "Tournament is full"},
-		{ErrTournamentStarted, http.StatusConflict, "Tournament already started"},
 		{ErrProgramNotFound, http.StatusNotFound, "Program not found"},
 		{ErrConcurrentUpdate, http.StatusConflict, "Concurrent update detected"},
 	}

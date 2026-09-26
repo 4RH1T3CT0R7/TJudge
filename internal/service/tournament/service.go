@@ -43,11 +43,9 @@ type TournamentRepository interface {
 	Complete(ctx context.Context, tournament *models.Tournament) (int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetParticipantsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetTeamsCount(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	GetLatestParticipantsGroupedByGame(ctx context.Context, tournamentID uuid.UUID) (map[string][]*models.TournamentParticipant, error)
 	GetLatestParticipantsByGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.TournamentParticipant, error)
-	AddParticipant(ctx context.Context, participant *models.TournamentParticipant) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
 }
@@ -236,70 +234,6 @@ func (s *Service) List(ctx context.Context, filter models.TournamentFilter) ([]*
 	}
 
 	return tournaments, nil
-}
-
-// JoinRequest — тело запроса на join
-type JoinRequest struct {
-	TournamentID uuid.UUID `json:"tournament_id"`
-	ProgramID    uuid.UUID `json:"program_id"`
-}
-
-// Join добавляет участника в турнир
-func (s *Service) Join(ctx context.Context, req *JoinRequest) error {
-	// лок, иначе гонка на проверке лимита участников
-	lockKey := fmt.Sprintf("tournament:join:%s", req.TournamentID.String())
-
-	return s.distributedLock.WithLock(ctx, lockKey, 5*time.Second, func(ctx context.Context) error {
-		// берётся турнир
-		tournament, err := s.GetByID(ctx, req.TournamentID)
-		if err != nil {
-			return err
-		}
-
-		// турнир должен быть ещё pending
-		if tournament.Status != models.TournamentPending {
-			return errors.ErrTournamentStarted
-		}
-
-		// проверка лимита
-		if tournament.MaxParticipants != nil {
-			count, err := s.tournamentRepo.GetParticipantsCount(ctx, req.TournamentID)
-			if err != nil {
-				return fmt.Errorf("failed to get participants count: %w", err)
-			}
-
-			if count >= *tournament.MaxParticipants {
-				return errors.ErrTournamentFull
-			}
-		}
-
-		// добавление участника
-		participant := &models.TournamentParticipant{
-			ID:           uuid.New(),
-			TournamentID: req.TournamentID,
-			ProgramID:    req.ProgramID,
-			Rating:       1500, // стартовый эло
-		}
-
-		if err := s.tournamentRepo.AddParticipant(ctx, participant); err != nil {
-			return fmt.Errorf("failed to add participant: %w", err)
-		}
-
-		s.log.Info("Participant joined tournament",
-			zap.String("tournament_id", req.TournamentID.String()),
-			zap.String("program_id", req.ProgramID.String()),
-		)
-
-		// событие: лидерборд и кэш обновятся в обработчиках
-		s.notifier.ParticipantJoined(ctx, events.ParticipantJoined{
-			Version:       1,
-			TournamentID:  req.TournamentID,
-			ProgramID:     req.ProgramID,
-			InitialRating: 1500,
-		})
-
-		return nil
-	})
 }
 
 // Start переводит турнир в active и включает первую игру

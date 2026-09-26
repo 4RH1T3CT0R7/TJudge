@@ -67,10 +67,8 @@ var (
 	ErrInternal = New(http.StatusInternalServerError, "Internal server error", nil)
 
 	// бизнес-логика
-	ErrTournamentFull    = New(http.StatusConflict, "Tournament is full", nil)
-	ErrTournamentStarted = New(http.StatusConflict, "Tournament already started", nil)
-	ErrProgramNotFound   = New(http.StatusNotFound, "Program not found", nil)
-	ErrConcurrentUpdate  = New(http.StatusConflict, "Concurrent update detected", nil)
+	ErrProgramNotFound  = New(http.StatusNotFound, "Program not found", nil)
+	ErrConcurrentUpdate = New(http.StatusConflict, "Concurrent update detected", nil)
 )
 
 // WithMessage новая ошибка с тем же кодом но другим текстом.

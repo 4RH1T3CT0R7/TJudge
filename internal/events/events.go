@@ -34,13 +34,6 @@ type TournamentDeleted struct {
 	TournamentID uuid.UUID
 }
 
-type ParticipantJoined struct {
-	Version       int
-	TournamentID  uuid.UUID
-	ProgramID     uuid.UUID
-	InitialRating int
-}
-
 // ProgramCompiled - асинхронная компиляция загруженной программы завершилась (успешно или нет).
 // тащит с собой всё что нужно вебсокету, чтобы не лезть лишний раз в базу
 type ProgramCompiled struct {

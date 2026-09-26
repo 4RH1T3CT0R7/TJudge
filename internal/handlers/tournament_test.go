@@ -48,11 +48,6 @@ func (m *MockTournamentService) List(ctx context.Context, filter models.Tourname
 	return args.Get(0).([]*models.Tournament), args.Error(1)
 }
 
-func (m *MockTournamentService) Join(ctx context.Context, req *tournament.JoinRequest) error {
-	args := m.Called(ctx, req)
-	return args.Error(0)
-}
-
 func (m *MockTournamentService) Start(ctx context.Context, tournamentID uuid.UUID) error {
 	args := m.Called(ctx, tournamentID)
 	return args.Error(0)
