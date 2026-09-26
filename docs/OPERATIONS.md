@@ -256,4 +256,6 @@ docker compose -f docker-compose.selfhosted.yml ps
 curl http://localhost:8080/health                    # "OK"
 ```
 
+Worker проверяет на старте, что `WORKER_TIMEOUT` не меньше `EXECUTOR_TIMEOUT` + 20s, и при несогласованных таймаутах не запускается (`WORKER_TIMEOUT (…) must be at least EXECUTOR_TIMEOUT (…) + 20s` в логах).
+
 `make deploy*` вызывают `scripts/quick-deploy.sh <profile>`. Смена профиля — `docker compose -f docker-compose.selfhosted.yml down` и заново нужным `make deploy-*`.
