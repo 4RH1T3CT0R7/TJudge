@@ -707,16 +707,6 @@
   100% { transform: translate(0, 0) scale(0); opacity: 0; }
 }
 
-@keyframes pixel-dissolve {
-  0% { opacity: 1; transform: scale(1); filter: blur(0); }
-  50% { opacity: 0.6; transform: scale(1.1); filter: blur(1px); }
-  100% { opacity: 0; transform: scale(0.3); filter: blur(6px); }
-}
-
-.animate-pixel-dissolve {
-  animation: pixel-dissolve 1s ease-out forwards;
-}
-
 /* Quest terminal animations */
 
 @keyframes teleport-glitch {

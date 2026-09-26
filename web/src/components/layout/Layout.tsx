@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useDarkMode } from '../../hooks/useDarkMode';
-import { SpaceInvader } from '../SpaceInvader';
 import { AnimatedOutlet } from '../motion/AnimatedOutlet';
 import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
@@ -26,13 +25,14 @@ export function Layout() {
     activateGodMode();
   }, [activateGodMode]));
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLoggingOut(true);
-    // Delay actual logout so dissolve animation plays fully before auth state changes
-    setTimeout(async () => {
+    try {
       await logout();
       navigate('/login');
-    }, 1000);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -107,7 +107,7 @@ export function Layout() {
                 </button>
               )}
               {isAuthenticated ? (
-                <div className={`flex items-center gap-3 ${isLoggingOut ? 'animate-pixel-dissolve' : ''}`}>
+                <div className="flex items-center gap-3">
                   <Link
                     to="/profile"
                     className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200"
@@ -117,9 +117,6 @@ export function Layout() {
                   >
                     {user?.username}
                   </Link>
-                  {isLoggingOut && (
-                    <SpaceInvader size="sm" controlledPose="cry" eyeOverride="sad" speechBubble="// до свидания..." />
-                  )}
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}

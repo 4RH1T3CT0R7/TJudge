@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { SpaceInvader } from './SpaceInvader';
 import type { InvaderPose } from './SpaceInvader';
 
-type CinematicType = 'first_login' | 'tournament_victory' | 'top1_leaderboard';
+type CinematicType = 'first_login' | 'tournament_victory';
 
 interface CinematicProps {
   type: CinematicType;
@@ -24,6 +25,8 @@ function useTerminalTyping(lines: string[], startDelay: number) {
     return () => clearTimeout(t);
   }, [startDelay]);
 
+  // печать быстрая и ровная: весь кинематик первого входа укладывается в 3 с
+
   useEffect(() => {
     if (!started || lineIndex >= lines.length) return;
 
@@ -32,7 +35,7 @@ function useTerminalTyping(lines: string[], startDelay: number) {
       const t = setTimeout(() => {
         setCurrentLine(prev => prev + line[charIndex]);
         setCharIndex(c => c + 1);
-      }, 30 + Math.random() * 40);
+      }, 15);
       return () => clearTimeout(t);
     } else {
       const t = setTimeout(() => {
@@ -40,7 +43,7 @@ function useTerminalTyping(lines: string[], startDelay: number) {
         setCurrentLine('');
         setCharIndex(0);
         setLineIndex(i => i + 1);
-      }, 300);
+      }, 150);
       return () => clearTimeout(t);
     }
   }, [started, lineIndex, charIndex, lines, currentLine]);
@@ -48,6 +51,8 @@ function useTerminalTyping(lines: string[], startDelay: number) {
   const done = lineIndex >= lines.length;
   return { displayedLines, currentLine, done };
 }
+
+const FIRST_LOGIN_LINES = ['> подключение к tjudge.ru...', '> доступ открыт.'];
 
 // ASCII trophy
 const ASCII_TROPHY = [
@@ -70,6 +75,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
   const [showTrophy, setShowTrophy] = useState(false);
   const [trophyLines, setTrophyLines] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const reduceMotion = useReducedMotion();
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
     timerRef.current.push(setTimeout(fn, ms));
@@ -80,15 +86,27 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // First login cinematic sequence
-  const firstLoginLines = [
-    '> Connecting to tjudge.ru...',
-    '> Authenticating...',
-    '> Access granted.',
-  ];
+  // таймеры и пропуск могут сработать оба, onComplete - только один раз
+  const doneRef = useRef(false);
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete();
+  }, [onComplete]);
+
+  // пропуск любой клавишей; при reduced-motion кинематика нет вовсе
+  useEffect(() => {
+    if (reduceMotion) {
+      finish();
+      return;
+    }
+    window.addEventListener('keydown', finish);
+    return () => window.removeEventListener('keydown', finish);
+  }, [reduceMotion, finish]);
+
   const { displayedLines, currentLine, done: typingDone } = useTerminalTyping(
-    type === 'first_login' ? firstLoginLines : [],
-    500
+    type === 'first_login' ? FIRST_LOGIN_LINES : [],
+    200
   );
 
   // First login sequence
@@ -101,20 +119,18 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
     addTimer(() => {
       setInvaderPose('teleport');
       setInvaderSpeech(null);
-    }, 500);
+    }, 100);
     // Dance + welcome
     addTimer(() => {
       setInvaderPose('dance');
-      setInvaderSpeech(`// добро пожаловать, ${username || 'user'}!`);
-    }, 1500);
+      setInvaderSpeech(`// добро пожаловать, ${username || 'участник'}!`);
+    }, 300);
     // Fade out
     addTimer(() => {
       setPhase(2);
-    }, 4500);
-    addTimer(() => {
-      onComplete();
-    }, 5500);
-  }, [type, typingDone, phase, username, addTimer, onComplete]);
+    }, 800);
+    addTimer(finish, 1200);
+  }, [type, typingDone, phase, username, addTimer, finish]);
 
   // Tournament victory sequence
   useEffect(() => {
@@ -146,51 +162,26 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
     // Phase 3: Dance + celebration
     addTimer(() => {
       setInvaderPose('dance');
-      setInvaderSpeech(`// ${teamName || 'Команда'} — 1st PLACE!`);
+      setInvaderSpeech(`// ${teamName || 'Команда'} — 1 место!`);
     }, 5000);
 
     // Fade out
     addTimer(() => setPhase(3), 7000);
-    addTimer(() => onComplete(), 8000);
-  }, [type, teamName, addTimer, onComplete]);
-
-  // Top 1 leaderboard sequence
-  useEffect(() => {
-    if (type !== 'top1_leaderboard') return;
-
-    // Phase 1: Flash gold
-    addTimer(() => setPhase(1), 300);
-
-    // Phase 2: Invader fly up
-    addTimer(() => {
-      setInvaderPose('fly');
-      setPhase(2);
-    }, 1000);
-
-    // Phase 3: Spin + handsUp
-    addTimer(() => {
-      setInvaderPose('spin');
-    }, 2000);
-    addTimer(() => {
-      setInvaderPose('handsUp');
-      setInvaderSpeech('// #1!!!');
-    }, 3000);
-
-    // Fade out
-    addTimer(() => setPhase(3), 4500);
-    addTimer(() => onComplete(), 5500);
-  }, [type, addTimer, onComplete]);
+    addTimer(finish, 7300);
+  }, [type, teamName, addTimer, finish]);
 
   const isFading = (type === 'first_login' && phase >= 2) ||
-                   (type === 'tournament_victory' && phase >= 3) ||
-                   (type === 'top1_leaderboard' && phase >= 3);
+                   (type === 'tournament_victory' && phase >= 3);
+
+  if (reduceMotion) return null;
 
   return (
     <div
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-1000 ${
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-300 ${
         isFading ? 'opacity-0' : 'opacity-100'
       }`}
       style={{ backgroundColor: 'rgba(0,0,0,0.95)' }}
+      onPointerDown={finish}
     >
       {/* First Login */}
       {type === 'first_login' && (
@@ -259,7 +250,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
             {phase >= 2 && (
               <div className="text-center mt-4">
                 <div className="text-2xl font-bold text-amber-400 font-mono" style={{ textShadow: '0 0 20px rgba(245,158,11,0.5)' }}>
-                  1st PLACE
+                  1 МЕСТО
                 </div>
                 <div className="text-lg text-gray-300 mt-1">{teamName}</div>
               </div>
@@ -268,37 +259,9 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
         </>
       )}
 
-      {/* Top 1 Leaderboard */}
-      {type === 'top1_leaderboard' && (
-        <>
-          {/* Gold flash */}
-          {phase >= 1 && (
-            <div className="absolute inset-0 pointer-events-none animate-pulse" style={{
-              background: 'radial-gradient(circle at 50% 40%, rgba(245,158,11,0.2) 0%, transparent 60%)',
-            }} />
-          )}
-
-          {/* Invader */}
-          <div className="transition-transform duration-700" style={{
-            transform: phase >= 2 ? 'translateY(-20px)' : 'translateY(0)',
-          }}>
-            <SpaceInvader
-              size="lg"
-              controlledPose={invaderPose}
-              speechBubble={invaderSpeech}
-              eyeOverride="wide"
-            />
-          </div>
-
-          {phase >= 2 && (
-            <div className="text-center mt-6">
-              <div className="text-3xl font-bold text-amber-400 font-mono" style={{ textShadow: '0 0 20px rgba(245,158,11,0.5)' }}>
-                #1
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      <p className="absolute bottom-6 font-mono text-xs text-gray-500">
+        {'// любая клавиша или касание — пропустить'}
+      </p>
     </div>
   );
 }
