@@ -1,16 +1,31 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ClockIcon } from '../icons';
+import { queryKeys } from '../../api/queryKeys';
+import type { TournamentGameWithDetails } from '../../types';
 
 interface AutoRoundCountdownProps {
-  enabled: boolean;
-  intervalSeconds: number;
-  lastRunAt: string | null | undefined;
+  status: TournamentGameWithDetails;
+  tournamentActive: boolean;
 }
 
+// планировщик проверяет игры раз в 5 с: после этого причина в /games/status свежая
+const RECHECK_MS = 6000;
+
+// Причины, по которым авто-раунд не стартует, хотя интервал прошёл (см. autoround.go)
+const WAIT_TEXT: Record<string, string> = {
+  matches_running: 'авто: следующий раунд после текущего',
+  new_programs: 'авто: ждёт новую версию программы',
+  participants: 'авто: нужно две готовые программы',
+};
+
 // Таймер до следующего авто-раунда: мотивирует успеть загрузить новую
-// версию программы. Данные уже есть в публичном /games/status.
-export function AutoRoundCountdown({ enabled, intervalSeconds, lastRunAt }: AutoRoundCountdownProps) {
+// версию программы. Когда отсчёт кончился, а раунд не пошёл, показывает
+// причину с последней проверки планировщика, а не «вот-вот».
+export function AutoRoundCountdown({ status, tournamentActive }: AutoRoundCountdownProps) {
+  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
+  const enabled = status.auto_round_enabled && tournamentActive && status.auto_round_interval_seconds > 0;
 
   useEffect(() => {
     if (!enabled) return;
@@ -18,18 +33,31 @@ export function AutoRoundCountdown({ enabled, intervalSeconds, lastRunAt }: Auto
     return () => clearInterval(id);
   }, [enabled]);
 
-  if (!enabled || intervalSeconds <= 0) return null;
-
   // Без last_run планировщик стартует от включения — точного времени нет.
-  const base = lastRunAt ? new Date(lastRunAt).getTime() : null;
-  const nextAt = base !== null ? base + intervalSeconds * 1000 : null;
+  const lastRunAt = status.auto_round_last_run_at;
+  const nextAt = lastRunAt ? new Date(lastRunAt).getTime() + status.auto_round_interval_seconds * 1000 : null;
   const msLeft = nextAt !== null ? nextAt - now : null;
+  const waitText = status.auto_round_wait ? WAIT_TEXT[status.auto_round_wait] : undefined;
+  // отсчёт кончился, причины нет: статус перечитывается, пока планировщик не ответит
+  const awaitingCheck = enabled && !waitText && msLeft !== null && msLeft <= 0;
+
+  useEffect(() => {
+    if (!awaitingCheck) return;
+    const id = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(status.tournament_id) });
+    }, RECHECK_MS);
+    return () => clearInterval(id);
+  }, [awaitingCheck, queryClient, status.tournament_id]);
+
+  if (!enabled) return null;
 
   let text: string;
-  if (msLeft === null) {
+  if (waitText) {
+    text = waitText;
+  } else if (msLeft === null) {
     text = 'авто-раунд включён';
   } else if (msLeft <= 0) {
-    text = 'раунд вот-вот стартует';
+    text = 'раунд стартует';
   } else {
     const totalSec = Math.floor(msLeft / 1000);
     const h = Math.floor(totalSec / 3600);
@@ -44,7 +72,7 @@ export function AutoRoundCountdown({ enabled, intervalSeconds, lastRunAt }: Auto
     <span
       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-primary-300"
       style={{ backgroundColor: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)' }}
-      title="Авто-раунды включены: новый раунд запускается автоматически"
+      title="Авто-раунды включены: новый раунд запускается автоматически, когда прошёл интервал и появились новые программы"
     >
       <ClockIcon className="w-3.5 h-3.5" />
       {text}

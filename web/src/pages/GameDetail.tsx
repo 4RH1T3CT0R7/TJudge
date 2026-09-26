@@ -318,11 +318,7 @@ export function GameDetail() {
                 ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
               </span>
               {gameStatus && (
-                <AutoRoundCountdown
-                  enabled={gameStatus.auto_round_enabled}
-                  intervalSeconds={gameStatus.auto_round_interval_seconds}
-                  lastRunAt={gameStatus.auto_round_last_run_at}
-                />
+                <AutoRoundCountdown status={gameStatus} tournamentActive={tournament?.status === 'active'} />
               )}
             </p>
           </div>

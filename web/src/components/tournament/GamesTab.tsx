@@ -190,11 +190,7 @@ export function GamesTab({
 
               {gameStatus?.auto_round_enabled && (
                 <div className="mb-3">
-                  <AutoRoundCountdown
-                    enabled={gameStatus.auto_round_enabled}
-                    intervalSeconds={gameStatus.auto_round_interval_seconds}
-                    lastRunAt={gameStatus.auto_round_last_run_at}
-                  />
+                  <AutoRoundCountdown status={gameStatus} tournamentActive={tournamentStatus === 'active'} />
                 </div>
               )}
 

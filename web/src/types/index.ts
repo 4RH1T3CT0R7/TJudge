@@ -73,6 +73,8 @@ export interface TournamentGameWithDetails {
   auto_round_enabled: boolean;
   auto_round_interval_seconds: number;
   auto_round_last_run_at?: string;
+  /** Почему авто-раунд не стартовал на последней проверке планировщика; нет - причины нет. */
+  auto_round_wait?: 'matches_running' | 'interval' | 'new_programs' | 'participants';
 }
 
 // Program types
