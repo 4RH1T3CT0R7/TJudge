@@ -91,6 +91,9 @@ jobs:
             grep -q '^HOST_PROGRAMS_PATH=' .env 2>/dev/null || echo "HOST_PROGRAMS_PATH=$PWD/data/programs" >> .env
             ./scripts/init-secrets.sh
             export VERSION=${TAG#v}
+            # версия тоже в .env: ручной docker compose без неё поднял бы :latest
+            sed -i '/^VERSION=/d' .env
+            echo "VERSION=$VERSION" >> .env
             P="docker compose -f docker-compose.prod.yml"
             $P pull
             # образы песочниц не сервисы compose, pull их не тянет
