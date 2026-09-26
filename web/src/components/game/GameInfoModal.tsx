@@ -32,6 +32,7 @@ export function GameInfoModal({
     >
       {/* tabIndex: блок прокрутки входит в цикл Tab модалки и листается стрелками */}
       <div
+        role="region"
         tabIndex={0}
         aria-label="Описание игры"
         className="overflow-y-auto max-h-[calc(85vh-80px)] space-y-6"
