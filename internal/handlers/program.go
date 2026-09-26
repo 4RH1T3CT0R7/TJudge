@@ -12,7 +12,6 @@ import (
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
-	"github.com/bmstu-itstech/tjudge/internal/service/codescan"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
@@ -614,39 +613,8 @@ func (h *ProgramHandler) saveUploadedFile(w http.ResponseWriter, fileContent []b
 	return true
 }
 
-// logCodeScan пишет находки статического анализа (codescan) в лог и только.
-// отказывать в загрузке по нему нельзя: он срабатывает на обычные import sys и
-// re.compile и обходится одной строкой, изоляцию даёт песочница.
-//
-// проверка синтаксиса и компиляция тут не выполняются: недоверенный код никогда
-// не должен попадать в тулчейны на хосте API-процесса. программа создаётся в
-// статусе compiling, а собирает её worker уже в Docker-песочнице
-func (h *ProgramHandler) logCodeScan(language, filePath string) {
-	scanner := codescan.ScannerFor(language)
-	if scanner == nil {
-		return
-	}
-
-	// #nosec G304 -- тот же filePath что собран выше из uuid, не пользовательский ввод
-	src, err := os.ReadFile(filePath)
-	if err != nil {
-		return
-	}
-
-	for _, f := range scanner.Scan(string(src)) {
-		h.log.Warn("Code scan finding",
-			zap.String("file", filePath),
-			zap.String("language", language),
-			zap.Int("line", f.Line),
-			zap.String("level", string(f.Level)),
-			zap.String("pattern", f.Pattern),
-			zap.String("message", f.Message),
-		)
-	}
-}
-
 // handleFileUpload — основной путь загрузки бота: multipart -> проверки доступа
-// и блокировок -> запись на диск -> codescan в лог -> запись в БД -> очередь
+// и блокировок -> запись на диск -> запись в БД -> очередь
 // компиляции.
 //
 // статусная модель: программа рождается в compiling и уходит в очередь; worker
@@ -704,8 +672,8 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// компиляция и проверка синтаксиса идут асинхронно в Docker-песочнице worker'а
-	h.logCodeScan(language, filePath)
+	// компиляция и проверка синтаксиса идут асинхронно в Docker-песочнице
+	// worker'а: недоверенный код не попадает в тулчейны на хосте API
 
 	// запись в БД с атомарным назначением версии
 	program := &models.Program{
