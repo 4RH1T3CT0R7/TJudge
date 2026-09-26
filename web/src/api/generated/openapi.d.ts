@@ -2071,7 +2071,7 @@ export interface components {
         ProgramID: string;
         /** @description Match UUID */
         MatchID: string;
-        /** @description Maximum number of records to return */
+        /** @description Maximum number of records to return, larger values are clamped to the maximum */
         Limit: number;
         /** @description Number of records to skip */
         Offset: number;
@@ -2237,7 +2237,7 @@ export interface operations {
             query?: {
                 status?: "pending" | "active" | "completed" | "cancelled";
                 game_type?: string;
-                /** @description Maximum number of records to return */
+                /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */
                 offset?: components["parameters"]["Offset"];
@@ -2440,7 +2440,7 @@ export interface operations {
     tournamentsGetMatches: {
         parameters: {
             query?: {
-                /** @description Maximum number of records to return */
+                /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */
                 offset?: components["parameters"]["Offset"];
@@ -2690,7 +2690,7 @@ export interface operations {
         parameters: {
             query?: {
                 name?: string;
-                /** @description Maximum number of records to return */
+                /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */
                 offset?: components["parameters"]["Offset"];
@@ -3111,7 +3111,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "pending" | "running" | "completed" | "failed" | "cancelled";
-                /** @description Maximum number of records to return */
+                /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */
                 offset?: components["parameters"]["Offset"];
@@ -3816,7 +3816,7 @@ export interface operations {
                 program_id?: string;
                 status?: "pending" | "running" | "completed" | "failed" | "cancelled";
                 game_type?: string;
-                /** @description Maximum number of records to return */
+                /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */
                 offset?: components["parameters"]["Offset"];
