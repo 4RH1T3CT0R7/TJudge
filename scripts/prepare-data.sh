@@ -6,7 +6,9 @@ set -euo pipefail
 #     и отдаются uid 1000: от него работают api, worker, песочницы и бэкап;
 #   - программы из старого named volume programs_data один раз копируются в
 #     HOST_PROGRAMS_PATH. раньше prod писал их в volume, а песочницы монтировали
-#     пустой каталог хоста. volume не удаляется, это делается руками после проверки;
+#     пустой каталог хоста. volume не удаляется, это делается руками после проверки.
+#     отметка о переносе ставится в сам volume: иначе опустевший каталог (другой
+#     путь в .env, несмонтированный диск) молча заполнился бы старыми файлами;
 #   - если в БД есть программы, а каталог пуст, скрипт завершается с ошибкой,
 #     чтобы api и worker не поднялись без файлов программ.
 #
@@ -34,7 +36,7 @@ mkdir -p "$HOST_PROGRAMS_PATH" backups
 
 # каталоги программ 0750 от uid 1000, поэтому смотреть в них надо из контейнера
 in_programs() { docker run --rm -v "$HOST_PROGRAMS_PATH":/p:ro "$HELPER_IMAGE" sh -c "$1"; }
-has_files() { [ -n "$(in_programs "find /p -type f ! -name $MARKER | head -n 1")" ]; }
+has_files() { [ -n "$(in_programs "find /p -type f | head -n 1")" ]; }
 
 project=$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')
 project="${COMPOSE_PROJECT_NAME:-$project}"
@@ -42,17 +44,17 @@ volume=$(docker volume ls -q \
     --filter label=com.docker.compose.project="$project" \
     --filter label=com.docker.compose.volume=programs_data)
 
-if [ -n "$volume" ] && ! in_programs "test -e /p/$MARKER"; then
+if [ -n "$volume" ] && ! docker run --rm -v "$volume":/from:ro "$HELPER_IMAGE" test -e "/from/$MARKER"; then
     if has_files; then
         die "файлы есть и в volume $volume, и в $HOST_PROGRAMS_PATH: объедините их вручную"
     fi
     echo "prepare-data: перенос программ из volume $volume в $HOST_PROGRAMS_PATH"
     compose stop api worker
-    docker run --rm -v "$volume":/from:ro -v "$HOST_PROGRAMS_PATH":/to "$HELPER_IMAGE" sh -euc "
+    docker run --rm -v "$volume":/from -v "$HOST_PROGRAMS_PATH":/to "$HELPER_IMAGE" sh -euc "
         cp -a /from/. /to/
         [ \"\$(find /from -type f | wc -l)\" = \"\$(find /to -type f | wc -l)\" ]
         chown -R 1000:1000 /to
-        touch /to/$MARKER"
+        touch /from/$MARKER"
     echo "prepare-data: перенесено; после проверки volume удаляется так: docker volume rm $volume"
 fi
 
