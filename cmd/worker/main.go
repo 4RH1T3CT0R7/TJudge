@@ -122,12 +122,13 @@ func main() {
 	}
 	defer exec.Close()
 
-	// без образов матчи и сборки молча уходили бы в infra-ошибку по кругу,
-	// поэтому недостающий образ скачивается, а недоступный - отказ старта
+	// недостающий образ скачивается заранее. недоступный образ старт не роняет:
+	// матчи и сборки без него получают infra-ошибку и повторяются, пока образ
+	// не появится, а остальная работа воркера идёт
 	imageCtx, imageCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	for _, img := range []string{cfg.Executor.DockerImage, cfg.Executor.BuilderImage} {
 		if err := exec.EnsureImage(imageCtx, img); err != nil {
-			log.Fatal("Docker image is not available", zap.String("image", img), zap.Error(err))
+			log.Error("Docker image is not available", zap.String("image", img), zap.Error(err))
 		}
 	}
 	imageCancel()

@@ -45,7 +45,7 @@ DOCKER_SOCK_GID=<stat -c %g /var/run/docker.sock>  # release.yml допишет 
 
 Штатный путь — пуш тега `v*`. `release.yml` собирает образы `ghcr.io/4rh1t3ct0r7/tjudge-{api,worker,executor,builder}:<версия>` (`migrate` собирается на сервере из checkout) и по ssh выполняет на сервере: `git pull origin main`, `init-secrets.sh`, `VERSION=<версия> P pull && P up -d --remove-orphans`, проверку, что `tjudge-api-1` работает на запрошенном образе, и `scripts/doctor.sh` (CRITICAL валит деплой). Сервис `migrate` применяет миграции до старта api и worker.
 
-Worker на старте проверяет образы `EXECUTOR_DOCKER_IMAGE` (в prod — `ghcr.io/4rh1t3ct0r7/tjudge-executor:<версия>`) и `EXECUTOR_BUILDER_IMAGE` (в prod-compose не задан, по умолчанию `tjudge-builder:latest`). Отсутствующий образ он качает без авторизации, а при неудаче не стартует (`Docker image is not available`). `P pull` эти образы не тянет, поэтому на сервере они должны быть заранее:
+Worker на старте проверяет образы `EXECUTOR_DOCKER_IMAGE` (в prod — `ghcr.io/4rh1t3ct0r7/tjudge-executor:<версия>`) и `EXECUTOR_BUILDER_IMAGE` (в prod-compose не задан, по умолчанию `tjudge-builder:latest`). Отсутствующий образ он качает без авторизации, а при неудаче пишет `Docker image is not available` и работает дальше: матчи или сборки без образа уходят в повтор, пока образ не появится. `P pull` эти образы не тянет, поэтому на сервере они должны быть заранее:
 
 ```bash
 docker pull ghcr.io/4rh1t3ct0r7/tjudge-executor:<версия>        # после docker login ghcr.io, если пакет приватный
@@ -101,7 +101,7 @@ make admin EMAIL=admin@example.com                   # первый админ (
 
 `release.yml` после выкладки делает `docker image prune -f` и `docker builder prune -f`: удаляются только dangling-образы и build-кэш. `scripts/deploy.sh` и `scripts/blue-green-deploy.sh` оставляют N последних тегов каждого `tjudge-*` образа (`TJUDGE_IMAGE_KEEP`, по умолчанию 3).
 
-Не запускать на проде `docker image prune -af` без фильтров. Образ исполнителя матчей нужен только во время матча, в остальное время на нём нет контейнеров, и prune его удалит. Worker без него не стартует, а в работе будет скачивать заново. `docker system prune -af --volumes` и `docker volume prune` при остановленных postgres/redis удалят volume с БД.
+Не запускать на проде `docker image prune -af` без фильтров. Образ исполнителя матчей нужен только во время матча, в остальное время на нём нет контейнеров, и prune его удалит. Без него матчи уходят в повтор, пока worker не скачает образ заново. `docker system prune -af --volumes` и `docker volume prune` при остановленных postgres/redis удалят volume с БД.
 
 Ротация логов контейнеров — `/etc/docker/daemon.json`:
 
@@ -179,7 +179,7 @@ make doctor                                       # 4. проверка
 Триггер: воркеры заняты (`sum(tjudge_active_workers) > 0`), а за 10 минут не завершился ни один матч. Большая очередь в начале раунда штатна, размер очереди (`tjudge_queue_size`) не показатель: гейдж залипает.
 
 1. Завершения: `increase(tjudge_matches_total[10m])` в Prometheus — ноль подтверждает зависание.
-2. Логи воркера: `P logs --tail=300 worker | grep -i error`. Без образов исполнителя и песочницы worker не стартует (`Docker image is not available`).
+2. Логи воркера: `P logs --tail=300 worker | grep -i error`. Без образов исполнителя и песочницы в логе `Docker image is not available`, матчи и сборки висят в повторе.
 3. Docker daemon: `docker info` и `docker ps` на хосте отвечают быстро? Зависший daemon держит воркеры занятыми без результата.
 4. Матчи, зависшие в `running` дольше `WORKER_TIMEOUT` + 30s, recovery воркера раз в минуту возвращает в `pending` и ставит в очередь. Вручную — кнопка во вкладке «Система» или `POST /api/v1/system/recovery/reset-stuck-matches` (только сброс в `pending`, в очередь их ставит recovery).
 5. Матчи идут, но медленно: размер пула — `tjudge_worker_pool_size`. `WORKER_MAX` в prod зашит в `docker-compose.prod.yml`, в self-hosted задаётся в `config/profiles/<profile>.env`. Больше воркеров, чем ядер, даёт переподписку CPU и ложные таймауты программ.
