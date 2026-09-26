@@ -11,7 +11,6 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
 )
 
 type MatchRepository struct {
@@ -73,25 +72,6 @@ func insertMatches(ctx context.Context, tx *sqlx.Tx, matches []*models.Match) er
 	// пустой Exec отправляет накопленные строки на сервер
 	if _, err := stmt.ExecContext(ctx); err != nil {
 		return errors.Wrap(err, "failed to insert matches")
-	}
-	return nil
-}
-
-// DeleteBatch сносит матчи по списку id одним запросом.
-// нужно для отката, если EnqueueBatch упал уже после вставки матчей.
-// идемпотентно - если каких-то id уже нет, ошибки не будет
-func (r *MatchRepository) DeleteBatch(ctx context.Context, ids []uuid.UUID) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	strs := make([]string, len(ids))
-	for i, id := range ids {
-		strs[i] = id.String()
-	}
-	query := `DELETE FROM matches WHERE id = ANY($1)`
-	if _, err := r.db.ExecContext(ctx, query, pq.Array(strs)); err != nil {
-		return errors.Wrap(err, "failed to delete matches batch")
 	}
 	return nil
 }

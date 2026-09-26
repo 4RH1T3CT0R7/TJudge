@@ -55,7 +55,6 @@ type TournamentRepository interface {
 // MatchRepository — матчи в бд
 type MatchRepository interface {
 	Create(ctx context.Context, match *models.Match) error
-	DeleteBatch(ctx context.Context, ids []uuid.UUID) error
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)

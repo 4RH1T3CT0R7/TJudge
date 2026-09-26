@@ -25,15 +25,6 @@ type SchedulingService struct {
 	log             *logger.Logger
 }
 
-// matchIDs - вытаскивает id матчей для отката (компенсация при ошибке очереди)
-func matchIDs(matches []*models.Match) []uuid.UUID {
-	ids := make([]uuid.UUID, 0, len(matches))
-	for _, m := range matches {
-		ids = append(ids, m.ID)
-	}
-	return ids
-}
-
 func NewSchedulingService(
 	tournamentRepo TournamentRepository,
 	matchRepo MatchRepository,
@@ -86,7 +77,7 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 	if len(pending) > 0 {
-		return ss.enqueue(ctx, tournamentID, pending, nil)
+		return ss.enqueue(ctx, tournamentID, pending)
 	}
 
 	ss.log.Info("No pending matches, generating new round",
@@ -151,7 +142,7 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 	if len(pending) > 0 {
-		return ss.enqueue(ctx, tournamentID, pending, nil)
+		return ss.enqueue(ctx, tournamentID, pending)
 	}
 
 	ss.log.Info("No pending matches for game, resetting and generating new round",
@@ -191,24 +182,22 @@ func (ss *SchedulingService) startRound(ctx context.Context, tournamentID uuid.U
 	)
 
 	// раунд уже в бд: отмена запроса (клиент ушёл, таймаут) не должна оборвать
-	// постановку в очередь и откат, иначе матчи повиснут в pending вне очереди
-	return ss.enqueue(context.WithoutCancel(ctx), tournamentID, matches, matchIDs(matches))
+	// постановку в очередь. при сбое очереди матчи не откатываются: сброс прошлых
+	// результатов уже закоммичен, и откат оставил бы игру пустой. pending-матчи
+	// поставит в очередь периодический recovery воркера
+	if _, err := ss.enqueue(context.WithoutCancel(ctx), tournamentID, matches); err != nil {
+		ss.log.Error("Round created but not enqueued, worker recovery will enqueue it",
+			zap.Error(err),
+			zap.String("tournament_id", tournamentID.String()),
+			zap.Int("matches_count", len(matches)),
+		)
+	}
+	return len(matches), nil
 }
 
-// enqueue ставит матчи в очередь батчем (один pipeline). при ошибке откатываются только
-// созданные в этом вызове (created); старые pending остаются и уйдут в очередь при
-// следующем запуске
-func (ss *SchedulingService) enqueue(ctx context.Context, tournamentID uuid.UUID, matches []*models.Match, created []uuid.UUID) (int, error) {
+// enqueue ставит матчи в очередь батчем (один pipeline)
+func (ss *SchedulingService) enqueue(ctx context.Context, tournamentID uuid.UUID, matches []*models.Match) (int, error) {
 	if err := ss.queueManager.EnqueueBatch(ctx, matches); err != nil {
-		if len(created) > 0 {
-			if delErr := ss.matchRepo.DeleteBatch(ctx, created); delErr != nil {
-				ss.log.Error("Failed to rollback matches after enqueue error",
-					zap.Error(delErr),
-					zap.Int("orphaned_matches", len(created)),
-					zap.String("tournament_id", tournamentID.String()),
-				)
-			}
-		}
 		return 0, fmt.Errorf("failed to enqueue matches: %w", err)
 	}
 
@@ -308,7 +297,7 @@ func (ss *SchedulingService) RetryFailedMatches(ctx context.Context, tournamentI
 			zap.Int64("reset_count", resetCount),
 		)
 
-		enqueued, err = ss.enqueue(ctx, tournamentID, matches, nil)
+		enqueued, err = ss.enqueue(ctx, tournamentID, matches)
 		return err
 	})
 
