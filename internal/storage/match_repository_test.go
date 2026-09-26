@@ -414,6 +414,41 @@ func (s *MatchRepositorySuite) TestUpdateResult_WithError() {
 	assert.NotNil(s.T(), fetched.CompletedAt)
 }
 
+// результат с победителем пишется вместе с outbox-задачей рейтинга,
+// ошибка программы - без неё
+func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_Success() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("updok")
+	played := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	crashed := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	ctx := context.Background()
+
+	require.NoError(s.T(), s.repo.UpdateResultWithOutbox(ctx, played.ID,
+		&models.MatchResult{MatchID: played.ID, Score1: 3, Score2: 1, Winner: 1}))
+	require.NoError(s.T(), s.repo.UpdateResultWithOutbox(ctx, crashed.ID,
+		&models.MatchResult{MatchID: crashed.ID, ErrorCode: 1, ErrorMessage: "crash", Winner: 2}))
+
+	fetched, err := s.repo.GetByID(ctx, played.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchCompleted, fetched.Status)
+	require.NotNil(s.T(), fetched.Winner)
+	assert.Equal(s.T(), 1, *fetched.Winner)
+	assert.NotNil(s.T(), fetched.CompletedAt)
+
+	fetched, err = s.repo.GetByID(ctx, crashed.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchFailed, fetched.Status)
+
+	var kinds []string
+	require.NoError(s.T(), s.database.SelectContext(ctx, &kinds,
+		"SELECT kind FROM match_outbox WHERE match_id = $1 AND status = 'pending'", played.ID))
+	assert.Equal(s.T(), []string{storage.OutboxKindRatingUpdate}, kinds)
+
+	var crashedRows int
+	require.NoError(s.T(), s.database.GetContext(ctx, &crashedRows,
+		"SELECT COUNT(*) FROM match_outbox WHERE match_id = $1", crashed.ID))
+	assert.Zero(s.T(), crashedRows)
+}
+
 // отменённый (дисквалификация) матч результатом не перезаписывается и
 // outbox-задачу не получает
 func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_NotRunning() {
