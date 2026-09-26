@@ -86,7 +86,10 @@ jobs:
             echo "$GHCR_TOKEN" | docker login ghcr.io -u 4rh1t3ct0r7 --password-stdin
             export GITHUB_REPOSITORY_OWNER=4rh1t3ct0r7
             # значения хоста пишутся в .env один раз, оттуда их берут и деплой,
-            # и ручной docker compose
+            # и ручной docker compose. без перевода строки в конце .env
+            # дописанное склеилось бы с последней строкой
+            touch .env
+            [ -z "$(tail -c1 .env)" ] || echo >> .env
             grep -q '^DOCKER_SOCK_GID=' .env 2>/dev/null || echo "DOCKER_SOCK_GID=$(stat -c %g /var/run/docker.sock)" >> .env
             grep -q '^HOST_PROGRAMS_PATH=' .env 2>/dev/null || echo "HOST_PROGRAMS_PATH=$PWD/data/programs" >> .env
             ./scripts/init-secrets.sh
