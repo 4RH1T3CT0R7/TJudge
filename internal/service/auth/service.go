@@ -211,8 +211,9 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 	}
 
 	// смена пароля отзывает все сессии, выписанные до неё. access живёт недолго,
-	// так что проверки на рефреше хватает. iat в jwt с точностью до секунды
-	if user.PasswordChangedAt != nil && issuedAt.Before(user.PasswordChangedAt.Truncate(time.Second)) {
+	// так что проверки на рефреше хватает. iat усечён вниз до миллисекунды,
+	// поэтому отзывается и токен той же миллисекунды
+	if user.PasswordChangedAt != nil && !issuedAt.After(*user.PasswordChangedAt) {
 		return nil, errors.ErrInvalidToken.WithMessage("refresh token has been revoked")
 	}
 
