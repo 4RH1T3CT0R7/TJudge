@@ -26,8 +26,9 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      # worker, api и песочницы работают от uid 1000, как в проде. root из
-      # dev-compose создал бы каталоги сборки, недоступные builder'у
+      # api, worker и builder работают от uid 1000, как в проде. root из
+      # dev-compose создал бы каталоги сборки, недоступные builder'у. боты
+      # матча работают под случайными uid 20000-59999
       - name: stack
         run: |
           mkdir -p data/programs
@@ -37,6 +38,13 @@ jobs:
           export DOCKER_GID WORKER_USER=1000:$DOCKER_GID
           docker compose up -d --build
           curl -sf --retry 60 --retry-all-errors --retry-delay 2 http://localhost:8080/health
+
+      # живой матч бота-разведчика в собранном образе: атаки на соперника и
+      # tjudge-cli не должны проходить
+      - name: sandbox isolation
+        env:
+          TJUDGE_SANDBOX_IMAGE: tjudge-cli:latest
+        run: go test -count=1 -v -tags=integration -run TestSandbox_BotsIsolated ./internal/executor/
 
       # DB_* по умолчанию смотрят в postgres dev-compose (5433/tjudge)
       - name: full cycle
