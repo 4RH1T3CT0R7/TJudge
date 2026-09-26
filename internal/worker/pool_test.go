@@ -13,6 +13,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -444,6 +445,25 @@ func TestPool_PanicRecovery_Respawns(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	pool.Stop()
+}
+
+// паника в обработке матча не оставляет гейдж in-progress завышенным
+func TestPool_ProcessNext_PanicReleasesInProgressGauge(t *testing.T) {
+	pool, queue, processor := newTestPool(t, testConfig())
+	queue.On("Dequeue", mock.Anything).Return(testMatch(), nil).Once()
+	processor.On("Process", mock.Anything, mock.Anything).Run(func(mock.Arguments) {
+		panic("boom")
+	}).Return(nil)
+
+	inProgress := func() float64 {
+		var d dto.Metric
+		require.NoError(t, pool.metrics.MatchesInProgress.Write(&d))
+		return d.GetGauge().GetValue()
+	}
+
+	before := inProgress()
+	assert.Panics(t, func() { pool.processNext(context.Background(), 1) })
+	assert.Equal(t, before, inProgress())
 }
 
 // отмена контекста во время retry-backoff возвращает context.Canceled

@@ -273,6 +273,11 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 
 	start := time.Now()
 	p.metrics.RecordMatchStart()
+	// через defer: паника в обработке не оставит гейдж in-progress завышенным
+	status := "failed"
+	defer func() {
+		p.metrics.RecordMatchComplete(match.GameType, status, time.Since(start))
+	}()
 
 	// processCtx производится от shutdownCtx, не от workerCtx: scale-down
 	// (отмена workerCtx) не должен убивать матч на середине, а вот shutdown
@@ -282,26 +287,22 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 
 	err = p.processWithRetry(processCtx, match)
 
-	duration := time.Since(start)
-	status := "completed"
 	if err != nil {
-		status = "failed"
 		p.matchesFailed.Add(1)
 		p.log.LogError("Match processing failed", err,
 			zap.Int32("worker_id", workerID),
 			zap.String("match_id", match.ID.String()),
 		)
 	} else {
+		status = "completed"
 		p.matchesProcessed.Add(1)
 	}
-
-	p.metrics.RecordMatchComplete(match.GameType, status, duration)
 
 	p.log.Debug("Match processed",
 		zap.Int32("worker_id", workerID),
 		zap.String("match_id", match.ID.String()),
 		zap.String("status", status),
-		zap.Duration("duration", duration),
+		zap.Duration("duration", time.Since(start)),
 	)
 
 	return false

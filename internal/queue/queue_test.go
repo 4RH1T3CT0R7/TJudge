@@ -14,6 +14,8 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -405,6 +407,38 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	size, err := qm.GetQueueSize(ctx, models.PriorityHigh)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), size)
+}
+
+// снимок метрики: гейдж или гистограмма
+func readMetric(t *testing.T, m prometheus.Metric) *dto.Metric {
+	t.Helper()
+	var d dto.Metric
+	require.NoError(t, m.Write(&d))
+	return &d
+}
+
+// выборка пишет время ожидания, пустая выборка доводит гейдж размера до нуля
+func TestQueueManager_Dequeue_Metrics(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	wait := qm.metrics.QueueWaitTime.WithLabelValues("low").(prometheus.Metric)
+	size := qm.metrics.QueueSize.WithLabelValues("low")
+
+	before := readMetric(t, wait).GetHistogram().GetSampleCount()
+	require.NoError(t, qm.Enqueue(ctx, testMatch(models.PriorityLow)))
+	assert.Equal(t, 1.0, readMetric(t, size).GetGauge().GetValue())
+
+	m, err := qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	assert.Equal(t, before+1, readMetric(t, wait).GetHistogram().GetSampleCount())
+
+	// BRPOP на пустой очереди ждёт 2с, троттлинг гейджа (1с) к этому времени истёк
+	m, err = qm.Dequeue(ctx)
+	require.NoError(t, err)
+	require.Nil(t, m)
+	assert.Equal(t, 0.0, readMetric(t, size).GetGauge().GetValue())
 }
 
 func TestQueueManager_PurgeInvalidMatches_SomeInvalid(t *testing.T) {

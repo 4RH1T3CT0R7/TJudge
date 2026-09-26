@@ -82,12 +82,11 @@ func New() *Metrics {
 				},
 				[]string{"priority"},
 			),
-			// TODO: queue_wait_time никто не пишет, разобраться нужна ли она вообще
 			QueueWaitTime: promauto.NewHistogramVec(
 				prometheus.HistogramOpts{
 					Name:    "tjudge_queue_wait_time_seconds",
 					Help:    "Time spent waiting in queue",
-					Buckets: prometheus.ExponentialBuckets(0.01, 2, 10),
+					Buckets: prometheus.ExponentialBuckets(0.1, 2, 14), // от 0.1s до ~14 мин, раунд большого турнира ждёт долго
 				},
 				[]string{"priority"},
 			),
@@ -234,6 +233,11 @@ func (m *Metrics) RecordCacheMiss(cacheType string) {
 
 func (m *Metrics) SetQueueSize(priority string, size int) {
 	m.QueueSize.WithLabelValues(priority).Set(float64(size))
+}
+
+// RecordQueueWait - время от постановки матча в очередь до выборки воркером
+func (m *Metrics) RecordQueueWait(priority string, wait time.Duration) {
+	m.QueueWaitTime.WithLabelValues(priority).Observe(wait.Seconds())
 }
 
 func (m *Metrics) SetQueueDeadLetterSize(size int64) {

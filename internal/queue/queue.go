@@ -53,6 +53,13 @@ func dedupKeyFor(matchID string) string {
 	return dedupPrefix + matchID
 }
 
+// queuedMatch - запись очереди: матч плюс время постановки для QueueWaitTime.
+// у записей без enqueued_at (старый формат) время ожидания не пишется
+type queuedMatch struct {
+	models.Match
+	EnqueuedAt time.Time `json:"enqueued_at"`
+}
+
 // Enqueue кладёт матч в очередь по его приоритету
 func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error {
 	// setnx создаёт ключ дедупа только если его ещё нет
@@ -70,7 +77,7 @@ func (qm *QueueManager) Enqueue(ctx context.Context, match *models.Match) error 
 		return nil
 	}
 
-	data, err := json.Marshal(match)
+	data, err := json.Marshal(queuedMatch{Match: *match, EnqueuedAt: time.Now()})
 	if err != nil {
 		return fmt.Errorf("failed to marshal match: %w", err)
 	}
@@ -143,6 +150,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 	grouped := make(map[string][]any)
 	var addedToDedup []string
 	var skipped int
+	now := time.Now()
 
 	for _, match := range matches {
 		key := dedupKeyFor(match.ID.String())
@@ -158,7 +166,7 @@ func (qm *QueueManager) EnqueueBatch(ctx context.Context, matches []*models.Matc
 			}
 		}
 
-		data, err := json.Marshal(match)
+		data, err := json.Marshal(queuedMatch{Match: *match, EnqueuedAt: now})
 		if err != nil {
 			return fmt.Errorf("failed to marshal match %s: %w", match.ID, err)
 		}
@@ -210,14 +218,15 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 		return nil, fmt.Errorf("failed to dequeue match: %w", err)
 	}
 
-	// Если все очереди пустые
+	// все очереди пустые: гейдж размера тоже должен дойти до нуля
 	if result == nil {
+		qm.updateQueueSizeMetrics(ctx)
 		return nil, nil
 	}
 
 	// result[0] - имя очереди, result[1] - данные
-	var match models.Match
-	if err := json.Unmarshal([]byte(result[1]), &match); err != nil {
+	var entry queuedMatch
+	if err := json.Unmarshal([]byte(result[1]), &entry); err != nil {
 		// битый json - в dead-letter, разбор руками потом
 		deadLetterKey := "queue:dead_letter"
 		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
@@ -252,6 +261,10 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 			zap.String("queue_key", result[0]),
 		)
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
+	}
+	match := entry.Match
+	if !entry.EnqueuedAt.IsZero() {
+		qm.metrics.RecordQueueWait(string(match.Priority), time.Since(entry.EnqueuedAt))
 	}
 
 	// удаление dedup-ключа, чтобы матч мог быть повторно поставлен в очередь в будущем
@@ -482,7 +495,7 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority m
 		return 0, nil
 	}
 
-	// остаются только те что есть в бд
+	// остаются только те что есть в бд, записи переносятся как есть
 	var validMatches [][]byte
 	var purgedCount int64
 
@@ -495,11 +508,7 @@ func (qm *QueueManager) purgeQueueInvalidMatches(ctx context.Context, priority m
 		}
 
 		if validator(match.ID.String()) {
-			data, mErr := json.Marshal(match)
-			if mErr != nil {
-				return 0, fmt.Errorf("failed to re-marshal valid match %s: %w", match.ID, mErr)
-			}
-			validMatches = append(validMatches, data)
+			validMatches = append(validMatches, []byte(item))
 		} else {
 			purgedCount++
 		}
