@@ -118,8 +118,9 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # абсолютный путь, тот же что HOST_PROGRAMS_PATH у worker'а
     volumes:
-      - ./data/programs:/data/programs
+      - ${HOST_PROGRAMS_PATH:-${PWD}/data/programs}:/data/programs
     networks:
       - tjudge-network
       - monitoring
@@ -171,7 +172,8 @@ services:
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-./data/programs}
+      # песочницы монтируют файлы программ по этому пути хоста, нужен абсолютный
+      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-${PWD}/data/programs}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -182,7 +184,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./data/programs:/data/programs
+      - ${HOST_PROGRAMS_PATH:-${PWD}/data/programs}:/data/programs
     networks:
       - tjudge-network
       - monitoring
