@@ -187,7 +187,8 @@ const maxLoginKeyLen = 64
 
 // LoginSubject - ip плюс логин (email или username, как ищет auth-сервис) из
 // json-тела. тело возвращается на место для хендлера вместе с ошибкой чтения,
-// если она была (превышение MaxBodySize)
+// если она была (превышение MaxBodySize). разбор тот же, что в хендлере
+// (Decoder читает первое json-значение): мусор после объекта не обнуляет логин
 func LoginSubject(r *http.Request, ip string) string {
 	body, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(body), r.Body))
@@ -196,7 +197,7 @@ func LoginSubject(r *http.Request, ip string) string {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 	}
-	_ = json.Unmarshal(body, &req)
+	_ = json.NewDecoder(bytes.NewReader(body)).Decode(&req)
 	login := req.Username
 	if req.Email != "" {
 		login = req.Email

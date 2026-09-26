@@ -327,6 +327,7 @@ func TestLoginSubject(t *testing.T) {
 		`{"username":"Anya","password":"x"}`:                 "ip:10.0.0.1:login:anya",
 		`{"username":"anya","email":"A@b.c","password":"x"}`: "ip:10.0.0.1:login:a@b.c",
 		`not json`: "ip:10.0.0.1:login:",
+		`{"username":"anya","password":"x"} junk`: "ip:10.0.0.1:login:anya",
 	} {
 		req := httptest.NewRequest("POST", "/", strings.NewReader(body))
 		assert.Equal(t, want, middleware.LoginSubject(req, "10.0.0.1"))

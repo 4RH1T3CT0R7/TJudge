@@ -169,8 +169,8 @@ const loginIPMultiplier = 5
 
 // loginRateLimit - лимит входа: счётчик на пару ip+логин и потолок на ip в
 // loginIPMultiplier раз выше. аудитория за одним NAT не выбивает вход друг
-// другу, перебор паролей одного аккаунта упирается в прежний лимит на ip,
-// перебор по многим аккаунтам - в потолок
+// другу. username и email одного аккаунта считаются отдельно, поэтому перебор
+// одного аккаунта с ip получает до двух лимитов, перебор по многим - потолок
 func (s *Server) loginRateLimit() func(http.Handler) http.Handler {
 	if !s.rateLimitConfig.Enabled {
 		return func(next http.Handler) http.Handler { return next }
