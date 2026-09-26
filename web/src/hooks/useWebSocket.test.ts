@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { useWebSocket, reconnectDelay } from './useWebSocket';
+import api from '../api/client';
 
 // Управляемый WebSocket: тест сам решает, когда сокет открылся или упал.
 class FakeWebSocket {
@@ -11,8 +13,10 @@ class FakeWebSocket {
   onerror: ((e: Event) => void) | null = null;
   onmessage: ((e: MessageEvent) => void) | null = null;
   close = vi.fn();
+  protocols: string[];
 
-  constructor() {
+  constructor(_url: string, protocols: string[]) {
+    this.protocols = protocols;
     FakeWebSocket.instances.push(this);
   }
 
@@ -26,6 +30,11 @@ class FakeWebSocket {
 }
 
 const last = () => FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+
+// JWT с нужным exp (сек): подпись клиент не проверяет, ему нужен только payload
+const jwt = (exp: number) => `h.${btoa(JSON.stringify({ exp }))}.s`;
+
+const user = { id: 'u1', username: 'u', email: 'u@x.y', role: 'user', created_at: '', updated_at: '' };
 
 describe('useWebSocket', () => {
   beforeEach(() => {
@@ -83,5 +92,51 @@ describe('useWebSocket', () => {
     });
     expect(result.current.isConnected).toBe(true);
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('после истечения токена reconnect ждёт общий с REST refresh и берёт новый токен', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const stale = jwt(now + 60);
+    const fresh = jwt(now + 3600);
+    api.setAccessToken(stale);
+    localStorage.setItem('refresh_token', 'r1');
+
+    let refreshCalls = 0;
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => (releaseRefresh = resolve));
+    const respond = (config: InternalAxiosRequestConfig, status: number, data: unknown): AxiosResponse => ({
+      data: { data }, status, statusText: '', headers: { 'content-type': 'application/json' }, config,
+    });
+    const adapter: AxiosAdapter = async (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshCalls++;
+        await refreshGate;
+        return respond(config, 200, { access_token: fresh, refresh_token: 'r2', user });
+      }
+      if (config.headers.Authorization === `Bearer ${fresh}`) return respond(config, 200, user);
+      throw new AxiosError('unauthorized', undefined, config, null, respond(config, 401, null));
+    };
+    (api as unknown as { client: { defaults: { adapter: AxiosAdapter } } }).client.defaults.adapter = adapter;
+
+    renderHook(() => useWebSocket({ tournamentId: 't1', enabled: true }));
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    act(() => last().open());
+
+    // Токен истёк, связь оборвалась, одновременно REST-запрос получил 401
+    vi.setSystemTime(Date.now() + 120_000);
+    act(() => last().drop(1006));
+    const me = api.getMe();
+    await act(() => vi.advanceTimersByTimeAsync(reconnectDelay(1)));
+    // Со старым токеном сокет не открывается, пока идёт refresh
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    releaseRefresh();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await expect(me).resolves.toEqual(user);
+    expect(refreshCalls).toBe(1);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(last().protocols).toEqual([`access_token.${fresh}`]);
   });
 });

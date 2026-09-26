@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WSMessage } from '../types';
+import api from '../api/client';
 
 // Потолок backoff переподключения. Лимита попыток нет: после деплоя или
 // потери сети соединение должно вернуться само, без F5.
@@ -8,6 +9,20 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 /** Задержка перед попыткой attempt (с 1): 1s, 2s, 4s, ... до 30s. */
 export function reconnectDelay(attempt: number): number {
   return Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS);
+}
+
+// Запас на расхождение часов клиента и сервера.
+const TOKEN_EXPIRY_SKEW_MS = 30000;
+
+// true, если exp из JWT уже прошёл. Нечитаемый токен считается живым: решит сервер.
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp === 'number' && exp * 1000 - TOKEN_EXPIRY_SKEW_MS <= Date.now();
+  } catch {
+    return false;
+  }
 }
 
 interface UseWebSocketOptions {
@@ -37,6 +52,8 @@ export function useWebSocket({
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempts = useRef(0);
   const mountedRef = useRef(true);
+  // Номер последнего connect: connect после refresh сверяется с ним
+  const connectSeqRef = useRef(0);
 
   // Храним значения в refs, чтобы не пересоздавать функции
   const tournamentIdRef = useRef(tournamentId);
@@ -46,7 +63,7 @@ export function useWebSocket({
   const onErrorRef = useRef(onError);
 
   // Ref для connect-функции, чтобы onclose мог ссылаться на неё без forward declaration
-  const connectRef = useRef<() => void>(() => {});
+  const connectRef = useRef<(afterRefresh?: boolean) => void>(() => {});
 
   // Обновляем refs при смене значений
   useEffect(() => {
@@ -57,7 +74,7 @@ export function useWebSocket({
     onErrorRef.current = onError;
   }, [tournamentId, onMessage, onOpen, onClose, onError]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback((afterRefresh = false) => {
     // Не коннектимся, если компонент размонтирован
     if (!mountedRef.current) {
       return;
@@ -80,6 +97,21 @@ export function useWebSocket({
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+
+    // Истёкший токен сервер отклонит на хендшейке, а браузер покажет это обычным
+    // обрывом 1006, поэтому токен обновляется заранее общим с REST single-flight.
+    // После сетевой ошибки refresh сокет открывается со старым токеном и уходит
+    // в backoff; отказ refresh завершает сессию, и токена уже нет.
+    const seq = ++connectSeqRef.current;
+    if (!afterRefresh && isTokenExpired(token)) {
+      void api
+        .refreshSession()
+        .catch(() => {})
+        .then(() => {
+          if (seq === connectSeqRef.current) connectRef.current(true);
+        });
+      return;
     }
 
     // Закрываем существующее соединение, если есть. Его обработчики дальше
@@ -151,6 +183,7 @@ export function useWebSocket({
   });
 
   const disconnect = useCallback(() => {
+    connectSeqRef.current++;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;

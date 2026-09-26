@@ -164,23 +164,12 @@ class ApiClient {
         ) {
           requestWithRetry._retry = true;
 
-          // Mutex предотвращает одновременные refresh-попытки
           try {
-            await this.refreshTokenWithMutex();
+            await this.refreshSession();
           } catch (refreshError) {
             // Сеть/5xx на refresh: сессия жива, запрос падает с ошибкой refresh,
             // чтобы вызывающий (initialize) не принял её за отказ в доступе
-            if (!isAuthRejection(refreshError)) {
-              return Promise.reject(refreshError);
-            }
-            // Refresh отклонён - токены чистятся локально, logout API не вызывается
-            // (вызов logout API привёл бы к ещё одному 401 и бесконечному циклу)
-            this.clearTokens();
-            // Уведомляем подписчиков (напр. auth store), чтобы React Router сделал navigate
-            if (this.onAuthFailure) {
-              this.onAuthFailure();
-            }
-            return Promise.reject(error);
+            return Promise.reject(isAuthRejection(refreshError) ? error : refreshError);
           }
           // Повтор вне try: его собственная ошибка - не повод стирать токены
           return this.client.request(originalRequest);
@@ -224,22 +213,22 @@ class ApiClient {
   }
 
   /**
-   * Refresh токена с mutex для защиты от гонок.
-   * Несколько одновременных 401 будут ждать один и тот же refresh-promise.
+   * Refresh токена с mutex: одновременные 401 и переподключение WebSocket
+   * ждут один и тот же запрос. Отказ сервера завершает сессию: токены чистятся
+   * локально (logout API дал бы ещё один 401), подписчик (auth store) делает navigate.
    */
-  private async refreshTokenWithMutex(): Promise<void> {
-    // Если refresh уже идёт - ждём его
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    // Запускаем новый refresh и сохраняем promise
-    this.refreshPromise = this.refreshToken()
+  refreshSession(): Promise<void> {
+    this.refreshPromise ??= this.refreshToken()
+      .catch((err: unknown) => {
+        if (isAuthRejection(err)) {
+          this.clearTokens();
+          this.onAuthFailure?.();
+        }
+        throw err;
+      })
       .finally(() => {
-        // Очищаем promise по завершению (успех или неудача)
         this.refreshPromise = null;
       });
-
     return this.refreshPromise;
   }
 
