@@ -8,7 +8,6 @@ import { ToastContainer } from './components/ToastContainer';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
 import { useAuthStore } from './store/authStore';
 import { queryClient } from './api/queryClient';
-import { InvaderProvider } from './context/InvaderContext';
 
 const pageImports = {
   Home: () => import('./pages/Home'),
@@ -191,13 +190,11 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <MotionConfig reducedMotion="user">
-          <InvaderProvider>
-            <BrowserRouter>
-              <AppContent />
-            </BrowserRouter>
-            <ToastContainer />
-            <ConfirmDialogHost />
-          </InvaderProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+          <ToastContainer />
+          <ConfirmDialogHost />
         </MotionConfig>
       </QueryClientProvider>
     </ErrorBoundary>

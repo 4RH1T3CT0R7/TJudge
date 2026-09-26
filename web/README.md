@@ -76,8 +76,6 @@ web/
 │   │   ├── PixelGrid.tsx       # Пиксельная сетка
 │   │   ├── ErrorBoundary.tsx   # Обработка ошибок React
 │   │   └── PageLoader.tsx      # Лоадер для lazy-загрузки страниц
-│   ├── context/
-│   │   └── InvaderContext.tsx   # Глобальное состояние маскота-инвейдера
 │   ├── hooks/                  # Кастомные хуки
 │   │   ├── useWebSocket.ts     # WebSocket для real-time обновлений
 │   │   ├── useQuestState.ts    # Состояние и логика квеста (5 уровней)
@@ -235,8 +233,6 @@ import { useAuthStore } from './store/authStore';
 
 const { user, isAuthenticated, login, logout } = useAuthStore();
 ```
-
-Состояние маскота управляется через `InvaderContext` (React Context), который обрабатывает события с приоритетами и последовательностями анимаций.
 
 ## Стилизация
 
