@@ -1,16 +1,24 @@
-# TJudge Self-Hosted Docker Compose
-# Optimized for self-hosted deployments with configurable resource profiles
+# TJudge self-hosted: сборка образов на месте, nginx с certbot на 80/443.
 #
-# Usage:
-#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/weak.env up -d
-#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/medium.env up -d
-#   docker-compose -f docker-compose.selfhosted.yml --env-file config/profiles/strong.env up -d
+# Запуск: make deploy | make deploy-weak | make deploy-medium | make deploy-strong
+# (scripts/quick-deploy.sh: секреты, каталоги данных, сборка, запуск).
+# Вручную, из корня репозитория, после ./scripts/init-secrets.sh:
+#   docker compose -f docker-compose.selfhosted.yml --env-file .env --env-file config/profiles/medium.env up -d
 #
-# Quick deploy:
-#   make deploy-weak | make deploy-medium | make deploy-strong
+# Пароли БД и Redis и JWT_SECRET берутся только из secrets/ (*_FILE).
+# DOMAIN в .env: без него сайт работает по http на localhost, с ним certbot
+# выпускает сертификат и nginx сам переходит на https.
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
 
 services:
-  # TJudge CLI - match executor image (build only)
+  # образ исполнителя матчей (только сборка)
   tjudge-cli:
     build:
       context: .
@@ -21,20 +29,30 @@ services:
     networks:
       - tjudge-network
 
-  # PostgreSQL Database
+  # песочница компиляции программ (только сборка)
+  tjudge-builder:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: tjudge-builder:latest
+    entrypoint: ["echo", "tjudge-builder image built successfully"]
+    restart: "no"
+    networks:
+      - tjudge-network
+
+  # наружу не публикуется: доступ через docker exec (make backup, psql)
   postgres:
     image: postgres:15-alpine
     container_name: tjudge-postgres
     environment:
       POSTGRES_DB: ${DB_NAME:-tjudge}
       POSTGRES_USER: ${DB_USER:-tjudge}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
-    ports:
-      - "5433:5432"
+    secrets:
+      - db_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tjudge}"]
       interval: 10s
@@ -44,25 +62,26 @@ services:
       - tjudge-network
     restart: unless-stopped
 
-  # Redis Cache & Queue
+  # очереди, локи и blacklist токенов: noeviction, наружу не публикуется
   redis:
     image: redis:7-alpine
     container_name: tjudge-redis
     command: >
-      redis-server
+      sh -c 'redis-server
+      --requirepass "$$(cat /run/secrets/redis_password)"
       --appendonly yes
       --appendfsync everysec
       --maxmemory ${REDIS_MAXMEMORY:-512mb}
       --maxmemory-policy noeviction
       --save 900 1
       --save 300 10
-      --save 60 10000
-    ports:
-      - "6379:6379"
+      --save 60 10000'
+    secrets:
+      - redis_password
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,7 +89,6 @@ services:
       - tjudge-network
     restart: unless-stopped
 
-  # Database migrations
   migrate:
     build:
       context: .
@@ -80,8 +98,10 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-tjudge}
-      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=${DB_NAME:-tjudge}
+    secrets:
+      - db_password
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,7 +109,6 @@ services:
       - tjudge-network
     restart: "no"
 
-  # API Server
   api:
     build:
       context: .
@@ -98,38 +117,49 @@ services:
     expose:
       - "8080"
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     environment:
+      - ENVIRONMENT=production
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-tjudge}
-      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=${DB_NAME:-tjudge}
-      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-50}
-      - DB_MAX_IDLE=${DB_MAX_IDLE:-10}
+      # api и worker вместе держат 2 x DB_MAX_CONNECTIONS из 100 у postgres
+      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-30}
+      - DB_MAX_IDLE=${DB_MAX_IDLE:-5}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      # как у worker: от него считается порог зависшего матча в /system/status
+      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-90s}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FORMAT=${LOG_FORMAT:-json}
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - BASE_URL=${BASE_URL:-http://localhost:8080}
+      - BASE_URL=${BASE_URL:-http://localhost}
       # без значения cross-origin запросы запрещены, а websocket в production
       # пускает только свой хост; фронт отдаётся с того же origin, ему хватает
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - WEBSOCKET_ALLOWED_ORIGINS=${WEBSOCKET_ALLOWED_ORIGINS:-}
-      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-false}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-100}
+    secrets:
+      - db_password
+      - redis_password
+      - jwt_secret
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # тот же абсолютный путь, что HOST_PROGRAMS_PATH у worker'а: песочницы
+    # монтируют файлы программ с хоста
     volumes:
-      - ./data/programs:/data/programs
+      - ${HOST_PROGRAMS_PATH:-${PWD}/data/programs}:/data/programs
     networks:
       - tjudge-network
     healthcheck:
@@ -146,38 +176,38 @@ services:
       - NET_BIND_SERVICE
     restart: unless-stopped
 
-  # Worker Pool
   worker:
     build:
       context: .
       dockerfile: docker/worker/Dockerfile
       args:
-        # GID группы docker на хосте. Подставьте реальное значение через .env:
-        #   DOCKER_GID=$(getent group docker | cut -d: -f3)
+        # GID группы docker на хосте, quick-deploy.sh берёт его у docker.sock
         DOCKER_GID: ${DOCKER_GID:-999}
     container_name: tjudge-worker
-    # SECURITY (P0.8): запускаем от non-root appuser в docker-группе.
-    # WORKER_UID/DOCKER_GID должны совпадать с UID/GID на хосте для корректного
-    # доступа к /var/run/docker.sock без root-прав.
+    # non-root appuser в группе docker хоста: доступ к docker.sock без root
     user: "${WORKER_UID:-1000}:${DOCKER_GID:-999}"
     security_opt:
       - no-new-privileges:true
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     environment:
+      - ENVIRONMENT=production
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-tjudge}
-      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_NAME=${DB_NAME:-tjudge}
-      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-50}
-      - DB_MAX_IDLE=${DB_MAX_IDLE:-10}
+      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-30}
+      - DB_MAX_IDLE=${DB_MAX_IDLE:-5}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - REDIS_POOL_SIZE=${REDIS_POOL_SIZE:-50}
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
       - WORKER_MIN=${WORKER_MIN:-2}
-      - WORKER_MAX=${WORKER_MAX:-10}
-      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-60s}
+      - WORKER_MAX=${WORKER_MAX:-4}
+      # не меньше EXECUTOR_TIMEOUT + 20s, иначе поднимается на старте
+      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-90s}
       - EXECUTOR_TIMEOUT=${EXECUTOR_TIMEOUT:-60s}
       - EXECUTOR_CPU_QUOTA=${EXECUTOR_CPU_QUOTA:-100000}
       - EXECUTOR_MEMORY_LIMIT=${EXECUTOR_MEMORY_LIMIT:-536870912}
@@ -187,8 +217,13 @@ services:
       - METRICS_ENABLED=true
       - METRICS_PORT=9090
       - PROGRAMS_PATH=/data/programs
-      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-}
+      - HOST_PROGRAMS_PATH=${HOST_PROGRAMS_PATH:-${PWD}/data/programs}
       - EXECUTOR_DOCKER_IMAGE=${EXECUTOR_DOCKER_IMAGE:-tjudge-cli:latest}
+      - EXECUTOR_BUILDER_IMAGE=${EXECUTOR_BUILDER_IMAGE:-tjudge-builder:latest}
+    secrets:
+      - db_password
+      - redis_password
+      - jwt_secret
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -196,16 +231,14 @@ services:
         condition: service_healthy
       tjudge-cli:
         condition: service_completed_successfully
+      tjudge-builder:
+        condition: service_completed_successfully
     volumes:
-      # SECURITY (UR bug_016): :ro ограничивает только filesystem-операции на
-      # inode socket'а (chmod/unlink/rename); само Docker HTTP API (POST
-      # /containers/create с privileged+bind /, exec, attach) НЕ ограничено
-      # и даёт root-эквивалентный доступ к хосту. :ro — косметика.
-      # Для реального ограничения API поставьте tecnativa/docker-socket-proxy
-      # перед worker'ом и укажите ему DOCKER_HOST=tcp://socket-proxy:2375
-      # с разрешением только нужных endpoint'ов (CONTAINERS=1, POST=1).
+      # :ro ограничивает только операции с файлом сокета, docker API через него
+      # остаётся root-эквивалентом. для реального ограничения нужен
+      # docker-socket-proxy перед worker'ом (DOCKER_HOST=tcp://socket-proxy:2375)
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data/programs:/data/programs
+      - ${HOST_PROGRAMS_PATH:-${PWD}/data/programs}:/data/programs
     networks:
       - tjudge-network
     healthcheck:
@@ -218,15 +251,16 @@ services:
     stop_grace_period: 150s
     restart: unless-stopped
 
-  # Nginx reverse proxy
+  # без сертификата DOMAIN сайт идёт по http, с ним - https (entrypoint.sh)
   nginx:
-    image: nginx:alpine
+    image: nginx:1.30-alpine
     container_name: tjudge-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deployments/nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./deployments/nginx/selfhosted:/etc/nginx/tjudge:ro
+      - ./deployments/nginx/selfhosted/entrypoint.sh:/docker-entrypoint.d/40-tjudge.sh:ro
       - certbot_webroot:/var/www/certbot:ro
       - certbot_certs:/etc/letsencrypt:ro
     environment:
@@ -238,9 +272,8 @@ services:
       - tjudge-network
     restart: unless-stopped
 
-
-  # P1.14: периодический pg_dump в /backups. Runs every BACKUP_INTERVAL_SECONDS.
-  # Запускается с profile=backup: `docker compose --profile backup up -d backup`
+  # периодический pg_dump в ./backups (BACKUP_INTERVAL_SECONDS), включается
+  # профилем: docker compose ... --profile backup up -d backup
   backup:
     build:
       context: docker/backup
@@ -249,10 +282,12 @@ services:
     environment:
       - PGHOST=postgres
       - PGUSER=${DB_USER:-tjudge}
-      - PGPASSWORD=${DB_PASSWORD:-secret}
+      - PGPASSWORD_FILE=/run/secrets/db_password
       - PGDATABASE=${DB_NAME:-tjudge}
       - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    secrets:
+      - db_password
     volumes:
       - ./backups:/backups
     depends_on:
@@ -266,13 +301,39 @@ services:
     profiles:
       - backup
 
+  # выпуск сертификата для DOMAIN (кроме localhost) и продление раз в 12 часов.
+  # регистрация в Let's Encrypt с CERTBOT_EMAIL, без него - без почты
   certbot:
-    image: certbot/certbot
+    image: certbot/certbot:v5.8.0
     container_name: tjudge-certbot
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
     volumes:
       - certbot_webroot:/var/www/certbot
       - certbot_certs:/etc/letsencrypt
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        trap exit TERM
+        set -- --register-unsafely-without-email
+        [ -n "$$CERTBOT_EMAIL" ] && set -- -m "$$CERTBOT_EMAIL"
+        while :; do
+          pause=12h
+          if [ "$$DOMAIN" = localhost ]; then
+            :
+          elif [ -f "/etc/letsencrypt/live/$$DOMAIN/fullchain.pem" ]; then
+            certbot renew --quiet
+          elif ! certbot certonly --webroot -w /var/www/certbot -d "$$DOMAIN" \
+              --agree-tos --non-interactive "$$@"; then
+            # лимит Let's Encrypt - 5 неудачных проверок домена в час
+            pause=15m
+          fi
+          sleep "$$pause" & wait $$!
+        done
+    depends_on:
+      - nginx
     networks:
       - tjudge-network
     restart: unless-stopped

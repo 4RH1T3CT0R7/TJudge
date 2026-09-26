@@ -7,7 +7,6 @@ set -euo pipefail
 # Usage: ./scripts/detect-profile.sh
 
 # Colors for output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -100,10 +99,10 @@ echo ""
 PROFILE_FILE="$PROJECT_DIR/config/profiles/${PROFILE}.env"
 if [ -f "$PROFILE_FILE" ]; then
     echo -e "Profile Configuration:"
-    echo -e "  ${BLUE}WORKER_MIN${NC}=$(grep WORKER_MIN "$PROFILE_FILE" | cut -d= -f2)"
-    echo -e "  ${BLUE}WORKER_MAX${NC}=$(grep WORKER_MAX "$PROFILE_FILE" | cut -d= -f2)"
-    echo -e "  ${BLUE}EXECUTOR_MEMORY_LIMIT${NC}=$(grep EXECUTOR_MEMORY_LIMIT "$PROFILE_FILE" | cut -d= -f2)"
-    echo -e "  ${BLUE}EXECUTOR_CPU_QUOTA${NC}=$(grep EXECUTOR_CPU_QUOTA "$PROFILE_FILE" | cut -d= -f2)"
+    echo -e "  ${BLUE}WORKER_MIN${NC}=$(grep "^WORKER_MIN=" "$PROFILE_FILE" | cut -d= -f2)"
+    echo -e "  ${BLUE}WORKER_MAX${NC}=$(grep "^WORKER_MAX=" "$PROFILE_FILE" | cut -d= -f2)"
+    echo -e "  ${BLUE}EXECUTOR_MEMORY_LIMIT${NC}=$(grep "^EXECUTOR_MEMORY_LIMIT=" "$PROFILE_FILE" | cut -d= -f2)"
+    echo -e "  ${BLUE}EXECUTOR_CPU_QUOTA${NC}=$(grep "^EXECUTOR_CPU_QUOTA=" "$PROFILE_FILE" | cut -d= -f2)"
     echo ""
 fi
 

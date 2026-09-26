@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# TJudge Quick Deploy Script
-# Automatically detects hardware profile and deploys the application
+# TJudge Quick Deploy (self-hosted)
+# Подбирает профиль под железо, готовит секреты и каталоги, собирает и запускает
+# docker-compose.selfhosted.yml. Настройки сайта (DOMAIN, BASE_URL, CORS...) - в .env,
+# значения профиля перекрывают .env.
 #
 # Usage:
 #   ./scripts/quick-deploy.sh          # Auto-detect profile
@@ -13,6 +15,7 @@ set -euo pipefail
 PROFILE="${1:-auto}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+COMPOSE_FILE_NAME=docker-compose.selfhosted.yml
 
 # Colors for output
 RED='\033[0;31m'
@@ -59,62 +62,53 @@ ENV_FILE="config/profiles/${PROFILE}.env"
 if [ ! -f "$ENV_FILE" ]; then
     log_error "Profile not found: $ENV_FILE"
     echo "Available profiles:"
-    ls -1 config/profiles/*.env 2>/dev/null | xargs -n1 basename | sed 's/.env$//'
+    for f in config/profiles/*.env; do basename "$f" .env; done
     exit 1
 fi
 
 log_info "Using profile: $PROFILE ($ENV_FILE)"
 
-# 2. Initialize secrets if needed
-if [ ! -d "secrets" ]; then
-    log_info "Initializing secrets..."
-    if [ -f "./scripts/init-secrets.sh" ]; then
-        ./scripts/init-secrets.sh
-    else
-        mkdir -p secrets
-        echo "secret-$(openssl rand -hex 16)" > secrets/db_password.txt
-        echo "secret-$(openssl rand -hex 32)" > secrets/jwt_secret.txt
-        echo "secret-$(openssl rand -hex 16)" > secrets/redis_password.txt
-        log_info "Generated new secrets in ./secrets/"
-    fi
-fi
+# явный --env-file отключает автозагрузку .env, поэтому он передаётся первым
+ENV_ARGS=()
+[ -f .env ] && ENV_ARGS+=(--env-file .env)
+ENV_ARGS+=(--env-file "$ENV_FILE")
+compose() { docker compose -f "$COMPOSE_FILE_NAME" "${ENV_ARGS[@]}" "$@"; }
 
-# 3. Create data directories
-log_info "Creating data directories..."
-mkdir -p data/programs backups
+# 2. Secrets: existing files are kept
+./scripts/init-secrets.sh
 
-# 4. Set HOST_PROGRAMS_PATH for Docker-in-Docker
+# 3. Host paths: абсолютный путь к программам нужен песочницам worker'а,
+# GID docker.sock - worker'у без root
 export HOST_PROGRAMS_PATH="$PROJECT_DIR/data/programs"
 log_info "HOST_PROGRAMS_PATH: $HOST_PROGRAMS_PATH"
-
-# 5. Build images
-log_info "Building Docker images..."
-if command -v docker-compose &>/dev/null; then
-    COMPOSE_CMD="docker-compose"
-else
-    COMPOSE_CMD="docker compose"
+if [ -z "${DOCKER_GID:-}" ]; then
+    DOCKER_GID=$(stat -c %g /var/run/docker.sock 2>/dev/null || echo 999)
+    export DOCKER_GID
 fi
+./scripts/prepare-data.sh "$COMPOSE_FILE_NAME"
 
-$COMPOSE_CMD -f docker-compose.selfhosted.yml --env-file "$ENV_FILE" build --parallel
+# 4. Build images
+log_info "Building Docker images..."
+compose build --parallel
 
-# 6. Start services
+# 5. Start services
 log_info "Starting services..."
-$COMPOSE_CMD -f docker-compose.selfhosted.yml --env-file "$ENV_FILE" up -d
+compose up -d
 
-# 7. Wait for services
+# 6. Wait for services: api не публикуется на хост, проверка изнутри контейнера
 log_info "Waiting for services to be ready..."
 RETRIES=30
 WAIT_SECONDS=2
 
 for i in $(seq 1 $RETRIES); do
-    if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+    if compose exec -T api wget -qO- http://localhost:8080/health > /dev/null 2>&1; then
         break
     fi
 
     if [ "$i" -eq "$RETRIES" ]; then
         log_error "Health check failed after $RETRIES attempts"
         log_info "Checking container logs..."
-        $COMPOSE_CMD -f docker-compose.selfhosted.yml logs --tail=20 api
+        compose logs --tail=20 api
         exit 1
     fi
 
@@ -123,39 +117,33 @@ for i in $(seq 1 $RETRIES); do
 done
 echo ""
 
-# 8. Show status
+DOMAIN=$(sed -n 's/^DOMAIN=//p' .env 2>/dev/null | tail -1)
+DOMAIN="${DOMAIN:-localhost}"
+
+# 7. Show status
 log_info "Deployment successful!"
 echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "  Service URLs"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo -e "  API:        ${GREEN}http://localhost:8080${NC}"
-echo -e "  Health:     ${GREEN}http://localhost:8080/health${NC}"
-echo -e "  Metrics:    ${GREEN}http://localhost:9090/metrics${NC}"
+echo -e "  Site:       ${GREEN}http://${DOMAIN}${NC} (https - после выпуска сертификата certbot'ом)"
+echo -e "  Metrics:    ${GREEN}http://127.0.0.1:9090/metrics${NC} (api), ${GREEN}:9091${NC} (worker)"
 echo ""
 
-# Check if monitoring is enabled
-if $COMPOSE_CMD -f docker-compose.selfhosted.yml ps grafana 2>/dev/null | grep -q "running"; then
-    echo -e "  Grafana:    ${GREEN}http://localhost:3000${NC} (admin/admin)"
-    echo -e "  Prometheus: ${GREEN}http://localhost:9092${NC}"
-fi
-
-echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "  Container Status"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-$COMPOSE_CMD -f docker-compose.selfhosted.yml ps
+compose ps
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "  Useful Commands"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo "  View logs:      $COMPOSE_CMD -f docker-compose.selfhosted.yml logs -f"
-echo "  Stop:           $COMPOSE_CMD -f docker-compose.selfhosted.yml down"
-echo "  Restart:        $COMPOSE_CMD -f docker-compose.selfhosted.yml restart"
+echo "  Compose:        docker compose -f $COMPOSE_FILE_NAME ${ENV_ARGS[*]} <команда>"
+echo "  Backups:        ... --profile backup up -d backup"
 echo "  Backup DB:      make backup"
 echo "  List backups:   make backup-list"
 echo ""
