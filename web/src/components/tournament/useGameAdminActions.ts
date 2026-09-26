@@ -4,7 +4,7 @@ import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
-import { extractErrorMessage, waitForMatchesAndAutoRetry } from './helpers';
+import { extractErrorMessage, waitForMatches } from './helpers';
 import type { Game, Tournament } from '../../types';
 
 // Админ-действия над играми турнира (запуск раунда, активная игра, сброс раунда).
@@ -52,7 +52,7 @@ export function useGameAdminActions({
       }
 
       // Wait for matches to complete and auto-retry if needed (runs in background)
-      void waitForMatchesAndAutoRetry(queryClient, tournamentId, result.enqueued).then(() => {
+      void waitForMatches(queryClient, tournamentId, result.enqueued).then(() => {
         // Final refresh after all matches complete
         void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });

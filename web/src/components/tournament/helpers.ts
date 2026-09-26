@@ -33,7 +33,7 @@ export const statusConfig: Record<TournamentStatus, {
 // Упавшие матчи автоматически не перезапускаются: ошибка программы
 // детерминирована, и авто-ретрай из браузера гонял бы её матчи по кругу.
 // Для ретраев есть кнопка «Перезапустить неудачные» и recovery на бэкенде.
-export async function waitForMatchesAndAutoRetry(
+export async function waitForMatches(
   queryClient: QueryClient,
   targetTournamentId: string,
   initialEnqueued: number
