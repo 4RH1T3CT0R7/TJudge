@@ -46,13 +46,6 @@ export interface Team {
   updated_at: string;
 }
 
-export interface TeamMember {
-  id: string;
-  team_id: string;
-  user_id: string;
-  joined_at: string;
-}
-
 // TeamWithMembers - команда с участниками (поля Team встроены напрямую)
 export interface TeamWithMembers extends Team {
   members: User[];
@@ -83,8 +76,6 @@ export interface TournamentGameWithDetails {
 }
 
 // Program types
-export type ProgramStatus = 'pending' | 'compiling' | 'ready' | 'error';
-
 export interface Program {
   id: string;
   user_id: string;
@@ -182,13 +173,6 @@ export interface CrossGameLeaderboardEntry {
 // Тело ошибки бэкенда (handlers/responses.go writeError)
 export interface ApiError {
   error: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
 }
 
 // Queue stats types
@@ -312,21 +296,6 @@ export interface SystemMetrics {
 export interface WSMessage {
   type: string;
   payload: unknown;
-}
-
-export interface LeaderboardUpdate {
-  entries: LeaderboardEntry[];
-}
-
-export interface MatchUpdate {
-  match: Match;
-}
-
-export interface TournamentUpdate {
-  status: TournamentStatus;
-  matches_count?: number;
-  start_time?: string;
-  end_time?: string;
 }
 
 // Head-to-head матрица: агрегат личных встреч пары команд в игре турнира

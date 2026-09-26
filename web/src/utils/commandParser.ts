@@ -52,7 +52,7 @@ const VIRTUAL_FS: Record<string, string> = {
 };
 
 // --- All known commands for tab completion ---
-export const ALL_COMMANDS = [
+const ALL_COMMANDS = [
   'invader.jump()', 'invader.spin(360)', 'invader.say("")', 'invader.dance()',
   'invader.fly()', 'invader.attack()', 'invader.shield()', 'invader.sleep()',
   'invader.cry()', 'invader.teleport()', 'invader.transform("")', 'invader.pose()',

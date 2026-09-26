@@ -58,7 +58,7 @@ const gameConfig: Record<string, GameConfig> = {
   },
 };
 
-export const defaultGameConfig: GameConfig = {
+const defaultGameConfig: GameConfig = {
   icon: '🎮',
   color: 'gray',
   bgClass: 'bg-primary-600',

@@ -42,20 +42,6 @@ export const slideLeftVariants: Variants = {
   },
 };
 
-export const slideUpVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: springGentle,
-  },
-  exit: {
-    opacity: 0,
-    y: -10,
-    transition: { duration: 0.15 },
-  },
-};
-
 export const peekVariants: Variants = {
   hidden: { opacity: 0, x: 30, scale: 0.8 },
   visible: {
@@ -121,30 +107,5 @@ export const staggerItemVariants: Variants = {
     opacity: 1,
     y: 0,
     transition: springGentle,
-  },
-};
-
-export const celebrateVariants: Variants = {
-  idle: { scale: 1, rotate: 0 },
-  celebrate: {
-    scale: [1, 1.15, 1],
-    rotate: [0, -5, 5, 0],
-    transition: { duration: 0.6, ease: 'easeInOut' },
-  },
-};
-
-export const jumpVariants: Variants = {
-  idle: { y: 0 },
-  jump: {
-    y: [0, -30, -5, -15, 0],
-    transition: { duration: 0.6, ease: 'easeOut' },
-  },
-};
-
-export const shakeVariants: Variants = {
-  idle: { x: 0 },
-  shake: {
-    x: [0, -6, 6, -4, 4, -2, 2, 0],
-    transition: { duration: 0.5 },
   },
 };

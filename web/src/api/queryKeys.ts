@@ -32,7 +32,6 @@ export const queryKeys = {
 
   // Programs
   programs: ['programs'] as const,
-  program: (id: string) => ['programs', id] as const,
   programVersions: (teamId: string, gameId: string) =>
     ['programs', 'versions', teamId, gameId] as const,
 

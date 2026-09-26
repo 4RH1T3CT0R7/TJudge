@@ -26,7 +26,7 @@ export const TOURNAMENT_STATUS_POLL_INTERVAL = 30_000;
 // Во время раунда match_result идут непрерывно (по событию на матч), а каждая
 // инвалидация - это запросы лидерборда и раундов. Окно 5с держит вкладку
 // в пределах серверного rate limit.
-export const INVALIDATE_THROTTLE_MS = 5000;
+const INVALIDATE_THROTTLE_MS = 5000;
 
 /**
  * Throttle с первым и хвостовым вызовом: первое событие обновляет данные сразу,
@@ -113,12 +113,8 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
             { queryKey: queryKeys.programs },
             (old) => old?.map((p) => (p.id === program_id ? { ...p, status } : p))
           );
-          queryClient.setQueryData<Program>(queryKeys.program(program_id), (old) =>
-            old ? { ...old, status } : old
-          );
-          // ['programs'] - префикс и списка, и версий, и отдельных программ.
+          // ['programs'] - префикс и списка, и версий.
           void queryClient.invalidateQueries({ queryKey: queryKeys.programs });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId), exact: false, predicate: (q) => q.queryKey.includes('programs') });
           break;
         }
       }
