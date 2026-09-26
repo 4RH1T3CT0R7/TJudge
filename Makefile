@@ -1,4 +1,4 @@
-.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list
+.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list security vulncheck test-security
 
 # Default target
 help:
@@ -32,7 +32,8 @@ help:
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
 	@echo "  make test-security - Run security tests against E2E_API_URL"
-	@echo "  make security      - gosec + govulncheck with CI allowlist"
+	@echo "  make security      - gosec + vulncheck"
+	@echo "  make vulncheck     - govulncheck with allowlist (used by CI)"
 	@echo ""
 	@echo "  === Docker ==="
 	@echo "  make docker-build  - Build all Docker images"
@@ -194,18 +195,23 @@ test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
 
-# Security scan. allowlist govulncheck тот же, что в ci.yml: у github.com/docker/docker
-# фикса в этом пути модуля нет, обе уязвимости про демон, а не клиентский SDK
+# Security scan. копия allowlist и фильтра живёт в шаге govulncheck в ci.yml, пока
+# тот не переведён на make vulncheck, править оба места вместе.
+# у github.com/docker/docker фикса в этом пути модуля нет, обе уязвимости про демон,
+# а не клиентский SDK
 VULN_ALLOWLIST := GO-2026-4887|GO-2026-4883
 # сканеры ставятся в bin/tools текущим тулчейном: собранный старым go gosec
 # не разбирает новый синтаксис, а govulncheck из PATH может быть не той версии
 TOOLS_BIN := $(CURDIR)/bin/tools
 
-security:
-	@echo "Running security scan..."
+security: vulncheck
+	@echo "Running gosec..."
 	GOBIN=$(TOOLS_BIN) go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
-	GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 	$(TOOLS_BIN)/gosec -quiet ./...
+
+# падает только на достижимых уязвимостях вне VULN_ALLOWLIST
+vulncheck:
+	GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 	@rc=0; out=$$($(TOOLS_BIN)/govulncheck ./...) || rc=$$?; echo "$$out"; \
 	if [ "$$rc" -ne 0 ] && [ "$$rc" -ne 3 ]; then exit "$$rc"; fi; \
 	new=$$(echo "$$out" | grep -oE '^Vulnerability #[0-9]+: GO-[0-9]+-[0-9]+' | awk '{print $$3}' | grep -vxE '$(VULN_ALLOWLIST)' || true); \
