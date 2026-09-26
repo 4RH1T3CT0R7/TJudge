@@ -419,7 +419,8 @@ func (r *TeamRepository) GetUserTeamInTournament(ctx context.Context, tournament
 
 func (r *TeamRepository) GenerateUniqueCode(ctx context.Context) (string, error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	const codeLength = 6
+	// 32^8 = 2^40 вариантов: код не перебрать даже с сотни ip
+	const codeLength = 8
 	const maxAttempts = 10
 
 	for range maxAttempts {
