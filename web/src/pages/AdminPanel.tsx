@@ -25,7 +25,9 @@ import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
 import { SystemTab } from '../components/admin/SystemTab';
 import { handleTabListKeyDown } from '../components/ui/tabs';
-import type { Game, LeaderboardEntry, Program } from '../types';
+import { buildProgramRows } from '../components/admin/programRows';
+import type { ProgramRow } from '../components/admin/programRows';
+import type { Game } from '../types';
 
 type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
 
@@ -259,9 +261,9 @@ export function AdminPanel() {
     }
   }, [managingTournamentId, showTournamentForm, showGameForm]), anyModalOpen);
 
-  // Programs tab state: композитный запрос (игры турнира + лидерборды + детали программ).
+  // Programs tab state: композитный запрос (игры турнира, команды, лидерборды и программы игр).
   // Ключ лежит в поддереве queryKeys.tournament(id), поэтому invalidate по турниру сбрасывает и его.
-  // Each request inside is independent to avoid cascading failures.
+  // Запросы по играм независимы: сбой одного не прячет остальные.
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   const programsQuery = useQuery({
     queryKey: [...queryKeys.tournament(selectedTournamentId ?? ''), 'admin-programs'],
@@ -270,55 +272,24 @@ export function AdminPanel() {
       const tournamentId = selectedTournamentId;
       if (!tournamentId) throw new Error('tournament not selected');
 
-      // Get games for this tournament
-      const gamesData = await api.getTournamentGames(tournamentId);
+      const [games, teams] = await Promise.all([
+        api.getTournamentGames(tournamentId),
+        api.getTournamentTeams(tournamentId).catch(() => []),
+      ]);
+      const rowsByGame: Record<string, ProgramRow[]> = {};
+      await Promise.all(games.map(async (game) => {
+        const [leaderboard, programs] = await Promise.all([
+          api.getGameLeaderboard(tournamentId, game.id).catch(() => []),
+          api.getGamePrograms(tournamentId, game.id).catch(() => []),
+        ]);
+        rowsByGame[game.id] = buildProgramRows(programs ?? [], leaderboard ?? [], teams ?? []);
+      }));
 
-      // Load leaderboard and program details for each game
-      const programsByGame: Record<string, LeaderboardEntry[]> = {};
-      const detailsByGame: Record<string, Program[]> = {};
-
-      // First, try to get game-specific leaderboards and program details
-      for (const game of gamesData) {
-        try {
-          const leaderboard = await api.getGameLeaderboard(tournamentId, game.id);
-          if (leaderboard && leaderboard.length > 0) {
-            programsByGame[game.id] = leaderboard;
-          }
-        } catch {
-          console.error(`Failed to load leaderboard for game ${game.id}`);
-        }
-
-        // Load full program details (includes error_message)
-        try {
-          const programs = await api.getGamePrograms(tournamentId, game.id);
-          if (programs && programs.length > 0) {
-            detailsByGame[game.id] = programs;
-          }
-        } catch {
-          console.error(`Failed to load programs for game ${game.id}`);
-        }
-      }
-
-      // If no game-specific data, fall back to tournament-level leaderboard
-      if (Object.keys(programsByGame).length === 0) {
-        try {
-          const tournamentLeaderboard = await api.getLeaderboard(tournamentId);
-          if (tournamentLeaderboard && tournamentLeaderboard.length > 0) {
-            // Put all programs under "all" key or first game
-            const key = gamesData.length > 0 ? gamesData[0].id : 'all';
-            programsByGame[key] = tournamentLeaderboard;
-          }
-        } catch {
-          console.error('Failed to load tournament leaderboard');
-        }
-      }
-
-      return { games: gamesData, programsByGame, detailsByGame };
+      return { games, rowsByGame };
     },
   });
   const tournamentGames = programsQuery.data?.games ?? [];
-  const programsData = programsQuery.data?.programsByGame ?? {};
-  const programDetails = programsQuery.data?.detailsByGame ?? {};
+  const programRows = programsQuery.data?.rowsByGame ?? {};
   const isLoadingPrograms = programsQuery.isLoading;
   const showLoadingPrograms = useDelayedLoading(isLoadingPrograms);
 
@@ -535,8 +506,7 @@ export function AdminPanel() {
           selectedTournamentId={selectedTournamentId}
           setSelectedTournamentId={setSelectedTournamentId}
           tournamentGames={tournamentGames}
-          programsData={programsData}
-          programDetails={programDetails}
+          programRows={programRows}
           isLoadingPrograms={isLoadingPrograms}
           showLoadingPrograms={showLoadingPrograms}
           setActionError={setActionError}

@@ -1,17 +1,29 @@
 import type { Dispatch, SetStateAction } from 'react';
 import api from '../../api/client';
 import { getGameConfig } from '../../utils/gameConfig';
-import type { Game, Tournament, LeaderboardEntry, Program } from '../../types';
+import type { Game, Tournament, Program } from '../../types';
 import { statusLabels } from './types';
 import type { AdminReactionSetter } from './types';
+import type { ProgramRow } from './programRows';
+
+const buildStatus: Record<Program['status'], { label: string; className: string }> = {
+  compiling: { label: 'компилируется', className: 'bg-yellow-900/30 text-yellow-400' },
+  ready: { label: 'готова', className: 'bg-green-900/30 text-green-400' },
+  failed: { label: 'ошибка сборки', className: 'bg-red-900/30 text-red-400' },
+};
+
+const playingLabel: Record<ProgramRow['playing'], string> = {
+  this: 'да',
+  previous: 'предыдущая версия',
+  none: 'нет',
+};
 
 interface ProgramsTabProps {
   tournaments: Tournament[];
   selectedTournamentId: string | null;
   setSelectedTournamentId: Dispatch<SetStateAction<string | null>>;
   tournamentGames: Game[];
-  programsData: Record<string, LeaderboardEntry[]>;
-  programDetails: Record<string, Program[]>;
+  programRows: Record<string, ProgramRow[]>;
   isLoadingPrograms: boolean;
   showLoadingPrograms: boolean;
   setActionError: Dispatch<SetStateAction<string | null>>;
@@ -23,8 +35,7 @@ export function ProgramsTab({
   selectedTournamentId,
   setSelectedTournamentId,
   tournamentGames,
-  programsData,
-  programDetails,
+  programRows,
   isLoadingPrograms,
   showLoadingPrograms,
   setActionError,
@@ -36,13 +47,14 @@ export function ProgramsTab({
   };
 
   // Download program file
-  const handleDownloadProgram = async (programId: string, programName: string) => {
+  const handleDownloadProgram = async (program: Program) => {
     try {
-      const blob = await api.downloadProgram(programId);
+      const blob = await api.downloadProgram(program.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${programName}.py`;
+      // имя загруженного файла, с его расширением
+      a.download = program.name || `program_v${program.version}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -116,13 +128,9 @@ export function ProgramsTab({
             <div className="space-y-6">
               {/* Total programs count */}
               {tournamentGames.length > 0 && (() => {
-                const total = tournamentGames.reduce((sum, game) => {
-                  const programs = programsData[game.id] || [];
-                  const details = programDetails[game.id] || [];
-                  return sum + (programs.length || details.length);
-                }, 0);
+                const total = tournamentGames.reduce((sum, game) => sum + (programRows[game.id]?.length ?? 0), 0);
                 return (
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm text-gray-400">
                       Всего загружено программ: <span className="font-semibold text-gray-200">{total}</span>
                     </div>
@@ -143,22 +151,8 @@ export function ProgramsTab({
                 </div>
               ) : (
                 tournamentGames.map((game) => {
-                  const programs = programsData[game.id] || [];
-                  const details = programDetails[game.id] || [];
-                  const totalPrograms = programs.length || details.length;
-
-                  // Create a lookup map for program errors by team_id
-                  // (team_id is used because leaderboard may show older program versions while
-                  // programDetails has the latest version - using team_id ensures correct matching)
-                  const errorLookup = new Map<string, string>();
-                  details.forEach(p => {
-                    if (p.error_message && p.team_id) {
-                      errorLookup.set(p.team_id, p.error_message);
-                    }
-                  });
-
-                  // Count programs with errors
-                  const programsWithErrors = details.filter(p => p.error_message).length;
+                  const rows = programRows[game.id] ?? [];
+                  const failedCount = rows.filter((r) => r.program.status === 'failed').length;
 
                   return (
                     <div key={game.id} className="card">
@@ -171,11 +165,11 @@ export function ProgramsTab({
                             </h3>
                             <div className="flex items-center gap-2">
                               <p className="text-sm text-gray-400">
-                                {totalPrograms} {totalPrograms === 1 ? 'программа' : totalPrograms < 5 ? 'программы' : 'программ'}
+                                {rows.length} {rows.length === 1 ? 'программа' : rows.length > 1 && rows.length < 5 ? 'программы' : 'программ'}
                               </p>
-                              {programsWithErrors > 0 && (
+                              {failedCount > 0 && (
                                 <span className="px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded-full">
-                                  {programsWithErrors} с ошибкой
+                                  {failedCount} с ошибкой сборки
                                 </span>
                               )}
                             </div>
@@ -183,11 +177,11 @@ export function ProgramsTab({
                         </div>
                       </div>
 
-                      {programs.length === 0 && details.length === 0 ? (
+                      {rows.length === 0 ? (
                         <p className="text-sm text-gray-400">
                           Программы ещё не загружены
                         </p>
-                      ) : programs.length > 0 ? (
+                      ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
@@ -195,67 +189,57 @@ export function ProgramsTab({
                                 <th className="pb-2 pr-4">#</th>
                                 <th className="pb-2 pr-4">Программа</th>
                                 <th className="pb-2 pr-4">Команда</th>
-                                <th className="pb-2 pr-4 text-center">Рейтинг</th>
+                                <th className="pb-2 pr-4 text-center">Очки</th>
                                 <th className="pb-2 pr-4 text-center">W</th>
                                 <th className="pb-2 pr-4 text-center">L</th>
                                 <th className="pb-2 pr-4 text-center">D</th>
                                 <th className="pb-2 pr-4 text-center">Игр</th>
-                                <th className="pb-2 pr-4">Статус</th>
+                                <th className="pb-2 pr-4">Сборка</th>
+                                <th className="pb-2 pr-4">В раундах</th>
                                 <th className="pb-2">Действия</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {programs.map((entry) => {
-                                const error = entry.team_id ? errorLookup.get(entry.team_id) : undefined;
+                              {rows.map(({ program, teamName, stats, playing }) => {
+                                const status = buildStatus[program.status];
                                 return (
-                                  <tr key={entry.program_id} className="border-b border-gray-800">
-                                    <td className="py-2 pr-4 font-medium text-gray-400">{entry.rank}</td>
+                                  <tr key={program.id} className="border-b border-gray-800 align-top">
+                                    <td className="py-2 pr-4 font-medium text-gray-400">{stats?.rank ?? '–'}</td>
                                     <td className="py-2 pr-4">
                                       <div className="font-medium text-gray-100">
-                                        {entry.program_name}
+                                        {program.name} <span className="text-xs text-gray-500">v{program.version}</span>
                                       </div>
                                       <code className="text-xs text-gray-500 font-mono">
-                                        {entry.program_id.substring(0, 8)}...
+                                        {program.id.substring(0, 8)}...
                                       </code>
                                     </td>
-                                    <td className="py-2 pr-4 text-gray-300">
-                                      {entry.team_name || '-'}
-                                    </td>
-                                    <td className="py-2 pr-4 text-center font-bold text-gray-100">
-                                      {entry.rating}
-                                    </td>
-                                    <td className="py-2 pr-4 text-center text-green-400">
-                                      {entry.wins}
-                                    </td>
-                                    <td className="py-2 pr-4 text-center text-red-400">
-                                      {entry.losses}
-                                    </td>
-                                    <td className="py-2 pr-4 text-center text-gray-400">
-                                      {entry.draws}
-                                    </td>
-                                    <td className="py-2 pr-4 text-center text-gray-300">
-                                      {entry.total_games}
-                                    </td>
+                                    <td className="py-2 pr-4 text-gray-300">{teamName}</td>
+                                    <td className="py-2 pr-4 text-center font-bold text-gray-100">{stats?.rating ?? '–'}</td>
+                                    <td className="py-2 pr-4 text-center text-green-400">{stats?.wins ?? '–'}</td>
+                                    <td className="py-2 pr-4 text-center text-red-400">{stats?.losses ?? '–'}</td>
+                                    <td className="py-2 pr-4 text-center text-gray-400">{stats?.draws ?? '–'}</td>
+                                    <td className="py-2 pr-4 text-center text-gray-300">{stats?.total_games ?? '–'}</td>
                                     <td className="py-2 pr-4">
-                                      {error ? (
-                                        <div className="group relative">
-                                          <span className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded cursor-help">
-                                            Ошибка
-                                          </span>
-                                          <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
-                                            <pre className="whitespace-pre-wrap break-words font-mono">{error}</pre>
-                                          </div>
-                                        </div>
+                                      {program.status === 'failed' && program.error_message ? (
+                                        <details>
+                                          <summary className={`w-fit px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap ${status.className}`}>
+                                            {status.label}
+                                          </summary>
+                                          <pre className="mt-1 max-w-md whitespace-pre-wrap break-words font-mono text-xs text-gray-300">{program.error_message}</pre>
+                                        </details>
                                       ) : (
-                                        <span className="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">
-                                          OK
+                                        <span className={`px-2 py-1 text-xs rounded whitespace-nowrap ${status.className}`}>
+                                          {status.label}
                                         </span>
                                       )}
                                     </td>
+                                    <td className={`py-2 pr-4 text-sm whitespace-nowrap ${playing === 'none' ? 'text-gray-500' : 'text-gray-300'}`}>
+                                      {playingLabel[playing]}
+                                    </td>
                                     <td className="py-2">
                                       <button
-                                        onClick={() => handleDownloadProgram(entry.program_id, entry.program_name)}
-                                        className="text-primary-400 hover:text-primary-300 text-sm"
+                                        onClick={() => handleDownloadProgram(program)}
+                                        className="text-primary-400 hover:text-primary-300 text-sm whitespace-nowrap"
                                         title="Скачать программу"
                                       >
                                         ⬇️ Скачать
@@ -264,66 +248,6 @@ export function ProgramsTab({
                                   </tr>
                                 );
                               })}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        // Show details only if no leaderboard but have program details
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
-                                <th className="pb-2 pr-4">Программа</th>
-                                <th className="pb-2 pr-4">Версия</th>
-                                <th className="pb-2 pr-4">Язык</th>
-                                <th className="pb-2 pr-4">Статус</th>
-                                <th className="pb-2">Действия</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {details.map((prog) => (
-                                <tr key={prog.id} className="border-b border-gray-800">
-                                  <td className="py-2 pr-4">
-                                    <div className="font-medium text-gray-100">
-                                      {prog.name}
-                                    </div>
-                                    <code className="text-xs text-gray-500 font-mono">
-                                      {prog.id.substring(0, 8)}...
-                                    </code>
-                                  </td>
-                                  <td className="py-2 pr-4 text-gray-300">
-                                    v{prog.version}
-                                  </td>
-                                  <td className="py-2 pr-4 text-gray-300">
-                                    {prog.language}
-                                  </td>
-                                  <td className="py-2 pr-4">
-                                    {prog.error_message ? (
-                                      <div className="group relative">
-                                        <span className="px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded cursor-help">
-                                          Ошибка
-                                        </span>
-                                        <div className="absolute z-10 hidden group-hover:block w-80 p-2 bg-gray-900 text-white text-xs rounded shadow-lg -left-32 top-full mt-1">
-                                          <pre className="whitespace-pre-wrap break-words font-mono">{prog.error_message}</pre>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <span className="px-2 py-1 bg-green-900/30 text-green-400 text-xs rounded">
-                                        OK
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-2">
-                                    <button
-                                      onClick={() => handleDownloadProgram(prog.id, prog.name)}
-                                      className="text-primary-400 hover:text-primary-300 text-sm"
-                                      title="Скачать программу"
-                                    >
-                                      ⬇️ Скачать
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
                             </tbody>
                           </table>
                         </div>
