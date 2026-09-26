@@ -136,10 +136,15 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	defer cancel()
 
 	containerConfig := &container.Config{
-		Image:  e.config.DockerImage,
-		Cmd:    cmd,
-		Tty:    false,
-		Labels: containerLabels(),
+		Image: e.config.DockerImage,
+		// точка входа образа разводит ботов по своим uid (docker/tjudge/sandbox.sh).
+		// задана явно: в старом образе без неё контейнер не стартует (infra-ошибка,
+		// матч повторится), а не проваливает каждый матч
+		Entrypoint: []string{sandboxEntrypoint},
+		User:       "0:0",
+		Cmd:        cmd,
+		Tty:        false,
+		Labels:     containerLabels(),
 	}
 
 	hostConfig := buildMatchHostConfig(e.config, binds)
@@ -214,6 +219,15 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	return nil, fmt.Errorf("match execution timeout")
 }
 
+// раскладка матч-контейнера, общая с docker/tjudge/sandbox.sh
+const (
+	sandboxEntrypoint = "/usr/local/bin/sandbox"
+	// сюда монтируются файлы программ, каталог доступен только root
+	sandboxMountPath = "/mnt/programs"
+	// код выхода точки входа при сбое подготовки песочницы
+	sandboxSetupFailed = 125
+)
+
 // buildMatchHostConfig собирает докер-hostConfig для матч-контейнера. вынесено
 // отдельно чтобы флаги можно было проверить тестом - каждая строка тут отдельная
 // линия обороны против чужого кода, значения трогать нельзя
@@ -256,8 +270,16 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 		ReadonlyRootfs: true,   // корень только на чтение, писать можно лишь в tmpfs
 		SecurityOpt:    securityOpts,
 		CapDrop:        []string{"ALL"}, // все capabilities сняты
+		// кроме нужных точке входа (скопировать программы из /mnt/programs,
+		// отдать их uid ботов и сбросить root до этих uid) и tjudge-cli (KILL:
+		// добить бота под чужим uid, иначе он ждёт его выхода до таймаута матча).
+		// сами боты работают без capabilities
+		CapAdd: []string{"CHOWN", "DAC_READ_SEARCH", "SETUID", "SETGID", "KILL"},
 		Tmpfs: map[string]string{
 			"/tmp": "rw,nosuid,size=64m", // writable /tmp, но nosuid (без эскалации) и капнут
+			// копии программ под uid ботов: две программы до 32мб (maxArtifactSize).
+			// 0711 - список файлов ботам не виден
+			"/programs": "rw,exec,nosuid,nodev,size=80m,mode=0711",
 		},
 		AutoRemove: false, // не автоудалять - сперва надо забрать логи, потом cleanup
 	}
@@ -344,6 +366,12 @@ func sanitizeStderr(raw string) string {
 func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.MatchResult, error) {
 	result := &models.MatchResult{
 		ErrorCode: int(exitCode),
+	}
+
+	// песочница не поднялась (нет capabilities, старый образ) - программы
+	// не запускались, матч надо повторить
+	if exitCode == sandboxSetupFailed {
+		return nil, infraErrorf("sandbox setup failed: %s", strings.TrimSpace(stderr))
 	}
 
 	// ненулевой код - это валидный терминальный результат, не ошибка парсинга
@@ -441,7 +469,8 @@ func (e *Executor) cleanup(containerID string) {
 // programMounts переводит пути программ в пути внутри контейнера и собирает
 // bind-ы только под них: исполняемый файл и, у java, каталог классов рядом.
 // весь каталог программ монтировать нельзя - бот прочитал бы исходники и
-// бинарники других команд
+// бинарники других команд. файлы монтируются в sandboxMountPath, а по путям
+// /programs/<имя> их раскладывает точка входа образа
 func (e *Executor) programMounts(paths ...string) ([]string, []string, error) {
 	containerPaths := make([]string, 0, len(paths))
 	var binds []string
@@ -466,12 +495,12 @@ func (e *Executor) programMounts(paths ...string) ([]string, []string, error) {
 	return containerPaths, binds, nil
 }
 
-// appendBind добавляет ro-bind для пути внутри контейнера, источник на хосте
-// считается от hostProgramsPath (docker-in-docker). дубль точки монтирования
-// докер отвергает, поэтому повтор пропускается
+// appendBind добавляет ro-bind в sandboxMountPath для пути внутри контейнера,
+// источник на хосте считается от hostProgramsPath (docker-in-docker). дубль
+// точки монтирования докер отвергает, поэтому повтор пропускается
 func (e *Executor) appendBind(binds []string, containerPath string) []string {
 	rel := strings.TrimPrefix(containerPath, e.containerPath)
-	bind := fmt.Sprintf("%s%s:%s:ro", e.hostProgramsPath, rel, containerPath)
+	bind := fmt.Sprintf("%s%s:%s%s:ro", e.hostProgramsPath, rel, sandboxMountPath, rel)
 	if slices.Contains(binds, bind) {
 		return binds
 	}
@@ -495,11 +524,10 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 	return "", fmt.Errorf("path %q is outside programs directory %q", cleaned, e.programsPath)
 }
 
-// buildCommand собирает аргументы tjudge-cli.
-// у контейнера ENTRYPOINT ["tjudge-cli"], поэтому тут только аргументы:
-// <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>. игры: см. github.com/bmstu-itstech/tjudge-cli
+// buildCommand собирает аргументы tjudge-cli: <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>.
+// точка входа передаёт их tjudge-cli как есть, заменив две последние
+// программы лаунчерами. игры: см. github.com/bmstu-itstech/tjudge-cli
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
-	// TJudgePath не добавляется - за него ENTRYPOINT
 	cmd := []string{gameType}
 
 	if e.config.DefaultIterations > 0 {

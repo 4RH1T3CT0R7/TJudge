@@ -46,30 +46,27 @@ RUN apk add --no-cache \
     lua5.4 \
     # Go runtime
     go \
-    # Bash для скриптов
+    # Bash для скриптов и точки входа
     bash \
     # Базовые утилиты
-    coreutils
+    coreutils \
+    # Сброс root до uid бота в лаунчерах (см. sandbox.sh)
+    setpriv
 
 # Создаём симлинки для удобства
 RUN ln -sf /usr/bin/python3 /usr/bin/python && \
     ln -sf /usr/bin/lua5.4 /usr/bin/lua && \
     ln -sf /usr/bin/php83 /usr/bin/php
 
-# Добавляем непривилегированного пользователя
-RUN adduser -D -H -s /sbin/nologin tjudge
-
 # Копируем бинарник tjudge-cli
 COPY --from=builder /usr/local/bin/tjudge-cli /usr/local/bin/tjudge-cli
+COPY --chmod=0755 docker/tjudge/sandbox.sh /usr/local/bin/sandbox
 
-# Делаем бинарник исполняемым
-RUN chmod +x /usr/local/bin/tjudge-cli
-
-# Создаём рабочую директорию для программ
+# Сюда executor монтирует файлы программ матча, ботам сюда хода нет.
+# /programs - tmpfs с копиями программ под uid ботов
+RUN mkdir -m 0700 /mnt/programs
 WORKDIR /programs
 
-# Переключаемся на непривилегированного пользователя
-USER tjudge
-
-# Точка входа
-ENTRYPOINT ["tjudge-cli"]
+# Пользователя нет: точка входа стартует от root с минимумом capabilities
+# и запускает каждого бота под своим uid
+ENTRYPOINT ["/usr/local/bin/sandbox"]

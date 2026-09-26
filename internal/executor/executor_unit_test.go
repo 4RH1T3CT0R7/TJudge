@@ -304,6 +304,17 @@ func TestParseResult_ExitCodeGeneric(t *testing.T) {
 	assert.Contains(t, result.ErrorMessage, "код 3")
 }
 
+// сбой подготовки песочницы - окружение, а не программы: матч повторяется
+func TestParseResult_SandboxSetupFailedIsInfra(t *testing.T) {
+	e := newTestExecutor(t)
+
+	_, err := e.parseResult(sandboxSetupFailed, "", "sandbox: line 47: command failed")
+
+	require.Error(t, err)
+	assert.True(t, IsInfraError(err))
+	assert.Contains(t, err.Error(), "line 47")
+}
+
 func TestParseResult_ErrorWithStdoutAndStderr(t *testing.T) {
 	e := newTestExecutor(t)
 

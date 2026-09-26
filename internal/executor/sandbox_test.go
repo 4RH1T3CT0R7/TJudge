@@ -3,6 +3,7 @@ package executor
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
@@ -21,10 +22,12 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 		PidsLimit:   100,
 		CPUSetCPUs:  "",
 	}
-	binds := []string{"/host/programs/a:/programs/a:ro", "/host/programs/b:/programs/b:ro"}
+	binds := []string{"/host/programs/a:/mnt/programs/a:ro", "/host/programs/b:/mnt/programs/b:ro"}
 	hc := buildMatchHostConfig(cfg, binds)
 
 	assert.Equal(t, []string{"ALL"}, []string(hc.CapDrop), "должны сниматься все capabilities")
+	// только то, что нужно точке входа и tjudge-cli для ботов под своими uid
+	assert.ElementsMatch(t, []string{"CHOWN", "DAC_READ_SEARCH", "SETUID", "SETGID", "KILL"}, []string(hc.CapAdd))
 	assert.Equal(t, "none", string(hc.NetworkMode), "сеть должна быть отключена")
 	assert.True(t, hc.ReadonlyRootfs, "корень только на чтение")
 	assert.Equal(t, cfg.MemoryLimit, hc.Memory)
@@ -42,6 +45,13 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	require.True(t, ok, "должен быть tmpfs на /tmp")
 	assert.Contains(t, tmp, "nosuid")
 	assert.Contains(t, tmp, "size=64m")
+
+	// копии программ: исполняемые, без setuid, список файлов ботам закрыт
+	progs, ok := hc.Tmpfs["/programs"]
+	require.True(t, ok, "должен быть tmpfs на /programs")
+	for _, opt := range []string{"exec", "nosuid", "nodev", "mode=0711"} {
+		assert.Contains(t, strings.Split(progs, ","), opt)
+	}
 
 	// монтируются только переданные файлы программ, на чтение
 	assert.Equal(t, binds, hc.Binds)
@@ -92,7 +102,7 @@ func TestLoadSeccompProfile_Invalid(t *testing.T) {
 }
 
 // в матч монтируются только файлы двух программ (и классы java), а не весь
-// каталог программ со всеми командами
+// каталог программ со всеми командами, и не туда, откуда их запускают боты
 func TestProgramMounts_OnlyMatchPrograms(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"t1_g_p1", "t1_g_p1.c", "t2_g_p2", "t2_g_p2.java", "t3_g_p3.py"} {
@@ -107,15 +117,15 @@ func TestProgramMounts_OnlyMatchPrograms(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/programs/t1_g_p1", "/programs/t2_g_p2"}, paths)
 	assert.Equal(t, []string{
-		"/host/programs/t1_g_p1:/programs/t1_g_p1:ro",
-		"/host/programs/t2_g_p2:/programs/t2_g_p2:ro",
-		"/host/programs/t2_g_p2_classes:/programs/t2_g_p2_classes:ro",
+		"/host/programs/t1_g_p1:/mnt/programs/t1_g_p1:ro",
+		"/host/programs/t2_g_p2:/mnt/programs/t2_g_p2:ro",
+		"/host/programs/t2_g_p2_classes:/mnt/programs/t2_g_p2_classes:ro",
 	}, binds)
 
 	// одна и та же программа с обеих сторон - один bind, иначе докер откажет
 	_, binds, err = e.programMounts(filepath.Join(dir, "t3_g_p3.py"), filepath.Join(dir, "t3_g_p3.py"))
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/host/programs/t3_g_p3.py:/programs/t3_g_p3.py:ro"}, binds)
+	assert.Equal(t, []string{"/host/programs/t3_g_p3.py:/mnt/programs/t3_g_p3.py:ro"}, binds)
 
 	// сам каталог программ и отсутствующий файл не монтируются
 	_, _, err = e.programMounts(dir, filepath.Join(dir, "t1_g_p1"))
