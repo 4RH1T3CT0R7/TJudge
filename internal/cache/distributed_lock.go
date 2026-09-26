@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	stderrors "errors"
 	"fmt"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"go.uber.org/zap"
 )
+
+// ErrLockLost - причина отмены ctx fn в WithLock: лок увели или он протух
+var ErrLockLost = stderrors.New("distributed lock lost")
 
 // DistributedLock - лок на редисе (redlock по мотивам redis.io)
 type DistributedLock struct {
@@ -105,16 +109,20 @@ func (dl *DistributedLock) Unlock(ctx context.Context, key string, token string)
 }
 
 // WithLock выполняет fn под локом. пока fn работает, фоновая горутина
-// продлевает лок каждые ttl/3 чтобы он не протух на долгой операции
+// продлевает лок каждые ttl/3 чтобы он не протух на долгой операции.
+// если лок потерян, ctx fn отменяется с причиной ErrLockLost
 func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Duration, fn func(ctx context.Context) error) error {
 	token, err := dl.TryLock(ctx, key, ttl, 3, 100*time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 
+	fnCtx, fnCancel := context.WithCancelCause(ctx)
+	defer fnCancel(nil)
+
 	renewCtx, renewCancel := context.WithCancel(ctx)
 	renewDone := make(chan struct{})
-	go dl.renewLoop(renewCtx, key, token, ttl, renewDone)
+	go dl.renewLoop(renewCtx, key, token, ttl, renewDone, func() { fnCancel(ErrLockLost) })
 
 	defer func() {
 		// сначала стоп продлению, ждать горутину, и только потом снимать лок,
@@ -130,11 +138,16 @@ func (dl *DistributedLock) WithLock(ctx context.Context, key string, ttl time.Du
 		_ = dl.Unlock(unlockCtx, key, token)
 	}()
 
-	return fn(ctx)
+	err = fn(fnCtx)
+	if err != nil && stderrors.Is(context.Cause(fnCtx), ErrLockLost) {
+		return fmt.Errorf("%w: %w", ErrLockLost, err)
+	}
+	return err
 }
 
-// renewLoop продлевает ttl лока пока не отменят контекст
-func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token string, ttl time.Duration, done chan struct{}) {
+// renewLoop продлевает ttl лока пока не отменят контекст. onLost вызывается,
+// когда лок точно потерян: чужой токен, ключ протух или редис недоступен дольше ttl
+func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token string, ttl time.Duration, done chan struct{}, onLost func()) {
 	defer close(done)
 
 	lockKey := fmt.Sprintf("lock:%s", key)
@@ -153,6 +166,7 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 		end
 	`
 	ttlMs := fmt.Sprintf("%d", ttl.Milliseconds())
+	lastRenew := time.Now()
 
 	for {
 		select {
@@ -167,12 +181,20 @@ func (dl *DistributedLock) renewLoop(ctx context.Context, key string, token stri
 					zap.String("key", key),
 					zap.Error(err),
 				)
+				// без продления дольше ttl ключ уже протух
+				if time.Since(lastRenew) >= ttl {
+					onLost()
+					return
+				}
 			} else if val, ok := result.(int64); ok && val == 0 {
 				// лок увели или он протух, продлевать больше нечего
 				dl.cache.log.Warn("Distributed lock lost (token mismatch or expired)",
 					zap.String("key", key),
 				)
+				onLost()
 				return
+			} else {
+				lastRenew = time.Now()
 			}
 		}
 	}

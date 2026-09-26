@@ -170,6 +170,45 @@ func TestDistributedLock_WithLock(t *testing.T) {
 	})
 }
 
+// потеря лока посреди fn отменяет её контекст, работа не идёт дальше без лока
+func TestDistributedLock_WithLock_CancelsOnLockLoss(t *testing.T) {
+	waitCancel := func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Second):
+			return nil
+		}
+	}
+
+	t.Run("лок увели", func(t *testing.T) {
+		cache, mr := setupTestCacheWithMR(t)
+		lock := NewDistributedLock(cache)
+
+		err := lock.WithLock(context.Background(), "test-lost", 600*time.Millisecond, func(ctx context.Context) error {
+			require.NoError(t, mr.Set("lock:test-lost", "чужой-токен"))
+			return waitCancel(ctx)
+		})
+		require.ErrorIs(t, err, ErrLockLost)
+		require.ErrorIs(t, err, context.Canceled)
+
+		// чужой лок не снят
+		v, _ := mr.Get("lock:test-lost")
+		assert.Equal(t, "чужой-токен", v)
+	})
+
+	t.Run("редис недоступен дольше ttl", func(t *testing.T) {
+		cache, mr := setupTestCacheWithMR(t)
+		lock := NewDistributedLock(cache)
+
+		err := lock.WithLock(context.Background(), "test-down", 600*time.Millisecond, func(ctx context.Context) error {
+			mr.Close()
+			return waitCancel(ctx)
+		})
+		require.ErrorIs(t, err, ErrLockLost)
+	})
+}
+
 func TestDistributedLock_ConcurrentAccess(t *testing.T) {
 	cache := setupTestCache(t)
 	defer cache.Close()
