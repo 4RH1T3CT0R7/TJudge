@@ -132,18 +132,15 @@ func TestConfig_Validate_Executor(t *testing.T) {
 	assert.ErrorContains(t, cfg.Validate(), "EXECUTOR_DEFAULT_ITERATIONS")
 }
 
-// ctx воркера не должен истекать раньше таймаута контейнера: иначе таймаут
-// программы не записывается и матч бесконечно возвращается через recovery
-func TestConfig_Validate_WorkerTimeoutCoversExecutor(t *testing.T) {
-	cfg := validConfig()
-	cfg.Worker.Timeout = 60 * time.Second
-	cfg.Executor.Timeout = 60 * time.Second
-	err := cfg.Validate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "WORKER_TIMEOUT")
+// WORKER_TIMEOUT меньше EXECUTOR_TIMEOUT+запас поднимается, а не роняет старт
+func TestLoad_RaisesWorkerTimeout(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "development")
+	t.Setenv("WORKER_TIMEOUT", "60s")
+	t.Setenv("EXECUTOR_TIMEOUT", "60s")
 
-	cfg.Worker.Timeout = 80 * time.Second
-	assert.NoError(t, cfg.Validate())
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 60*time.Second+workerTimeoutMargin, cfg.Worker.Timeout)
 }
 
 func TestConfig_Validate_CompileWorkersLessThan1(t *testing.T) {

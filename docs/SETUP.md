@@ -33,7 +33,7 @@ cd web && npm run dev                       # терминал 3, http://localho
 - Compose отдаёт PostgreSQL на 5433 (`DB_PORT=5433` уже в `.env.example`).
 - `npm run build` кладёт фронт в `internal/web/dist`, а `go build` встраивает его через `go:embed`. Без сборки `go build`, `go vet` и `go test` падают с `pattern all:dist: no matching files found`.
 - Воркер запускает контейнеры через Docker SDK и монтирует в них файлы программ с хоста. Когда api и worker идут локально, в `.env` `PROGRAMS_PATH` и `HOST_PROGRAMS_PATH` задают одним абсолютным путём, например `/path/to/TJudge/data/programs`.
-- На старте worker проверяет образы `EXECUTOR_DOCKER_IMAGE` и `EXECUTOR_BUILDER_IMAGE`. Отсутствующий образ он пытается скачать, а если не вышло, не стартует.
+- На старте worker проверяет образы `EXECUTOR_DOCKER_IMAGE` и `EXECUTOR_BUILDER_IMAGE`. Отсутствующий образ он пытается скачать, а если не вышло, пишет ошибку `Docker image is not available` и работает дальше: матчи или сборки без образа повторяются, пока он не появится.
 
 Фронтенд: React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, TanStack Query 5, Zustand 5. Скрипты `web/`: `dev`, `build`, `lint`, `test` (vitest), `generate:api`. Типы API в `web/src/api/generated` генерируются из `docs/openapi.yaml`. После правки спеки нужен `npm run generate:api`, иначе CI упадёт на проверке свежести.
 
@@ -59,7 +59,7 @@ E2E_FULL_CYCLE=true go test -tags=e2e -run TestE2E_FullCycle ./tests/e2e/   # к
 Загрузка — `internal/config/config.go`: `.env` через godotenv, затем переменные окружения. Полный список с комментариями — [`.env.example`](../.env.example). Правила, которые проверяются на старте:
 
 - Разбор строгий: неверное целое, bool (только формы `strconv.ParseBool`) или длительность без единиц (`90`, а не `90s`) останавливает старт.
-- `WORKER_TIMEOUT` ≥ `EXECUTOR_TIMEOUT` + 20s, оба больше нуля. `WORKER_TIMEOUT` у api и worker должен совпадать: от него считается порог зависшего матча (`WORKER_TIMEOUT` + 30s) в recovery и в `/system/status`.
+- `WORKER_TIMEOUT` меньше `EXECUTOR_TIMEOUT` + 20s на старте поднимается до этого значения, оба больше нуля. `WORKER_TIMEOUT` у api и worker должен совпадать: от него считается порог зависшего матча (`WORKER_TIMEOUT` + 30s) в recovery и в `/system/status`.
 - `EXECUTOR_MEMORY_LIMIT` не меньше 6 МиБ, `EXECUTOR_DEFAULT_ITERATIONS` и `EXECUTOR_COMPILE_WORKERS` не меньше 1, `TRUSTED_PROXIES` — валидные CIDR.
 - В production (`ENVIRONMENT=production`) `JWT_SECRET` не короче 32 байт и не из списка заглушек.
 - Секреты `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` можно передать файлом: `DB_PASSWORD_FILE` и т.д. (Docker secrets).
@@ -127,7 +127,6 @@ CI (`.github/workflows/`): `ci.yml` на push в main и PR — фронтенд
 | `network monitoring declared as external, but could not be found` | `docker network create monitoring` или `make docker-up` |
 | `role tjudge does not exist` | локальный PG занял 5432 — для Docker используйте 5433 |
 | `invalid environment: ...` на старте | опечатка в `.env`: число, bool или длительность без единиц |
-| `WORKER_TIMEOUT (...) must be at least EXECUTOR_TIMEOUT (...) + 20s` | поднять `WORKER_TIMEOUT` или снизить `EXECUTOR_TIMEOUT` |
 | `air: command not found` | `go install github.com/air-verse/air@latest` + `~/go/bin` в PATH |
 | `Internal server error` | миграции не применены: `make migrate-up` |
 | Программы висят в `compiling` / матчи не идут | логи worker'а: `docker compose logs worker`; нет образа `tjudge-builder` или `tjudge-cli` |

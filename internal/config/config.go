@@ -262,13 +262,6 @@ func (c *Config) Validate() error {
 	if c.Executor.DefaultIterations < 1 {
 		return fmt.Errorf("EXECUTOR_DEFAULT_ITERATIONS must be positive")
 	}
-	// таймаут обработки матча накрывает таймаут контейнера с запасом на
-	// create/cleanup и запись результата. иначе первым истекает ctx воркера,
-	// таймаут программы не записывается и матч крутится через recovery вечно
-	if c.Worker.Timeout < c.Executor.Timeout+workerTimeoutMargin {
-		return fmt.Errorf("WORKER_TIMEOUT (%s) must be at least EXECUTOR_TIMEOUT (%s) + %s",
-			c.Worker.Timeout, c.Executor.Timeout, workerTimeoutMargin)
-	}
 	if c.Executor.CompileWorkers < 1 {
 		return fmt.Errorf("executor compile_workers must be positive")
 	}
@@ -413,6 +406,14 @@ func Load() (*Config, error) {
 	// опечатка в .env не должна молча превращаться в дефолт
 	if err := errors.Join(env.errs...); err != nil {
 		return nil, fmt.Errorf("invalid environment: %w", err)
+	}
+
+	// таймаут обработки матча накрывает таймаут контейнера с запасом на
+	// create/cleanup и запись результата. иначе первым истекает ctx воркера,
+	// таймаут программы не записывается и матч крутится через recovery вечно.
+	// профили с 60s/60s не роняют старт, значение просто поднимается
+	if floor := cfg.Executor.Timeout + workerTimeoutMargin; cfg.Worker.Timeout < floor {
+		cfg.Worker.Timeout = floor
 	}
 
 	if err := cfg.Validate(); err != nil {
