@@ -61,7 +61,8 @@ func (r *ProgramRepository) Create(ctx context.Context, program *models.Program)
 // тогда повтор с новым id, до 3 раз.
 // программа турнира тем же запросом регистрируется участником: по отдельности сбой
 // между двумя INSERT оставлял готовую версию без строки tournament_participants, и
-// команда молча выпадала из раундов игры
+// команда молча выпадала из раундов игры.
+// программа турнира создаётся только для игры, подключённой к этому турниру
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
 		program.Status = models.ProgramReady
@@ -70,9 +71,10 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 	query := `
 		WITH p AS (
 			INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
 				COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
-			)
+			WHERE $4::uuid IS NULL
+			   OR EXISTS (SELECT 1 FROM tournament_games WHERE tournament_id = $4 AND game_id = $5)
 			RETURNING id, tournament_id, version, created_at, updated_at
 		), tp AS (
 			INSERT INTO tournament_participants (tournament_id, program_id, rating)
@@ -100,6 +102,9 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 
 		if err == nil {
 			return nil
+		}
+		if stderrors.Is(err, sql.ErrNoRows) {
+			return errors.ErrInvalidInput.WithMessage("игра не подключена к этому турниру")
 		}
 
 		// повтор на конфликте уникального индекса (две версии столкнулись)

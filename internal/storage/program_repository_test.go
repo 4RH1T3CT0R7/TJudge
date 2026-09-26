@@ -5,6 +5,7 @@ package storage_test
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -422,6 +423,7 @@ func (s *ProgramRepositorySuite) TestCreateWithAtomicVersion_RegistersParticipan
 	user := s.createUser("prog_atomic")
 	tournament := s.createTournament("TPATOM", user.ID)
 	game := s.createGame("atomic_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
 	team := s.createTeam(tournament.ID, user.ID, "TATOM1")
 
 	for want := 1; want <= 2; want++ {
@@ -439,4 +441,29 @@ func (s *ProgramRepositorySuite) TestCreateWithAtomicVersion_RegistersParticipan
 			tournament.ID, p.ID).Scan(&rating))
 		assert.Equal(s.T(), 1500, rating)
 	}
+}
+
+// загрузка в игру, не подключённую к турниру: 400, ни программы, ни участника
+func (s *ProgramRepositorySuite) TestCreateWithAtomicVersion_GameNotInTournament() {
+	ctx := context.Background()
+	user := s.createUser("prog_detached")
+	tournament := s.createTournament("TPDETG", user.ID)
+	game := s.createGame("detached_game")
+	team := s.createTeam(tournament.ID, user.ID, "TDETG1")
+
+	p := &models.Program{
+		ID: uuid.New(), UserID: user.ID, TeamID: &team.ID, TournamentID: &tournament.ID, GameID: &game.ID,
+		Name: "detached", CodePath: "/tmp/detached.py", Language: "python", Status: models.ProgramCompiling,
+	}
+	err := s.repo.CreateWithAtomicVersion(ctx, p)
+	require.Error(s.T(), err)
+	appErr := errors.GetAppError(err)
+	require.NotNil(s.T(), appErr)
+	assert.Equal(s.T(), http.StatusBadRequest, appErr.Code)
+	assert.Contains(s.T(), appErr.Message, "не подключена")
+
+	var n int
+	require.NoError(s.T(), s.database.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM programs WHERE team_id = $1", team.ID).Scan(&n))
+	assert.Zero(s.T(), n)
 }
