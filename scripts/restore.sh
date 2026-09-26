@@ -119,8 +119,12 @@ if ! docker exec "$POSTGRES_CONTAINER" pg_dump --no-owner --no-acl -U "$DB_USER"
 fi
 log_info "Safety backup created: $SAFETY_BACKUP"
 
-log_info "Stopping API and Worker services..."
-docker compose stop api worker
+# бэкап-контейнер монтирует тот же каталог программ: без перезапуска он так
+# и архивировал бы переименованный старый каталог
+services=(api worker)
+[ -n "$(docker compose --profile backup ps -q backup 2>/dev/null)" ] && services+=(backup)
+log_info "Stopping ${services[*]}..."
+docker compose --profile backup stop "${services[@]}"
 
 log_info "Restoring database from: $BACKUP_FILE"
 recreate_db
@@ -128,9 +132,9 @@ if ! load_dump "$BACKUP_FILE"; then
     log_error "Restore failed, database is being returned to the safety backup"
     recreate_db
     if load_dump "$SAFETY_BACKUP"; then
-        log_error "Database returned to its state before restore. api и worker остановлены: docker compose start api worker"
+        log_error "Database returned to its state before restore. ${services[*]} остановлены: docker compose --profile backup start ${services[*]}"
     else
-        log_error "Safety backup did not load either: $SAFETY_BACKUP. api и worker остановлены"
+        log_error "Safety backup did not load either: $SAFETY_BACKUP. ${services[*]} остановлены"
     fi
     exit 1
 fi
@@ -155,8 +159,8 @@ if [ -n "$PROGRAMS_FILE" ]; then
     log_info "Programs restored."
 fi
 
-log_info "Starting API and Worker services..."
-docker compose start api worker
+log_info "Starting ${services[*]}..."
+docker compose --profile backup start "${services[@]}"
 
 log_info "Restore process completed successfully!"
 echo ""
