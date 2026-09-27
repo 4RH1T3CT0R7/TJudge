@@ -193,6 +193,8 @@ func (p *Processor) play(ctx context.Context, match *models.Match) error {
 	// осталась pending и диспетчер её добьёт
 	if result.ErrorCode == 0 && result.Winner >= 0 {
 		match.Winner = &result.Winner
+		match.Score1 = &result.Score1
+		match.Score2 = &result.Score2
 		if err := p.ratingService.ProcessMatchResult(ctx, match); err != nil {
 			p.log.LogError("Failed to update ratings, outbox dispatcher will retry", err,
 				zap.String("match_id", match.ID.String()),

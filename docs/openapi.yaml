@@ -1917,7 +1917,7 @@ paths:
 
         **Server-sent messages** (`{"type": ..., "payload": {...}}`, see web/src/types/ws.ts):
         - `tournament_update` -- tournament started or completed; payload: `status`, `start_time` or `end_time`
-        - `match_result` -- a match result was applied; payload: `match_id`, `program1_id`, `program2_id`, `new_rating1`, `new_rating2`, `winner`
+        - `match_result` -- a match result was applied; payload: `match_id`, `program1_id`, `program2_id`, `new_rating1`, `new_rating2`, `winner`, `game_type`, `score1`, `score2`, `team1_name`, `team2_name` (null if the team was deleted)
         - `program_update` -- compilation or self-check finished; payload: `program_id`, `team_id`, `status`, `check_status` (only for a ready program: `pending` right after compilation, then `ok` or `failed`; absent if the self-check did not take place)
       operationId: wsTournament
       security:

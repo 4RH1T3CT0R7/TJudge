@@ -69,6 +69,11 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 
 	winner := 1
 	match := testMatch(&winner)
+	match.GameType = "tug_of_war"
+	score1, score2 := 42, 17
+	match.Score1, match.Score2 = &score1, &score2
+	team1 := "Альфа"
+	match.Team1Name = &team1
 	repo.On("ApplyMatchResult", ctx, match).Return(true, nil)
 
 	err := svc.ProcessMatchResult(ctx, match)
@@ -94,6 +99,12 @@ func TestService_ProcessMatchResult_Player1Wins(t *testing.T) {
 	assert.Equal(t, 1, evt.Winner)
 	assert.Equal(t, 1516, evt.NewRating1)
 	assert.Equal(t, 1484, evt.NewRating2)
+	// лента матчей на табло: игра, счёт и названия команд
+	assert.Equal(t, "tug_of_war", evt.GameType)
+	assert.Equal(t, &score1, evt.Score1)
+	assert.Equal(t, &score2, evt.Score2)
+	assert.Equal(t, &team1, evt.Team1Name)
+	assert.Nil(t, evt.Team2Name)
 }
 
 func TestService_ProcessMatchResult_Player2Wins(t *testing.T) {

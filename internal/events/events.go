@@ -54,7 +54,8 @@ type GameRoundReset struct {
 	GameID       uuid.UUID
 }
 
-// MatchResultProcessed - рейтинги ело после матча пересчитаны
+// MatchResultProcessed - рейтинги ело после матча пересчитаны.
+// игра, счёт и названия команд нужны ленте матчей на табло
 type MatchResultProcessed struct {
 	Version      int
 	TournamentID uuid.UUID
@@ -64,4 +65,9 @@ type MatchResultProcessed struct {
 	NewRating1   int
 	NewRating2   int
 	Winner       int
+	GameType     string
+	Score1       *int
+	Score2       *int
+	Team1Name    *string // nil - команду удалили
+	Team2Name    *string
 }

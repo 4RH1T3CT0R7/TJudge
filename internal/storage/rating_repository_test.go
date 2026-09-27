@@ -255,6 +255,32 @@ func (s *RatingRepositorySuite) TestApplyMatchResult_Idempotent() {
 	assert.Equal(s.T(), "done", outboxStatus)
 }
 
+// названия команд для ленты матчей приходят тем же запросом, что и рейтинги;
+// у программы без команды - nil
+func (s *RatingRepositorySuite) TestApplyMatchResult_TeamNames() {
+	tournament, program1 := s.setupRatingPrerequisites("aptn")
+	user2 := s.createUser("rating_aptn2")
+	program2 := s.createProgram(user2.ID, "RatingBot_aptn2")
+	s.addParticipant(tournament.ID, program1.ID, 1500)
+	s.addParticipant(tournament.ID, program2.ID, 1500)
+
+	ctx := context.Background()
+	teamID := uuid.New()
+	_, err := s.database.ExecContext(ctx,
+		"INSERT INTO teams (id, tournament_id, name, code, leader_id) VALUES ($1, $2, 'Альфа', 'TNAPTN', $3)",
+		teamID, tournament.ID, program1.UserID)
+	require.NoError(s.T(), err)
+	_, err = s.database.ExecContext(ctx, "UPDATE programs SET team_id = $1 WHERE id = $2", teamID, program1.ID)
+	require.NoError(s.T(), err)
+
+	match := s.completedMatch(tournament.ID, program1.ID, program2.ID, 1)
+	require.NoError(s.T(), s.ratingService().ProcessMatchResult(ctx, match))
+
+	require.NotNil(s.T(), match.Team1Name)
+	assert.Equal(s.T(), "Альфа", *match.Team1Name)
+	assert.Nil(s.T(), match.Team2Name)
+}
+
 // матч удалили (сброс раунда) до применения рейтинга - дельта не ложится
 func (s *RatingRepositorySuite) TestApplyMatchResult_MatchDeleted() {
 	tournament, program1 := s.setupRatingPrerequisites("apdel")

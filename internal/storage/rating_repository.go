@@ -77,21 +77,32 @@ func (r *RatingRepository) ApplyMatchResult(ctx context.Context, match *models.M
 			return nil
 		}
 
+		// названия команд - для ленты матчей в событии, заодно тем же запросом
 		var rows []struct {
 			ProgramID uuid.UUID `db:"program_id"`
 			Rating    int       `db:"rating"`
+			TeamName  *string   `db:"team_name"`
 		}
 		if err := tx.SelectContext(ctx, &rows, `
-			SELECT program_id, rating FROM tournament_participants
-			WHERE tournament_id = $1 AND program_id IN ($2, $3)
-			ORDER BY program_id
-			FOR UPDATE
+			SELECT tp.program_id, tp.rating, t.name AS team_name
+			FROM tournament_participants tp
+			LEFT JOIN programs p ON p.id = tp.program_id
+			LEFT JOIN teams t ON t.id = p.team_id
+			WHERE tp.tournament_id = $1 AND tp.program_id IN ($2, $3)
+			ORDER BY tp.program_id
+			FOR UPDATE OF tp
 		`, match.TournamentID, match.Program1ID, match.Program2ID); err != nil {
 			return errors.Wrap(err, "failed to lock participant ratings")
 		}
 		ratings := make(map[uuid.UUID]int, len(rows))
 		for _, row := range rows {
 			ratings[row.ProgramID] = row.Rating
+			switch row.ProgramID {
+			case match.Program1ID:
+				match.Team1Name = row.TeamName
+			case match.Program2ID:
+				match.Team2Name = row.TeamName
+			}
 		}
 		rating1, ok1 := ratings[match.Program1ID]
 		rating2, ok2 := ratings[match.Program2ID]

@@ -157,7 +157,8 @@ func TestSyncNotifier_WsTopology(t *testing.T) {
 	assert.Equal(t, "tournament_update", br.calls[2].messageType)
 	// ключи payload'а match_result - замороженный контракт фронта
 	mp := br.calls[0].payload.(map[string]any)
-	for _, k := range []string{"match_id", "program1_id", "program2_id", "new_rating1", "new_rating2", "winner"} {
+	for _, k := range []string{"match_id", "program1_id", "program2_id", "new_rating1", "new_rating2", "winner",
+		"game_type", "score1", "score2", "team1_name", "team2_name"} {
 		assert.Contains(t, mp, k)
 	}
 	// лог компиляции с кусками исходника не уходит всем подписчикам турнира

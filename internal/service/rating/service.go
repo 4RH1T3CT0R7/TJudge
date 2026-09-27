@@ -24,7 +24,8 @@ type ParticipantUpdate struct {
 
 type RatingRepository interface {
 	// рейтинг за матч применяется ровно один раз: репозиторий в одной транзакции
-	// гасит outbox-задачу, блокирует рейтинги обоих участников и отдаёт их в calc.
+	// гасит outbox-задачу, блокирует рейтинги обоих участников и отдаёт их в calc,
+	// заодно заполняет Team1Name/Team2Name матча для события.
 	// false - рейтинг уже применён (fast path и диспетчер разошлись) или матча нет
 	ApplyMatchResult(ctx context.Context, match *models.Match, calc func(rating1, rating2 int) (*ParticipantUpdate, *ParticipantUpdate)) (bool, error)
 }
@@ -139,6 +140,11 @@ func (s *Service) ProcessMatchResult(ctx context.Context, match *models.Match) e
 		NewRating1:   newRating1,
 		NewRating2:   newRating2,
 		Winner:       winner,
+		GameType:     match.GameType,
+		Score1:       match.Score1,
+		Score2:       match.Score2,
+		Team1Name:    match.Team1Name,
+		Team2Name:    match.Team2Name,
 	})
 
 	return nil

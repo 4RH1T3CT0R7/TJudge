@@ -122,6 +122,11 @@ func (n *SyncNotifier) MatchResultProcessed(ctx context.Context, e MatchResultPr
 			"new_rating1": e.NewRating1,
 			"new_rating2": e.NewRating2,
 			"winner":      e.Winner,
+			"game_type":   e.GameType,
+			"score1":      e.Score1,
+			"score2":      e.Score2,
+			"team1_name":  e.Team1Name,
+			"team2_name":  e.Team2Name,
 		})
 	}
 }
