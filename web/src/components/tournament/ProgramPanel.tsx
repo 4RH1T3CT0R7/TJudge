@@ -127,11 +127,13 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
     const v = `v${tracked.version}`;
     if (prev.status === 'compiling' && tracked.status === 'ready') addToast(`${v} собрана`, 'success');
     if (prev.status === 'compiling' && tracked.status === 'failed') {
-      addToast(`${v} не собралась: ${explainCompileError(tracked.error_message ?? '') ?? 'смотрите вывод компилятора'}`, 'error');
+      addToast(`${v} не собралась — ${explainCompileError(tracked.error_message ?? '') ?? 'смотрите вывод компилятора'}`, 'error');
     }
     if (prev.check !== 'failed' && tracked.check_status === 'failed') {
       const e = explainMatchError({ status: 'failed', error_code: 1, winner: 2, error_message: tracked.check_message ?? '' }, 1);
-      addToast(`${v}: самопроверка не пройдена — ${e?.verdict ?? 'программа упала'}`, 'info');
+      // «Ваша программа …» после тире - со строчной
+      const verdict = e ? e.verdict[0].toLowerCase() + e.verdict.slice(1) : 'программа упала';
+      addToast(`${v}: самопроверка не пройдена — ${verdict}`, 'info');
     }
   }, [tracked]);
 
