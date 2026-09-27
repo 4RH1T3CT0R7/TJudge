@@ -21,6 +21,8 @@ export default defineConfig({
   build: {
     outDir: '../internal/web/dist',
     emptyOutDir: true,
+    // шрифты только файлами: CSP (font-src 'self') блокирует data:-шрифты
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
     rollupOptions: {
       output: {
         // react-markdown без ручного чанка: он попадает только в ленивые чанки GameView/GameDetail
