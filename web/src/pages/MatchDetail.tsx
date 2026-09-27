@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api, { isRetryableError } from '../api/client';
@@ -251,7 +252,8 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
             }}
             className="btn btn-sm btn-primary w-32 justify-center"
           >
-            {isPlaying ? '❚❚ пауза' : '▶ проиграть'}
+            <span aria-hidden="true">{isPlaying ? '❚❚' : '▶'}</span>
+            {isPlaying ? 'пауза' : 'проиграть'}
           </button>
         )}
         <button type="button" onClick={() => seek(step - 1)} disabled={step === 0} className="btn btn-sm btn-secondary" aria-label="На ход назад">
@@ -321,7 +323,7 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
   );
 }
 
-function Fact({ term, children }: { term: string; children: React.ReactNode }) {
+function Fact({ term, children }: { term: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-gray-500">{term}</dt>
