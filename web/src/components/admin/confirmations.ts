@@ -134,17 +134,14 @@ export async function confirmDeleteTournament(tournament: { id: string; name: st
   });
 }
 
-export async function confirmDeleteGame(game: { id: string; display_name: string }) {
-  const tournaments = await api.getTournaments();
-  const lists = await Promise.all(tournaments.map((t) => api.getTournamentGames(t.id)));
-  const used = lists.filter((games) => games.some((g) => g.id === game.id)).length;
+// Число турниров с игрой клиент надёжно не посчитает: список турниров
+// постраничный, а игры турнира - запрос на каждый
+export function confirmDeleteGame(game: { display_name: string }) {
   return confirmDialog({
     title: 'Удаление игры',
     message: `Игра «${game.display_name}» удалится вместе с правилами.`,
     details: [
-      used > 0
-        ? `уберёт игру из ${count(used, ['турнира', 'турниров', 'турниров'])}`
-        : 'игра не добавлена ни в один турнир',
+      'уберёт игру из всех турниров, где она добавлена',
       'если по игре уже загружены программы, сервер удаление отклонит',
     ],
     confirmLabel: 'Удалить игру',
