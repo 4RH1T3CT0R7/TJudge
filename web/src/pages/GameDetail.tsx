@@ -523,7 +523,7 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
-            <p className="flex text-sm font-medium text-gray-300">
+            <p className="flex items-baseline text-sm font-medium text-gray-300">
               <span className="truncate">{leftName}</span>
               {mine && <YouMark />}
             </p>
