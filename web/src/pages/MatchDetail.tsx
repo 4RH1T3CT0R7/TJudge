@@ -252,7 +252,7 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
 
   // на телефоне шаги - главный способ идти по ходам (и единственный при reduced
   // motion), поэтому кнопки крупнее, а ползунок со счётчиком - своей строкой
-  const stepBtn = 'btn btn-sm btn-secondary min-h-10 min-w-10 text-base sm:min-h-0 sm:min-w-8';
+  const stepBtn = 'btn btn-sm btn-secondary min-h-10 min-w-10 text-base sm:min-h-0 sm:min-w-0 sm:text-xs';
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 font-mono text-sm">
