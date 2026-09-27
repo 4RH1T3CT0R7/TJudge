@@ -5,6 +5,7 @@ import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
 import { getGameConfig } from '../../utils/gameConfig';
+import { mdPreview } from '../../utils/markdown';
 import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
 import { StatusLabel } from '../ui/StatusLabel';
@@ -695,11 +696,11 @@ export function TournamentsTab({
                     <div>
                       <h3 className="font-semibold text-gray-100">{tournament.name}</h3>
                       <p className="text-sm text-gray-400">
-                        Код: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{tournament.code}</code>
+                        Код турнира: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{tournament.code}</code>
                       </p>
                       {tournament.description && (
                         <p className="text-sm text-gray-300 mt-1 line-clamp-2">
-                          {tournament.description}
+                          {mdPreview(tournament.description)}
                         </p>
                       )}
                     </div>
