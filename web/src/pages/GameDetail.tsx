@@ -409,7 +409,7 @@ export function GameDetail() {
                   </p>
                 ) : (
                   <p className="text-gray-400">
-                    <Link to={`/tournaments/${tournamentId}`} className="text-primary-400 hover:underline">
+                    <Link to={`/tournaments/${tournamentId}`} className="text-primary-400 underline hover:text-primary-300">
                       Присоединитесь к команде
                     </Link>{' '}
                     чтобы отправить программу.

@@ -7,7 +7,7 @@ export function PlaceHint({ children }: { children: ReactNode }) {
     <p className="mt-3 font-mono text-xs text-gray-500">
       <span aria-hidden="true">{'// '}</span>
       {children} ·{' '}
-      <Link to="/help#place" className="text-primary-400 hover:underline">
+      <Link to="/help#place" className="text-primary-400 underline hover:text-primary-300">
         как считается место
       </Link>
     </p>
