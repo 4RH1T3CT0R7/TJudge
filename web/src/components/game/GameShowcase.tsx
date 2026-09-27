@@ -7,12 +7,13 @@ import { TravelersDilemmaVisualization } from './TravelersDilemmaVisualization';
 import { PublicGoodsVisualization } from './PublicGoodsVisualization';
 import { DollarAuctionVisualization } from './DollarAuctionVisualization';
 import { GAME_PAYOFFS } from '../../utils/gameConfig';
+import { Tabs } from '../ui/Tabs';
 
 const { dilemma, tug_of_war, travelers_dilemma, public_goods, dollar_auction } = GAME_PAYOFFS;
 
 // Game Showcase Component with tabs
 export function GameShowcase() {
-  const [activeGame, setActiveGame] = useState(0);
+  const [activeGame, setActiveGame] = useState('dilemma');
   const [modalOpen, setModalOpen] = useState(false);
   useEscapeKey(useCallback(() => setModalOpen(false), []), modalOpen);
 
@@ -89,7 +90,7 @@ export function GameShowcase() {
     },
   ];
 
-  const currentGame = games[activeGame];
+  const currentGame = games.find((game) => game.id === activeGame) ?? games[0];
   const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
     purple: {
       bg: 'bg-primary-900/30',
@@ -125,79 +126,67 @@ export function GameShowcase() {
 
   return (
     <div className="space-y-6">
-      {/* Game tabs */}
-      <div className="flex flex-wrap justify-center gap-3 md:gap-4">
-        {games.map((game, index) => (
-          <button
-            key={game.id}
-            onClick={() => setActiveGame(index)}
-            aria-pressed={activeGame === index}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors ${
-              activeGame === index
-                ? `${colorClasses[game.color].bg} ${colorClasses[game.color].text} ${colorClasses[game.color].border} border-2 shadow-lg scale-105`
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border-2 border-transparent'
-            }`}
-          >
-            <span className="text-xl" aria-hidden="true">{game.icon}</span>
-            <span className="sr-only sm:not-sr-only">{game.name}</span>
-          </button>
-        ))}
-      </div>
+      <Tabs
+        label="Игры"
+        items={games.map((game) => ({ id: game.id, label: game.name }))}
+        active={currentGame.id}
+        onChange={setActiveGame}
+      >
+        {/* Game content */}
+        <div className="grid md:grid-cols-2 gap-8 items-start">
+          <div className="space-y-4" key={currentGame.id}>
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">{currentGame.icon}</span>
+              <h2 className={`text-2xl md:text-3xl font-bold ${colorClasses[currentGame.color].text}`}>
+                {currentGame.name}
+              </h2>
+            </div>
 
-      {/* Game content */}
-      <div className="grid md:grid-cols-2 gap-8 items-start">
-        <div className="space-y-4" key={currentGame.id}>
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">{currentGame.icon}</span>
-            <h2 className={`text-2xl md:text-3xl font-bold ${colorClasses[currentGame.color].text}`}>
-              {currentGame.name}
-            </h2>
-          </div>
-
-          <p className="text-gray-300 leading-relaxed">
-            {currentGame.description}
-          </p>
-
-          <div className="space-y-3">
-            {currentGame.rules.map((rule, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: rule.color === 'green' ? '#22c55e' : rule.color === 'red' ? '#ef4444' : rule.color === 'yellow' ? '#eab308' : rule.color === 'blue' ? '#3b82f6' : '#a855f7' }}
-                />
-                <span className="text-gray-300 text-sm">
-                  <strong>{rule.text}</strong> — {rule.result}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className={`p-3 rounded-lg border ${colorClasses[currentGame.color].bg} ${colorClasses[currentGame.color].border}`}>
-            <p className={`text-sm ${colorClasses[currentGame.color].text}`}>
-              <strong>Инсайт:</strong> {currentGame.insight}
+            <p className="text-gray-300 leading-relaxed">
+              {currentGame.description}
             </p>
+
+            <div className="space-y-3">
+              {currentGame.rules.map((rule, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: rule.color === 'green' ? '#22c55e' : rule.color === 'red' ? '#ef4444' : rule.color === 'yellow' ? '#eab308' : rule.color === 'blue' ? '#3b82f6' : '#a855f7' }}
+                  />
+                  <span className="text-gray-300 text-sm">
+                    <strong>{rule.text}</strong> — {rule.result}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className={`p-3 rounded-lg border ${colorClasses[currentGame.color].bg} ${colorClasses[currentGame.color].border}`}>
+              <p className={`text-sm ${colorClasses[currentGame.color].text}`}>
+                <strong>Инсайт:</strong> {currentGame.insight}
+              </p>
+            </div>
+
+            <button
+              onClick={() => setModalOpen(true)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-primary-400 transition-colors group"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Подробнее об игре
+              <svg className="w-3 h-3 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
 
-          <button
-            onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-primary-400 transition-colors group"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Подробнее об игре
-            <svg className="w-3 h-3 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Visualization */}
-        <div className="flex justify-center items-center bg-gray-800/50 rounded-2xl p-4 border border-gray-700 transition-colors">
-          <div className="w-full animate-fade-in" key={currentGame.id + '-viz'}>
-            {currentGame.visualization}
+          {/* Visualization */}
+          <div className="flex justify-center items-center bg-gray-800/50 rounded-2xl p-4 border border-gray-700 transition-colors">
+            <div className="w-full animate-fade-in" key={currentGame.id + '-viz'}>
+              {currentGame.visualization}
+            </div>
           </div>
         </div>
-      </div>
+      </Tabs>
 
       <GameInfoModal
         isOpen={modalOpen}
