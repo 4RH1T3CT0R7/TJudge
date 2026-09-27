@@ -445,7 +445,8 @@ export function TournamentScreen() {
                   </span>
                 )}
               </p>
-              <Feed items={feed} />
+              {/* у не идущего турнира матчей не будет */}
+              {tournament.status === 'active' && <Feed items={feed} />}
             </div>
             <div className="flex shrink-0 items-center gap-[1vw]">
               <p className="text-right text-gray-300 text-[clamp(14px,2vh,26px)]">
