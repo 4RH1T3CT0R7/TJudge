@@ -23,6 +23,17 @@ export function ConfirmDialogHost() {
   );
 }
 
+// Последствия действия построчно, перенос строки уходит под текст, а не под маркер.
+export function Consequences({ lines, className = '' }: { lines: string[]; className?: string }) {
+  return (
+    <ul className={`${className} list-['-_'] space-y-1.5 rounded border border-gray-800 bg-gray-950 py-2 pl-8 pr-3 font-mono text-sm text-gray-300 marker:text-gray-500`}>
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
 // Фокус сразу на «Отмена»: Enter по привычке не подтверждает. При вводе
 // названия фокус в поле, Enter подтверждает только совпавший текст.
 function ConfirmBody({ options, settle }: { options: ConfirmOptions; settle: (confirmed: boolean) => void }) {
@@ -44,11 +55,7 @@ function ConfirmBody({ options, settle }: { options: ConfirmOptions; settle: (co
         <p className="text-gray-300 whitespace-pre-line">{options.message}</p>
       </div>
       {options.details && options.details.length > 0 && (
-        <ul className="mt-4 space-y-1 rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-sm text-gray-300">
-          {options.details.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
+        <Consequences lines={options.details} className="mt-4" />
       )}
       {expected !== undefined && (
         <Field
