@@ -77,7 +77,7 @@ export function TeamsTab({
               type="text"
               value={joinCode}
               onChange={(e) => { setJoinCode(e.target.value.toUpperCase()); setJoinError(''); }}
-              placeholder="Код приглашения (например: ABC123)"
+              placeholder="Код приглашения, 8 символов"
               className="input flex-1 uppercase tracking-wider"
               maxLength={10}
             />
