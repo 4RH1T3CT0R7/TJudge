@@ -459,7 +459,7 @@ export function GameDetail() {
                 <h2 className="text-lg font-semibold mb-4 text-gray-100">Отправить программу</h2>
                 {!isAuthenticated ? (
                   <p className="text-gray-400">
-                    <Link to="/login" className="text-primary-400 hover:underline">
+                    <Link to="/login" className="text-primary-400 underline hover:text-primary-300">
                       Войдите
                     </Link>{' '}
                     чтобы отправить программу.
