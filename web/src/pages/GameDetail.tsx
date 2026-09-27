@@ -194,7 +194,7 @@ export function GameDetail() {
       // Check for syntax errors in uploaded program
       if (program.error_message) {
         // Program uploaded but has syntax error - show warning
-        setUploadError(`⚠️ Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
+        setUploadError(`Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
       } else {
         setUploadedId(program.id);
         setUploadInvaderBubble('{ загружено: true }');
@@ -306,7 +306,7 @@ export function GameDetail() {
         title={
           <>
             <title>{`${game.display_name} — TJudge`}</title>
-            <span aria-hidden="true" className="mr-3">{getGameConfig(game.name).icon}</span>
+            <span aria-hidden="true" className={`mr-3 font-mono ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
             {game.display_name}
           </>
         }

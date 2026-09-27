@@ -6,7 +6,7 @@ import { TugOfWarVisualization } from './TugOfWarVisualization';
 import { TravelersDilemmaVisualization } from './TravelersDilemmaVisualization';
 import { PublicGoodsVisualization } from './PublicGoodsVisualization';
 import { DollarAuctionVisualization } from './DollarAuctionVisualization';
-import { GAME_PAYOFFS } from '../../utils/gameConfig';
+import { GAME_PAYOFFS, getGameConfig } from '../../utils/gameConfig';
 import { Tabs } from '../ui/Tabs';
 
 const { dilemma, tug_of_war, travelers_dilemma, public_goods, dollar_auction } = GAME_PAYOFFS;
@@ -21,7 +21,6 @@ export function GameShowcase() {
     {
       id: 'dilemma',
       name: 'Дилемма заключённого',
-      icon: '🤝',
       color: 'purple',
       description: 'Классическая задача теории игр, демонстрирующая конфликт между индивидуальной и коллективной рациональностью.',
       rules: [
@@ -35,7 +34,6 @@ export function GameShowcase() {
     {
       id: 'tug_of_war',
       name: 'Перетягивание каната',
-      icon: '🪢',
       color: 'green',
       description: 'Стратегическая игра на распределение ресурсов. Распределите силы по раундам, чтобы победить.',
       rules: [
@@ -49,7 +47,6 @@ export function GameShowcase() {
     {
       id: 'travelers_dilemma',
       name: 'Дилемма путешественника',
-      icon: '🧳',
       color: 'blue',
       description: 'Два путешественника называют стоимость потерянных чемоданов. Жадность наказывается, а скромность вознаграждается.',
       rules: [
@@ -63,7 +60,6 @@ export function GameShowcase() {
     {
       id: 'public_goods',
       name: 'Общественное благо',
-      icon: '🏛️',
       color: 'orange',
       description: 'Каждый решает, сколько вложить в общий пул. Пул умножается и делится поровну — но зачем вкладывать, если можно получить бесплатно?',
       rules: [
@@ -77,7 +73,6 @@ export function GameShowcase() {
     {
       id: 'dollar_auction',
       name: 'Аукцион двойной цены',
-      icon: '💰',
       color: 'yellow',
       description: 'Приз выставляется на торги, но проигравший тоже платит свою ставку. Классическая ловушка эскалации.',
       rules: [
@@ -136,7 +131,7 @@ export function GameShowcase() {
         <div className="grid md:grid-cols-2 gap-8 items-start">
           <div className="space-y-4" key={currentGame.id}>
             <div className="flex items-center gap-3">
-              <span className="text-4xl">{currentGame.icon}</span>
+              <span aria-hidden="true" className="font-mono text-4xl">{getGameConfig(currentGame.id).icon}</span>
               <h2 className={`text-2xl md:text-3xl font-bold ${colorClasses[currentGame.color].text}`}>
                 {currentGame.name}
               </h2>
@@ -193,7 +188,7 @@ export function GameShowcase() {
         onClose={() => setModalOpen(false)}
         gameId={currentGame.id}
         gameName={currentGame.name}
-        gameIcon={currentGame.icon}
+        gameIcon={getGameConfig(currentGame.id).icon}
       />
     </div>
   );

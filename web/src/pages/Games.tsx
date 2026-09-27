@@ -69,7 +69,7 @@ export function Games() {
                   <h2 className="text-xl font-semibold text-gray-100 transition-colors">
                     {game.display_name}
                   </h2>
-                  <div className={`w-12 h-12 ${config.bgClass} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 shadow-lg`}>
+                  <div aria-hidden="true" className={`w-12 h-12 ${config.bgClass} rounded-xl flex items-center justify-center font-mono font-bold text-2xl text-gray-950 flex-shrink-0 shadow-lg`}>
                     {config.icon}
                   </div>
                 </div>

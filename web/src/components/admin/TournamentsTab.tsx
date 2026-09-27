@@ -396,7 +396,7 @@ export function TournamentsTab({
                                   <span className="text-sm font-bold text-primary-400 w-6">
                                     {index + 1}.
                                   </span>
-                                  <span className="text-lg">{getGameConfig(game.name).icon}</span>
+                                  <span aria-hidden="true" className={`font-mono text-lg ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
                                   <span className="font-medium text-gray-100">
                                     {game.display_name}
                                   </span>
@@ -611,7 +611,7 @@ export function TournamentsTab({
                       }`}
                         >
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">{getGameConfig(game.name).icon}</span>
+                        <span aria-hidden="true" className={`font-mono text-2xl ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
                         <div>
                           <p className="font-medium text-gray-100">
                             {game.display_name}

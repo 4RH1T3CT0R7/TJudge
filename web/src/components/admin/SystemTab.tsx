@@ -199,8 +199,7 @@ export function SystemTab({
             <div className="grid gap-6 md:grid-cols-2">
               {/* Services Health Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">🩺</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Состояние сервисов
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -266,8 +265,7 @@ export function SystemTab({
 
               {/* Version & Uptime Card */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">📦</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Версия и аптайм
                 </h3>
                 {fullStatus ? (
@@ -305,8 +303,7 @@ export function SystemTab({
 
               {/* Programs Card */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">📁</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Программы
                 </h3>
                 {fullStatus ? (
@@ -329,8 +326,7 @@ export function SystemTab({
 
               {/* Queue Stats Card */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">📊</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Очередь матчей
                 </h3>
                 {queueNumbers ? (
@@ -383,8 +379,7 @@ export function SystemTab({
 
               {/* Match Stats Card: статусы из /system/status (все ключи by_status), фолбэк — useMatchStatistics */}
               <div className="card">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">🎮</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Статистика матчей
                 </h3>
                 {matchStats || fullStatus ? (
@@ -415,8 +410,7 @@ export function SystemTab({
 
               {/* Outbox Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">✉️</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Outbox (целостность рейтингов)
                 </h3>
                 {fullStatus?.outbox ? (
@@ -568,8 +562,7 @@ export function SystemTab({
 
               {/* System Metrics Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">💻</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Нагрузка сервера
                 </h3>
                 {systemMetrics ? (
@@ -577,7 +570,7 @@ export function SystemTab({
                     {/* CPU */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                        <span>🔧</span> CPU
+                        CPU
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
@@ -611,7 +604,7 @@ export function SystemTab({
                     {/* Memory */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                        <span>🧠</span> Память
+                        Память
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
@@ -643,7 +636,7 @@ export function SystemTab({
                     {/* Disk */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                        <span>💾</span> Диск ({systemMetrics.disk.path})
+                        Диск ({systemMetrics.disk.path})
                       </div>
                       <div className="relative pt-1">
                         <div className="flex mb-2 items-center justify-between">
@@ -680,7 +673,7 @@ export function SystemTab({
                 {systemMetrics && (
                   <div className="mt-6 pt-4 border-t border-gray-700">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
-                      <span>🌡️</span> Температура
+                      Температура
                     </div>
                     {systemMetrics.temperature && systemMetrics.temperature.length > 0 ? (
                       <div className="flex flex-wrap gap-3">
@@ -712,7 +705,7 @@ export function SystemTab({
                 {systemMetrics && (
                   <div className="mt-6 pt-4 border-t border-gray-700">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
-                      <span>🐹</span> Go Runtime
+                      Go Runtime
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
@@ -739,7 +732,7 @@ export function SystemTab({
                 {systemMetrics && (
                   <div className="mt-4 pt-4 border-t border-gray-700">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-300 mb-3">
-                      <span>🖥️</span> Система
+                      Система
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
@@ -766,8 +759,7 @@ export function SystemTab({
               {/* Failed Matches Card */}
               {failedMatches.length > 0 && (
                 <div className="card md:col-span-2">
-                  <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                    <span className="text-xl">⚠️</span>
+                  <h3 className="text-md font-semibold text-gray-100 mb-4">
                     Провалившиеся матчи ({failedMatches.length})
                   </h3>
                   <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -800,8 +792,7 @@ export function SystemTab({
 
               {/* Queue Actions Card */}
               <div className="card md:col-span-2">
-                <h3 className="text-md font-semibold text-gray-100 mb-4 flex items-center gap-2">
-                  <span className="text-xl">🛠</span>
+                <h3 className="text-md font-semibold text-gray-100 mb-4">
                   Управление очередью
                 </h3>
                 <div className="flex flex-wrap gap-3">

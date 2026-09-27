@@ -152,7 +152,7 @@ export function ProgramsTab({
                     <div key={game.id} className="card">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{getGameConfig(game.name).icon}</span>
+                          <span aria-hidden="true" className={`font-mono text-2xl ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
                           <div>
                             <h3 className="font-semibold text-gray-100">
                               {game.display_name}
@@ -233,7 +233,7 @@ export function ProgramsTab({
                                         className="text-primary-400 hover:text-primary-300 text-sm whitespace-nowrap"
                                         title="Скачать программу"
                                       >
-                                        ⬇️ Скачать
+                                        Скачать
                                       </button>
                                     </td>
                                   </tr>

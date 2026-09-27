@@ -18,22 +18,22 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
   const third = entries[2];
 
   const podiumData = [
-    { entry: second, place: 2, height: 'h-28', delay: 'delay-300', bgGradient: 'from-gray-300 via-gray-200 to-gray-400', textColor: 'text-gray-700', medal: '🥈' },
-    { entry: first, place: 1, height: 'h-40', delay: 'delay-100', bgGradient: 'from-yellow-400 via-amber-300 to-yellow-500', textColor: 'text-amber-900', medal: '🥇' },
-    { entry: third, place: 3, height: 'h-20', delay: 'delay-500', bgGradient: 'from-orange-400 via-orange-300 to-orange-500', textColor: 'text-orange-900', medal: '🥉' },
+    { entry: second, place: 2, height: 'h-28', delay: 'delay-300', bgGradient: 'from-gray-300 via-gray-200 to-gray-400', textColor: 'text-gray-700' },
+    { entry: first, place: 1, height: 'h-40', delay: 'delay-100', bgGradient: 'from-yellow-400 via-amber-300 to-yellow-500', textColor: 'text-amber-900' },
+    { entry: third, place: 3, height: 'h-20', delay: 'delay-500', bgGradient: 'from-orange-400 via-orange-300 to-orange-500', textColor: 'text-orange-900' },
   ];
 
   return (
     <div className="mb-8 p-4 sm:p-6 bg-gradient-to-b from-primary-900/30 via-primary-800/20 to-transparent rounded-2xl">
       <div className="text-center mb-6">
         <h3 className="text-2xl font-bold text-gray-100 mb-1">
-          🏆 Победители турнира 🏆
+          Победители турнира
         </h3>
         <p className="text-gray-400">Поздравляем финалистов!</p>
       </div>
 
       <div className="flex items-end justify-center gap-2 sm:gap-4 max-w-2xl mx-auto">
-        {podiumData.map(({ entry, place, height, delay, bgGradient, textColor, medal }) => (
+        {podiumData.map(({ entry, place, height, delay, bgGradient, textColor }) => (
           <div
             key={place}
             className={`flex-1 min-w-0 max-w-48 transition-[transform,opacity] duration-700 ease-out ${
@@ -44,9 +44,6 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
             <div className={`text-center mb-2 transform transition-[transform,opacity] duration-500 ${
               isVisible ? 'scale-100' : 'scale-0'
             } ${delay}`}>
-              <div className="text-4xl mb-2 animate-bounce" style={{ animationDelay: `${(place - 1) * 200}ms`, animationDuration: '2s' }}>
-                {medal}
-              </div>
               {/* на телефоне колонка узкая: название переносится, а не обрезается */}
               <div className="font-bold text-sm sm:text-lg text-gray-100 line-clamp-3 break-words hyphens-auto sm:px-2" title={entry.team_name || entry.program_name}>
                 {entry.team_name || entry.program_name}

@@ -25,7 +25,7 @@ export function GameInfoModal({
       maxWidth="max-w-2xl"
       title={
         <span className="flex items-center gap-3">
-          <span className="text-3xl" aria-hidden="true">{gameIcon}</span>
+          <span className="font-mono text-3xl" aria-hidden="true">{gameIcon}</span>
           {gameName}
         </span>
       }

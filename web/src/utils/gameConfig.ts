@@ -1,4 +1,5 @@
 // Game-specific icons and colors configuration (see https://github.com/bmstu-itstech/tjudge-cli)
+// Иконка игры — моноширинный глиф, не эмодзи
 
 export interface GameConfig {
   icon: string;
@@ -12,7 +13,7 @@ export interface GameConfig {
 
 const gameConfig: Record<string, GameConfig> = {
   dilemma: {
-    icon: '🤝',
+    icon: '⇄',
     color: 'purple',
     bgClass: 'bg-primary-500',
     textClass: 'text-primary-400',
@@ -21,7 +22,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-primary-500 to-primary-600',
   },
   tug_of_war: {
-    icon: '🪢',
+    icon: '⟷',
     color: 'green',
     bgClass: 'bg-green-500',
     textClass: 'text-green-400',
@@ -30,7 +31,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-green-500 to-green-600',
   },
   travelers_dilemma: {
-    icon: '🧳',
+    icon: '≤',
     color: 'blue',
     bgClass: 'bg-blue-500',
     textClass: 'text-blue-400',
@@ -39,7 +40,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-blue-500 to-blue-600',
   },
   public_goods: {
-    icon: '🏛️',
+    icon: 'Σ',
     color: 'orange',
     bgClass: 'bg-orange-500',
     textClass: 'text-orange-400',
@@ -48,7 +49,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-orange-500 to-orange-600',
   },
   dollar_auction: {
-    icon: '💰',
+    icon: '$↑',
     color: 'yellow',
     bgClass: 'bg-yellow-500',
     textClass: 'text-yellow-400',
@@ -59,7 +60,7 @@ const gameConfig: Record<string, GameConfig> = {
 };
 
 const defaultGameConfig: GameConfig = {
-  icon: '🎮',
+  icon: '#',
   color: 'gray',
   bgClass: 'bg-primary-600',
   textClass: 'text-primary-400',
