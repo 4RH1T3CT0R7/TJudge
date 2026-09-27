@@ -1,8 +1,9 @@
 import { useId } from 'react';
-import { Markdown } from '../ui/Markdown';
+import { Markdown, ScrollX } from '../ui/Markdown';
 import { LANGUAGES } from '../../utils/starters';
 
-// Схема обмена строками: судья → программа (stdin) голубым, программа → судья (stdout) фиолетовым.
+// Схема обмена строками: программа слева, как «←/→» в примерах и шаблонах. Ввод от судьи
+// (stdin) голубым, ход программы (stdout) фиолетовым.
 const STDIN = 'text-cyan-300';
 const STDOUT = 'text-primary-300';
 
@@ -19,15 +20,15 @@ function ProtocolAnatomy() {
       </p>
       <pre
         role="img"
-        aria-label="Схема: судья присылает параметры игры, программа отвечает ходом, судья присылает ход соперника, и так каждую итерацию"
+        aria-label="Схема: судья присылает программе параметры игры, программа отвечает ходом, судья присылает ход соперника, и так каждую итерацию"
         className="w-fit max-w-full overflow-x-auto"
       >
-        {' судья                программа\n'}
-        {'   │'}<span className={STDIN}>── параметры игры ──▶</span>{'│\n'}
-        {'   │'}<span className={STDOUT}>◀────── ваш ход ─────</span>{'│\n'}
-        {'   │'}<span className={STDIN}>── ход соперника ───▶</span>{'│\n'}
-        {'   │         …           │\n'}
-        {'   ╵                     ╵'}
+        {' программа               судья\n'}
+        {'     │'}<span className={STDIN}>◀── параметры игры ──</span>{'│\n'}
+        {'     │'}<span className={STDOUT}>────── ваш ход ─────▶</span>{'│\n'}
+        {'     │'}<span className={STDIN}>◀── ход соперника ───</span>{'│\n'}
+        {'     │          …          │\n'}
+        {'     ╵                     ╵'}
       </pre>
       <ol>
         <li>
@@ -36,7 +37,8 @@ function ProtocolAnatomy() {
         </li>
         <li>
           <strong>Итерация.</strong> Программа выводит ход одной строкой, сбрасывает вывод и читает ход соперника. Итераций столько,
-          сколько пришло на старте. В аукционе порядок обратный: сначала ставка соперника, потом ваша.
+          сколько пришло на старте. В аукционе иначе: сначала приходит ставка соперника, потом ваша; число со старта — максимум,
+          торги кончаются на пасе, а о пасе соперника судья не сообщает.
         </li>
         <li>
           <strong>Конец.</strong> Ввод заканчивается, судья завершает программу. Отдельного сообщения о конце нет.
@@ -58,7 +60,7 @@ function ProtocolAnatomy() {
 
       <h3>Сброс вывода</h3>
       <p>Без сброса ход остаётся в буфере программы: судья его не получает и через 200 мс засчитывает поражение.</p>
-      <div className="overflow-x-auto">
+      <ScrollX as="div" label="Сброс вывода, прокрутка по горизонтали">
         <table>
           <thead>
             <tr>
@@ -78,16 +80,18 @@ function ProtocolAnatomy() {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollX>
     </section>
   );
 }
 
 // Правила игры: «Анатомия хода» встаёт перед разделом «Протокол», без него - в конце.
+// Первый заголовок «# Название» повторяет заголовок страницы и не выводится.
 export function GameRules({ rules }: { rules: string }) {
-  const at = rules.search(/^##\s+Протокол/m);
-  const head = at < 0 ? rules : rules.slice(0, at);
-  const tail = at < 0 ? '' : rules.slice(at);
+  const body = rules.replace(/^#\s[^\n]*\n*/, '');
+  const at = body.search(/^##\s+Протокол/m);
+  const head = at < 0 ? body : body.slice(0, at);
+  const tail = at < 0 ? '' : body.slice(at);
   return (
     <>
       <Markdown>{head}</Markdown>

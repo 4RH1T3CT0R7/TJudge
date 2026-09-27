@@ -9,7 +9,8 @@ const rehypePlugins = [rehypeNumericColumns];
 // Широкие таблицы и блоки кода прокручиваются внутри себя, а не растягивают
 // страницу на телефоне. В порядок Tab (с ролью и именем) блок попадает, только
 // когда ему есть что прокручивать: иначе это пустая остановка клавиатуры.
-function ScrollX({ as: Tag, label, children }: { as: 'pre' | 'div'; label: string; children: ReactNode }) {
+// group, а не region: одинаковые подписи дали бы неразличимые ориентиры.
+export function ScrollX({ as: Tag, label, children }: { as: 'pre' | 'div'; label: string; children: ReactNode }) {
   const ref = useRef<HTMLPreElement & HTMLDivElement>(null);
   const [scrolls, setScrolls] = useState(false);
 
@@ -26,7 +27,7 @@ function ScrollX({ as: Tag, label, children }: { as: 'pre' | 'div'; label: strin
       ref={ref}
       className="overflow-x-auto"
       tabIndex={scrolls ? 0 : undefined}
-      role={scrolls ? 'region' : undefined}
+      role={scrolls ? 'group' : undefined}
       aria-label={scrolls ? label : undefined}
     >
       {children}
