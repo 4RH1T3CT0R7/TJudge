@@ -165,12 +165,15 @@ export function MatchDetail() {
   );
 }
 
+// На телефоне названия сторон - строкой над счётом и переносятся целиком:
+// в три колонки рядом со счётом от них оставалось по несколько букв.
 function Scoreboard({ match, names, mySide }: { match: Match; names: [string, string]; mySide: Side | null }) {
   const side = (s: Side) => (
     <div className={`min-w-0 ${s === 2 ? 'text-right' : ''}`}>
-      <p className="truncate text-sm text-gray-300">
+      <p className="break-words text-sm text-gray-300">
+        {/* метка в начале, как в матрице встреч: не теряется с хвостом длинного названия */}
+        {mySide === s && <YouMark className="mr-2 text-xs" />}
         {names[s - 1]}
-        {mySide === s && <YouMark />}
       </p>
       <p className="font-mono text-xs text-gray-500">игрок {s}</p>
     </div>
@@ -181,15 +184,15 @@ function Scoreboard({ match, names, mySide }: { match: Match; names: [string, st
   const result =
     match.winner === 1 || match.winner === 2
       ? mySide
-        ? match.winner === mySide ? 'победа' : 'поражение'
+        ? `${match.winner === mySide ? 'победа' : 'поражение'} «${names[mySide - 1]}» (вы)`
         : `победа «${names[match.winner - 1]}»`
       : match.status === 'completed' ? 'ничья' : null;
 
   return (
     <div className={`card ${mySide ? 'row-mine' : ''}`}>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+      <div className="grid grid-cols-2 items-center gap-x-4 gap-y-3 sm:grid-cols-[1fr_auto_1fr]">
         {side(1)}
-        <p className="font-mono text-3xl font-bold tabular-nums">
+        <p className="col-span-2 row-start-2 text-center font-mono text-3xl font-bold tabular-nums sm:col-span-1 sm:row-start-auto">
           {score(1)}
           <span className="mx-2 text-gray-500">:</span>
           {score(2)}
