@@ -103,7 +103,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
           );
         })}
       </ul>
-      <div tabIndex={0} role="region" aria-label="Паспорт стратегий" className="relative hidden overflow-x-auto xl:block">
+      <div tabIndex={0} role="region" aria-label="Таблица паспорта стратегий" className="relative hidden overflow-x-auto xl:block">
         <table className="w-full whitespace-nowrap text-sm">
           <thead>
             <tr className="border-b border-gray-700 text-left text-gray-400">
