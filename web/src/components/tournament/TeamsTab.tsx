@@ -5,6 +5,7 @@ import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { SpaceInvader } from '../SpaceInvader';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import type { Team, TournamentStatus } from '../../types';
 
 // Teams Tab Component
@@ -94,14 +95,11 @@ export function TeamsTab({
 
       {/* Teams list */}
       {teams.length === 0 ? (
-        <div className="empty-state">
-          <div className="flex justify-center mb-4">
+        <div className="pt-12">
+          <div className="flex justify-center">
             <SpaceInvader size="sm" controlledPose="cry" speechBubble="// пока никого..." eyeOverride="sad" />
           </div>
-          <h3 className="empty-state-title">Нет команд</h3>
-          <p className="empty-state-description">
-            Ни одна команда еще не присоединилась к турниру
-          </p>
+          <EmptyState command="команды" hint="ни одна команда ещё не присоединилась к турниру" />
         </div>
       ) : (
         <div>

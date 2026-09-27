@@ -18,6 +18,7 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { useSequenceTyping } from '../hooks/useEasterEggs';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
@@ -346,9 +347,7 @@ export function AdminPanel() {
 
   if (user?.role !== 'admin') {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-400">Доступ запрещён. Требуются права администратора.</p>
-      </div>
+      <ErrorState message="Доступ запрещён: нужны права администратора" />
     );
   }
 

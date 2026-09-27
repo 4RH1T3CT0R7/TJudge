@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
-import { PlayIcon, PuzzlePieceIcon } from '../icons';
+import { PlayIcon } from '../icons';
 import { AutoRoundCountdown } from './AutoRoundCountdown';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import type {
   Team,
   Game,
@@ -113,15 +114,7 @@ export function GamesTab({
 
   if (games.length === 0) {
     return (
-      <div className="empty-state">
-        <div className="empty-state-icon">
-          <PuzzlePieceIcon />
-        </div>
-        <h3 className="empty-state-title">Нет игр</h3>
-        <p className="empty-state-description">
-          В этот турнир еще не добавлены игры
-        </p>
-      </div>
+      <EmptyState command="игры" hint="в турнир ещё не добавлены игры" />
     );
   }
 

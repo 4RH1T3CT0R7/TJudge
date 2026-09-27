@@ -536,23 +536,6 @@
     @apply text-gray-400;
   }
 
-  /* Empty state */
-  .empty-state {
-    @apply text-center py-12 px-4;
-  }
-
-  .empty-state-icon {
-    @apply w-12 h-12 mx-auto mb-3 text-gray-500;
-  }
-
-  .empty-state-title {
-    @apply text-base font-semibold text-gray-200 mb-1;
-  }
-
-  .empty-state-description {
-    @apply text-gray-400 text-sm;
-  }
-
   /* Alert styles with slide-in animation */
   .alert {
     @apply p-4 rounded-lg border flex items-start gap-3;

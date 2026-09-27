@@ -7,6 +7,7 @@ import { useTeam } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export function TeamManagement() {
@@ -14,7 +15,7 @@ export function TeamManagement() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const { data: teamData, isPending, isError } = useTeam(id ?? '');
+  const { data: teamData, isPending, isError, refetch } = useTeam(id ?? '');
   const showLoading = useDelayedLoading(isPending);
 
   // Edit state
@@ -145,14 +146,18 @@ export function TeamManagement() {
 
   if (isError || !teamData) {
     return (
-      <div className="text-center py-12">
-        <div className="flex justify-center mb-4">
+      <div className="pt-12">
+        <div className="flex justify-center">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// не найдено" eyeOverride="sad" />
         </div>
-        <p className="text-red-400">{isError ? 'Не удалось загрузить данные команды' : 'Команда не найдена'}</p>
-        <Link to="/tournaments" className="btn btn-secondary mt-4">
-          Назад к турнирам
-        </Link>
+        <ErrorState
+          message={isError ? 'Не удалось загрузить данные команды' : 'Команда не найдена'}
+          onRetry={isError ? () => void refetch() : undefined}
+        >
+          <Link to="/tournaments" className="btn btn-secondary">
+            Назад к турнирам
+          </Link>
+        </ErrorState>
       </div>
     );
   }

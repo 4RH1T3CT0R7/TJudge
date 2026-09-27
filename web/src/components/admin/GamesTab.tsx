@@ -6,6 +6,7 @@ import type { Game } from '../../types';
 import type { AdminReactionSetter, GameFormState } from './types';
 import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
+import { EmptyState } from '../ui/EmptyState';
 
 interface GamesTabProps {
   games: Game[];
@@ -192,9 +193,7 @@ export function GamesTab({
 
           {/* Games List */}
           {games.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
-              Игры ещё не созданы.
-            </div>
+            <EmptyState command="игры" hint="игры ещё не созданы" />
           ) : (
             <div className="space-y-4">
               {games.map((game) => (

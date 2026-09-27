@@ -3,6 +3,7 @@ import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
 import { useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import type { Match, MatchRound } from '../../types';
 
 // Matches Tab Component - отображает матчи, сгруппированные по раундам.
@@ -64,15 +65,7 @@ export function MatchesTab({
 
   if (rounds.length === 0) {
     return (
-      <div className="empty-state">
-        <div className="empty-state-icon">
-          <FolderIcon />
-        </div>
-        <h3 className="empty-state-title">Нет матчей</h3>
-        <p className="empty-state-description">
-          Матчи появятся после запуска раундов
-        </p>
-      </div>
+      <EmptyState command="матчи" hint="пока пусто: матчи появятся после запуска раундов" />
     );
   }
 

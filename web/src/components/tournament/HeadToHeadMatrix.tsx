@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { EmptyState } from '../ui/EmptyState';
 import type { HeadToHeadCell } from '../../types';
 
 interface HeadToHeadMatrixProps {
@@ -26,10 +27,7 @@ export function HeadToHeadMatrix({ cells }: HeadToHeadMatrixProps) {
 
   if (teams.length < 2) {
     return (
-      <div className="empty-state">
-        <h3 className="empty-state-title">Матрица пока пуста</h3>
-        <p className="empty-state-description">Появится после первых завершённых матчей минимум двух команд</p>
-      </div>
+      <EmptyState command="личные встречи" hint="появятся после первых завершённых матчей минимум двух команд" />
     );
   }
 

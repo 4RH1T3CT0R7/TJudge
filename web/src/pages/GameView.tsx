@@ -3,13 +3,14 @@ import { useGame } from '../hooks/queries';
 import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { Markdown } from '../components/ui/Markdown';
 
 
 export function GameView() {
   const { id } = useParams<{ id: string }>();
-  const { data: game, isPending, isError } = useGame(id ?? '');
+  const { data: game, isPending, isError, refetch } = useGame(id ?? '');
   const showLoading = useDelayedLoading(isPending);
 
   if (showLoading) {
@@ -22,16 +23,18 @@ export function GameView() {
 
   if (isError || !game) {
     return (
-      <div className="text-center py-12">
-        <div className="flex justify-center mb-4">
+      <div className="pt-12">
+        <div className="flex justify-center">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// игра не найдена" eyeOverride="sad" />
         </div>
-        <p className="text-red-400 mb-4">
-          {isError ? 'Не удалось загрузить информацию об игре' : 'Игра не найдена'}
-        </p>
-        <Link to="/games" className="btn btn-secondary">
-          Назад к списку игр
-        </Link>
+        <ErrorState
+          message={isError ? 'Не удалось загрузить информацию об игре' : 'Игра не найдена'}
+          onRetry={isError ? () => void refetch() : undefined}
+        >
+          <Link to="/games" className="btn btn-secondary">
+            Назад к списку игр
+          </Link>
+        </ErrorState>
       </div>
     );
   }

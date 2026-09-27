@@ -7,6 +7,7 @@ import type { AdminReactionSetter } from './types';
 import { Field } from '../ui/Field';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import type { ProgramRow } from './programRows';
 
 const playingLabel: Record<ProgramRow['playing'], string> = {
@@ -115,9 +116,7 @@ export function ProgramsTab({
 
           {/* No tournament selected */}
           {!selectedTournamentId && !isLoadingPrograms && (
-            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
-              Выберите турнир для просмотра загруженных программ
-            </div>
+            <EmptyState command="программы" hint="выберите турнир для просмотра загруженных программ" />
           )}
 
           {/* Programs data */}
@@ -143,9 +142,7 @@ export function ProgramsTab({
                 );
               })()}
               {tournamentGames.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
-                  В этом турнире нет игр
-                </div>
+                <EmptyState command="игры" hint="в этом турнире нет игр" />
               ) : (
                 tournamentGames.map((game) => {
                   const rows = programRows[game.id] ?? [];

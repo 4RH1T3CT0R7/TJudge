@@ -19,6 +19,8 @@ import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
@@ -281,12 +283,14 @@ export function GameDetail() {
 
   if (error || !game) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-500">{error ? 'Не удалось загрузить данные игры' : 'Игра не найдена'}</p>
-        <Link to={`/tournaments/${tournamentId}`} className="btn btn-secondary mt-4">
+      <ErrorState
+        message={error ? 'Не удалось загрузить данные игры' : 'Игра не найдена'}
+        onRetry={error ? () => { void tournamentQuery.refetch(); void gameQuery.refetch(); } : undefined}
+      >
+        <Link to={`/tournaments/${tournamentId}`} className="btn btn-secondary">
           Назад к турниру
         </Link>
-      </div>
+      </ErrorState>
     );
   }
 
@@ -398,7 +402,7 @@ export function GameDetail() {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-400">Нет данных рейтинга. Загрузите программу и дождитесь результатов матчей.</p>
+                  <EmptyState command="рейтинг" hint="нет данных: загрузите программу и дождитесь результатов матчей" />
                 )}
 
                 {/* Head-to-head: кто кого бьёт */}
@@ -419,9 +423,7 @@ export function GameDetail() {
                 {matches.length > 0 ? (
                   <MatchGroups matches={matches} />
                 ) : (
-                  <p className="text-gray-400">
-                    {currentPage > 1 ? 'На этой странице матчей нет.' : 'Матчи ещё не проводились.'}
-                  </p>
+                  <EmptyState command="матчи" hint={currentPage > 1 ? 'на этой странице матчей нет' : 'матчи ещё не проводились'} />
                 )}
                 {/* Pagination: и на опустевшей странице (раунд сбросили), чтобы было куда вернуться */}
                 {(currentPage > 1 || hasNextPage) && (

@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useGames } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
 
@@ -20,14 +22,11 @@ export function Games() {
 
   if (isError) {
     return (
-      <div className="text-center py-12">
-        <div className="flex justify-center mb-4">
+      <div className="pt-12">
+        <div className="flex justify-center">
           <SpaceInvader size="sm" controlledPose="dizzy" speechBubble="// ошибка загрузки" eyeOverride="sad" />
         </div>
-        <p className="text-red-400">Не удалось загрузить список игр</p>
-        <button onClick={() => refetch()} className="btn btn-secondary mt-4">
-          Попробовать снова
-        </button>
+        <ErrorState message="Не удалось загрузить список игр" onRetry={() => void refetch()} />
       </div>
     );
   }
@@ -43,10 +42,11 @@ export function Games() {
       </div>
 
       {games.length === 0 ? (
-        <div className="text-center py-12">
-          <SpaceInvader size="sm" controlledPose="cry" speechBubble="// пусто..." eyeOverride="sad" />
-          <p className="text-gray-400 mt-4">Игры пока не добавлены</p>
-          <p className="text-gray-500 text-xs mt-1 font-mono">// скоро появятся</p>
+        <div className="pt-12">
+          <div className="flex justify-center">
+            <SpaceInvader size="sm" controlledPose="cry" speechBubble="// пусто..." eyeOverride="sad" />
+          </div>
+          <EmptyState command="игры" hint="игры пока не добавлены, скоро появятся" />
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

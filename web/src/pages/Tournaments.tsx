@@ -4,6 +4,8 @@ import { useTournaments } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { Spinner } from '../components/ui/Spinner';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { UsersIcon } from '../components/icons';
 import { StatusLabel } from '../components/ui/StatusLabel';
@@ -45,25 +47,21 @@ export function Tournaments() {
       {showLoading ? (
         <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка турниров</Spinner></div>
       ) : isPending ? null : isError && !data ? (
-        <div className="text-center py-12">
-          <div className="flex justify-center mb-4">
+        <div className="pt-12">
+          <div className="flex justify-center">
             <SpaceInvader size="sm" controlledPose="dizzy" speechBubble="// ошибка загрузки" eyeOverride="sad" />
           </div>
-          <p className="text-red-400">Не удалось загрузить список турниров</p>
-          <button onClick={() => refetch()} className="btn btn-secondary mt-4">
-            Попробовать снова
-          </button>
+          <ErrorState message="Не удалось загрузить список турниров" onRetry={() => void refetch()} />
         </div>
       ) : tournaments.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="relative inline-block">
+        <div className="pt-16">
+          <div className="flex justify-center">
             <SpaceInvader size="md" controlledPose="cry" eyeOverride="sad" speechBubble="// пусто..." />
           </div>
-          <p className="text-gray-400 mt-6 text-xl">
-            {filter ? 'Турниры не найдены' : 'Пока нет доступных турниров'}
-          </p>
-          <p className="text-gray-600 text-base mt-2 font-mono">{'> ожидание новых турниров...'}</p>
-          <p className="text-gray-700 text-sm mt-1 font-mono">// создайте первый турнир в панели админа</p>
+          <EmptyState
+            command="турниры"
+            hint={filter ? 'турниров с таким статусом нет' : 'пока нет доступных турниров: их создаёт организатор в панели админа'}
+          />
         </div>
       ) : (
         <StaggerList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

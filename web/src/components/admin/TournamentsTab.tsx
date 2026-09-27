@@ -9,6 +9,7 @@ import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
 import type { AdminReactionSetter, TournamentFormState } from './types';
@@ -594,9 +595,7 @@ export function TournamentsTab({
                 <Spinner>загрузка игр</Spinner>
               </div>
             ) : managingTournamentGames.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                В этом турнире нет игр
-              </div>
+              <EmptyState command="игры" hint="в этом турнире нет игр" />
             ) : (
               <div className="space-y-3">
                 {managingTournamentGames.map((game) => {
@@ -683,9 +682,7 @@ export function TournamentsTab({
 
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 bg-gray-800 rounded-lg">
-              Турниры ещё не созданы.
-            </div>
+            <EmptyState command="турниры" hint="турниры ещё не созданы" />
           ) : (
             <div className="space-y-4">
               {tournaments.map((tournament) => (
