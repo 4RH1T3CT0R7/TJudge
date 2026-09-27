@@ -28,7 +28,9 @@ export function LeaderboardTab({
 }) {
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      {/* в одну строку только с lg: на планшете чип «Обновление...» переносил
+          кнопки на вторую строку, и таблица прыгала */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-gray-100">Рейтинг</h2>
           {isConnected && (
