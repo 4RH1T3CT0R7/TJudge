@@ -2,7 +2,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import api from '../../api/client';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
-import { MATCHES, confirmClearQueue, count } from './confirmations';
+import type { ConfirmOptions } from '../../store/confirmStore';
+import { confirmClearQueue, count } from './confirmations';
 import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetrics } from '../../types';
 import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
@@ -162,14 +163,18 @@ export function SystemTab({
   };
 
   // Кнопки восстановления: прикладные поломки чинятся прямо из интерфейса.
-  // danger - только у необратимой очистки dead-letter, остальное перезапускается безопасно
+  // Кнопка активна, только когда есть что чинить; danger - только у необратимой
+  // очистки dead-letter, остальное перезапускается безопасно
+  const stuckCount = fullStatus?.matches?.stuck_running ?? 0;
+  const outboxErrors = fullStatus?.outbox?.errors ?? 0;
+  const compilingCount = fullStatus?.programs?.compiling ?? 0;
+  const deadLetterCount = fullStatus?.queues?.dead_letter ?? 0;
   const handleRecovery = async (
     action: 'outbox' | 'compile' | 'stuck' | 'deadletter',
-    confirmText: string,
-    run: () => Promise<string>,
-    danger = false
+    confirm: ConfirmOptions,
+    run: () => Promise<string>
   ) => {
-    if (!(await confirmDialog({ title: 'Восстановление', message: confirmText, confirmLabel: 'Выполнить', danger }))) return;
+    if (!(await confirmDialog(confirm))) return;
     setRecoveryBusy(action);
     setSystemError(null);
     try {
@@ -477,100 +482,101 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'stuck',
-                        `Сбросить зависшие матчи (running дольше WORKER_TIMEOUT+30с) в pending: ${count(fullStatus?.matches?.stuck_running ?? 0, MATCHES)}? В очередь их вернёт воркер в течение минуты.`,
+                        {
+                          title: 'Зависшие матчи',
+                          message: 'Матчи, которые идут дольше таймаута воркера, сыграются заново.',
+                          details: [
+                            `вернёт в очередь ${count(stuckCount, ['зависший матч', 'зависших матча', 'зависших матчей'])}`,
+                            'воркер возьмёт их в течение минуты',
+                          ],
+                          confirmLabel: 'Вернуть в очередь',
+                        },
                         async () => {
                           const r = await api.recoveryResetStuckMatches();
                           return `Сброшено в pending: ${r.reset} матчей`;
                         }
                       )
                     }
-                    disabled={recoveryBusy !== null}
-                    className={`btn ${
-                      (fullStatus?.matches?.stuck_running ?? 0) > 0 ? 'btn-warning' : 'btn-secondary'
-                    }`}
+                    disabled={recoveryBusy !== null || stuckCount === 0}
+                    className={`btn ${stuckCount > 0 ? 'btn-warning' : 'btn-secondary'}`}
                   >
                     {recoveryBusy === 'stuck'
                       ? 'Сброс...'
-                      : `Сбросить зависшие матчи${
-                          (fullStatus?.matches?.stuck_running ?? 0) > 0
-                            ? ` (${fullStatus?.matches?.stuck_running})`
-                            : ''
-                        }`}
+                      : `Сбросить зависшие матчи${stuckCount > 0 ? ` (${stuckCount})` : ''}`}
                   </button>
                   <button
                     onClick={() =>
                       handleRecovery(
                         'outbox',
-                        `Повторить ошибочные outbox-задачи (рейтинги, которые не применились): ${count(fullStatus?.outbox?.errors ?? 0, ['задача', 'задачи', 'задач'])}?`,
+                        {
+                          title: 'Повтор outbox-задач',
+                          message: 'Обновления рейтинга, которые завершились ошибкой, выполнятся заново.',
+                          details: [`повторит ${count(outboxErrors, ['задачу', 'задачи', 'задач'])}`],
+                          confirmLabel: 'Повторить',
+                        },
                         async () => {
                           const r = await api.recoveryRetryOutbox();
                           return `Возвращено в обработку: ${r.retried} задач`;
                         }
                       )
                     }
-                    disabled={recoveryBusy !== null}
-                    className={`btn ${
-                      (fullStatus?.outbox?.errors ?? 0) > 0 ? 'btn-warning' : 'btn-secondary'
-                    }`}
+                    disabled={recoveryBusy !== null || outboxErrors === 0}
+                    className={`btn ${outboxErrors > 0 ? 'btn-warning' : 'btn-secondary'}`}
                   >
                     {recoveryBusy === 'outbox'
                       ? 'Повтор...'
-                      : `Повторить outbox-ошибки${
-                          (fullStatus?.outbox?.errors ?? 0) > 0 ? ` (${fullStatus?.outbox?.errors})` : ''
-                        }`}
+                      : `Повторить outbox-ошибки${outboxErrors > 0 ? ` (${outboxErrors})` : ''}`}
                   </button>
                   <button
                     onClick={() =>
                       handleRecovery(
                         'compile',
-                        `Перезапустить компиляцию всех программ в статусе compiling: ${count(fullStatus?.programs?.compiling ?? 0, ['программа', 'программы', 'программ'])}?`,
+                        {
+                          title: 'Перезапуск компиляции',
+                          message: 'Программы, которые всё ещё компилируются, заново встанут в очередь сборки.',
+                          details: [`перезапустит сборку ${count(compilingCount, ['программы', 'программ', 'программ'])}`],
+                          confirmLabel: 'Перезапустить',
+                        },
                         async () => {
                           const r = await api.recoveryRequeueCompiling();
                           return `Поставлено в очередь компиляции: ${r.requeued} программ`;
                         }
                       )
                     }
-                    disabled={recoveryBusy !== null}
-                    className={`btn ${
-                      (fullStatus?.programs?.compiling ?? 0) > 0 ? 'btn-warning' : 'btn-secondary'
-                    }`}
+                    disabled={recoveryBusy !== null || compilingCount === 0}
+                    className={`btn ${compilingCount > 0 ? 'btn-warning' : 'btn-secondary'}`}
                   >
                     {recoveryBusy === 'compile'
                       ? 'Перезапуск...'
-                      : `Перезапустить компиляцию${
-                          (fullStatus?.programs?.compiling ?? 0) > 0
-                            ? ` (${fullStatus?.programs?.compiling})`
-                            : ''
-                        }`}
+                      : `Перезапустить компиляцию${compilingCount > 0 ? ` (${compilingCount})` : ''}`}
                   </button>
                   <button
                     onClick={() =>
                       handleRecovery(
                         'deadletter',
-                        `Очистить dead-letter очередь? Удалится безвозвратно: ${count(fullStatus?.queues?.dead_letter ?? 0, ['повреждённая задача', 'повреждённые задачи', 'повреждённых задач'])}.`,
+                        {
+                          title: 'Очистка dead-letter',
+                          message: 'Повреждённые задачи удалятся из dead-letter безвозвратно.',
+                          details: [`удалит ${count(deadLetterCount, ['повреждённую задачу', 'повреждённые задачи', 'повреждённых задач'])}`],
+                          confirmLabel: 'Очистить dead-letter',
+                          danger: true,
+                        },
                         async () => {
                           const r = await api.recoveryClearDeadLetter();
                           return `Удалено из dead-letter: ${r.cleared} записей`;
-                        },
-                        true
+                        }
                       )
                     }
-                    disabled={recoveryBusy !== null}
-                    className={`btn ${
-                      (fullStatus?.queues?.dead_letter ?? 0) > 0 ? 'btn-danger' : 'btn-secondary'
-                    }`}
+                    disabled={recoveryBusy !== null || deadLetterCount === 0}
+                    className={`btn ${deadLetterCount > 0 ? 'btn-danger' : 'btn-secondary'}`}
                   >
                     {recoveryBusy === 'deadletter'
                       ? 'Очистка...'
-                      : `Очистить dead-letter${
-                          (fullStatus?.queues?.dead_letter ?? 0) > 0
-                            ? ` (${fullStatus?.queues?.dead_letter})`
-                            : ''
-                        }`}
+                      : `Очистить dead-letter${deadLetterCount > 0 ? ` (${deadLetterCount})` : ''}`}
                   </button>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">
-                  Кнопки подсвечиваются, когда есть что чинить. Зависшие матчи и компиляция
+                  Кнопки активны, когда есть что чинить. Зависшие матчи, outbox и компиляция
                   перезапускаются безопасно (идемпотентно); очистка dead-letter необратима.
                 </p>
               </div>
