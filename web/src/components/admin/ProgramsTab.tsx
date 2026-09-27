@@ -8,6 +8,8 @@ import { Field } from '../ui/Field';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
+import { MatchError } from '../tournament/MatchError';
+import { explainCompileError } from '../../utils/explainError';
 import { EmptyState } from '../ui/EmptyState';
 import type { ProgramRow } from './programRows';
 
@@ -219,12 +221,32 @@ export function ProgramsTab({
                                           <summary className="w-fit cursor-pointer">
                                             <StatusLabel entity="program" status={program.status} />
                                           </summary>
-                                          <div className="mt-1 max-w-md">
+                                          <div className="mt-1 max-w-md space-y-1">
+                                            {explainCompileError(program.error_message) && (
+                                              <p className="font-mono text-xs text-amber-300">
+                                                <span aria-hidden="true">{'// '}</span>
+                                                {explainCompileError(program.error_message)}
+                                              </p>
+                                            )}
                                             <TerminalOutput label="вывод компилятора" text={program.error_message} maxHeight="max-h-48" />
                                           </div>
                                         </details>
                                       ) : (
                                         <StatusLabel entity="program" status={program.status} />
+                                      )}
+                                      {program.status === 'ready' && program.check_status === 'failed' && (
+                                        <details className="mt-1">
+                                          <summary className="w-fit cursor-pointer font-mono text-xs text-amber-300">
+                                            <span aria-hidden="true">⚠ </span>самопроверка
+                                          </summary>
+                                          <div className="mt-1 max-w-md">
+                                            <MatchError
+                                              match={{ status: 'failed', error_code: 1, error_message: program.check_message ?? '' }}
+                                              mySide={null}
+                                              names={[teamName]}
+                                            />
+                                          </div>
+                                        </details>
                                       )}
                                     </td>
                                     <td className={`py-2 pr-4 text-sm whitespace-nowrap ${playing === 'none' ? 'text-gray-500' : 'text-gray-300'}`}>
