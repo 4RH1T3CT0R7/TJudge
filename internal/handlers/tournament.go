@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
 	"github.com/bmstu-itstech/tjudge/internal/models"
@@ -109,6 +110,8 @@ func (h *TournamentHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter.GameType = r.URL.Query().Get("game_type")
+	// коды выдаются заглавными, а с QR и вручную приходят как угодно
+	filter.Code = strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("code")))
 
 	pg := pagination.ParseLimitOffset(r, 50, 0)
 	filter.Limit = pg.Limit

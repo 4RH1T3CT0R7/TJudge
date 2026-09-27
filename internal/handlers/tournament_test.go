@@ -262,6 +262,24 @@ func TestTournamentHandler_List(t *testing.T) {
 
 		mockService.AssertExpectations(t)
 	})
+
+	// короткая ссылка /t/:code: код приходит в любом регистре и с пробелами
+	t.Run("code filter normalized", func(t *testing.T) {
+		mockService := new(MockTournamentService)
+		handler := NewTournamentHandler(mockService, new(MockSchedulingService), nil, log)
+
+		mockService.On("List", mock.Anything, mock.MatchedBy(func(filter models.TournamentFilter) bool {
+			return filter.Code == "2ZFSPV"
+		})).Return([]*models.Tournament{}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments?code=%202zfspv", nil)
+		w := httptest.NewRecorder()
+
+		handler.List(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockService.AssertExpectations(t)
+	})
 }
 
 func TestTournamentHandler_Start(t *testing.T) {

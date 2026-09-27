@@ -2305,6 +2305,8 @@ export interface operations {
             query?: {
                 status?: "pending" | "active" | "completed" | "cancelled";
                 game_type?: string;
+                /** @description Tournament code, case-insensitive (short link /t/{code}) */
+                code?: string;
                 /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
                 /** @description Number of records to skip */

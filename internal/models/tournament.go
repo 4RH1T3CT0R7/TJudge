@@ -53,6 +53,7 @@ type TournamentParticipant struct {
 type TournamentFilter struct {
 	Status   TournamentStatus
 	GameType string
+	Code     string // короткая ссылка /t/:code
 	Limit    int
 	Offset   int
 }

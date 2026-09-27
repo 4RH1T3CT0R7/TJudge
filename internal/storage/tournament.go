@@ -136,6 +136,12 @@ func (r *TournamentRepository) List(ctx context.Context, filter models.Tournamen
 		argCount++
 	}
 
+	if filter.Code != "" {
+		query += fmt.Sprintf(" AND code = $%d", argCount)
+		args = append(args, filter.Code)
+		argCount++
+	}
+
 	query += orderByCreatedAtDesc
 
 	if filter.Limit > 0 {

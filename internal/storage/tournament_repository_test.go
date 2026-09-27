@@ -281,6 +281,18 @@ func (s *TournamentRepositorySuite) TestList_FilterByStatus() {
 	assert.True(s.T(), found, "Active tournament should be in list")
 }
 
+func (s *TournamentRepositorySuite) TestList_FilterByCode() {
+	ctx := context.Background()
+
+	t1, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TESTC01")
+	createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TESTC02")
+
+	tournaments, err := s.repo.List(ctx, models.TournamentFilter{Code: t1.Code, Limit: 10})
+	require.NoError(s.T(), err)
+	require.Len(s.T(), tournaments, 1)
+	assert.Equal(s.T(), t1.ID, tournaments[0].ID)
+}
+
 func (s *TournamentRepositorySuite) TestUpdateStatus() {
 	ctx := context.Background()
 	tournament, _ := createTestTournamentWithUser(s.T(), s.repo, s.userRepo, "TEST008")

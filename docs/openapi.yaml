@@ -236,6 +236,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: code
+          in: query
+          description: Tournament code, case-insensitive (short link /t/{code})
+          schema:
+            type: string
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
