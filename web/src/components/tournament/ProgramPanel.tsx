@@ -421,15 +421,11 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
               .filter((p) => p.id !== current?.id)
               .sort((a, b) => b.version - a.version)
               .map((program) => (
-                <div key={program.id} className="flex justify-between items-center text-sm p-2 bg-gray-800 rounded">
-                  <div className="flex flex-col">
+                <div key={program.id} className="flex justify-between items-start gap-2 text-sm p-2 bg-gray-800 rounded">
+                  <div className="flex min-w-0 flex-1 flex-col">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-gray-100">v{program.version}</span>
-                      <StatusLabel
-                        entity="program"
-                        status={program.status}
-                        title={program.status === 'failed' ? program.error_message || undefined : undefined}
-                      />
+                      <StatusLabel entity="program" status={program.status} />
                       {playing?.id === program.id && (
                         <span className="font-mono text-xs text-primary-300"><span aria-hidden="true">▶ </span>в игре</span>
                       )}
@@ -451,3 +447,14 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
     </div>
   );
 }
+                    {program.status === 'failed' && program.error_message && (
+                      <details className="mt-1">
+                        <summary className="w-fit cursor-pointer font-mono text-xs text-gray-400">вывод компилятора</summary>
+                        <div className="mt-1 space-y-1">
+                          {explainCompileError(program.error_message) && (
+                            <Note tone="text-amber-300">{explainCompileError(program.error_message)}</Note>
+                          )}
+                          <TerminalOutput label={`компиляция · ${program.language}`} text={program.error_message} maxHeight="max-h-48" />
+                        </div>
+                      </details>
+                    )}
