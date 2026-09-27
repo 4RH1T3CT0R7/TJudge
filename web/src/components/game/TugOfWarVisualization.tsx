@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GAME_PAYOFFS } from '../../utils/gameConfig';
+import { Segmented } from '../ui/Segmented';
 
 // Tug of War Visualization
 export function TugOfWarVisualization() {
@@ -77,21 +78,13 @@ export function TugOfWarVisualization() {
       </div>
 
       {showResults && (
-        <div className="flex justify-center gap-2">
-          {rounds.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentRound(i)}
-              aria-pressed={currentRound === i}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                currentRound === i
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-gray-700 text-gray-300'
-              }`}
-            >
-              Раунд {i + 1}
-            </button>
-          ))}
+        <div className="flex justify-center">
+          <Segmented
+            label="Раунд"
+            options={rounds.map((_, i) => ({ value: String(i), label: `Раунд ${i + 1}` }))}
+            value={String(currentRound)}
+            onChange={(v) => setCurrentRound(Number(v))}
+          />
         </div>
       )}
 
