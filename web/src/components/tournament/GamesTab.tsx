@@ -9,6 +9,7 @@ import { AutoRoundCountdown } from './AutoRoundCountdown';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
+import { mdPreview } from '../../utils/markdown';
 import type {
   Team,
   Game,
@@ -177,9 +178,7 @@ export function GamesTab({
               </div>
 
               {game.rules && (
-                <p className="text-gray-300 text-sm line-clamp-3 mb-4">
-                  {game.rules.substring(0, 200)}...
-                </p>
+                <p className="text-gray-300 text-sm line-clamp-3 mb-4">{mdPreview(game.rules)}</p>
               )}
 
               {gameStatus?.auto_round_enabled && (

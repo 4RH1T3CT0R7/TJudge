@@ -10,6 +10,7 @@ import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { UsersIcon } from '../components/icons';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { PageHeader } from '../components/ui/PageHeader';
+import { mdPreview } from '../utils/markdown';
 import type { TournamentStatus } from '../types';
 
 export function Tournaments() {
@@ -85,9 +86,7 @@ export function Tournaments() {
                   </div>
 
                   {tournament.description && (
-                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">
-                      {tournament.description}
-                    </p>
+                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">{mdPreview(tournament.description)}</p>
                   )}
 
                   <div className="flex items-center justify-between text-sm text-gray-400">

@@ -7,6 +7,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
+import { mdPreview } from '../utils/markdown';
 
 export function Games() {
   const { data, isPending, isError, refetch } = useGames();
@@ -78,24 +79,7 @@ export function Games() {
                 </p>
 
                 {game.rules && (
-                  <div className="text-sm text-gray-300 mb-4 line-clamp-3">
-                    {(() => {
-                      const plain = game.rules
-                        .replace(/#{1,6}\s+/g, '')
-                        .replace(/~~([^~]+)~~/g, '$1')
-                        .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
-                        .replace(/`([^`]+)`/g, '$1')
-                        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                        .replace(/^[-*+]\s+/gm, '')
-                        .replace(/^\d+\.\s+/gm, '')
-                        .replace(/^>\s+/gm, '')
-                        .replace(/^\|.+\|$/gm, '')
-                        .replace(/\n{2,}/g, ' ')
-                        .replace(/\n/g, ' ')
-                        .trim();
-                      return plain.length > 150 ? plain.substring(0, 150) + '...' : plain;
-                    })()}
-                  </div>
+                  <p className="text-sm text-gray-300 mb-4 line-clamp-3">{mdPreview(game.rules)}</p>
                 )}
 
                 <div className={`flex items-center gap-2 ${config.textClass} text-sm font-medium pt-4 border-t border-gray-700`}>

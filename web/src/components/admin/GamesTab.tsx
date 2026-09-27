@@ -7,6 +7,7 @@ import type { AdminReactionSetter, GameFormState } from './types';
 import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
+import { mdPreview } from '../../utils/markdown';
 
 interface GamesTabProps {
   games: Game[];
@@ -206,9 +207,7 @@ export function GamesTab({
                       <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
                     </p>
                     {game.rules && (
-                      <p className="text-sm text-gray-300 mt-2 line-clamp-2">
-                        {game.rules.substring(0, 150)}...
-                      </p>
+                      <p className="text-sm text-gray-300 mt-2 line-clamp-2">{mdPreview(game.rules)}</p>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
