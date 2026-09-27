@@ -170,8 +170,18 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Tab completion
+    // Tab completion. Shift+Tab и Tab, которому нечего дополнять, уводят фокус
+    // дальше, Esc снимает его с поля: иначе поле - клавиатурная ловушка
+    if (e.key === 'Escape') {
+      e.currentTarget.blur();
+      return;
+    }
     if (e.key === 'Tab') {
+      if (e.shiftKey) return;
+      if (tabMatches.length === 0) {
+        const matches = tabComplete(input);
+        if (matches.length === 0 || (matches.length === 1 && matches[0] === input)) return;
+      }
       e.preventDefault();
       if (tabMatches.length === 0) {
         const matches = tabComplete(input);
@@ -295,6 +305,7 @@ export function QuestTerminal({ state, dispatch }: QuestTerminalProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              aria-label="Команда терминала"
               className="w-full bg-transparent text-transparent caret-green-400 outline-none focus-visible:ring-1 focus-visible:ring-green-500/50 font-mono text-sm leading-6 pl-1"
               spellCheck={false}
               autoComplete="off"
