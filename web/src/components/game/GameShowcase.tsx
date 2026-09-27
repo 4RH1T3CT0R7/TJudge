@@ -138,8 +138,8 @@ export function GameShowcase() {
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border-2 border-transparent'
             }`}
           >
-            <span className="text-xl">{game.icon}</span>
-            <span className="hidden sm:inline">{game.name}</span>
+            <span className="text-xl" aria-hidden="true">{game.icon}</span>
+            <span className="sr-only sm:not-sr-only">{game.name}</span>
           </button>
         ))}
       </div>
