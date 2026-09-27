@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import api from '../api/client';
+import api, { isRetryableError } from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 import {
   useTournament,
@@ -97,7 +97,11 @@ export function TournamentDetail() {
     gamesStatusQuery.isLoading ||
     myTeamQuery.isLoading;
   const showLoading = useDelayedLoading(isLoading);
-  const error = tournamentQuery.isError ? 'Не удалось загрузить данные турнира' : null;
+  // повтор помогает при обрыве сети и сбое сервера; 404 и мусорный id (400) им не исправить
+  const canRetry = isRetryableError(tournamentQuery.error);
+  const error = tournamentQuery.isError
+    ? canRetry ? 'Не удалось загрузить данные турнира' : 'Турнир не найден'
+    : null;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
@@ -324,7 +328,7 @@ export function TournamentDetail() {
         </div>
         <ErrorState
           message={error || 'Турнир не найден'}
-          onRetry={error ? () => void tournamentQuery.refetch() : undefined}
+          onRetry={canRetry ? () => void tournamentQuery.refetch() : undefined}
         >
           <Link to="/tournaments" className="btn btn-secondary">
             К списку турниров

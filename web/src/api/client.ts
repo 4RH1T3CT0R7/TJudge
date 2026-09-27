@@ -102,7 +102,8 @@ function isAuthRejection(error: unknown): boolean {
 }
 
 // isRetryableError возвращает true для transient-ошибок, где retry имеет смысл.
-function isRetryableError(error: AxiosError): boolean {
+export function isRetryableError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
   // Network / timeout без response - retry полезен.
   if (!error.response) return true;
   const status = error.response.status;
