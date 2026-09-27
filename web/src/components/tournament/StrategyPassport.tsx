@@ -83,6 +83,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
                   <td className="py-2 text-right font-mono tabular-nums">
                     <Link
                       to={{ search: `?tab=matches&team=${p.team_id}` }}
+                      state={{ focus: 'matches' }}
                       aria-label={`Матчи команды ${p.team_name}: ${p.matches}`}
                       className="text-primary-400 underline hover:text-primary-300"
                     >
