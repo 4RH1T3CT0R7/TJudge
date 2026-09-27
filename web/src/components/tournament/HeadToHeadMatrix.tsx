@@ -128,7 +128,8 @@ interface GridProps {
 
 function SmallMatrix({ teams, cellOf, colorOf, describe, metric, myTeamId }: GridProps & { metric: Metric }) {
   return (
-    <div className="overflow-x-auto">
+    // на телефоне матрица шире экрана: область прокрутки доступна с клавиатуры
+    <div tabIndex={0} role="region" aria-label="Матрица личных встреч" className="overflow-x-auto">
       <table className="border-separate" style={{ borderSpacing: 2 }}>
         <thead>
           <tr>
@@ -287,7 +288,7 @@ function PixelMatrix({ teams, cellOf, colorOf, describe, myTeamId }: GridProps) 
 // «Моя команда против всех»: строка на соперника, по его месту.
 function MyTeamTable({ me, teams, cellOf }: { me: Team; teams: Team[]; cellOf: GridProps['cellOf'] }) {
   return (
-    <div className="relative overflow-x-auto">
+    <div tabIndex={0} role="region" aria-label="Встречи вашей команды" className="relative overflow-x-auto">
       <table className="w-full whitespace-nowrap text-sm">
         <thead>
           <tr className="border-b border-gray-700 text-left text-gray-400">

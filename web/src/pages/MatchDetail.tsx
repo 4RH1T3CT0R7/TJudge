@@ -485,7 +485,7 @@ function IterationTable({
         таблица итераций <span className="text-gray-500">[{n}]</span>
       </summary>
       {open && (
-        <div className="mt-3 max-h-96 overflow-auto rounded border border-gray-800">
+        <div tabIndex={0} role="region" aria-label="Таблица итераций" className="mt-3 max-h-96 overflow-auto rounded border border-gray-800">
           <table className="w-full whitespace-nowrap font-mono text-sm tabular-nums">
             <thead className="sticky top-0 bg-gray-900 text-left text-xs text-gray-400">
               <tr>
