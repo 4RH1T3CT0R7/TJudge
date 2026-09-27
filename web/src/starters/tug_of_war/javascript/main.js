@@ -15,7 +15,7 @@ let played = 0;
 function move() {
   const spend = Math.floor(energy / (n - played));
   energy -= spend;
-  console.log(spend);             // → сколько потратить: от 0 до остатка; console.log сбрасывает вывод сам
+  console.log(spend);             // → трата; console.log сбрасывает вывод сам
 }
 
 rl.on("line", (line) => {
@@ -27,6 +27,6 @@ rl.on("line", (line) => {
     }
     return;
   }
-  played++;                       // ← сколько потратил соперник
+  played++;                       // ← трата соперника
   if (played < n) move();
 });

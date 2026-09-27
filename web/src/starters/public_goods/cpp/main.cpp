@@ -7,10 +7,11 @@
 int main() {
     int capital, n;
     double multiplier;
-    std::cin >> capital >> multiplier >> n;   // ← капитал на итерацию E, множитель пула m, число итераций
+    // ← капитал на итерацию E, множитель пула m (дробное число), число итераций
+    std::cin >> capital >> multiplier >> n;
     int give = capital;                       // первый вклад - весь капитал
     for (int i = 0; i < n; i++) {
-        std::cout << give << std::endl;       // → вклад: целое число от 0 до E; std::endl сбрасывает вывод
-        std::cin >> give;                     // ← вклад соперника: в следующий раз вложить столько же
+        std::cout << give << std::endl;       // → вклад; std::endl сбрасывает вывод
+        std::cin >> give;                     // ← вклад соперника
     }
 }

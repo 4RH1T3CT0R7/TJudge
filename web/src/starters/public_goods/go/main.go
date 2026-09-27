@@ -20,8 +20,9 @@ func main() {
 	}
 	give := capital // первый вклад - весь капитал
 	for i := 0; i < n; i++ {
-		fmt.Println(give)                               // → вклад: целое число от 0 до E; os.Stdout без буфера
-		if _, err := fmt.Fscan(in, &give); err != nil { // ← вклад соперника: в следующий раз вложить столько же
+		// os.Stdout без буфера: Println отправляет строку сразу
+		fmt.Println(give)                               // → вклад: целое от 0 до E
+		if _, err := fmt.Fscan(in, &give); err != nil { // ← вклад соперника
 			return
 		}
 	}

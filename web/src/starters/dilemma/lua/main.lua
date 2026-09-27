@@ -9,5 +9,5 @@ local move = "COOPERATE"
 for _ = 1, n do
   io.write(move, "\n")            -- → ваш ход
   io.stdout:flush()               -- сброс вывода обязателен
-  move = io.read("l")             -- ← ход соперника: в следующий раз ответить тем же
+  move = io.read("l")             -- ← ход соперника
 end

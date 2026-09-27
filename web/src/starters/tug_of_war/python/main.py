@@ -9,5 +9,5 @@ n = int(input())                  # ← число итераций
 for i in range(n):
     spend = energy // (n - i)     # поровну на оставшиеся итерации
     energy -= spend
-    print(spend, flush=True)      # → сколько потратить: от 0 до остатка; flush=True обязателен
-    opponent = int(input())       # ← сколько потратил соперник
+    print(spend, flush=True)      # → трата; flush=True обязателен
+    opponent = int(input())       # ← трата соперника

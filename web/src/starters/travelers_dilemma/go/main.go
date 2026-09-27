@@ -19,7 +19,8 @@ func main() {
 	}
 	claim := min(max(90, low), high) // 90, если оно внутри [L, U]
 	for i := 0; i < n; i++ {
-		fmt.Println(claim)                                  // → заявка: целое число от L до U; os.Stdout без буфера
+		// os.Stdout без буфера: Println отправляет строку сразу
+		fmt.Println(claim)                                  // → заявка: целое от L до U
 		if _, err := fmt.Fscan(in, &opponent); err != nil { // ← заявка соперника
 			return
 		}

@@ -7,10 +7,11 @@
 
 int main() {
     int low, high, bonus, n, opponent;
-    std::cin >> low >> high >> bonus >> n;    // ← нижняя граница L, верхняя U, бонус и штраф R, число итераций
+    // ← нижняя граница L, верхняя U, бонус и штраф R, число итераций
+    std::cin >> low >> high >> bonus >> n;
     int claim = std::clamp(90, low, high);    // 90, если оно внутри [L, U]
     for (int i = 0; i < n; i++) {
-        std::cout << claim << std::endl;      // → заявка: целое число от L до U; std::endl сбрасывает вывод
+        std::cout << claim << std::endl;      // → заявка; std::endl сбрасывает вывод
         std::cin >> opponent;                 // ← заявка соперника
     }
 }

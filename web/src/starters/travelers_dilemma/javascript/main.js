@@ -12,14 +12,14 @@ let played = 0;
 
 rl.on("line", (line) => {
   if (init.length < 4) {
-    init.push(Number(line));      // ← нижняя граница L, верхняя U, бонус и штраф R, число итераций
+    init.push(Number(line));      // ← границы L и U, бонус R, затем число итераций
     if (init.length === 4) {
       const [low, high] = init;
       claim = Math.min(Math.max(90, low), high);  // 90, если оно внутри [L, U]
-      console.log(claim);         // → заявка: целое число от L до U; console.log сбрасывает вывод сам
+      console.log(claim);         // → заявка; console.log сбрасывает вывод сам
     }
     return;
   }
   played++;                       // ← заявка соперника
-  if (played < init[3]) console.log(claim);
+  if (played < init[3]) console.log(claim);  // → та же заявка
 });

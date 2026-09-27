@@ -18,8 +18,9 @@ func main() {
 	}
 	move := "COOPERATE"
 	for i := 0; i < n; i++ {
-		fmt.Println(move)                               // → ваш ход; os.Stdout без буфера, сброс не нужен
-		if _, err := fmt.Fscan(in, &move); err != nil { // ← ход соперника: в следующий раз ответить тем же
+		// os.Stdout без буфера: Println отправляет строку сразу
+		fmt.Println(move)                               // → ваш ход
+		if _, err := fmt.Fscan(in, &move); err != nil { // ← ход соперника
 			return
 		}
 	}

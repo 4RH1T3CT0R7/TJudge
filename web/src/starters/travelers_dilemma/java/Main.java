@@ -9,14 +9,14 @@ import java.io.InputStreamReader;
 public class Main {
     public static void main(String[] args) throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-        int low = Integer.parseInt(in.readLine().trim());         // ← нижняя граница L
-        int high = Integer.parseInt(in.readLine().trim());        // ← верхняя граница U
-        int bonus = Integer.parseInt(in.readLine().trim());       // ← бонус и штраф R
-        int n = Integer.parseInt(in.readLine().trim());           // ← число итераций
-        int claim = Math.min(Math.max(90, low), high);            // 90, если оно внутри [L, U]
+        int low = Integer.parseInt(in.readLine().trim());     // ← нижняя граница L
+        int high = Integer.parseInt(in.readLine().trim());    // ← верхняя граница U
+        int bonus = Integer.parseInt(in.readLine().trim());   // ← бонус и штраф R
+        int n = Integer.parseInt(in.readLine().trim());       // ← число итераций
+        int claim = Math.min(Math.max(90, low), high);        // 90, если внутри [L, U]
         for (int i = 0; i < n; i++) {
-            System.out.println(claim);                            // → заявка: целое число от L до U
-            System.out.flush();                                   // сброс вывода обязателен
+            System.out.println(claim);                // → заявка: целое от L до U
+            System.out.flush();                       // сброс вывода обязателен
             int opponent = Integer.parseInt(in.readLine().trim()); // ← заявка соперника
         }
     }

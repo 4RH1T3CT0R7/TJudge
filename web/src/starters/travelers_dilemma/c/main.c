@@ -8,13 +8,13 @@ int main(void) {
     int low, high, bonus, n, opponent;
     // ← нижняя граница L, верхняя граница U, бонус и штраф R, число итераций
     if (scanf("%d %d %d %d", &low, &high, &bonus, &n) != 4) return 1;
-    int claim = 90;                                     // 90, если оно внутри [L, U]
+    int claim = 90;                             // 90, если оно внутри [L, U]
     if (claim < low) claim = low;
     if (claim > high) claim = high;
     for (int i = 0; i < n; i++) {
-        printf("%d\n", claim);                          // → заявка: целое число от L до U
-        fflush(stdout);                                 // сброс вывода обязателен
-        if (scanf("%d", &opponent) != 1) return 1;      // ← заявка соперника
+        printf("%d\n", claim);                  // → заявка: целое от L до U
+        fflush(stdout);                         // сброс вывода обязателен
+        if (scanf("%d", &opponent) != 1) return 1;  // ← заявка соперника
     }
     return 0;
 }

@@ -10,7 +10,7 @@ $n = (int) fgets(STDIN);              // ← число итераций
 for ($i = 0; $i < $n; $i++) {
     $spend = intdiv($energy, $n - $i);  // поровну на оставшиеся итерации
     $energy -= $spend;
-    echo $spend, "\n";                // → сколько потратить: от 0 до остатка
+    echo $spend, "\n";                // → трата: от 0 до остатка
     flush();                          // сброс вывода
-    $opponent = (int) fgets(STDIN);   // ← сколько потратил соперник
+    $opponent = (int) fgets(STDIN);   // ← трата соперника
 }

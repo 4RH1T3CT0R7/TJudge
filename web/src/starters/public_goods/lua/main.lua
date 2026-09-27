@@ -11,5 +11,5 @@ local give = capital                       -- первый вклад - весь
 for _ = 1, n do
   io.write(give, "\n")                     -- → вклад: целое число от 0 до E
   io.stdout:flush()                        -- сброс вывода обязателен
-  give = tonumber(io.read("l"))            -- ← вклад соперника: в следующий раз вложить столько же
+  give = tonumber(io.read("l"))            -- ← вклад соперника
 end

@@ -11,6 +11,6 @@ fn main() {
     for _ in 0..n {
         println!("{}", choice); // → ваш ход
         io::stdout().flush().unwrap(); // сброс вывода обязателен
-        choice = lines.next().unwrap().trim().to_string(); // ← ход соперника: в следующий раз ответить тем же
+        choice = lines.next().unwrap().trim().to_string(); // ← ход соперника
     }
 }

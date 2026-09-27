@@ -10,7 +10,7 @@ int main() {
     for (int i = 0; i < n; i++) {
         int spend = energy / (n - i);         // поровну на оставшиеся итерации
         energy -= spend;
-        std::cout << spend << std::endl;      // → сколько потратить: от 0 до остатка; std::endl сбрасывает вывод
-        std::cin >> opponent;                 // ← сколько потратил соперник
+        std::cout << spend << std::endl;      // → трата; std::endl сбрасывает вывод
+        std::cin >> opponent;                 // ← трата соперника
     }
 }

@@ -8,4 +8,4 @@ n = int(input())                  # ← число итераций
 move = "COOPERATE"
 for _ in range(n):
     print(move, flush=True)       # → ваш ход; flush=True обязателен
-    move = input()                # ← ход соперника: в следующий раз ответить тем же
+    move = input()                # ← ход соперника

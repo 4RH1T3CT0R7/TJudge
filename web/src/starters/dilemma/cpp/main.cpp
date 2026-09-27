@@ -11,6 +11,6 @@ int main() {
     std::string move = "COOPERATE";
     for (int i = 0; i < n; i++) {
         std::cout << move << std::endl;   // → ваш ход; std::endl сбрасывает вывод
-        std::cin >> move;                 // ← ход соперника: в следующий раз ответить тем же
+        std::cin >> move;                 // ← ход соперника
     }
 }

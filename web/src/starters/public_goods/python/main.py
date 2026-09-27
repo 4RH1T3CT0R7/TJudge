@@ -9,5 +9,5 @@ multiplier = float(input())       # ← множитель пула m, дроб�
 n = int(input())                  # ← число итераций
 give = capital                    # первый вклад - весь капитал
 for _ in range(n):
-    print(give, flush=True)       # → вклад: целое число от 0 до E; flush=True обязателен
-    give = int(input())           # ← вклад соперника: в следующий раз вложить столько же
+    print(give, flush=True)       # → вклад; flush=True обязателен
+    give = int(input())           # ← вклад соперника

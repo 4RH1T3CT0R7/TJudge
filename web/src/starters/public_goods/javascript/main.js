@@ -11,14 +11,14 @@ let played = 0;
 
 rl.on("line", (line) => {
   if (init.length < 3) {
-    init.push(Number(line));      // ← капитал на итерацию E, множитель пула m (дробное число), число итераций
+    init.push(Number(line));      // ← капитал E, множитель m (дробный), число итераций
     if (init.length === 3) {
-      console.log(init[0]);       // → первый вклад - весь капитал; console.log сбрасывает вывод сам
+      console.log(init[0]);       // → весь капитал; console.log сбрасывает вывод сам
     }
     return;
   }
   played++;                       // ← вклад соперника
   if (played < init[2]) {
-    console.log(Number(line));    // → вклад: столько же, сколько соперник, от 0 до E
+    console.log(Number(line));    // → вклад: столько же, сколько соперник
   }
 });

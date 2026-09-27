@@ -17,3 +17,13 @@ it('у каждой игры шаблон на каждом языке, и пр�
   }
   expect(Object.keys(files)).toHaveLength(games.size * LANGUAGES.length);
 });
+
+it('строки шаблонов помещаются в блок кода без прокрутки', () => {
+  // ~100 знаков в блоке на desktop от 1280 px: длиннее - подписи протокола уходят за край.
+  // табуляция в блоке - 4 знака (TerminalOutput)
+  for (const [path, src] of Object.entries(files)) {
+    for (const line of src.split('\n')) {
+      expect(line.replaceAll('\t', '    ').length, `${path}: ${line}`).toBeLessThanOrEqual(88);
+    }
+  }
+});

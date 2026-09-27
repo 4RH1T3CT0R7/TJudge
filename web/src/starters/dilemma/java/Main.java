@@ -14,7 +14,7 @@ public class Main {
         for (int i = 0; i < n; i++) {
             System.out.println(move);                     // → ваш ход
             System.out.flush();                           // сброс вывода обязателен
-            move = in.readLine().trim();                  // ← ход соперника: в следующий раз ответить тем же
+            move = in.readLine().trim();                  // ← ход соперника
         }
     }
 }

@@ -9,11 +9,11 @@ int main(void) {
     double multiplier;
     // ← капитал на итерацию E, множитель пула m (дробное число), число итераций
     if (scanf("%d %lf %d", &capital, &multiplier, &n) != 3) return 1;
-    int give = capital;                             // первый вклад - весь капитал
+    int give = capital;                         // первый вклад - весь капитал
     for (int i = 0; i < n; i++) {
-        printf("%d\n", give);                       // → вклад: целое число от 0 до E
-        fflush(stdout);                             // сброс вывода обязателен
-        if (scanf("%d", &give) != 1) return 1;      // ← вклад соперника: в следующий раз вложить столько же
+        printf("%d\n", give);                   // → вклад: целое от 0 до E
+        fflush(stdout);                         // сброс вывода обязателен
+        if (scanf("%d", &give) != 1) return 1;  // ← вклад соперника
     }
     return 0;
 }

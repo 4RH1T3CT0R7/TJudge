@@ -13,14 +13,16 @@ import (
 func main() {
 	in := bufio.NewReader(os.Stdin)
 	var energy, n, opponent int
-	if _, err := fmt.Fscan(in, &energy, &n); err != nil { // ← начальная энергия и число итераций
+	// ← начальная энергия, затем число итераций
+	if _, err := fmt.Fscan(in, &energy, &n); err != nil {
 		return
 	}
 	for i := 0; i < n; i++ {
 		spend := energy / (n - i) // поровну на оставшиеся итерации
 		energy -= spend
-		fmt.Println(spend)                                  // → сколько потратить: от 0 до остатка; os.Stdout без буфера
-		if _, err := fmt.Fscan(in, &opponent); err != nil { // ← сколько потратил соперник
+		// os.Stdout без буфера: Println отправляет строку сразу
+		fmt.Println(spend)                                  // → трата: от 0 до остатка
+		if _, err := fmt.Fscan(in, &opponent); err != nil { // ← трата соперника
 			return
 		}
 	}

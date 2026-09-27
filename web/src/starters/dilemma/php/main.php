@@ -10,5 +10,5 @@ $move = "COOPERATE";
 for ($i = 0; $i < $n; $i++) {
     echo $move, "\n";             // → ваш ход
     flush();                      // сброс вывода
-    $move = trim(fgets(STDIN));   // ← ход соперника: в следующий раз ответить тем же
+    $move = trim(fgets(STDIN));   // ← ход соперника
 }

@@ -11,7 +11,7 @@ int main(void) {
     for (int i = 0; i < n; i++) {
         printf("%s\n", move);                     // → ваш ход
         fflush(stdout);                           // сброс вывода обязателен
-        if (scanf("%15s", move) != 1) return 1;   // ← ход соперника: в следующий раз ответить тем же
+        if (scanf("%15s", move) != 1) return 1;   // ← ход соперника
     }
     return 0;
 }

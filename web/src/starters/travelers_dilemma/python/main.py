@@ -10,5 +10,5 @@ bonus = int(input())              # ← бонус и штраф R
 n = int(input())                  # ← число итераций
 claim = min(max(90, low), high)   # 90, если оно внутри [L, U]
 for _ in range(n):
-    print(claim, flush=True)      # → заявка: целое число от L до U; flush=True обязателен
+    print(claim, flush=True)      # → заявка; flush=True обязателен
     opponent = int(input())       # ← заявка соперника
