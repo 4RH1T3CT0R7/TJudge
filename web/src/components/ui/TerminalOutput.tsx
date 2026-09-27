@@ -13,11 +13,14 @@ interface TerminalOutputProps {
   label?: string;
   /** Ограничение высоты, дальше прокрутка. */
   maxHeight?: string;
+  /** Переносить длинные строки (ошибки матчей). Лог компилятора не переносится:
+   *  стрелки ^^^ под строкой должны указывать на свою колонку. */
+  wrap?: boolean;
 }
 
 // Логи компилятора и ошибки матчей как в терминале: моноширинный шрифт,
 // переносы сохраняются, длинный вывод прокручивается, есть копирование.
-export function TerminalOutput({ text, label, maxHeight = 'max-h-64' }: TerminalOutputProps) {
+export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = false }: TerminalOutputProps) {
   const [copied, setCopied] = useState(false);
   const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
 
@@ -44,7 +47,10 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64' }: Terminal
         </div>
       )}
       {/* tabIndex: длинный вывод прокручивается с клавиатуры */}
-      <pre tabIndex={0} className={`${maxHeight} overflow-auto whitespace-pre-wrap break-words p-3 leading-relaxed text-gray-300`}>
+      <pre
+        tabIndex={0}
+        className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
+      >
         {text.split('\n').map((line, i) => (
           <span key={i} className={lineTone(line)}>
             {line}

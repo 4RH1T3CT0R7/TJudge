@@ -778,7 +778,7 @@ export function SystemTab({
                           </span>
                         </div>
                         {match.error_message && (
-                          <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" />
+                          <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" wrap />
                         )}
                         <div className="mt-2 text-xs text-gray-400">
                           Код ошибки: {match.error_code || 'N/A'}

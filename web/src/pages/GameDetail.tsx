@@ -911,7 +911,7 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
 
           {activeMatch.error_message && (
             <div className="mt-2">
-              <TerminalOutput label="stderr:" text={activeMatch.error_message} />
+              <TerminalOutput label="stderr:" text={activeMatch.error_message} wrap />
             </div>
           )}
 
