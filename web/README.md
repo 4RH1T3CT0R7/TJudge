@@ -59,10 +59,11 @@ web/
 │   │   ├── layout/
 │   │   │   └── Layout.tsx      # Общий layout (Header, Footer, навигация)
 │   │   ├── motion/             # Анимации
-│   │   │   ├── AnimatedOutlet.tsx   # Анимированные переходы страниц
-│   │   │   ├── InvaderPresence.tsx  # Анимации появления инвейдера
-│   │   │   ├── StaggerList.tsx      # Последовательная анимация списков
-│   │   │   └── invaderVariants.ts   # Конфигурация вариантов анимаций
+│   │   │   ├── AnimatedOutlet.tsx   # Единственная анимация входа на экран
+│   │   │   ├── InvaderPresence.tsx  # Появление инвейдера
+│   │   │   ├── invaderVariants.ts   # Варианты входа страницы и маскота
+│   │   │   ├── tokens.ts            # Длительности и кривая для motion (как --dur-* в index.css)
+│   │   │   └── features.ts          # Возможности motion, грузятся лениво (LazyMotion)
 │   │   ├── quest/              # Система квестов
 │   │   │   ├── QuestTerminal.tsx    # Терминал квеста
 │   │   │   ├── QuestInvader.tsx     # Инвейдер в квесте
@@ -72,7 +73,7 @@ web/
 │   │   ├── TerminalQuest.tsx   # Терминальный квест
 │   │   ├── TerminalTypewriter.tsx  # Эффект печатающегося текста
 │   │   ├── CinematicOverlay.tsx # Кинематографические переходы
-│   │   ├── PixelGrid.tsx       # Пиксельная сетка
+│   │   ├── PixelGrid.tsx       # Пиксельный фон главной (three.js)
 │   │   ├── ErrorBoundary.tsx   # Обработка ошибок React
 │   │   └── ui/                 # Примитивы: Tabs, StatusLabel, Spinner, EmptyState, ErrorState, PageHeader, Field, Modal, TerminalOutput
 │   ├── hooks/                  # Кастомные хуки
@@ -81,6 +82,7 @@ web/
 │   │   ├── useEasterEggs.ts    # Пасхалки (Konami Code, God Mode и др.)
 │   │   ├── useDarkMode.ts      # Тёмная тема
 │   │   ├── useDelayedLoading.ts    # Отложенный показ лоадера
+│   │   ├── useMotionPref.ts    # Настройка анимаций: система + переключатель в подвале
 │   │   └── useEscapeKey.ts     # Обработка клавиши Escape
 │   ├── pages/                  # Страницы
 │   │   ├── Home.tsx
@@ -148,9 +150,18 @@ Vite дополнительно разделяет бандл на чанки ч
 | `three` | Three.js |
 | `vendor-react` | react, react-dom, react/jsx-runtime, react-router-dom |
 | `vendor-data` | axios, zustand |
-| `vendor-motion` | motion (Framer Motion) |
 
 react-markdown и remark-gfm своего чанка не имеют: Vite кладёт их в ленивый чанк, который грузят только GameView и GameDetail.
+
+motion подключён через `LazyMotion`: во входном чанке только `m`-компоненты, `AnimatePresence` и `MotionConfig`, а возможности (`domMax`: анимации и layout для перестановок строк) приходят отдельным чанком после первого экрана. Внутри `LazyMotion strict` полный `motion.*` не используется, только `m.*`.
+
+## Анимации
+
+- Одна настройка `useMotionPref()`: системная `prefers-reduced-motion`, которую перекрывает переключатель «[x] анимации» в подвале (localStorage). Она ставит `html[data-motion="reduced"]` для CSS, `MotionConfig` для motion, а печать, маскот, PixelGrid и спиннер читают её сами.
+- Длительности `--dur-fast` 120, `--dur-base` 200, `--dur-slow` 400 мс и одна кривая `--ease-out` (index.css; для motion — `components/motion/tokens.ts`). В классах — `duration-(--dur-base)`.
+- Вход на экран анимирует только `AnimatedOutlet`, у карточек и секций своих анимаций входа нет.
+- Ничего бесконечного на фоне (WCAG 2.2.2): циклы маскота, блик пьедестала и курсор терминала конечны, печать на главной проходит фразы один раз. Свечение маскота — ореол с анимацией прозрачности, не `filter`.
+- PixelGrid рисует в 1/8 разрешения (шейдер и так рисует клетками 8×8), не чаще 30 кадров в секунду, стоит вне экрана и на скрытой вкладке. На программном WebGL (SwiftShader, llvmpipe) и при выключенных анимациях — один неподвижный кадр, без WebGL — пустой фон.
 
 ## Маскот и геймификация
 
