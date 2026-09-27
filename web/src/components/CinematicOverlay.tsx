@@ -259,7 +259,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
         </>
       )}
 
-      <p className="absolute bottom-6 font-mono text-xs text-gray-500">
+      <p className="absolute bottom-6 font-mono text-xs text-gray-400">
         {'// любая клавиша или касание — пропустить'}
       </p>
     </div>
