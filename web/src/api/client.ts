@@ -789,10 +789,11 @@ class ApiClient {
   }
 
   // 404 здесь штатный (матч сыгран без -v или раньше транскриптов): null и без тоста.
+  // Ранние записи хранят сторону без ходов как null, а не пустой массив.
   async getMatchTranscript(id: string): Promise<MatchTranscript | null> {
     try {
       const { data } = await this.client.get<MatchTranscript>(`/matches/${id}/transcript`, { quiet: true });
-      return data;
+      return { ...data, moves: data.moves.map((m) => m ?? []) };
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) return null;
       throw err;

@@ -422,9 +422,10 @@ var (
 // splitTranscript отделяет от stderr строки -v и собирает из них транскрипт
 // (nil, если ходов нет). остаток - тот же stderr, что без -v: итоговая строка
 // ошибки и хвост stderr бота для текста ошибки. stderr бота за маркером
-// sandbox.sh не разбирается: ходы берутся только из вывода судьи
+// sandbox.sh не разбирается: ходы берутся только из вывода судьи.
+// у стороны без ходов - пустой массив, а не null в JSON
 func splitTranscript(stderr string) (*models.Transcript, string) {
-	moves := [][]int{nil, nil}
+	moves := [][]int{{}, {}}
 	var points [][]int
 	var rest strings.Builder
 	lines := strings.SplitAfter(stderr, "\n")

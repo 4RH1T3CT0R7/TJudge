@@ -126,6 +126,13 @@ func TestSplitTranscript(t *testing.T) {
 				"[<] decision: Cooperate\n[iter-01] result: (10, 0)\nTraceback\n",
 		},
 		{
+			// у стороны без ходов в JSON должен быть пустой массив, а не null
+			name:     "вторая программа упала на первом ходу",
+			stderr:   "[init] iterations: 100\n[>] decision: Cooperate\nright player error: unknown action 'C'\n",
+			want:     &models.Transcript{Moves: [][]int{{models.MoveCooperate}, {}}},
+			wantRest: "right player error: unknown action 'C'\n",
+		},
+		{
 			name:   "числовые ходы",
 			stderr: "[>] claim: 100\n[<] claim: 2\n[iter-00] result: (0, 4)\n[iter-00] score: (0, 4)\n[result] score: (0, 4)\n",
 			want:   &models.Transcript{Moves: [][]int{{100}, {2}}, Points: [][]int{{0}, {4}}},
