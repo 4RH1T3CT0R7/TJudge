@@ -364,7 +364,7 @@ func Load() (*Config, error) {
 			MemoryLimit:       int64(env.Int("EXECUTOR_MEMORY_LIMIT", 536870912)),
 			PidsLimit:         int64(env.Int("EXECUTOR_PIDS_LIMIT", 100)),
 			DefaultIterations: env.Int("EXECUTOR_DEFAULT_ITERATIONS", 100),
-			Verbose:           env.Bool("EXECUTOR_VERBOSE", false),
+			Verbose:           env.Bool("EXECUTOR_VERBOSE", true), // транскрипты матчей
 			SeccompProfile:    getEnv("EXECUTOR_SECCOMP_PROFILE", ""),
 			AppArmorProfile:   getEnv("EXECUTOR_APPARMOR_PROFILE", ""),
 			BuilderImage:      getEnv("EXECUTOR_BUILDER_IMAGE", "tjudge-builder:latest"),
