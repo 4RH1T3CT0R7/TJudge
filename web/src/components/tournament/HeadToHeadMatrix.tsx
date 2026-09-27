@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { EmptyState } from '../ui/EmptyState';
-import { YouMark } from '../ui/YouMark';
 import type { HeadToHeadCell } from '../../types';
 
 interface HeadToHeadMatrixProps {
@@ -61,8 +60,14 @@ export function HeadToHeadMatrix({ cells, myTeamId }: HeadToHeadMatrixProps) {
                 style={{ backgroundColor: '#0a0a0b' }}
                 title={row.name}
               >
+                {/* в узкой колонке имя обрезается, поэтому метка своей строки - в начале */}
+                {row.id === myTeamId && (
+                  <span className="font-mono text-primary-400">
+                    <span aria-hidden="true">&gt; </span>
+                    <span className="sr-only">вы: </span>
+                  </span>
+                )}
                 {row.name}
-                {row.id === myTeamId && <YouMark />}
               </th>
               {teams.map((col) => {
                 if (row.id === col.id) {
