@@ -299,13 +299,13 @@ export function TeamManagement() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleRemoveMember(member.id)}
-                        className="btn btn-danger text-sm"
+                        className="btn btn-danger"
                       >
                         Подтвердить
                       </button>
                       <button
                         onClick={() => setMemberToRemove(null)}
-                        className="btn btn-secondary text-sm"
+                        className="btn btn-secondary"
                       >
                         Отмена
                       </button>

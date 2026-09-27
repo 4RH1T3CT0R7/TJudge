@@ -423,7 +423,7 @@ export function GameDetail() {
                     <button
                       onClick={() => setCurrentPage((p) => p - 1)}
                       disabled={currentPage === 1}
-                      className="btn btn-secondary text-sm disabled:opacity-50"
+                      className="btn btn-secondary"
                     >
                       Назад
                     </button>
@@ -433,7 +433,7 @@ export function GameDetail() {
                     <button
                       onClick={() => setCurrentPage((p) => p + 1)}
                       disabled={!hasNextPage}
-                      className="btn btn-secondary text-sm disabled:opacity-50"
+                      className="btn btn-secondary"
                     >
                       Вперёд
                     </button>
@@ -534,7 +534,7 @@ export function GameDetail() {
                           useToastStore.getState().addToast('Не удалось скачать программу', 'error');
                         }
                       }}
-                      className="btn btn-secondary w-full mt-2 text-sm"
+                      className="btn btn-secondary w-full mt-2"
                     >
                       Скачать программу
                     </button>

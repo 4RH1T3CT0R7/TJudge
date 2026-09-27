@@ -633,7 +633,7 @@ export function TournamentsTab({
                           <button
                             onClick={() => handleSetActiveGame(game.id)}
                             disabled={settingActiveGame === game.id}
-                            className="btn btn-secondary text-sm disabled:opacity-50"
+                            className="btn btn-secondary"
                               >
                             {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
                           </button>
@@ -643,14 +643,14 @@ export function TournamentsTab({
                             <button
                               onClick={() => handleRunGameMatches(game.name, game.display_name)}
                               disabled={runningGameMatches === game.name}
-                              className="btn btn-primary text-sm disabled:opacity-50 flex-1"
+                              className="btn btn-primary flex-1"
                                 >
                               {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
                             </button>
                             <button
                               onClick={() => handleResetGameRound(game.id, game.display_name)}
                               disabled={resettingGame === game.id}
-                              className="btn btn-danger text-sm"
+                              className="btn btn-danger"
                               title="Сбросить раунд (удалить все матчи и рейтинги)"
                                 >
                               {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
@@ -707,14 +707,14 @@ export function TournamentsTab({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
                       href={`/tournaments/${tournament.id}`}
-                      className="btn btn-secondary text-sm"
+                      className="btn btn-secondary"
                     >
                       Просмотр
                     </a>
                     {tournament.status === 'pending' && (
                       <button
                         onClick={() => handleStartTournament(tournament.id)}
-                        className="btn btn-primary text-sm"
+                        className="btn btn-primary"
                       >
                         Запустить
                       </button>
@@ -723,7 +723,7 @@ export function TournamentsTab({
                       <>
                         <button
                           onClick={() => openTournamentGamesManagement(tournament.id)}
-                          className="btn btn-primary text-sm"
+                          className="btn btn-primary"
                         >
                           Запустить раунд
                         </button>
@@ -742,7 +742,7 @@ export function TournamentsTab({
                               setActionError(extractErrorMessage(err, 'Не удалось завершить турнир'));
                             }
                           }}
-                          className="btn btn-secondary text-sm"
+                          className="btn btn-secondary"
                         >
                           Завершить
                         </button>
@@ -754,13 +754,13 @@ export function TournamentsTab({
                           <div className="flex gap-1">
                             <button
                               onClick={() => handleDeleteTournament(tournament.id)}
-                              className="btn btn-danger text-sm"
+                              className="btn btn-danger"
                             >
                               Подтвердить
                             </button>
                             <button
                               onClick={() => setDeleteTournamentId(null)}
-                              className="btn btn-secondary text-sm"
+                              className="btn btn-secondary"
                             >
                               Отмена
                             </button>
@@ -768,7 +768,7 @@ export function TournamentsTab({
                         ) : (
                           <button
                             onClick={() => setDeleteTournamentId(tournament.id)}
-                            className="btn btn-danger text-sm"
+                            className="btn btn-danger"
                           >
                             Удалить
                           </button>

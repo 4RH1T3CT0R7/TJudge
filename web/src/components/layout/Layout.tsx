@@ -121,13 +121,13 @@ export function Layout() {
                   <button
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="btn btn-secondary text-sm"
+                    className="btn btn-secondary"
                   >
                     {isLoggingOut ? '// ...' : 'Выйти'}
                   </button>
                 </div>
               ) : (
-                <Link to="/login" className="btn btn-primary text-sm">
+                <Link to="/login" className="btn btn-primary">
                   Войти
                 </Link>
               )}

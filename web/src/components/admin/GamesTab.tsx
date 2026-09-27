@@ -212,7 +212,7 @@ export function GamesTab({
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => startEditGame(game)}
-                      className="btn btn-secondary text-sm"
+                      className="btn btn-secondary"
                     >
                       Редактировать
                     </button>
@@ -220,13 +220,13 @@ export function GamesTab({
                       <div className="flex gap-1">
                         <button
                           onClick={() => handleDeleteGame(game.id)}
-                          className="btn btn-danger text-sm"
+                          className="btn btn-danger"
                         >
                           Подтвердить
                         </button>
                         <button
                           onClick={() => setDeleteGameId(null)}
-                          className="btn btn-secondary text-sm"
+                          className="btn btn-secondary"
                         >
                           Отмена
                         </button>
@@ -234,7 +234,7 @@ export function GamesTab({
                     ) : (
                       <button
                         onClick={() => setDeleteGameId(game.id)}
-                        className="btn btn-danger text-sm"
+                        className="btn btn-danger"
                       >
                         Удалить
                       </button>

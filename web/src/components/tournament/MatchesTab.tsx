@@ -126,14 +126,14 @@ export function MatchesTab({
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="btn btn-secondary text-sm"
+            className="btn btn-secondary"
           >
             Обновить
           </button>
-          <button onClick={expandAll} className="btn btn-secondary text-sm">
+          <button onClick={expandAll} className="btn btn-secondary">
             Развернуть все
           </button>
-          <button onClick={collapseAll} className="btn btn-secondary text-sm">
+          <button onClick={collapseAll} className="btn btn-secondary">
             Свернуть все
           </button>
         </div>
@@ -434,7 +434,7 @@ function RoundMatches({
           <button
             onClick={() => setPage((p) => p - 1)}
             disabled={page === 0}
-            className="btn btn-secondary text-sm disabled:opacity-50"
+            className="btn btn-secondary"
           >
             Назад
           </button>
@@ -444,7 +444,7 @@ function RoundMatches({
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={page + 1 >= pageCount}
-            className="btn btn-secondary text-sm disabled:opacity-50"
+            className="btn btn-secondary"
           >
             Вперёд
           </button>

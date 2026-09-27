@@ -178,7 +178,7 @@ export function SystemTab({
             <button
               onClick={refreshSystemData}
               disabled={isLoadingSystem}
-              className="btn btn-secondary text-sm"
+              className="btn btn-secondary"
             >
               {isLoadingSystem ? 'Обновление...' : 'Обновить'}
             </button>

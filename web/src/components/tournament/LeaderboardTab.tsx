@@ -54,7 +54,7 @@ export function LeaderboardTab({
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="btn btn-secondary text-sm"
+            className="btn btn-secondary"
           >
             Обновить
           </button>
