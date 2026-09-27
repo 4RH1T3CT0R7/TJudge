@@ -10,6 +10,7 @@ import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
 import { MatchError } from './MatchError';
 import { extractErrorMessage } from './helpers';
+import { revealAndFocus } from '../../hooks/useRevealOnMobile';
 import { explainCompileError, explainMatchError } from '../../utils/explainError';
 import { crashStats, latestVersion, playingVersion, uploadBlockReason } from '../../utils/participant';
 import { precheckFile, SUPPORTED_EXTENSIONS } from '../../utils/precheckFile';
@@ -60,6 +61,65 @@ const Note = ({ tone = 'text-gray-500', children }: { tone?: string; children: R
   </p>
 );
 
+// Здоровье версии, которая играет: сколько её матчей упало по её вине.
+// Ключ под матчами игры: обновляется вместе с ними по событиям матчей.
+function useHealth(tournamentId: string, gameId: string, playing: Program | null) {
+  const query = useQuery({
+    queryKey: [...queryKeys.gameMatches(tournamentId, gameId), 'program', playing?.id ?? ''] as const,
+    queryFn: () => api.getProgramMatches(tournamentId, playing!.id),
+    enabled: !!tournamentId && !!playing,
+    staleTime: 30_000,
+  });
+  return useMemo(() => {
+    if (!playing) return null;
+    const list = query.data ?? [];
+    const stats = crashStats(list, playing.id);
+    // ponytail: потолок бэкенда 100 матчей (до 51 команды), больше - счётчики с сервера
+    return stats && { ...stats, capped: list.length >= 100 };
+  }, [query.data, playing]);
+}
+
+const PANEL_HEADING_ID = 'program-panel';
+
+// Сводка программы над вкладками на узком экране: карточка там ниже правил,
+// а падение бота видно сразу. Кнопка ведёт к карточке.
+export function ProgramSummary({ tournamentId, gameId, myTeam, programs }: Pick<ProgramPanelProps, 'gameId' | 'myTeam' | 'programs'> & { tournamentId: string }) {
+  const current = latestVersion(programs);
+  const playing = playingVersion(programs, myTeam.is_disqualified);
+  const health = useHealth(tournamentId, gameId, playing);
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-gray-400 lg:hidden">
+      <span>
+        <span aria-hidden="true">{'// '}</span>
+        {current ? `ваша программа v${current.version}` : 'программа не загружена'}
+      </span>
+      {current && <StatusLabel entity="program" status={current.status} />}
+      {playing && (
+        <span className="text-primary-300">
+          <span aria-hidden="true">▶ </span>
+          {playing.id === current?.id ? 'в игре' : `играет v${playing.version}`}
+        </span>
+      )}
+      {health && (
+        <span className="text-amber-300">
+          <span aria-hidden="true">⚠ </span>
+          {`падает в ${health.crashed.length} из ${health.played}${health.capped ? '+' : ''}`}
+        </span>
+      )}
+      {current?.status === 'ready' && current.check_status === 'failed' && (
+        <span className="text-amber-300"><span aria-hidden="true">⚠ </span>самопроверка не пройдена</span>
+      )}
+      <button
+        type="button"
+        onClick={() => revealAndFocus(document.getElementById(PANEL_HEADING_ID))}
+        className="text-primary-400 underline hover:text-primary-300"
+      >
+        {current ? 'к программе' : 'загрузить'} <span aria-hidden="true">↓</span>
+      </button>
+    </div>
+  );
+}
+
 async function download(program: Program) {
   try {
     const blob = await api.downloadProgram(program.id);
@@ -100,21 +160,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
   const blockReason = uploadBlockReason(tournament, myTeam, gameStatus, gamesStatus, rounds);
   const canUpload = !blockReason && !isUploading;
 
-  // Здоровье версии, которая играет: сколько её матчей упало по её вине.
-  // Ключ под матчами игры: обновляется вместе с ними по событиям матчей.
-  const healthQuery = useQuery({
-    queryKey: [...queryKeys.gameMatches(tournamentId, gameId), 'program', playing?.id ?? ''] as const,
-    queryFn: () => api.getProgramMatches(tournamentId, playing!.id),
-    enabled: !!tournamentId && !!playing,
-    staleTime: 30_000,
-  });
-  const health = useMemo(() => {
-    if (!playing) return null;
-    const list = healthQuery.data ?? [];
-    const stats = crashStats(list, playing.id);
-    // ponytail: потолок бэкенда 100 матчей (до 51 команды), больше - счётчики с сервера
-    return stats && { ...stats, capped: list.length >= 100 };
-  }, [healthQuery.data, playing]);
+  const health = useHealth(tournamentId, gameId, playing);
 
   // Тосты об итоге своей сборки и самопроверки: карточка на телефоне ниже вкладок.
   const prevRef = useRef<{ id?: string; status?: string; check?: string | null }>({});
@@ -217,7 +263,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>
+      <h2 id={PANEL_HEADING_ID} className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>
 
       {current && (
         <div className="mb-4 space-y-3">

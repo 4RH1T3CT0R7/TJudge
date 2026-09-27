@@ -19,7 +19,7 @@ import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { Segmented } from '../components/ui/Segmented';
 import { MatchError } from '../components/tournament/MatchError';
-import { ProgramPanel } from '../components/tournament/ProgramPanel';
+import { ProgramPanel, ProgramSummary } from '../components/tournament/ProgramPanel';
 import type { Side } from '../utils/explainError';
 import { pairTotals } from '../utils/participant';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -219,6 +219,10 @@ export function GameDetail() {
           )}
         </p>
       </PageHeader>
+
+      {isAuthenticated && myTeam && tournamentId && (
+        <ProgramSummary tournamentId={tournamentId} gameId={game.id} myTeam={myTeam} programs={programs} />
+      )}
 
       <Tabs
         label="Разделы игры"
