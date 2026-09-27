@@ -472,6 +472,42 @@ func (s *TournamentRepositorySuite) TestGetLeaderboard_LatestVersionsAndForfeits
 	}
 }
 
+// свойства стратегий считаются по транскриптам обеих сторон матча, матч без
+// транскрипта не учитывается
+func (s *TournamentRepositorySuite) TestGetStrategyProfiles() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_spr")
+	tournament := s.createTrackedTournament("TPSPR1", user.ID)
+	game := s.createTrackedGame("spr_game")
+	require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+	tft := s.createTeamEntrant(tournament.ID, game.ID, "TSPRT1")
+	allD := s.createTeamEntrant(tournament.ID, game.ID, "TSPRD1")
+
+	finish := func(p1, p2 uuid.UUID, t *models.Transcript) {
+		m := s.createTrackedMatch(tournament.ID, p1, p2, game.Name, models.MatchRunning)
+		require.NoError(s.T(), s.matchRepo.UpdateResult(ctx, m.ID, &models.MatchResult{Score1: 1, Score2: 1, Transcript: t}))
+	}
+	const C, D = models.MoveCooperate, models.MoveDefect
+	finish(tft.ID, allD.ID, &models.Transcript{Moves: [][]int{{C, D, D}, {D, D, D}}})
+	finish(allD.ID, tft.ID, &models.Transcript{Moves: [][]int{{D, D, D}, {C, D, D}}})
+	finish(tft.ID, allD.ID, nil)
+
+	profiles, err := s.repo.GetStrategyProfiles(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), profiles, 2)
+	share := func(v float64) *float64 { return &v }
+	// по имени команды: TSPRD1 раньше TSPRT1
+	assert.Equal(s.T(), *allD.TeamID, profiles[0].TeamID)
+	assert.Equal(s.T(), 2, profiles[0].Matches)
+	assert.Equal(s.T(), share(0), profiles[0].Cooperation)
+	assert.Equal(s.T(), share(0), profiles[0].Niceness)
+	assert.Equal(s.T(), *tft.TeamID, profiles[1].TeamID)
+	assert.Equal(s.T(), share(2.0/6), profiles[1].Cooperation)
+	assert.Equal(s.T(), share(1), profiles[1].Niceness)
+	assert.Equal(s.T(), share(1), profiles[1].Retaliation)
+	assert.Nil(s.T(), profiles[1].Forgiveness)
+}
+
 func (s *TournamentRepositorySuite) TestGetLeaderboard_LimitEnforced() {
 	ctx := context.Background()
 	user := s.createTrackedUser("tp_lbl")

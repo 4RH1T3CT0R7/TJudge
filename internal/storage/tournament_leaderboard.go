@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -433,4 +435,68 @@ func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID u
 		return nil, errors.Wrap(err, "failed to get head-to-head")
 	}
 	return cells, nil
+}
+
+// GetStrategyProfiles - свойства стратегий команд по транскриптам сыгранных
+// матчей игры турнира; ходы читаются как в дилемме (сотрудничество/предательство).
+// каждая сторона матча идёт в зачёт своей команде, матчи с дисквалифицированными
+// не считаются, как в head-to-head.
+// ponytail: транскрипты разбираются на каждый запрос, на 100 командах это около
+// 10 тыс. матчей и 10 МБ; при частых запросах - кэш или счётчики при записи результата
+func (r *TournamentRepository) GetStrategyProfiles(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.StrategyProfile, error) {
+	query := `
+		SELECT t1.id, t1.name, t2.id, t2.name, m.transcript->'moves'
+		FROM matches m
+		JOIN programs p1 ON p1.id = m.program1_id
+		JOIN programs p2 ON p2.id = m.program2_id
+		JOIN teams t1 ON t1.id = p1.team_id AND NOT t1.is_disqualified
+		JOIN teams t2 ON t2.id = p2.team_id AND NOT t2.is_disqualified
+		WHERE m.tournament_id = $1 AND m.game_type = $2 AND m.transcript IS NOT NULL AND ` + playedMatch
+
+	rows, err := r.db.QueryContext(ctx, query, tournamentID, gameType)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get match transcripts")
+	}
+	defer rows.Close()
+
+	type teamTally struct {
+		name  string
+		tally models.StrategyTally
+	}
+	teams := map[uuid.UUID]*teamTally{}
+	tally := func(id uuid.UUID, name string) *models.StrategyTally {
+		t, ok := teams[id]
+		if !ok {
+			t = &teamTally{name: name}
+			teams[id] = t
+		}
+		return &t.tally
+	}
+
+	for rows.Next() {
+		var id1, id2 uuid.UUID
+		var name1, name2 string
+		var raw []byte
+		if err := rows.Scan(&id1, &name1, &id2, &name2, &raw); err != nil {
+			return nil, errors.Wrap(err, "failed to scan match transcript")
+		}
+		var moves [2][]int
+		if err := json.Unmarshal(raw, &moves); err != nil {
+			return nil, errors.Wrap(err, "failed to decode match transcript")
+		}
+		tally(id1, name1).Add(moves[0], moves[1])
+		tally(id2, name2).Add(moves[1], moves[0])
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "rows iteration error")
+	}
+
+	profiles := make([]*models.StrategyProfile, 0, len(teams))
+	for id, t := range teams {
+		profiles = append(profiles, t.tally.Profile(id, t.name))
+	}
+	slices.SortFunc(profiles, func(a, b *models.StrategyProfile) int {
+		return strings.Compare(a.TeamName, b.TeamName)
+	})
+	return profiles, nil
 }
