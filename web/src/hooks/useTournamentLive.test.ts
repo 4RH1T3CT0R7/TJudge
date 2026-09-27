@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createElement, type ReactNode } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../api/client';
-import type { Tournament } from '../types';
-import { throttle, useTournamentLive, TOURNAMENT_STATUS_POLL_INTERVAL } from './useTournamentLive';
+import type { MatchRound, Tournament } from '../types';
+import { queryKeys } from '../api/queryKeys';
+import { throttle, useTournamentLive, ROUND_POLL_INTERVAL, TOURNAMENT_STATUS_POLL_INTERVAL } from './useTournamentLive';
 import { FALLBACK_POLL_INTERVAL } from './queries';
+
+// связь есть, когда хук включён: сокет в тестах не открывается
+vi.mock('./useWebSocket', () => ({
+  useWebSocket: ({ enabled }: { enabled: boolean }) => ({ isConnected: enabled, isOnline: true, reconnect: () => {} }),
+}));
 
 describe('useTournamentLive без WS', () => {
   afterEach(() => {
@@ -30,6 +36,27 @@ describe('useTournamentLive без WS', () => {
     getTournament.mockResolvedValue({ id: 't1', status: 'active' } as Tournament);
     await vi.advanceTimersByTimeAsync(TOURNAMENT_STATUS_POLL_INTERVAL);
     await waitFor(() => expect(result.current.pollInterval).toBe(FALLBACK_POLL_INTERVAL));
+  });
+});
+
+describe('useTournamentLive с WS', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('пока идёт раунд, опрашивает и при живой связи: упавшие матчи событий не шлют', async () => {
+    vi.spyOn(api, 'getTournament').mockResolvedValue({ id: 't1', status: 'active' } as Tournament);
+    const client = new QueryClient();
+    const rounds = (pending: number) => [{ game_type: 'tug', pending_count: pending, running_count: 0 } as MatchRound];
+    client.setQueryData(queryKeys.matchesByRounds('t1'), rounds(3));
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+
+    const { result } = renderHook(() => useTournamentLive({ tournamentId: 't1' }), { wrapper });
+    await waitFor(() => expect(result.current.pollInterval).toBe(ROUND_POLL_INTERVAL));
+
+    act(() => {
+      client.setQueryData(queryKeys.matchesByRounds('t1'), rounds(0));
+    });
+    await waitFor(() => expect(result.current.pollInterval).toBe(false));
   });
 });
 

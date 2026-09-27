@@ -1,8 +1,9 @@
 // Живые обновления турнира: WebSocket-события → точечная инвалидация
 // кэша TanStack Query.
 //
-// Поллинг включается только как fallback, когда WS-соединения нет
-// (pollInterval из этого хука). Это касается и анонимов: /ws требует токен,
+// Поллинг включается как fallback, когда WS-соединения нет (pollInterval из
+// этого хука), и редкий - пока идёт раунд: упавшие и отменённые матчи событий
+// не шлют, и конец игры, чьи последние матчи упали, иначе не был бы виден. Это касается и анонимов: /ws требует токен,
 // поэтому у них живых событий нет и данные обновляет поллинг. У не идущего
 // турнира матчи не меняются, и поллинга нет. Статус турнира без WS
 // перечитывается редко: иначе открытая до старта вкладка так и не узнала бы,
@@ -15,7 +16,7 @@ import { parseTournamentWSMessage } from '../types/ws';
 import type { MatchResultPayload } from '../types/ws';
 import type { WSMessage, Program } from '../types';
 import { queryKeys } from '../api/queryKeys';
-import { FALLBACK_POLL_INTERVAL, useTournament } from './queries';
+import { FALLBACK_POLL_INTERVAL, useMatchesByRounds, useTournament } from './queries';
 
 interface UseTournamentLiveOptions {
   tournamentId: string;
@@ -25,6 +26,7 @@ interface UseTournamentLiveOptions {
 }
 
 export const TOURNAMENT_STATUS_POLL_INTERVAL = 30_000;
+export const ROUND_POLL_INTERVAL = 15_000;
 
 // Во время раунда match_result идут непрерывно (по событию на матч), а каждая
 // инвалидация - это запросы лидерборда и раундов. Окно 5с держит вкладку
@@ -141,9 +143,17 @@ export function useTournamentLive({ tournamentId, enabled = true, onMatchResult 
     pollInterval: isConnected ? false : TOURNAMENT_STATUS_POLL_INTERVAL,
   });
   const active = tournament.data?.status === 'active';
+  // Только чтение кэша раундов: запрос ведёт страница, где они нужны.
+  const rounds = useMatchesByRounds(tournamentId, { enabled: false }).data;
+  const roundRunning = !!rounds?.some((r) => r.pending_count + r.running_count > 0);
 
-  // Fallback-поллинг: только когда живых обновлений нет, в том числе без WS вовсе.
-  const pollInterval: number | false = active && !isConnected ? FALLBACK_POLL_INTERVAL : false;
+  const pollInterval: number | false = !active
+    ? false
+    : !isConnected
+      ? FALLBACK_POLL_INTERVAL
+      : roundRunning
+        ? ROUND_POLL_INTERVAL
+        : false;
 
   return { isConnected, isOnline, reconnect, pollInterval };
 }
