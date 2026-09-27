@@ -500,8 +500,8 @@ export function GameDetail() {
                 {/* Current Program */}
                 {currentProgram && (
                   <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="font-medium text-gray-200">{currentProgram.name}</p>
+                    <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
+                      <p className="min-w-0 break-all font-medium text-gray-200">{currentProgram.name}</p>
                       <div className="flex items-center gap-2">
                         <StatusLabel entity="program" status={currentProgram.status} />
                         <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
