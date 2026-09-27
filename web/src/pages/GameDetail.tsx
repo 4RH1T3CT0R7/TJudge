@@ -21,6 +21,7 @@ import { Segmented } from '../components/ui/Segmented';
 import { MatchError } from '../components/tournament/MatchError';
 import { ProgramPanel } from '../components/tournament/ProgramPanel';
 import type { Side } from '../utils/explainError';
+import { pairTotals } from '../utils/participant';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -488,16 +489,7 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
   const first = matches[0];
   const leftName = nameOf(first, leftSide(first));
   const rightName = nameOf(first, other(leftSide(first)));
-  let leftTotal = 0, rightTotal = 0, wins = 0, losses = 0, draws = 0, finished = 0;
-  for (const m of matches) {
-    const ls = leftSide(m);
-    leftTotal += scoreOf(m, ls) ?? 0;
-    rightTotal += scoreOf(m, other(ls)) ?? 0;
-    if (m.status === 'completed' || m.status === 'failed') finished++;
-    if (m.winner === ls) wins++;
-    else if (m.winner === other(ls)) losses++;
-    else if (m.status === 'completed' && m.winner === 0) draws++;
-  }
+  const { leftTotal, rightTotal, wins, losses, draws, finished } = pairTotals(matches, leftSide);
   // цвета от первого лица (у чужой пары - от левой стороны): победа зелёная, поражение красное
   const tone = mine ? (wins > losses ? 'text-green-400' : wins < losses ? 'text-red-400' : 'text-gray-100') : 'text-gray-100';
 

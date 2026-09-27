@@ -10,9 +10,10 @@ import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
 import { MatchError } from './MatchError';
 import { extractErrorMessage } from './helpers';
-import { explainCompileError, explainMatchError, failedSide, type Side } from '../../utils/explainError';
+import { explainCompileError, explainMatchError } from '../../utils/explainError';
+import { crashStats, latestVersion, playingVersion, uploadBlockReason } from '../../utils/participant';
 import { precheckFile, SUPPORTED_EXTENSIONS } from '../../utils/precheckFile';
-import type { Match, MatchRound, Program, Team, Tournament, TournamentGameWithDetails } from '../../types';
+import type { MatchRound, Program, Team, Tournament, TournamentGameWithDetails } from '../../types';
 
 interface ProgramPanelProps {
   tournament: Tournament | null;
@@ -25,31 +26,6 @@ interface ProgramPanelProps {
   myTeam: Team;
   /** Все версии программы команды в этой игре. */
   programs: Program[];
-}
-
-const latest = (list: Program[]) => list.reduce<Program | null>((a, b) => (a && a.version > b.version ? a : b), null);
-
-// Почему загрузка закрыта, по тем же правилам, что у бэкенда (handlers/program.go):
-// турнир не идёт, команда дисквалифицирована; без авто-раунда - раунд игры завершён
-// или в турнире идут матчи любой игры. null - загрузка открыта.
-function uploadBlockReason(
-  tournament: Tournament | null,
-  myTeam: Team,
-  gameStatus: TournamentGameWithDetails | null,
-  gamesStatus: TournamentGameWithDetails[],
-  rounds: MatchRound[],
-): string | null {
-  if (tournament?.status === 'pending') return 'турнир ещё не начался: загрузка откроется после старта';
-  if (tournament?.status === 'completed') return 'турнир завершён, загрузка закрыта';
-  if (myTeam.is_disqualified) return 'команда дисквалифицирована';
-  if (gameStatus?.auto_round_enabled) return null;
-  if (gameStatus?.round_completed) return 'раунд этой игры завершён, новые версии не принимаются';
-  const running = rounds.filter((r) => r.pending_count + r.running_count > 0);
-  if (running.length === 0) return null;
-  const total = running.reduce((n, r) => n + r.total_matches, 0);
-  const done = running.reduce((n, r) => n + r.total_matches - r.pending_count - r.running_count, 0);
-  const game = gamesStatus.find((g) => g.game_name === running[0].game_type)?.game_display_name ?? running[0].game_type;
-  return `идёт раунд «${game}», сыграно ${done}/${total}: загрузка откроется, когда он закончится`;
 }
 
 // Секундомер сборки: тикает, пока running; после остановки держит последнее значение.
@@ -117,9 +93,8 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const reasonId = useId();
 
-  const current = latest(programs);
-  // играет последняя собранная версия (storage/tournament.go latestReadyParticipants)
-  const playing = myTeam.is_disqualified ? null : latest(programs.filter((p) => p.status === 'ready'));
+  const current = latestVersion(programs);
+  const playing = playingVersion(programs, myTeam.is_disqualified);
   const tracked = uploaded ? programs.find((p) => p.id === uploaded.id) : undefined;
 
   const blockReason = uploadBlockReason(tournament, myTeam, gameStatus, gamesStatus, rounds);
@@ -136,11 +111,9 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
   const health = useMemo(() => {
     if (!playing) return null;
     const list = healthQuery.data ?? [];
-    const own = (m: Match): Side => (m.program1_id === playing.id ? 1 : 2);
-    const played = list.filter((m) => m.status === 'completed' || failedSide(m) !== null);
-    const crashed = played.filter((m) => failedSide(m) === own(m));
+    const stats = crashStats(list, playing.id);
     // ponytail: потолок бэкенда 100 матчей (до 51 команды), больше - счётчики с сервера
-    return crashed.length > 0 ? { crashed, played: played.length, capped: list.length >= 100, side: own(crashed[0]) } : null;
+    return stats && { ...stats, capped: list.length >= 100 };
   }, [healthQuery.data, playing]);
 
   // Тосты об итоге своей сборки и самопроверки: карточка на телефоне ниже вкладок.
