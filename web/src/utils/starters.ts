@@ -96,6 +96,8 @@ export function localRunScript(game: string, lang: Language): string {
     lang.build,
     '',
     '# матч с самим собой: 20 итераций, -v показывает каждый ход',
+    '# tjudge-cli не показывает stderr программы, а после 64 КБ в stderr она зависает:',
+    '# отладку у себя пишите в файл, например debug.log',
     `tjudge-cli ${game} -i 20 -v ${lang.run} ${lang.run}`,
   ].join('\n');
 }
