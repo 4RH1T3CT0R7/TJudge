@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// шаблоны ботов со страницы игры: web/public/starters/<игра>/<язык>/main.<ext>
-const startersDir = "../../web/public/starters"
+// шаблоны ботов со страницы игры: web/src/starters/<игра>/<язык>/main.<ext>
+const startersDir = "../../web/src/starters"
 
 // TestE2E_Starters: каждый шаблон собирается в tjudge-builder и проходит
 // самопроверку - матч против эталонного бота игры в tjudge-cli. без прогона
