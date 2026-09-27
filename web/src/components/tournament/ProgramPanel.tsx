@@ -337,7 +337,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
         <div
           ref={dropZoneRef}
           role="button"
-          tabIndex={canUpload ? 0 : -1}
+          tabIndex={0}
           aria-label="Загрузить файл программы"
           aria-disabled={!canUpload || undefined}
           aria-describedby={blockReason ? reasonId : undefined}
