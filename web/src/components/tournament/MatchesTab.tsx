@@ -473,7 +473,6 @@ function RoundMatches({
               <th className="px-4 py-2 text-left font-medium text-gray-300">Игрок 1</th>
               <th className="px-4 py-2 text-center font-medium text-gray-300">Счёт</th>
               <th className="px-4 py-2 text-left font-medium text-gray-300">Игрок 2</th>
-              <th className="px-4 py-2"><span className="sr-only">Подробности</span></th>
             </tr>
           </thead>
           <tbody>
@@ -547,7 +546,9 @@ function scoreTone(match: Match, side: Side, mySide: Side | null) {
   return '';
 }
 
-// Строка матча: команды вместо id программ, у упавшего - раскрытие с вердиктом
+// Строка матча: команды вместо id программ, у упавшего - раскрытие с вердиктом.
+// «почему?» в первой колонке: на телефоне таблица шире экрана, и кнопка
+// в последней колонке оказывалась за краем прокрутки
 function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
   const [open, setOpen] = useState(false);
   const mySide = sideOf(match, myTeamId);
@@ -567,7 +568,19 @@ function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
     <>
       <tr className={`border-b border-gray-700 hover:bg-gray-800/30 ${mySide ? 'row-mine' : ''}`} aria-current={mySide ? 'true' : undefined}>
         <td className="px-4 py-2">
-          <StatusLabel entity="match" status={match.status} />
+          <div className="flex items-center gap-2">
+            <StatusLabel entity="match" status={match.status} />
+            {match.status === 'failed' && (
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="btn btn-sm btn-secondary whitespace-nowrap"
+              >
+                почему?
+              </button>
+            )}
+          </div>
         </td>
         <td className="px-4 py-2">{name(1)}</td>
         <td className="px-4 py-2 text-center">
@@ -582,23 +595,15 @@ function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
           )}
         </td>
         <td className="px-4 py-2">{name(2)}</td>
-        <td className="px-4 py-2 text-right">
-          {match.status === 'failed' && (
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              className="btn btn-sm btn-secondary whitespace-nowrap"
-            >
-              почему?
-            </button>
-          )}
-        </td>
       </tr>
       {open && (
         <tr className="border-b border-gray-700">
-          <td colSpan={5} className="px-4 py-3">
-            <MatchError match={match} mySide={mySide} names={names} />
+          <td colSpan={4} className="px-4 py-3">
+            {/* прилипает к левому краю прокрутки и не шире видимой части
+                (экран минус поля страницы, карточки и ячейки): вердикт читается без прокрутки */}
+            <div className="sticky left-4 max-w-[calc(100vw-4.5rem)]">
+              <MatchError match={match} mySide={mySide} names={names} />
+            </div>
           </td>
         </tr>
       )}
