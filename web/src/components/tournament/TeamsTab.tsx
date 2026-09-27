@@ -138,7 +138,7 @@ export function TeamsTab({
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
                       {team.is_disqualified && (
-                        <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded-full">Дисквалификация</span>
+                        <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded">Дисквалификация</span>
                       )}
                       {myTeam?.id === team.id && (
                         <span className="badge badge-blue text-xs">Ваша</span>

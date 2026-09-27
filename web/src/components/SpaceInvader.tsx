@@ -1306,7 +1306,7 @@ export function SpaceInvader({
             fontFamily: 'var(--font-mono)',
             fontSize: '11px',
             padding: '4px 10px',
-            borderRadius: '6px',
+            borderRadius: '2px',
             border: lastSpeechIsImpactRef.current ? '1px solid rgba(239,68,68,0.4)' : `1px solid rgba(${accentRgb},0.3)`,
             pointerEvents: 'none',
             zIndex: 30,

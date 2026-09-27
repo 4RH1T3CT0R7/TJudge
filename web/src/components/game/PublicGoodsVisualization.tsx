@@ -109,17 +109,17 @@ export function PublicGoodsVisualization() {
       {/* Status */}
       <div className="flex justify-center gap-2 flex-wrap">
         {isNash && (
-          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded-full border border-cyan-700/50">
+          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded border border-cyan-700/50">
             Равновесие Нэша: оба по {ENDOWMENT}
           </span>
         )}
         {isFullCoop && (
-          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded-full border border-green-700/50">
+          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded border border-green-700/50">
             Полная кооперация: оба по {coopPayoff}!
           </span>
         )}
         {(isFreeRiderA || isFreeRiderB) && (
-          <span className="px-2 py-1 bg-red-900/40 text-red-400 text-xs rounded-full border border-red-700/50">
+          <span className="px-2 py-1 bg-red-900/40 text-red-400 text-xs rounded border border-red-700/50">
             Безбилетник {isFreeRiderA ? 'A' : 'B'} выигрывает больше!
           </span>
         )}

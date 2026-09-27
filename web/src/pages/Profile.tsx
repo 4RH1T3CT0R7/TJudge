@@ -98,7 +98,7 @@ export function Profile() {
               <p className="text-gray-400 break-all">
                 {user?.email || 'Email не указан'}
               </p>
-              <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${
+              <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded ${
                 user?.role === 'admin'
                   ? 'bg-primary-900/50 text-primary-300'
                   : 'bg-gray-700 text-gray-200'

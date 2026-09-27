@@ -95,12 +95,12 @@ export function TravelersDilemmaVisualization() {
       {/* Status badges */}
       <div className="flex justify-center gap-2 flex-wrap">
         {isNash && (
-          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded-full border border-cyan-700/50">
+          <span className="px-2 py-1 bg-cyan-900/40 text-cyan-400 text-xs rounded border border-cyan-700/50">
             Равновесие Нэша (2, 2)
           </span>
         )}
         {isCooperative && (
-          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded-full border border-green-700/50">
+          <span className="px-2 py-1 bg-green-900/40 text-green-400 text-xs rounded border border-green-700/50">
             Кооперативный оптимум (100, 100)
           </span>
         )}

@@ -91,7 +91,7 @@ export function MatchesTab({
               Матчи по раундам
             </h2>
             {hasActiveMatches && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 text-xs">
+              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-900/30 text-blue-400 text-xs">
                 <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                 Обновление...
               </span>
@@ -299,7 +299,7 @@ function RoundCard({
                 Раунд {round.round_number}
               </span>
             </div>
-            <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded-full font-medium">
+            <span className="px-2 py-0.5 bg-primary-900/30 text-primary-400 text-xs rounded font-medium">
               {getGameDisplayName(round.game_type)}
             </span>
             <span className="ml-1 text-sm text-gray-400">
@@ -311,22 +311,22 @@ function RoundCard({
             {/* Mini stats badges */}
             <div className="hidden sm:flex items-center gap-2 text-xs">
               {round.completed_count > 0 && (
-                <span className="px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400">
+                <span className="px-2 py-1 rounded bg-emerald-900/30 text-emerald-400">
                   {round.completed_count} сыграно
                 </span>
               )}
               {round.running_count > 0 && (
-                <span className="px-2 py-1 rounded-full bg-blue-900/30 text-blue-400">
+                <span className="px-2 py-1 rounded bg-blue-900/30 text-blue-400">
                   {round.running_count} идёт
                 </span>
               )}
               {round.pending_count > 0 && (
-                <span className="px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400">
+                <span className="px-2 py-1 rounded bg-yellow-900/30 text-yellow-400">
                   {round.pending_count} в очереди
                 </span>
               )}
               {round.failed_count > 0 && (
-                <span className="px-2 py-1 rounded-full bg-red-900/30 text-red-400">
+                <span className="px-2 py-1 rounded bg-red-900/30 text-red-400">
                   {round.failed_count} ошибок
                 </span>
               )}

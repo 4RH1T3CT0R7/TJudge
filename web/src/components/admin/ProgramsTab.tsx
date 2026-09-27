@@ -163,7 +163,7 @@ export function ProgramsTab({
                                 {rows.length} {rows.length === 1 ? 'программа' : rows.length > 1 && rows.length < 5 ? 'программы' : 'программ'}
                               </p>
                               {failedCount > 0 && (
-                                <span className="px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded-full">
+                                <span className="px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded">
                                   {failedCount} с ошибкой сборки
                                 </span>
                               )}

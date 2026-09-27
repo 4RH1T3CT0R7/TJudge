@@ -169,7 +169,7 @@ export function GamesTab({
                     {game.name}
                   </code>
                   {isActive && (
-                    <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
+                    <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded font-medium">
                       Активна
                     </span>
                   )}

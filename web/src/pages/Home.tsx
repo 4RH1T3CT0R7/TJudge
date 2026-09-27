@@ -102,7 +102,7 @@ export function Home() {
 
         {/* Content */}
         <div className="relative z-10 max-w-3xl mx-auto text-center">
-          <div className="inline-block px-3 py-1 bg-primary-500/20 rounded-full text-sm font-medium text-primary-300 mb-4 border border-primary-500/30">
+          <div className="inline-block px-3 py-1 bg-primary-500/20 rounded text-sm font-medium text-primary-300 mb-4 border border-primary-500/30">
             Теория игр в действии
           </div>
           <title>TJudge — турниры по теории игр</title>

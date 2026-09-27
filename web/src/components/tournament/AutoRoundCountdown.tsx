@@ -73,7 +73,7 @@ export function AutoRoundCountdown({ status, tournamentActive }: AutoRoundCountd
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-primary-300"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-primary-300"
       style={{ backgroundColor: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)' }}
       title="Авто-раунды включены: новый раунд запускается автоматически, когда прошёл интервал и появились новые программы"
     >

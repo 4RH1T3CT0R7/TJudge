@@ -66,7 +66,7 @@ export function GameInfoModal({
           </h3>
           <div className="flex flex-wrap gap-2">
             {details.applications.map((app, i) => (
-              <span key={i} className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded-full">
+              <span key={i} className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded">
                 {app}
               </span>
             ))}

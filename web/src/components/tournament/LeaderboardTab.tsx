@@ -43,7 +43,7 @@ export function LeaderboardTab({
             </span>
           )}
           {hasActiveMatches && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 text-xs">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-900/30 text-blue-400 text-xs">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
               Обновление...
             </span>
