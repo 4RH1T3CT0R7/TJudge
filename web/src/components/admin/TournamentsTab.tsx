@@ -360,7 +360,7 @@ export function TournamentsTab({
                           {games.map((game) => (
                             <label
                               key={game.id}
-                              className="flex items-center gap-3 p-2 hover:bg-gray-600 rounded cursor-pointer"
+                              className="flex items-center gap-3 p-2 hover:bg-gray-600/50 rounded cursor-pointer"
                             >
                               <input
                                 type="checkbox"

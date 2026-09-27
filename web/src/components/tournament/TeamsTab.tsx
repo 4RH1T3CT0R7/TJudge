@@ -131,7 +131,7 @@ export function TeamsTab({
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${
-                    team.is_disqualified ? 'bg-red-700' : myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-500'
+                    team.is_disqualified ? 'bg-red-700' : myTeam?.id === team.id ? 'bg-primary-500' : 'bg-gray-700'
                   }`}>
                     {index + 1}
                   </div>
@@ -162,7 +162,7 @@ export function TeamsTab({
                       <div className="space-y-1">
                         {teamMembers[team.id].map((member, i) => (
                           <div key={i} className="flex items-center gap-2 text-sm">
-                            <span className="w-5 h-5 rounded-full bg-gray-600 flex items-center justify-center text-xs text-gray-300">
+                            <span className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-xs text-gray-300">
                               {member.username[0]?.toUpperCase()}
                             </span>
                             <span className="text-gray-200">{member.username}</span>

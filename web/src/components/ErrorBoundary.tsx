@@ -62,7 +62,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Попробовать снова
             </button>
             <button
-              className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+              className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600/50 transition-colors"
               onClick={this.handleHome}
               aria-label="Вернуться на главную"
             >

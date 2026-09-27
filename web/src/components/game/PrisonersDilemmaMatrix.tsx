@@ -58,7 +58,7 @@ export function PrisonersDilemmaMatrix() {
               onMouseLeave={() => setHoveredCell(null)}
             >
               <div className="w-full h-full flex items-center justify-center">
-                <span className={`font-mono font-bold ${fontSize} text-white`}>{`${cc[0]}, ${cc[1]}`}</span>
+                <span className={`font-mono font-bold ${fontSize} text-gray-950`}>{`${cc[0]}, ${cc[1]}`}</span>
               </div>
             </td>
             <td
@@ -67,7 +67,7 @@ export function PrisonersDilemmaMatrix() {
               onMouseLeave={() => setHoveredCell(null)}
             >
               <div className="w-full h-full flex items-center justify-center">
-                <span className={`font-mono font-bold ${fontSize} text-white`}>{`${cd[0]}, ${cd[1]}`}</span>
+                <span className={`font-mono font-bold ${fontSize} text-gray-950`}>{`${cd[0]}, ${cd[1]}`}</span>
               </div>
             </td>
           </tr>
@@ -81,7 +81,7 @@ export function PrisonersDilemmaMatrix() {
               onMouseLeave={() => setHoveredCell(null)}
             >
               <div className="w-full h-full flex items-center justify-center">
-                <span className={`font-mono font-bold ${fontSize} text-white`}>{`${dc[0]}, ${dc[1]}`}</span>
+                <span className={`font-mono font-bold ${fontSize} text-gray-950`}>{`${dc[0]}, ${dc[1]}`}</span>
               </div>
             </td>
             <td
@@ -90,7 +90,7 @@ export function PrisonersDilemmaMatrix() {
               onMouseLeave={() => setHoveredCell(null)}
             >
               <div className="w-full h-full flex items-center justify-center">
-                <span className={`font-mono font-bold ${fontSize} text-white`}>{`${dd[0]}, ${dd[1]}`}</span>
+                <span className={`font-mono font-bold ${fontSize} text-gray-950`}>{`${dd[0]}, ${dd[1]}`}</span>
               </div>
               <div className="absolute top-2 right-2 w-4 h-4 bg-cyan-400 rounded-full" title="Равновесие Нэша" />
             </td>

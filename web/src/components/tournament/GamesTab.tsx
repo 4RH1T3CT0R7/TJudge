@@ -257,7 +257,7 @@ export function GamesTab({
                           className={`btn text-xs py-1.5 px-3 ${
                             gameStatus?.auto_round_enabled
                               ? 'bg-green-600 hover:bg-green-700 text-white'
-                              : 'bg-gray-600 hover:bg-gray-700 text-gray-200'
+                              : 'bg-gray-700 hover:bg-gray-800 text-gray-200'
                           }`}
                           title={gameStatus?.auto_round_enabled
                             ? `Авто-раунд: каждые ${gameStatus.auto_round_interval_seconds}с`

@@ -125,7 +125,7 @@ export function DollarAuctionVisualization() {
         {step > 0 && (
           <button
             onClick={reset}
-            className="px-4 py-2 rounded-xl bg-gray-700 text-gray-300 text-sm hover:bg-gray-600 transition-colors"
+            className="px-4 py-2 rounded-xl bg-gray-700 text-gray-300 text-sm hover:bg-gray-600/50 transition-colors"
           >
             Сначала
           </button>
