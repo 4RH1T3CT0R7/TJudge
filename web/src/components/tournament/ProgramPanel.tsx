@@ -14,6 +14,7 @@ import { revealAndFocus } from '../../hooks/useRevealOnMobile';
 import { explainCompileError, explainMatchError } from '../../utils/explainError';
 import { crashStats, latestVersion, playingVersion, uploadBlockReason } from '../../utils/participant';
 import { precheckFile, SUPPORTED_EXTENSIONS } from '../../utils/precheckFile';
+import { saveFile } from '../../utils/saveFile';
 import type { MatchRound, Program, Team, Tournament, TournamentGameWithDetails } from '../../types';
 
 interface ProgramPanelProps {
@@ -122,15 +123,7 @@ export function ProgramSummary({ tournamentId, gameId, myTeam, programs }: Pick<
 
 async function download(program: Program) {
   try {
-    const blob = await api.downloadProgram(program.id);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = program.name || `program_v${program.version}`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    saveFile(await api.downloadProgram(program.id), program.name || `program_v${program.version}`);
   } catch (err) {
     console.error('Download failed:', err);
     useToastStore.getState().addToast('Не удалось скачать программу', 'error');

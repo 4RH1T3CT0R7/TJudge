@@ -10,6 +10,7 @@ import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
 import { MatchError } from '../tournament/MatchError';
 import { explainCompileError } from '../../utils/explainError';
+import { saveFile } from '../../utils/saveFile';
 import { EmptyState } from '../ui/EmptyState';
 import type { ProgramRow } from './programRows';
 
@@ -50,16 +51,8 @@ export function ProgramsTab({
   // Download program file
   const handleDownloadProgram = async (program: Program) => {
     try {
-      const blob = await api.downloadProgram(program.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       // имя загруженного файла, с его расширением
-      a.download = program.name || `program_v${program.version}`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      saveFile(await api.downloadProgram(program.id), program.name || `program_v${program.version}`);
       setAdminReaction('handsUp', '// отправляю файл', 2500);
     } catch (err) {
       console.error('Failed to download program:', err);
@@ -71,15 +64,7 @@ export function ProgramsTab({
   const handleDownloadAllPrograms = async () => {
     if (!selectedTournamentId) return;
     try {
-      const blob = await api.downloadTournamentPrograms(selectedTournamentId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `programs_${selectedTournamentId.substring(0, 8)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      saveFile(await api.downloadTournamentPrograms(selectedTournamentId), `programs_${selectedTournamentId.substring(0, 8)}.zip`);
       setAdminReaction('handsUp', '// архивирую...', 2500);
     } catch (err) {
       console.error('Failed to download programs archive:', err);
