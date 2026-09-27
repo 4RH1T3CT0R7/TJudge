@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { XMarkIcon } from '../icons';
@@ -38,10 +39,13 @@ function trapTab(e: KeyboardEvent<HTMLDivElement>) {
 // Общая модалка на классах .modal-backdrop/.modal-content (index.css):
 // клик по фону и Escape закрывают, клик по контенту — нет.
 // Фокус уходит в диалог и после закрытия возвращается на элемент, который его открыл.
+// Рендер в body: иначе контекст наложения страницы оставляет шапку поверх фона.
 export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md' }: ModalProps) {
   useEscapeKey(onClose, open);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  // выделение текста в поле, отпущенное над фоном, тоже даёт click по фону
+  const pressedOnBackdrop = useRef(false);
 
   // Открывший элемент запоминается при рендере: autoFocus внутри диалога
   // срабатывает раньше эффектов и уже успевает перевести фокус.
@@ -63,15 +67,21 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md' }:
 
   if (!open) return null;
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
+  return createPortal(
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => { pressedOnBackdrop.current = e.target === e.currentTarget; }}
+      onClick={(e) => {
+        if (pressedOnBackdrop.current && e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title !== undefined ? titleId : undefined}
         tabIndex={-1}
-        className={`modal-content w-full ${maxWidth} p-6 m-4 outline-none`}
+        className={`modal-content w-full ${maxWidth} max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 m-4 outline-none`}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={trapTab}
       >
@@ -89,6 +99,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md' }:
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

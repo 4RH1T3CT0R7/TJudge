@@ -46,3 +46,28 @@ it('держит фокус внутри диалога и возвращает 
 
   root.unmount();
 });
+
+it('закрывается по фону, только если нажатие началось на фоне', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => root.render(<Harness />));
+  await act(async () => document.getElementById('opener')!.click());
+
+  const backdrop = document.querySelector<HTMLElement>('.modal-backdrop')!;
+  const ok = document.getElementById('ok')!;
+  // выделение начато внутри диалога и отпущено над фоном
+  await act(async () => {
+    ok.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+
+  await act(async () => {
+    backdrop.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+  root.unmount();
+});
