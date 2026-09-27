@@ -13,7 +13,7 @@ interface PageHeaderProps {
   title: ReactNode;
   /** Бейдж статуса рядом с заголовком. */
   status?: ReactNode;
-  /** Действия справа, на узком экране под заголовком. */
+  /** Действия справа; не хватает ширины — переносятся под заголовок. */
   actions?: ReactNode;
   /** Строка под заголовком (код турнира и т. п.). */
   children?: ReactNode;
@@ -51,7 +51,8 @@ export function PageHeader({ crumbs, title, status, actions, children }: PageHea
           </ol>
         </nav>
       )}
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      {/* перенос вместо брейкпоинта: действия встают справа, пока хватает ширины */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-100 break-words">{title}</h1>
