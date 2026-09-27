@@ -3,6 +3,8 @@
 
 export interface GameConfig {
   icon: string;
+  /** Короткое имя для шапки табло и ленты: полное не влезает в колонку. */
+  short?: string;
   color: string;
   bgClass: string;
   textClass: string;
@@ -13,6 +15,7 @@ export interface GameConfig {
 
 const gameConfig: Record<string, GameConfig> = {
   dilemma: {
+    short: 'Дилемма',
     icon: '⇄',
     color: 'purple',
     bgClass: 'bg-primary-500',
@@ -22,6 +25,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-primary-500 to-primary-600',
   },
   tug_of_war: {
+    short: 'Канат',
     icon: '⟷',
     color: 'green',
     bgClass: 'bg-green-500',
@@ -31,6 +35,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-green-500 to-green-600',
   },
   travelers_dilemma: {
+    short: 'Путешеств.',
     icon: '≤',
     color: 'blue',
     bgClass: 'bg-blue-500',
@@ -40,6 +45,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-blue-500 to-blue-600',
   },
   public_goods: {
+    short: 'Общее благо',
     icon: 'Σ',
     color: 'orange',
     bgClass: 'bg-orange-500',
@@ -49,6 +55,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-orange-500 to-orange-600',
   },
   dollar_auction: {
+    short: 'Аукцион',
     icon: '$',
     color: 'yellow',
     bgClass: 'bg-yellow-500',

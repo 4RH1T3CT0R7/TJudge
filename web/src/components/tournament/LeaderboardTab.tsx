@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { ArrowsExpandIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
 import { LEADERBOARD_VIEWS } from './helpers';
@@ -5,54 +7,51 @@ import { Segmented } from '../ui/Segmented';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { YouMark } from '../ui/YouMark';
+import { CountUp } from '../ui/CountUp';
 import { PlaceHint } from './PlaceHint';
 import { useRevealOnMobile } from '../../hooks/useRevealOnMobile';
-import type { CrossGameLeaderboardEntry, Game } from '../../types';
+import { usePlaceChanges } from '../../hooks/usePlaceChanges';
+import { teamKey, type GameProgress, type StandingRow } from '../../utils/liveStandings';
+import { getGameConfig } from '../../utils/gameConfig';
+import type { Game } from '../../types';
+
+// перестановка строк при смене мест (FLIP); при reduced motion MotionConfig её выключает
+const ROW_MOVE = { duration: 0.4, ease: 'easeOut' } as const;
 
 // Leaderboard Tab Component
 export function LeaderboardTab({
-  crossGameEntries,
+  rows,
   games,
-  isConnected,
+  live,
+  progress,
   showCrossGame,
   onShowCrossGameChange,
-  onToggleFullscreen,
   onRefresh,
   isRefreshing,
-  hasActiveMatches,
   isCompleted,
   myTeamId,
+  screenHref,
 }: {
-  crossGameEntries: CrossGameLeaderboardEntry[];
+  rows: StandingRow[];
   games: Game[];
-  isConnected: boolean;
+  /** id идущих игр: их очки предварительные и в место не входят. */
+  live: Set<string>;
+  progress: Map<string, GameProgress>;
   showCrossGame: boolean;
   onShowCrossGameChange: (value: boolean) => void;
-  onToggleFullscreen: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
-  hasActiveMatches: boolean;
   isCompleted: boolean;
   myTeamId?: string;
+  /** Табло для проектора; нет - кнопку не показывать. */
+  screenHref?: string;
 }) {
+  const changes = usePlaceChanges(rows);
   return (
     <div>
-      {/* в одну строку только с lg: на планшете чип «Обновление...» переносил
-          кнопки на вторую строку, и таблица прыгала */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-gray-100">Рейтинг</h2>
-          {isConnected && (
-            <span className="online-indicator">
-              Онлайн
-            </span>
-          )}
-          {hasActiveMatches && (
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-900/30 text-blue-400 text-xs">
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-              Обновление...
-            </span>
-          )}
           {isRefreshing && <Spinner />}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -69,273 +68,275 @@ export function LeaderboardTab({
             value={showCrossGame ? 'games' : 'total'}
             onChange={(v) => onShowCrossGameChange(v === 'games')}
           />
-          <button onClick={onToggleFullscreen} className="btn btn-secondary">
-            <ArrowsExpandIcon />
-            На весь экран
-          </button>
+          {screenHref && (
+            // табло для проектора: на телефоне незачем
+            <Link to={screenHref} className="btn btn-secondary hidden sm:inline-flex">
+              <ArrowsExpandIcon />
+              Табло
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Show animated podium for completed tournaments */}
-      {isCompleted && crossGameEntries.length >= 3 && (
-        <WinnersPodium entries={crossGameEntries} />
+      {isCompleted && rows.length >= 3 && (
+        <WinnersPodium entries={rows.map((r) => r.entry)} />
       )}
 
       {showCrossGame ? (
-        <CrossGameLeaderboardTable entries={crossGameEntries} games={games} myTeamId={myTeamId} />
+        <CrossGameLeaderboardTable rows={rows} games={games} live={live} progress={progress} changes={changes} myTeamId={myTeamId} />
       ) : (
-        <GeneralLeaderboardTable entries={crossGameEntries} myTeamId={myTeamId} />
+        <GeneralLeaderboardTable rows={rows} changes={changes} myTeamId={myTeamId} />
       )}
-      {crossGameEntries.length > 0 && (
-        <PlaceHint>место — по сумме очков всех игр с множителями, а не по числу побед</PlaceHint>
+      {rows.length > 0 && (
+        <PlaceHint>
+          {live.size > 0
+            ? 'место — по доигранным играм: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
+            : 'место — по сумме очков всех игр с множителями, а не по числу побед'}
+        </PlaceHint>
       )}
     </div>
   );
 }
 
-// General Leaderboard Table Component - uses CrossGameLeaderboardEntry data
-// Shows: rank, team name, total score, games played, score per game
-export function GeneralLeaderboardTable({
-  entries,
-  isDark = false,
+// ▲N / ▼N рядом с местом, пока сдвиг свежий
+function PlaceShift({ delta }: { delta?: number }) {
+  if (!delta) return null;
+  return (
+    <span className={`font-mono text-[0.7em] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
+      <span aria-hidden="true">{delta > 0 ? '▲' : '▼'}</span>
+      <span className="sr-only">{delta > 0 ? 'поднялась на' : 'опустилась на'} </span>
+      {Math.abs(delta)}
+    </span>
+  );
+}
+
+const placeBadge = (place: number | null) =>
+  place === 1 ? 'rank-badge rank-gold'
+    : place === 2 ? 'rank-badge rank-silver'
+      : place === 3 ? 'rank-badge rank-bronze'
+        : 'rank-badge rank-default';
+
+const rowTone = (place: number | null) =>
+  place === 1 ? 'leaderboard-row-gold'
+    : place === 2 ? 'leaderboard-row-silver'
+      : place === 3 ? 'leaderboard-row-bronze'
+        : '';
+
+// General Leaderboard Table: место, команда, сумма доигранных игр и полоса
+function GeneralLeaderboardTable({
+  rows,
+  changes,
   myTeamId,
 }: {
-  entries: CrossGameLeaderboardEntry[];
-  isDark?: boolean;
+  rows: StandingRow[];
+  changes: Map<string, number>;
   myTeamId?: string;
 }) {
   const revealMine = useRevealOnMobile<HTMLDivElement>();
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     return (
       <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
     );
   }
 
-  // Find max score for visual bars
-  const maxScore = Math.max(...entries.map(e => e.total_rating), 1);
-
-  const getRankBadge = (rank: number) => {
-    if (rank === 1) {
-      return (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
-          <svg className="w-5 h-5 text-amber-900" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 5V.13a2.96 2.96 0 0 0-1.293.749L.879 3.707A2.96 2.96 0 0 0 .13 5H5Zm1.5 6.5H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H6.5ZM6 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm7.5 2.5H18a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-4.5v-7Zm1.5-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z" clipRule="evenodd"/>
-          </svg>
-        </div>
-      );
-    }
-    if (rank === 2) {
-      return (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-400 flex items-center justify-center shadow-lg shadow-gray-500/20">
-          <span className="font-bold text-gray-700">2</span>
-        </div>
-      );
-    }
-    if (rank === 3) {
-      return (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-300 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-          <span className="font-bold text-orange-900">3</span>
-        </div>
-      );
-    }
-    return (
-      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-        isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-800 text-gray-300'
-      }`}>
-        {rank}
-      </div>
-    );
-  };
-
-  const getRowClass = (index: number) => {
-    if (index === 0) return isDark ? 'bg-amber-900/10' : 'bg-amber-900/10';
-    if (index === 1) return isDark ? 'bg-gray-700/20' : 'bg-gray-700/20';
-    if (index === 2) return isDark ? 'bg-orange-900/10' : 'bg-orange-900/10';
-    return '';
-  };
+  const maxScore = Math.max(...rows.map(r => r.total), 1);
 
   return (
-    <div className={isDark
-      ? 'grid grid-cols-2 xl:grid-cols-3 gap-2'
-      : 'space-y-2'
-    }>
-      {/* Card-style entries */}
-      {entries.map((entry, index) => {
+    <div className="space-y-2">
+      {rows.map((row) => {
+        const { entry, place, total } = row;
+        const key = teamKey(entry);
         const mine = !!myTeamId && entry.team_id === myTeamId;
         return (
-          <div
-            key={entry.program_id}
+          <motion.div
+            key={key}
+            layout="position"
+            transition={ROW_MOVE}
             ref={mine ? revealMine : undefined}
             aria-current={mine ? 'true' : undefined}
-            className={`${isDark ? 'p-2.5' : 'p-4'} rounded-xl transition-colors ${
-              isDark
-                ? `bg-gray-800/50 border border-gray-700 ${getRowClass(index)}`
-                : `bg-gray-800/50 border border-gray-800 ${getRowClass(index)} hover:shadow-md`
-            } ${mine ? 'row-mine' : ''}`}
+            className={`p-4 rounded-xl transition-colors bg-gray-800/50 border border-gray-800 ${rowTone(place)} hover:shadow-md ${mine ? 'row-mine' : ''}`}
           >
-            <div className={`flex items-center ${isDark ? 'gap-3' : 'gap-4'}`}>
-              {/* Rank */}
-              {isDark ? (
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                  index === 0 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900' :
-                  index === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700' :
-                  index === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-orange-900' :
-                  'bg-gray-700 text-gray-300'
-                }`}>
-                  {entry.rank}
-                </div>
-              ) : getRankBadge(entry.rank)}
+            <div className="flex items-center gap-4">
+              <div className="flex w-12 shrink-0 flex-col items-center">
+                <span className={placeBadge(place)}>{place ?? '–'}</span>
+                <PlaceShift delta={changes.get(key)} />
+              </div>
 
-              {/* Team Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-baseline">
-                      <h3 className={`min-w-0 font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
+                      <h3 className="min-w-0 font-bold truncate text-lg text-gray-100">
                         {entry.team_name || entry.program_name}
                       </h3>
                       {mine && <YouMark />}
                     </div>
-                    {!isDark && (
-                      <div className="flex items-center gap-3 text-sm text-gray-400">
-                        <span>{entry.total_games} игр</span>
-                        <span>•</span>
-                        <span className="text-emerald-400">{entry.total_wins}W</span>
-                        <span className="text-red-400">{entry.total_losses}L</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-3 text-sm text-gray-400">
+                      <span>{entry.total_games} игр</span>
+                      <span>•</span>
+                      <span className="text-emerald-400">{entry.total_wins}W</span>
+                      <span className="text-red-400">{entry.total_losses}L</span>
+                    </div>
                   </div>
 
-                  {/* Score */}
                   <div className="text-right shrink-0">
-                    <div className={`font-bold tabular-nums ${isDark ? 'text-xl' : 'text-3xl'} ${
-                      index === 0 ? 'text-amber-500' :
-                      index === 1 ? 'text-gray-400' :
-                      index === 2 ? 'text-orange-500' :
+                    <div className={`font-bold tabular-nums text-3xl ${
+                      place === 1 ? 'text-amber-500' :
+                      place === 2 ? 'text-gray-400' :
+                      place === 3 ? 'text-orange-500' :
                       'text-primary-400'
                     }`}>
-                      {entry.total_rating.toLocaleString()}
+                      <CountUp value={total} />
                     </div>
-                    {!isDark && (
-                      <div className="text-xs text-gray-400">
-                        очков
-                      </div>
-                    )}
+                    <div className="text-xs text-gray-400">
+                      очков
+                    </div>
                   </div>
                 </div>
 
-                {/* Score bar - только в обычном режиме */}
-                {!isDark && (
-                  <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-500 ${
-                        index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                        index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
-                        index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
-                        'bg-gradient-to-r from-primary-400 to-primary-500'
-                      }`}
-                      style={{ width: `${(entry.total_rating / maxScore) * 100}%` }}
-                    />
-                  </div>
-                )}
+                <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-[width] duration-500 ${
+                      place === 1 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                      place === 2 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
+                      place === 3 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
+                      'bg-gradient-to-r from-primary-400 to-primary-500'
+                    }`}
+                    style={{ width: `${(Math.max(total, 0) / maxScore) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>
   );
 }
 
-// Cross-Game Leaderboard Table Component
-function CrossGameLeaderboardTable({
-  entries,
+// Таблица по играм. broadcast - плотность табло: кегль и высота строк от высоты
+// экрана, без подстрок; pinned - сколько первых строк закреплено над страницей.
+export function CrossGameLeaderboardTable({
+  rows,
   games,
-  isDark = false,
-  isCompact = false,
+  live,
+  progress,
+  changes,
   myTeamId,
+  broadcast = false,
+  pinned = 0,
 }: {
-  entries: CrossGameLeaderboardEntry[];
+  rows: StandingRow[];
   games: Game[];
-  isDark?: boolean;
-  isCompact?: boolean;
+  live: Set<string>;
+  progress: Map<string, GameProgress>;
+  changes: Map<string, number>;
   myTeamId?: string;
+  broadcast?: boolean;
+  pinned?: number;
 }) {
   const revealMine = useRevealOnMobile<HTMLTableRowElement>();
-  if (entries.length === 0) {
+  if (rows.length === 0) {
     return (
       <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
     );
   }
 
-  const getRankClass = (index: number) => {
-    if (index === 0) return 'rank-badge rank-gold';
-    if (index === 1) return 'rank-badge rank-silver';
-    if (index === 2) return 'rank-badge rank-bronze';
-    return isDark ? 'rank-badge bg-gray-700 text-gray-300' : 'rank-badge rank-default';
-  };
-
-  const getRowClass = (index: number) => {
-    if (index === 0) return isDark ? 'bg-amber-900/20' : 'leaderboard-row-gold';
-    if (index === 1) return isDark ? 'bg-gray-700/30' : 'leaderboard-row-silver';
-    if (index === 2) return isDark ? 'bg-orange-900/20' : 'leaderboard-row-bronze';
-    return '';
-  };
-
-  const cellPx = isCompact ? 'px-3 py-1' : 'px-4 py-3';
-  const headPx = isCompact ? 'px-3 py-1.5' : 'px-4 py-3';
-  const headText = isCompact ? 'text-[10px]' : 'text-sm';
+  const cell = broadcast ? 'px-[0.8vw]' : 'px-4 py-3';
+  const head = broadcast
+    ? 'px-[0.8vw] h-[max(40px,7vh)] text-[clamp(14px,1.9vh,26px)] font-semibold leading-tight text-gray-400'
+    : 'px-4 py-3 text-sm font-semibold uppercase tracking-wide';
 
   return (
-    <div className={`overflow-x-auto ${isDark ? '' : 'card p-0'}`}>
-      <table className={`w-full ${isDark ? 'text-white' : 'text-gray-100'} ${isCompact ? 'text-sm' : ''}`}>
-        <thead className={isDark ? 'bg-gray-800/50' : 'bg-gray-800/50'}>
+    <div className={broadcast ? '' : 'overflow-x-auto card p-0'}>
+      <table className={`w-full ${broadcast ? 'table-fixed text-[clamp(20px,3.2vh,44px)] text-gray-100' : 'text-gray-100'}`}>
+        <thead className={broadcast ? 'border-b border-line' : 'bg-gray-800/50'}>
           <tr>
-            <th className={`${headPx} text-left font-semibold ${headText} uppercase tracking-wide`}>Место</th>
-            <th className={`${headPx} text-left font-semibold ${headText} uppercase tracking-wide`}>Команда</th>
-            {games.map((game) => (
-              <th key={game.id} className={`${headPx} text-center font-semibold ${headText} uppercase tracking-wide`}>
-                {game.display_name}
-              </th>
-            ))}
-            <th className={`${headPx} text-right font-semibold ${headText} uppercase tracking-wide`}>Сумма</th>
+            <th className={`${head} text-left ${broadcast ? 'w-[9%]' : ''}`}>Место</th>
+            <th className={`${head} text-left ${broadcast ? 'w-[30%]' : ''}`}>Команда</th>
+            {games.map((game) => {
+              const isLive = live.has(game.id);
+              const p = progress.get(game.name);
+              return (
+                <th key={game.id} className={`${head} text-center`}>
+                  <span className={broadcast ? 'block truncate' : ''}>
+                    {isLive && <span aria-hidden="true" className="text-blue-400">◐ </span>}
+                    {broadcast ? (getGameConfig(game.name).short ?? game.display_name) : game.display_name}
+                  </span>
+                  {isLive && (
+                    <span className="block font-mono font-normal normal-case tracking-normal text-[0.8em] text-gray-400">
+                      {broadcast && p ? `предв. ${p.done}/${p.total}` : 'предварительно'}
+                    </span>
+                  )}
+                </th>
+              );
+            })}
+            <th className={`${head} text-right ${broadcast ? 'w-[13%]' : ''}`}>Сумма</th>
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry, index) => {
+          {rows.map((row, index) => {
+            const { entry, place, total } = row;
+            const key = teamKey(entry);
             const mine = !!myTeamId && entry.team_id === myTeamId;
             return (
-              <tr
-                key={entry.program_id}
+              <motion.tr
+                key={key}
+                layout="position"
+                transition={ROW_MOVE}
                 ref={mine ? revealMine : undefined}
                 aria-current={mine ? 'true' : undefined}
-                className={`border-b ${isDark ? 'border-gray-700/50' : 'border-gray-700'} ${getRowClass(index)} transition-colors ${mine ? 'row-mine' : ''}`}
+                className={`border-b ${index === pinned - 1 ? 'border-b-4 border-double border-line' : 'border-gray-700/60'} ${
+                  broadcast ? 'h-[max(36px,5vh)]' : rowTone(place)
+                } ${mine ? 'row-mine' : ''}`}
               >
-                <td className={cellPx}>
-                  <span className={getRankClass(index)}>
-                    {entry.rank}
+                <td className={cell}>
+                  <span className="inline-flex items-baseline gap-2">
+                    {broadcast ? (
+                      <span className={`font-mono font-bold tabular-nums ${
+                        place === 1 ? 'text-amber-400' : place === 2 ? 'text-gray-300' : place === 3 ? 'text-orange-400' : 'text-gray-400'
+                      }`}>
+                        {place ?? '–'}
+                      </span>
+                    ) : (
+                      <span className={placeBadge(place)}>{place ?? '–'}</span>
+                    )}
+                    <PlaceShift delta={changes.get(key)} />
                   </span>
                 </td>
-                <td className={cellPx}>
-                  <span className="font-semibold">
+                <td className={`${cell} ${broadcast ? 'truncate font-bold' : ''}`}>
+                  <span className={broadcast ? '' : 'font-semibold'}>
                     {entry.team_name || entry.program_name}
                   </span>
                   {mine && <YouMark />}
                 </td>
                 {games.map((game) => {
                   const gameRating = entry.game_ratings[game.id];
+                  const isLive = live.has(game.id);
+                  const perTeam = progress.get(game.name)?.perTeam;
                   return (
-                    <td key={game.id} className={`${cellPx} text-center`}>
+                    <td key={game.id} className={`${cell} text-center font-mono tabular-nums`}>
                       {gameRating ? (
                         <div>
-                          <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
-                          {!isCompact && (
-                            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
-                              <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
-                              <span className="mx-0.5">/</span>
-                              <span className="text-red-400" title="Поражений">{gameRating.losses}</span>
-                              <span className="mx-0.5">/</span>
-                              <span title="Ничьих">{gameRating.draws || 0}</span>
+                          <span className={isLive ? 'text-gray-400' : broadcast ? '' : 'font-bold'}>
+                            <CountUp value={Math.round(gameRating.rating)} />
+                          </span>
+                          {!broadcast && (
+                            <div className="text-xs text-gray-400">
+                              {isLive ? (
+                                <span title="Сыграно матчей из раунда">
+                                  {gameRating.total_games}/{perTeam || '?'}
+                                </span>
+                              ) : (
+                                <>
+                                  <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
+                                  <span className="mx-0.5">/</span>
+                                  <span className="text-red-400" title="Поражений">{gameRating.losses}</span>
+                                  <span className="mx-0.5">/</span>
+                                  <span title="Ничьих">{gameRating.draws || 0}</span>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -345,29 +346,16 @@ function CrossGameLeaderboardTable({
                     </td>
                   );
                 })}
-                <td className={`${cellPx} text-right`}>
-                  <span className={`font-mono font-bold ${isCompact ? 'text-base' : 'text-lg'} ${isDark ? 'text-primary-400' : 'text-primary-400'}`}>
-                    {entry.total_rating}
+                <td className={`${cell} text-right`}>
+                  <span className={`font-mono font-bold tabular-nums text-primary-400 ${broadcast ? '' : 'text-lg'}`}>
+                    <CountUp value={total} />
                   </span>
                 </td>
-              </tr>
+              </motion.tr>
             );
           })}
         </tbody>
       </table>
     </div>
   );
-}
-
-// Dark mode alias for fullscreen
-export function CrossGameLeaderboardTableDark({
-  entries,
-  games,
-  myTeamId,
-}: {
-  entries: CrossGameLeaderboardEntry[];
-  games: Game[];
-  myTeamId?: string;
-}) {
-  return <CrossGameLeaderboardTable entries={entries} games={games} myTeamId={myTeamId} isDark isCompact />;
 }

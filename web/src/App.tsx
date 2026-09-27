@@ -1,4 +1,4 @@
-import { useEffect, lazy } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'motion/react';
@@ -16,6 +16,7 @@ const pageImports = {
   Profile: () => import('./pages/Profile'),
   Tournaments: () => import('./pages/Tournaments'),
   TournamentDetail: () => import('./pages/TournamentDetail'),
+  TournamentScreen: () => import('./pages/TournamentScreen'),
   GameDetail: () => import('./pages/GameDetail'),
   GameView: () => import('./pages/GameView'),
   Games: () => import('./pages/Games'),
@@ -31,6 +32,7 @@ const Login = lazy(() => pageImports.Login().then(m => ({ default: m.Login })));
 const Profile = lazy(() => pageImports.Profile().then(m => ({ default: m.Profile })));
 const Tournaments = lazy(() => pageImports.Tournaments().then(m => ({ default: m.Tournaments })));
 const TournamentDetail = lazy(() => pageImports.TournamentDetail().then(m => ({ default: m.TournamentDetail })));
+const TournamentScreen = lazy(() => pageImports.TournamentScreen().then(m => ({ default: m.TournamentScreen })));
 const GameDetail = lazy(() => pageImports.GameDetail().then(m => ({ default: m.GameDetail })));
 const GameView = lazy(() => pageImports.GameView().then(m => ({ default: m.GameView })));
 const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
@@ -132,6 +134,23 @@ function AppContent() {
 
   return (
     <Routes>
+      {/* табло для проектора: без шапки и подвала приложения */}
+      <Route
+        path="tournaments/:id/screen"
+        element={
+          <ProtectedRoute>
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center min-h-screen text-sm text-gray-400">
+                  <Spinner>загрузка табло</Spinner>
+                </div>
+              }
+            >
+              <TournamentScreen />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/" element={<Layout />}>
         <Route index element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="login" element={<Login />} />

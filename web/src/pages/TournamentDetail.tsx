@@ -26,26 +26,21 @@ import { CinematicOverlay } from '../components/CinematicOverlay';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { useOnRoundFinished } from '../hooks/useOnRoundFinished';
 import { InfoTab } from '../components/tournament/InfoTab';
-import {
-  LeaderboardTab,
-  GeneralLeaderboardTable,
-  CrossGameLeaderboardTableDark,
-} from '../components/tournament/LeaderboardTab';
+import { LeaderboardTab } from '../components/tournament/LeaderboardTab';
 import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
 import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
 import { MatchesTab } from '../components/tournament/MatchesTab';
 import { JoinTournamentModal } from '../components/tournament/JoinTournamentModal';
-import { extractErrorMessage, LEADERBOARD_VIEWS } from '../components/tournament/helpers';
+import { extractErrorMessage } from '../components/tournament/helpers';
 import { useGameAdminActions } from '../components/tournament/useGameAdminActions';
 import { Tabs } from '../components/ui/Tabs';
-import { Segmented } from '../components/ui/Segmented';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { useTabParam } from '../hooks/useTabParam';
-import { gameProgress } from '../utils/liveStandings';
+import { gameProgress, honestStandings, liveGameIds } from '../utils/liveStandings';
 import type {
   Tournament,
   TournamentStatus,
@@ -83,11 +78,14 @@ export function TournamentDetail() {
   const tournament: Tournament | null = tournamentQuery.data ?? null;
   const teams: Team[] = teamsQuery.data ?? [];
   const games: Game[] = gamesQuery.data ?? [];
-  const crossGameLeaderboard: CrossGameLeaderboardEntry[] = leaderboardQuery.data ?? [];
   const matchRounds: MatchRound[] = matchRoundsQuery.data ?? [];
   const gamesStatus: TournamentGameWithDetails[] = gamesStatusQuery.data ?? [];
   const myTeam: Team | null = myTeamQuery.data ?? null;
+
+  // честный live: место только по доигранным играм (utils/liveStandings)
   const progress = useMemo(() => gameProgress(matchRoundsQuery.data ?? []), [matchRoundsQuery.data]);
+  const liveGames = useMemo(() => liveGameIds(gamesQuery.data ?? [], progress), [gamesQuery.data, progress]);
+  const standings = useMemo(() => honestStandings(leaderboardQuery.data ?? [], liveGames), [leaderboardQuery.data, liveGames]);
 
   const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'info');
   // Первичная загрузка всех данных страницы (раньше - единый ручной флаг).
@@ -106,7 +104,6 @@ export function TournamentDetail() {
   const error = tournamentQuery.isError
     ? canRetry ? 'Не удалось загрузить данные турнира' : 'Турнир не найден'
     : null;
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showCrossGameLeaderboard, setShowCrossGameLeaderboard] = useState(true); // По играм / Общий
   const [isRetryingMatches, setIsRetryingMatches] = useState(false);
 
@@ -249,10 +246,6 @@ export function TournamentDetail() {
     }
   };
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
   const handleStartTournament = async () => {
     if (!tournament) return;
 
@@ -372,47 +365,6 @@ export function TournamentDetail() {
   const canManage = isCreator || isAdmin;
   const canStart = canManage && tournament.status === 'pending';
   const canComplete = canManage && tournament.status === 'active';
-
-  // Fullscreen leaderboard view
-  if (isFullscreen) {
-    return (
-      <div className="fixed inset-0 bg-gray-900 text-white z-50 overflow-auto">
-        <div className="p-4 md:p-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <title>{`${tournament.name} — TJudge`}</title>
-              <h1 className="text-3xl md:text-4xl font-bold mb-2">{tournament.name}</h1>
-              <p className="text-gray-400">
-                {showCrossGameLeaderboard ? 'Рейтинг по играм' : 'Общий рейтинг'}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Segmented
-                label="Вид таблицы"
-                options={LEADERBOARD_VIEWS}
-                value={showCrossGameLeaderboard ? 'games' : 'total'}
-                onChange={(v) => setShowCrossGameLeaderboard(v === 'games')}
-              />
-              {isConnected && (
-                <span className="online-indicator text-green-400">
-                  Обновления в реальном времени
-                </span>
-              )}
-              <button onClick={toggleFullscreen} className="btn btn-secondary">
-                <XMarkIcon />
-                Закрыть
-              </button>
-            </div>
-          </div>
-          {showCrossGameLeaderboard ? (
-            <CrossGameLeaderboardTableDark entries={crossGameLeaderboard} games={games} myTeamId={myTeam?.id} />
-          ) : (
-            <GeneralLeaderboardTable entries={crossGameLeaderboard} isDark myTeamId={myTeam?.id} />
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in">
@@ -580,17 +532,17 @@ export function TournamentDetail() {
 
         {activeTab === 'leaderboard' && (
           <LeaderboardTab
-            crossGameEntries={crossGameLeaderboard}
+            rows={standings}
             games={games}
-            isConnected={isConnected}
+            live={liveGames}
+            progress={progress}
             showCrossGame={showCrossGameLeaderboard}
             onShowCrossGameChange={setShowCrossGameLeaderboard}
-            onToggleFullscreen={toggleFullscreen}
             onRefresh={refreshLeaderboard}
             isRefreshing={isRefreshingLeaderboard}
-            hasActiveMatches={roundRunning}
             isCompleted={tournament.status === 'completed'}
             myTeamId={myTeam?.id}
+            screenHref={isAuthenticated ? `/tournaments/${tournament.id}/screen` : undefined}
           />
         )}
 
