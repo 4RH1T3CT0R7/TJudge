@@ -226,7 +226,7 @@ export function TournamentDetail() {
     if (!joinCode.trim()) return;
     // код турнира путают с кодом приглашения, в команду он не ведёт
     if (joinCode.trim().toUpperCase() === tournament?.code.toUpperCase()) {
-      setJoinError('Это код турнира, а нужен код приглашения в команду: его видит лидер на странице команды');
+      setJoinError('Это код турнира, а нужен код приглашения в команду: его видит капитан на странице команды');
       return;
     }
 
