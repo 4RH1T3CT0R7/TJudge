@@ -440,8 +440,11 @@ function ScoreChart({ totals, n, step, names }: { totals: number[][]; n: number;
           preserveAspectRatio="none"
           role="img"
           aria-label={`Накопленный счёт по итерациям: ${names[0]} ${totals[0].at(-1)}, ${names[1]} ${totals[1].at(-1)}`}
-          onMouseLeave={() => setHover(null)}
-          onMouseMove={(e) => {
+          // курсор ведёт только мышь: у касания нет «ухода», и подпись залипала бы
+          // поверх шага ползунка и проигрывания
+          onPointerLeave={() => setHover(null)}
+          onPointerMove={(e) => {
+            if (e.pointerType !== 'mouse') return;
             const r = e.currentTarget.getBoundingClientRect();
             const px = ((e.clientX - r.left) / r.width) * W;
             setHover(Math.max(0, Math.min(n, Math.round(((px - PAD.left) / (W - PAD.left - PAD.right)) * n))));
