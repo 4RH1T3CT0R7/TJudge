@@ -44,6 +44,12 @@ func TestSanitizeForDB_MultipleNullBytes(t *testing.T) {
 	assert.Equal(t, "startmiddleend", result)
 }
 
+// хвост stderr бота режется по байтам и может начаться посреди символа
+func TestSanitizeForDB_InvalidUTF8(t *testing.T) {
+	cut := "Ошибка"[1:]
+	assert.Equal(t, "�шибка", sanitizeForDB(cut))
+}
+
 // --- buildCommand ---
 
 func TestBuildCommand_Basic(t *testing.T) {

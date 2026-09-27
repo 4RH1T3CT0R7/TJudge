@@ -17,6 +17,15 @@
 # инфраструктурной ошибкой, а не ошибкой программы. Программа, которую не
 # удалось скопировать в tmpfs, проигрывает с кодом своей стороны (1 или 2,
 # как у tjudge-cli): иначе её матчи вечно возвращались бы в очередь.
+#
+# stderr бота tjudge-cli открывает как pipe и не читает: бот, написавший в
+# него больше буфера pipe (64 КБ), зависал и проигрывал по таймауту. Поэтому
+# лаунчер ещё от root направляет stderr бота в свой файл /programs/.bot<N>.err
+# (0600, по пути боту недоступен, бот пишет в унаследованный дескриптор).
+# Файлы бота ограничены err_limit: сверх него запись завершается ошибкой, а не
+# убивает бота сигналом. Проигравшая по ошибке сторона (код 1 или 2) получает
+# хвост своего stderr после сообщения tjudge-cli: он уходит в текст ошибки
+# матча, а его видят только админ и команда этой программы.
 set -eEuo pipefail
 
 fail() {
@@ -29,6 +38,10 @@ copy_failed() {
     echo "sandbox: program $name: copy failed" >&2
     exit $((i + 1))
 }
+
+# две копии программ (до 32 МБ) и два файла по err_limit помещаются в tmpfs
+# /programs (80 МБ, см. buildMatchHostConfig)
+err_limit=$((4 << 20))
 
 (($# >= 3)) || fail "usage: sandbox <game> [options] <program1> <program2>"
 args=("${@:1:$#-2}")
@@ -74,9 +87,29 @@ for i in 0 1; do
     drop=(setpriv --reuid="$uid" --regid="$uid" --clear-groups --inh-caps=-all)
     "${drop[@]}" test -x "$prog" || fail "program $name is not executable as uid $uid"
     launcher=/programs/.bot$i
-    printf '#!/bin/sh\nexec %s %s\n' "${drop[*]}" "$prog" >"$launcher"
+    # >>: при игре с собой обе стороны пишут в файл первой
+    printf '#!/bin/sh\numask 077\nulimit -f %d\ntrap "" XFSZ\nexec %s %s 2>>%s\n' \
+        $((err_limit / 512)) "${drop[*]}" "$prog" "$launcher.err" >"$launcher"
     chmod 0700 "$launcher"
     bots+=("$launcher")
 done
 
-exec tjudge-cli "${args[@]}" "${bots[@]}"
+# без exec: после матча нужен stderr проигравшей стороны. сбой в дописывании
+# хвоста не должен превращать итог матча в сбой песочницы
+code=0
+tjudge-cli "${args[@]}" "${bots[@]}" || code=$?
+trap - ERR
+set +e
+if ((code == 1 || code == 2)); then
+    err=/programs/.bot$((code - 1)).err
+    [[ -e $err ]] || err=/programs/.bot0.err
+    if [[ -s $err ]]; then
+        echo "--- stderr программы (последние 2 КБ) ---" >&2
+        tail -c 2048 "$err" >&2
+        echo >&2
+        if (($(stat -c %s "$err") >= err_limit)); then
+            echo "--- stderr больше 4 МБ: запись сверх лимита завершалась ошибкой ---" >&2
+        fi
+    fi
+fi
+exit "$code"

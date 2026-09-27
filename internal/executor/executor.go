@@ -350,9 +350,10 @@ func (lw *limitWriter) Write(p []byte) (int, error) {
 	return written, err
 }
 
-// sanitizeForDB убирает null-байты (они рушат INSERT в postgres)
+// sanitizeForDB убирает null-байты и битый UTF-8: и то и другое рушит INSERT в
+// postgres. битый UTF-8 дают вывод бота и обрезка stderr посреди символа
 func sanitizeForDB(s string) string {
-	return strings.ReplaceAll(s, "\x00", "")
+	return strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "\uFFFD")
 }
 
 // ansiEscapeRe ловит ansi-эскейпы (цветовые последовательности типа \x1b[31m)

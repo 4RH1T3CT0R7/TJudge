@@ -101,3 +101,73 @@ func TestSandbox_BotsIsolated(t *testing.T) {
 		assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2}, "бот добрался до соперника")
 	}
 }
+
+// сотрудничает и на каждом ходу пишет в stderr 20 КБ: за матч больше буфера
+// pipe, который tjudge-cli не читает
+const chattyBot = `#!/usr/bin/env python3
+import sys
+n = int(input())
+for i in range(n):
+    sys.stderr.write("SECRET-%d " % i + "x" * 20000 + "\n")
+    print("COOPERATE", flush=True)
+    input()
+`
+
+const crashBot = `#!/usr/bin/env python3
+n = int(input())
+print("COOPERATE", flush=True)
+input()
+1 / 0
+`
+
+func newLiveExecutor(t *testing.T, dir string) *Executor {
+	t.Helper()
+	image := os.Getenv("TJUDGE_SANDBOX_IMAGE")
+	if image == "" {
+		t.Skip("TJUDGE_SANDBOX_IMAGE не задан")
+	}
+	log, _ := logger.New("error", "json")
+	e, err := NewExecutor(config.ExecutorConfig{
+		DockerImage:       image,
+		Timeout:           time.Minute,
+		CPUQuota:          100000,
+		MemoryLimit:       256 << 20,
+		PidsLimit:         64,
+		DefaultIterations: 10,
+	}, dir, "", log)
+	require.NoError(t, err)
+	return e
+}
+
+func writeBots(t *testing.T, dir string, bots map[string]string) {
+	t.Helper()
+	for name, src := range bots {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(src), 0o700))
+	}
+}
+
+// отладочный вывод в stderr больше не вешает бота, а в текст ошибки попадает
+// хвост stderr только упавшей стороны
+func TestSandbox_BotStderr(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	writeBots(t, dir, map[string]string{"chatty.py": chattyBot, "crash.py": crashBot, "coop": cooperatorBot})
+	run := func(p1, p2 string) *models.MatchResult {
+		res, err := e.Execute(context.Background(), &models.Match{ID: uuid.New(), GameType: "dilemma"},
+			filepath.Join(dir, p1), filepath.Join(dir, p2))
+		require.NoError(t, err)
+		return res
+	}
+
+	res := run("chatty.py", "coop")
+	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
+	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
+
+	for side, pair := range [][2]string{{"crash.py", "chatty.py"}, {"chatty.py", "crash.py"}} {
+		res = run(pair[0], pair[1])
+		assert.Equal(t, side+1, res.ErrorCode)
+		assert.Contains(t, res.ErrorMessage, "--- stderr программы (последние 2 КБ) ---")
+		assert.Contains(t, res.ErrorMessage, "ZeroDivisionError: division by zero")
+		assert.NotContains(t, res.ErrorMessage, "SECRET", "в ошибку попал stderr соперника")
+	}
+}
