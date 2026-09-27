@@ -1,13 +1,27 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, type NavigateProps } from 'react-router-dom';
 import { ProtectedRoute } from './App';
 import { AnimatedOutlet } from './components/motion/AnimatedOutlet';
 import { Login } from './pages/Login';
 import api from './api/client';
 import { useAuthStore } from './store/authStore';
 import type { AuthResponse } from './types';
+
+// Без защиты в ProtectedRoute уходящая страница редиректит на /login без конца
+// и вешает прогон: счётчик превращает зависание в падение теста
+vi.mock('react-router-dom', async (importOriginal) => {
+  const rr = await importOriginal<typeof import('react-router-dom')>();
+  let redirects = 0;
+  return {
+    ...rr,
+    Navigate: (props: NavigateProps) => {
+      if (++redirects > 5) throw new Error('цикл редиректов на /login');
+      return <rr.Navigate {...props} />;
+    },
+  };
+});
 
 describe('ProtectedRoute', () => {
   it('ссылка-приглашение: аноним входит и попадает обратно на /join/CODE', async () => {
