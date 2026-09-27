@@ -153,7 +153,7 @@ export function ProgramsTab({
                     <div key={game.id} className="card">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <span aria-hidden="true" className={`font-mono text-2xl ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
+                          <span aria-hidden="true" className={`inline-block w-8 shrink-0 text-center font-mono text-2xl ${getGameConfig(game.name).textClass}`}>{getGameConfig(game.name).icon}</span>
                           <div>
                             <h3 className="font-semibold text-gray-100">
                               {game.display_name}

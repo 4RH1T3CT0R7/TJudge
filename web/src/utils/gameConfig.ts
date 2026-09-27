@@ -49,7 +49,7 @@ const gameConfig: Record<string, GameConfig> = {
     gradientClass: 'from-orange-500 to-orange-600',
   },
   dollar_auction: {
-    icon: '$↑',
+    icon: '$',
     color: 'yellow',
     bgClass: 'bg-yellow-500',
     textClass: 'text-yellow-400',
