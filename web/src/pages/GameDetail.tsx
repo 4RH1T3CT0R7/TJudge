@@ -72,7 +72,7 @@ export function GameDetail() {
     [gamesStatusQuery.data, gameId]
   );
 
-  // График рейтинга: история подгружается лениво при открытии модалки.
+  // График ELO (rating_history): история подгружается лениво при открытии модалки.
   const [chartProgram, setChartProgram] = useState<{ id: string; name: string } | null>(null);
   const ratingHistoryQuery = useQuery({
     queryKey: queryKeys.ratingHistory(tournamentId ?? '', chartProgram?.id ?? ''),
@@ -256,7 +256,7 @@ export function GameDetail() {
                           <th className="pb-2 pr-4 text-center">L</th>
                           <th className="pb-2 pr-4 text-center">D</th>
                           <th className="pb-2 text-center">Игр</th>
-                          <th className="pb-2 text-center"><span className="sr-only">График рейтинга</span></th>
+                          <th className="pb-2 text-center"><span className="sr-only">График ELO</span></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -286,8 +286,8 @@ export function GameDetail() {
                                 <button
                                   onClick={() => setChartProgram({ id: entry.program_id, name: entry.team_name || entry.program_name })}
                                   className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
-                                  title="График рейтинга"
-                                  aria-label={`График рейтинга ${entry.team_name || entry.program_name}`}
+                                  title="График ELO"
+                                  aria-label={`График ELO ${entry.team_name || entry.program_name}`}
                                 >
                                   <ChartBarIcon className="w-4 h-4" />
                                 </button>
@@ -406,7 +406,7 @@ export function GameDetail() {
       <Modal
         open={chartProgram !== null}
         onClose={() => setChartProgram(null)}
-        title={chartProgram ? `Динамика рейтинга — ${chartProgram.name}` : ''}
+        title={chartProgram ? `Динамика ELO — ${chartProgram.name}` : ''}
         maxWidth="max-w-2xl"
       >
         {ratingHistoryQuery.isPending ? (
@@ -423,7 +423,8 @@ export function GameDetail() {
             />
             {(ratingHistoryQuery.data?.length ?? 0) > 0 && (
               <p className="text-xs text-gray-500 mt-3">
-                Последние {ratingHistoryQuery.data!.length} изменений рейтинга в этом турнире
+                Последние {ratingHistoryQuery.data!.length} изменений ELO в этом турнире. ELO начинается с 1500
+                и растёт от побед над сильными соперниками; это не сумма очков из таблицы
               </p>
             )}
           </>
