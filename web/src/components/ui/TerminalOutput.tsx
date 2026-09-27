@@ -28,7 +28,8 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
   const preRef = useRef<HTMLPreElement>(null);
   const canCopy = copyable && typeof navigator !== 'undefined' && !!navigator.clipboard;
 
-  // в фокус с клавиатуры попадает только вывод, который есть что прокручивать
+  // в фокус с клавиатуры попадает только вывод, который есть что прокручивать;
+  // group, а не region: одинаковые подписи «stderr:» дали бы неразличимые ориентиры
   useEffect(() => {
     const pre = preRef.current;
     if (!pre) return;
@@ -66,7 +67,7 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
       <pre
         ref={preRef}
         tabIndex={scrollable ? 0 : undefined}
-        role={scrollable ? 'region' : undefined}
+        role={scrollable ? 'group' : undefined}
         aria-label={scrollable ? label || 'вывод' : undefined}
         className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
       >

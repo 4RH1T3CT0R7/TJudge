@@ -29,6 +29,6 @@ it('фокусируется с клавиатуры, только когда в
   rerender(<TerminalOutput text={'длинный\nвывод'} label="stderr:" />);
   const pre = container.querySelector('pre')!;
   expect(pre.tabIndex).toBe(0);
-  expect(pre.getAttribute('role')).toBe('region');
+  expect(pre.getAttribute('role')).toBe('group');
   expect(pre.getAttribute('aria-label')).toBe('stderr:');
 });
