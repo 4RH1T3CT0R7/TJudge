@@ -45,7 +45,9 @@ interface FeedItem {
 }
 
 // Экран не гаснет, пока табло открыто и видно; вкладка в фоне замок теряет сама.
+// true - замка нет: API доступен только по HTTPS и на localhost, а браузер вправе отказать.
 function useWakeLock() {
+  const [blocked, setBlocked] = useState(() => !('wakeLock' in navigator));
   useEffect(() => {
     if (!('wakeLock' in navigator)) return;
     let sentinel: WakeLockSentinel | null = null;
@@ -56,8 +58,11 @@ function useWakeLock() {
         (s) => {
           if (stopped) void s.release();
           else sentinel = s;
+          setBlocked(false);
         },
-        () => {}
+        () => {
+          if (!stopped) setBlocked(true);
+        }
       );
     };
     acquire();
@@ -68,6 +73,7 @@ function useWakeLock() {
       void sentinel?.release();
     };
   }, []);
+  return blocked;
 }
 
 function useFullscreen() {
@@ -194,7 +200,7 @@ export function TournamentScreen() {
     return () => clearTimeout(t);
   }, [bannerType, bannerQueued]);
 
-  useWakeLock();
+  const wakeLockBlocked = useWakeLock();
   const fullscreen = useFullscreen();
   const idle = useIdle();
 
@@ -367,6 +373,13 @@ export function TournamentScreen() {
             </button>
           )}
           <Link to={`/tournaments/${tournament.id}`} className="btn btn-sm btn-secondary">Закрыть</Link>
+          {wakeLockBlocked && (
+            <p className="basis-full text-right font-mono text-sm text-yellow-400">
+              <span aria-hidden="true">{'// '}</span>
+              экран может погаснуть:{' '}
+              {window.isSecureContext ? 'браузер не дал Wake Lock' : 'Wake Lock работает только по HTTPS или на localhost'}
+            </p>
+          )}
         </nav>
       </header>
 
