@@ -214,7 +214,7 @@ func main() {
 	defer compiler.Close()
 
 	compileQueue := queue.NewCompileQueue(redisCache, log)
-	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler,
+	compileWorker := worker.NewCompileWorker(compileQueue, programRepo, compiler, exec,
 		cache.NewDistributedLock(redisCache), notifier, log, cfg.Executor.CompileWorkers)
 	compileWorker.Start()
 

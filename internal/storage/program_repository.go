@@ -62,7 +62,8 @@ func (r *ProgramRepository) Create(ctx context.Context, program *models.Program)
 // программа турнира тем же запросом регистрируется участником: по отдельности сбой
 // между двумя INSERT оставлял готовую версию без строки tournament_participants, и
 // команда молча выпадала из раундов игры.
-// программа турнира создаётся только для игры, подключённой к этому турниру
+// программа турнира создаётся только для игры, подключённой к этому турниру.
+// пустой game_type берётся из игры: по нему воркер выбирает эталон самопроверки
 func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program *models.Program) error {
 	if program.Status == "" {
 		program.Status = models.ProgramReady
@@ -71,16 +72,18 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 	query := `
 		WITH p AS (
 			INSERT INTO programs (id, user_id, team_id, tournament_id, game_id, name, game_type, code_path, file_path, language, status, error_message, version)
-			SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+			SELECT $1, $2, $3, $4, $5, $6,
+				COALESCE(NULLIF($7, ''), (SELECT name FROM games WHERE id = $5), ''),
+				$8, $9, $10, $11, $12,
 				COALESCE((SELECT MAX(version) FROM programs WHERE team_id = $3 AND game_id = $5), 0) + 1
 			WHERE $4::uuid IS NULL
 			   OR EXISTS (SELECT 1 FROM tournament_games WHERE tournament_id = $4 AND game_id = $5)
-			RETURNING id, tournament_id, version, created_at, updated_at
+			RETURNING id, tournament_id, game_type, version, created_at, updated_at
 		), tp AS (
 			INSERT INTO tournament_participants (tournament_id, program_id, rating)
 			SELECT tournament_id, id, 1500 FROM p WHERE tournament_id IS NOT NULL
 		)
-		SELECT version, created_at, updated_at FROM p
+		SELECT game_type, version, created_at, updated_at FROM p
 	`
 
 	const maxRetries = 3
@@ -98,7 +101,7 @@ func (r *ProgramRepository) CreateWithAtomicVersion(ctx context.Context, program
 			program.Language,
 			program.Status,
 			program.ErrorMessage,
-		).Scan(&program.Version, &program.CreatedAt, &program.UpdatedAt)
+		).Scan(&program.GameType, &program.Version, &program.CreatedAt, &program.UpdatedAt)
 
 		if err == nil {
 			return nil
@@ -125,7 +128,8 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE id = $1
 	`
@@ -146,6 +150,9 @@ func (r *ProgramRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.
 		&program.Version,
 		&program.CreatedAt,
 		&program.UpdatedAt,
+		&program.CheckStatus,
+		&program.CheckMessage,
+		&program.CheckedAt,
 	)
 	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrProgramNotFound
@@ -164,7 +171,8 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*m
 
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE id = ANY($1)
 	`
@@ -183,7 +191,8 @@ func (r *ProgramRepository) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*m
 func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE user_id = $1
 		   OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $1)
@@ -215,6 +224,9 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 			&p.Version,
 			&p.CreatedAt,
 			&p.UpdatedAt,
+			&p.CheckStatus,
+			&p.CheckMessage,
+			&p.CheckedAt,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan program")
@@ -233,11 +245,14 @@ func (r *ProgramRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 // (или к исходнику для интерпретируемых языков) и текст ошибки.
 // зовётся из compile-worker'а после сборки в докер-песочнице. пишется только
 // поверх compiling: при дубле сборки (редис потерял лок и dedup) побеждает
-// первый итог. false - программа уже не в compiling или удалена
+// первый итог. false - программа уже не в compiling или удалена.
+// готовая программа встаёт в очередь самопроверки (check_status = pending)
 func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) (bool, error) {
 	query := `
 		UPDATE programs
-		SET status = $2, code_path = $3, error_message = $4, updated_at = NOW()
+		SET status = $2, code_path = $3, error_message = $4, updated_at = NOW(),
+		    check_status = CASE WHEN $2 = 'ready' THEN 'pending' END,
+		    check_message = NULL, checked_at = NULL
 		WHERE id = $1 AND status = 'compiling'
 	`
 
@@ -253,13 +268,44 @@ func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUI
 	return rows > 0, nil
 }
 
+// SaveCheckResult пишет итог самопроверки поверх pending. пустой status -
+// проверка не состоялась (сбой окружения), программа остаётся без неё
+func (r *ProgramRepository) SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) error {
+	query := `
+		UPDATE programs
+		SET check_status = NULLIF($2, ''), check_message = $3,
+		    checked_at = CASE WHEN $2 = '' THEN NULL ELSE NOW() END
+		WHERE id = $1 AND check_status = 'pending'
+	`
+	if _, err := r.db.ExecWithMetrics(ctx, "program_save_check_result", query, id, string(status), message); err != nil {
+		return errors.Wrap(err, "failed to save check result")
+	}
+	return nil
+}
+
+// ResetStaleChecks снимает pending с самопроверок, которые не закончились за
+// olderThan: воркер умер посреди проверки, и без сброса она висела бы вечно
+func (r *ProgramRepository) ResetStaleChecks(ctx context.Context, olderThan time.Duration) (int64, error) {
+	query := `
+		UPDATE programs
+		SET check_status = NULL
+		WHERE check_status = 'pending' AND updated_at < NOW() - $1::interval
+	`
+	result, err := r.db.ExecWithMetrics(ctx, "program_reset_stale_checks", query, olderThan.String())
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to reset stale checks")
+	}
+	return result.RowsAffected()
+}
+
 // GetStuckCompiling достаёт программы, застрявшие в compiling дольше olderThan —
 // значит задача где-то потерялась (упали между созданием и enqueue, или редис лёг).
 // compile-worker периодически закидывает их обратно в очередь
 func (r *ProgramRepository) GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE status = 'compiling' AND updated_at < NOW() - $1::interval
 		ORDER BY updated_at ASC
@@ -314,7 +360,8 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 	query := `
 		SELECT DISTINCT ON (team_id)
 		       id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE tournament_id = $1 AND game_id = $2 AND team_id IS NOT NULL
 		ORDER BY team_id, version DESC
@@ -345,6 +392,9 @@ func (r *ProgramRepository) GetByTournamentAndGame(ctx context.Context, tourname
 			&p.Version,
 			&p.CreatedAt,
 			&p.UpdatedAt,
+			&p.CheckStatus,
+			&p.CheckMessage,
+			&p.CheckedAt,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan program")
@@ -372,7 +422,8 @@ func (r *ProgramRepository) GetLatestVersion(ctx context.Context, teamID, gameID
 func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, teamID, gameID uuid.UUID) ([]*models.Program, error) {
 	query := `
 		SELECT id, user_id, team_id, tournament_id, game_id, name, game_type,
-		       code_path, file_path, language, status, error_message, version, created_at, updated_at
+		       code_path, file_path, language, status, error_message, version, created_at, updated_at,
+		       check_status, check_message, checked_at
 		FROM programs
 		WHERE team_id = $1 AND game_id = $2
 		ORDER BY version DESC
@@ -403,6 +454,9 @@ func (r *ProgramRepository) GetAllVersionsByTeamAndGame(ctx context.Context, tea
 			&p.Version,
 			&p.CreatedAt,
 			&p.UpdatedAt,
+			&p.CheckStatus,
+			&p.CheckMessage,
+			&p.CheckedAt,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan program")

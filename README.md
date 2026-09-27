@@ -100,7 +100,7 @@ make deploy-strong       # 8+ ядер, 16+ ГБ RAM
 | API Server | Go 1.26, Chi Router, JWT, WebSocket |
 | Domain Events | In-process Event Bus, между репликами через Redis pub/sub `tjudge:events` |
 | Worker Pool | Go, автомасштабирование от `WORKER_MIN` до `WORKER_MAX` (по умолчанию число ядер), приоритетная очередь |
-| Database | PostgreSQL 15 (миграции 000001-000045), живые лидерборды по партиционированным `matches` |
+| Database | PostgreSQL 15 (миграции 000001-000046), живые лидерборды по партиционированным `matches` |
 | Cache/Queue | Redis 7: кэш турниров и лидерборда, очереди матчей и компиляции, распределённые локи, rate limiting |
 | Monitoring | Prometheus, Grafana, Alertmanager, Pushgateway (`make monitoring-up`); прод-стек в отдельном репо infra-monitoring |
 | Executor | Компиляция в песочнице `tjudge-builder`, матчи в [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust), оба без сети; боты матча под разными uid |

@@ -18,6 +18,16 @@ const (
 	ProgramFailed ProgramStatus = "failed"
 )
 
+// итог самопроверки: матча свежесобранной программы против эталонного бота игры
+type CheckStatus string
+
+const (
+	CheckPending CheckStatus = "pending"
+	CheckOK      CheckStatus = "ok"
+	// программа упала или сходила не по правилам, подробности в CheckMessage
+	CheckFailed CheckStatus = "failed"
+)
+
 type Program struct {
 	ID           uuid.UUID     `json:"id" db:"id"`
 	UserID       uuid.UUID     `json:"user_id" db:"user_id"`
@@ -34,4 +44,9 @@ type Program struct {
 	Version      int           `json:"version" db:"version"`
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at" db:"updated_at"`
+
+	// nil - самопроверки не было (программа старше неё или сбой окружения)
+	CheckStatus  *CheckStatus `json:"check_status,omitempty" db:"check_status"`
+	CheckMessage *string      `json:"check_message,omitempty" db:"check_message"`
+	CheckedAt    *time.Time   `json:"checked_at,omitempty" db:"checked_at"`
 }

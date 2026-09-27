@@ -52,6 +52,8 @@ type ProgramRepository interface {
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*models.Program, error)
 	UpdateCompileResult(ctx context.Context, id uuid.UUID, status models.ProgramStatus, codePath string, errorMessage *string) (bool, error)
 	GetStuckCompiling(ctx context.Context, olderThan time.Duration, limit int) ([]*models.Program, error)
+	SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) error
+	ResetStaleChecks(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
 // Processor обрабатывает матчи

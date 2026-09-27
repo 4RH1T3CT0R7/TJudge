@@ -162,6 +162,17 @@ func TestSyncNotifier_WsTopology(t *testing.T) {
 	}
 	// лог компиляции с кусками исходника не уходит всем подписчикам турнира
 	assert.NotContains(t, br.calls[1].payload.(map[string]any), "error_message")
+	assert.NotContains(t, br.calls[1].payload.(map[string]any), "check_status", "у несобранной программы самопроверки нет")
+}
+
+func TestSyncNotifier_ProgramCheckStatus(t *testing.T) {
+	br := &fakeBroadcaster{}
+	n := &SyncNotifier{Broadcaster: br, Log: testLog(t)}
+
+	n.ProgramCompiled(context.Background(), ProgramCompiled{Version: 1, TournamentID: uuid.New(), Status: "ready", CheckStatus: "failed"})
+
+	require.Len(t, br.calls, 1)
+	assert.Equal(t, "failed", br.calls[0].payload.(map[string]any)["check_status"])
 }
 
 // nil-коллабораторы просто пропускаются, ничего не паникует

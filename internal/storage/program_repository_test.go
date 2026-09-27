@@ -331,6 +331,55 @@ func (s *ProgramRepositorySuite) TestUpdateCompileResult_OnlyFromCompiling() {
 	assert.False(s.T(), applied)
 }
 
+// готовая программа встаёт в очередь самопроверки, итог пишется только поверх pending
+func (s *ProgramRepositorySuite) TestSelfCheckLifecycle() {
+	ctx := context.Background()
+	user := s.createUser("prog_selfcheck")
+	program := s.createProgram(user.ID, nil, nil, nil, "Check Bot", 1)
+	_, err := s.database.ExecContext(ctx, "UPDATE programs SET status = 'compiling' WHERE id = $1", program.ID)
+	require.NoError(s.T(), err)
+
+	applied, err := s.repo.UpdateCompileResult(ctx, program.ID, models.ProgramReady, "/tmp/test/bot.bin", nil)
+	require.NoError(s.T(), err)
+	require.True(s.T(), applied)
+	got, err := s.repo.GetByID(ctx, program.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), got.CheckStatus)
+	assert.Equal(s.T(), models.CheckPending, *got.CheckStatus)
+
+	msg := "Traceback: ZeroDivisionError"
+	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, models.CheckFailed, &msg))
+	// повтор поверх готового итога ничего не меняет
+	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, models.CheckOK, nil))
+
+	got, err = s.repo.GetByID(ctx, program.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), got.CheckStatus)
+	assert.Equal(s.T(), models.CheckFailed, *got.CheckStatus)
+	require.NotNil(s.T(), got.CheckMessage)
+	assert.Equal(s.T(), msg, *got.CheckMessage)
+	assert.NotNil(s.T(), got.CheckedAt)
+
+	// несостоявшаяся проверка оставляет программу без статуса
+	_, err = s.database.ExecContext(ctx, "UPDATE programs SET check_status = 'pending' WHERE id = $1", program.ID)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, "", nil))
+	got, err = s.repo.GetByID(ctx, program.ID)
+	require.NoError(s.T(), err)
+	assert.Nil(s.T(), got.CheckStatus)
+	assert.Nil(s.T(), got.CheckedAt)
+
+	// зависший pending снимается, свежий остаётся
+	_, err = s.database.ExecContext(ctx, "UPDATE programs SET check_status = 'pending' WHERE id = $1", program.ID)
+	require.NoError(s.T(), err)
+	n, err := s.repo.ResetStaleChecks(ctx, time.Hour)
+	require.NoError(s.T(), err)
+	assert.Zero(s.T(), n)
+	n, err = s.repo.ResetStaleChecks(ctx, 0)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(1), n)
+}
+
 func (s *ProgramRepositorySuite) TestDelete() {
 	user := s.createUser("prog_delete")
 	program := s.createProgram(user.ID, nil, nil, nil, "Delete Bot", 1)
@@ -434,6 +483,8 @@ func (s *ProgramRepositorySuite) TestCreateWithAtomicVersion_RegistersParticipan
 		require.NoError(s.T(), s.repo.CreateWithAtomicVersion(ctx, p))
 		s.programIDs = append(s.programIDs, p.ID)
 		assert.Equal(s.T(), want, p.Version)
+		// по имени игры воркер выбирает эталон самопроверки
+		assert.Equal(s.T(), game.Name, p.GameType)
 
 		var rating int
 		require.NoError(s.T(), s.database.QueryRowContext(ctx,

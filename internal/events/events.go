@@ -34,7 +34,8 @@ type TournamentDeleted struct {
 	TournamentID uuid.UUID
 }
 
-// ProgramCompiled - асинхронная компиляция загруженной программы завершилась (успешно или нет).
+// ProgramCompiled - асинхронная компиляция загруженной программы завершилась (успешно или нет)
+// или у готовой программы закончилась самопроверка.
 // тащит с собой всё что нужно вебсокету, чтобы не лезть лишний раз в базу
 type ProgramCompiled struct {
 	Version      int
@@ -43,6 +44,7 @@ type ProgramCompiled struct {
 	TeamID       uuid.UUID
 	Status       string  // models.ProgramStatus: ready | failed
 	ErrorMessage *string // компиляционная ошибка при status=failed
+	CheckStatus  string  // models.CheckStatus; пусто - самопроверки нет
 }
 
 // GameRoundReset - раунд игры сброшен (матчи удалены, рейтинги откачены к 1500)

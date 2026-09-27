@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -28,6 +29,11 @@ type ProgramCompiler interface {
 	Compile(ctx context.Context, program *models.Program) (*executor.CompileResult, error)
 }
 
+// ProgramChecker гоняет самопроверку: матч программы против эталонного бота игры
+type ProgramChecker interface {
+	Check(ctx context.Context, gameType, programPath string) (*models.MatchResult, error)
+}
+
 // compileLockTTL - ttl лока сборки. WithLock продлевает его, пока сборка идёт,
 // а у убитого воркера лок протухает и программу можно собрать снова
 const compileLockTTL = 30 * time.Second
@@ -37,7 +43,7 @@ func compileLockKey(programID uuid.UUID) string {
 }
 
 // CompileWorker разбирает очередь компиляции: задача -> сборка в песочнице ->
-// статус compiling -> ready/failed.
+// статус compiling -> ready/failed, у ready затем самопроверка.
 // заодно периодически возвращает в очередь программы, зависшие в compiling
 // (задача потерялась: апи упал между созданием и enqueue, редис моргнул,
 // воркер перезапустился посреди сборки)
@@ -45,6 +51,7 @@ type CompileWorker struct {
 	queue       CompileQueue
 	programRepo ProgramRepository
 	compiler    ProgramCompiler
+	checker     ProgramChecker
 	lock        *cache.DistributedLock
 	notifier    events.Notifier
 	log         *logger.Logger
@@ -64,6 +71,7 @@ func NewCompileWorker(
 	q CompileQueue,
 	programRepo ProgramRepository,
 	compiler ProgramCompiler,
+	checker ProgramChecker,
 	lock *cache.DistributedLock,
 	notifier events.Notifier,
 	log *logger.Logger,
@@ -73,6 +81,7 @@ func NewCompileWorker(
 		queue:            q,
 		programRepo:      programRepo,
 		compiler:         compiler,
+		checker:          checker,
 		lock:             lock,
 		notifier:         notifier,
 		log:              log,
@@ -221,22 +230,75 @@ func (w *CompileWorker) compile(ctx context.Context, workerID int, task *queue.C
 		return
 	}
 
-	w.publishCompiled(ctx, program, status, errMsg)
+	checkStatus := models.CheckStatus("")
+	if status == models.ProgramReady {
+		checkStatus = models.CheckPending
+	}
+	w.publishCompiled(ctx, program, status, errMsg, checkStatus)
 
 	w.log.Info("Program compiled",
 		zap.Int("worker_id", workerID),
 		zap.String("program_id", program.ID.String()),
 		zap.String("status", string(status)),
 	)
+
+	if status == models.ProgramReady {
+		w.selfCheck(ctx, program, codePath)
+	}
+}
+
+// selfCheck гоняет свежесобранную программу против эталонного бота игры.
+// итог - только предупреждение команде: программа уже ready и в раунды
+// попадает в любом случае, рейтинги и лидерборды проверка не трогает
+func (w *CompileWorker) selfCheck(ctx context.Context, program *models.Program, execPath string) {
+	var status models.CheckStatus
+	var msg *string
+	// у программ, загруженных до заполнения game_type, эталон не выбрать
+	if program.GameType != "" {
+		res, err := w.checker.Check(ctx, program.GameType, execPath)
+		status, msg = checkVerdict(res, err)
+		if status == "" {
+			w.log.Warn("Self-check did not take place",
+				zap.String("program_id", program.ID.String()), zap.Error(err))
+		}
+	}
+
+	if err := w.programRepo.SaveCheckResult(ctx, program.ID, status, msg); err != nil {
+		// pending снимет ResetStaleChecks
+		w.log.LogError("Failed to save self-check result", err,
+			zap.String("program_id", program.ID.String()))
+		return
+	}
+	w.publishCompiled(ctx, program, models.ProgramReady, nil, status)
+}
+
+// checkVerdict переводит итог матча с эталоном в статус самопроверки. пусто -
+// проверка не состоялась: сбой окружения или упал сам эталон (код 2)
+func checkVerdict(res *models.MatchResult, err error) (models.CheckStatus, *string) {
+	switch {
+	case err != nil && executor.IsInfraError(err):
+		return "", nil
+	case err != nil:
+		msg := err.Error()
+		return models.CheckFailed, &msg
+	case res.ErrorCode == 0:
+		msg := fmt.Sprintf("счёт %d:%d против эталонного бота", res.Score1, res.Score2)
+		return models.CheckOK, &msg
+	case res.ErrorCode == 1:
+		return models.CheckFailed, &res.ErrorMessage
+	default:
+		return "", nil
+	}
 }
 
 // publishCompiled шлёт событие ProgramCompiled, best-effort
-func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Program, status models.ProgramStatus, errMsg *string) {
+func (w *CompileWorker) publishCompiled(ctx context.Context, program *models.Program, status models.ProgramStatus, errMsg *string, checkStatus models.CheckStatus) {
 	evt := events.ProgramCompiled{
 		Version:      1,
 		ProgramID:    program.ID,
 		Status:       string(status),
 		ErrorMessage: errMsg,
+		CheckStatus:  string(checkStatus),
 	}
 	if program.TournamentID != nil {
 		evt.TournamentID = *program.TournamentID
@@ -263,6 +325,12 @@ func (w *CompileWorker) runStuckRecovery(ctx context.Context) {
 }
 
 func (w *CompileWorker) recoverStuck(ctx context.Context) {
+	if n, err := w.programRepo.ResetStaleChecks(ctx, w.stuckOlderThan); err != nil {
+		w.log.LogError("Failed to reset stale self-checks", err)
+	} else if n > 0 {
+		w.log.Info("Reset stale self-checks", zap.Int64("count", n))
+	}
+
 	programs, err := w.programRepo.GetStuckCompiling(ctx, w.stuckOlderThan, w.stuckBatchSize)
 	if err != nil {
 		w.log.LogError("Failed to find stuck compiling programs", err)

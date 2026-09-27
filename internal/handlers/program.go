@@ -683,7 +683,7 @@ func (h *ProgramHandler) handleFileUpload(w http.ResponseWriter, r *http.Request
 		TournamentID: &form.tournamentID,
 		GameID:       &form.gameID,
 		Name:         form.name,
-		GameType:     "",       // заполнится из game
+		GameType:     "",       // запрос создания возьмёт имя игры
 		CodePath:     filePath, // исходник; после компиляции worker заменит на бинарник
 		FilePath:     &filePath,
 		Language:     language,
