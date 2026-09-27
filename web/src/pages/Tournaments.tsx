@@ -37,7 +37,7 @@ export function Tournaments() {
             className="input w-auto min-w-[150px]"
           >
             <option value="">Все статусы</option>
-            <option value="pending">Ожидание</option>
+            <option value="pending">Регистрация</option>
             <option value="active">Активные</option>
             <option value="completed">Завершённые</option>
           </select>

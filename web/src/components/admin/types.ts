@@ -2,7 +2,7 @@ import type { InvaderPose } from '../SpaceInvader';
 import type { TournamentStatus } from '../../types';
 
 export const statusLabels: Record<TournamentStatus, string> = {
-  pending: 'Ожидание',
+  pending: 'Регистрация',
   active: 'Активный',
   completed: 'Завершён',
 };

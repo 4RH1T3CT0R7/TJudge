@@ -22,7 +22,7 @@ const STATUS = {
     failed: { glyph: '✕', label: 'Ошибка сборки', tone: 'red' },
   },
   tournament: {
-    pending: { glyph: '○', label: 'Ожидание', tone: 'yellow' },
+    pending: { glyph: '○', label: 'Регистрация', tone: 'yellow' },
     active: { glyph: '◐', label: 'Активный', tone: 'blue' },
     completed: { glyph: '■', label: 'Завершён', tone: 'gray' },
   },
