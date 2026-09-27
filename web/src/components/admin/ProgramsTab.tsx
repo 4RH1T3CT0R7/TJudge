@@ -241,7 +241,7 @@ export function ProgramsTab({
                                           </summary>
                                           <div className="mt-1 max-w-md">
                                             <MatchError
-                                              match={{ status: 'failed', error_code: 1, error_message: program.check_message ?? '' }}
+                                              match={{ status: 'failed', error_code: 1, winner: 2, error_message: program.check_message ?? '' }}
                                               mySide={null}
                                               names={[teamName]}
                                             />

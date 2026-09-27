@@ -3,7 +3,7 @@ import { explainMatchError, failedSide, type Side } from '../../utils/explainErr
 import type { Match } from '../../types';
 
 interface MatchErrorProps {
-  match: Pick<Match, 'status' | 'error_code' | 'error_message'>;
+  match: Pick<Match, 'status' | 'error_code' | 'error_message' | 'winner'>;
   /** Сторона своей программы; null - зритель или админ. */
   mySide: Side | null;
   /** Названия команд сторон. */

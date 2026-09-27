@@ -23,6 +23,7 @@ const OVERFLOW_MARK = '--- stderr больше 4 МБ';
 const FLUSH_HINT =
   'сбрасывайте вывод после каждого хода: fflush(stdout), print(..., flush=True), STDOUT.sync = true, io.flush(); время на ответ включает запуск';
 const STDOUT_HINT = 'в stdout — только ход, одной строкой; отладку печатайте в stderr';
+const NUMBER_HINT = 'ход — одно целое число без знака, дробной части и лишних символов, одной строкой';
 
 interface Reason {
   phrase: string;
@@ -55,13 +56,22 @@ const REASONS: [RegExp, (m: RegExpMatchArray) => Reason][] = [
     /bid must be > opponent's last bid \((-?\d+)\), got (-?\d+)/,
     (m) => ({ phrase: `поставила ${m[2]}, а нужно больше ставки соперника ${m[1]}`, hint: 'чтобы выйти из торгов, ставьте 0' }),
   ],
-  [/invalid digit|cannot parse|invalid float|empty string/i, () => ({ phrase: 'ответила не числом', hint: STDOUT_HINT })],
+  // ходы всех игр - целые неотрицательные числа (u32 или i32), разбор через parse() Rust
+  [/empty string/, () => ({ phrase: 'ответила пустой строкой', hint: STDOUT_HINT })],
+  [/number too (large|small)/, (m) => ({ phrase: `ответила слишком ${m[1] === 'large' ? 'большим' : 'маленьким'} числом`, hint: NUMBER_HINT })],
+  [/invalid digit/, () => ({ phrase: 'ответила не целым неотрицательным числом', hint: NUMBER_HINT })],
 ];
 
-/** Сторона, чья программа упала: код выхода tjudge-cli 1 или 2; иначе сбой не программы. */
-export function failedSide(match: Pick<Match, 'status' | 'error_code'>): Side | null {
+/**
+ * Сторона, чья программа упала: код выхода tjudge-cli 1 или 2 и победа соперника,
+ * как в handlers/match.go redactMatchErrors. Код 1 без победителя - сбой матча
+ * в воркере (таймаут матча, мусор в выводе), сторона неизвестна: null.
+ */
+export function failedSide(match: Pick<Match, 'status' | 'error_code' | 'winner'>): Side | null {
   if (match.status !== 'failed') return null;
-  return match.error_code === 1 || match.error_code === 2 ? match.error_code : null;
+  if (match.error_code === 1 && match.winner === 2) return 1;
+  if (match.error_code === 2 && match.winner === 1) return 2;
+  return null;
 }
 
 /** Хвост stderr упавшей программы, который бэкенд приложил к ошибке. */
@@ -72,12 +82,14 @@ export function stderrTail(text: string): string | undefined {
   return tail.split('\n').filter((l) => !l.startsWith(OVERFLOW_MARK)).join('\n').trim() || undefined;
 }
 
-// Последняя строка с ошибкой в хвосте: Traceback, panic, Exception.
+// Последняя строка с ошибкой в хвосте: Traceback, panic, Exception. Кадры стека
+// (Java/JS «at …», Ruby «from …») пропускаются: в них тоже бывает «…Exception».
 function lastErrorLine(tail: string): string | undefined {
   const lines = tail.split('\n').map((l) => l.trim()).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^(at|from)\s/.test(lines[i])) continue;
     if (/panicked at/.test(lines[i])) return [lines[i], lines[i + 1]].filter(Boolean).join(' ');
-    if (/\w*(Error|Exception)\b|^panic:|Segmentation fault/.test(lines[i])) return lines[i].slice(0, 160);
+    if (/(Error|Exception)(:|\)?$)|^panic:|Segmentation fault/.test(lines[i])) return lines[i].slice(0, 160);
   }
   return undefined;
 }
@@ -95,7 +107,7 @@ function tailHint(text: string): string | undefined {
  * names - названия команд сторон. null - матч не падал.
  */
 export function explainMatchError(
-  match: Pick<Match, 'status' | 'error_code' | 'error_message'>,
+  match: Pick<Match, 'status' | 'error_code' | 'error_message' | 'winner'>,
   mySide: Side | null,
   names: [string?, string?] = [],
 ): Explanation | null {
@@ -103,7 +115,8 @@ export function explainMatchError(
   const side = failedSide(match);
   if (side === null) {
     return {
-      verdict: `Матч прерван системой${match.error_code ? ` (код ${match.error_code})` : ''}`,
+      // код 1 без победителя - метка сбоя воркера, а не сторона
+      verdict: `Матч прерван системой${(match.error_code ?? 0) > 2 ? ` (код ${match.error_code})` : ''}`,
       hint: 'если повторяется, сообщите организатору',
     };
   }
@@ -152,9 +165,21 @@ const COMPILE_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
   ],
   [/is not in std|cannot find package|no required module provides package/, () => 'внешние модули Go недоступны, только стандартная библиотека'],
   [/declared and not used|imported and not used/, () => 'Go не собирает код с неиспользуемыми переменными и импортами: удалите их'],
-  [/mismatched types/, () => 'типы не совпадают: приведите явно (as u32, try_into)'],
+  [/error\[E0308\]: mismatched types/, () => 'типы не совпадают: приведите явно (as u32, try_into)'],
+  [/\(mismatched types (\w+) and (\w+)\)/, (m) => `типы ${m[1]} и ${m[2]} не смешиваются: приведите явно, например ${m[2]}(x)`],
   [/Missing parentheses in call to 'print'/, () => 'это синтаксис Python 2, а сборка идёт в Python 3.12: print(...)'],
-  [/IndentationError|TabError/, () => 'отступы: не смешивайте табы и пробелы'],
+  // py_compile: «IndentationError: unexpected indent (main.py, line 5)»
+  [/TabError/, () => 'в отступах смешаны табы и пробелы: оставьте что-то одно'],
+  [
+    /IndentationError: (unexpected indent|expected an indented block|unindent)[^\n]*, line (\d+)\)/,
+    (m) =>
+      m[1] === 'unexpected indent'
+        ? `лишний отступ в строке ${m[2]}`
+        : m[1] === 'unindent'
+          ? `отступ в строке ${m[2]} не совпадает ни с одним уровнем выше`
+          : `в строке ${m[2]} не хватает отступа: тело if, for, def сдвигается вправо`,
+  ],
+  [/IndentationError/, () => 'ошибка в отступах: смотрите строку в выводе ниже'],
   [/не найдено объявление class/, () => 'объявите class с методом public static void main(String[] args)'],
   [/cannot find symbol|was not declared in this scope/, () => 'имя не найдено: проверьте опечатки и подключённые заголовки или импорты'],
   [/invalid UTF-8|stream did not contain valid UTF-8|Non-UTF-8 code/i, () => 'сохраните файл в кодировке UTF-8'],

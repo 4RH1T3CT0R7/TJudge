@@ -157,7 +157,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
       addToast(`${v} не собралась: ${explainCompileError(tracked.error_message ?? '') ?? 'смотрите вывод компилятора'}`, 'error');
     }
     if (prev.check !== 'failed' && tracked.check_status === 'failed') {
-      const e = explainMatchError({ status: 'failed', error_code: 1, error_message: tracked.check_message ?? '' }, 1);
+      const e = explainMatchError({ status: 'failed', error_code: 1, winner: 2, error_message: tracked.check_message ?? '' }, 1);
       addToast(`${v}: самопроверка не пройдена — ${e?.verdict ?? 'программа упала'}`, 'info');
     }
   }, [tracked]);
@@ -237,7 +237,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
 
   const checkError =
     current?.status === 'ready' && current.check_status === 'failed'
-      ? { status: 'failed' as const, error_code: 1, error_message: current.check_message ?? '' }
+      ? { status: 'failed' as const, error_code: 1, winner: 2, error_message: current.check_message ?? '' }
       : null;
 
   return (
