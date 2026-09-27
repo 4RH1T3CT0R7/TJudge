@@ -47,7 +47,8 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
               <div className="text-4xl mb-2 animate-bounce" style={{ animationDelay: `${(place - 1) * 200}ms`, animationDuration: '2s' }}>
                 {medal}
               </div>
-              <div className="font-bold text-lg text-gray-100 truncate px-2">
+              {/* на телефоне колонка узкая: название переносится, а не обрезается */}
+              <div className="font-bold text-sm sm:text-lg text-gray-100 line-clamp-3 break-words hyphens-auto sm:px-2" title={entry.team_name || entry.program_name}>
                 {entry.team_name || entry.program_name}
               </div>
               <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
