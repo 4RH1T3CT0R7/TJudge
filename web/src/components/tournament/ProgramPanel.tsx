@@ -248,11 +248,9 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
                 {current.check_status === 'failed' && <span className="text-amber-300">⚠ упала</span>}
               </SessionLine>
             )}
-            <p role="status" className="mt-2 border-t border-gray-800 pt-2">
-              {current.status === 'compiling' && <span className="text-yellow-300"><span aria-hidden="true">◔ </span>компилируется</span>}
-              {current.status === 'ready' && <span className="text-green-400"><span aria-hidden="true">● </span>собрана</span>}
-              {current.status === 'failed' && <span className="text-red-400"><span aria-hidden="true">✕ </span>не собралась</span>}
-              {playing?.id === current.id && <span className="text-primary-300"> · <span aria-hidden="true">▶ </span>в игре</span>}
+            <p role="status" className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-800 pt-2">
+              <StatusLabel entity="program" status={current.status} />
+              {playing?.id === current.id && <span className="text-primary-300"><span aria-hidden="true">▶ </span>в игре</span>}
             </p>
           </section>
 
