@@ -12,7 +12,9 @@ export function ErrorState({ message, onRetry, children }: ErrorStateProps) {
   return (
     <div role="alert" className="mx-auto w-fit max-w-full py-12 px-4 font-mono text-sm">
       <p>
-        <span className="text-red-400">stderr:</span> <span className="text-gray-200">{message}</span>
+        <span aria-hidden="true" className="text-red-400">stderr: </span>
+        <span className="sr-only">Ошибка: </span>
+        <span className="text-gray-200">{message}</span>
       </p>
       {(onRetry || children) && (
         <div className="mt-5 flex flex-wrap gap-3">
