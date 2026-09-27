@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import api from '../../api/client';
 import { confirmDialog, useConfirmStore } from '../../store/confirmStore';
+import { useToastStore } from '../../store/toastStore';
 import { ConfirmDialogHost } from '../ui/ConfirmDialog';
 import { useGameAdminActions } from '../tournament/useGameAdminActions';
-import { confirmDisqualify, count } from './confirmations';
+import { confirmDisqualify, confirmResetRound, count } from './confirmations';
 import type { Game, MatchRound, Tournament } from '../../types';
 
 afterEach(() => {
@@ -111,4 +112,15 @@ it('название сверяется без регистра, знаков, �
     fireEvent.change(await screen.findByLabelText(/Чтобы подтвердить/), { target: { value: typed } });
     expect((screen.getByText('Удалить') as HTMLButtonElement).disabled, `${name} / ${typed}`).toBe(!unlocked);
   }
+});
+
+it('сброс при идущих матчах не открывает диалог, а сообщает тостом', async () => {
+  vi.spyOn(api, 'getMatchesByRounds').mockResolvedValue([round({ total_matches: 4, running_count: 1 })]);
+  useToastStore.setState({ toasts: [] });
+
+  await expect(confirmResetRound('t1', { name: 'dilemma', display_name: 'Дилемма' })).resolves.toBe(false);
+  expect(useConfirmStore.getState().pending).toBeNull();
+  expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual([
+    'Идут матчи игры «Дилемма»: сброс возможен после их завершения',
+  ]);
 });

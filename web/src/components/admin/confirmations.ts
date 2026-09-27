@@ -1,11 +1,13 @@
 import api from '../../api/client';
 import { confirmDialog } from '../../store/confirmStore';
+import { useToastStore } from '../../store/toastStore';
 import type { MatchRound } from '../../types';
 
 // Подтверждения необратимых действий админа. Числа последствий считаются прямо
 // перед показом: запуск раунда - dry-run бэкенда тем же кодом, что и настоящий
 // запуск, остальное - по счётчикам матчей с теми же статусами, что трогает действие.
-// Ошибка расчёта (нет участников, идут матчи) уходит вызывающему вместо диалога.
+// Ошибка запроса (нет участников, идут матчи) уходит вызывающему вместо диалога,
+// тост о ней показывает клиент API.
 
 type Forms = [one: string, few: string, many: string];
 
@@ -62,9 +64,11 @@ export async function confirmRunRound(tournamentId: string, game: GameRef, note?
 
 export async function confirmResetRound(tournamentId: string, game: GameRef) {
   const rounds = (await api.getMatchesByRounds(tournamentId)).filter((r) => r.game_type === game.name);
-  // сброс при идущих матчах бэкенд всё равно отклонит (409)
+  // сброс при идущих матчах бэкенд всё равно отклонит (409); запроса нет, поэтому
+  // тост здесь: баннер ошибки у вызывающего бывает под фоном модалки или за экраном
   if (rounds.some((r) => r.running_count > 0)) {
-    throw new Error(`Идут матчи игры «${game.display_name}»: сброс возможен после их завершения`);
+    useToastStore.getState().addToast(`Идут матчи игры «${game.display_name}»: сброс возможен после их завершения`, 'error');
+    return false;
   }
   return confirmDialog({
     title: 'Сброс раунда',
