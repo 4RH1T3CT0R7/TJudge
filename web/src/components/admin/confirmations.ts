@@ -1,7 +1,7 @@
 import api from '../../api/client';
 import { confirmDialog } from '../../store/confirmStore';
 import { useToastStore } from '../../store/toastStore';
-import type { MatchRound } from '../../types';
+import type { MatchRound, RoundPreview } from '../../types';
 
 // Подтверждения необратимых действий админа. Числа последствий считаются прямо
 // перед показом: запуск раунда - dry-run бэкенда тем же кодом, что и настоящий
@@ -30,6 +30,14 @@ interface GameRef {
   display_name: string;
 }
 
+// Последствия нового раунда по его dry-run; общие у ручного запуска и авто-раунда.
+export function roundLines(p: RoundPreview) {
+  return [
+    ...(p.matches_deleted > 0 ? [`удалит ${count(p.matches_deleted, MATCHES)} прошлого раунда и историю рейтинга`] : []),
+    `создаст ${count(p.matches_created, MATCHES)} для ${count(p.participants, ['команды', 'команд', 'команд'])} с готовой программой`,
+  ];
+}
+
 // note - побочный эффект вызывающего (смена активной игры), последней строкой
 export async function confirmRunRound(tournamentId: string, game: GameRef, note?: string) {
   const p = await api.previewGameRound(tournamentId, game.name);
@@ -46,17 +54,12 @@ export async function confirmRunRound(tournamentId: string, game: GameRef, note?
     });
   }
   const restart = p.matches_deleted > 0;
-  const created = `создаст ${count(p.matches_created, MATCHES)} для ${count(p.participants, ['команды', 'команд', 'команд'])} с готовой программой`;
   return confirmDialog({
     title: restart ? 'Перезапуск раунда' : 'Запуск раунда',
     message: restart
       ? `Раунд игры «${game.display_name}» начнётся заново, результаты прошлого раунда пропадут.`
       : `Запустить раунд игры «${game.display_name}»?`,
-    details: [
-      ...(restart ? [`удалит ${count(p.matches_deleted, MATCHES)} прошлого раунда и историю рейтинга`] : []),
-      created,
-      ...(note ? [note] : []),
-    ],
+    details: [...roundLines(p), ...(note ? [note] : [])],
     confirmLabel: restart ? 'Перезапустить раунд' : 'Запустить раунд',
     danger: restart,
   });

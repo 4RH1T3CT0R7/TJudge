@@ -31,6 +31,13 @@ import {
   SchemaError,
 } from './schema';
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Без глобального тоста об ошибке: вызывающий её ждёт и показывает сам. */
+    quiet?: boolean;
+  }
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 // Retry/backoff parameters для transient-ошибок (5xx, network).
@@ -213,8 +220,12 @@ class ApiClient {
 
         // Показываем глобальный error-toast для не-401 ошибок
         // (401 обрабатываются логикой refresh токена выше).
-        // Ошибки входа форма показывает сама
-        if (error.response?.status !== 401 && !LOGIN_ENDPOINT.test(originalRequest?.url ?? '')) {
+        // Ошибки входа и запросов с quiet показывает вызывающий
+        if (
+          error.response?.status !== 401 &&
+          !LOGIN_ENDPOINT.test(originalRequest?.url ?? '') &&
+          !originalRequest?.quiet
+        ) {
           const responseData = error.response?.data as
             | Record<string, unknown>
             | undefined;
@@ -432,10 +443,10 @@ class ApiClient {
   }
 
   // Dry-run запуска раунда: те же расчёты на бэкенде, база не меняется.
-  async previewGameRound(tournamentId: string, gameType: string): Promise<RoundPreview> {
+  async previewGameRound(tournamentId: string, gameType: string, quiet = false): Promise<RoundPreview> {
     const { data } = await this.client.get<RoundPreview>(
       `/tournaments/${tournamentId}/run-game-matches/preview`,
-      { params: { game_type: gameType } }
+      { params: { game_type: gameType }, quiet }
     );
     return data;
   }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
@@ -7,6 +7,8 @@ import { useToastStore } from '../../store/toastStore';
 import { PlayIcon } from '../icons';
 import { AutoRoundCountdown } from './AutoRoundCountdown';
 import { Modal } from '../ui/Modal';
+import { Consequences } from '../ui/ConfirmDialog';
+import { roundLines } from '../admin/confirmations';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { mdPreview } from '../../utils/markdown';
@@ -52,6 +54,16 @@ export function GamesTab({
   // Игра, для которой спрашивается интервал авто-раунда
   const [autoRoundGameId, setAutoRoundGameId] = useState<string | null>(null);
   const [autoRoundInterval, setAutoRoundInterval] = useState('60');
+  // Если авто-раунд стартует сразу, он запустит тот же раунд, что считает dry-run.
+  // Ошибка dry-run (мало команд, идут матчи) значит, что сразу раунд не стартует
+  const autoRoundGame = games.find((g) => g.id === autoRoundGameId);
+  const autoRoundPreview = useQuery({
+    queryKey: ['tournament', tournamentId, 'round-preview', autoRoundGame?.name],
+    queryFn: () => api.previewGameRound(tournamentId, autoRoundGame!.name, true),
+    enabled: autoRoundGame !== undefined,
+    staleTime: 0,
+    gcTime: 0,
+  }).data;
 
   const handleRunMatches = async (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
@@ -284,6 +296,12 @@ export function GamesTab({
             Авто-раунд сам перезапускает игру: первый раунд может стартовать сразу после включения,
             и каждый новый раунд удаляет результаты прошлого.
           </p>
+          {autoRoundPreview?.pending === 0 && (
+            <>
+              <p className="mt-3 text-sm text-gray-400">Если раунд стартует сразу:</p>
+              <Consequences lines={roundLines(autoRoundPreview)} className="mt-2" />
+            </>
+          )}
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setAutoRoundGameId(null)}>
               Отмена

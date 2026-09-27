@@ -3,14 +3,16 @@ import { act } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import api from '../../api/client';
 import { confirmDialog, useConfirmStore } from '../../store/confirmStore';
 import { useToastStore } from '../../store/toastStore';
 import { ConfirmDialogHost } from '../ui/ConfirmDialog';
+import { GamesTab } from '../tournament/GamesTab';
 import { useGameAdminActions } from '../tournament/useGameAdminActions';
 import { confirmDisqualify, confirmResetRound, count } from './confirmations';
-import type { Game, MatchRound, Tournament } from '../../types';
+import type { Game, MatchRound, Tournament, TournamentGameWithDetails } from '../../types';
 
 afterEach(() => {
   cleanup();
@@ -123,4 +125,25 @@ it('сброс при идущих матчах не открывает диал
   expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual([
     'Идут матчи игры «Дилемма»: сброс возможен после их завершения',
   ]);
+});
+
+it('включение авто-раунда показывает числа dry-run без тоста об ошибке', async () => {
+  const preview = vi.spyOn(api, 'previewGameRound').mockResolvedValue({
+    game_type: 'dilemma', pending: 0, participants: 5, matches_created: 20, matches_deleted: 12,
+  });
+  const game = { id: 'g1', name: 'dilemma', display_name: 'Дилемма заключённого', rules: '' } as Game;
+  const status = { game_id: 'g1', is_active: true, auto_round_enabled: false } as TournamentGameWithDetails;
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter>
+        <GamesTab games={[game]} gamesStatus={[status]} tournamentId="t1" myTeam={null} isAdmin tournamentStatus="active" />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  fireEvent.click(screen.getByText('Авто'));
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() => expect(dialog.textContent).toContain('удалит 12 матчей прошлого раунда'));
+  expect(dialog.textContent).toContain('создаст 20 матчей для 5 команд');
+  expect(preview).toHaveBeenCalledWith('t1', 'dilemma', true);
 });
