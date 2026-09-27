@@ -123,7 +123,7 @@ export function GameShowcase() {
     <div className="space-y-6">
       <Tabs
         label="Игры"
-        items={games.map((game) => ({ id: game.id, label: game.name }))}
+        items={games.map((game) => ({ id: game.id, label: game.name, icon: getGameConfig(game.id).icon }))}
         active={currentGame.id}
         onChange={setActiveGame}
       >

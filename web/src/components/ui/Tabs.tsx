@@ -7,6 +7,8 @@ export interface TabItem<T extends string> {
   label: string;
   /** Счётчик после подписи: «Матчи [414]». */
   count?: number;
+  /** Глиф вместо подписи на узком экране (подпись остаётся для скринридера). */
+  icon?: string;
 }
 
 interface TabsProps<T extends string> {
@@ -87,7 +89,8 @@ export function Tabs<T extends string>({ items, active, onChange, label, aside, 
                 }`}
               >
                 <span aria-hidden="true" className={selected ? 'text-primary-400' : 'invisible'}>{'> '}</span>
-                {tab.label}
+                {tab.icon && <span aria-hidden="true" className="sm:hidden">{tab.icon}</span>}
+                <span className={tab.icon ? 'max-sm:sr-only' : undefined}>{tab.label}</span>
                 {tab.count !== undefined && <>{' '}<span className="text-gray-500">[{tab.count}]</span></>}
               </button>
             );
