@@ -72,7 +72,7 @@ export function Tournaments() {
               <StaggerItem key={tournament.id}>
                 <Link
                   to={`/tournaments/${tournament.id}`}
-                  className="card card-hover block"
+                  className="card card-hover block h-full"
                   onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
                 >
