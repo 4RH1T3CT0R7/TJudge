@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { expect, it } from 'vitest';
 import { Modal } from './Modal';
@@ -118,5 +119,40 @@ it('Escape закрывает только верхний из открытых 
 
   await act(async () => escape());
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+  root.unmount();
+});
+
+it('Escape не закрывает нижний диалог, перерисованный под открытым верхним', async () => {
+  function Outer() {
+    const [open, setOpen] = useState(true);
+    const [, setTick] = useState(0);
+    return (
+      <>
+        <button id="tick" onClick={() => setTick((t) => t + 1)}>перерисовать</button>
+        <Modal open={open} onClose={() => setOpen(false)} title="Форма">
+          <p>форма</p>
+        </Modal>
+      </>
+    );
+  }
+  // в браузере закрытие верхнего коммитится в микрозадаче между слушателями keydown
+  function Inner() {
+    const [open, setOpen] = useState(true);
+    return (
+      <Modal open={open} onClose={() => flushSync(() => setOpen(false))} title="Подтверждение">
+        <p>подтверждение</p>
+      </Modal>
+    );
+  }
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => root.render(<><Outer /><Inner /></>));
+  await act(async () => document.getElementById('tick')!.click());
+
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+  const left = document.querySelectorAll('[role="dialog"]');
+  expect(left).toHaveLength(1);
+  expect(left[0].textContent).toContain('форма');
   root.unmount();
 });

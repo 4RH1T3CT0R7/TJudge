@@ -1,7 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { XMarkIcon } from '../icons';
 
 interface ModalProps {
@@ -16,8 +15,14 @@ interface ModalProps {
 }
 
 // Открытые модалки в порядке открытия: Escape закрывает только верхнюю,
-// подтверждение поверх формы не должно закрыть заодно и форму.
-const openStack: symbol[] = [];
+// подтверждение поверх формы не должно закрыть заодно и форму. Слушатель один
+// на все модалки: у отдельных порядок вызова меняется при перерисовках, а
+// закрытая верхняя успевает уйти со стека до вызова слушателя нижней.
+const openStack: { current: () => void }[] = [];
+
+function closeTop(e: { key: string }) {
+  if (e.key === 'Escape') openStack[openStack.length - 1]?.current();
+}
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -47,17 +52,19 @@ function trapTab(e: KeyboardEvent<HTMLDivElement>) {
 // Фокус уходит в диалог и после закрытия возвращается на элемент, который его открыл.
 // Рендер в body: иначе контекст наложения страницы оставляет шапку поверх фона.
 export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md', closeOnBackdrop = true }: ModalProps) {
-  const [token] = useState(() => Symbol('modal'));
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
-    openStack.push(token);
+    if (openStack.length === 0) document.addEventListener('keydown', closeTop);
+    openStack.push(onCloseRef);
     return () => {
-      openStack.splice(openStack.indexOf(token), 1);
+      openStack.splice(openStack.indexOf(onCloseRef), 1);
+      if (openStack.length === 0) document.removeEventListener('keydown', closeTop);
     };
-  }, [open, token]);
-  useEscapeKey(() => {
-    if (openStack[openStack.length - 1] === token) onClose();
-  }, open);
+  }, [open]);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   // выделение текста в поле, отпущенное над фоном, тоже даёт click по фону
