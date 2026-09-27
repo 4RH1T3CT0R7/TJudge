@@ -93,6 +93,7 @@ web/
 │   │   ├── TournamentScreen.tsx
 │   │   ├── ShortLink.tsx
 │   │   ├── GameDetail.tsx
+│   │   ├── MatchDetail.tsx
 │   │   ├── Games.tsx
 │   │   ├── GameView.tsx
 │   │   ├── TeamManagement.tsx
@@ -128,10 +129,11 @@ web/
 | Login | `/login` | Вход в систему |
 | Profile | `/profile` | Профиль пользователя (требует авторизации) |
 | Tournaments | `/tournaments` | Список турниров |
-| Tournament Detail | `/tournaments/:id` | Детали турнира (вкладки: Info, Leaderboard, Games, Teams) |
+| Tournament Detail | `/tournaments/:id` | Детали турнира (вкладки: Info, Leaderboard, Games, Teams); у завершённого на вкладке таблицы — итоги с автоинсайтами |
 | Tournament Screen | `/tournaments/:id/screen` | Табло для проектора: без шапки, F — полный экран, ←/→ и пробел — страницы и пауза, `?rotate=` — секунд на страницу, `?view=ceremony` — церемония (admin); требует авторизации |
 | Short Link | `/t/:code` | Короткая ссылка с QR табло: ведёт на таблицу турнира по его коду |
-| Game Detail | `/tournaments/:tournamentId/games/:gameId` | Правила игры, загрузка программы |
+| Game Detail | `/tournaments/:tournamentId/games/:gameId` | Правила игры, загрузка программы; вкладка «Анализ» — матрица личных встреч (победы или средние очки, при 21+ командах — пиксельная карта), «экология» Аксельрода, паспорт стратегий дилеммы; `?team=` — матчи одной команды |
+| Match Detail | `/tournaments/:id/matches/:matchId` | Разбор матча: ходы обеих сторон по итерациям, накопленный счёт, проигрывание (без reduced motion), ссылка на обратную ориентацию. Ходы — из `GET /matches/{id}/transcript`, у матчей без записи — пустое состояние |
 | Games | `/games` | Каталог игр |
 | Game View | `/games/:id` | Просмотр правил отдельной игры |
 | Team Management | `/teams/:id` | Управление командой (требует авторизации) |
