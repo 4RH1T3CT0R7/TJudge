@@ -428,6 +428,9 @@ func splitTranscript(stderr string) (*models.Transcript, string) {
 	moves := [][]int{{}, {}}
 	var points [][]int
 	var rest strings.Builder
+	// -v любой игры начинается с [init]. без неё начало потока срезал tail в
+	// sandbox.sh (ход бота целиком в «unknown action»), и ходы шли бы не с первой итерации
+	started := false
 	lines := strings.SplitAfter(stderr, "\n")
 	for i, raw := range lines {
 		line := strings.TrimSuffix(raw, "\n")
@@ -439,7 +442,9 @@ func splitTranscript(stderr string) (*models.Transcript, string) {
 			rest.WriteString(raw)
 			continue
 		}
-		if m := moveLineRe.FindStringSubmatch(line); m != nil {
+		if strings.HasPrefix(line, "[init] ") {
+			started = true
+		} else if m := moveLineRe.FindStringSubmatch(line); m != nil {
 			side := 0
 			if m[1] == "<" {
 				side = 1
@@ -464,7 +469,7 @@ func splitTranscript(stderr string) (*models.Transcript, string) {
 			}
 		}
 	}
-	if len(moves[0]) == 0 && len(moves[1]) == 0 {
+	if !started || (len(moves[0]) == 0 && len(moves[1]) == 0) {
 		return nil, rest.String()
 	}
 	return &models.Transcript{Moves: moves, Points: points}, rest.String()

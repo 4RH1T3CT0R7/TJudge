@@ -134,8 +134,14 @@ func TestSplitTranscript(t *testing.T) {
 		},
 		{
 			name:   "числовые ходы",
-			stderr: "[>] claim: 100\n[<] claim: 2\n[iter-00] result: (0, 4)\n[iter-00] score: (0, 4)\n[result] score: (0, 4)\n",
+			stderr: "[init] L: 2, U: 100, R: 2, iterations: 1\n[>] claim: 100\n[<] claim: 2\n[iter-00] result: (0, 4)\n[iter-00] score: (0, 4)\n[result] score: (0, 4)\n",
 			want:   &models.Transcript{Moves: [][]int{{100}, {2}}, Points: [][]int{{0}, {4}}},
+		},
+		{
+			// tail в sandbox.sh срезал начало потока: ходы не с первой итерации
+			name:     "поток без [init]",
+			stderr:   "ision: Cooperate\n[<] decision: Defect\n[iter-07] result: (0, 10)\nright player error: unknown action\n",
+			wantRest: "ision: Cooperate\nright player error: unknown action\n",
 		},
 		{
 			name: "аукцион: ставки по очереди, очков за итерацию нет",
