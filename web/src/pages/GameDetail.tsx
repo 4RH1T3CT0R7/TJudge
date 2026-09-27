@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../api/client';
@@ -20,6 +20,9 @@ import { Tabs } from '../components/ui/Tabs';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { TerminalOutput } from '../components/ui/TerminalOutput';
+import { Segmented } from '../components/ui/Segmented';
+import { MatchError } from '../components/tournament/MatchError';
+import type { Side } from '../utils/explainError';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -35,6 +38,10 @@ import { useTabParam } from '../hooks/useTabParam';
 import type { Match } from '../types';
 
 const TAB_IDS = ['rules', 'leaderboard', 'matches'] as const;
+const MATCH_VIEWS = [
+  { value: 'mine', label: 'Мои' },
+  { value: 'all', label: 'Все' },
+] as const;
 
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
@@ -42,8 +49,6 @@ export function GameDetail() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'rules');
 
-  // Pagination state for matches
-  const [currentPage, setCurrentPage] = useState(1);
   const matchesPerPage = 20;
 
   // Upload state
@@ -98,21 +103,51 @@ export function GameDetail() {
     staleTime: 30_000,
   });
 
-  // Матчи с пагинацией: ключ включает страницу, предыдущая страница
+  // «Мои матчи»: участнику по умолчанию только матчи своей команды (?view=all - все),
+  // ?status=failed - только упавшие (ссылка из бейджа здоровья программы).
+  // Страница сбрасывается на первую при смене фильтра.
+  const myTeamId = myTeam?.id;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const showAllMatches = !myTeamId || searchParams.get('view') === 'all';
+  const onlyFailed = searchParams.get('status') === 'failed';
+  const matchesTeam = showAllMatches ? undefined : myTeamId;
+  const filterKey = `${matchesTeam ?? ''}:${onlyFailed}`;
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const currentPage = pageState.key === filterKey ? pageState.page : 1;
+  const setCurrentPage = (page: number) => setPageState({ key: filterKey, page });
+  const setMatchesParam = (name: 'view' | 'status', value: string | null) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value === null) next.delete(name);
+        else next.set(name, value);
+        return next;
+      },
+      { replace: true },
+    );
+
+  // Матчи с пагинацией: ключ включает страницу и фильтр, предыдущая страница
   // остаётся на экране, пока грузится новая. Total ручка не отдаёт, поэтому
   // запрашивается на один матч больше: лишний означает, что есть следующая страница.
   const matchesQuery = useQuery({
-    queryKey: [...queryKeys.gameMatches(tournamentId ?? '', gameId ?? ''), currentPage] as const,
+    queryKey: [
+      ...queryKeys.gameMatches(tournamentId ?? '', gameId ?? ''),
+      currentPage,
+      matchesTeam ?? '',
+      onlyFailed ? 'failed' : '',
+    ] as const,
     queryFn: ({ signal }) =>
       api.getGameMatches(
         tournamentId ?? '',
         gameId ?? '',
-        undefined,
+        onlyFailed ? 'failed' : undefined,
         matchesPerPage + 1,
         (currentPage - 1) * matchesPerPage,
-        signal
+        signal,
+        matchesTeam
       ),
-    enabled: !!tournamentId && !!gameId,
+    // до ответа my-team неизвестно, какой фильтр нужен
+    enabled: !!tournamentId && !!gameId && !(isAuthenticated && myTeamQuery.isPending),
     placeholderData: keepPreviousData,
     refetchInterval: live.pollInterval,
   });
@@ -123,7 +158,6 @@ export function GameDetail() {
   // Версии команды по игре, кто бы из участников их ни загрузил: в матчах
   // играет последняя версия команды, а не последняя своя. Поллинг каждые 10с,
   // пока какая-то версия компилируется (бейдж статуса обновится сам)
-  const myTeamId = myTeam?.id;
   const revealMine = useRevealOnMobile<HTMLTableRowElement>();
   const programsQuery = useQuery({
     queryKey: queryKeys.programVersions(myTeamId ?? '', gameId ?? ''),
@@ -133,6 +167,7 @@ export function GameDetail() {
       query.state.data?.some((p) => p.status === 'compiling') ? 10000 : false,
   });
   const programs = useMemo(() => programsQuery.data ?? [], [programsQuery.data]);
+  const myProgramIds = useMemo(() => new Set(programs.map((p) => p.id)), [programs]);
   const currentProgram = useMemo(
     () =>
       programs.length > 0
@@ -146,7 +181,7 @@ export function GameDetail() {
     gameQuery.isPending ||
     gamesStatusQuery.isPending ||
     leaderboardQuery.isPending ||
-    matchesQuery.isPending ||
+    (matchesQuery.isPending && matchesQuery.fetchStatus !== 'idle') ||
     (isAuthenticated && myTeamQuery.isPending) ||
     (isAuthenticated && !!myTeamId && programsQuery.isPending);
 
@@ -426,19 +461,38 @@ export function GameDetail() {
 
             {activeTab === 'matches' && (
               <div className="card">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h2 className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
+                  {myTeamId && (
+                    <Segmented
+                      label="Чьи матчи показать"
+                      options={MATCH_VIEWS}
+                      value={showAllMatches ? 'all' : 'mine'}
+                      onChange={(v) => setMatchesParam('view', v === 'all' ? 'all' : null)}
+                    />
+                  )}
                 </div>
+                {onlyFailed && (
+                  <p className="mb-4 flex flex-wrap items-center gap-3 font-mono text-sm text-gray-300">
+                    <span><span aria-hidden="true" className="text-red-400">✕ </span>только матчи с ошибкой</span>
+                    <button type="button" onClick={() => setMatchesParam('status', null)} className="btn btn-sm btn-secondary">
+                      показать все
+                    </button>
+                  </p>
+                )}
                 {matches.length > 0 ? (
-                  <MatchGroups matches={matches} />
+                  <MatchGroups matches={matches} me={{ teamId: myTeamId, teamName: myTeam?.name, programIds: myProgramIds }} />
                 ) : (
-                  <EmptyState command="матчи" hint={currentPage > 1 ? 'на этой странице матчей нет' : 'матчи ещё не проводились'} />
+                  <EmptyState
+                    command="матчи"
+                    hint={currentPage > 1 ? 'на этой странице матчей нет' : matchesTeam ? 'у вашей команды матчей пока нет' : 'матчи ещё не проводились'}
+                  />
                 )}
                 {/* Pagination: и на опустевшей странице (раунд сбросили), чтобы было куда вернуться */}
                 {(currentPage > 1 || hasNextPage) && (
                   <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t border-gray-700">
                     <button
-                      onClick={() => setCurrentPage((p) => p - 1)}
+                      onClick={() => setCurrentPage(currentPage - 1)}
                       disabled={currentPage === 1}
                       className="btn btn-secondary"
                     >
@@ -448,7 +502,7 @@ export function GameDetail() {
                       Страница {currentPage}
                     </span>
                     <button
-                      onClick={() => setCurrentPage((p) => p + 1)}
+                      onClick={() => setCurrentPage(currentPage + 1)}
                       disabled={!hasNextPage}
                       className="btn btn-secondary"
                     >
@@ -771,164 +825,186 @@ export function GameDetail() {
   );
 }
 
-// Match groups component - groups matches by program pair and shows iterations as tabs
-function MatchGroups({ matches }: { matches: Match[] }) {
-  // Group matches by program pair (program1_id + program2_id)
-  const groupedMatches: Record<string, Match[]> = {};
+interface Me {
+  teamId?: string;
+  teamName?: string;
+  /** Версии своей программы: запасной способ узнать свою сторону, если команд в ответе нет. */
+  programIds: Set<string>;
+}
 
-  matches.forEach((match) => {
-    // Create a consistent key regardless of which program is first
-    const ids = [match.program1_id, match.program2_id].sort();
-    const key = ids.join('-');
+// Сторона своей команды в матче; null - матч чужой.
+function mySideOf(m: Match, me: Me): Side | null {
+  if (me.teamId && m.team1_id === me.teamId) return 1;
+  if (me.teamId && m.team2_id === me.teamId) return 2;
+  if (me.programIds.has(m.program1_id)) return 1;
+  if (me.programIds.has(m.program2_id)) return 2;
+  return null;
+}
 
-    if (!groupedMatches[key]) {
-      groupedMatches[key] = [];
-    }
-    groupedMatches[key].push(match);
-  });
+const sideId = (m: Match, side: Side) => (side === 1 ? m.team1_id ?? m.program1_id : m.team2_id ?? m.program2_id);
 
-  // Sort matches within each group by created_at
-  Object.values(groupedMatches).forEach((group) => {
+// Матчи группируются по паре команд: пара играет в обеих ориентациях (AB и BA)
+function MatchGroups({ matches, me }: { matches: Match[]; me: Me }) {
+  const groups = new Map<string, Match[]>();
+  for (const m of matches) {
+    const key = [sideId(m, 1), sideId(m, 2)].sort().join('-');
+    groups.set(key, [...(groups.get(key) ?? []), m]);
+  }
+  for (const group of groups.values()) {
     group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  });
-
-  const groupEntries = Object.entries(groupedMatches);
-
-  if (groupEntries.length === 0) {
-    return <p className="text-gray-400">Матчи ещё не проводились.</p>;
   }
 
   return (
     <div className="space-y-4">
-      {groupEntries.map(([key, groupMatches]) => (
-        <MatchGroupCard key={key} matches={groupMatches} />
+      {[...groups].map(([key, group]) => (
+        <MatchGroupCard key={key} matches={group} me={me} />
       ))}
     </div>
   );
 }
 
-// Match group card with iteration tabs
-function MatchGroupCard({ matches }: { matches: Match[] }) {
-  const [activeIteration, setActiveIteration] = useState(0);
-  const activeMatch = matches[activeIteration];
+// Карточка пары: слева своя команда (от первого лица), у чужой пары - сторона первого матча.
+// Счёт, цвета и итог считаются для левой стороны в каждом матче, в какой бы роли она ни играла.
+function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeMatch = matches[activeIndex];
+  const mine = matches.some((m) => mySideOf(m, me) !== null);
+  const leftId = sideId(matches[0], 1);
+  const leftSide = (m: Match): Side => (mine ? mySideOf(m, me) ?? 1 : sideId(m, 1) === leftId ? 1 : 2);
+  const nameOf = (m: Match, side: Side) =>
+    (side === 1 ? m.team1_name : m.team2_name) ??
+    (mine && side === leftSide(m) ? me.teamName : undefined) ??
+    `программа ${(side === 1 ? m.program1_id : m.program2_id).slice(0, 8)}`;
+  const other = (side: Side): Side => (side === 1 ? 2 : 1);
+  const scoreOf = (m: Match, side: Side) => (side === 1 ? m.score1 : m.score2);
 
-  // Calculate aggregate stats
-  const stats = {
-    completed: matches.filter((m) => m.status === 'completed').length,
-    pending: matches.filter((m) => m.status === 'pending').length,
-    running: matches.filter((m) => m.status === 'running').length,
-    failed: matches.filter((m) => m.status === 'failed').length,
-    total1: matches.reduce((sum, m) => sum + (m.score1 ?? 0), 0),
-    total2: matches.reduce((sum, m) => sum + (m.score2 ?? 0), 0),
-    wins1: matches.filter((m) => m.winner === 1).length,
-    wins2: matches.filter((m) => m.winner === 2).length,
-    draws: matches.filter((m) => m.winner === 0).length,
+  const first = matches[0];
+  const leftName = nameOf(first, leftSide(first));
+  const rightName = nameOf(first, other(leftSide(first)));
+  let leftTotal = 0, rightTotal = 0, wins = 0, losses = 0, draws = 0, finished = 0;
+  for (const m of matches) {
+    const ls = leftSide(m);
+    leftTotal += scoreOf(m, ls) ?? 0;
+    rightTotal += scoreOf(m, other(ls)) ?? 0;
+    if (m.status === 'completed' || m.status === 'failed') finished++;
+    if (m.winner === ls) wins++;
+    else if (m.winner === other(ls)) losses++;
+    else if (m.status === 'completed' && m.winner === 0) draws++;
+  }
+  // цвета от первого лица (у чужой пары - от левой стороны): победа зелёная, поражение красное
+  const tone = mine ? (wins > losses ? 'text-green-400' : wins < losses ? 'text-red-400' : 'text-gray-100') : 'text-gray-100';
+
+  const resultOf = (m: Match) => {
+    const ls = leftSide(m);
+    if (m.winner === ls) return mine ? 'победа' : `победа «${leftName}»`;
+    if (m.winner === other(ls)) return mine ? 'поражение' : `победа «${rightName}»`;
+    if (m.status === 'completed') return 'ничья';
+    return undefined;
   };
-
-  const getIterationStatus = (match: Match) => {
-    switch (match.status) {
-      case 'completed':
-        if (match.winner === 1) return 'bg-green-500';
-        if (match.winner === 2) return 'bg-red-500';
-        return 'bg-gray-400';
-      case 'running':
-        return 'bg-blue-500 animate-pulse';
-      case 'failed':
-        return 'bg-red-600';
-      default:
-        return 'bg-line';
-    }
+  const roleOf = (m: Match) => (mine ? `вы — игрок ${leftSide(m)}` : `«${leftName}» — игрок ${leftSide(m)}`);
+  const cellColor = (m: Match) => {
+    const ls = leftSide(m);
+    if (m.status === 'running') return 'bg-blue-500 animate-pulse';
+    if (m.status === 'pending' || m.status === 'cancelled') return 'bg-line';
+    if (m.winner === ls) return 'bg-green-600';
+    if (m.winner === other(ls)) return 'bg-red-600';
+    return m.status === 'failed' ? 'bg-red-800' : 'bg-gray-600';
   };
 
   return (
-    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-      {/* Header with aggregate stats */}
+    <div className={`bg-gray-800/50 rounded-lg p-4 border border-gray-700 ${mine ? 'row-mine' : ''}`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-        <div className="flex items-center gap-4">
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-400 truncate max-w-[120px]" title={matches[0]?.program1_id}>
-              Программа 1
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-300 truncate">
+              {leftName}
+              {mine && <YouMark />}
             </p>
-            <p className="text-2xl font-bold text-gray-100">{stats.total1}</p>
+            <p className={`text-2xl font-bold font-mono tabular-nums ${tone}`}>{leftTotal}</p>
           </div>
-          <div className="text-center text-gray-500">
-            <span className="text-lg">vs</span>
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-400 truncate max-w-[120px]" title={matches[0]?.program2_id}>
-              Программа 2
-            </p>
-            <p className="text-2xl font-bold text-gray-100">{stats.total2}</p>
+          <span aria-hidden="true" className="text-lg text-gray-500">:</span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-300 truncate">{rightName}</p>
+            <p className="text-2xl font-bold font-mono tabular-nums text-gray-100">{rightTotal}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-green-400" title="Победы 1">
-            W1: {stats.wins1}
-          </span>
-          <span className="text-gray-400" title="Ничьи">
-            D: {stats.draws}
-          </span>
-          <span className="text-red-400" title="Победы 2">
-            W2: {stats.wins2}
-          </span>
-          <span className="text-gray-500">
-            ({stats.completed}/{matches.length})
-          </span>
-        </div>
+        <p className="font-mono text-sm text-gray-400">
+          {mine ? (
+            <>
+              <span className="text-green-400">победы {wins}</span> · ничьи {draws} ·{' '}
+              <span className="text-red-400">поражения {losses}</span>
+            </>
+          ) : (
+            <>победы {wins}:{losses} · ничьи {draws}</>
+          )}
+          <span className="text-gray-500"> [{finished}/{matches.length}]</span>
+        </p>
       </div>
 
-      {/* Iteration tabs */}
-      <div className="mb-3">
-        <div className="flex flex-wrap gap-1.5">
-          {matches.map((match, index) => (
+      {/* Матчи пары: обе ориентации, AB и BA */}
+      <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label={`Матчи: ${leftName} против ${rightName}`}>
+        {matches.map((match, index) => {
+          const result = resultOf(match);
+          return (
             <button
               key={match.id}
-              onClick={() => setActiveIteration(index)}
+              type="button"
+              onClick={() => setActiveIndex(index)}
+              aria-pressed={activeIndex === index}
+              aria-label={`Матч ${index + 1}: ${roleOf(match)}${result ? `, ${result}` : ''}`}
+              title={`Матч ${index + 1}: ${roleOf(match)}${result ? `, ${result}` : ''}`}
               className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${
-                activeIteration === index
-                  ? 'ring-2 ring-primary-500 ring-offset-1 ring-offset-gray-800'
-                  : 'hover:scale-105'
+                activeIndex === index ? 'ring-2 ring-primary-500 ring-offset-1 ring-offset-gray-800' : 'hover:scale-105'
               }`}
-              title={`Итерация ${index + 1}: ${match.status}${match.winner !== undefined ? ` (Победа ${match.winner || 'Ничья'})` : ''}`}
             >
-              <div className={`w-full h-full rounded-lg flex items-center justify-center text-white ${getIterationStatus(match)}`}>
+              <div className={`w-full h-full rounded-lg flex items-center justify-center text-white ${cellColor(match)}`}>
                 {index + 1}
               </div>
             </button>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Active iteration details */}
       {activeMatch && (
         <div className="bg-gray-800 rounded-lg p-3 border border-line">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-sm font-medium text-gray-300">
-              Итерация {activeIteration + 1}
+              Матч {activeIndex + 1} · {roleOf(activeMatch)}
             </span>
             <StatusLabel entity="match" status={activeMatch.status} />
           </div>
 
-          <div className="flex items-center justify-center gap-4 py-2">
-            <span className={`text-xl font-bold ${activeMatch.winner === 1 ? 'text-green-400' : 'text-gray-300'}`}>
-              {activeMatch.score1 ?? '-'}
-            </span>
-            <span className="text-gray-400">:</span>
-            <span className={`text-xl font-bold ${activeMatch.winner === 2 ? 'text-green-400' : 'text-gray-300'}`}>
-              {activeMatch.score2 ?? '-'}
-            </span>
+          <div className="flex items-center justify-center gap-4 py-2 font-mono tabular-nums">
+            {(() => {
+              const ls = leftSide(activeMatch);
+              const leftWon = activeMatch.winner === ls;
+              const rightWon = activeMatch.winner === other(ls);
+              return (
+                <>
+                  <span className={`text-xl font-bold ${leftWon ? 'text-green-400' : rightWon && mine ? 'text-red-400' : 'text-gray-300'}`}>
+                    {scoreOf(activeMatch, ls) ?? '-'}
+                  </span>
+                  <span className="text-gray-400">:</span>
+                  <span className={`text-xl font-bold ${rightWon && !mine ? 'text-green-400' : 'text-gray-300'}`}>
+                    {scoreOf(activeMatch, other(ls)) ?? '-'}
+                  </span>
+                </>
+              );
+            })()}
           </div>
 
-          {activeMatch.winner !== undefined && activeMatch.status === 'completed' && (
-            <p className="text-center text-sm text-gray-400">
-              {activeMatch.winner === 0 ? 'Ничья' : `Победа Программы ${activeMatch.winner}`}
-            </p>
+          {activeMatch.status === 'completed' && (
+            <p className="text-center text-sm text-gray-400">{resultOf(activeMatch)}</p>
           )}
 
-          {activeMatch.error_message && (
+          {activeMatch.status === 'failed' && (
             <div className="mt-2">
-              <TerminalOutput label="stderr:" text={activeMatch.error_message} wrap />
+              <MatchError
+                match={activeMatch}
+                mySide={mine ? leftSide(activeMatch) : null}
+                names={[nameOf(activeMatch, 1), nameOf(activeMatch, 2)]}
+              />
             </div>
           )}
 
