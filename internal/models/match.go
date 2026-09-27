@@ -107,4 +107,5 @@ type MatchResult struct {
 	ErrorCode    int // exit code от tjudge-cli
 	ErrorMessage string
 	Duration     time.Duration
+	Transcript   *Transcript // nil - tjudge-cli шёл без -v или ходов не было
 }

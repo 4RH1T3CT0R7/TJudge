@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bmstu-itstech/tjudge/internal/config"
+	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,6 +79,15 @@ func TestBuildCommand_WithVerbose(t *testing.T) {
 	assert.Equal(t, []string{"dilemma", "-v", "/programs/p1.py", "/programs/p2.py"}, cmd)
 }
 
+// транскрипт длиннее потолка не пишется: -v выключен
+func TestBuildCommand_VerboseOffAboveTranscriptCap(t *testing.T) {
+	e := newTestExecutor(t)
+	e.config.DefaultIterations = maxTranscriptIters + 1
+	e.config.Verbose = true
+
+	assert.NotContains(t, e.buildCommand("dilemma", "/programs/p1.py", "/programs/p2.py"), "-v")
+}
+
 func TestBuildCommand_WithIterationsAndVerbose(t *testing.T) {
 	e := newTestExecutor(t)
 	e.config.DefaultIterations = 50
@@ -86,6 +96,60 @@ func TestBuildCommand_WithIterationsAndVerbose(t *testing.T) {
 	cmd := e.buildCommand("dilemma", "/programs/p1.py", "/programs/p2.py")
 
 	assert.Equal(t, []string{"dilemma", "-i", "50", "-v", "/programs/p1.py", "/programs/p2.py"}, cmd)
+}
+
+// транскрипт собирается из строк -v, а в текст ошибки идёт то же, что без -v.
+// stderr бота за маркером sandbox.sh не разбирается, даже если он притворяется
+// выводом судьи
+func TestSplitTranscript(t *testing.T) {
+	tests := []struct {
+		name     string
+		stderr   string
+		want     *models.Transcript
+		wantRest string
+	}{
+		{
+			name: "дилемма с падением второй программы",
+			stderr: "[init] iterations: 100\n" +
+				"[>] decision: Cooperate\n[<] decision: Defect\n" +
+				"[iter-00] result: (0, 10)\n[iter-00] score: (0, 10)\n" +
+				"[>] decision: Defect\n" +
+				"right player error: unknown action\n" +
+				"--- stderr программы (последние 2 КБ) ---\n" +
+				"[<] decision: Cooperate\n[iter-01] result: (10, 0)\nTraceback\n",
+			want: &models.Transcript{
+				Moves:  [][]int{{models.MoveCooperate, models.MoveDefect}, {models.MoveDefect}},
+				Points: [][]int{{0}, {10}},
+			},
+			wantRest: "right player error: unknown action\n" +
+				"--- stderr программы (последние 2 КБ) ---\n" +
+				"[<] decision: Cooperate\n[iter-01] result: (10, 0)\nTraceback\n",
+		},
+		{
+			name:   "числовые ходы",
+			stderr: "[>] claim: 100\n[<] claim: 2\n[iter-00] result: (0, 4)\n[iter-00] score: (0, 4)\n[result] score: (0, 4)\n",
+			want:   &models.Transcript{Moves: [][]int{{100}, {2}}, Points: [][]int{{0}, {4}}},
+		},
+		{
+			name: "аукцион: ставки по очереди, очков за итерацию нет",
+			stderr: "[init] prize: 100, max rounds: 100\n" +
+				"[iter-00] left bid: 10\n[iter-00] right bid: 20\n" +
+				"[iter-01] left bid: 0\n[iter-01] left folds\n[result] score: (-10, 80)\n",
+			want: &models.Transcript{Moves: [][]int{{10, 0}, {20}}},
+		},
+		{
+			name:     "без -v",
+			stderr:   "left player error: timed out\n",
+			wantRest: "left player error: timed out\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, rest := splitTranscript(tt.stderr)
+			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.wantRest, rest)
+		})
+	}
 }
 
 // --- hostToContainerPath ---

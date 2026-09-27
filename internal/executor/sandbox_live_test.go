@@ -113,10 +113,14 @@ for i in range(n):
     input()
 `
 
+// перед падением пишет в stderr строку под вывод судьи: в транскрипт она
+// попасть не должна
 const crashBot = `#!/usr/bin/env python3
+import sys
 n = int(input())
 print("COOPERATE", flush=True)
 input()
+sys.stderr.write("[<] decision: Defect\n")
 1 / 0
 `
 
@@ -134,6 +138,7 @@ func newLiveExecutor(t *testing.T, dir string) *Executor {
 		MemoryLimit:       256 << 20,
 		PidsLimit:         64,
 		DefaultIterations: 10,
+		Verbose:           true,
 	}, dir, "", log)
 	require.NoError(t, err)
 	return e
@@ -162,13 +167,22 @@ func TestSandbox_BotStderr(t *testing.T) {
 	res := run("chatty.py", "coop")
 	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
 	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
+	require.NotNil(t, res.Transcript)
+	assert.Len(t, res.Transcript.Moves[0], 10)
+	assert.Equal(t, res.Transcript.Moves[0], res.Transcript.Moves[1])
+	assert.Len(t, res.Transcript.Points[1], 10)
 
+	// ходы обрываются на падении: второй игрок при этом уже не ходит
+	moves := [][][]int{{{1}, {1}}, {{1, 1}, {1}}}
 	for side, pair := range [][2]string{{"crash.py", "chatty.py"}, {"chatty.py", "crash.py"}} {
 		res = run(pair[0], pair[1])
 		assert.Equal(t, side+1, res.ErrorCode)
 		assert.Contains(t, res.ErrorMessage, "--- stderr программы (последние 2 КБ) ---")
 		assert.Contains(t, res.ErrorMessage, "ZeroDivisionError: division by zero")
 		assert.NotContains(t, res.ErrorMessage, "SECRET", "в ошибку попал stderr соперника")
+		assert.NotContains(t, res.ErrorMessage, "[iter-00]", "в ошибку попал вывод -v")
+		require.NotNil(t, res.Transcript)
+		assert.Equal(t, moves[side], res.Transcript.Moves, "в транскрипт попал stderr бота")
 	}
 }
 

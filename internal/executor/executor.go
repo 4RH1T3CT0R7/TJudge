@@ -59,6 +59,11 @@ func NewExecutor(cfg config.ExecutorConfig, programsPath, hostProgramsPath strin
 		hostProgramsPath = programsPath
 	}
 
+	if cfg.Verbose && cfg.DefaultIterations > maxTranscriptIters {
+		log.Warn("Match transcripts disabled: too many iterations",
+			zap.Int("iterations", cfg.DefaultIterations), zap.Int("max", maxTranscriptIters))
+	}
+
 	return &Executor{
 		config:           cfg,
 		dockerClient:     cli,
@@ -189,6 +194,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 				// логи забираются даже при ошибке
 				_, stderr, logErr := e.getContainerLogs(ctx, containerID)
 				if logErr == nil && stderr != "" {
+					_, stderr = splitTranscript(stderr)
 					return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
 				}
 				return nil, infraErrorf("error waiting for container: %w", err)
@@ -204,6 +210,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			return nil, infraErrorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
 
+		transcript, stderrRaw := splitTranscript(stderrRaw)
 		stderr := sanitizeStderr(stderrRaw)
 
 		// stdout до 1мб в лог не идёт, только размер
@@ -214,7 +221,11 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 			zap.Int("stdout_len", len(stdout)),
 		)
 
-		return e.parseResult(status.StatusCode, stdout, stderr)
+		result, err := e.parseResult(status.StatusCode, stdout, stderr)
+		if result != nil {
+			result.Transcript = transcript
+		}
+		return result, err
 	case <-execCtx.Done():
 	}
 
@@ -380,7 +391,7 @@ const stderrHeadSize = 1024
 
 // sanitizeStderr чистит сырой stderr: снимает ansi-эскейпы и режет до 4кб.
 // режется середина: в конце итоговая строка tjudge-cli и хвост stderr бота
-// от sandbox.sh (около 2,2кб), перед ними бывает длинный вывод (-v, ход бота
+// от sandbox.sh (около 2,2кб), перед ними бывает длинный вывод (ход бота
 // целиком в «unknown action»)
 func sanitizeStderr(raw string) string {
 	cleaned := ansiEscapeRe.ReplaceAllString(raw, "")
@@ -392,6 +403,83 @@ func sanitizeStderr(raw string) string {
 	}
 
 	return cleaned
+}
+
+// sandboxBotStderr - начало строки, которой sandbox.sh отделяет хвост stderr
+// упавшего бота
+const sandboxBotStderr = "--- stderr программы"
+
+// строки -v у tjudge-cli: ход стороны ([>] - программа 1, [<] - 2), ставка
+// аукциона, очки итерации. остальные ([init], [result], счёт нарастающим
+// итогом) транскрипту не нужны
+var (
+	verboseLineRe = regexp.MustCompile(`^\[(init|>|<|iter-\d+|result|drop)\] `)
+	moveLineRe    = regexp.MustCompile(`^\[([><])\] \w+: (\w+)$`)
+	bidLineRe     = regexp.MustCompile(`^\[iter-\d+\] (left|right) bid: (-?\d+)$`)
+	pointsLineRe  = regexp.MustCompile(`^\[iter-\d+\] result: \((-?\d+), (-?\d+)\)$`)
+)
+
+// splitTranscript отделяет от stderr строки -v и собирает из них транскрипт
+// (nil, если ходов нет). остаток - тот же stderr, что без -v: итоговая строка
+// ошибки и хвост stderr бота для текста ошибки. stderr бота за маркером
+// sandbox.sh не разбирается: ходы берутся только из вывода судьи
+func splitTranscript(stderr string) (*models.Transcript, string) {
+	moves := [][]int{nil, nil}
+	var points [][]int
+	var rest strings.Builder
+	lines := strings.SplitAfter(stderr, "\n")
+	for i, raw := range lines {
+		line := strings.TrimSuffix(raw, "\n")
+		if strings.HasPrefix(line, sandboxBotStderr) {
+			rest.WriteString(strings.Join(lines[i:], ""))
+			break
+		}
+		if !verboseLineRe.MatchString(line) {
+			rest.WriteString(raw)
+			continue
+		}
+		if m := moveLineRe.FindStringSubmatch(line); m != nil {
+			side := 0
+			if m[1] == "<" {
+				side = 1
+			}
+			if v, ok := parseMove(m[2]); ok {
+				moves[side] = append(moves[side], v)
+			}
+		} else if m := bidLineRe.FindStringSubmatch(line); m != nil {
+			side := 0
+			if m[1] == "right" {
+				side = 1
+			}
+			v, _ := strconv.Atoi(m[2])
+			moves[side] = append(moves[side], v)
+		} else if m := pointsLineRe.FindStringSubmatch(line); m != nil {
+			if points == nil {
+				points = [][]int{nil, nil}
+			}
+			for side := range 2 {
+				v, _ := strconv.Atoi(m[side+1])
+				points[side] = append(points[side], v)
+			}
+		}
+	}
+	if len(moves[0]) == 0 && len(moves[1]) == 0 {
+		return nil, rest.String()
+	}
+	return &models.Transcript{Moves: moves, Points: points}, rest.String()
+}
+
+// parseMove переводит ход из вывода -v в число: решения дилеммы - в
+// models.MoveCooperate/MoveDefect, остальные ходы уже числа
+func parseMove(s string) (int, bool) {
+	switch s {
+	case "Cooperate":
+		return models.MoveCooperate, true
+	case "Defect":
+		return models.MoveDefect, true
+	}
+	v, err := strconv.Atoi(s)
+	return v, err == nil
 }
 
 // parseResult разбирает вывод tjudge-cli
@@ -566,13 +654,23 @@ func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
 		cmd = append(cmd, "-i", strconv.Itoa(e.config.DefaultIterations))
 	}
 
-	if e.config.Verbose {
+	if e.verbose() {
 		cmd = append(cmd, "-v")
 	}
 
 	cmd = append(cmd, program1, program2)
 
 	return cmd
+}
+
+// maxTranscriptIters - потолок итераций для транскрипта. -v пишет около 100
+// байт на итерацию, транскрипт в базе - около 10 байт: на 1000 итераций
+// это 100 КБ stderr и 10 КБ на матч
+const maxTranscriptIters = 1000
+
+// verbose - включать ли -v: транскрипты длиннее maxTranscriptIters не пишутся
+func (e *Executor) verbose() bool {
+	return e.config.Verbose && e.config.DefaultIterations <= maxTranscriptIters
 }
 
 // метки контейнеров матчей и сборок. по ним воркер на старте находит
