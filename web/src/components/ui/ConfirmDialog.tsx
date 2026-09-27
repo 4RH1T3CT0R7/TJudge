@@ -34,12 +34,20 @@ export function Consequences({ lines, className = '' }: { lines: string[]; class
   );
 }
 
+// Название сверяется без регистра, знаков и лишних пробелов: «·», ёлочки, «ё»
+// и двойной пробел не набрать с клавиатуры или не видно в подписи. Название
+// из одних знаков (эмодзи) сверяется как есть.
+function nameKey(s: string) {
+  const key = s.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return key || s.replace(/\s+/g, ' ').trim();
+}
+
 // Фокус сразу на «Отмена»: Enter по привычке не подтверждает. При вводе
 // названия фокус в поле, Enter подтверждает только совпавший текст.
 function ConfirmBody({ options, settle }: { options: ConfirmOptions; settle: (confirmed: boolean) => void }) {
   const [typed, setTyped] = useState('');
   const expected = options.typeToConfirm?.trim();
-  const locked = expected !== undefined && typed.trim() !== expected;
+  const locked = expected !== undefined && nameKey(typed) !== nameKey(expected);
 
   return (
     <form

@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testin
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import api from '../../api/client';
-import { useConfirmStore } from '../../store/confirmStore';
+import { confirmDialog, useConfirmStore } from '../../store/confirmStore';
 import { ConfirmDialogHost } from '../ui/ConfirmDialog';
 import { useGameAdminActions } from '../tournament/useGameAdminActions';
 import { confirmDisqualify, count } from './confirmations';
@@ -84,13 +84,31 @@ it('дисквалификация считает матчи команды и �
   expect(confirm.disabled).toBe(true);
 
   // Enter с неверным текстом не подтверждает
-  fireEvent.change(input, { target: { value: 'энтропия' } });
+  fireEvent.change(input, { target: { value: 'Энтроп' } });
   fireEvent.submit(input.closest('form')!);
   expect(useConfirmStore.getState().pending).not.toBeNull();
 
-  fireEvent.change(input, { target: { value: ' Энтропия ' } });
+  fireEvent.change(input, { target: { value: ' энтропия ' } });
   expect(confirm.disabled).toBe(false);
   fireEvent.submit(input.closest('form')!);
   await waitFor(() => expect(useConfirmStore.getState().pending).toBeNull());
   await expect(answer).resolves.toBe(true);
+});
+
+it('название сверяется без регистра, знаков, «ё» и лишних пробелов', async () => {
+  render(<ConfirmDialogHost />);
+  const cases: [name: string, typed: string, unlocked: boolean][] = [
+    ['Равновесие  Нэша', 'Равновесие Нэша', true],
+    ['Пробный турнир · сентябрь 2026', 'пробный турнир . сентябрь 2026', true],
+    ['«Ёжики»', 'ежики', true],
+    ['Ёжики', 'Ежи', false],
+    // название из одних эмодзи не открывается пустым вводом
+    ['🔥 🔥', '', false],
+    ['🔥 🔥', '🔥  🔥', true],
+  ];
+  for (const [name, typed, unlocked] of cases) {
+    act(() => { void confirmDialog({ message: 'Удалить?', typeToConfirm: name, confirmLabel: 'Удалить' }); });
+    fireEvent.change(await screen.findByLabelText(/Чтобы подтвердить/), { target: { value: typed } });
+    expect((screen.getByText('Удалить') as HTMLButtonElement).disabled, `${name} / ${typed}`).toBe(!unlocked);
+  }
 });
