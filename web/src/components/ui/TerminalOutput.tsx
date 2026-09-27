@@ -1,0 +1,57 @@
+import { useState } from 'react';
+
+// Предупреждения жёлтым; ошибки (error, *Error:, file:line:col:) красным.
+function lineTone(line: string) {
+  if (/\bwarning\b/i.test(line)) return 'text-amber-300';
+  if (/\berror\b|^\s*\w*Error\b|^\S+:\d+(:\d+)?:/i.test(line)) return 'text-red-300';
+  return undefined;
+}
+
+interface TerminalOutputProps {
+  text: string;
+  /** Подпись над выводом: «stderr:», «$ gcc main.c». */
+  label?: string;
+  /** Ограничение высоты, дальше прокрутка. */
+  maxHeight?: string;
+}
+
+// Логи компилятора и ошибки матчей как в терминале: моноширинный шрифт,
+// переносы сохраняются, длинный вывод прокручивается, есть копирование.
+export function TerminalOutput({ text, label, maxHeight = 'max-h-64' }: TerminalOutputProps) {
+  const [copied, setCopied] = useState(false);
+  const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
+
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => {},
+    );
+  };
+
+  return (
+    <div className="rounded border border-gray-800 bg-gray-950 font-mono text-xs">
+      {(label || canCopy) && (
+        <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-800 text-gray-500">
+          <span className="truncate">{label}</span>
+          {canCopy && (
+            <button type="button" onClick={copy} aria-live="polite" className="btn btn-sm btn-secondary">
+              {copied ? 'скопировано' : 'копировать'}
+            </button>
+          )}
+        </div>
+      )}
+      {/* tabIndex: длинный вывод прокручивается с клавиатуры */}
+      <pre tabIndex={0} className={`${maxHeight} overflow-auto whitespace-pre-wrap break-words p-3 leading-relaxed text-gray-300`}>
+        {text.split('\n').map((line, i) => (
+          <span key={i} className={lineTone(line)}>
+            {line}
+            {'\n'}
+          </span>
+        ))}
+      </pre>
+    </div>
+  );
+}
