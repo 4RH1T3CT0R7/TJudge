@@ -123,7 +123,6 @@ export function TournamentDetail() {
 
   // Invader state for WS reactions
   const [wsInvaderPose, setWsInvaderPose] = useState<InvaderPose>('idle');
-  const [wsInvaderSpeech, setWsInvaderSpeech] = useState<string | null>(null);
   const wsInvaderTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Cinematic state
@@ -133,14 +132,10 @@ export function TournamentDetail() {
   // маскот во вкладках реагирует на живые обновления не чаще раза в 15 с
   const lastLiveFlashRef = useRef(0);
 
-  const flashWsInvader = useCallback((pose: InvaderPose, speech: string | null, duration = 2000) => {
+  const flashWsInvader = useCallback((pose: InvaderPose, duration = 2000) => {
     clearTimeout(wsInvaderTimerRef.current);
     setWsInvaderPose(pose);
-    setWsInvaderSpeech(speech);
-    wsInvaderTimerRef.current = setTimeout(() => {
-      setWsInvaderPose('idle');
-      setWsInvaderSpeech(null);
-    }, duration);
+    wsInvaderTimerRef.current = setTimeout(() => setWsInvaderPose('idle'), duration);
   }, []);
 
   // Реакции инвейдера и синематики: раньше триггерились WS-сообщениями напрямую,
@@ -155,7 +150,7 @@ export function TournamentDetail() {
     prevLeaderboardDataRef.current = leaderboardData;
     if (prev && prev !== leaderboardData && Date.now() - lastLiveFlashRef.current > 15_000) {
       lastLiveFlashRef.current = Date.now();
-      flashWsInvader('attack', '// обновление!', 800);
+      flashWsInvader('attack', 800);
     }
   }, [leaderboardData, flashWsInvader]);
 
@@ -185,7 +180,7 @@ export function TournamentDetail() {
     const prev = prevTournamentStatusRef.current;
     prevTournamentStatusRef.current = tournamentStatusValue;
     if (prev && prev !== tournamentStatusValue) {
-      flashWsInvader('handsUp', '// турнир обновлён!', 2000);
+      flashWsInvader('handsUp', 2000);
 
       // Check for tournament completion with user's team at #1
       if (tournamentStatusValue === 'completed' && myTeam && leaderboardData && leaderboardData.length > 0) {
@@ -563,10 +558,12 @@ export function TournamentDetail() {
             );
           })}
         </nav>
-        {/* маскот живых обновлений вне потока: появление не сдвигает вкладки */}
+        {/* маскот живых обновлений вне потока: появление не сдвигает вкладки.
+            Только с lg, где справа от вкладок есть место, уменьшен до высоты
+            панели и без реплики: иначе заходил на вкладки и баннер команды */}
         {isConnected && wsInvaderPose !== 'idle' && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden md:block">
-            <SpaceInvader size="sm" controlledPose={wsInvaderPose} speechBubble={wsInvaderSpeech} />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 scale-50 origin-right pointer-events-none hidden lg:block">
+            <SpaceInvader size="sm" controlledPose={wsInvaderPose} />
           </div>
         )}
       </div>
