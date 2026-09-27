@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Предупреждения жёлтым; ошибки (error, *Error:, file:line:col:) красным.
 function lineTone(line: string) {
@@ -16,13 +16,30 @@ interface TerminalOutputProps {
   /** Переносить длинные строки (ошибки матчей). Лог компилятора не переносится:
    *  стрелки ^^^ под строкой должны указывать на свою колонку. */
   wrap?: boolean;
+  /** Кнопка «копировать»; в длинных списках её лучше убрать. */
+  copyable?: boolean;
 }
 
 // Логи компилятора и ошибки матчей как в терминале: моноширинный шрифт,
 // переносы сохраняются, длинный вывод прокручивается, есть копирование.
-export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = false }: TerminalOutputProps) {
+export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = false, copyable = true }: TerminalOutputProps) {
   const [copied, setCopied] = useState(false);
-  const canCopy = typeof navigator !== 'undefined' && !!navigator.clipboard;
+  const [scrollable, setScrollable] = useState(false);
+  const preRef = useRef<HTMLPreElement>(null);
+  const canCopy = copyable && typeof navigator !== 'undefined' && !!navigator.clipboard;
+
+  // в фокус с клавиатуры попадает только вывод, который есть что прокручивать
+  useEffect(() => {
+    const pre = preRef.current;
+    if (!pre) return;
+    const check = () =>
+      setScrollable(pre.scrollHeight > pre.clientHeight || pre.scrollWidth > pre.clientWidth);
+    check();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(check);
+    observer.observe(pre);
+    return () => observer.disconnect();
+  }, [text, wrap, maxHeight]);
 
   const copy = () => {
     navigator.clipboard.writeText(text).then(
@@ -46,9 +63,11 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
           )}
         </div>
       )}
-      {/* tabIndex: длинный вывод прокручивается с клавиатуры */}
       <pre
-        tabIndex={0}
+        ref={preRef}
+        tabIndex={scrollable ? 0 : undefined}
+        role={scrollable ? 'region' : undefined}
+        aria-label={scrollable ? label || 'вывод' : undefined}
         className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
       >
         {text.split('\n').map((line, i) => (

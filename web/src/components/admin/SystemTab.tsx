@@ -763,7 +763,8 @@ export function SystemTab({
                   <h3 className="text-md font-semibold text-gray-100 mb-4">
                     Провалившиеся матчи ({failedMatches.length})
                   </h3>
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {/* фокус на самом списке: внутри нет элементов, через которые его можно прокрутить */}
+                  <div tabIndex={0} role="region" aria-label="Провалившиеся матчи" className="space-y-3 max-h-64 overflow-y-auto">
                     {failedMatches.map((match) => (
                       <div
                         key={match.id}
@@ -778,7 +779,7 @@ export function SystemTab({
                           </span>
                         </div>
                         {match.error_message && (
-                          <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" wrap />
+                          <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" wrap copyable={false} />
                         )}
                         <div className="mt-2 text-xs text-gray-400">
                           Код ошибки: {match.error_code || 'N/A'}

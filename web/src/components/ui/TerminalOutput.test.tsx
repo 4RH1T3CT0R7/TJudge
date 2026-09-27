@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { TerminalOutput } from './TerminalOutput';
 
@@ -16,4 +16,19 @@ it('подсвечивает ошибки и предупреждения ком
   const tones = [...container.querySelectorAll('pre > span')].map((s) => s.className);
   expect(tones).toEqual(['text-amber-300', 'text-red-300', 'text-red-300', 'text-red-300', 'text-amber-300', '']);
   expect(container.querySelector('pre')!.textContent).toBe(log + '\n');
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+it('фокусируется с клавиатуры, только когда вывод прокручивается', () => {
+  const { container, rerender } = render(<TerminalOutput text="ok" label="stderr:" />);
+  expect(container.querySelector('pre')!.hasAttribute('tabindex')).toBe(false);
+
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(500);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100);
+  rerender(<TerminalOutput text={'длинный\nвывод'} label="stderr:" />);
+  const pre = container.querySelector('pre')!;
+  expect(pre.tabIndex).toBe(0);
+  expect(pre.getAttribute('role')).toBe('region');
+  expect(pre.getAttribute('aria-label')).toBe('stderr:');
 });
