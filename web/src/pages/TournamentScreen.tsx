@@ -23,7 +23,7 @@ import type { CrossGameLeaderboardEntry, Game } from '../types';
 const DEFAULT_ROTATE_S = 15;
 const BANNER_MS = 20_000;
 const IDLE_MS = 3000;
-const FEED_SIZE = 12;
+const FEED_SIZE = 4;
 // во время раунда результаты идут десятками в секунду: лента обновляется раз в секунду
 const FEED_FLUSH_MS = 1000;
 const CEREMONY_PLACES = 10;
@@ -400,7 +400,7 @@ function Feed({ items }: { items: FeedItem[] }) {
           <span aria-hidden="true">{'// '}</span>результаты появятся, когда пойдут матчи
         </span>
       ) : (
-        items.slice(0, 4).map((m) => (
+        items.map((m) => (
           <span key={m.id} className="shrink-0 text-gray-300">
             <span aria-hidden="true" className="text-gray-600">│ </span>
             <span className={m.winner === 1 ? 'font-bold text-gray-100' : ''}>{m.team1}</span>{' '}
