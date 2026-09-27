@@ -329,7 +329,7 @@ function CrossGameLeaderboardTable({
                             <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
                               <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
                               <span className="mx-0.5">/</span>
-                              <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
+                              <span className="text-red-400" title="Поражений">{gameRating.losses}</span>
                               <span className="mx-0.5">/</span>
                               <span title="Ничьих">{gameRating.draws || 0}</span>
                             </div>
