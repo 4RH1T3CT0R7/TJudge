@@ -3,6 +3,10 @@ import { create } from 'zustand';
 export interface ConfirmOptions {
   title?: string;
   message: string;
+  /** Последствия построчно, с числами: «удалит 12 матчей». */
+  details?: string[];
+  /** Кнопка подтверждения откроется, когда введён этот текст (название турнира, команды). */
+  typeToConfirm?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   /** Красная кнопка подтверждения для необратимых действий. */
@@ -10,6 +14,8 @@ export interface ConfirmOptions {
 }
 
 interface PendingConfirm extends ConfirmOptions {
+  /** Новый диалог поверх неотвеченного начинается с пустого поля ввода. */
+  id: number;
   resolve: (confirmed: boolean) => void;
 }
 
@@ -27,8 +33,9 @@ export const useConfirmStore = create<ConfirmStore>()((set, get) => ({
   ask: (options) =>
     new Promise<boolean>((resolve) => {
       // Параллельный второй вызов отменяет первый: на экране одна модалка.
-      get().pending?.resolve(false);
-      set({ pending: { ...options, resolve } });
+      const prev = get().pending;
+      prev?.resolve(false);
+      set({ pending: { ...options, id: (prev?.id ?? 0) + 1, resolve } });
     }),
 
   settle: (confirmed) => {
