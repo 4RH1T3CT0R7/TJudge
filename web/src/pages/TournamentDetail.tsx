@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import api, { isRetryableError } from '../api/client';
@@ -13,6 +13,7 @@ import {
   useMyTeam,
 } from '../hooks/queries';
 import { useTournamentLive } from '../hooks/useTournamentLive';
+import { useLiveTable } from '../hooks/useLiveTable';
 import { useToastStore } from '../store/toastStore';
 import { confirmDialog } from '../store/confirmStore';
 import { confirmCompleteTournament, confirmDisqualify } from '../components/admin/confirmations';
@@ -40,7 +41,6 @@ import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { useTabParam } from '../hooks/useTabParam';
-import { gameProgress, honestStandings, liveGameIds } from '../utils/liveStandings';
 import type {
   Tournament,
   TournamentStatus,
@@ -50,8 +50,11 @@ import type {
   MatchRound,
   TournamentGameWithDetails,
 } from '../types';
+import type { GameProgress } from '../utils/liveStandings';
 
 const TAB_IDS = ['info', 'leaderboard', 'matches', 'games', 'teams'] as const;
+const NO_PROGRESS = new Map<string, GameProgress>();
+const NO_LIVE = new Set<string>();
 
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +63,7 @@ export function TournamentDetail() {
   const queryClient = useQueryClient();
 
   // Живые обновления: WS-события точечно инвалидируют кэш (useTournamentLive),
-  // а pollInterval включается только как fallback, когда WS недоступен.
+  // а опрос (pollInterval) включается, когда WS недоступен или идёт раунд.
   const tournamentQuery = useTournament(tournamentId);
   const live = useTournamentLive({
     tournamentId,
@@ -70,8 +73,8 @@ export function TournamentDetail() {
 
   const teamsQuery = useTournamentTeams(tournamentId);
   const gamesQuery = useTournamentGames(tournamentId);
-  const leaderboardQuery = useCrossGameLeaderboard(tournamentId, { pollInterval: live.pollInterval });
-  const matchRoundsQuery = useMatchesByRounds(tournamentId, { pollInterval: live.pollInterval });
+  const leaderboardQuery = useCrossGameLeaderboard(tournamentId);
+  const matchRoundsQuery = useMatchesByRounds(tournamentId);
   const gamesStatusQuery = useTournamentGamesStatus(tournamentId, { pollInterval: live.pollInterval });
   const myTeamQuery = useMyTeam(tournamentId, { enabled: isAuthenticated });
 
@@ -82,10 +85,11 @@ export function TournamentDetail() {
   const gamesStatus: TournamentGameWithDetails[] = gamesStatusQuery.data ?? [];
   const myTeam: Team | null = myTeamQuery.data ?? null;
 
-  // честный live: место только по доигранным играм (utils/liveStandings)
-  const progress = useMemo(() => gameProgress(matchRoundsQuery.data ?? []), [matchRoundsQuery.data]);
-  const liveGames = useMemo(() => liveGameIds(gamesQuery.data ?? [], progress), [gamesQuery.data, progress]);
-  const standings = useMemo(() => honestStandings(leaderboardQuery.data ?? [], liveGames), [leaderboardQuery.data, liveGames]);
+  // честный live: место по доигранным итогам, из согласованной пары запросов
+  const liveTable = useLiveTable(gamesQuery.data, leaderboardQuery, matchRoundsQuery, live.pollInterval);
+  const progress = liveTable?.progress ?? NO_PROGRESS;
+  const liveGames = liveTable?.live ?? NO_LIVE;
+  const standings = liveTable?.standings ?? [];
 
   const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'info');
   // Первичная загрузка всех данных страницы (раньше - единый ручной флаг).
@@ -309,11 +313,14 @@ export function TournamentDetail() {
   }, [queryClient, tournamentId]);
   const isRefreshingMatches = matchRoundsQuery.isRefetching;
 
-  // Ручное обновление таблиц рейтинга (кнопка «Обновить»).
+  // Ручное обновление таблиц рейтинга (кнопка «Обновить»): таблица и раунды
+  // вместе, место считается по их паре.
   const refetchLeaderboard = leaderboardQuery.refetch;
+  const refetchRounds = matchRoundsQuery.refetch;
   const refreshLeaderboard = useCallback(() => {
     void refetchLeaderboard();
-  }, [refetchLeaderboard]);
+    void refetchRounds();
+  }, [refetchLeaderboard, refetchRounds]);
   const isRefreshingLeaderboard = leaderboardQuery.isRefetching;
 
   if (showLoading) {
@@ -478,7 +485,7 @@ export function TournamentDetail() {
       {tournament.status === 'active' && (
         <LiveStatusLine
           progress={progress}
-          progressAt={matchRoundsQuery.dataUpdatedAt}
+          progressAt={liveTable?.at ?? 0}
           games={games}
           status={tournament.status}
           isConnected={isConnected}

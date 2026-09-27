@@ -92,7 +92,7 @@ export function LeaderboardTab({
       {rows.length > 0 && (
         <PlaceHint>
           {live.size > 0
-            ? 'место — по доигранным играм: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
+            ? 'место и сумма — по последним итогам игр: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
             : 'место — по сумме очков всех игр с множителями, а не по числу побед'}
         </PlaceHint>
       )}
@@ -100,9 +100,9 @@ export function LeaderboardTab({
   );
 }
 
-// ▲N / ▼N рядом с местом, пока сдвиг свежий
-function PlaceShift({ delta }: { delta?: number }) {
-  if (!delta) return null;
+// ▲N / ▼N рядом с местом, пока сдвиг свежий; у строки без места стрелок нет
+function PlaceShift({ delta, place }: { delta?: number; place: number | null }) {
+  if (!delta || place === null) return null;
   return (
     <span className={`font-mono text-[0.7em] ${delta > 0 ? 'text-green-400' : 'text-red-400'}`}>
       <span aria-hidden="true">{delta > 0 ? '▲' : '▼'}</span>
@@ -161,7 +161,7 @@ function GeneralLeaderboardTable({
             <div className="flex items-center gap-4">
               <div className="flex w-12 shrink-0 flex-col items-center">
                 <span className={placeBadge(place)}>{place ?? '–'}</span>
-                <PlaceShift delta={changes.get(key)} />
+                <PlaceShift delta={changes.get(key)} place={place} />
               </div>
 
               <div className="flex-1 min-w-0">
@@ -173,11 +173,12 @@ function GeneralLeaderboardTable({
                       </h3>
                       {mine && <YouMark />}
                     </div>
+                    {/* тот же срез, что у очков: доигранные итоги */}
                     <div className="flex items-center gap-3 text-sm text-gray-400">
-                      <span>{entry.total_games} игр</span>
+                      <span>{row.games} игр</span>
                       <span>•</span>
-                      <span className="text-emerald-400">{entry.total_wins}W</span>
-                      <span className="text-red-400">{entry.total_losses}L</span>
+                      <span className="text-emerald-400">{row.wins}W</span>
+                      <span className="text-red-400">{row.losses}L</span>
                     </div>
                   </div>
 
@@ -188,7 +189,7 @@ function GeneralLeaderboardTable({
                       place === 3 ? 'text-orange-500' :
                       'text-primary-400'
                     }`}>
-                      <CountUp value={total} />
+                      {place === null ? '–' : <CountUp value={total} />}
                     </div>
                     <div className="text-xs text-gray-400">
                       очков
@@ -303,7 +304,7 @@ export function CrossGameLeaderboardTable({
                     ) : (
                       <span className={placeBadge(place)}>{place ?? '–'}</span>
                     )}
-                    <PlaceShift delta={changes.get(key)} />
+                    <PlaceShift delta={changes.get(key)} place={place} />
                   </span>
                 </td>
                 <td className={`${cell} ${broadcast ? 'truncate font-bold' : ''}`}>
@@ -349,7 +350,7 @@ export function CrossGameLeaderboardTable({
                 })}
                 <td className={`${cell} text-right`}>
                   <span className={`font-mono font-bold tabular-nums text-primary-400 ${broadcast ? '' : 'text-lg'}`}>
-                    <CountUp value={total} />
+                    {place === null ? '–' : <CountUp value={total} />}
                   </span>
                 </td>
               </m.tr>

@@ -5,8 +5,8 @@ const SHOW_MS = 8000;
 
 /**
  * Сдвиги мест за последнее изменение таблицы: ключ команды → на сколько мест
- * поднялась (>0) или опустилась (<0). Держатся 8 с. Первый показ и команды
- * без места сдвигов не дают.
+ * поднялась (>0) или опустилась (<0). Держатся 8 с, следующее изменение
+ * заменяет их. Первый показ и команды без места сдвигов не дают.
  */
 export function usePlaceChanges(rows: StandingRow[]): Map<string, number> {
   // подпись мест сравнивается строкой: массив строк пересобирается на каждый рендер
@@ -22,7 +22,8 @@ export function usePlaceChanges(rows: StandingRow[]): Map<string, number> {
       const before = Number(was.get(teamKey(r.entry)) || NaN);
       if (r.place !== null && before && before !== r.place) diff.set(teamKey(r.entry), before - r.place);
     }
-    if (diff.size > 0) setChanges(diff);
+    // пустой diff тоже снимает прежние стрелки: они относились к другому порядку
+    if (diff.size > 0 || changes.size > 0) setChanges(diff);
   }
 
   useEffect(() => {

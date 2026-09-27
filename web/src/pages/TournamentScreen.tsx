@@ -9,6 +9,7 @@ import {
   useTournamentGames,
 } from '../hooks/queries';
 import { useTournamentLive } from '../hooks/useTournamentLive';
+import { useLiveTable } from '../hooks/useLiveTable';
 import { usePlaceChanges } from '../hooks/usePlaceChanges';
 import { useAuthStore } from '../store/authStore';
 import { CrossGameLeaderboardTable } from '../components/tournament/LeaderboardTab';
@@ -16,18 +17,22 @@ import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
 import { QrCode } from '../components/tournament/QrCode';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
-import { gameProgress, honestStandings, liveGameIds, pageCount, pageSlice, type StandingRow } from '../utils/liveStandings';
+import { pageCount, pageSlice, type GameProgress, type StandingRow } from '../utils/liveStandings';
 import { getGameConfig } from '../utils/gameConfig';
 import type { MatchResultPayload } from '../types/ws';
 import type { CrossGameLeaderboardEntry, Game } from '../types';
 
 const DEFAULT_ROTATE_S = 15;
 const BANNER_MS = 20_000;
+// игры раунда доигрываются с шагом в несколько секунд: итоги встают в очередь
+const BANNER_QUEUED_MS = 8000;
 const IDLE_MS = 3000;
 const FEED_SIZE = 4;
 // во время раунда результаты идут десятками в секунду: лента обновляется раз в секунду
 const FEED_FLUSH_MS = 1000;
 const CEREMONY_PLACES = 10;
+const NO_PROGRESS = new Map<string, GameProgress>();
+const NO_LIVE = new Set<string>();
 
 interface FeedItem {
   id: string;
@@ -157,32 +162,30 @@ export function TournamentScreen() {
   );
   const live = useTournamentLive({ tournamentId: id, enabled: isAuthenticated, onMatchResult });
   const tournamentQuery = useTournament(id);
-  const leaderboardQuery = useCrossGameLeaderboard(id, { pollInterval: live.pollInterval });
-  const roundsQuery = useMatchesByRounds(id, { pollInterval: live.pollInterval });
+  const leaderboardQuery = useCrossGameLeaderboard(id);
+  const roundsQuery = useMatchesByRounds(id);
 
-  const progress = useMemo(() => gameProgress(roundsQuery.data ?? []), [roundsQuery.data]);
-  const liveGames = useMemo(() => liveGameIds(games, progress), [games, progress]);
-  const standings = useMemo(() => honestStandings(leaderboardQuery.data ?? [], liveGames), [leaderboardQuery.data, liveGames]);
+  const table = useLiveTable(gamesQuery.data, leaderboardQuery, roundsQuery, live.pollInterval);
+  const progress = table?.progress ?? NO_PROGRESS;
+  const liveGames = table?.live ?? NO_LIVE;
+  const standings = useMemo(() => table?.standings ?? [], [table]);
   const changes = usePlaceChanges(standings);
 
-  // «$ итог:» по игре, у которой только что доиграли матчи раунда
-  const liveSig = [...progress.values()].filter((p) => p.live).map((p) => p.gameType).sort().join(',');
-  const [prevLiveSig, setPrevLiveSig] = useState(liveSig);
-  const [banner, setBanner] = useState<{ gameType: string } | null>(null);
-  if (liveSig !== prevLiveSig) {
-    setPrevLiveSig(liveSig);
-    const nowLive = liveSig.split(',');
-    const finished = prevLiveSig.split(',').filter((g) => g && !nowLive.includes(g) && progress.has(g));
-    if (finished.length > 0) setBanner({ gameType: finished[finished.length - 1] });
+  // «$ итог:» по играм, чей раунд только что доигран, по очереди
+  const [seenTable, setSeenTable] = useState(table);
+  const [banners, setBanners] = useState<string[]>([]);
+  if (table !== seenTable) {
+    setSeenTable(table);
+    const fresh = (table?.finished ?? []).filter((g) => !banners.includes(g));
+    if (fresh.length > 0) setBanners([...banners, ...fresh]);
   }
-  const refetchLeaderboard = leaderboardQuery.refetch;
+  const bannerType = banners[0];
+  const bannerQueued = banners.length > 1;
   useEffect(() => {
-    if (!banner) return;
-    // раунды могли узнать о конце раньше таблицы
-    void refetchLeaderboard();
-    const t = setTimeout(() => setBanner(null), BANNER_MS);
+    if (!bannerType) return;
+    const t = setTimeout(() => setBanners((q) => q.slice(1)), bannerQueued ? BANNER_QUEUED_MS : BANNER_MS);
     return () => clearTimeout(t);
-  }, [banner, refetchLeaderboard]);
+  }, [bannerType, bannerQueued]);
 
   useWakeLock();
   const fullscreen = useFullscreen();
@@ -278,8 +281,8 @@ export function TournamentScreen() {
 
   const { pinned, body } = pageSlice(standings, perPage, page);
   const shortLink = `${window.location.host}/t/${tournament.code}`;
-  const bannerGame = banner && games.find((g) => g.name === banner.gameType);
-  const bannerTop = bannerGame ? topOfGame(leaderboardQuery.data ?? [], bannerGame) : [];
+  const bannerGame = bannerType && !ceremony ? games.find((g) => g.name === bannerType) : undefined;
+  const bannerTop = bannerGame && table ? topOfGame(table.entries, bannerGame) : [];
 
   return (
     <main
@@ -318,7 +321,7 @@ export function TournamentScreen() {
 
       <LiveStatusLine
         progress={progress}
-        progressAt={roundsQuery.dataUpdatedAt}
+        progressAt={table?.at ?? 0}
         games={games}
         status={tournament.status}
         isConnected={live.isConnected}
@@ -344,6 +347,10 @@ export function TournamentScreen() {
 
       {ceremony ? (
         <Ceremony rows={placed} revealed={revealed} />
+      ) : !table ? (
+        <div className="flex flex-1 items-center justify-center text-gray-400 text-[clamp(16px,2.4vh,32px)]">
+          <Spinner>загрузка таблицы</Spinner>
+        </div>
       ) : (
         <>
           <section ref={measureArea} aria-label="Таблица турнира" className="min-h-0 flex-1">
@@ -369,7 +376,7 @@ export function TournamentScreen() {
                 {liveGames.size > 0 && (
                   <span>
                     <span aria-hidden="true">{'// '}</span>
-                    место — по доигранным играм, очки идущей (◐) предварительные
+                    место — по последним итогам игр, очки идущей (◐) предварительные
                   </span>
                 )}
               </p>

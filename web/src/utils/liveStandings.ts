@@ -1,8 +1,9 @@
-// Честный live: место считается только по доигранным играм. Частичные суммы
-// идущей игры зависят от того, чьи матчи очередь сыграла раньше, и дают ложные
-// смены лидера; поэтому они видны в таблице с пометкой «предварительно», но место
-// не меняют, пока игра не доиграна. Объяснение для участников — в /help#place.
-import type { CrossGameLeaderboardEntry, Game, MatchRound } from '../types';
+// Честный live: место - по сумме последних доигранных итогов каждой игры.
+// Частичная сумма идущей игры зависит от того, чьи матчи очередь сыграла раньше,
+// и дала бы ложные смены лидера. Поэтому пока игра идёт, в место входит её
+// прошлый итог (если страница его застала), а новые очки видны в таблице с
+// пометкой «предварительно». Объяснение для участников - в /help#place.
+import type { CrossGameLeaderboardEntry, Game, GameRatingInfo, MatchRound } from '../types';
 
 export interface GameProgress {
   gameType: string;
@@ -71,48 +72,107 @@ export function etaSeconds(r: RoundSummary, at: number, now: number): number | n
 
 export interface StandingRow {
   entry: CrossGameLeaderboardEntry;
-  /** Место по доигранным играм; null - ни одна игра команды ещё не доиграна. */
+  /** Место по доигранным итогам; null - у команды нет ни одного доигранного матча. */
   place: number | null;
-  /** Сумма очков доигранных игр. */
+  /** Сумма, победы, поражения и матчи доигранных итогов: то, по чему место. */
   total: number;
+  wins: number;
+  losses: number;
+  games: number;
 }
 
 export const teamKey = (e: CrossGameLeaderboardEntry) => e.team_id ?? e.program_id;
+
+/** Последний доигранный итог игры: id игры → ключ команды → её очки. */
+export type Settled = Map<string, Map<string, GameRatingInfo>>;
 
 export function liveGameIds(games: Game[], progress: Map<string, GameProgress>): Set<string> {
   return new Set(games.filter((g) => progress.get(g.name)?.live).map((g) => g.id));
 }
 
-export function honestStandings(entries: CrossGameLeaderboardEntry[], live: Set<string>): StandingRow[] {
-  // пока ничего не идёт, порядок и места сервера уже честные
-  if (live.size === 0) return entries.map((entry) => ({ entry, place: entry.rank, total: entry.total_rating }));
+/** Итоги не идущих игр обновляются, у идущей остаётся прошлый, если он был. */
+export function settleGames(prev: Settled, entries: CrossGameLeaderboardEntry[], live: Set<string>): Settled {
+  const next = new Map(prev);
+  for (const id of new Set(entries.flatMap((e) => Object.keys(e.game_ratings)))) {
+    if (live.has(id)) continue;
+    next.set(id, new Map(entries.filter((e) => e.game_ratings[id]).map((e) => [teamKey(e), e.game_ratings[id]])));
+  }
+  return next;
+}
 
-  const scored = entries.map((entry) => {
-    let total = 0;
-    let wins = 0;
-    let played = 0;
-    for (const [gameId, r] of Object.entries(entry.game_ratings)) {
-      if (live.has(gameId)) continue;
-      total += r.rating;
-      wins += r.wins;
-      played += r.total_games;
+export function honestStandings(
+  entries: CrossGameLeaderboardEntry[],
+  live: Set<string>,
+  settled: Settled = new Map()
+): StandingRow[] {
+  const scored = entries.map((entry, index) => {
+    const row = { entry, index, total: 0, wins: 0, losses: 0, games: 0 };
+    for (const [gameId, current] of Object.entries(entry.game_ratings)) {
+      const r = live.has(gameId) ? settled.get(gameId)?.get(teamKey(entry)) : current;
+      if (!r) continue;
+      row.total += r.rating;
+      row.wins += r.wins;
+      row.losses += r.losses;
+      row.games += r.total_games;
     }
-    return { entry, total, wins, played };
+    return row;
   });
-  // равенство решает название, а не частичные суммы: иначе строки прыгали бы
+  // при равенстве суммы и побед место общее, а порядок - как у сервера:
+  // иначе строки менялись бы местами от частичных сумм
   scored.sort(
-    (a, b) =>
-      Number(b.played > 0) - Number(a.played > 0) ||
-      b.total - a.total ||
-      b.wins - a.wins ||
-      a.entry.team_name.localeCompare(b.entry.team_name, 'ru')
+    (a, b) => Number(b.games > 0) - Number(a.games > 0) || b.total - a.total || b.wins - a.wins || a.index - b.index
   );
   let place = 0;
   return scored.map((s, i) => {
     const prev = scored[i - 1];
     if (!prev || prev.total !== s.total || prev.wins !== s.wins) place = i + 1;
-    return { entry: s.entry, total: s.total, place: s.played > 0 ? place : null };
+    return { entry: s.entry, place: s.games > 0 ? place : null, total: s.total, wins: s.wins, losses: s.losses, games: s.games };
   });
+}
+
+/** Согласованная пара «таблица + раунды» и всё, что из неё следует. */
+export interface LiveTable {
+  entries: CrossGameLeaderboardEntry[];
+  rounds: MatchRound[];
+  games: Game[];
+  progress: Map<string, GameProgress>;
+  /** id идущих игр. */
+  live: Set<string>;
+  standings: StandingRow[];
+  /** Игры (game_type), чей раунд доигран в этом обновлении: баннер «$ итог:». */
+  finished: string[];
+  settled: Settled;
+  /** Раунды, уже виденные доигранными: повтор упавших матчей второго итога не даёт. */
+  doneRounds: Set<string>;
+  /** Когда пришли раунды, мс: от этого момента считается темп. */
+  at: number;
+}
+
+const roundKey = (p: GameProgress) => `${p.gameType}@${p.startedAt}`;
+
+export function nextLiveTable(
+  prev: LiveTable | null,
+  games: Game[],
+  entries: CrossGameLeaderboardEntry[],
+  rounds: MatchRound[],
+  at: number
+): LiveTable {
+  const progress = gameProgress(rounds);
+  const live = liveGameIds(games, progress);
+  const settled = settleGames(prev?.settled ?? new Map(), entries, live);
+  const done = [...progress.values()].filter((p) => !p.live);
+  return {
+    entries,
+    rounds,
+    games,
+    progress,
+    live,
+    standings: honestStandings(entries, live, settled),
+    finished: prev ? done.filter((p) => !prev.doneRounds.has(roundKey(p))).map((p) => p.gameType) : [],
+    settled,
+    doneRounds: new Set([...(prev?.doneRounds ?? []), ...done.map(roundKey)]),
+    at,
+  };
 }
 
 /** Со второй страницы табло сверху закреплены лидеры. */

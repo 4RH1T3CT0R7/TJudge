@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { etaSeconds, gameProgress, honestStandings, pageCount, pageSlice, roundSummary } from './liveStandings';
-import type { CrossGameLeaderboardEntry, MatchRound } from '../types';
+import {
+  etaSeconds,
+  gameProgress,
+  honestStandings,
+  nextLiveTable,
+  pageCount,
+  pageSlice,
+  roundSummary,
+  settleGames,
+} from './liveStandings';
+import type { CrossGameLeaderboardEntry, Game, MatchRound } from '../types';
 
-const round = (game_type: string, total: number, pending: number, running = 0): MatchRound => ({
+const T0 = '2026-09-27T10:00:00Z';
+
+const round = (game_type: string, total: number, pending: number, running = 0, created_at = T0): MatchRound => ({
   round_number: 1,
   game_type,
   total_matches: total,
@@ -12,7 +23,7 @@ const round = (game_type: string, total: number, pending: number, running = 0): 
   failed_count: 0,
   wins1: 0,
   wins2: 0,
-  created_at: '2026-09-27T10:00:00Z',
+  created_at,
 });
 
 const entry = (name: string, rank: number, games: Record<string, [number, number, number]>): CrossGameLeaderboardEntry => {
@@ -25,6 +36,9 @@ const entry = (name: string, rank: number, games: Record<string, [number, number
   const sum = Object.values(games).reduce((s, [r]) => s + r, 0);
   return { rank, team_id: name, team_name: name, program_id: name, program_name: name, game_ratings, total_rating: sum, total_wins: 0, total_losses: 0, total_games: 0 };
 };
+
+const places = (rows: { entry: CrossGameLeaderboardEntry; place: number | null; total: number }[]) =>
+  rows.map((r) => [r.entry.team_name, r.place, r.total]);
 
 describe('gameProgress', () => {
   it('берёт последний раунд игры и считает матчи команды', () => {
@@ -60,25 +74,64 @@ describe('honestStandings', () => {
     entry('Гамма', 3, { b: [50, 0, 2] }),
   ];
 
-  it('без идущих игр отдаёт места сервера', () => {
+  it('без идущих игр держит порядок сервера', () => {
     expect(honestStandings(entries, new Set()).map((r) => r.place)).toEqual([1, 2, 3]);
   });
 
-  it('частичные суммы идущей игры не меняют место', () => {
-    const rows = honestStandings(entries, new Set(['b']));
-    expect(rows.map((r) => [r.entry.team_name, r.place, r.total])).toEqual([
+  it('частичные суммы идущей игры без прошлого итога в место не входят', () => {
+    expect(places(honestStandings(entries, new Set(['b'])))).toEqual([
       ['Альфа', 1, 300],
       ['Бета', 2, 100],
       ['Гамма', null, 0],
     ]);
   });
 
-  it('равенство решает название, а не частичные суммы', () => {
-    const rows = honestStandings([entry('Я', 1, { b: [9, 1, 1] }), entry('А', 2, { b: [1, 0, 1] })], new Set(['b']));
-    expect(rows.map((r) => [r.entry.team_name, r.place])).toEqual([
-      ['А', null],
-      ['Я', null],
+  it('у идущей игры в место входит её прошлый итог', () => {
+    const before = [entry('Бета', 1, { a: [100, 1, 18], b: [50, 1, 18] }), entry('Альфа', 2, { a: [300, 3, 18], b: [10, 0, 18] }), entry('Гамма', 3, { b: [900, 9, 18] })];
+    const settled = settleGames(new Map(), before, new Set());
+    expect(places(honestStandings(entries, new Set(['b']), settled))).toEqual([
+      ['Гамма', 1, 900],
+      ['Альфа', 2, 310],
+      ['Бета', 3, 150],
     ]);
+  });
+
+  it('равным - общее место и порядок сервера', () => {
+    const rows = honestStandings([entry('Я', 1, { a: [0, 0, 2] }), entry('А', 2, { a: [0, 0, 2] }), entry('Б', 3, { a: [-5, 0, 2] })], new Set());
+    expect(places(rows)).toEqual([
+      ['Я', 1, 0],
+      ['А', 1, 0],
+      ['Б', 3, -5],
+    ]);
+  });
+});
+
+describe('nextLiveTable', () => {
+  const games = [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }] as Game[];
+  const T1 = '2026-09-27T11:00:00Z';
+
+  it('раунд, повтор упавших и итог: места меняются только по доигранным итогам', () => {
+    // до раунда: обе игры доиграны, лидер Альфа
+    const t0 = nextLiveTable(null, games, [entry('Альфа', 1, { a: [300, 3, 18], b: [300, 3, 18] }), entry('Бета', 2, { a: [200, 2, 18], b: [200, 2, 18] })], [round('a', 90, 0), round('b', 90, 0)], 0);
+    expect(places(t0.standings)).toEqual([['Альфа', 1, 600], ['Бета', 2, 400]]);
+    expect(t0.finished).toEqual([]);
+
+    // новый раунд b: очки b сброшены, у Беты частично больше - место держит прошлый итог
+    const t1 = nextLiveTable(t0, games, [entry('Бета', 1, { a: [200, 2, 18], b: [90, 1, 2] }), entry('Альфа', 2, { a: [300, 3, 18], b: [10, 0, 2] })], [round('b', 90, 80, 0, T1), round('a', 90, 0)], 1);
+    expect(places(t1.standings)).toEqual([['Альфа', 1, 600], ['Бета', 2, 400]]);
+    expect(t1.finished).toEqual([]);
+
+    // b доиграна: новые очки b входят в место, итог игры - один раз
+    const final = [entry('Бета', 1, { a: [200, 2, 18], b: [900, 9, 18] }), entry('Альфа', 2, { a: [300, 3, 18], b: [100, 1, 18] })];
+    const t2 = nextLiveTable(t1, games, final, [round('b', 90, 0, 0, T1), round('a', 90, 0)], 2);
+    expect(places(t2.standings)).toEqual([['Бета', 1, 1100], ['Альфа', 2, 400]]);
+    expect(t2.finished).toEqual(['b']);
+
+    // повтор упавших матчей того же раунда: место не трогается, второго итога нет
+    const t3 = nextLiveTable(t2, games, final, [round('b', 90, 5, 0, T1), round('a', 90, 0)], 3);
+    expect(places(t3.standings)).toEqual([['Бета', 1, 1100], ['Альфа', 2, 400]]);
+    const t4 = nextLiveTable(t3, games, final, [round('b', 90, 0, 0, T1), round('a', 90, 0)], 4);
+    expect(t4.finished).toEqual([]);
   });
 });
 
