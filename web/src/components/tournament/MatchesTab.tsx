@@ -103,11 +103,11 @@ export function MatchesTab({
               Всего: <strong className="text-gray-100">{totalStats.total}</strong>
             </span>
             <span className="text-emerald-400">
-              Завершено: <strong>{totalStats.completed}</strong>
+              Сыграно: <strong>{totalStats.completed}</strong>
             </span>
             {totalStats.running > 0 && (
               <span className="text-blue-400">
-                Выполняется: <strong>{totalStats.running}</strong>
+                Идёт: <strong>{totalStats.running}</strong>
               </span>
             )}
             {totalStats.pending > 0 && (
@@ -172,12 +172,12 @@ export function MatchesTab({
           <div className="flex flex-wrap gap-4 mt-2 text-xs">
             <span className="flex items-center gap-1">
               <span className="w-3 h-3 rounded-full bg-emerald-500" />
-              Завершено
+              Сыграно
             </span>
             {totalStats.running > 0 && (
               <span className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-                Выполняется
+                Идёт
               </span>
             )}
             {totalStats.pending > 0 && (
@@ -312,12 +312,12 @@ function RoundCard({
             <div className="hidden sm:flex items-center gap-2 text-xs">
               {round.completed_count > 0 && (
                 <span className="px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400">
-                  {round.completed_count} завершено
+                  {round.completed_count} сыграно
                 </span>
               )}
               {round.running_count > 0 && (
                 <span className="px-2 py-1 rounded-full bg-blue-900/30 text-blue-400">
-                  {round.running_count} выполняется
+                  {round.running_count} идёт
                 </span>
               )}
               {round.pending_count > 0 && (
