@@ -21,9 +21,17 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 // обыграла ли команда строки соперника по сумме встреч пары
 const beat = (c: HeadToHeadCell) => c.wins > c.losses;
 
+// Места внутри игры: по сумме очков команды в её личных встречах, как в таблице игры.
+function gamePlaces(cells: HeadToHeadCell[]): Map<string, number> {
+  const sum = new Map<string, number>();
+  for (const c of cells) sum.set(c.team_id, (sum.get(c.team_id) ?? 0) + c.score_for);
+  const scores = [...sum.values()];
+  return new Map([...sum].map(([id, s]) => [id, 1 + scores.filter((o) => o > s).length]));
+}
+
 // Автоинсайты по итогам турнира: кто обыгрывал лидера, главная сенсация,
-// самая кооперативная стратегия, преимущество игрока 1, ничьи. Каждый - только
-// если для него есть данные.
+// урок дилеммы, самая кооперативная стратегия, преимущество игрока 1, ничьи.
+// Каждый - только если для него есть данные.
 export function tournamentInsights({ places, games, headToHead, rounds, strategies }: InsightInput): Insight[] {
   const out: Insight[] = [];
   const gameName = (id: string) => games.find((g) => g.id === id)?.display_name ?? '';
@@ -48,21 +56,47 @@ export function tournamentInsights({ places, games, headToHead, rounds, strategi
     });
   }
 
-  // сенсация - победа команды, стоящей в таблице ниже всех относительно соперника
-  let upset: { game: string; c: HeadToHeadCell; gap: number } | null = null;
-  for (const { game, c } of pairs) {
-    const a = places.get(c.team_id);
-    const b = places.get(c.opponent_id);
-    if (!a || !b || !beat(c)) continue;
-    const gap = a.place - b.place;
-    if (gap > 0 && (!upset || gap > upset.gap)) upset = { game, c, gap };
+  // сенсация - победа над командой, стоящей в той же игре намного выше. Дилемма
+  // не в счёт: там пару выигрывает предатель, а место решает сумма очков.
+  // Победы над лидером уже названы выше
+  let upset: { game: string; c: HeadToHeadCell; a: number; b: number } | null = null;
+  for (const g of games) {
+    if (g.name === 'dilemma') continue;
+    const cells = headToHead.get(g.id) ?? [];
+    const place = gamePlaces(cells);
+    for (const c of cells) {
+      const a = place.get(c.team_id);
+      const b = place.get(c.opponent_id);
+      if (!a || !b || !beat(c) || c.opponent_id === leader?.[0]) continue;
+      if (a > b && (!upset || a - b > upset.a - upset.b)) upset = { game: g.id, c, a, b };
+    }
   }
   if (upset) {
-    const { c, game } = upset;
+    const { c, game, a, b } = upset;
     out.push({
       label: 'главная сенсация',
-      text: `«${c.team_name}» (${places.get(c.team_id)!.place}-е место) обыграла «${c.opponent_name}» (${places.get(c.opponent_id)!.place}-е) в игре «${gameName(game)}», ${c.wins}–${c.losses}`,
+      text: `«${c.team_name}» (${a}-е место в игре «${gameName(game)}») обыграла «${c.opponent_name}» (${b}-е), ${c.wins}–${c.losses}`,
     });
+  }
+
+  // урок дилеммы: больше всех побед в парах ещё не первое место
+  const dilemma = games.find((g) => g.name === 'dilemma');
+  const dilemmaCells = dilemma ? (headToHead.get(dilemma.id) ?? []) : [];
+  if (dilemma && dilemmaCells.length > 0) {
+    const tally = new Map<string, { name: string; wins: number; games: number }>();
+    for (const c of dilemmaCells) {
+      const t = tally.get(c.team_id) ?? { name: c.team_name, wins: 0, games: 0 };
+      tally.set(c.team_id, { ...t, wins: t.wins + c.wins, games: t.games + c.wins + c.losses + c.draws });
+    }
+    const [first, second] = [...tally].sort((x, y) => y[1].wins - x[1].wins);
+    const place = gamePlaces(dilemmaCells).get(first[0]) ?? 1;
+    if (first[1].wins > (second?.[1].wins ?? 0) && place > 1) {
+      const { name, wins, games: played } = first[1];
+      out.push({
+        label: 'урок дилеммы',
+        text: `«${name}» выиграла ${wins} из ${played} матчей в игре «${dilemma.display_name}» — больше всех, но по сумме очков только ${place}-е место: здесь важна сумма очков, а не победы в парах`,
+      });
+    }
   }
 
   const coop = (strategies ?? []).filter((s) => s.cooperation !== null);
