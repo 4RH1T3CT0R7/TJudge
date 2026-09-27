@@ -26,7 +26,8 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LineChart } from '../components/ui/LineChart';
-import { Markdown } from '../components/ui/Markdown';
+import { GameRules } from '../components/game/GameRules';
+import { StarterKit } from '../components/game/StarterKit';
 import { YouMark } from '../components/ui/YouMark';
 import { revealAndFocus, useRevealOnMobile } from '../hooks/useRevealOnMobile';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
@@ -137,13 +138,13 @@ export function GameDetail() {
     placeholderData: keepPreviousData,
     refetchInterval: live.pollInterval,
   });
-  // переход из бейджа здоровья программы: список матчей в поле зрения и в фокусе,
-  // иначе на телефоне всё остаётся у карточки программы внизу страницы
+  // переходы из карточки программы (к матчам с ошибкой, к шаблону): раздел в поле
+  // зрения и в фокусе, иначе на телефоне всё остаётся у карточки внизу страницы
   const location = useLocation();
-  const focusMatches = (location.state as { focus?: string } | null)?.focus === 'matches';
+  const focus = (location.state as { focus?: 'matches' | 'starter' } | null)?.focus;
   useEffect(() => {
-    if (focusMatches) revealAndFocus(document.getElementById('game-matches'));
-  }, [focusMatches, location.key]);
+    if (focus) revealAndFocus(document.getElementById(focus === 'matches' ? 'game-matches' : 'starter'));
+  }, [focus, location.key]);
 
   const pageData = matchesQuery.data ?? [];
   const hasNextPage = pageData.length > matchesPerPage;
@@ -238,18 +239,19 @@ export function GameDetail() {
           {/* Main Content Section */}
           <div className="lg:col-span-2 min-w-0">
             {activeTab === 'rules' && (
-              <div className="card">
-                <h2 className="text-lg font-semibold mb-4 text-gray-100">Правила игры</h2>
-                {game.rules ? (
-                  <div className="prose max-w-none prose-invert">
-                    <div className="markdown-content text-gray-300">
-                      <Markdown>{game.rules}</Markdown>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-gray-400">Правила для этой игры не указаны.</p>
-                )}
-              </div>
+              <>
+                <div className="card">
+                  <h2 className="text-lg font-semibold mb-4 text-gray-100">Правила игры</h2>
+                  {game.rules ? (
+                    <GameRules rules={game.rules} />
+                  ) : (
+                    <p className="text-gray-400">Правила для этой игры не указаны.</p>
+                  )}
+                </div>
+                <div className="mt-6">
+                  <StarterKit game={game.name} />
+                </div>
+              </>
             )}
 
             {activeTab === 'leaderboard' && (

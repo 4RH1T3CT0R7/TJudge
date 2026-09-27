@@ -6,7 +6,9 @@ import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
-import { Markdown } from '../components/ui/Markdown';
+import { GameRules } from '../components/game/GameRules';
+import { StarterKit } from '../components/game/StarterKit';
+import { RuntimeInfo } from '../components/game/RuntimeInfo';
 
 
 export function GameView() {
@@ -64,14 +66,13 @@ export function GameView() {
           <div className="card">
             <h2 className="text-xl font-semibold mb-4 text-gray-100">Правила игры</h2>
             {game.rules ? (
-              <div className="prose max-w-none prose-invert">
-                <div className="markdown-content text-gray-300">
-                  <Markdown>{game.rules}</Markdown>
-                </div>
-              </div>
+              <GameRules rules={game.rules} />
             ) : (
               <p className="text-gray-400">Правила для этой игры не указаны.</p>
             )}
+          </div>
+          <div className="mt-6">
+            <StarterKit game={game.name} />
           </div>
         </div>
 
@@ -88,6 +89,9 @@ export function GameView() {
             >
               Найти турниры
             </Link>
+            <div className="mt-4">
+              <RuntimeInfo />
+            </div>
           </div>
           {/* Invader - вне карточки, чтобы избежать overflow */}
           <div className="flex justify-end mt-3 pr-2">

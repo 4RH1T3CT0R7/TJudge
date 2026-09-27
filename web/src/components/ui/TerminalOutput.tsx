@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Предупреждения жёлтым; ошибки (error, *Error:, file:line:col:) красным.
 function lineTone(line: string) {
@@ -18,11 +18,15 @@ interface TerminalOutputProps {
   wrap?: boolean;
   /** Кнопка «копировать»; в длинных списках её лучше убрать. */
   copyable?: boolean;
+  /** Свои кнопки в шапке перед «копировать» (скачать). */
+  actions?: ReactNode;
+  /** Своя раскраска строки вместо тонов лога (код шаблона). */
+  renderLine?: (line: string) => ReactNode;
 }
 
 // Логи компилятора и ошибки матчей как в терминале: моноширинный шрифт,
 // переносы сохраняются, длинный вывод прокручивается, есть копирование.
-export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = false, copyable = true }: TerminalOutputProps) {
+export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = false, copyable = true, actions, renderLine }: TerminalOutputProps) {
   const [copied, setCopied] = useState(false);
   const [scrollable, setScrollable] = useState(false);
   const preRef = useRef<HTMLPreElement>(null);
@@ -54,14 +58,17 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
 
   return (
     <div className="rounded border border-gray-800 bg-gray-950 font-mono text-xs">
-      {(label || canCopy) && (
+      {(label || canCopy || actions) && (
         <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-800 text-gray-500">
           <span className="truncate">{label}</span>
-          {canCopy && (
-            <button type="button" onClick={copy} aria-live="polite" className="btn btn-sm btn-secondary">
-              {copied ? 'скопировано' : 'копировать'}
-            </button>
-          )}
+          <span className="flex shrink-0 gap-2">
+            {actions}
+            {canCopy && (
+              <button type="button" onClick={copy} aria-live="polite" className="btn btn-sm btn-secondary">
+                {copied ? 'скопировано' : 'копировать'}
+              </button>
+            )}
+          </span>
         </div>
       )}
       <pre
@@ -72,8 +79,8 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
         className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap wrap-anywhere' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
       >
         {text.split('\n').map((line, i) => (
-          <span key={i} className={lineTone(line)}>
-            {line}
+          <span key={i} className={renderLine ? undefined : lineTone(line)}>
+            {renderLine ? renderLine(line) : line}
             {'\n'}
           </span>
         ))}

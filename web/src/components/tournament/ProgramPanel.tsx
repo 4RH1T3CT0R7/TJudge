@@ -9,6 +9,7 @@ import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
 import { MatchError } from './MatchError';
+import { RuntimeInfo } from '../game/RuntimeInfo';
 import { extractErrorMessage } from './helpers';
 import { revealAndFocus } from '../../hooks/useRevealOnMobile';
 import { explainCompileError, explainMatchError } from '../../utils/explainError';
@@ -258,6 +259,15 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
     <div className="card">
       <h2 id={PANEL_HEADING_ID} className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>
 
+      {!current && (
+        <p className="mb-4 text-sm text-gray-400">
+          Программы ещё нет. Начните с шаблона на своём языке:{' '}
+          <Link to={{ search: '' }} state={{ focus: 'starter' }} className="font-mono text-primary-400 hover:underline">
+            <span aria-hidden="true">$ </span>начать<span aria-hidden="true"> ↓</span>
+          </Link>
+        </p>
+      )}
+
       {current && (
         <div className="mb-4 space-y-3">
           {/* Терминальная сессия текущей версии: upload → compile → check */}
@@ -454,6 +464,7 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
         <p className="text-xs text-gray-400 text-center">
           Поддерживаемые форматы: {SUPPORTED_EXTENSIONS.join(', ')}
         </p>
+        <RuntimeInfo />
       </div>
 
       {/* Previous Versions */}
