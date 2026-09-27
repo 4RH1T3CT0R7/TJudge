@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import api, { isRetryableError } from '../api/client';
@@ -31,6 +31,7 @@ import {
   GeneralLeaderboardTable,
   CrossGameLeaderboardTableDark,
 } from '../components/tournament/LeaderboardTab';
+import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
 import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
 import { MatchesTab } from '../components/tournament/MatchesTab';
@@ -44,6 +45,7 @@ import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { useTabParam } from '../hooks/useTabParam';
+import { gameProgress } from '../utils/liveStandings';
 import type {
   Tournament,
   TournamentStatus,
@@ -69,7 +71,7 @@ export function TournamentDetail() {
     tournamentId,
     enabled: isAuthenticated,
   });
-  const { isConnected } = live;
+  const { isConnected, isOnline } = live;
 
   const teamsQuery = useTournamentTeams(tournamentId);
   const gamesQuery = useTournamentGames(tournamentId);
@@ -85,6 +87,7 @@ export function TournamentDetail() {
   const matchRounds: MatchRound[] = matchRoundsQuery.data ?? [];
   const gamesStatus: TournamentGameWithDetails[] = gamesStatusQuery.data ?? [];
   const myTeam: Team | null = myTeamQuery.data ?? null;
+  const progress = useMemo(() => gameProgress(matchRoundsQuery.data ?? []), [matchRoundsQuery.data]);
 
   const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'info');
   // Первичная загрузка всех данных страницы (раньше - единый ручной флаг).
@@ -519,6 +522,18 @@ export function TournamentDetail() {
           </div>
         )}
       </PageHeader>
+
+      {tournament.status === 'active' && (
+        <LiveStatusLine
+          progress={progress}
+          games={games}
+          status={tournament.status}
+          isConnected={isConnected}
+          isOnline={isOnline}
+          updatedAt={Math.max(leaderboardQuery.dataUpdatedAt, matchRoundsQuery.dataUpdatedAt)}
+          className="mb-6 text-sm"
+        />
+      )}
 
       {/* Action Error */}
       {actionError && (
