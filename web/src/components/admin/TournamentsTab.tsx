@@ -371,7 +371,7 @@ export function TournamentsTab({
                           />
                           <div>
                             <span className="font-medium text-gray-100">{game.display_name}</span>
-                            <span className="text-xs text-gray-400 ml-2">({game.name})</span>
+                            <span className="text-xs text-gray-300 ml-2">({game.name})</span>
                           </div>
                         </label>
                       ))}
