@@ -380,25 +380,41 @@ function MoveStrip({
   name: string;
 }) {
   // на коротком матче клетки с зазором, на длинном - сплошная полоса
-  const w = n <= 200 ? 0.8 : 1;
-  const cells = useMemo(
-    () =>
-      moves.map((m, i) =>
-        dilemma ? (
-          <rect key={i} x={i} width={w} height={1} className={m === COOPERATE ? 'fill-primary-500' : 'fill-red-500'} />
-        ) : (
-          <rect
-            key={i}
-            x={i}
-            width={w}
-            height={1}
-            className="fill-primary-400"
-            fillOpacity={0.12 + 0.88 * (range.max === range.min ? 1 : (m - range.min) / (range.max - range.min))}
-          />
-        )
-      ),
-    [moves, dilemma, range, w]
-  );
+  const long = n > 200;
+  const w = long ? 1 : 0.8;
+  const cells = useMemo(() => {
+    if (!dilemma) {
+      return moves.map((m, i) => (
+        <rect
+          key={i}
+          x={i}
+          width={w}
+          height={1}
+          className="fill-primary-400"
+          fillOpacity={0.12 + 0.88 * (range.max === range.min ? 1 : (m - range.min) / (range.max - range.min))}
+        />
+      ));
+    }
+    // на длинном матче клетка уже пикселя: предательство получает обводку постоянной
+    // толщины, иначе одиночное на телефоне не видно, и рисуется поверх сотрудничества,
+    // чтобы обводку не перекрыла соседняя клетка
+    const at = moves.map((_, i) => i);
+    return [...at.filter((i) => moves[i] === COOPERATE), ...at.filter((i) => moves[i] !== COOPERATE)].map((i) =>
+      moves[i] === COOPERATE ? (
+        <rect key={i} x={i} width={w} height={1} className="fill-primary-500" />
+      ) : (
+        <rect
+          key={i}
+          x={i}
+          width={w}
+          height={1}
+          className="fill-red-500 stroke-red-500"
+          strokeWidth={long ? 1.5 : 0}
+          vectorEffect="non-scaling-stroke"
+        />
+      )
+    );
+  }, [moves, dilemma, range, w, long]);
   const summary = dilemma
     ? `${name}: сотрудничество ${moves.filter((m) => m === COOPERATE).length}, предательство ${moves.filter((m) => m !== COOPERATE).length}`
     : `${name}: ${moves.length} ходов`;
