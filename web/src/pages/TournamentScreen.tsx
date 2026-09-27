@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
@@ -24,6 +24,8 @@ const DEFAULT_ROTATE_S = 15;
 const BANNER_MS = 20_000;
 const IDLE_MS = 3000;
 const FEED_SIZE = 12;
+// во время раунда результаты идут десятками в секунду: лента обновляется раз в секунду
+const FEED_FLUSH_MS = 1000;
 const CEREMONY_PLACES = 10;
 
 interface FeedItem {
@@ -123,6 +125,16 @@ export function TournamentScreen() {
   const ceremony = isAdmin && params.get('view') === 'ceremony';
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  const incoming = useRef<FeedItem[]>([]);
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (incoming.current.length === 0) return;
+      const fresh = incoming.current;
+      incoming.current = [];
+      setFeed((f) => [...fresh, ...f.filter((x) => !fresh.some((n) => n.id === x.id))].slice(0, FEED_SIZE));
+    }, FEED_FLUSH_MS);
+    return () => clearInterval(t);
+  }, []);
   const gamesQuery = useTournamentGames(id);
   const games = useMemo(() => gamesQuery.data ?? [], [gamesQuery.data]);
   const onMatchResult = useCallback(
@@ -138,7 +150,7 @@ export function TournamentScreen() {
         score2: p.score2 ?? null,
         winner: p.winner,
       };
-      setFeed((f) => [item, ...f.filter((x) => x.id !== item.id)].slice(0, FEED_SIZE));
+      incoming.current = [item, ...incoming.current.filter((x) => x.id !== item.id)];
     },
     [games]
   );
