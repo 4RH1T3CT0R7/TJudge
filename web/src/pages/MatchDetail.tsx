@@ -25,7 +25,7 @@ import {
   runningTotal,
   sharePct,
 } from '../utils/transcript';
-import type { Side } from '../utils/explainError';
+import { failedSide, type Side } from '../utils/explainError';
 import type { Match, MatchTranscript } from '../types';
 
 // что программа сообщает за ход в числовых играх: [подпись, среднее]
@@ -168,9 +168,15 @@ export function MatchDetail() {
             hint="ходы этого матча не записаны: он сыгран до включения записи или с числом итераций больше 1000"
           />
         ) : match.game_type === 'dollar_auction' ? (
-          <AuctionBids transcript={transcriptQuery.data} names={names} />
+          <AuctionBids transcript={transcriptQuery.data} names={names} culprit={failedSide(match)} />
         ) : (
-          <Replay transcript={transcriptQuery.data} gameType={match.game_type} names={names} />
+          <Replay
+            transcript={transcriptQuery.data}
+            gameType={match.game_type}
+            names={names}
+            failed={match.status === 'failed'}
+            culprit={failedSide(match)}
+          />
         )}
       </section>
     </div>
@@ -225,8 +231,25 @@ function Scoreboard({ match, names, mySide }: { match: Match; names: [string, st
 // Проигрывание матча: полосы ходов, график счёта и таблица итераций показывают
 // состояние после step итераций. Автопроигрывание только без reduced motion,
 // шаги и ползунок работают всегда.
-function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; gameType: string; names: [string, string] }) {
+function Replay({
+  transcript,
+  gameType,
+  names,
+  failed,
+  culprit,
+}: {
+  transcript: MatchTranscript;
+  gameType: string;
+  names: [string, string];
+  failed: boolean;
+  /** Чья программа упала; null - неизвестно. */
+  culprit: Side | null;
+}) {
   const n = iterationsOf(transcript);
+  // упавший матч обрывается на итерации без очков (с нуля): ходы до неё бывают у
+  // обеих сторон, у одной или ни у одной, поэтому клеток и строк бывает n + 1
+  const failAt = failed ? (transcript.points?.[0]?.length ?? n) : null;
+  const cols = failAt === null ? n : Math.max(n, failAt + 1);
   const [step, setStep] = useState(n);
   const [playing, setPlaying] = useState(false);
   const { reduced } = useMotionPref();
@@ -304,7 +327,17 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
               <SideMark side={s} />
               {names[s - 1]}
             </p>
-            <MoveStrip moves={transcript.moves[s - 1] ?? []} n={n} step={step} dilemma={dilemma} range={range} onSeek={seek} name={names[s - 1]} />
+            <MoveStrip
+              moves={transcript.moves[s - 1] ?? []}
+              n={n}
+              cols={cols}
+              failAt={culprit === s ? failAt : null}
+              step={step}
+              dilemma={dilemma}
+              range={range}
+              onSeek={seek}
+              name={names[s - 1]}
+            />
           </div>
         ))}
         <p className="font-mono text-xs text-gray-500">
@@ -345,9 +378,26 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
         )}
       </dl>
 
-      {totals && <ScoreChart totals={totals} n={n} step={step} names={names} />}
+      {failAt !== null && (
+        <p className="font-mono text-sm text-gray-300">
+          <span aria-hidden="true" className="text-red-400">✕ </span>
+          матч остановлен на ходу {failAt + 1}:{' '}
+          {culprit ? `программа «${names[culprit - 1]}» завершилась с ошибкой` : 'программа завершилась с ошибкой'}; очки по
+          ходам не засчитаны{culprit ? ' — техническое поражение' : ''}
+        </p>
+      )}
 
-      <IterationTable transcript={transcript} totals={totals} dilemma={dilemma} names={names} step={step} />
+      {totals && <ScoreChart totals={totals} n={n} step={step} names={names} failed={failed} />}
+
+      <IterationTable
+        transcript={transcript}
+        totals={totals}
+        dilemma={dilemma}
+        names={names}
+        step={step}
+        rows={cols}
+        fail={failAt !== null && culprit ? { at: failAt, side: culprit } : null}
+      />
     </div>
   );
 }
@@ -365,6 +415,8 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
 function MoveStrip({
   moves,
   n,
+  cols,
+  failAt,
   step,
   dilemma,
   range,
@@ -373,6 +425,10 @@ function MoveStrip({
 }: {
   moves: number[];
   n: number;
+  /** Клеток в полосе: n или n + 1 у упавшего матча. */
+  cols: number;
+  /** Итерация, на которой программа этой стороны упала: там клетка-✕. */
+  failAt: number | null;
   step: number;
   dilemma: boolean;
   range: { min: number; max: number };
@@ -418,28 +474,48 @@ function MoveStrip({
   const summary = dilemma
     ? `${name}: сотрудничество ${moves.filter((m) => m === COOPERATE).length}, предательство ${moves.filter((m) => m !== COOPERATE).length}`
     : `${name}: ${moves.length} ходов`;
+  const failure = failAt === null ? '' : `, ошибка на ходу ${failAt + 1}`;
 
   return (
     <svg
-      viewBox={`0 0 ${n} 1`}
+      viewBox={`0 0 ${cols} 1`}
       preserveAspectRatio="none"
       shapeRendering="crispEdges"
       className="block h-4 w-full cursor-pointer"
       role="img"
-      aria-label={summary}
+      aria-label={summary + failure}
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
-        onSeek(Math.floor(((e.clientX - r.left) / r.width) * n) + 1);
+        onSeek(Math.floor(((e.clientX - r.left) / r.width) * cols) + 1);
       }}
     >
       {cells}
+      {failAt !== null && (
+        <g className="stroke-red-400" strokeWidth={1.5}>
+          <rect x={failAt} width={w} height={1} className="fill-gray-800" stroke="none" />
+          <line x1={failAt} y1={0} x2={failAt + w} y2={1} vectorEffect="non-scaling-stroke" />
+          <line x1={failAt + w} y1={0} x2={failAt} y2={1} vectorEffect="non-scaling-stroke" />
+        </g>
+      )}
       {step < n && <rect x={step} width={n - step} height={1} fill="#111827" fillOpacity={0.75} />}
     </svg>
   );
 }
 
 // Накопленный счёт обеих сторон; курсор - на step или под указателем.
-function ScoreChart({ totals, n, step, names }: { totals: number[][]; n: number; step: number; names: [string, string] }) {
+function ScoreChart({
+  totals,
+  n,
+  step,
+  names,
+  failed,
+}: {
+  totals: number[][];
+  n: number;
+  step: number;
+  names: [string, string];
+  failed: boolean;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 600;
   const H = 180;
@@ -455,7 +531,9 @@ function ScoreChart({ totals, n, step, names }: { totals: number[][]; n: number;
   return (
     <figure>
       <figcaption className="mb-2 flex flex-wrap gap-x-5 gap-y-1 font-mono text-sm text-gray-300">
-        <span className="text-gray-500">счёт после {at} из {n}:</span>
+        <span className="text-gray-500">
+          {failed ? 'очки до ошибки' : 'счёт'} после {at} из {n}:
+        </span>
         {([0, 1] as const).map((s) => (
           <span key={s} className="inline-flex items-center gap-2">
             <SideMark side={(s + 1) as Side} className="" />
@@ -508,12 +586,18 @@ function IterationTable({
   dilemma,
   names,
   step,
+  rows,
+  fail,
 }: {
   transcript: MatchTranscript;
   totals: number[][] | null;
   dilemma: boolean;
   names: [string, string];
   step: number;
+  /** Строк: итерации и у упавшего матча строка ошибки. */
+  rows: number;
+  /** Где и чья программа упала. */
+  fail: { at: number; side: Side } | null;
 }) {
   const [open, setOpen] = useState(false);
   const n = iterationsOf(transcript);
@@ -528,6 +612,18 @@ function IterationTable({
     ) : (
       v
     );
+  const cell = (side: Side, i: number) => {
+    const v = transcript.moves[side - 1]?.[i];
+    if (fail?.at !== i || fail.side !== side) return move(v);
+    return (
+      <>
+        {v !== undefined && <>{move(v)} </>}
+        <span className="text-red-400">
+          <span aria-hidden="true">✕ </span>ошибка
+        </span>
+      </>
+    );
+  };
 
   return (
     <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
@@ -551,15 +647,15 @@ function IterationTable({
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: n }, (_, i) => (
+              {Array.from({ length: rows }, (_, i) => (
                 <tr
                   key={i}
                   aria-current={i === step - 1 ? 'step' : undefined}
                   className={`border-t border-gray-800 ${i === step - 1 ? 'bg-gray-800' : ''}`}
                 >
                   <td className="px-3 py-1 text-gray-500">{i + 1}</td>
-                  <td className="px-3 py-1 text-gray-200">{move(transcript.moves[0]?.[i])}</td>
-                  <td className="px-3 py-1 text-gray-200">{move(transcript.moves[1]?.[i])}</td>
+                  <td className="px-3 py-1 text-gray-200">{cell(1, i)}</td>
+                  <td className="px-3 py-1 text-gray-200">{cell(2, i)}</td>
                   {totals && (
                     <td className="px-3 py-1 text-right text-gray-300">
                       {transcript.points![0][i] ?? '—'}:{transcript.points![1][i] ?? '—'}
@@ -581,7 +677,9 @@ function IterationTable({
 }
 
 // Торги аукциона: ставки по очереди, очков по ходам нет, только итог.
-function AuctionBids({ transcript, names }: { transcript: MatchTranscript; names: [string, string] }) {
+// У упавшего матча последней строкой - ход, на котором программа упала: в аукционе
+// ошибка бывает только при ставке, и это всегда очередь упавшей стороны.
+function AuctionBids({ transcript, names, culprit }: { transcript: MatchTranscript; names: [string, string]; culprit: Side | null }) {
   const prize = GAME_PAYOFFS.dollar_auction.prize;
   const turns = auctionTurns(transcript);
   return (
@@ -597,6 +695,15 @@ function AuctionBids({ transcript, names }: { transcript: MatchTranscript; names
             </span>
           </li>
         ))}
+        {culprit && (
+          <li className="flex gap-3">
+            <span className="w-8 text-right tabular-nums text-gray-500">{turns.length + 1}.</span>
+            <span className="min-w-0 flex-1 truncate text-gray-300">{names[culprit - 1]}</span>
+            <span className="text-red-400">
+              <span aria-hidden="true">✕ </span>ошибка
+            </span>
+          </li>
+        )}
       </ol>
       <p className="mt-3 font-mono text-xs text-gray-500">
         <span aria-hidden="true">{'// '}</span>
