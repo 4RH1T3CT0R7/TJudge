@@ -99,7 +99,7 @@ export function PrisonersDilemmaMatrix() {
             <td></td>
             <td></td>
             <td colSpan={2} className="pt-4">
-              <div className={`text-center transition-opacity duration-200 h-12 ${hoveredCell ? 'opacity-100' : 'opacity-50'}`}>
+              <div className="text-center h-12">
                 {hoveredCell ? (
                   <>
                     <div className="text-base font-semibold text-gray-200">{cellInfo[hoveredCell].title}</div>
