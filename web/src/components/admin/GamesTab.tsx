@@ -121,6 +121,7 @@ export function GamesTab({
           <Modal
             open={showGameForm}
             onClose={resetGameForm}
+            closeOnBackdrop={false}
             title={editingGame ? 'Редактировать игру' : 'Создать новую игру'}
             maxWidth="max-w-2xl"
           >

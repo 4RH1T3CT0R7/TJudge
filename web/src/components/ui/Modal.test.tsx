@@ -6,12 +6,12 @@ import { Modal } from './Modal';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Harness() {
+function Harness({ closeOnBackdrop }: { closeOnBackdrop?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button id="opener" onClick={() => setOpen(true)}>открыть</button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Диалог">
+      <Modal open={open} onClose={() => setOpen(false)} title="Диалог" closeOnBackdrop={closeOnBackdrop}>
         <button id="ok" onClick={() => setOpen(false)}>ок</button>
       </Modal>
     </>
@@ -68,6 +68,23 @@ it('закрывается по фону, только если нажатие �
     backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+  root.unmount();
+});
+
+it('с closeOnBackdrop={false} клик по фону не закрывает', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => root.render(<Harness closeOnBackdrop={false} />));
+  await act(async () => document.getElementById('opener')!.click());
+
+  const backdrop = document.querySelector<HTMLElement>('.modal-backdrop')!;
+  await act(async () => {
+    backdrop.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
   root.unmount();
 });

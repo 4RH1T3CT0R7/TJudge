@@ -11,6 +11,8 @@ interface ModalProps {
   children: ReactNode;
   /** Tailwind-класс максимальной ширины контента. */
   maxWidth?: string;
+  /** false у форм: случайный клик мимо панели не стирает введённое. */
+  closeOnBackdrop?: boolean;
 }
 
 const FOCUSABLE =
@@ -37,10 +39,10 @@ function trapTab(e: KeyboardEvent<HTMLDivElement>) {
 }
 
 // Общая модалка на классах .modal-backdrop/.modal-content (index.css):
-// клик по фону и Escape закрывают, клик по контенту — нет.
+// клик по фону (если не отключён) и Escape закрывают, клик по контенту — нет.
 // Фокус уходит в диалог и после закрытия возвращается на элемент, который его открыл.
 // Рендер в body: иначе контекст наложения страницы оставляет шапку поверх фона.
-export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md' }: ModalProps) {
+export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md', closeOnBackdrop = true }: ModalProps) {
   useEscapeKey(onClose, open);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -72,7 +74,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md' }:
       className="modal-backdrop"
       onMouseDown={(e) => { pressedOnBackdrop.current = e.target === e.currentTarget; }}
       onClick={(e) => {
-        if (pressedOnBackdrop.current && e.target === e.currentTarget) onClose();
+        if (closeOnBackdrop && pressedOnBackdrop.current && e.target === e.currentTarget) onClose();
       }}
     >
       <div

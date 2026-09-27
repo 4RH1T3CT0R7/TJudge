@@ -330,7 +330,7 @@ export function TournamentsTab({
             </button>
           </div>
 
-          <Modal open={showTournamentForm} onClose={resetTournamentForm} title="Создать турнир" maxWidth="max-w-lg">
+          <Modal open={showTournamentForm} onClose={resetTournamentForm} closeOnBackdrop={false} title="Создать турнир" maxWidth="max-w-lg">
             <div className="space-y-4">
               <Field label="Название *">
                 {(control) => (
