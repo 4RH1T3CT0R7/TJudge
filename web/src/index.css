@@ -206,6 +206,8 @@
 
   html {
     scroll-behavior: smooth;
+    /* прокрутка к разделу (scrollIntoView, якоря) не прячет его под фиксированной шапкой h-16 */
+    scroll-padding-top: 5rem;
     color-scheme: dark;
     /* Fluid base font-size: 16px on ≤1440, scales to ~18.5px on 2K (2560px) */
     font-size: clamp(1rem, calc(0.75rem + 0.25vw), 1.25rem);
