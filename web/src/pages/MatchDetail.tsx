@@ -48,6 +48,7 @@ function SideMark({ side, className = 'mr-1.5' }: { side: Side; className?: stri
 const TICK_MS = 60;
 const TICKS_PER_REPLAY = 150;
 
+const PD = GAME_PAYOFFS.dilemma;
 const pct = (x: number | null) => (x === null ? '—' : sharePct(x));
 const num = (x: number | null) => (x === null ? '—' : x.toLocaleString('ru-RU', { maximumFractionDigits: 1 }));
 
@@ -143,6 +144,11 @@ export function MatchDetail() {
             </Link>
           )}
           <Link to={gameHref} className="text-primary-400 underline hover:text-primary-300">все матчи игры</Link>
+          {game && (
+            <Link to={`/tournaments/${tournamentId}/games/${game.id}?tab=rules`} className="text-primary-400 underline hover:text-primary-300">
+              правила
+            </Link>
+          )}
         </p>
       </PageHeader>
 
@@ -306,6 +312,10 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
             <>
               <span aria-hidden="true" className="text-primary-500">■</span> сотрудничество{' '}
               <span aria-hidden="true" className="ml-2 text-red-500">■</span> предательство
+              <br />
+              <span aria-hidden="true">{'// '}</span>
+              за ход: оба сотрудничают — {PD.cc.join(':')}, один предал — {PD.dc.join(':')} в его пользу, оба предали —{' '}
+              {PD.dd.join(':')}
             </>
           ) : (
             <>
