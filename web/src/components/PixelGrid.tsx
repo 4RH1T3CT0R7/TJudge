@@ -428,6 +428,9 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
       clickTarget.removeEventListener('click', onClick);
       clickTarget.removeEventListener('mousemove', onMouseMove);
       clickTarget.removeEventListener('mouseleave', onMouseLeave);
+      // эффект пересоздаёт рендерер при смене настройки анимаций: без явной потери
+      // контекста старые копятся до сборки мусора, и браузер начинает их отнимать
+      renderer.forceContextLoss();
       renderer.dispose();
       geometry.dispose();
       material.dispose();
