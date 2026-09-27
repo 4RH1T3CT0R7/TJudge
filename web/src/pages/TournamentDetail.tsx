@@ -318,6 +318,7 @@ export function TournamentDetail() {
   if (error || !tournament) {
     return (
       <div className="py-12">
+        <h1 className="sr-only">Турнир</h1>
         <div className="flex justify-center">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// ошибка" eyeOverride="sad" />
         </div>
