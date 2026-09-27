@@ -274,7 +274,7 @@ export function GameDetail() {
                                 {entry.team_name || entry.program_name}
                                 {mine && <YouMark />}
                                 {entry.team_name && (
-                                  <div className="font-mono text-xs text-gray-500 break-all">{entry.program_name}</div>
+                                  <div className="hidden font-mono text-xs text-gray-500 break-all sm:block">{entry.program_name}</div>
                                 )}
                               </td>
                               <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
