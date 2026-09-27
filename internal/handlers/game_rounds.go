@@ -340,8 +340,13 @@ func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	teamID, ok := parseOptionalQueryUUID(w, r, "team_id")
+	if !ok {
+		return
+	}
 	filter := models.MatchFilter{
 		TournamentID: &tournamentID,
+		TeamID:       teamID,
 		GameType:     g.Name,
 	}
 

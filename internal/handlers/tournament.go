@@ -28,7 +28,7 @@ type TournamentService interface {
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error)
 	GetMatches(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error)
-	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error)
 }
 
 // SchedulingService раскладывает пары round-robin и толкает матчи в очередь
@@ -309,7 +309,8 @@ func (h *TournamentHandler) GetMatches(w http.ResponseWriter, r *http.Request) {
 //
 // без параметров отдаются только счётчики раундов. матчи раунда приходят
 // постранично по round+game_type: в раунде N*(N-1) матчей на игру, и полный
-// список на каждый запрос страницы турнира клал бы API.
+// список на каждый запрос страницы турнира клал бы API. team_id сужает и
+// счётчики, и страницу до матчей команды.
 func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Request) {
 	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
 	if !ok {
@@ -328,8 +329,12 @@ func (h *TournamentHandler) GetMatchesByRounds(w http.ResponseWriter, r *http.Re
 		pg := pagination.ParseLimitOffset(r, 50, 0)
 		page = &models.RoundPage{RoundNumber: round, GameType: q.Get("game_type"), Limit: pg.Limit, Offset: pg.Offset}
 	}
+	teamID, ok := parseOptionalQueryUUID(w, r, "team_id")
+	if !ok {
+		return
+	}
 
-	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID, page)
+	rounds, err := h.tournamentService.GetMatchesByRounds(r.Context(), tournamentID, page, teamID)
 	if err != nil {
 		h.log.LogError("Failed to get matches by rounds", err,
 			zap.String("tournament_id", tournamentID.String()),

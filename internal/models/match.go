@@ -13,6 +13,7 @@ var ErrMatchAlreadyProcessed = errors.New("match already processed or in progres
 type MatchFilter struct {
 	TournamentID *uuid.UUID
 	ProgramID    *uuid.UUID
+	TeamID       *uuid.UUID // матчи любой версии программы команды
 	Status       MatchStatus
 	GameType     string
 	Limit        int
@@ -54,6 +55,12 @@ type Match struct {
 	StartedAt    *time.Time    `json:"started_at,omitempty" db:"started_at"`
 	CompletedAt  *time.Time    `json:"completed_at,omitempty" db:"completed_at"`
 	CreatedAt    time.Time     `json:"created_at" db:"created_at"`
+
+	// команды программ, только в ответах API; nil - команду удалили
+	Team1ID   *uuid.UUID `json:"team1_id,omitempty" db:"team1_id"`
+	Team1Name *string    `json:"team1_name,omitempty" db:"team1_name"`
+	Team2ID   *uuid.UUID `json:"team2_id,omitempty" db:"team2_id"`
+	Team2Name *string    `json:"team2_name,omitempty" db:"team2_name"`
 }
 
 // группа матчей одного раунда по конкретной игре

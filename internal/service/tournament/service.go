@@ -57,7 +57,7 @@ type MatchRepository interface {
 	GetPendingByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Match, error)
 	GetPendingByTournamentAndGame(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.Match, error)
 	ResetFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int64, error)
-	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error)
+	GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error)
 }
 
 // QueueManager кладёт матчи в очередь
@@ -483,8 +483,8 @@ func (s *Service) GetMatches(ctx context.Context, tournamentID uuid.UUID, limit,
 	return s.matchRepo.GetByTournamentID(ctx, tournamentID, limit, offset)
 }
 
-func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
-	return s.matchRepo.GetMatchesByRounds(ctx, tournamentID, page)
+func (s *Service) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error) {
+	return s.matchRepo.GetMatchesByRounds(ctx, tournamentID, page, teamID)
 }
 
 // GetCrossGameLeaderboard — кросс-игровой рейтинг

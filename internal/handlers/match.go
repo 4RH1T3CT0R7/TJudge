@@ -158,6 +158,12 @@ func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.ProgramID = &id
 	}
 
+	teamID, ok := parseOptionalQueryUUID(w, r, "team_id")
+	if !ok {
+		return
+	}
+	filter.TeamID = teamID
+
 	// статус берётся только из белого списка, иначе отдаётся 400
 	if status := r.URL.Query().Get("status"); status != "" {
 		s := models.MatchStatus(status)

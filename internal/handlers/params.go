@@ -21,6 +21,21 @@ func parseUUIDParam(w http.ResponseWriter, r *http.Request, paramName, resourceN
 	return id, true
 }
 
+// parseOptionalQueryUUID - необязательный query-параметр: пустой даёт nil,
+// кривой - 400 и false
+func parseOptionalQueryUUID(w http.ResponseWriter, r *http.Request, paramName string) (*uuid.UUID, bool) {
+	raw := r.URL.Query().Get(paramName)
+	if raw == "" {
+		return nil, true
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("invalid "+paramName))
+		return nil, false
+	}
+	return &id, true
+}
+
 // parseQueryUUID - то же для query-параметра
 func parseQueryUUID(w http.ResponseWriter, r *http.Request, paramName string) (uuid.UUID, bool) {
 	raw := r.URL.Query().Get(paramName)

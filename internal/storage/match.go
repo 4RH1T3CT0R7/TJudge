@@ -76,35 +76,47 @@ func insertMatches(ctx context.Context, tx *sqlx.Tx, matches []*models.Match) er
 	return nil
 }
 
-func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
-	var match models.Match
+// withTeams дописывает к выборке матчей (колонки как в scanMatchWithTeams)
+// команды обеих программ. соединение идёт поверх уже отобранной страницы:
+// поверх всех матчей игры оно стоило бы JOIN каждой строки (EXPLAIN на 100
+// командах: 12 мс против 7,5 мс у запроса без команд)
+func withTeams(query, orderBy string) string {
+	q := `
+		SELECT m.*, p1.team_id, t1.name, p2.team_id, t2.name
+		FROM (` + query + `) m
+		LEFT JOIN programs p1 ON p1.id = m.program1_id
+		LEFT JOIN teams t1 ON t1.id = p1.team_id
+		LEFT JOIN programs p2 ON p2.id = m.program2_id
+		LEFT JOIN teams t2 ON t2.id = p2.team_id`
+	if orderBy != "" {
+		q += " ORDER BY " + orderBy
+	}
+	return q
+}
 
-	query := `
+func scanMatchWithTeams(row interface{ Scan(...any) error }) (*models.Match, error) {
+	var m models.Match
+	err := row.Scan(&m.ID, &m.TournamentID, &m.Program1ID, &m.Program2ID, &m.GameType, &m.Status, &m.Priority, &m.RoundNumber,
+		&m.Score1, &m.Score2, &m.Winner, &m.ErrorCode, &m.ErrorMessage, &m.StartedAt, &m.CompletedAt, &m.CreatedAt,
+		&m.Team1ID, &m.Team1Name, &m.Team2ID, &m.Team2Name)
+	return &m, err
+}
+
+// teamMatchCond - матчи команды: её программа любой версии на любой стороне.
+// ARRAY(...) считается один раз, и поиск идёт по индексам program1_id и
+// program2_id, а не перебором всех матчей турнира
+const teamMatchCond = ` AND (program1_id = ANY(ARRAY(SELECT id FROM programs WHERE team_id = $%[1]d))
+		OR program2_id = ANY(ARRAY(SELECT id FROM programs WHERE team_id = $%[1]d)))`
+
+func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Match, error) {
+	query := withTeams(`
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE id = $1
-	`
+	`, "")
 
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&match.ID,
-		&match.TournamentID,
-		&match.Program1ID,
-		&match.Program2ID,
-		&match.GameType,
-		&match.Status,
-		&match.Priority,
-		&match.RoundNumber,
-		&match.Score1,
-		&match.Score2,
-		&match.Winner,
-		&match.ErrorCode,
-		&match.ErrorMessage,
-		&match.StartedAt,
-		&match.CompletedAt,
-		&match.CreatedAt,
-	)
-
+	match, err := scanMatchWithTeams(r.db.QueryRowContext(ctx, query, id))
 	if stderrors.Is(err, sql.ErrNoRows) {
 		return nil, errors.ErrNotFound.WithMessage("match not found")
 	}
@@ -112,20 +124,20 @@ func (r *MatchRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Ma
 		return nil, errors.Wrap(err, "failed to get match by id")
 	}
 
-	return &match, nil
+	return match, nil
 }
 
 func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID, limit, offset int) ([]*models.Match, error) {
 	var matches []*models.Match
 
-	query := `
+	query := withTeams(`
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 		FROM matches
 		WHERE tournament_id = $1
 		ORDER BY round_number DESC, created_at DESC, id DESC
 		LIMIT $2 OFFSET $3
-	`
+	`, "m.round_number DESC, m.created_at DESC, m.id DESC")
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID, limit, offset)
 	if err != nil {
@@ -134,29 +146,11 @@ func (r *MatchRepository) GetByTournamentID(ctx context.Context, tournamentID uu
 	defer rows.Close()
 
 	for rows.Next() {
-		var match models.Match
-		err := rows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
+		match, err := scanMatchWithTeams(rows)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
-		matches = append(matches, &match)
+		matches = append(matches, match)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -280,7 +274,8 @@ func (r *MatchRepository) GetPendingByTournamentAndGame(ctx context.Context, tou
 
 // GetMatchesByRounds отдаёт счётчики по раундам турнира без самих матчей.
 // с page выбирается только этот раунд игры вместе со страницей его матчей.
-func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
+// teamID сужает и счётчики, и страницу до матчей команды
+func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error) {
 	query := `
 		SELECT
 			round_number,
@@ -297,11 +292,16 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 		WHERE tournament_id = $1
 	`
 	args := []any{tournamentID}
-	if page != nil {
-		query += " AND round_number = $2 AND game_type = $3"
-		args = append(args, page.RoundNumber, page.GameType)
+	var cond string
+	if teamID != nil {
+		args = append(args, *teamID)
+		cond = fmt.Sprintf(teamMatchCond, len(args))
 	}
-	query += `
+	if page != nil {
+		args = append(args, page.RoundNumber, page.GameType)
+		cond += fmt.Sprintf(" AND round_number = $%d AND game_type = $%d", len(args)-1, len(args))
+	}
+	query += cond + `
 		GROUP BY round_number, game_type
 		ORDER BY MIN(created_at) DESC
 	`
@@ -343,16 +343,16 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 
 	// id в сортировке нужен для стабильных страниц: матчи раунда
 	// вставляются пачкой с одинаковым created_at
-	matchQuery := `
+	matchQuery := withTeams(`
 		SELECT id, tournament_id, program1_id, program2_id, game_type, status, priority, round_number,
 		       score1, score2, winner, error_code, error_message, started_at, completed_at, created_at
 		FROM matches
-		WHERE tournament_id = $1 AND round_number = $2 AND game_type = $3
+		WHERE tournament_id = $1`+cond+fmt.Sprintf(`
 		ORDER BY created_at, id
-		LIMIT $4 OFFSET $5
-	`
+		LIMIT $%d OFFSET $%d
+	`, len(args)+1, len(args)+2), "m.created_at, m.id")
 
-	matchRows, err := r.db.QueryContext(ctx, matchQuery, tournamentID, page.RoundNumber, page.GameType, page.Limit, page.Offset)
+	matchRows, err := r.db.QueryContext(ctx, matchQuery, append(args, page.Limit, page.Offset)...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get matches")
 	}
@@ -360,29 +360,11 @@ func (r *MatchRepository) GetMatchesByRounds(ctx context.Context, tournamentID u
 
 	round := rounds[0]
 	for matchRows.Next() {
-		var match models.Match
-		err := matchRows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
+		match, err := scanMatchWithTeams(matchRows)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
-		round.Matches = append(round.Matches, &match)
+		round.Matches = append(round.Matches, match)
 	}
 	if err := matchRows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
@@ -414,6 +396,12 @@ func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) (
 		argCount++
 	}
 
+	if filter.TeamID != nil {
+		query += fmt.Sprintf(teamMatchCond, argCount)
+		args = append(args, *filter.TeamID)
+		argCount++
+	}
+
 	if filter.Status != "" {
 		query += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, filter.Status)
@@ -439,7 +427,7 @@ func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) (
 		args = append(args, filter.Offset)
 	}
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, withTeams(query, "m.round_number DESC, m.created_at DESC, m.id DESC"), args...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list matches")
 	}
@@ -447,29 +435,11 @@ func (r *MatchRepository) List(ctx context.Context, filter models.MatchFilter) (
 
 	var matches []*models.Match
 	for rows.Next() {
-		var match models.Match
-		err := rows.Scan(
-			&match.ID,
-			&match.TournamentID,
-			&match.Program1ID,
-			&match.Program2ID,
-			&match.GameType,
-			&match.Status,
-			&match.Priority,
-			&match.RoundNumber,
-			&match.Score1,
-			&match.Score2,
-			&match.Winner,
-			&match.ErrorCode,
-			&match.ErrorMessage,
-			&match.StartedAt,
-			&match.CompletedAt,
-			&match.CreatedAt,
-		)
+		match, err := scanMatchWithTeams(rows)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan match")
 		}
-		matches = append(matches, &match)
+		matches = append(matches, match)
 	}
 
 	if err := rows.Err(); err != nil {

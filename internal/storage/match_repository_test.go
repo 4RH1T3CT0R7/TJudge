@@ -544,7 +544,7 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	_, err := s.database.ExecContext(ctx, "UPDATE matches SET winner = 2 WHERE id = $1", won.ID)
 	require.NoError(s.T(), err)
 
-	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, nil)
+	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, nil, nil)
 	require.NoError(s.T(), err)
 
 	// три группы: (раунд 1, prisoners_dilemma), (раунд 1, tug_of_war), (раунд 2, prisoners_dilemma);
@@ -557,7 +557,7 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 
 	// страница одного раунда: счётчики всего раунда, матчей не больше лимита
 	page := &models.RoundPage{RoundNumber: 1, GameType: "prisoners_dilemma", Limit: 2}
-	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, page)
+	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, page, nil)
 	require.NoError(s.T(), err)
 	require.Len(s.T(), rounds, 1)
 	assert.Equal(s.T(), 3, rounds[0].TotalMatches)
@@ -567,7 +567,7 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	require.Len(s.T(), rounds[0].Matches, 2)
 
 	page.Offset = 2
-	rest, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, page)
+	rest, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, page, nil)
 	require.NoError(s.T(), err)
 	require.Len(s.T(), rest, 1)
 	require.Len(s.T(), rest[0].Matches, 1)
@@ -583,9 +583,68 @@ func (s *MatchRepositorySuite) TestGetMatchesByRounds() {
 	assert.Len(s.T(), seen, 3)
 
 	// несуществующий раунд - пусто, без ошибки
-	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, &models.RoundPage{RoundNumber: 9, GameType: "prisoners_dilemma", Limit: 10})
+	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID, &models.RoundPage{RoundNumber: 9, GameType: "prisoners_dilemma", Limit: 10}, nil)
 	require.NoError(s.T(), err)
 	assert.Empty(s.T(), rounds)
+}
+
+// матчи в ответах API несут команды программ, фильтр по команде ловит все её версии
+func (s *MatchRepositorySuite) TestTeamNamesAndFilter() {
+	ctx := context.Background()
+	tournament, v2, rival := s.setupMatchPrerequisites("teams")
+	v1 := s.createProgram(*tournament.CreatorID, "Bot0_teams")
+	homeless := s.createProgram(*tournament.CreatorID, "Bot3_teams")
+
+	var home, away uuid.UUID
+	for name, id := range map[string]*uuid.UUID{"Голуби": &home, "Ястребы": &away} {
+		require.NoError(s.T(), s.database.QueryRowContext(ctx,
+			"INSERT INTO teams (tournament_id, name, code, leader_id) VALUES ($1, $2::text, substr(md5($2::text), 1, 8), $3) RETURNING id",
+			tournament.ID, name, *tournament.CreatorID).Scan(id))
+	}
+	for prog, team := range map[uuid.UUID]uuid.UUID{v1.ID: home, v2.ID: home, rival.ID: away} {
+		_, err := s.database.ExecContext(ctx, "UPDATE programs SET team_id = $2 WHERE id = $1", prog, team)
+		require.NoError(s.T(), err)
+	}
+
+	first := s.createMatch(tournament.ID, v2.ID, rival.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+	s.createMatch(tournament.ID, rival.ID, v1.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+	other := s.createMatch(tournament.ID, rival.ID, homeless.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+
+	got, err := s.repo.GetByID(ctx, first.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), got.Team1Name)
+	require.NotNil(s.T(), got.Team2Name)
+	assert.Equal(s.T(), "Голуби", *got.Team1Name)
+	assert.Equal(s.T(), "Ястребы", *got.Team2Name)
+	assert.Equal(s.T(), &home, got.Team1ID)
+
+	got, err = s.repo.GetByID(ctx, other.ID)
+	require.NoError(s.T(), err)
+	assert.Nil(s.T(), got.Team2Name, "программа без команды")
+
+	mine, err := s.repo.List(ctx, models.MatchFilter{TournamentID: &tournament.ID, TeamID: &home, Limit: 10})
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), mine, 2, "обе версии программы команды, на любой стороне")
+	for _, m := range mine {
+		assert.NotEqual(s.T(), other.ID, m.ID)
+	}
+
+	rounds, err := s.repo.GetMatchesByRounds(ctx, tournament.ID, nil, &home)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), rounds, 1)
+	assert.Equal(s.T(), 2, rounds[0].TotalMatches, "счётчики только по матчам команды")
+
+	rounds, err = s.repo.GetMatchesByRounds(ctx, tournament.ID,
+		&models.RoundPage{RoundNumber: 1, GameType: "prisoners_dilemma", Limit: 10}, &away)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), rounds, 1)
+	assert.Equal(s.T(), 3, rounds[0].TotalMatches)
+	require.Len(s.T(), rounds[0].Matches, 3)
+	assert.NotNil(s.T(), rounds[0].Matches[0].Team1Name)
+
+	all, err := s.repo.GetByTournamentID(ctx, tournament.ID, 10, 0)
+	require.NoError(s.T(), err)
+	assert.Len(s.T(), all, 3)
 }
 
 func (s *MatchRepositorySuite) TestGetStatistics() {

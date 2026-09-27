@@ -182,6 +182,28 @@ func TestMatchHandler_List(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
+	t.Run("фильтр по команде прокидывается в репозиторий", func(t *testing.T) {
+		mockRepo := new(MockMatchRepository)
+		handler := NewMatchHandler(mockRepo, nil, nil, log)
+
+		teamID := uuid.New()
+		mockRepo.On("List", mock.Anything, mock.MatchedBy(func(filter models.MatchFilter) bool {
+			return filter.TeamID != nil && *filter.TeamID == teamID
+		})).Return([]*models.Match{}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/matches?team_id="+teamID.String(), nil)
+		w := httptest.NewRecorder()
+
+		handler.List(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		mockRepo.AssertExpectations(t)
+
+		w = httptest.NewRecorder()
+		handler.List(w, httptest.NewRequest(http.MethodGet, "/api/v1/matches?team_id=invalid", nil))
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
 	t.Run("битый tournament_id даёт 400", func(t *testing.T) {
 		mockRepo := new(MockMatchRepository)
 		handler := NewMatchHandler(mockRepo, nil, nil, log)

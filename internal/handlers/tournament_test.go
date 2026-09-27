@@ -95,8 +95,8 @@ func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tou
 	return args.Get(0).([]*models.CrossGameLeaderboardEntry), args.Error(1)
 }
 
-func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
-	args := m.Called(ctx, tournamentID, page)
+func (m *MockTournamentService) GetMatchesByRounds(ctx context.Context, tournamentID uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error) {
+	args := m.Called(ctx, tournamentID, page, teamID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -643,7 +643,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 			},
 		}
 
-		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, (*models.RoundPage)(nil)).Return(expectedRounds, nil)
+		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, (*models.RoundPage)(nil), (*uuid.UUID)(nil)).Return(expectedRounds, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/matches/rounds", nil)
 		req = withTournamentID(req, tournamentID.String())
@@ -670,10 +670,11 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 
 		tournamentID := uuid.New()
 		page := &models.RoundPage{RoundNumber: 1, GameType: "prisoners_dilemma", Limit: 100, Offset: 100}
-		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, page).Return([]*models.MatchRound{}, nil)
+		teamID := uuid.New()
+		mockService.On("GetMatchesByRounds", mock.Anything, tournamentID, page, &teamID).Return([]*models.MatchRound{}, nil)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+
-			"/matches/rounds?round=1&game_type=prisoners_dilemma&limit=100000&offset=100", nil)
+			"/matches/rounds?round=1&game_type=prisoners_dilemma&limit=100000&offset=100&team_id="+teamID.String(), nil)
 		req = withTournamentID(req, tournamentID.String())
 		w := httptest.NewRecorder()
 
@@ -683,7 +684,7 @@ func TestTournamentHandler_GetMatchesByRounds(t *testing.T) {
 		mockService.AssertExpectations(t)
 	})
 
-	for _, query := range []string{"round=1", "game_type=prisoners_dilemma", "round=abc&game_type=x", "round=-1&game_type=x"} {
+	for _, query := range []string{"round=1", "game_type=prisoners_dilemma", "round=abc&game_type=x", "round=-1&game_type=x", "team_id=abc"} {
 		t.Run("bad round params "+query, func(t *testing.T) {
 			mockService := new(MockTournamentService)
 			handler := NewTournamentHandler(mockService, new(MockSchedulingService), nil, log)

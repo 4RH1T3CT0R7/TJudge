@@ -112,8 +112,8 @@ func (m *MockMatchRepository) ResetFailedMatches(ctx context.Context, id uuid.UU
 	return int64(args.Int(0)), args.Error(1)
 }
 
-func (m *MockMatchRepository) GetMatchesByRounds(ctx context.Context, id uuid.UUID, page *models.RoundPage) ([]*models.MatchRound, error) {
-	args := m.Called(ctx, id, page)
+func (m *MockMatchRepository) GetMatchesByRounds(ctx context.Context, id uuid.UUID, page *models.RoundPage, teamID *uuid.UUID) ([]*models.MatchRound, error) {
+	args := m.Called(ctx, id, page, teamID)
 	v, _ := args.Get(0).([]*models.MatchRound)
 	return v, args.Error(1)
 }
