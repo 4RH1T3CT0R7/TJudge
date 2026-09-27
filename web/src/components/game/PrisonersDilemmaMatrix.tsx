@@ -53,7 +53,7 @@ export function PrisonersDilemmaMatrix() {
               Сотр.
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-emerald-500 rounded-tl-xl ${hoveredCell === 'cc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-(--dur-base) bg-emerald-500 rounded-tl-xl ${hoveredCell === 'cc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('cc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -62,7 +62,7 @@ export function PrisonersDilemmaMatrix() {
               </div>
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-red-500 rounded-tr-xl ${hoveredCell === 'cd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-(--dur-base) bg-red-500 rounded-tr-xl ${hoveredCell === 'cd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('cd')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -76,7 +76,7 @@ export function PrisonersDilemmaMatrix() {
               Пред.
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-red-500 rounded-bl-xl ${hoveredCell === 'dc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-(--dur-base) bg-red-500 rounded-bl-xl ${hoveredCell === 'dc' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('dc')}
               onMouseLeave={() => setHoveredCell(null)}
             >
@@ -85,7 +85,7 @@ export function PrisonersDilemmaMatrix() {
               </div>
             </td>
             <td
-              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-200 bg-amber-500 rounded-br-xl relative ${hoveredCell === 'dd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
+              className={`${cellSize} cursor-pointer transition-[filter,transform,box-shadow] duration-(--dur-base) bg-amber-500 rounded-br-xl relative ${hoveredCell === 'dd' ? 'brightness-110 scale-105 shadow-xl z-10' : 'hover:brightness-105'}`}
               onMouseEnter={() => setHoveredCell('dd')}
               onMouseLeave={() => setHoveredCell(null)}
             >

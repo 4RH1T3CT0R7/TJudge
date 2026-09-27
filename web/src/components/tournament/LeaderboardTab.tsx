@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { DUR, EASE_OUT } from '../motion/tokens';
 import { ArrowsExpandIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
 import { LEADERBOARD_VIEWS } from './helpers';
@@ -16,7 +17,7 @@ import { getGameConfig } from '../../utils/gameConfig';
 import type { Game } from '../../types';
 
 // перестановка строк при смене мест (FLIP); при reduced motion MotionConfig её выключает
-const ROW_MOVE = { duration: 0.4, ease: 'easeOut' } as const;
+const ROW_MOVE = { duration: DUR.slow, ease: EASE_OUT };
 
 // Leaderboard Tab Component
 export function LeaderboardTab({
@@ -197,7 +198,7 @@ function GeneralLeaderboardTable({
 
                 <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-[width] duration-500 ${
+                    className={`h-full rounded-full transition-[width] duration-(--dur-slow) ${
                       place === 1 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
                       place === 2 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
                       place === 3 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :

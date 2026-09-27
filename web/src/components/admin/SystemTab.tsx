@@ -605,7 +605,7 @@ export function SystemTab({
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.cpu.usage_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-(--dur-slow) ${
                               systemMetrics.cpu.usage_percent > 80
                                 ? 'bg-red-500'
                                 : systemMetrics.cpu.usage_percent > 50
@@ -639,7 +639,7 @@ export function SystemTab({
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.memory.used_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-(--dur-slow) ${
                               systemMetrics.memory.used_percent > 80
                                 ? 'bg-red-500'
                                 : systemMetrics.memory.used_percent > 50
@@ -671,7 +671,7 @@ export function SystemTab({
                         <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-700">
                           <div
                             style={{ width: `${Math.min(systemMetrics.disk.used_percent, 100)}%` }}
-                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-300 ${
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center transition-[width] duration-(--dur-slow) ${
                               systemMetrics.disk.used_percent > 90
                                 ? 'bg-red-500'
                                 : systemMetrics.disk.used_percent > 70

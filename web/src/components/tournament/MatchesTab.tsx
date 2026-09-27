@@ -188,17 +188,17 @@ export function MatchesTab({
             <div className="h-full flex">
               {/* Completed - green */}
               <div
-                className="bg-emerald-500 transition-[width] duration-500"
+                className="bg-emerald-500 transition-[width] duration-(--dur-slow)"
                 style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
               />
               {/* Running - blue */}
               <div
-                className="bg-blue-500 transition-[width] duration-500"
+                className="bg-blue-500 transition-[width] duration-(--dur-slow)"
                 style={{ width: `${(totalStats.running / totalStats.total) * 100}%` }}
               />
               {/* Failed - red */}
               <div
-                className="bg-red-500 transition-[width] duration-500"
+                className="bg-red-500 transition-[width] duration-(--dur-slow)"
                 style={{ width: `${(totalStats.failed / totalStats.total) * 100}%` }}
               />
             </div>
@@ -382,7 +382,7 @@ function RoundCard({
             {/* Progress bar */}
             <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
               <div
-                className="h-full bg-emerald-500 transition-[width] duration-300"
+                className="h-full bg-emerald-500 transition-[width] duration-(--dur-slow)"
                 style={{ width: `${getProgressPercent()}%` }}
               />
             </div>

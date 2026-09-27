@@ -81,15 +81,25 @@
   --color-accent-500: #22c55e;
   --color-accent-600: #16a34a;
 
-  /* Animation durations */
-  --animate-fade-in: fade-in 0.2s ease-out;
+  /* Движение: одна кривая ease-out на всё (переходы по умолчанию тоже на ней),
+     длительности --dur-* в :root. Анимация входа на экран одна - AnimatedOutlet,
+     остальное движение сообщает об изменении данных или отвечает на действие */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --default-transition-duration: var(--dur-fast);
+  --default-transition-timing-function: var(--ease-out);
+  --animate-fade-in: fade-in var(--dur-base) var(--ease-out);
 }
 
-/* Glow CSS custom properties */
 :root {
   /* единое кольцо фокуса для всех элементов */
   --focus: var(--color-primary-400);
   --glow-green: 0 0 20px rgba(74,222,128,0.3);
+  /* Три длительности (в motion те же значения - components/motion/tokens.ts):
+     fast - отклик на наведение и нажатие, base - появление и смена состояния,
+     slow - вход страницы, перестановки строк, досчёт чисел */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 400ms;
 }
 
 @keyframes fade-in {
@@ -225,7 +235,7 @@
   .btn {
     @apply px-4 py-2 rounded-lg font-sans text-sm font-medium inline-flex items-center justify-center gap-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
-    @apply transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out;
+    @apply transition-[color,background-color,border-color,box-shadow,transform,opacity];
     @apply active:scale-[0.98];
     position: relative;
     overflow: hidden;
@@ -237,7 +247,7 @@
     inset: 0;
     background: radial-gradient(circle at 50% 50%, currentColor 0%, transparent 70%);
     opacity: 0;
-    transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity var(--dur-fast) var(--ease-out);
     pointer-events: none;
   }
 
@@ -326,7 +336,7 @@
   .input {
     @apply w-full px-3 py-2 rounded-lg text-gray-100;
     @apply placeholder:text-gray-500;
-    @apply transition-[border-color,background-color] duration-150;
+    @apply transition-[border-color,background-color];
     background: transparent;
     border: 1px solid #374151;
     outline: none;
@@ -349,7 +359,7 @@
   }
 
   .card-hover {
-    @apply transition-[transform,box-shadow] duration-200 ease-out;
+    @apply transition-[transform,box-shadow] duration-(--dur-base);
     @apply hover:-translate-y-0.5;
   }
   .card-hover:hover {
@@ -357,7 +367,7 @@
   }
 
   .card-interactive {
-    @apply cursor-pointer transition-[transform,box-shadow,border-color] duration-200 ease-out;
+    @apply cursor-pointer transition-[transform,box-shadow,border-color] duration-(--dur-base);
     @apply hover:-translate-y-0.5;
     @apply active:translate-y-0;
   }
@@ -369,7 +379,7 @@
   /* Badge styles */
   .badge {
     @apply px-2 py-0.5 rounded text-xs font-medium;
-    @apply transition-colors duration-150;
+    @apply transition-colors;
   }
 
   .badge-yellow {
@@ -395,7 +405,7 @@
   /* Modal backdrop */
   .modal-backdrop {
     @apply fixed inset-0 bg-black/60 flex items-center justify-center z-50;
-    animation: fade-in 0.15s ease-out;
+    animation: fade-in var(--dur-fast) var(--ease-out);
     backdrop-filter: blur(4px);
   }
 
@@ -403,7 +413,7 @@
     @apply rounded-lg shadow-xl;
     background: #111827;
     border: 1px solid #1f2937;
-    animation: scale-in 0.2s ease-out;
+    animation: scale-in var(--dur-base) var(--ease-out);
   }
 
   /* Loading skeleton with shimmer effect */
@@ -1047,7 +1057,7 @@ tr.row-mine > :first-child {
 }
 
 [data-motion="reduced"] :is(.btn, .input, .badge, .card-hover, .card-interactive) {
-  transition-duration: 150ms !important;
+  transition-duration: var(--dur-fast) !important;
   transition-property: color, background-color, border-color, opacity !important;
 }
 

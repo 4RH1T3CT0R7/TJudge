@@ -65,7 +65,7 @@ export function TugOfWarVisualization() {
             d={`M 10,30 Q 75,${25 + Math.sin(Date.now() / 500) * 3} 150,30 Q 225,${35 + Math.sin(Date.now() / 500) * 3} 290,30`}
             fill="none" stroke="#d97706" strokeWidth="4" strokeLinecap="round"
           />
-          <circle cx={ropePosition * 3} cy="30" r="10" fill="#dc2626" className="transition-all duration-500" />
+          <circle cx={ropePosition * 3} cy="30" r="10" fill="#dc2626" className="transition-all duration-(--dur-slow)" />
           <circle cx={ropePosition * 3} cy="30" r="6" fill="#fca5a5" />
         </svg>
 

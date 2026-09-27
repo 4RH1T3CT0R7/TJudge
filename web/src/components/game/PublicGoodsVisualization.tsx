@@ -41,7 +41,7 @@ export function PublicGoodsVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustContrib('A', -2)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${(contribA / ENDOWMENT) * 100}%` }} />
+              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-(--dur-base)" style={{ width: `${(contribA / ENDOWMENT) * 100}%` }} />
             </div>
             <button onClick={() => adjustContrib('A', 2)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">+</button>
           </div>
@@ -56,7 +56,7 @@ export function PublicGoodsVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustContrib('B', -2)} className="w-7 h-7 rounded bg-orange-900/50 text-orange-400 text-sm font-bold hover:bg-orange-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden">
-              <div className="h-full bg-orange-500 rounded-full transition-[width] duration-200" style={{ width: `${(contribB / ENDOWMENT) * 100}%` }} />
+              <div className="h-full bg-orange-500 rounded-full transition-[width] duration-(--dur-base)" style={{ width: `${(contribB / ENDOWMENT) * 100}%` }} />
             </div>
             <button onClick={() => adjustContrib('B', 2)} className="w-7 h-7 rounded bg-orange-900/50 text-orange-400 text-sm font-bold hover:bg-orange-900/80 transition-colors">+</button>
           </div>
@@ -78,7 +78,7 @@ export function PublicGoodsVisualization() {
         </div>
         <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-blue-500 via-green-500 to-orange-500 rounded-full transition-[width] duration-200"
+            className="h-full bg-gradient-to-r from-blue-500 via-green-500 to-orange-500 rounded-full transition-[width] duration-(--dur-base)"
             style={{ width: `${(pool / (ENDOWMENT * 2 * MULTIPLIER)) * 100}%` }}
           />
         </div>

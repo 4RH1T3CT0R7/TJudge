@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { DUR, EASE_OUT } from '../components/motion/tokens';
 import {
   useCrossGameLeaderboard,
   useMatchesByRounds,
@@ -431,7 +432,7 @@ function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number })
   const rest = rows.slice(3);
   const podium = [1, 0, 2].filter((i) => i < rows.length);
   const heights = ['h-[22vh]', 'h-[15vh]', 'h-[10vh]'];
-  const reveal = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4 } };
+  const reveal = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: DUR.slow, ease: EASE_OUT } };
 
   return (
     <section aria-label="Церемония награждения" className="flex min-h-0 flex-1 flex-col font-mono">

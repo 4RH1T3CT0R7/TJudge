@@ -1,4 +1,5 @@
 import type { Variants } from 'motion/react';
+import { DUR, EASE_OUT } from './tokens';
 
 // Маскот выезжает сбоку на единственной пружине
 export const invaderEnterVariants: Variants = {
@@ -15,7 +16,7 @@ export const pageTransitionVariants: Variants = {
   animate: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.2, ease: 'easeOut' },
+    transition: { duration: DUR.base, ease: EASE_OUT },
   },
   // Exit мгновенный: с mode="wait" AnimatePresence ждёт завершения exit перед
   // монтированием новой страницы. Любая ненулевая длительность создаёт «провал

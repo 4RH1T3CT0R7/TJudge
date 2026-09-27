@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef } from 'react';
 import { animate } from 'motion/react';
 import { useMotionPref } from '../../hooks/useMotionPref';
+import { DUR, EASE_OUT } from '../motion/tokens';
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 
-// Число, которое досчитывает от прежнего значения к новому за 0,6 с.
+// Число, которое досчитывает от прежнего значения к новому за --dur-slow.
 // При reduced motion сразу показывает новое. Текст пишет только эффект:
 // React не держит своего текстового узла, который анимация бы подменила.
 export function CountUp({ value }: { value: number }) {
@@ -22,8 +23,8 @@ export function CountUp({ value }: { value: number }) {
       return;
     }
     const controls = animate(from, value, {
-      duration: 0.6,
-      ease: 'easeOut',
+      duration: DUR.slow,
+      ease: EASE_OUT,
       onUpdate: (v) => {
         el.textContent = fmt(Math.round(v));
       },

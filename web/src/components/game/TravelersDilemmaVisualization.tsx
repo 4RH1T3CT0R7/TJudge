@@ -43,7 +43,7 @@ export function TravelersDilemmaVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustClaim('A', -10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
-              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimA - min) / (max - min)) * 100}%` }} />
+              <div className="h-full bg-blue-500 rounded-full transition-[width] duration-(--dur-base)" style={{ width: `${((claimA - min) / (max - min)) * 100}%` }} />
             </div>
             <button onClick={() => adjustClaim('A', 10)} className="w-7 h-7 rounded bg-blue-900/50 text-blue-400 text-sm font-bold hover:bg-blue-900/80 transition-colors">+</button>
           </div>
@@ -56,7 +56,7 @@ export function TravelersDilemmaVisualization() {
           <div className="flex items-center gap-2">
             <button onClick={() => adjustClaim('B', -10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">-</button>
             <div className="flex-1 h-3 bg-gray-700 rounded-full overflow-hidden relative">
-              <div className="h-full bg-purple-500 rounded-full transition-[width] duration-200" style={{ width: `${((claimB - min) / (max - min)) * 100}%` }} />
+              <div className="h-full bg-purple-500 rounded-full transition-[width] duration-(--dur-base)" style={{ width: `${((claimB - min) / (max - min)) * 100}%` }} />
             </div>
             <button onClick={() => adjustClaim('B', 10)} className="w-7 h-7 rounded bg-purple-900/50 text-purple-400 text-sm font-bold hover:bg-purple-900/80 transition-colors">+</button>
           </div>

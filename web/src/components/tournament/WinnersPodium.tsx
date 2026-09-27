@@ -36,12 +36,12 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
         {podiumData.map(({ entry, place, height, delay, bgGradient, textColor }) => (
           <div
             key={place}
-            className={`flex-1 min-w-0 max-w-48 transition-[transform,opacity] duration-700 ease-out ${
+            className={`flex-1 min-w-0 max-w-48 transition-[transform,opacity] duration-(--dur-slow) ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             } ${delay}`}
           >
             {/* Winner card */}
-            <div className={`text-center mb-2 transform transition-[transform,opacity] duration-500 ${
+            <div className={`text-center mb-2 transform transition-[transform,opacity] duration-(--dur-slow) ${
               isVisible ? 'scale-100' : 'scale-0'
             } ${delay}`}>
               {/* на телефоне колонка узкая: название переносится, а не обрезается */}
@@ -58,7 +58,7 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
 
             {/* Podium */}
             <div
-              className={`${height} bg-gradient-to-t ${bgGradient} rounded-t-lg shadow-lg relative overflow-hidden transition-[transform,opacity] duration-700 ease-out ${
+              className={`${height} bg-gradient-to-t ${bgGradient} rounded-t-lg shadow-lg relative overflow-hidden transition-[transform,opacity] duration-(--dur-slow) ${
                 isVisible ? 'opacity-100' : 'opacity-0'
               } ${delay}`}
             >

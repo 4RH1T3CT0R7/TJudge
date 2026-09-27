@@ -203,7 +203,7 @@ export function Login() {
             role={error || validationError ? 'alert' : undefined}
             aria-live="assertive"
             aria-atomic="true"
-            className={`text-sm mb-1 transition-colors duration-300 ${error ? 'text-red-400' : validationError ? 'text-primary-400' : 'text-gray-500'}`}
+            className={`text-sm mb-1 transition-colors duration-(--dur-slow) ${error ? 'text-red-400' : validationError ? 'text-primary-400' : 'text-gray-500'}`}
             style={monoFont}
           >
             {error ? `stderr: ${error}` : validationError || '// авторизация'}
@@ -222,7 +222,7 @@ export function Login() {
               {'// имя пользователя'}
             </label>
             <div
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-200"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-(--dur-base)"
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-green-400 text-sm shrink-0" style={monoFont}>$</span>
@@ -257,7 +257,7 @@ export function Login() {
               {'// пароль'}
             </label>
             <div
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-200"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-[border-color,background-color] duration-(--dur-base)"
               style={{ border: '1px solid #374151', background: 'transparent' }}
             >
               <span className="text-primary-400 text-sm shrink-0" style={monoFont}>{'>'}</span>

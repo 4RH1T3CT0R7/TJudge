@@ -65,7 +65,7 @@ export function Layout() {
                 <>
                   <Link
                     to="/tournaments"
-                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-(--dur-base) whitespace-nowrap hover:text-primary-400"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}
@@ -74,7 +74,7 @@ export function Layout() {
                   </Link>
                   <Link
                     to="/games"
-                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-(--dur-base) whitespace-nowrap hover:text-primary-400"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}
@@ -83,7 +83,7 @@ export function Layout() {
                   </Link>
                   <Link
                     to="/help"
-                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-(--dur-base) whitespace-nowrap hover:text-primary-400"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}
@@ -95,7 +95,7 @@ export function Layout() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                  className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-(--dur-base) whitespace-nowrap hover:text-primary-400"
                   style={GLOW_STYLE}
                   onMouseEnter={glowEnter}
                   onMouseLeave={glowLeave}
@@ -122,7 +122,7 @@ export function Layout() {
                   <Link
                     to="/profile"
                     title={user?.username}
-                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200 truncate max-w-[4.5rem] min-[360px]:max-w-[7rem] sm:max-w-[12rem] md:max-w-[6rem] lg:max-w-[12rem]"
+                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-(--dur-base) truncate max-w-[4.5rem] min-[360px]:max-w-[7rem] sm:max-w-[12rem] md:max-w-[6rem] lg:max-w-[12rem]"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}
@@ -150,7 +150,7 @@ export function Layout() {
         {mobileMenuOpen && (
           <nav
             className="md:hidden border-t border-gray-800/60 px-4 pt-2 pb-4 flex flex-col gap-1"
-            style={{ animation: 'slide-down 0.2s ease-out' }}
+            style={{ animation: 'slide-down var(--dur-base) var(--ease-out)' }}
           >
             {isAuthenticated && (
               <>
@@ -215,7 +215,7 @@ export function Layout() {
                   decoding="async"
                   width={40}
                   height={28}
-                  className={`${logo.h} w-auto opacity-50 hover:opacity-90 transition-opacity duration-300`}
+                  className={`${logo.h} w-auto opacity-50 hover:opacity-90 transition-opacity duration-(--dur-slow)`}
                 />
               ))}
             </div>
@@ -232,11 +232,11 @@ export function Layout() {
               href="https://itsbmstu.ru"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex gap-3 items-center opacity-80 hover:opacity-100 transition-opacity duration-300"
+              className="group flex gap-3 items-center opacity-80 hover:opacity-100 transition-opacity duration-(--dur-slow)"
             >
               <div className="relative">
-                <div className="absolute inset-0 bg-primary-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="relative w-10 h-10 rounded-lg p-1 transition-shadow duration-300" style={{ backgroundColor: 'rgba(31,41,55,0.8)' }}>
+                <div className="absolute inset-0 bg-primary-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-(--dur-slow)" />
+                <div className="relative w-10 h-10 rounded-lg p-1 transition-shadow duration-(--dur-slow)" style={{ backgroundColor: 'rgba(31,41,55,0.8)' }}>
                   <img
                     alt="ITS Tech"
                     width="32"
@@ -246,7 +246,7 @@ export function Layout() {
                   />
                 </div>
               </div>
-              <span className="text-base font-medium text-gray-400 group-hover:text-primary-400 transition-colors duration-300">
+              <span className="text-base font-medium text-gray-400 group-hover:text-primary-400 transition-colors duration-(--dur-slow)">
                 Сделано в ИТС ТЕХ
               </span>
             </a>

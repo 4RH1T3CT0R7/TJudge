@@ -34,7 +34,7 @@ function ToastItem({ toast }: { toast: Toast }) {
         pointer-events-auto px-3 py-2 rounded
         bg-gray-950 border border-gray-800 border-l-2 ${tone.border}
         shadow-lg shadow-black/40 text-sm
-        transition-[translate,opacity] duration-200 ease-out
+        transition-[translate,opacity] duration-(--dur-base)
         ${visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
     >
