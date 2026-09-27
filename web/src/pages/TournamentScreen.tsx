@@ -158,11 +158,11 @@ export function TournamentScreen() {
   const games = useMemo(() => gamesQuery.data ?? [], [gamesQuery.data]);
   const onMatchResult = useCallback(
     (p: MatchResultPayload) => {
-      // без названий команд (старый бэкенд) строку ленты не собрать
-      if (p.team1_name === undefined || p.team2_name === undefined) return;
+      // без игры и названий команд (worker старее api) строку ленты не собрать
+      if (!p.game_type || (p.team1_name == null && p.team2_name == null)) return;
       const item: FeedItem = {
         id: p.match_id,
-        game: getGameConfig(p.game_type ?? '').short ?? games.find((g) => g.name === p.game_type)?.display_name ?? '',
+        game: getGameConfig(p.game_type).short ?? games.find((g) => g.name === p.game_type)?.display_name ?? '',
         team1: p.team1_name ?? '—',
         team2: p.team2_name ?? '—',
         score1: p.score1 ?? null,
