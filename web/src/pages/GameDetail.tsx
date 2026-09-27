@@ -32,13 +32,15 @@ import { YouMark } from '../components/ui/YouMark';
 import { PlaceHint } from '../components/tournament/PlaceHint';
 import { revealAndFocus, useRevealOnMobile } from '../hooks/useRevealOnMobile';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
+import { Ecology } from '../components/tournament/Ecology';
+import { StrategyPassport } from '../components/tournament/StrategyPassport';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
 import { ChartBarIcon } from '../components/icons';
 import { getGameConfig } from '../utils/gameConfig';
 import { useTabParam } from '../hooks/useTabParam';
 import type { Match } from '../types';
 
-const TAB_IDS = ['rules', 'leaderboard', 'matches'] as const;
+const TAB_IDS = ['rules', 'leaderboard', 'matches', 'analysis'] as const;
 const MATCH_VIEWS = [
   { value: 'mine', label: 'Мои' },
   { value: 'all', label: 'Все' },
@@ -83,27 +85,36 @@ export function GameDetail() {
     staleTime: 30_000,
   });
 
-  // Head-to-head матрица: грузится при открытой вкладке рейтинга.
+  // Вкладка анализа: head-to-head (матрица и «экология») и паспорт стратегий дилеммы.
+  // Обе ручки тяжёлые, грузятся только на этой вкладке и живыми событиями не перечитываются.
   const headToHeadQuery = useQuery({
     queryKey: queryKeys.headToHead(tournamentId ?? '', gameId ?? ''),
     queryFn: () => api.getHeadToHead(tournamentId!, gameId!),
-    enabled: Boolean(tournamentId && gameId) && activeTab === 'leaderboard',
+    enabled: Boolean(tournamentId && gameId) && activeTab === 'analysis',
     staleTime: 30_000,
+  });
+  const strategiesQuery = useQuery({
+    queryKey: queryKeys.strategies(tournamentId ?? '', gameId ?? ''),
+    queryFn: () => api.getStrategyProfiles(tournamentId!, gameId!),
+    enabled: Boolean(tournamentId && gameId) && activeTab === 'analysis' && gameQuery.data?.name === 'dilemma',
+    staleTime: 60_000,
   });
 
   // «Мои матчи»: участнику по умолчанию только матчи своей команды (?view=all - все),
-  // ?status=failed - только упавшие (ссылка из бейджа здоровья программы).
+  // ?status=failed - только упавшие (ссылка из бейджа здоровья программы),
+  // ?team=id - матчи одной команды (ссылка из паспорта стратегий).
   // Страница сбрасывается на первую при смене фильтра.
   const myTeamId = myTeam?.id;
   const [searchParams, setSearchParams] = useSearchParams();
   const showAllMatches = !myTeamId || searchParams.get('view') === 'all';
   const onlyFailed = searchParams.get('status') === 'failed';
-  const matchesTeam = showAllMatches ? undefined : myTeamId;
+  const teamFilter = searchParams.get('team');
+  const matchesTeam = teamFilter ?? (showAllMatches ? undefined : myTeamId);
   const filterKey = `${matchesTeam ?? ''}:${onlyFailed}`;
   const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
   const currentPage = pageState.key === filterKey ? pageState.page : 1;
   const setCurrentPage = (page: number) => setPageState({ key: filterKey, page });
-  const setMatchesParam = (name: 'view' | 'status', value: string | null) =>
+  const setMatchesParam = (name: 'view' | 'status' | 'team', value: string | null) =>
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -165,6 +176,11 @@ export function GameDetail() {
       query.state.data?.some((p) => p.status === 'compiling' || p.check_status === 'pending') ? 5000 : false,
   });
   const programs = useMemo(() => programsQuery.data ?? [], [programsQuery.data]);
+  // строки и колонки матрицы - по месту в таблице игры
+  const teamOrder = useMemo(
+    () => (leaderboardQuery.data ?? []).flatMap((e) => (e.team_id ? [e.team_id] : [])),
+    [leaderboardQuery.data]
+  );
   const myProgramIds = useMemo(() => new Set(programs.map((p) => p.id)), [programs]);
   const isLoading =
     tournamentQuery.isPending ||
@@ -232,6 +248,7 @@ export function GameDetail() {
           { id: 'rules', label: 'Правила' },
           { id: 'leaderboard', label: 'Рейтинг', count: leaderboard.length },
           { id: 'matches', label: 'Матчи' },
+          { id: 'analysis', label: 'Анализ' },
         ]}
         active={activeTab}
         onChange={setActiveTab}
@@ -319,13 +336,43 @@ export function GameDetail() {
                 ) : (
                   <EmptyState command="рейтинг" hint="нет данных: загрузите программу и дождитесь результатов матчей" />
                 )}
+              </div>
+            )}
 
-                {/* Head-to-head: кто кого бьёт */}
+            {activeTab === 'analysis' && (
+              <div className="space-y-6">
+                <section aria-labelledby="h2h-title" className="card">
+                  <h2 id="h2h-title" className="text-lg font-semibold mb-4 text-gray-100">Личные встречи</h2>
+                  {headToHeadQuery.isPending ? (
+                    <p className="py-6 text-sm text-gray-400"><Spinner>загрузка встреч</Spinner></p>
+                  ) : headToHeadQuery.isError ? (
+                    <ErrorState message="Не удалось загрузить личные встречи" onRetry={() => void headToHeadQuery.refetch()} />
+                  ) : (
+                    <HeadToHeadMatrix cells={headToHeadQuery.data ?? []} myTeamId={myTeamId} order={teamOrder} />
+                  )}
+                </section>
                 {(headToHeadQuery.data?.length ?? 0) > 0 && (
-                  <div className="mt-8 pt-6 border-t border-gray-800">
-                    <h3 className="text-base font-semibold mb-4 text-gray-100">Личные встречи</h3>
-                    <HeadToHeadMatrix cells={headToHeadQuery.data ?? []} myTeamId={myTeamId} />
-                  </div>
+                  <section aria-labelledby="eco-title" className="card">
+                    <h2 id="eco-title" className="text-lg font-semibold mb-1 text-gray-100">Экология</h2>
+                    <p className="mb-4 font-mono text-sm text-gray-400">
+                      <span aria-hidden="true" className="text-primary-400">$ </span>кто выживет в популяции стратегий
+                    </p>
+                    <Ecology cells={headToHeadQuery.data ?? []} order={teamOrder} myTeamId={myTeamId} />
+                  </section>
+                )}
+                {game.name === 'dilemma' && (
+                  <section aria-labelledby="passport-title" className="card">
+                    <h2 id="passport-title" className="text-lg font-semibold mb-4 text-gray-100">Паспорт стратегий</h2>
+                    {strategiesQuery.isPending ? (
+                      <p className="py-6 text-sm text-gray-400"><Spinner>загрузка стратегий</Spinner></p>
+                    ) : strategiesQuery.isError ? (
+                      <ErrorState message="Не удалось загрузить свойства стратегий" onRetry={() => void strategiesQuery.refetch()} />
+                    ) : (strategiesQuery.data?.length ?? 0) > 0 ? (
+                      <StrategyPassport profiles={strategiesQuery.data ?? []} myTeamId={myTeamId} />
+                    ) : (
+                      <EmptyState command="паспорт стратегий" hint="появится после матчей с записью ходов" />
+                    )}
+                  </section>
                 )}
               </div>
             )}
@@ -334,7 +381,7 @@ export function GameDetail() {
               <div className="card">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <h2 id="game-matches" className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
-                  {myTeamId && (
+                  {myTeamId && !teamFilter && (
                     <Segmented
                       label="Чьи матчи показать"
                       options={MATCH_VIEWS}
@@ -343,6 +390,16 @@ export function GameDetail() {
                     />
                   )}
                 </div>
+                {teamFilter && (
+                  <p className="mb-4 flex flex-wrap items-center gap-3 font-mono text-sm text-gray-300">
+                    <span>
+                      только матчи «{leaderboard.find((e) => e.team_id === teamFilter)?.team_name ?? 'команды'}»
+                    </span>
+                    <button type="button" onClick={() => setMatchesParam('team', null)} className="btn btn-sm btn-secondary">
+                      показать все
+                    </button>
+                  </p>
+                )}
                 {onlyFailed && (
                   <p className="mb-4 flex flex-wrap items-center gap-3 font-mono text-sm text-gray-300">
                     <span><span aria-hidden="true" className="text-red-400">✕ </span>только матчи с ошибкой</span>

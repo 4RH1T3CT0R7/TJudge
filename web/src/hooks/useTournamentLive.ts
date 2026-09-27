@@ -82,11 +82,11 @@ export function useTournamentLive({ tournamentId, enabled = true, onMatchResult 
         void queryClient.invalidateQueries({ queryKey: queryKeys.crossGameLeaderboard(tournamentId) });
         // Счётчики раундов и открытые страницы матчей (ключи вложены).
         void queryClient.invalidateQueries({ queryKey: queryKeys.matchesByRounds(tournamentId) });
-        // Ключи страницы игры: лидерборд и матчи. Head-to-head - тяжёлая матрица
-        // по всем матчам игры, она обновляется по staleTime и фокусу.
+        // Ключи страницы игры: лидерборд и матчи. Head-to-head и стратегии - тяжёлые
+        // ручки по всем матчам игры, они обновляются по staleTime и фокусу.
         void queryClient.invalidateQueries({
           queryKey: ['tournament', tournamentId, 'game'],
-          predicate: (q) => q.queryKey[4] !== 'head-to-head',
+          predicate: (q) => q.queryKey[4] !== 'head-to-head' && q.queryKey[4] !== 'strategies',
         });
         // Авто-раунд сдвигает last_run_at, отдельного события нет.
         void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(tournamentId) });
