@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
+import { ErrorState } from './ui/ErrorState';
 
 interface Props {
   children: ReactNode;
@@ -44,31 +45,13 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          className="flex flex-col items-center justify-center min-h-screen gap-4 text-gray-300 p-6"
-          role="alert"
-          aria-live="assertive"
-        >
-          <h1 className="text-2xl font-bold">Что-то пошло не так</h1>
-          <p className="text-gray-400 text-center max-w-md">
-            {this.state.errorMessage}
-          </p>
-          <div className="flex gap-3">
-            <button
-              className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-              onClick={this.handleRetry}
-              aria-label="Попробовать снова"
-            >
-              Попробовать снова
-            </button>
-            <button
-              className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600/50 transition-colors"
-              onClick={this.handleHome}
-              aria-label="Вернуться на главную"
-            >
+        <div className="flex flex-col items-center justify-center min-h-screen p-6">
+          <h1 className="text-2xl font-bold text-gray-100">Что-то пошло не так</h1>
+          <ErrorState message={this.state.errorMessage} onRetry={this.handleRetry}>
+            <button className="btn btn-secondary" onClick={this.handleHome}>
               На главную
             </button>
-          </div>
+          </ErrorState>
         </div>
       );
     }
