@@ -199,7 +199,8 @@ export function GamesTab({
             <div className="space-y-4">
               {games.map((game) => (
                 <div key={game.id} className="card flex flex-wrap justify-between items-start gap-3">
-                  <div className="min-w-0">
+                  {/* basis: кнопки уходят вниз только на узком экране, а не из-за длинного описания */}
+                  <div className="min-w-0 flex-1 basis-64">
                     <h3 className="font-semibold text-gray-100">{game.display_name}</h3>
                     <p className="text-sm text-gray-400">
                       <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
