@@ -224,6 +224,11 @@ export function TournamentDetail() {
 
   const handleJoinTeam = async () => {
     if (!joinCode.trim()) return;
+    // код турнира путают с кодом приглашения, в команду он не ведёт
+    if (joinCode.trim().toUpperCase() === tournament?.code.toUpperCase()) {
+      setJoinError('Это код турнира, а нужен код приглашения в команду: его видит лидер на странице команды');
+      return;
+    }
 
     setIsJoining(true);
     setJoinError('');
@@ -492,13 +497,16 @@ export function TournamentDetail() {
           </>
         }
       >
-        <div className="flex items-center gap-2 text-gray-300">
-          <HashtagIcon className="w-4 h-4" />
-          <span>Код:</span>
-          <code className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-100">
-            {tournament.code}
-          </code>
-        </div>
+        {/* код турнира нужен только организатору: участники путали его с кодом приглашения */}
+        {isAdmin && (
+          <div className="flex items-center gap-2 text-gray-300">
+            <HashtagIcon className="w-4 h-4" />
+            <span>Код турнира:</span>
+            <code className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-100">
+              {tournament.code}
+            </code>
+          </div>
+        )}
       </PageHeader>
 
       {/* Action Error */}

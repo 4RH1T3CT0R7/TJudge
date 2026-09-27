@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTournaments } from '../hooks/queries';
+import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { Spinner } from '../components/ui/Spinner';
@@ -18,6 +19,7 @@ export function Tournaments() {
   const { data, isPending, isError, refetch } = useTournaments(filter || undefined);
   const showLoading = useDelayedLoading(isPending);
   const tournaments = data ?? [];
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   return (
     <div>
@@ -94,9 +96,11 @@ export function Tournaments() {
                       <UsersIcon className="w-4 h-4" />
                       <span>До {tournament.max_team_size} чел.</span>
                     </div>
-                    <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
-                      {tournament.code}
-                    </code>
+                    {isAdmin && (
+                      <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
+                        {tournament.code}
+                      </code>
+                    )}
                   </div>
 
                   {tournament.is_permanent && (
