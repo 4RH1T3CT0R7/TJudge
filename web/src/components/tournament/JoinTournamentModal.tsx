@@ -1,3 +1,4 @@
+import { Field } from '../ui/Field';
 import { Modal } from '../ui/Modal';
 
 interface JoinTournamentModalProps {
@@ -31,27 +32,28 @@ export function JoinTournamentModal({
   return (
     <Modal open={open} onClose={onClose} title="Участие в турнире">
       <div className="space-y-6">
-        <div>
-          <h3 className="font-semibold text-gray-100 mb-3">Создать новую команду</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              name="teamName"
-              autoComplete="off"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Название команды"
-              className="input flex-1"
-            />
-            <button
-              onClick={onCreateTeam}
-              disabled={isJoining || !teamName.trim()}
-              className="btn btn-primary"
-            >
-              Создать
-            </button>
-          </div>
-        </div>
+        <Field label="Название новой команды">
+          {(control) => (
+            <div className="flex gap-2">
+              <input
+                {...control}
+                type="text"
+                name="teamName"
+                autoComplete="off"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                className="input flex-1"
+              />
+              <button
+                onClick={onCreateTeam}
+                disabled={isJoining || !teamName.trim()}
+                className="btn btn-primary"
+              >
+                Создать
+              </button>
+            </div>
+          )}
+        </Field>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
@@ -62,28 +64,28 @@ export function JoinTournamentModal({
           </div>
         </div>
 
-        <div>
-          <h3 className="font-semibold text-gray-100 mb-3">Присоединиться к существующей</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              name="joinCode"
-              autoComplete="off"
-              value={joinCode}
-              onChange={(e) => { setJoinCode(e.target.value); setJoinError(''); }}
-              placeholder="Код приглашения"
-              className="input flex-1 font-mono"
-            />
-            <button
-              onClick={onJoinTeam}
-              disabled={isJoining || !joinCode.trim()}
-              className="btn btn-secondary"
-            >
-              Вступить
-            </button>
-          </div>
-          {joinError && <p className="text-red-400 text-sm mt-1">{joinError}</p>}
-        </div>
+        <Field label="Код приглашения в команду" error={joinError || undefined}>
+          {(control) => (
+            <div className="flex gap-2">
+              <input
+                {...control}
+                type="text"
+                name="joinCode"
+                autoComplete="off"
+                value={joinCode}
+                onChange={(e) => { setJoinCode(e.target.value); setJoinError(''); }}
+                className="input flex-1 font-mono"
+              />
+              <button
+                onClick={onJoinTeam}
+                disabled={isJoining || !joinCode.trim()}
+                className="btn btn-secondary"
+              >
+                Вступить
+              </button>
+            </div>
+          )}
+        </Field>
       </div>
     </Modal>
   );
