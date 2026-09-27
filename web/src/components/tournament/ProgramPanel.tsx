@@ -297,8 +297,13 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
                 {`v${playing!.version} собрана, но падает в ${health.crashed.length} из ${health.played}${health.capped ? '+' : ''} матчей`}
               </p>
               <MatchError match={health.crashed[0]} mySide={health.side} brief />
-              <Link to={{ search: '?tab=matches&status=failed' }} className="inline-block text-sm text-primary-400 hover:underline">
-                Смотреть эти матчи →
+              {/* список - все упавшие матчи команды: и где упал соперник, и старые версии */}
+              <Link
+                to={{ search: '?tab=matches&status=failed' }}
+                state={{ focus: 'matches' }}
+                className="inline-block text-sm text-primary-400 hover:underline"
+              >
+                Все матчи команды с ошибкой →
               </Link>
             </div>
           )}

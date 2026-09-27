@@ -12,3 +12,13 @@ export function useRevealOnMobile<T extends HTMLElement>() {
     el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
   }, []);
 }
+
+// Переход к разделу внутри страницы: прокрутка к заголовку и фокус на нём,
+// чтобы и глаз, и клавиатура, и скринридер оказались у начала раздела.
+export function revealAndFocus(el: HTMLElement | null) {
+  if (!el) return;
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  el.tabIndex = -1;
+  el.focus({ preventScroll: true });
+}

@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../api/client';
 import { queryKeys } from '../api/queryKeys';
@@ -28,7 +28,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { YouMark } from '../components/ui/YouMark';
-import { useRevealOnMobile } from '../hooks/useRevealOnMobile';
+import { revealAndFocus, useRevealOnMobile } from '../hooks/useRevealOnMobile';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
 import { ChartBarIcon } from '../components/icons';
@@ -137,6 +137,14 @@ export function GameDetail() {
     placeholderData: keepPreviousData,
     refetchInterval: live.pollInterval,
   });
+  // переход из бейджа здоровья программы: список матчей в поле зрения и в фокусе,
+  // иначе на телефоне всё остаётся у карточки программы внизу страницы
+  const location = useLocation();
+  const focusMatches = (location.state as { focus?: string } | null)?.focus === 'matches';
+  useEffect(() => {
+    if (focusMatches) revealAndFocus(document.getElementById('game-matches'));
+  }, [focusMatches, location.key]);
+
   const pageData = matchesQuery.data ?? [];
   const hasNextPage = pageData.length > matchesPerPage;
   const matches = hasNextPage ? pageData.slice(0, matchesPerPage) : pageData;
@@ -315,7 +323,7 @@ export function GameDetail() {
             {activeTab === 'matches' && (
               <div className="card">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <h2 className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
+                  <h2 id="game-matches" className="text-lg font-semibold text-gray-100">Результаты матчей</h2>
                   {myTeamId && (
                     <Segmented
                       label="Чьи матчи показать"
