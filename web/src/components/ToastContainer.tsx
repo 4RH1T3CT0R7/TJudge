@@ -38,12 +38,17 @@ function ToastItem({ toast }: { toast: Toast }) {
         ${visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
     >
+      {/* Скринридер читает только эту копию: сообщение раньше кнопки закрытия, а новый
+          key на повторе заново вставляет её в live-регион, и повтор озвучивается целиком */}
+      <span key={toast.count} className="sr-only">
+        {toast.count > 1 ? `${toast.message} (повтор ${toast.count})` : toast.message}
+      </span>
       <div className="flex items-center gap-2 font-mono text-xs">
-        <span className={`font-bold ${tone.text}`}>{tone.tag}</span>
-        <time className="text-gray-500" dateTime={new Date(toast.at).toISOString()}>
+        <span aria-hidden="true" className={`font-bold ${tone.text}`}>{tone.tag}</span>
+        <time aria-hidden="true" className="text-gray-500" dateTime={new Date(toast.at).toISOString()}>
           {new Date(toast.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
         </time>
-        {toast.count > 1 && <span className="text-gray-300">×{toast.count}</span>}
+        {toast.count > 1 && <span aria-hidden="true" className="text-gray-300">×{toast.count}</span>}
         <button
           type="button"
           onClick={handleDismiss}
@@ -53,7 +58,7 @@ function ToastItem({ toast }: { toast: Toast }) {
           <XMarkIcon className="w-4 h-4" />
         </button>
       </div>
-      <p className="mt-0.5 break-words leading-snug text-gray-100">{toast.message}</p>
+      <p aria-hidden="true" className="mt-0.5 break-words leading-snug text-gray-100">{toast.message}</p>
     </div>
   );
 }
