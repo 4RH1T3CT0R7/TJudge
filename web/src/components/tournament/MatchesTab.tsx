@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
-import { useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
+import { useMatchesByRounds, useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
-import type { Match, MatchRound } from '../../types';
+import { Field } from '../ui/Field';
+import { MatchError } from './MatchError';
+import type { Side } from '../../utils/explainError';
+import type { Match, MatchRound, Team } from '../../types';
 
 // Matches Tab Component - отображает матчи, сгруппированные по раундам.
 // rounds - только счётчики; матчи раунда грузятся страницами при раскрытии.
 export function MatchesTab({
   tournamentId,
-  rounds,
+  rounds: allRounds,
+  teams = [],
+  myTeamId,
   onRefresh,
   isRefreshing,
   isAdmin,
@@ -18,6 +23,8 @@ export function MatchesTab({
 }: {
   tournamentId: string;
   rounds: MatchRound[];
+  teams?: Team[];
+  myTeamId?: string;
   onRefresh: () => void;
   isRefreshing: boolean;
   isAdmin: boolean;
@@ -25,6 +32,10 @@ export function MatchesTab({
 }) {
   const [expandedRounds, setExpandedRounds] = useState<Set<string>>(new Set());
   const [hiddenRounds, setHiddenRounds] = useState<Set<string>>(new Set());
+  // Фильтр по команде сужает и счётчики раундов, и страницы матчей
+  const [teamId, setTeamId] = useState('');
+  const teamRounds = useMatchesByRounds(tournamentId, { teamId, pollInterval, enabled: !!teamId });
+  const rounds = teamId ? (teamRounds.data ?? []) : allRounds;
 
   const hideRound = (roundKey: string) => {
     setHiddenRounds(prev => {
@@ -63,11 +74,14 @@ export function MatchesTab({
     setExpandedRounds(new Set());
   };
 
-  if (rounds.length === 0) {
+  if (allRounds.length === 0) {
     return (
       <EmptyState command="матчи" hint="пока пусто: матчи появятся после запуска раундов" />
     );
   }
+
+  // своя команда первой: её матчи ищут чаще всего
+  const teamOptions = [...teams].sort((a, b) => Number(b.id === myTeamId) - Number(a.id === myTeamId));
 
   // Суммарная статистика по всем раундам
   const totalStats = rounds.reduce(
@@ -122,7 +136,26 @@ export function MatchesTab({
             )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          {teams.length > 0 && (
+            <Field label="Команда">
+              {(control) => (
+                <select
+                  {...control}
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  className="input w-auto max-w-56"
+                >
+                  <option value="">все команды</option>
+                  {teamOptions.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.id === myTeamId ? `${t.name} (вы)` : t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          )}
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
@@ -206,6 +239,13 @@ export function MatchesTab({
         </div>
       )}
 
+      {teamId && teamRounds.isPending && (
+        <p className="py-6 text-sm text-gray-400"><Spinner>загрузка матчей команды</Spinner></p>
+      )}
+      {teamId && !teamRounds.isPending && rounds.length === 0 && (
+        <EmptyState command="матчи команды" hint="у этой команды пока нет матчей" />
+      )}
+
       {/* Rounds list */}
       <div className="space-y-3">
         {rounds
@@ -214,9 +254,11 @@ export function MatchesTab({
             const roundKey = `${round.round_number}-${round.game_type}`;
             return (
               <RoundCard
-                key={roundKey}
+                key={`${roundKey}-${teamId}`}
                 tournamentId={tournamentId}
                 pollInterval={pollInterval}
+                teamId={teamId || undefined}
+                myTeamId={myTeamId}
                 round={round}
                 isExpanded={expandedRounds.has(roundKey)}
                 onToggle={() => toggleRound(roundKey)}
@@ -245,6 +287,8 @@ const getGameDisplayName = (gameType: string) => gameDisplayNames[gameType] || g
 function RoundCard({
   tournamentId,
   pollInterval,
+  teamId,
+  myTeamId,
   round,
   isExpanded,
   onToggle,
@@ -253,6 +297,8 @@ function RoundCard({
 }: {
   tournamentId: string;
   pollInterval: number | false;
+  teamId?: string;
+  myTeamId?: string;
   round: MatchRound;
   isExpanded: boolean;
   onToggle: () => void;
@@ -381,7 +427,7 @@ function RoundCard({
             )}
           </div>
 
-          <RoundMatches tournamentId={tournamentId} round={round} pollInterval={pollInterval} />
+          <RoundMatches tournamentId={tournamentId} round={round} pollInterval={pollInterval} teamId={teamId} myTeamId={myTeamId} />
         </div>
       )}
     </div>
@@ -393,20 +439,28 @@ function RoundMatches({
   tournamentId,
   round,
   pollInterval,
+  teamId,
+  myTeamId,
 }: {
   tournamentId: string;
   round: MatchRound;
   pollInterval: number | false;
+  teamId?: string;
+  myTeamId?: string;
 }) {
   const [page, setPage] = useState(0);
+  const [jump, setJump] = useState('');
   const { data: matches = [], isPending } = useRoundMatches(
     tournamentId,
     round.round_number,
     round.game_type,
     page,
-    { pollInterval }
+    { pollInterval, teamId }
   );
+  // при фильтре по команде total_matches уже суженный: страниц сколько у команды
   const pageCount = Math.max(1, Math.ceil(round.total_matches / ROUND_PAGE_SIZE));
+  const jumpTo = Number(jump);
+  const canJump = Number.isInteger(jumpTo) && jumpTo >= 1 && jumpTo <= pageCount;
 
   return (
     <>
@@ -415,22 +469,22 @@ function RoundMatches({
           <thead className="bg-gray-800/50">
             <tr>
               <th className="px-4 py-2 text-left font-medium text-gray-300">Статус</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 1</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Игрок 1</th>
               <th className="px-4 py-2 text-center font-medium text-gray-300">Счёт</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-300">Программа 2</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-300">Игра</th>
+              <th className="px-4 py-2 text-left font-medium text-gray-300">Игрок 2</th>
+              <th className="px-4 py-2"><span className="sr-only">Подробности</span></th>
             </tr>
           </thead>
           <tbody>
             {matches.map((match) => (
-              <MatchRow key={match.id} match={match} />
+              <MatchRow key={match.id} match={match} myTeamId={myTeamId} />
             ))}
           </tbody>
         </table>
         {isPending && <p className="px-4 py-3 text-sm text-gray-400"><Spinner>загрузка матчей</Spinner></p>}
       </div>
       {pageCount > 1 && (
-        <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-gray-800">
+        <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-3 border-t border-gray-800">
           <button
             onClick={() => setPage((p) => p - 1)}
             disabled={page === 0}
@@ -448,62 +502,107 @@ function RoundMatches({
           >
             Вперёд
           </button>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!canJump) return;
+              setPage(jumpTo - 1);
+              setJump('');
+            }}
+          >
+            <input
+              type="number"
+              min={1}
+              max={pageCount}
+              value={jump}
+              onChange={(e) => setJump(e.target.value)}
+              aria-label={`Номер страницы, от 1 до ${pageCount}`}
+              placeholder="№"
+              className="input w-20"
+            />
+            <button type="submit" disabled={!canJump} className="btn btn-secondary">
+              Перейти
+            </button>
+          </form>
         </div>
       )}
     </>
   );
 }
 
-// Компонент строки матча
-function MatchRow({ match }: { match: Match }) {
-  const getScoreDisplay = () => {
-    if (match.status !== 'completed') {
-      return <span className="text-gray-400">—</span>;
-    }
+// Сторона своей команды в матче; null - матч чужой или команд в ответе нет.
+function sideOf(match: Match, teamId?: string): Side | null {
+  if (!teamId) return null;
+  if (match.team1_id === teamId) return 1;
+  if (match.team2_id === teamId) return 2;
+  return null;
+}
 
-    const score1Class = match.winner === 1 ? 'text-emerald-400 font-bold' : '';
-    const score2Class = match.winner === 2 ? 'text-emerald-400 font-bold' : '';
+// Цвет счёта стороны: победа зелёная; если матч свой, поражение своей стороны красное.
+function scoreTone(match: Match, side: Side, mySide: Side | null) {
+  if (match.winner === side) return 'text-emerald-400 font-bold';
+  if (mySide === side && match.winner && match.winner !== side) return 'text-red-400';
+  return '';
+}
 
-    return (
-      <span className="font-mono">
-        <span className={score1Class}>{match.score1 ?? 0}</span>
-        <span className="text-gray-400 mx-1">:</span>
-        <span className={score2Class}>{match.score2 ?? 0}</span>
-      </span>
-    );
-  };
-
-  const getProgram1Class = () => {
-    if (match.status !== 'completed') return '';
-    return match.winner === 1 ? 'font-semibold text-emerald-400' : '';
-  };
-
-  const getProgram2Class = () => {
-    if (match.status !== 'completed') return '';
-    return match.winner === 2 ? 'font-semibold text-emerald-400' : '';
-  };
+// Строка матча: команды вместо id программ, у упавшего - раскрытие с вердиктом
+function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
+  const [open, setOpen] = useState(false);
+  const mySide = sideOf(match, myTeamId);
+  const names: [string?, string?] = [match.team1_name ?? undefined, match.team2_name ?? undefined];
+  const name = (side: Side) => (
+    <span className={mySide === side ? 'font-semibold text-gray-100' : undefined}>
+      {names[side - 1] ?? (
+        <code className="text-xs bg-gray-800 px-1.5 py-0.5 rounded">
+          {(side === 1 ? match.program1_id : match.program2_id).slice(0, 8)}
+        </code>
+      )}
+      {mySide === side && (
+        <span className="ml-2 font-mono text-xs text-primary-400"><span aria-hidden="true">&gt; </span>вы</span>
+      )}
+    </span>
+  );
 
   return (
-    <tr className="border-b border-gray-700 hover:bg-gray-800/30">
-      <td className="px-4 py-2">
-        <StatusLabel entity="match" status={match.status} />
-      </td>
-      <td className={`px-4 py-2 ${getProgram1Class()}`}>
-        <code className="text-xs bg-gray-800 px-1.5 py-0.5 rounded">
-          {match.program1_id.slice(0, 8)}
-        </code>
-      </td>
-      <td className="px-4 py-2 text-center">
-        {getScoreDisplay()}
-      </td>
-      <td className={`px-4 py-2 ${getProgram2Class()}`}>
-        <code className="text-xs bg-gray-800 px-1.5 py-0.5 rounded">
-          {match.program2_id.slice(0, 8)}
-        </code>
-      </td>
-      <td className="px-4 py-2">
-        <span className="text-gray-300">{match.game_type}</span>
-      </td>
-    </tr>
+    <>
+      <tr className={`border-b border-gray-700 hover:bg-gray-800/30 ${mySide ? 'row-mine' : ''}`} aria-current={mySide ? 'true' : undefined}>
+        <td className="px-4 py-2">
+          <StatusLabel entity="match" status={match.status} />
+        </td>
+        <td className="px-4 py-2">{name(1)}</td>
+        <td className="px-4 py-2 text-center">
+          {match.status === 'completed' ? (
+            <span className="font-mono tabular-nums">
+              <span className={scoreTone(match, 1, mySide)}>{match.score1 ?? 0}</span>
+              <span className="text-gray-400 mx-1">:</span>
+              <span className={scoreTone(match, 2, mySide)}>{match.score2 ?? 0}</span>
+            </span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </td>
+        <td className="px-4 py-2">{name(2)}</td>
+        <td className="px-4 py-2 text-right">
+          {match.status === 'failed' && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="btn btn-sm btn-secondary whitespace-nowrap"
+            >
+              почему?
+            </button>
+          )}
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-b border-gray-700">
+          <td colSpan={5} className="px-4 py-3">
+            <MatchError match={match} mySide={mySide} names={names} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

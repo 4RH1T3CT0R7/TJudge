@@ -563,6 +563,8 @@ export function TournamentDetail() {
           <MatchesTab
             tournamentId={tournament.id}
             rounds={matchRounds}
+            teams={teams}
+            myTeamId={myTeam?.id}
             onRefresh={refreshMatches}
             isRefreshing={isRefreshingMatches}
             isAdmin={isAdmin}

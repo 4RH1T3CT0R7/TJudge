@@ -7,6 +7,7 @@ import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
 import { TerminalOutput } from '../ui/TerminalOutput';
+import { MatchError } from '../tournament/MatchError';
 
 // Helper function to format bytes to human readable format
 const formatBytes = (bytes: number): string => {
@@ -787,6 +788,9 @@ export function SystemTab({
                           <span className="text-xs text-gray-400">
                             {match.game_type}
                           </span>
+                        </div>
+                        <div className="mb-2">
+                          <MatchError match={match} mySide={null} names={[match.team1_name ?? undefined, match.team2_name ?? undefined]} brief />
                         </div>
                         {match.error_message && (
                           <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" wrap copyable={false} />

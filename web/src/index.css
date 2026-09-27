@@ -521,6 +521,16 @@
     @apply bg-orange-900/20;
   }
 
+  /* Своя строка («> вы»): полоса primary слева и лёгкая подложка поверх медальной.
+     У строки таблицы полоса рисуется на первой ячейке: box-shadow у tr рисуют не все браузеры */
+  .row-mine {
+    background-color: color-mix(in oklab, var(--color-primary-900) 30%, transparent);
+  }
+  div.row-mine,
+  .row-mine > :first-child {
+    box-shadow: inset 2px 0 0 var(--color-primary-400);
+  }
+
   /* Rank badge */
   .rank-badge {
     @apply inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm;

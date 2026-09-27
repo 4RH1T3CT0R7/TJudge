@@ -40,11 +40,11 @@ describe('MatchesTab', () => {
     fireEvent.click(screen.getByText('Раунд 1'));
     expect(screen.getByText('10')).toBeTruthy();
 
-    await waitFor(() => expect(getRoundMatches).toHaveBeenCalledWith('t1', 1, 'dilemma', 50, 0, expect.any(AbortSignal)));
+    await waitFor(() => expect(getRoundMatches).toHaveBeenCalledWith('t1', 1, 'dilemma', 50, 0, expect.any(AbortSignal), undefined));
     expect(screen.getByText('Страница 1 из 3')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Вперёд'));
-    await waitFor(() => expect(getRoundMatches).toHaveBeenCalledWith('t1', 1, 'dilemma', 50, 50, expect.any(AbortSignal)));
+    await waitFor(() => expect(getRoundMatches).toHaveBeenCalledWith('t1', 1, 'dilemma', 50, 50, expect.any(AbortSignal), undefined));
   });
 
   it('раунд с отменёнными матчами закрыт на 100%', () => {

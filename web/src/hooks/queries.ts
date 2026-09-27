@@ -44,10 +44,13 @@ export function useCrossGameLeaderboard(tournamentId: string, opts: PollOption =
   });
 }
 
-export function useMatchesByRounds(tournamentId: string, opts: PollOption = {}) {
+// teamId - счётчики только матчей команды; ключ вложен в общий и инвалидируется с ним.
+export function useMatchesByRounds(tournamentId: string, opts: PollOption & { teamId?: string } = {}) {
   return useQuery({
-    queryKey: queryKeys.matchesByRounds(tournamentId),
-    queryFn: ({ signal }) => api.getMatchesByRounds(tournamentId, signal),
+    queryKey: opts.teamId
+      ? ([...queryKeys.matchesByRounds(tournamentId), 'team', opts.teamId] as const)
+      : queryKeys.matchesByRounds(tournamentId),
+    queryFn: ({ signal }) => api.getMatchesByRounds(tournamentId, signal, opts.teamId),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
   });
@@ -62,12 +65,12 @@ export function useRoundMatches(
   round: number,
   gameType: string,
   page: number,
-  opts: PollOption = {}
+  opts: PollOption & { teamId?: string } = {}
 ) {
   return useQuery({
-    queryKey: [...queryKeys.matchesByRounds(tournamentId), round, gameType, page] as const,
+    queryKey: [...queryKeys.matchesByRounds(tournamentId), round, gameType, page, opts.teamId ?? ''] as const,
     queryFn: ({ signal }) =>
-      api.getRoundMatches(tournamentId, round, gameType, ROUND_PAGE_SIZE, page * ROUND_PAGE_SIZE, signal),
+      api.getRoundMatches(tournamentId, round, gameType, ROUND_PAGE_SIZE, page * ROUND_PAGE_SIZE, signal, opts.teamId),
     enabled: (opts.enabled ?? true) && !!tournamentId,
     refetchInterval: opts.pollInterval ?? false,
     placeholderData: keepPreviousData,

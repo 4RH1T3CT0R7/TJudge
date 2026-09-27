@@ -430,11 +430,11 @@ class ApiClient {
     return data;
   }
 
-  // Только счётчики раундов, без матчей.
-  async getMatchesByRounds(tournamentId: string, signal?: AbortSignal): Promise<MatchRound[]> {
+  // Только счётчики раундов, без матчей; teamId сужает их до матчей команды.
+  async getMatchesByRounds(tournamentId: string, signal?: AbortSignal, teamId?: string): Promise<MatchRound[]> {
     const { data } = await this.client.get<MatchRound[]>(
       `/tournaments/${tournamentId}/matches/rounds`,
-      { signal }
+      { params: teamId ? { team_id: teamId } : undefined, signal }
     );
     return data;
   }
@@ -446,11 +446,12 @@ class ApiClient {
     gameType: string,
     limit: number,
     offset: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    teamId?: string
   ): Promise<Match[]> {
     const { data } = await this.client.get<MatchRound[]>(
       `/tournaments/${tournamentId}/matches/rounds`,
-      { params: { round, game_type: gameType, limit, offset }, signal }
+      { params: { round, game_type: gameType, limit, offset, ...(teamId && { team_id: teamId }) }, signal }
     );
     return data[0]?.matches ?? [];
   }
@@ -617,10 +618,12 @@ class ApiClient {
     status?: string,
     limit = 50,
     offset = 0,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    teamId?: string
   ): Promise<Match[]> {
     const params: Record<string, unknown> = { limit, offset };
     if (status) params.status = status;
+    if (teamId) params.team_id = teamId;
     const { data } = await this.client.get<Match[]>(
       `/tournaments/${tournamentId}/games/${gameId}/matches`,
       { params, signal }
