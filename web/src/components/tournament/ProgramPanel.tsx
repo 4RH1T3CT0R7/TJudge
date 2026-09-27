@@ -111,6 +111,11 @@ export function ProgramSummary({ tournamentId, gameId, myTeam, programs }: Pick<
       {current?.status === 'ready' && current.check_status === 'failed' && (
         <span className="text-amber-300"><span aria-hidden="true">⚠ </span>самопроверка не пройдена</span>
       )}
+      {!current && (
+        <Link to={{ search: '' }} state={{ focus: 'starter' }} className="text-primary-400 underline hover:text-primary-300">
+          <span aria-hidden="true">$ </span>начать с шаблона<span aria-hidden="true"> ↓</span>
+        </Link>
+      )}
       <button
         type="button"
         onClick={() => revealAndFocus(document.getElementById(PANEL_HEADING_ID))}
@@ -262,8 +267,11 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
       {!current && (
         <p className="mb-4 text-sm text-gray-400">
           Программы ещё нет. Начните с шаблона на своём языке:{' '}
+          {/* на телефоне карточка ниже шаблона, на широком экране шаблон слева внизу */}
           <Link to={{ search: '' }} state={{ focus: 'starter' }} className="font-mono text-primary-400 hover:underline">
-            <span aria-hidden="true">$ </span>начать<span aria-hidden="true"> ↓</span>
+            <span aria-hidden="true">$ </span>начать
+            <span aria-hidden="true" className="lg:hidden"> ↑</span>
+            <span aria-hidden="true" className="max-lg:hidden"> ↓</span>
           </Link>
         </p>
       )}

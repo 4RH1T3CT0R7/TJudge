@@ -9,7 +9,8 @@ import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { GameRules } from '../components/game/GameRules';
 import { StarterKit } from '../components/game/StarterKit';
 import { RuntimeInfo } from '../components/game/RuntimeInfo';
-
+import { revealAndFocus } from '../hooks/useRevealOnMobile';
+import { LANGUAGES, starterLoader } from '../utils/starters';
 
 export function GameView() {
   const { id } = useParams<{ id: string }>();
@@ -53,6 +54,18 @@ export function GameView() {
           </>
         }
         status={<code className="bg-gray-800 text-gray-100 px-3 py-1 rounded font-mono text-sm">{game.name}</code>}
+        actions={
+          // шаблон стоит под правилами, с первого экрана его не видно
+          LANGUAGES.some((l) => starterLoader(game.name, l)) && (
+            <button
+              type="button"
+              onClick={() => revealAndFocus(document.getElementById('starter'))}
+              className="btn btn-secondary font-mono"
+            >
+              <span aria-hidden="true">$ </span>начать с шаблона<span aria-hidden="true"> ↓</span>
+            </button>
+          )
+        }
       >
         <p className="text-gray-400">
           Добавлена {new Date(game.created_at).toLocaleDateString('ru-RU')}
