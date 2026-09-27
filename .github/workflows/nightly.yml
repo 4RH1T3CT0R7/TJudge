@@ -52,6 +52,13 @@ jobs:
           E2E_FULL_CYCLE: 'true'
         run: go test -count=1 -v -tags=e2e -run TestE2E_FullCycle ./tests/e2e/
 
+      # шаблоны ботов со страницы игры: сборка каждого в tjudge-builder и
+      # самопроверка против эталонного бота игры
+      - name: starters
+        env:
+          E2E_FULL_CYCLE: 'true'
+        run: go test -count=1 -v -timeout=30m -tags=e2e -run TestE2E_Starters ./tests/e2e/
+
       # дамп и архив программ после полного цикла, восстановление дампа в
       # одноразовый postgres. sudo: файлы программ принадлежат uid 1000
       - name: backup restore test
