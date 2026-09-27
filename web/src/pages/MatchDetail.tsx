@@ -38,6 +38,12 @@ const MOVE_LABEL: Record<string, [string, string]> = {
 // линии сторон на графике счёта (проверенная пара для тёмного фона)
 const SIDE_COLOR = { 1: '#3987e5', 2: '#d95926' } as const;
 
+// Цвет стороны с графика счёта - у её имени и над полосой, и в таблице: иначе
+// оранжевую линию легко принять за предательство.
+function SideMark({ side, className = 'mr-1.5' }: { side: Side; className?: string }) {
+  return <span aria-hidden="true" className={`inline-block h-0.5 w-4 shrink-0 align-middle ${className}`} style={{ background: SIDE_COLOR[side] }} />;
+}
+
 // автопроигрывание: кадр раз в 60 мс, весь матч укладывается примерно в 6-9 с
 const TICK_MS = 60;
 const TICKS_PER_REPLAY = 150;
@@ -288,7 +294,10 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
       <div className="space-y-2">
         {([1, 2] as const).map((s) => (
           <div key={s}>
-            <p className="mb-1 truncate text-xs text-gray-300">{names[s - 1]}</p>
+            <p className="mb-1 truncate text-xs text-gray-300">
+              <SideMark side={s} />
+              {names[s - 1]}
+            </p>
             <MoveStrip moves={transcript.moves[s - 1] ?? []} n={n} step={step} dilemma={dilemma} range={range} onSeek={seek} name={names[s - 1]} />
           </div>
         ))}
@@ -423,7 +432,7 @@ function ScoreChart({ totals, n, step, names }: { totals: number[][]; n: number;
         <span className="text-gray-500">счёт после {at} из {n}:</span>
         {([0, 1] as const).map((s) => (
           <span key={s} className="inline-flex items-center gap-2">
-            <span aria-hidden="true" className="inline-block h-0.5 w-4" style={{ background: SIDE_COLOR[(s + 1) as Side] }} />
+            <SideMark side={(s + 1) as Side} className="" />
             {names[s]} <span className="tabular-nums text-gray-100">{value(s)}</span>
           </span>
         ))}
@@ -505,8 +514,12 @@ function IterationTable({
             <thead className="sticky top-0 bg-gray-900 text-left text-xs text-gray-400">
               <tr>
                 <th className="px-3 py-2">№</th>
-                <th className="max-w-32 truncate px-3 py-2">{names[0]}</th>
-                <th className="max-w-32 truncate px-3 py-2">{names[1]}</th>
+                {([1, 2] as const).map((s) => (
+                  <th key={s} className="max-w-32 truncate px-3 py-2">
+                    <SideMark side={s} />
+                    {names[s - 1]}
+                  </th>
+                ))}
                 {totals && <th className="px-3 py-2 text-right">очки</th>}
                 {totals && <th className="px-3 py-2 text-right">счёт</th>}
               </tr>
