@@ -398,6 +398,10 @@
     @apply bg-purple-900/50 text-purple-300;
   }
 
+  .badge-red {
+    @apply bg-red-900/50 text-red-300;
+  }
+
   /* Tab styles - pill buttons */
   .tab-active {
     @apply text-white;
