@@ -357,11 +357,11 @@ export function TournamentsTab({
                 ) : (
                   <div className="space-y-3">
                     {/* Available games */}
-                    <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-600 rounded-lg p-3 bg-gray-700">
+                    <div className="space-y-2 max-h-32 overflow-y-auto border border-line rounded-lg p-3 bg-gray-700">
                       {games.map((game) => (
                         <label
                           key={game.id}
-                          className="flex items-center gap-3 p-2 hover:bg-gray-600/50 rounded cursor-pointer"
+                          className="flex items-center gap-3 p-2 hover:bg-line/50 rounded cursor-pointer"
                             >
                           <input
                             type="checkbox"

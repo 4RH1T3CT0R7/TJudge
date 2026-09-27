@@ -182,7 +182,7 @@ export function MatchesTab({
             )}
             {totalStats.pending > 0 && (
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-gray-600" />
+                <span className="w-3 h-3 rounded-full bg-line" />
                 В очереди
               </span>
             )}
@@ -266,7 +266,7 @@ function RoundCard({
     if (round.running_count > 0) return 'border-l-blue-500';
     if (round.pending_count > 0) return 'border-l-yellow-500';
     if (round.total_matches > 0) return 'border-l-emerald-500';
-    return 'border-l-gray-600';
+    return 'border-l-line';
   };
 
   const getProgressPercent = () => {

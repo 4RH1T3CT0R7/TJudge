@@ -60,9 +60,11 @@
   --color-primary-900: #4c1d95;
 
   /* Приглушённый текст: не ниже 4.5:1 на фоне #0a0a0b, карточках и gray-900
-     (gray-500 и на gray-800). Под текстом эти оттенки не использовать */
+     (gray-500 и на gray-800). Для рамок и заливок слишком светлые: там --color-line */
   --color-gray-500: oklch(66% 0.025 262);
   --color-gray-600: oklch(61% 0.028 260);
+  /* рамки и заливки: прежний gray-600 */
+  --color-line: oklch(44.6% 0.03 256.802);
 
   /* Скругления 2px везде, круглыми (rounded-full) остаются только точки-индикаторы */
   --radius: 2px;
@@ -966,7 +968,8 @@
 }
 
 .sudo-theme .border-gray-700,
-.sudo-theme .border-gray-600 {
+.sudo-theme .border-gray-600,
+.sudo-theme .border-line {
   border-color: rgba(0, 255, 65, 0.2) !important;
 }
 

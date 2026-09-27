@@ -65,7 +65,7 @@ const defaultGameConfig: GameConfig = {
   bgClass: 'bg-primary-600',
   textClass: 'text-primary-400',
   borderClass: 'border-primary-500',
-  cardBorderClass: 'border-gray-700 hover:border-gray-600',
+  cardBorderClass: 'border-gray-700 hover:border-line',
   gradientClass: 'from-primary-500 to-primary-600',
 };
 

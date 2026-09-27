@@ -586,7 +586,7 @@ export function GameDetail() {
                       ${!canUpload ? 'cursor-not-allowed opacity-50' : ''}
                       ${isDragging
                         ? 'border-primary-500 bg-primary-900/20'
-                        : 'border-gray-600 hover:border-primary-500 hover:bg-gray-800/50'
+                        : 'border-line hover:border-primary-500 hover:bg-gray-800/50'
                       }
                     `}
                   >
@@ -819,7 +819,7 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
       case 'failed':
         return 'bg-red-600';
       default:
-        return 'bg-gray-600';
+        return 'bg-line';
     }
   };
 
@@ -885,7 +885,7 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
 
       {/* Active iteration details */}
       {activeMatch && (
-        <div className="bg-gray-800 rounded-lg p-3 border border-gray-600">
+        <div className="bg-gray-800 rounded-lg p-3 border border-line">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-300">
               Итерация {activeIteration + 1}

@@ -54,7 +54,7 @@ export function TugOfWarVisualization() {
           <div className={`flex-1 rounded-r-xl transition-colors ${ropePosition > 55 ? 'bg-red-900/30' : 'bg-gray-800'}`} />
         </div>
 
-        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-600 -translate-x-1/2" />
+        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-line -translate-x-1/2" />
 
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 300 60" preserveAspectRatio="none">
           <path
