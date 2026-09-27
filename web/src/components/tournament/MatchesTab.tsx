@@ -5,6 +5,7 @@ import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { Field } from '../ui/Field';
+import { YouMark } from '../ui/YouMark';
 import { MatchError } from './MatchError';
 import type { Side } from '../../utils/explainError';
 import type { Match, MatchRound, Team } from '../../types';
@@ -558,9 +559,7 @@ function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
           {(side === 1 ? match.program1_id : match.program2_id).slice(0, 8)}
         </code>
       )}
-      {mySide === side && (
-        <span className="ml-2 font-mono text-xs text-primary-400"><span aria-hidden="true">&gt; </span>вы</span>
-      )}
+      {mySide === side && <YouMark />}
     </span>
   );
 

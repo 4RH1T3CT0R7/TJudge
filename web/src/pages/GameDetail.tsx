@@ -25,6 +25,8 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
+import { YouMark } from '../components/ui/YouMark';
+import { useRevealOnMobile } from '../hooks/useRevealOnMobile';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
 import { ChartBarIcon } from '../components/icons';
@@ -122,6 +124,7 @@ export function GameDetail() {
   // играет последняя версия команды, а не последняя своя. Поллинг каждые 10с,
   // пока какая-то версия компилируется (бейдж статуса обновится сам)
   const myTeamId = myTeam?.id;
+  const revealMine = useRevealOnMobile<HTMLTableRowElement>();
   const programsQuery = useQuery({
     queryKey: queryKeys.programVersions(myTeamId ?? '', gameId ?? ''),
     queryFn: () => api.getProgramVersions(myTeamId!, gameId!),
@@ -358,9 +361,9 @@ export function GameDetail() {
                     <table className="w-full">
                       <thead>
                         <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
-                          <th className="pb-2 pr-4">#</th>
-                          <th className="pb-2 pr-4">Программа</th>
-                          <th className="pb-2 pr-4 text-center">Рейтинг</th>
+                          <th className="pb-2 px-2">#</th>
+                          <th className="pb-2 pr-4">Команда</th>
+                          <th className="pb-2 pr-4 text-center" title="Сумма очков за сыгранные матчи раунда">Очки</th>
                           <th className="pb-2 pr-4 text-center">W</th>
                           <th className="pb-2 pr-4 text-center">L</th>
                           <th className="pb-2 pr-4 text-center">D</th>
@@ -369,27 +372,41 @@ export function GameDetail() {
                         </tr>
                       </thead>
                       <tbody>
-                        {leaderboard.map((entry) => (
-                          <tr key={entry.program_id} className="border-b border-gray-800">
-                            <td className="py-2 pr-4 font-mono font-medium text-gray-200">{entry.rank}</td>
-                            <td className="py-2 pr-4 text-gray-200">{entry.program_name}</td>
-                            <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
-                            <td className="py-2 pr-4 text-center font-mono text-green-400">{entry.wins}</td>
-                            <td className="py-2 pr-4 text-center font-mono text-red-400">{entry.losses}</td>
-                            <td className="py-2 pr-4 text-center font-mono text-gray-400">{entry.draws}</td>
-                            <td className="py-2 text-center font-mono text-gray-200">{entry.total_games}</td>
-                            <td className="py-2 text-center">
-                              <button
-                                onClick={() => setChartProgram({ id: entry.program_id, name: entry.program_name })}
-                                className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
-                                title="График рейтинга"
-                                aria-label={`График рейтинга ${entry.program_name}`}
-                              >
-                                <ChartBarIcon className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {leaderboard.map((entry) => {
+                          const mine = !!myTeamId && entry.team_id === myTeamId;
+                          return (
+                            <tr
+                              key={entry.program_id}
+                              ref={mine ? revealMine : undefined}
+                              aria-current={mine ? 'true' : undefined}
+                              className={`border-b border-gray-800 ${mine ? 'row-mine' : ''}`}
+                            >
+                              <td className="py-2 px-2 font-mono font-medium text-gray-200">{entry.rank}</td>
+                              <td className="py-2 pr-4 text-gray-200">
+                                {entry.team_name || entry.program_name}
+                                {mine && <YouMark />}
+                                {entry.team_name && (
+                                  <div className="font-mono text-xs text-gray-500 break-all">{entry.program_name}</div>
+                                )}
+                              </td>
+                              <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
+                              <td className="py-2 pr-4 text-center font-mono text-green-400">{entry.wins}</td>
+                              <td className="py-2 pr-4 text-center font-mono text-red-400">{entry.losses}</td>
+                              <td className="py-2 pr-4 text-center font-mono text-gray-400">{entry.draws}</td>
+                              <td className="py-2 text-center font-mono text-gray-200">{entry.total_games}</td>
+                              <td className="py-2 text-center">
+                                <button
+                                  onClick={() => setChartProgram({ id: entry.program_id, name: entry.team_name || entry.program_name })}
+                                  className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
+                                  title="График рейтинга"
+                                  aria-label={`График рейтинга ${entry.team_name || entry.program_name}`}
+                                >
+                                  <ChartBarIcon className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -401,7 +418,7 @@ export function GameDetail() {
                 {(headToHeadQuery.data?.length ?? 0) > 0 && (
                   <div className="mt-8 pt-6 border-t border-gray-800">
                     <h3 className="text-base font-semibold mb-4 text-gray-100">Личные встречи</h3>
-                    <HeadToHeadMatrix cells={headToHeadQuery.data ?? []} />
+                    <HeadToHeadMatrix cells={headToHeadQuery.data ?? []} myTeamId={myTeamId} />
                   </div>
                 )}
               </div>

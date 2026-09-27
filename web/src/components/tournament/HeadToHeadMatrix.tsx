@@ -1,15 +1,17 @@
 import { useMemo } from 'react';
 import { EmptyState } from '../ui/EmptyState';
+import { YouMark } from '../ui/YouMark';
 import type { HeadToHeadCell } from '../../types';
 
 interface HeadToHeadMatrixProps {
   cells: HeadToHeadCell[];
+  myTeamId?: string;
 }
 
 // Тепловая карта личных встреч: строка — команда, колонка — соперник.
 // Цвет ячейки — win-rate (красный → зелёный), в ячейке счёт побед-поражений.
 // Данные приходят уже слитыми по обеим ориентациям матчей (AB и BA).
-export function HeadToHeadMatrix({ cells }: HeadToHeadMatrixProps) {
+export function HeadToHeadMatrix({ cells, myTeamId }: HeadToHeadMatrixProps) {
   const { teams, byPair } = useMemo(() => {
     const totals = new Map<string, { name: string; wins: number }>();
     const pair = new Map<string, HeadToHeadCell>();
@@ -42,7 +44,7 @@ export function HeadToHeadMatrix({ cells }: HeadToHeadMatrixProps) {
             {teams.map((t) => (
               <th key={t.id} className="px-1 py-2 align-bottom" title={t.name}>
                 <span
-                  className="block text-xs font-medium text-gray-400 max-w-[72px] truncate"
+                  className={`block text-xs font-medium max-w-[72px] truncate ${t.id === myTeamId ? 'text-primary-300' : 'text-gray-400'}`}
                   style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: 96 }}
                 >
                   {t.name}
@@ -53,13 +55,14 @@ export function HeadToHeadMatrix({ cells }: HeadToHeadMatrixProps) {
         </thead>
         <tbody>
           {teams.map((row) => (
-            <tr key={row.id}>
+            <tr key={row.id} className={row.id === myTeamId ? 'row-mine' : undefined} aria-current={row.id === myTeamId ? 'true' : undefined}>
               <th
                 className="text-left text-xs font-medium text-gray-300 px-2 py-1 whitespace-nowrap max-w-[160px] truncate sticky left-0"
                 style={{ backgroundColor: '#0a0a0b' }}
                 title={row.name}
               >
                 {row.name}
+                {row.id === myTeamId && <YouMark />}
               </th>
               {teams.map((col) => {
                 if (row.id === col.id) {

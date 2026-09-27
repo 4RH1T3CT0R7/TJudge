@@ -389,9 +389,9 @@ export function TournamentDetail() {
             </div>
           </div>
           {showCrossGameLeaderboard ? (
-            <CrossGameLeaderboardTableDark entries={crossGameLeaderboard} games={games} />
+            <CrossGameLeaderboardTableDark entries={crossGameLeaderboard} games={games} myTeamId={myTeam?.id} />
           ) : (
-            <GeneralLeaderboardTable entries={crossGameLeaderboard} isDark />
+            <GeneralLeaderboardTable entries={crossGameLeaderboard} isDark myTeamId={myTeam?.id} />
           )}
         </div>
       </div>
@@ -556,6 +556,7 @@ export function TournamentDetail() {
             isRefreshing={isRefreshingLeaderboard}
             hasActiveMatches={roundRunning}
             isCompleted={tournament.status === 'completed'}
+            myTeamId={myTeam?.id}
           />
         )}
 

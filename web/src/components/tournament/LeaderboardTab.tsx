@@ -4,6 +4,8 @@ import { LEADERBOARD_VIEWS } from './helpers';
 import { Segmented } from '../ui/Segmented';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
+import { YouMark } from '../ui/YouMark';
+import { useRevealOnMobile } from '../../hooks/useRevealOnMobile';
 import type { CrossGameLeaderboardEntry, Game } from '../../types';
 
 // Leaderboard Tab Component
@@ -18,6 +20,7 @@ export function LeaderboardTab({
   isRefreshing,
   hasActiveMatches,
   isCompleted,
+  myTeamId,
 }: {
   crossGameEntries: CrossGameLeaderboardEntry[];
   games: Game[];
@@ -29,6 +32,7 @@ export function LeaderboardTab({
   isRefreshing: boolean;
   hasActiveMatches: boolean;
   isCompleted: boolean;
+  myTeamId?: string;
 }) {
   return (
     <div>
@@ -77,9 +81,9 @@ export function LeaderboardTab({
       )}
 
       {showCrossGame ? (
-        <CrossGameLeaderboardTable entries={crossGameEntries} games={games} />
+        <CrossGameLeaderboardTable entries={crossGameEntries} games={games} myTeamId={myTeamId} />
       ) : (
-        <GeneralLeaderboardTable entries={crossGameEntries} />
+        <GeneralLeaderboardTable entries={crossGameEntries} myTeamId={myTeamId} />
       )}
     </div>
   );
@@ -90,10 +94,13 @@ export function LeaderboardTab({
 export function GeneralLeaderboardTable({
   entries,
   isDark = false,
+  myTeamId,
 }: {
   entries: CrossGameLeaderboardEntry[];
   isDark?: boolean;
+  myTeamId?: string;
 }) {
+  const revealMine = useRevealOnMobile<HTMLDivElement>();
   if (entries.length === 0) {
     return (
       <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
@@ -149,81 +156,87 @@ export function GeneralLeaderboardTable({
       : 'space-y-2'
     }>
       {/* Card-style entries */}
-      {entries.map((entry, index) => (
-        <div
-          key={entry.program_id}
-          className={`${isDark ? 'p-2.5' : 'p-4'} rounded-xl transition-colors ${
-            isDark
-              ? `bg-gray-800/50 border border-gray-700 ${getRowClass(index)}`
-              : `bg-gray-800/50 border border-gray-800 ${getRowClass(index)} hover:shadow-md`
-          }`}
-        >
-          <div className={`flex items-center ${isDark ? 'gap-3' : 'gap-4'}`}>
-            {/* Rank */}
-            {isDark ? (
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                index === 0 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900' :
-                index === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700' :
-                index === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-orange-900' :
-                'bg-gray-700 text-gray-300'
-              }`}>
-                {entry.rank}
-              </div>
-            ) : getRankBadge(entry.rank)}
-
-            {/* Team Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className={`font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
-                    {entry.team_name || entry.program_name}
-                  </h3>
-                  {!isDark && (
-                    <div className="flex items-center gap-3 text-sm text-gray-400">
-                      <span>{entry.total_games} игр</span>
-                      <span>•</span>
-                      <span className="text-emerald-400">{entry.total_wins}W</span>
-                      <span className="text-red-400">{entry.total_losses}L</span>
-                    </div>
-                  )}
+      {entries.map((entry, index) => {
+        const mine = !!myTeamId && entry.team_id === myTeamId;
+        return (
+          <div
+            key={entry.program_id}
+            ref={mine ? revealMine : undefined}
+            aria-current={mine ? 'true' : undefined}
+            className={`${isDark ? 'p-2.5' : 'p-4'} rounded-xl transition-colors ${
+              isDark
+                ? `bg-gray-800/50 border border-gray-700 ${getRowClass(index)}`
+                : `bg-gray-800/50 border border-gray-800 ${getRowClass(index)} hover:shadow-md`
+            } ${mine ? 'row-mine' : ''}`}
+          >
+            <div className={`flex items-center ${isDark ? 'gap-3' : 'gap-4'}`}>
+              {/* Rank */}
+              {isDark ? (
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                  index === 0 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-amber-900' :
+                  index === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-gray-700' :
+                  index === 2 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-orange-900' :
+                  'bg-gray-700 text-gray-300'
+                }`}>
+                  {entry.rank}
                 </div>
+              ) : getRankBadge(entry.rank)}
 
-                {/* Score */}
-                <div className="text-right shrink-0">
-                  <div className={`font-bold tabular-nums ${isDark ? 'text-xl' : 'text-3xl'} ${
-                    index === 0 ? 'text-amber-500' :
-                    index === 1 ? 'text-gray-400' :
-                    index === 2 ? 'text-orange-500' :
-                    'text-primary-400'
-                  }`}>
-                    {entry.total_rating.toLocaleString()}
+              {/* Team Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className={`font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
+                      {entry.team_name || entry.program_name}
+                      {mine && <YouMark />}
+                    </h3>
+                    {!isDark && (
+                      <div className="flex items-center gap-3 text-sm text-gray-400">
+                        <span>{entry.total_games} игр</span>
+                        <span>•</span>
+                        <span className="text-emerald-400">{entry.total_wins}W</span>
+                        <span className="text-red-400">{entry.total_losses}L</span>
+                      </div>
+                    )}
                   </div>
-                  {!isDark && (
-                    <div className="text-xs text-gray-400">
-                      очков
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Score bar - только в обычном режиме */}
-              {!isDark && (
-                <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-500 ${
-                      index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
-                      index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
-                      index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
-                      'bg-gradient-to-r from-primary-400 to-primary-500'
-                    }`}
-                    style={{ width: `${(entry.total_rating / maxScore) * 100}%` }}
-                  />
+                  {/* Score */}
+                  <div className="text-right shrink-0">
+                    <div className={`font-bold tabular-nums ${isDark ? 'text-xl' : 'text-3xl'} ${
+                      index === 0 ? 'text-amber-500' :
+                      index === 1 ? 'text-gray-400' :
+                      index === 2 ? 'text-orange-500' :
+                      'text-primary-400'
+                    }`}>
+                      {entry.total_rating.toLocaleString()}
+                    </div>
+                    {!isDark && (
+                      <div className="text-xs text-gray-400">
+                        очков
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {/* Score bar - только в обычном режиме */}
+                {!isDark && (
+                  <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${
+                        index === 0 ? 'bg-gradient-to-r from-amber-400 to-amber-500' :
+                        index === 1 ? 'bg-gradient-to-r from-gray-500 to-gray-600' :
+                        index === 2 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
+                        'bg-gradient-to-r from-primary-400 to-primary-500'
+                      }`}
+                      style={{ width: `${(entry.total_rating / maxScore) * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -234,12 +247,15 @@ function CrossGameLeaderboardTable({
   games,
   isDark = false,
   isCompact = false,
+  myTeamId,
 }: {
   entries: CrossGameLeaderboardEntry[];
   games: Game[];
   isDark?: boolean;
   isCompact?: boolean;
+  myTeamId?: string;
 }) {
+  const revealMine = useRevealOnMobile<HTMLTableRowElement>();
   if (entries.length === 0) {
     return (
       <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
@@ -280,51 +296,57 @@ function CrossGameLeaderboardTable({
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry, index) => (
-            <tr
-              key={entry.program_id}
-              className={`border-b ${isDark ? 'border-gray-700/50' : 'border-gray-700'} ${getRowClass(index)} transition-colors`}
-            >
-              <td className={cellPx}>
-                <span className={getRankClass(index)}>
-                  {entry.rank}
-                </span>
-              </td>
-              <td className={cellPx}>
-                <span className="font-semibold">
-                  {entry.team_name || entry.program_name}
-                </span>
-              </td>
-              {games.map((game) => {
-                const gameRating = entry.game_ratings[game.id];
-                return (
-                  <td key={game.id} className={`${cellPx} text-center`}>
-                    {gameRating ? (
-                      <div>
-                        <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
-                        {!isCompact && (
-                          <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
-                            <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
-                            <span className="mx-0.5">/</span>
-                            <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
-                            <span className="mx-0.5">/</span>
-                            <span title="Ничьих">{gameRating.draws || 0}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                );
-              })}
-              <td className={`${cellPx} text-right`}>
-                <span className={`font-mono font-bold ${isCompact ? 'text-base' : 'text-lg'} ${isDark ? 'text-primary-400' : 'text-primary-400'}`}>
-                  {entry.total_rating}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {entries.map((entry, index) => {
+            const mine = !!myTeamId && entry.team_id === myTeamId;
+            return (
+              <tr
+                key={entry.program_id}
+                ref={mine ? revealMine : undefined}
+                aria-current={mine ? 'true' : undefined}
+                className={`border-b ${isDark ? 'border-gray-700/50' : 'border-gray-700'} ${getRowClass(index)} transition-colors ${mine ? 'row-mine' : ''}`}
+              >
+                <td className={cellPx}>
+                  <span className={getRankClass(index)}>
+                    {entry.rank}
+                  </span>
+                </td>
+                <td className={cellPx}>
+                  <span className="font-semibold">
+                    {entry.team_name || entry.program_name}
+                  </span>
+                  {mine && <YouMark />}
+                </td>
+                {games.map((game) => {
+                  const gameRating = entry.game_ratings[game.id];
+                  return (
+                    <td key={game.id} className={`${cellPx} text-center`}>
+                      {gameRating ? (
+                        <div>
+                          <span className="font-mono font-bold">{Math.round(gameRating.rating)}</span>
+                          {!isCompact && (
+                            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-400'}`}>
+                              <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
+                              <span className="mx-0.5">/</span>
+                              <span className="text-red-500" title="Поражений">{gameRating.losses}</span>
+                              <span className="mx-0.5">/</span>
+                              <span title="Ничьих">{gameRating.draws || 0}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className={`${cellPx} text-right`}>
+                  <span className={`font-mono font-bold ${isCompact ? 'text-base' : 'text-lg'} ${isDark ? 'text-primary-400' : 'text-primary-400'}`}>
+                    {entry.total_rating}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -335,9 +357,11 @@ function CrossGameLeaderboardTable({
 export function CrossGameLeaderboardTableDark({
   entries,
   games,
+  myTeamId,
 }: {
   entries: CrossGameLeaderboardEntry[];
   games: Game[];
+  myTeamId?: string;
 }) {
-  return <CrossGameLeaderboardTable entries={entries} games={games} isDark isCompact />;
+  return <CrossGameLeaderboardTable entries={entries} games={games} myTeamId={myTeamId} isDark isCompact />;
 }
