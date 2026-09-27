@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useMotionPref } from '../hooks/useMotionPref';
 
 // --- Types ---
 export type InvaderPose = 'idle' | 'handsUp' | 'dance' | 'run' | 'spin' | 'spinStop'
@@ -171,20 +172,9 @@ export function SpaceInvader({
   controlledPose = null,
   colorOverride = null,
 }: SpaceInvaderProps) {
-  const prefersReducedMotion = useRef(
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches; };
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
-
-  /** Returns `'none'` when the user prefers reduced motion, otherwise the given CSS animation value. */
-  const animate = (value: string): string =>
-    prefersReducedMotion.current ? 'none' : value;
+  const { reduced } = useMotionPref();
+  // при выключенных анимациях (useMotionPref) CSS-анимации поз не запускаются
+  const animate = (value: string): string => (reduced ? 'none' : value);
 
   // Производные цвета - переопределяем фиолетовый переданным цветом, если указан
   const bodyColor = colorOverride || BODY_COLOR;

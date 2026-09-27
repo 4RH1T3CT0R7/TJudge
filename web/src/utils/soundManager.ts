@@ -1,5 +1,6 @@
 // Минимальные процедурные звуки через Web Audio API - внешние файлы не нужны.
-// Уважает prefers-reduced-motion, заглушая весь звук.
+// При выключенных анимациях (useMotionPref) звука тоже нет.
+import { isMotionReduced } from '../hooks/useMotionPref';
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -8,8 +9,7 @@ class SoundManager {
   private getCtx(): AudioContext | null {
     if (this.muted) return null;
     if (typeof window === 'undefined') return null;
-    // Respect reduced motion preference
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return null;
+    if (isMotionReduced()) return null;
     if (!this.ctx) {
       this.ctx = new AudioContext();
     }

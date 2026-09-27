@@ -8,6 +8,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
 import { Spinner } from './components/ui/Spinner';
 import { useAuthStore } from './store/authStore';
+import { useMotionPref } from './hooks/useMotionPref';
 import { queryClient } from './api/queryClient';
 
 const pageImports = {
@@ -202,10 +203,11 @@ function AppContent() {
 }
 
 function App() {
+  const { reduced } = useMotionPref();
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <MotionConfig reducedMotion="user">
+        <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
           <BrowserRouter>
             <AppContent />
           </BrowserRouter>

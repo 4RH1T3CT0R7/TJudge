@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMotionPref } from '../hooks/useMotionPref';
 
 interface Phrase {
   text: string;
@@ -25,6 +26,8 @@ export function TerminalTypewriter() {
   const [phase, setPhase] = useState<Phase>('typing');
   const charIndex = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // при выключенных анимациях фраза стоит целиком, таймеров нет
+  const { reduced } = useMotionPref();
 
   // Ref to hold tick so it can self-schedule without forward reference
   const tickRef = useRef<() => void>(() => {});
@@ -74,11 +77,12 @@ export function TerminalTypewriter() {
   });
 
   useEffect(() => {
+    if (reduced) return;
     timerRef.current = setTimeout(tick, phase === 'typing' ? 80 : 0);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [tick, phase]);
+  }, [tick, phase, reduced]);
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -96,7 +100,7 @@ export function TerminalTypewriter() {
       >
         <div className="flex items-center text-lg min-h-[1.75rem]">
           <span className="text-green-400 mr-3">$</span>
-          <span style={{ color: currentPhrase.color }}>{displayedText}</span>
+          <span style={{ color: currentPhrase.color }}>{reduced ? currentPhrase.text : displayedText}</span>
           <span className="terminal-cursor ml-0.5 text-gray-400">|</span>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
-import { animate, useReducedMotion } from 'motion/react';
+import { animate } from 'motion/react';
+import { useMotionPref } from '../../hooks/useMotionPref';
 
 const fmt = (n: number) => n.toLocaleString('ru-RU');
 
@@ -9,7 +10,7 @@ const fmt = (n: number) => n.toLocaleString('ru-RU');
 export function CountUp({ value }: { value: number }) {
   const ref = useRef<HTMLSpanElement>(null);
   const prev = useRef(value);
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionPref();
 
   useLayoutEffect(() => {
     const el = ref.current;

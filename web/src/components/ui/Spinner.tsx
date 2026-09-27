@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useReducedMotion } from 'motion/react';
+import { useMotionPref } from '../../hooks/useMotionPref';
 
 const FRAMES = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
 
 // Брайлевый спиннер терминала: кадр раз в 80 мс, при reduced-motion стоит на месте.
 // Без подписи скринридер слышит «Загрузка».
 export function Spinner({ children, className = '' }: { children?: ReactNode; className?: string }) {
-  const reduceMotion = useReducedMotion();
+  const { reduced: reduceMotion } = useMotionPref();
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {

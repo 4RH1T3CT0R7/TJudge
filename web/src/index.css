@@ -1213,24 +1213,23 @@ tr.row-mine > :first-child {
 
 /* ===== End Sudo Theme ===== */
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  .btn, .input, .nav-link, .badge, .table-row,
-  .card-hover, .card-interactive, .feature-card {
-    transition-duration: 150ms !important;
-    transition-property: color, background-color, border-color, opacity !important;
-  }
-
-  html { scroll-behavior: auto !important; }
-  .skeleton { animation: none !important; }
+/* Анимации выключены: системная prefers-reduced-motion или переключатель в подвале
+   (hooks/useMotionPref ставит html[data-motion="reduced"]) */
+[data-motion="reduced"] *,
+[data-motion="reduced"] *::before,
+[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
+
+[data-motion="reduced"] :is(.btn, .input, .badge, .card-hover, .card-interactive) {
+  transition-duration: 150ms !important;
+  transition-property: color, background-color, border-color, opacity !important;
+}
+
+html[data-motion="reduced"] { scroll-behavior: auto !important; }
+[data-motion="reduced"] .skeleton { animation: none !important; }
 
 @layer utilities {
   .animate-fade-in {

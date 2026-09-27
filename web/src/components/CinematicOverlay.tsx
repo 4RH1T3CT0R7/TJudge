@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useReducedMotion } from 'motion/react';
+import { useMotionPref } from '../hooks/useMotionPref';
 import { SpaceInvader } from './SpaceInvader';
 import type { InvaderPose } from './SpaceInvader';
 
@@ -75,7 +75,7 @@ export function CinematicOverlay({ type, username, teamName, onComplete }: Cinem
   const [showTrophy, setShowTrophy] = useState(false);
   const [trophyLines, setTrophyLines] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const reduceMotion = useReducedMotion();
+  const { reduced: reduceMotion } = useMotionPref();
 
   const addTimer = useCallback((fn: () => void, ms: number) => {
     timerRef.current.push(setTimeout(fn, ms));

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { isMotionReduced } from './useMotionPref';
 
 // Своя строка на телефоне: длинная таблица уходит за экран, поэтому при первом
 // появлении строка прокручивается в поле зрения. На широком экране не трогается.
@@ -8,8 +9,7 @@ export function useRevealOnMobile<T extends HTMLElement>() {
     if (!el || done.current) return;
     done.current = true;
     if (!window.matchMedia?.('(max-width: 639px)').matches) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    el.scrollIntoView({ block: 'nearest', behavior: isMotionReduced() ? 'auto' : 'smooth' });
   }, []);
 }
 
@@ -21,8 +21,7 @@ export function revealAndFocus(el: HTMLElement | null) {
   const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
   const r = el.getBoundingClientRect();
   if (r.top < pad || r.bottom > window.innerHeight) {
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+    el.scrollIntoView({ block: 'start', behavior: isMotionReduced() ? 'auto' : 'smooth' });
   }
   el.tabIndex = -1;
   el.focus({ preventScroll: true });

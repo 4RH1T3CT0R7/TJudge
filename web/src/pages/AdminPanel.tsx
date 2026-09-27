@@ -21,6 +21,7 @@ import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
+import { useMotionPref } from '../hooks/useMotionPref';
 import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
@@ -130,6 +131,7 @@ export function AdminPanel() {
 
   // "sudo" easter egg - полностью зелёная hacker-тема
   const [sudoMode, setSudoMode] = useState(false);
+  const { reduced } = useMotionPref();
   const [sudoActivating, setSudoActivating] = useState(false);
   const sudoCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -161,7 +163,7 @@ export function AdminPanel() {
 
   // Sudo matrix rain canvas
   useEffect(() => {
-    if (!sudoMode) return;
+    if (!sudoMode || reduced) return;
     const canvas = sudoCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -205,7 +207,7 @@ export function AdminPanel() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [sudoMode]);
+  }, [sudoMode, reduced]);
 
   useEffect(() => {
     if (!sudoMode) return;

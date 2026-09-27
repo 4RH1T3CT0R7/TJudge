@@ -5,6 +5,7 @@ import { useDarkMode } from '../../hooks/useDarkMode';
 import { AnimatedOutlet } from '../motion/AnimatedOutlet';
 import { useKonamiCode, useGodMode } from '../../hooks/useEasterEggs';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { useMotionPref } from '../../hooks/useMotionPref';
 import { Bars3Icon, XMarkIcon } from '../icons';
 
 const GLOW_STYLE = { transitionProperty: 'color, text-shadow' } as const;
@@ -17,6 +18,7 @@ export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEscapeKey(useCallback(() => setMobileMenuOpen(false), []), mobileMenuOpen);
   useDarkMode();
+  const { reduced, setReduced } = useMotionPref();
   const navigate = useNavigate();
 
   // Easter eggs
@@ -217,6 +219,15 @@ export function Layout() {
                 />
               ))}
             </div>
+            {/* выключает анимации во всём приложении поверх системной настройки */}
+            <button
+              type="button"
+              aria-pressed={!reduced}
+              onClick={() => setReduced(!reduced)}
+              className="font-mono text-sm text-gray-400 hover:text-primary-400 transition-colors px-2 py-1.5"
+            >
+              <span aria-hidden="true">{reduced ? '[ ]' : '[x]'} </span>анимации
+            </button>
             <a
               href="https://itsbmstu.ru"
               target="_blank"
