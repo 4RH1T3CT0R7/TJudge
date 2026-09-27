@@ -3,6 +3,34 @@
 /* Enable class-based dark mode for Tailwind v4 */
 @variant dark (&:where(.dark, .dark *));
 
+/* Символы терминальной грамматики (глифы статусов, стрелки, рамки, брайль спиннера):
+   в подмножествах @fontsource их нет, без этих файлов их рисует системный шрифт.
+   Подмножества JetBrains Mono 2.304 (OFL 1.1), DejaVu Sans Mono и DejaVu Sans 2.35
+   (лицензия Bitstream Vera), тексты лицензий — в таблице name самих файлов.
+   При пересечении unicode-range первым проверяется последний @font-face. */
+@font-face {
+  font-family: 'TJudge Symbols';
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/jetbrains-mono-symbols.woff2') format('woff2');
+  unicode-range: U+2190-22FF, U+2500-27BF, U+27F0-27FF;
+}
+/* ◐ ⇄ ☁ ☆: в JetBrains Mono их нет */
+@font-face {
+  font-family: 'TJudge Symbols';
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/dejavu-sans-mono-symbols.woff2') format('woff2');
+  unicode-range: U+21C4, U+25D0, U+2601, U+2606;
+}
+@font-face {
+  font-family: 'TJudge Symbols';
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/dejavu-sans-braille.woff2') format('woff2');
+  unicode-range: U+2800-28FF;
+}
+
 /* Терминальная грамматика: только хром интерфейса (подписи, статусы, пустые
    состояния, лоадеры, ошибки), содержимое остаётся обычным текстом.
      $ команда  вторичная подпись раздела или действия, промпт всегда primary-400
@@ -16,8 +44,8 @@
 @theme {
   /* Шрифты self-host (@fontsource в main.tsx): моно — терминальный хром,
      заголовки, таблицы, числа и статусы; Onest — основной текст */
-  --font-sans: 'Onest Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: 'Onest Variable', 'TJudge Symbols', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'TJudge Symbols', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Violet/purple primary palette (deep purple, not pink) */
   --color-primary-50: #f5f3ff;
