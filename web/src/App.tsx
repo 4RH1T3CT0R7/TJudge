@@ -21,6 +21,7 @@ const pageImports = {
   Games: () => import('./pages/Games'),
   TeamManagement: () => import('./pages/TeamManagement'),
   JoinTeam: () => import('./pages/JoinTeam'),
+  Help: () => import('./pages/Help'),
   AdminPanel: () => import('./pages/AdminPanel'),
   NotFound: () => import('./pages/NotFound'),
 };
@@ -35,6 +36,7 @@ const GameView = lazy(() => pageImports.GameView().then(m => ({ default: m.GameV
 const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
 const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
 const JoinTeam = lazy(() => pageImports.JoinTeam().then(m => ({ default: m.JoinTeam })));
+const Help = lazy(() => pageImports.Help().then(m => ({ default: m.Help })));
 const AdminPanel = lazy(() => pageImports.AdminPanel().then(m => ({ default: m.AdminPanel })));
 const NotFound = lazy(() => pageImports.NotFound().then(m => ({ default: m.NotFound })));
 
@@ -138,6 +140,7 @@ function AppContent() {
         <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
         <Route path="games" element={<Games />} />
         <Route path="games/:id" element={<GameView />} />
+        <Route path="help" element={<Help />} />
         <Route
           path="teams/:id"
           element={

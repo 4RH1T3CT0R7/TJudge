@@ -79,6 +79,15 @@ export function Layout() {
                   >
                     Игры
                   </Link>
+                  <Link
+                    to="/help"
+                    className="text-gray-400 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 whitespace-nowrap hover:text-primary-400"
+                    style={GLOW_STYLE}
+                    onMouseEnter={glowEnter}
+                    onMouseLeave={glowLeave}
+                  >
+                    Справка
+                  </Link>
                 </>
               )}
               {user?.role === 'admin' && (
@@ -111,7 +120,7 @@ export function Layout() {
                   <Link
                     to="/profile"
                     title={user?.username}
-                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200 truncate max-w-[4.5rem] min-[360px]:max-w-[7rem] sm:max-w-[12rem]"
+                    className="text-sm text-gray-400 hover:text-primary-400 transition-colors duration-200 truncate max-w-[4.5rem] min-[360px]:max-w-[7rem] sm:max-w-[12rem] md:max-w-[6rem] lg:max-w-[12rem]"
                     style={GLOW_STYLE}
                     onMouseEnter={glowEnter}
                     onMouseLeave={glowLeave}
@@ -156,6 +165,13 @@ export function Layout() {
                   className="text-gray-300 px-4 py-3 rounded-lg text-base font-medium hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
                 >
                   Игры
+                </Link>
+                <Link
+                  to="/help"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-gray-300 px-4 py-3 rounded-lg text-base font-medium hover:text-primary-400 hover:bg-gray-800/60 transition-colors"
+                >
+                  Справка
                 </Link>
               </>
             )}
