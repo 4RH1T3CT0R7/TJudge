@@ -30,7 +30,6 @@ export default defineConfig({
           'three': ['three'],
           'vendor-react': ['react', 'react-dom', 'react/jsx-runtime', 'react-router-dom'],
           'vendor-data': ['axios', 'zustand'],
-          'vendor-motion': ['motion'],
         },
       },
     },

@@ -1,7 +1,7 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { MotionConfig } from 'motion/react';
+import { LazyMotion, MotionConfig } from 'motion/react';
 import { Layout } from './components/layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
@@ -10,6 +10,8 @@ import { Spinner } from './components/ui/Spinner';
 import { useAuthStore } from './store/authStore';
 import { useMotionPref } from './hooks/useMotionPref';
 import { queryClient } from './api/queryClient';
+
+const loadMotionFeatures = () => import('./components/motion/features').then((mod) => mod.default);
 
 const pageImports = {
   Home: () => import('./pages/Home'),
@@ -208,11 +210,14 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-          <ToastContainer />
-          <ConfirmDialogHost />
+          {/* strict: полный motion.* внутри не допускается, иначе features снова во входном чанке */}
+          <LazyMotion features={loadMotionFeatures} strict>
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
+            <ToastContainer />
+            <ConfirmDialogHost />
+          </LazyMotion>
         </MotionConfig>
       </QueryClientProvider>
     </ErrorBoundary>

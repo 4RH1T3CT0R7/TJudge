@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { DUR, EASE_OUT } from '../components/motion/tokens';
 import {
   useCrossGameLeaderboard,
@@ -448,10 +448,10 @@ function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number })
           <li key={r.entry.program_id} className="flex gap-[1vw] py-[0.4vh] text-gray-300">
             <span className="w-[3ch] text-right tabular-nums text-gray-400">{r.place}.</span>
             {isShown(i + 3) ? (
-              <motion.span {...reveal} className="flex flex-1 justify-between gap-[1vw]">
+              <m.span {...reveal} className="flex flex-1 justify-between gap-[1vw]">
                 <span className="truncate">{r.entry.team_name}</span>
                 <span className="tabular-nums">{r.total.toLocaleString('ru-RU')}</span>
-              </motion.span>
+              </m.span>
             ) : (
               <span className="text-gray-600">[ ? ]</span>
             )}
@@ -464,13 +464,13 @@ function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number })
           return (
             <div key={i} className="flex w-[26vw] flex-col items-center text-center">
               {isShown(i) && (
-                <motion.div {...reveal} className="mb-[1vh] w-full">
+                <m.div {...reveal} className="mb-[1vh] w-full">
                   {i === 0 && (
                     <pre aria-hidden="true" className="mb-[1vh] leading-none text-amber-400 text-[clamp(10px,1.8vh,24px)]">{CUP}</pre>
                   )}
                   <p className="truncate font-sans font-bold text-[clamp(22px,4vh,56px)]">{r.entry.team_name}</p>
                   <p className="tabular-nums text-gray-300 text-[clamp(16px,2.6vh,34px)]">{r.total.toLocaleString('ru-RU')}</p>
-                </motion.div>
+                </m.div>
               )}
               <div
                 className={`flex w-full items-start justify-center border-t-4 pt-[1vh] font-bold text-[clamp(28px,6vh,80px)] ${heights[i]} ${

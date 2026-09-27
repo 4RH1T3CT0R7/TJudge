@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { pageTransitionVariants } from './invaderVariants';
 import { Spinner } from '../ui/Spinner';
@@ -59,7 +59,7 @@ export function AnimatedOutlet() {
 
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <motion.div
+      <m.div
         key={location.pathname}
         className="flex-1 flex flex-col"
         variants={pageTransitionVariants}
@@ -70,7 +70,7 @@ export function AnimatedOutlet() {
         <Suspense fallback={<ChunkFallback />}>
           {outlet}
         </Suspense>
-      </motion.div>
+      </m.div>
     </AnimatePresence>
   );
 }

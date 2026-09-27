@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { DUR, EASE_OUT } from '../motion/tokens';
 import { ArrowsExpandIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
@@ -150,7 +150,7 @@ function GeneralLeaderboardTable({
         const key = teamKey(entry);
         const mine = !!myTeamId && entry.team_id === myTeamId;
         return (
-          <motion.div
+          <m.div
             key={key}
             layout="position"
             transition={ROW_MOVE}
@@ -209,7 +209,7 @@ function GeneralLeaderboardTable({
                 </div>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         );
       })}
     </div>
@@ -282,7 +282,7 @@ export function CrossGameLeaderboardTable({
             const key = teamKey(entry);
             const mine = !!myTeamId && entry.team_id === myTeamId;
             return (
-              <motion.tr
+              <m.tr
                 key={key}
                 layout="position"
                 transition={ROW_MOVE}
@@ -352,7 +352,7 @@ export function CrossGameLeaderboardTable({
                     <CountUp value={total} />
                   </span>
                 </td>
-              </motion.tr>
+              </m.tr>
             );
           })}
         </tbody>
