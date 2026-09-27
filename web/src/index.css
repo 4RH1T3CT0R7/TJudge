@@ -26,6 +26,16 @@
   --color-gray-500: oklch(66% 0.025 262);
   --color-gray-600: oklch(61% 0.028 260);
 
+  /* Скругления 2px везде, круглыми (rounded-full) остаются только точки-индикаторы */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+  --radius-4xl: 2px;
+
   /* Green accent */
   --color-accent-400: #4ade80;
   --color-accent-500: #22c55e;
