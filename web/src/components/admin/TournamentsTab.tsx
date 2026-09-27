@@ -332,7 +332,7 @@ export function TournamentsTab({
 
           <Modal open={showTournamentForm} onClose={resetTournamentForm} closeOnBackdrop={false} title="Создать турнир" maxWidth="max-w-lg">
             <div className="space-y-4">
-              <Field label="Название *">
+              <Field label="Название" required>
                 {(control) => (
                   <input
                     {...control}
@@ -349,7 +349,9 @@ export function TournamentsTab({
               </Field>
 
               <fieldset className="min-w-0">
-                <legend className="block text-sm font-medium mb-2 text-gray-300">Игры турнира *</legend>
+                <legend className="block text-sm font-medium mb-2 text-gray-300">
+                  Игры турнира<span aria-hidden="true"> *</span><span className="sr-only">, обязательно</span>
+                </legend>
                 {games.length === 0 ? (
                   <p className="text-sm text-gray-400">
                     Сначала создайте игры во вкладке "Игры"
@@ -408,6 +410,7 @@ export function TournamentsTab({
                                     disabled={index === 0}
                                     className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
                                     title="Вверх"
+                                    aria-label={`Переместить «${game.display_name}» вверх`}
                                       >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
@@ -419,6 +422,7 @@ export function TournamentsTab({
                                     disabled={index === selectedGameIds.length - 1}
                                     className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
                                     title="Вниз"
+                                    aria-label={`Переместить «${game.display_name}» вниз`}
                                       >
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
