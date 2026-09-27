@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { YouMark } from '../ui/YouMark';
 import { sharePct } from '../../utils/transcript';
@@ -50,12 +51,58 @@ function Share({ value }: { value: number | null }) {
   );
 }
 
+// число матчей команды - ссылка на их список, откуда можно открыть ходы каждого
+function MatchesLink({ p, children }: { p: StrategyProfile; children: ReactNode }) {
+  return (
+    <Link
+      to={{ search: `?tab=matches&team=${p.team_id}` }}
+      state={{ focus: 'matches' }}
+      aria-label={`Матчи команды ${p.team_name}: ${p.matches}`}
+      className="text-primary-400 underline hover:text-primary-300"
+    >
+      {children}
+    </Link>
+  );
+}
+
 // Паспорт стратегий дилеммы: свойства каждой команды по транскриптам её матчей.
-// Число матчей ведёт к списку этих матчей, откуда можно открыть ходы каждого.
+// На узком экране пять свойств в строку таблицы не помещаются: там карточка на команду.
 export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyProfile[]; myTeamId?: string }) {
   return (
     <div>
-      <div className="relative overflow-x-auto">
+      <ul className="space-y-3 md:hidden">
+        {profiles.map((p) => {
+          const mine = p.team_id === myTeamId;
+          return (
+            <li
+              key={p.team_id}
+              aria-current={mine ? 'true' : undefined}
+              className={`rounded border border-gray-800 p-3 ${mine ? 'row-mine' : ''}`}
+            >
+              <p className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="min-w-0 break-words text-gray-200">
+                  {mine && <YouMark className="mr-2 text-xs" />}
+                  {p.team_name}
+                </span>
+                <span className="shrink-0 font-mono text-gray-400">
+                  <MatchesLink p={p}>матчей: {p.matches}</MatchesLink>
+                </span>
+              </p>
+              <dl className="mt-2 space-y-1 font-mono text-sm tabular-nums">
+                {TRAITS.map((t) => (
+                  <div key={t.key} className="flex items-center justify-between gap-3">
+                    <dt className="text-gray-400">{t.label}</dt>
+                    <dd>
+                      <Share value={p[t.key]} />
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
+      <div tabIndex={0} role="region" aria-label="Паспорт стратегий" className="relative hidden overflow-x-auto md:block">
         <table className="w-full whitespace-nowrap text-sm">
           <thead>
             <tr className="border-b border-gray-700 text-left text-gray-400">
@@ -83,14 +130,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
                     </td>
                   ))}
                   <td className="py-2 text-right font-mono tabular-nums">
-                    <Link
-                      to={{ search: `?tab=matches&team=${p.team_id}` }}
-                      state={{ focus: 'matches' }}
-                      aria-label={`Матчи команды ${p.team_name}: ${p.matches}`}
-                      className="text-primary-400 underline hover:text-primary-300"
-                    >
-                      {p.matches}
-                    </Link>
+                    <MatchesLink p={p}>{p.matches}</MatchesLink>
                   </td>
                 </tr>
               );
