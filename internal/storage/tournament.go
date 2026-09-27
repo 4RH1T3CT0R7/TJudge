@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"golang.org/x/sync/singleflight"
 )
 
 // utc - время для колонок TIMESTAMP без зоны: смещение postgres молча отбрасывает,
@@ -27,6 +29,9 @@ func utc(t *time.Time) *time.Time {
 // TournamentRepository - репозиторий для работы с турнирами
 type TournamentRepository struct {
 	db *DB
+	// свойства стратегий по турниру и игре, см. GetStrategyProfiles
+	strategies   sync.Map
+	strategiesSF singleflight.Group
 }
 
 func NewTournamentRepository(db *DB) *TournamentRepository {

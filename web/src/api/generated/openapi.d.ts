@@ -682,7 +682,7 @@ export interface paths {
         };
         /**
          * Strategy profiles
-         * @description Axelrod properties of each team's strategy, computed from the transcripts of played matches (both sides of every match count for their teams; matches with disqualified teams are skipped). Defined for `dilemma` only: other games return an empty list. Matches played without `EXECUTOR_VERBOSE` have no transcript and are not counted.
+         * @description Axelrod properties of each team's strategy, computed from the transcripts of played matches (both sides of every match count for their teams; matches with disqualified teams are skipped). Defined for `dilemma` only: other games return an empty list. Matches played without `EXECUTOR_VERBOSE` have no transcript and are not counted. The result is cached per game and recomputed when the game's matches change, at most every 10 s while a round is running.
          */
         get: operations["tournamentGameStrategies"];
         put?: never;

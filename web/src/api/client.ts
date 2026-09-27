@@ -632,7 +632,8 @@ class ApiClient {
   }
 
   // Свойства стратегий команд (только дилемма, у других игр пусто). Тяжёлая ручка:
-  // перечитывает все транскрипты игры, опрашивать её вместе с таблицей нельзя.
+  // после новых результатов сервер перечитывает все транскрипты игры, опрашивать
+  // её вместе с таблицей нельзя.
   async getStrategyProfiles(tournamentId: string, gameId: string): Promise<StrategyProfile[]> {
     const { data } = await this.client.get<StrategyProfile[]>(
       `/tournaments/${tournamentId}/games/${gameId}/strategies`

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -437,13 +438,65 @@ func (r *TournamentRepository) GetHeadToHead(ctx context.Context, tournamentID u
 	return cells, nil
 }
 
+// strategyRecompute - не чаще этого свойства стратегий пересчитываются по
+// новым результатам, пока идёт раунд
+const strategyRecompute = 10 * time.Second
+
+type strategyEntry struct {
+	matches  int
+	last     string // время последнего результата игры
+	at       time.Time
+	profiles []*models.StrategyProfile
+}
+
 // GetStrategyProfiles - свойства стратегий команд по транскриптам сыгранных
 // матчей игры турнира; ходы читаются как в дилемме (сотрудничество/предательство).
 // каждая сторона матча идёт в зачёт своей команде, матчи с дисквалифицированными
 // не считаются, как в head-to-head.
-// ponytail: транскрипты разбираются на каждый запрос, на 100 командах это около
-// 10 тыс. матчей и 10 МБ; при частых запросах - кэш или счётчики при записи результата
+// разбор всех транскриптов игры дорогой: на 100 командах и 1000 итерациях это
+// около 10 тыс. матчей, 40 МБ чтения и 2 с CPU, а ручка публичная и её
+// запрашивает каждый зритель итогов. поэтому результат хранится в процессе и
+// пересчитывается, только когда меняется число матчей игры (перезапуск раунда,
+// дисквалификация) или приходят новые результаты, но не чаще strategyRecompute.
+// ponytail: кэш на процесс и без вытеснения (ключей - игры турниров); при
+// нескольких экземплярах api каждый считает сам
 func (r *TournamentRepository) GetStrategyProfiles(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.StrategyProfile, error) {
+	var matches int
+	var last string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT count(*), coalesce(max(completed_at)::text, '')
+		FROM matches WHERE tournament_id = $1 AND game_type = $2`,
+		tournamentID, gameType,
+	).Scan(&matches, &last)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get game matches version")
+	}
+
+	key := tournamentID.String() + "/" + gameType
+	if v, ok := r.strategies.Load(key); ok {
+		e, _ := v.(*strategyEntry)
+		if e.matches == matches && (e.last == last || time.Since(e.at) < strategyRecompute) {
+			return e.profiles, nil
+		}
+	}
+
+	// запрос общий для всех ждущих и не зависит от отмены первого из них
+	v, err, _ := r.strategiesSF.Do(key, func() (any, error) {
+		profiles, err := r.strategyProfiles(context.WithoutCancel(ctx), tournamentID, gameType)
+		if err != nil {
+			return nil, err
+		}
+		r.strategies.Store(key, &strategyEntry{matches: matches, last: last, at: time.Now(), profiles: profiles})
+		return profiles, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	profiles, _ := v.([]*models.StrategyProfile)
+	return profiles, nil
+}
+
+func (r *TournamentRepository) strategyProfiles(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.StrategyProfile, error) {
 	query := `
 		SELECT t1.id, t1.name, t2.id, t2.name, m.transcript->'moves'
 		FROM matches m

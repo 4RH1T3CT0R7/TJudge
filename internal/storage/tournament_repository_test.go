@@ -506,6 +506,12 @@ func (s *TournamentRepositorySuite) TestGetStrategyProfiles() {
 	assert.Equal(s.T(), share(1), profiles[1].Niceness)
 	assert.Equal(s.T(), share(1), profiles[1].Retaliation)
 	assert.Nil(s.T(), profiles[1].Forgiveness)
+
+	// новый матч игры сбрасывает кэш свойств
+	finish(tft.ID, allD.ID, &models.Transcript{Moves: [][]int{{C, D}, {D, D}}})
+	profiles, err = s.repo.GetStrategyProfiles(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), 3, profiles[0].Matches)
 }
 
 func (s *TournamentRepositorySuite) TestGetLeaderboard_LimitEnforced() {
