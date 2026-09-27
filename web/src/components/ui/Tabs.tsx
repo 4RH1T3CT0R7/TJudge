@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { handleTabListKeyDown } from './tabKeyboard';
 
@@ -26,6 +26,7 @@ interface TabsProps<T extends string> {
 export function Tabs<T extends string>({ items, active, onChange, label, aside, children }: TabsProps<T>) {
   const base = useId();
   const listRef = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(false);
 
   // выбранная вкладка не остаётся за краем прокручиваемого списка
   useEffect(() => {
@@ -37,6 +38,21 @@ export function Tabs<T extends string>({ items, active, onChange, label, aside, 
     else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth;
   }, [active]);
 
+  // справа есть скрытые вкладки: край списка гаснет, подсказывая прокрутку
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const update = () => setMoreRight(list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
+    const raf = requestAnimationFrame(update);
+    list.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      cancelAnimationFrame(raf);
+      list.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [items.length]);
+
   return (
     <>
       <div className="relative mb-6">
@@ -46,7 +62,9 @@ export function Tabs<T extends string>({ items, active, onChange, label, aside, 
           aria-label={label}
           onKeyDown={handleTabListKeyDown}
           // линия под вкладками тенью: рамку прокручиваемого списка перекрыть нельзя, тень рисуется под кнопками
-          className="relative flex overflow-x-auto font-mono text-sm shadow-[inset_0_-1px_0_var(--color-gray-800)] [scrollbar-width:thin]"
+          className={`relative flex overflow-x-auto font-mono text-sm shadow-[inset_0_-1px_0_var(--color-gray-800)] [scrollbar-width:thin] ${
+            moreRight ? '[mask-image:linear-gradient(to_right,black_calc(100%-3rem),transparent)]' : ''
+          }`}
         >
           {items.map((tab) => {
             const selected = tab.id === active;
