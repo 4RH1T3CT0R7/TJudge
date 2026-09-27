@@ -21,6 +21,7 @@ import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
@@ -296,39 +297,29 @@ export function GameDetail() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm">
-        <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
-          Турниры
-        </Link>
-        <span className="mx-2 text-gray-600">/</span>
-        <Link to={`/tournaments/${tournamentId}`} className="text-gray-400 hover:text-gray-300">
-          Турнир
-        </Link>
-        <span className="mx-2 text-gray-600">/</span>
-        <span className="text-gray-200">{game.display_name}</span>
-      </nav>
-
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 ${getGameConfig(game.name).bgClass} rounded-xl flex items-center justify-center text-3xl shadow-lg`}>
-            {getGameConfig(game.name).icon}
-          </div>
-          <div>
+      <PageHeader
+        crumbs={[
+          { label: 'турниры', to: '/tournaments' },
+          { label: tournament?.name ?? 'турнир', to: `/tournaments/${tournamentId}` },
+          { label: game.display_name },
+        ]}
+        title={
+          <>
             <title>{`${game.display_name} — TJudge`}</title>
-            <h1 className={`text-2xl font-bold mb-1 text-gray-100`}>{game.display_name}</h1>
-            <p className="text-gray-400 flex items-center gap-3 flex-wrap">
-              <span>
-                ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
-              </span>
-              {gameStatus && (
-                <AutoRoundCountdown status={gameStatus} tournamentActive={tournament?.status === 'active'} />
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
+            <span aria-hidden="true" className="mr-3">{getGameConfig(game.name).icon}</span>
+            {game.display_name}
+          </>
+        }
+      >
+        <p className="text-gray-400 flex items-center gap-3 flex-wrap">
+          <span>
+            ID игры: <code className="bg-gray-800 text-gray-100 px-2 py-0.5 rounded font-mono text-sm">{game.name}</code>
+          </span>
+          {gameStatus && (
+            <AutoRoundCountdown status={gameStatus} tournamentActive={tournament?.status === 'active'} />
+          )}
+        </p>
+      </PageHeader>
 
       <Tabs
         label="Разделы игры"

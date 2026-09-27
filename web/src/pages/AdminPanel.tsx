@@ -19,6 +19,7 @@ import type { InvaderPose } from '../components/SpaceInvader';
 import { useSequenceTyping } from '../hooks/useEasterEggs';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
@@ -386,16 +387,21 @@ export function AdminPanel() {
       )}
 
       <div className="relative z-[2]">
-      <div className="flex items-center justify-between mb-6">
-        <title>Админка — TJudge</title>
-        <h1 className={`text-2xl font-bold ${sudoMode ? 'sudo-text' : 'text-gray-100'}`}>
-          {sudoMode ? 'root@tjudge:~# admin' : 'Панель администратора'}
-        </h1>
-        {/* на узком экране реплика маскота вылезала бы за край */}
-        <div className="relative hidden sm:block">
-          <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} colorOverride={sudoMode ? '#00ff41' : null} />
-        </div>
-      </div>
+      <PageHeader
+        crumbs={[{ label: 'админка' }]}
+        title={
+          <>
+            <title>Админка — TJudge</title>
+            {sudoMode ? <span className="sudo-text">root@tjudge:~# admin</span> : 'Панель администратора'}
+          </>
+        }
+        actions={
+          /* на узком экране реплика маскота вылезала бы за край */
+          <div className="relative hidden sm:block">
+            <SpaceInvader size="sm" controlledPose={adminPose} speechBubble={speechVisible ? adminSpeech : null} colorOverride={sudoMode ? '#00ff41' : null} />
+          </div>
+        }
+      />
 
       <Tabs label="Разделы админки" items={tabs} active={activeTab} onChange={handleTabChange}>
         {/* Games Tab */}

@@ -4,6 +4,7 @@ import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { Markdown } from '../components/ui/Markdown';
 
@@ -41,26 +42,20 @@ export function GameView() {
 
   return (
     <div className="animate-fade-in">
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm">
-        <Link to="/games" className="text-gray-400 hover:text-gray-300">
-          Игры
-        </Link>
-        <span className="mx-2 text-gray-600">/</span>
-        <span className="text-gray-200">{game.display_name}</span>
-      </nav>
-
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-2">
-          <title>{`${game.display_name} — TJudge`}</title>
-          <h1 className="text-3xl font-bold text-gray-100">{game.display_name}</h1>
-          <code className="bg-gray-800 text-gray-100 px-3 py-1 rounded font-mono text-sm">{game.name}</code>
-        </div>
+      <PageHeader
+        crumbs={[{ label: 'игры', to: '/games' }, { label: game.display_name }]}
+        title={
+          <>
+            <title>{`${game.display_name} — TJudge`}</title>
+            {game.display_name}
+          </>
+        }
+        status={<code className="bg-gray-800 text-gray-100 px-3 py-1 rounded font-mono text-sm">{game.name}</code>}
+      >
         <p className="text-gray-400">
           Добавлена {new Date(game.created_at).toLocaleDateString('ru-RU')}
         </p>
-      </div>
+      </PageHeader>
 
       {/* Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

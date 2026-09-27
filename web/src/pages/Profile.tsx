@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { Tabs } from '../components/ui/Tabs';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useTabParam } from '../hooks/useTabParam';
 
 const TAB_IDS = ['email', 'password'] as const;
@@ -71,9 +72,16 @@ export function Profile() {
 
   return (
     <div className="max-w-2xl mx-auto w-full">
+      <PageHeader
+        crumbs={[{ label: 'профиль' }]}
+        title={
+          <>
+            <title>Профиль — TJudge</title>
+            Профиль
+          </>
+        }
+      />
       <div className="card">
-        <title>Профиль — TJudge</title>
-        <h1 className="text-2xl font-bold mb-6 text-gray-100">Профиль</h1>
 
         {/* User info */}
         <div className="mb-6 p-4 bg-gray-800 rounded-lg">

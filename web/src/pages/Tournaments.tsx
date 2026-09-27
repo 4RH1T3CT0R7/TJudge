@@ -9,6 +9,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { UsersIcon } from '../components/icons';
 import { StatusLabel } from '../components/ui/StatusLabel';
+import { PageHeader } from '../components/ui/PageHeader';
 import type { TournamentStatus } from '../types';
 
 export function Tournaments() {
@@ -19,18 +20,17 @@ export function Tournaments() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
+      <PageHeader
+        crumbs={[{ label: 'турниры' }]}
+        title={
+          <>
             <title>Турниры — TJudge</title>
-            <h1 className="text-2xl font-bold text-gray-100 mb-1">Турниры</h1>
-            <p className="text-gray-400 text-sm">
-              Найдите турнир и присоединяйтесь к соревнованию
-            </p>
-          </div>
-
+            Турниры
+          </>
+        }
+        actions={
           <select
+            aria-label="Статус турниров"
             value={filter}
             onChange={(e) => setFilter(e.target.value as TournamentStatus | '')}
             className="input w-auto min-w-[150px]"
@@ -40,8 +40,10 @@ export function Tournaments() {
             <option value="active">Активные</option>
             <option value="completed">Завершённые</option>
           </select>
-        </div>
-      </div>
+        }
+      >
+        <p className="text-gray-400 text-sm">Найдите турнир и присоединяйтесь к соревнованию</p>
+      </PageHeader>
 
       {/* Content */}
       {showLoading ? (

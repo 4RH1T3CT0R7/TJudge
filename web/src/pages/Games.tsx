@@ -4,6 +4,7 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
 
@@ -33,13 +34,17 @@ export function Games() {
 
   return (
     <div>
-      <div className="mb-8">
-        <title>Игры — TJudge</title>
-        <h1 className="text-3xl font-bold text-gray-100">Доступные игры</h1>
-        <p className="mt-2 text-gray-400">
-          Список игр, в которые можно играть на платформе TJudge
-        </p>
-      </div>
+      <PageHeader
+        crumbs={[{ label: 'игры' }]}
+        title={
+          <>
+            <title>Игры — TJudge</title>
+            Доступные игры
+          </>
+        }
+      >
+        <p className="text-gray-400">Список игр, в которые можно играть на платформе TJudge</p>
+      </PageHeader>
 
       {games.length === 0 ? (
         <div className="pt-12">

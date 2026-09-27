@@ -3,11 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../api/client';
 import { queryKeys } from '../api/queryKeys';
-import { useTeam } from '../hooks/queries';
+import { useTeam, useTournament } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
+import { PageHeader } from '../components/ui/PageHeader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export function TeamManagement() {
@@ -17,6 +18,8 @@ export function TeamManagement() {
   const queryClient = useQueryClient();
   const { data: teamData, isPending, isError, refetch } = useTeam(id ?? '');
   const showLoading = useDelayedLoading(isPending);
+  // название турнира для крошки
+  const tournamentName = useTournament(teamData?.tournament_id ?? '').data?.name;
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -168,22 +171,27 @@ export function TeamManagement() {
 
   return (
     <div className="max-w-4xl mx-auto w-full">
-      <title>{`${teamData.name} — TJudge`}</title>
-      {/* Breadcrumb */}
-      <nav className="mb-4 text-sm flex flex-wrap items-center gap-x-2">
-        <Link to="/tournaments" className="text-gray-400 hover:text-gray-300">
-          Турниры
-        </Link>
-        <span className="text-gray-600">/</span>
-        <Link
-          to={`/tournaments/${teamData.tournament_id}`}
-          className="text-gray-400 hover:text-gray-300"
-        >
-          Турнир
-        </Link>
-        <span className="text-gray-600">/</span>
-        <span className="text-gray-200 break-words min-w-0">{teamData.name}</span>
-      </nav>
+      <PageHeader
+        crumbs={[
+          { label: 'турниры', to: '/tournaments' },
+          { label: tournamentName ?? 'турнир', to: `/tournaments/${teamData.tournament_id}` },
+          { label: teamData.name },
+        ]}
+        title={
+          <>
+            <title>{`${teamData.name} — TJudge`}</title>
+            {teamData.name}
+          </>
+        }
+        status={isLeader && <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">Вы капитан</span>}
+        actions={
+          isLeader && !isEditing && (
+            <button onClick={() => { setNewName(teamData.name); setIsEditing(true); }} className="btn btn-secondary">
+              Изменить название
+            </button>
+          )
+        }
+      />
 
       {/* Team Header */}
       <div className="card mb-6">
@@ -214,30 +222,13 @@ export function TeamManagement() {
             </button>
           </div>
         ) : (
-          <>
-            <h1 className="text-2xl font-bold text-gray-100 text-center">{teamData.name}</h1>
-            {isLeader && (
-              <div className="flex justify-center mt-1 mb-1">
-                <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
-                  Вы капитан
-                </span>
-              </div>
-            )}
-            {isLeader && (
-              <div className="flex justify-center mt-5 mb-4">
-                <button onClick={() => { setNewName(teamData.name); setIsEditing(true); }} className="btn btn-secondary">
-                  Изменить название
-                </button>
-              </div>
-            )}
-            <div className="flex justify-center pt-10 pb-4">
-              <SpaceInvader
-                size="sm"
-                controlledPose="idle"
-                speechBubble={invaderSpeech}
-              />
-            </div>
-          </>
+          <div className="flex justify-center pt-10 pb-4">
+            <SpaceInvader
+              size="sm"
+              controlledPose="idle"
+              speechBubble={invaderSpeech}
+            />
+          </div>
         )}
 
         <div className="text-sm text-gray-400 space-y-1">
