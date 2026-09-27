@@ -1,13 +1,14 @@
 import { CalendarIcon, ClockIcon, UsersIcon } from '../icons';
+import { Markdown } from '../ui/Markdown';
 import type { Tournament } from '../../types';
 
-// Info Tab Component
+// Вкладка «Информация»: описание турнира в Markdown, как правила игр, и параметры.
 export function InfoTab({ tournament }: { tournament: Tournament }) {
   return (
     <div className="card">
       {tournament.description ? (
-        <div className="prose max-w-none mb-8">
-          <p className="text-gray-300 leading-relaxed">{tournament.description}</p>
+        <div className="mb-8">
+          <Markdown>{tournament.description}</Markdown>
         </div>
       ) : (
         <p className="text-gray-400 mb-8">Описание не указано.</p>
