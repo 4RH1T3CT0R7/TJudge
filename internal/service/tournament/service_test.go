@@ -473,7 +473,7 @@ func TestService_GetLeaderboard(t *testing.T) {
 		entries := []*models.LeaderboardEntry{
 			{Rank: 1, ProgramID: programID, ProgramName: "bot-v1", Rating: 1800, Wins: 5, Losses: 2, TotalGames: 7},
 		}
-		tournamentRepo.On("GetLeaderboard", ctx, id, 10).Return(entries, nil)
+		tournamentRepo.On("GetLeaderboard", mock.Anything, id, 10).Return(entries, nil)
 
 		result, err := service.GetLeaderboard(ctx, id, 10)
 		require.NoError(t, err)
@@ -482,7 +482,7 @@ func TestService_GetLeaderboard(t *testing.T) {
 		assert.Equal(t, 1800, result[0].Rating)
 		assert.Equal(t, "bot-v1", result[0].ProgramName)
 		assert.Equal(t, 5, result[0].Wins)
-		tournamentRepo.AssertCalled(t, "GetLeaderboard", ctx, id, 10)
+		tournamentRepo.AssertCalled(t, "GetLeaderboard", mock.Anything, id, 10)
 	})
 }
 
@@ -496,13 +496,32 @@ func TestService_GetCrossGameLeaderboard(t *testing.T) {
 			{Rank: 1, TeamName: "Team Alpha", TotalRating: 3000, TotalWins: 10},
 			{Rank: 2, TeamName: "Team Beta", TotalRating: 2500, TotalWins: 7},
 		}
-		tournamentRepo.On("GetCrossGameLeaderboard", ctx, id).Return(entries, nil)
+		tournamentRepo.On("GetCrossGameLeaderboard", mock.Anything, id).Return(entries, nil)
 
 		result, err := service.GetCrossGameLeaderboard(ctx, id)
 		require.NoError(t, err)
 		require.Len(t, result, 2)
 		assert.Equal(t, "Team Alpha", result[0].TeamName)
 		assert.Equal(t, 3000, result[0].TotalRating)
+	})
+
+	// запрос singleflight общий: отмена одного клиента не должна обрывать его для остальных
+	t.Run("shared_query_ignores_caller_cancel", func(t *testing.T) {
+		service, tournamentRepo, _, _, _, _ := newTestService(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		id := uuid.New()
+		entries := []*models.CrossGameLeaderboardEntry{{Rank: 1, TeamName: "Team Alpha"}}
+		tournamentRepo.On("GetCrossGameLeaderboard", mock.Anything, id).
+			Run(func(args mock.Arguments) {
+				assert.NoError(t, args.Get(0).(context.Context).Err())
+			}).
+			Return(entries, nil)
+
+		result, err := service.GetCrossGameLeaderboard(ctx, id)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
 	})
 }
 

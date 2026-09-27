@@ -413,6 +413,7 @@ func (s *Service) GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, li
 	// FIXME: формат sfKey руками повторяет ключ кэша, разъедутся - схлопывать перестанет
 	sfKey := fmt.Sprintf("leaderboard:%s:%d", tournamentID, limit)
 	val, err, _ := s.leaderboardSF.Do(sfKey, func() (any, error) {
+		ctx := context.WithoutCancel(ctx)
 		leaderboard, err := s.tournamentRepo.GetLeaderboard(ctx, tournamentID, limit)
 		if err != nil {
 			return nil, err
@@ -500,9 +501,12 @@ func (s *Service) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid
 		return cached, nil
 	}
 
-	// промах, singleflight от thundering herd
+	// промах, singleflight от thundering herd. Запрос общий для всех ждущих,
+	// поэтому не зависит от отмены первого: клиент, оборвавший свой запрос,
+	// иначе отдал бы 500 всем остальным
 	sfKey := fmt.Sprintf("crossgame:%s", tournamentID)
 	val, err, _ := s.leaderboardSF.Do(sfKey, func() (any, error) {
+		ctx := context.WithoutCancel(ctx)
 		entries, err := s.tournamentRepo.GetCrossGameLeaderboard(ctx, tournamentID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cross-game leaderboard: %w", err)
