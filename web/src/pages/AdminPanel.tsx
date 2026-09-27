@@ -24,7 +24,7 @@ import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
 import { SystemTab } from '../components/admin/SystemTab';
-import { handleTabListKeyDown } from '../components/ui/tabs';
+import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
 import { buildProgramRows } from '../components/admin/programRows';
 import type { ProgramRow } from '../components/admin/programRows';
 import type { Game } from '../types';

@@ -39,7 +39,7 @@ import { MatchesTab } from '../components/tournament/MatchesTab';
 import { JoinTournamentModal } from '../components/tournament/JoinTournamentModal';
 import { extractErrorMessage, statusConfig } from '../components/tournament/helpers';
 import { useGameAdminActions } from '../components/tournament/useGameAdminActions';
-import { handleTabListKeyDown } from '../components/ui/tabs';
+import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
 import type {
   Tournament,
   TournamentStatus,

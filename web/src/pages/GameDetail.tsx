@@ -16,7 +16,7 @@ import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
-import { handleTabListKeyDown } from '../components/ui/tabs';
+import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';

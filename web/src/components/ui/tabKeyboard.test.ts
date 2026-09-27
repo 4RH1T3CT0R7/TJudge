@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { KeyboardEvent } from 'react';
 import { expect, it } from 'vitest';
-import { handleTabListKeyDown } from './tabs';
+import { handleTabListKeyDown } from './tabKeyboard';
 
 it('стрелки и Home/End переключают вкладки по кругу', () => {
   const list = document.createElement('div');

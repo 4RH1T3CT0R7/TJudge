@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { handleTabListKeyDown } from '../components/ui/tabs';
+import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
 
 export function Profile() {
   const { user, updateProfile, login, isLoading } = useAuthStore();
