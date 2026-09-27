@@ -585,6 +585,95 @@
   .alert-error {
     @apply bg-red-900/30 border-red-700 text-red-300;
   }
+
+  /* Markdown правил игр и описаний турниров как man-страница (ui/Markdown):
+     моноширинные заголовки с префиксами #, таблицы в рамке, числовые колонки
+     (.num) вправо, код как вывод терминала (TerminalOutput) */
+  .md {
+    @apply text-gray-300 leading-relaxed wrap-break-word;
+  }
+  .md > * + * {
+    margin-top: 1rem;
+  }
+  .md :where(h1, h2, h3, h4) {
+    @apply font-mono font-semibold leading-snug text-primary-300;
+    margin-top: 2rem;
+  }
+  .md h1 {
+    @apply text-xl;
+  }
+  .md h2 {
+    @apply text-lg;
+  }
+  .md :where(h3, h4) {
+    @apply text-base text-gray-100;
+  }
+  /* префикс только для глаз: у content пустой альтернативный текст */
+  .md h1::before {
+    content: '# ' / '';
+  }
+  .md h2::before {
+    content: '## ' / '';
+  }
+  .md h3::before {
+    content: '### ' / '';
+  }
+  .md :where(h1, h2, h3)::before {
+    @apply text-primary-500;
+  }
+  .md > :first-child {
+    margin-top: 0;
+  }
+  .md strong {
+    @apply font-semibold text-gray-100;
+  }
+  .md a {
+    @apply text-primary-400 underline hover:text-primary-300;
+  }
+  .md ul {
+    list-style-type: '- ';
+    padding-left: 1.5rem;
+  }
+  .md ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+  }
+  .md li + li {
+    margin-top: 0.25rem;
+  }
+  .md li::marker {
+    @apply font-mono text-gray-500;
+  }
+  .md hr {
+    @apply my-8 border-gray-800;
+  }
+  .md blockquote {
+    @apply border-l-2 border-line pl-4 text-gray-400;
+  }
+  .md code {
+    @apply rounded bg-gray-800 px-1 py-0.5 font-mono text-[0.875em] text-gray-100;
+  }
+  .md pre {
+    @apply rounded border border-gray-800 bg-gray-950 p-3 font-mono text-xs leading-relaxed text-gray-300;
+  }
+  .md pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+  .md table {
+    @apply border-collapse text-sm;
+  }
+  .md :where(th, td) {
+    @apply border border-line px-3 py-1.5 text-left align-top;
+  }
+  .md th {
+    @apply bg-gray-900 font-mono font-semibold text-gray-100;
+  }
+  .md .num {
+    @apply text-right font-mono tabular-nums;
+  }
 }
 
 /* Своя строка («> вы»): полоса primary слева и лёгкая подложка поверх медальной
