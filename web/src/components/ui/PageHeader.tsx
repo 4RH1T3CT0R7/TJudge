@@ -19,8 +19,9 @@ interface PageHeaderProps {
   children?: ReactNode;
 }
 
-// путь в стиле pwd: «Осенний кубок» -> «осенний-кубок»
-const asPath = (label: string) => label.trim().toLowerCase().replace(/\s+/g, '-');
+// путь в стиле pwd: «Пробный турнир · сентябрь» -> «пробный-турнир-сентябрь»
+const asPath = (label: string) =>
+  label.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 
 // Шапка страницы: крошка-pwd «~/турниры/осенний-кубок», один размер H1, статус и действия.
 export function PageHeader({ crumbs, title, status, actions, children }: PageHeaderProps) {
@@ -31,7 +32,7 @@ export function PageHeader({ crumbs, title, status, actions, children }: PageHea
         <nav aria-label="Путь" className="mb-3 font-mono text-sm text-gray-500">
           <ol className="flex flex-wrap items-center">
             <li>
-              <Link to="/" className="inline-block py-0.5 hover:text-primary-400 transition-colors">~</Link>
+              <Link to="/" aria-label="Главная" className="inline-block min-w-6 py-0.5 text-center hover:text-primary-400 transition-colors">~</Link>
             </li>
             {crumbs.map((crumb, i) => {
               const current = i === crumbs.length - 1;
@@ -39,7 +40,8 @@ export function PageHeader({ crumbs, title, status, actions, children }: PageHea
                 <li key={i} className="flex min-w-0 items-center">
                   <span aria-hidden="true" className="px-0.5">/</span>
                   {crumb.to && !current ? (
-                    <Link to={crumb.to} className="inline-block py-0.5 hover:text-primary-400 transition-colors">{asPath(crumb.label)}</Link>
+                    // на телефоне промежуточные крошки укорачиваются, путь не растягивается на три строки
+                    <Link to={crumb.to} className="inline-block max-w-40 truncate py-0.5 align-bottom sm:max-w-none hover:text-primary-400 transition-colors">{asPath(crumb.label)}</Link>
                   ) : (
                     <span aria-current={current ? 'page' : undefined} className="truncate text-gray-400">
                       {asPath(crumb.label)}
