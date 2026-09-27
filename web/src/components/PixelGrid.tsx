@@ -1,7 +1,20 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { useMotionPref } from '../hooks/useMotionPref';
 
 const MAX_CLICKS = 10;
+// Шейдер рисует клетками 8×8 физических пикселей, поэтому буфер считается в 1/8
+// разрешения (фрагмент = клетка) и растягивается без сглаживания: картинка та же,
+// фрагментов в 64 раза меньше
+const CELL = 8;
+const FRAME_MS = 1000 / 30;
+// программный WebGL без GPU: анимация займёт процессор целиком, рисуется один кадр
+const SOFTWARE_GL = /swiftshader|llvmpipe|softpipe|software|basic render/i;
+
+function isSoftwareGL(gl: WebGLRenderingContext) {
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  return SOFTWARE_GL.test(String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)));
+}
 
 const vertexShader = `
   void main() {
@@ -106,9 +119,9 @@ const fragmentShader = `
   void main() {
     float t = iTime * 0.5;
 
-    // Pixelate to 8x8 grid
-    float pixelSize = 8.0;
-    vec2 pixelUV = floor(gl_FragCoord.xy / pixelSize) * pixelSize;
+    // Буфер в 1/8 разрешения: фрагмент - клетка 8x8, координаты в полном разрешении
+    float pixelSize = ${CELL.toFixed(1)};
+    vec2 pixelUV = floor(gl_FragCoord.xy) * pixelSize;
     vec2 pUV = pixelUV / iResolution.xy;
 
     // --- Invader force field ---
@@ -238,13 +251,8 @@ interface PixelGridProps {
 
 export function PixelGrid({ heroRef }: PixelGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<{
-    renderer: THREE.WebGLRenderer;
-    scene: THREE.Scene;
-    camera: THREE.OrthographicCamera;
-    material: THREE.ShaderMaterial;
-    animId: number;
-  } | null>(null);
+  // при выключенных анимациях - один неподвижный кадр
+  const { reduced } = useMotionPref();
   const clicksRef = useRef<{ x: number; y: number; time: number }[]>([]);
   const startTimeRef = useRef(0);
   const mouseRef = useRef({ x: 0, y: 0, smoothX: 0, smoothY: 0, active: 0, smoothActive: 0 });
@@ -257,12 +265,18 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: 'low-power' });
+    } catch {
+      // WebGL недоступен (нет GPU и программного рендера): фон без пикселей
+      return;
+    }
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
-    renderer.domElement.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;border-radius:inherit;';
+    renderer.domElement.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;border-radius:inherit;image-rendering:pixelated;';
+    const animated = !reduced && !isSoftwareGL(renderer.getContext());
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -291,46 +305,20 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     scene.add(new THREE.Mesh(geometry, material));
 
     let currentDpr = Math.min(window.devicePixelRatio, 2);
-
-    const resize = () => {
-      const rect = container.getBoundingClientRect();
-      currentDpr = Math.min(window.devicePixelRatio, 2);
-      renderer.setSize(rect.width, rect.height);
-      renderer.setPixelRatio(currentDpr);
-      material.uniforms.iResolution.value.set(rect.width * currentDpr, rect.height * currentDpr);
-
-      // Update invader force field position (visible only on lg+ screens)
-      const isLg = window.innerWidth >= 1024;
-      if (isLg) {
-        // Invader: absolute right-8 top-1/2 -translate-y-1/2, size="md" (~180px wide)
-        const invaderApproxWidth = 180;
-        const cssX = rect.width - 32 - invaderApproxWidth / 2;
-        const cssY = rect.height / 2;
-        // GL coords: x same direction, y flipped (0 = bottom)
-        material.uniforms.invaderCenter.value.set(cssX * currentDpr, (rect.height - cssY) * currentDpr);
-        material.uniforms.invaderRadius.value = 140 * currentDpr;
-      } else {
-        material.uniforms.invaderRadius.value = 0;
-      }
-    };
-    resize();
-
-    const ro = new ResizeObserver(resize);
-    ro.observe(container);
-
-    const ref = { renderer, scene, camera, material, animId: 0 };
-    sceneRef.current = ref;
-
     const mouse = mouseRef.current;
+    let animId = 0;
+    let running = false;
+    let visible = true;
+    let last = -Infinity;
 
-    const animate = () => {
+    const draw = () => {
       const now = performance.now() / 1000 - startTimeRef.current;
       material.uniforms.iTime.value = now;
 
-      // Smooth mouse position and active state (lerp each frame)
-      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.4;
-      mouse.smoothY += (mouse.y - mouse.smoothY) * 0.4;
-      mouse.smoothActive += (mouse.active - mouse.smoothActive) * 0.12;
+      // Сглаживание курсора на кадр при 30 FPS
+      mouse.smoothX += (mouse.x - mouse.smoothX) * 0.64;
+      mouse.smoothY += (mouse.y - mouse.smoothY) * 0.64;
+      mouse.smoothActive += (mouse.active - mouse.smoothActive) * 0.23;
       material.uniforms.mousePos.value.set(mouse.smoothX, mouse.smoothY);
       material.uniforms.mouseActive.value = mouse.smoothActive;
 
@@ -349,9 +337,59 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
       clicksRef.current = clicks.filter(c => now - c.time < 3.5);
 
       renderer.render(scene, camera);
-      ref.animId = requestAnimationFrame(animate);
     };
-    ref.animId = requestAnimationFrame(animate);
+
+    // не чаще 30 кадров в секунду: кадр пропускается, если с прошлого прошло меньше ~33 мс
+    const loop = (t: number) => {
+      animId = requestAnimationFrame(loop);
+      if (t - last < FRAME_MS - 4) return;
+      last = t;
+      draw();
+    };
+
+    // анимация идёт, только пока сетку видно: вне экрана и на скрытой вкладке стоит
+    const sync = () => {
+      const run = animated && visible && !document.hidden;
+      if (run === running) return;
+      running = run;
+      if (run) animId = requestAnimationFrame(loop);
+      else cancelAnimationFrame(animId);
+    };
+
+    const resize = () => {
+      const rect = container.getBoundingClientRect();
+      currentDpr = Math.min(window.devicePixelRatio, 2);
+      renderer.setPixelRatio(currentDpr / CELL);
+      renderer.setSize(rect.width, rect.height);
+      material.uniforms.iResolution.value.set(rect.width * currentDpr, rect.height * currentDpr);
+
+      // Update invader force field position (visible only on lg+ screens)
+      const isLg = window.innerWidth >= 1024;
+      if (isLg) {
+        // Invader: absolute right-8 top-1/2 -translate-y-1/2, size="md" (~180px wide)
+        const invaderApproxWidth = 180;
+        const cssX = rect.width - 32 - invaderApproxWidth / 2;
+        const cssY = rect.height / 2;
+        // GL coords: x same direction, y flipped (0 = bottom)
+        material.uniforms.invaderCenter.value.set(cssX * currentDpr, (rect.height - cssY) * currentDpr);
+        material.uniforms.invaderRadius.value = 140 * currentDpr;
+      } else {
+        material.uniforms.invaderRadius.value = 0;
+      }
+      // смена размера очищает буфер: без цикла кадр перерисовывается сразу
+      if (!running) draw();
+    };
+    resize();
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      sync();
+    });
+    io.observe(container);
+    document.addEventListener('visibilitychange', sync);
+    sync();
 
     // Слушаем клики на parent hero-секции (ловим клики везде,
     // включая текст, кнопки и захватчика - события всплывают естественно)
@@ -383,8 +421,10 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
     clickTarget.addEventListener('mouseleave', onMouseLeave);
 
     return () => {
-      cancelAnimationFrame(ref.animId);
+      cancelAnimationFrame(animId);
       ro.disconnect();
+      io.disconnect();
+      document.removeEventListener('visibilitychange', sync);
       clickTarget.removeEventListener('click', onClick);
       clickTarget.removeEventListener('mousemove', onMouseMove);
       clickTarget.removeEventListener('mouseleave', onMouseLeave);
@@ -395,7 +435,7 @@ export function PixelGrid({ heroRef }: PixelGridProps) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
     };
-  }, [heroRef]);
+  }, [heroRef, reduced]);
 
   return (
     <div
