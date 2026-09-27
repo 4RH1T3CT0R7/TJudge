@@ -22,6 +22,7 @@ const pageImports = {
   TournamentScreen: () => import('./pages/TournamentScreen'),
   ShortLink: () => import('./pages/ShortLink'),
   GameDetail: () => import('./pages/GameDetail'),
+  MatchDetail: () => import('./pages/MatchDetail'),
   GameView: () => import('./pages/GameView'),
   Games: () => import('./pages/Games'),
   TeamManagement: () => import('./pages/TeamManagement'),
@@ -39,6 +40,7 @@ const TournamentDetail = lazy(() => pageImports.TournamentDetail().then(m => ({ 
 const TournamentScreen = lazy(() => pageImports.TournamentScreen().then(m => ({ default: m.TournamentScreen })));
 const ShortLink = lazy(() => pageImports.ShortLink().then(m => ({ default: m.ShortLink })));
 const GameDetail = lazy(() => pageImports.GameDetail().then(m => ({ default: m.GameDetail })));
+const MatchDetail = lazy(() => pageImports.MatchDetail().then(m => ({ default: m.MatchDetail })));
 const GameView = lazy(() => pageImports.GameView().then(m => ({ default: m.GameView })));
 const Games = lazy(() => pageImports.Games().then(m => ({ default: m.Games })));
 const TeamManagement = lazy(() => pageImports.TeamManagement().then(m => ({ default: m.TeamManagement })));
@@ -163,6 +165,7 @@ function AppContent() {
         <Route path="tournaments/:id" element={<TournamentDetail />} />
         <Route path="t/:code" element={<ShortLink />} />
         <Route path="tournaments/:tournamentId/games/:gameId" element={<GameDetail />} />
+        <Route path="tournaments/:id/matches/:matchId" element={<MatchDetail />} />
         <Route path="games" element={<Games />} />
         <Route path="games/:id" element={<GameView />} />
         <Route path="help" element={<Help />} />

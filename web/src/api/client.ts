@@ -15,6 +15,8 @@ import type {
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
   HeadToHeadCell,
+  MatchTranscript,
+  StrategyProfile,
   RatingHistoryPoint,
   ApiError,
   QueueStats,
@@ -629,6 +631,15 @@ class ApiClient {
     return data;
   }
 
+  // Свойства стратегий команд (только дилемма, у других игр пусто). Тяжёлая ручка:
+  // перечитывает все транскрипты игры, опрашивать её вместе с таблицей нельзя.
+  async getStrategyProfiles(tournamentId: string, gameId: string): Promise<StrategyProfile[]> {
+    const { data } = await this.client.get<StrategyProfile[]>(
+      `/tournaments/${tournamentId}/games/${gameId}/strategies`
+    );
+    return data;
+  }
+
   async getProgramRatingHistory(
     tournamentId: string,
     programId: string,
@@ -764,11 +775,28 @@ class ApiClient {
   }
 
   // Матчи одной версии программы в турнире (здоровье программы); потолок бэкенда - 100.
-  async getProgramMatches(tournamentId: string, programId: string, limit = 100): Promise<Match[]> {
+  // teamId сужает до матчей против этой команды.
+  async getProgramMatches(tournamentId: string, programId: string, limit = 100, teamId?: string): Promise<Match[]> {
     const { data } = await this.client.get<Match[]>('/matches', {
-      params: { tournament_id: tournamentId, program_id: programId, limit },
+      params: { tournament_id: tournamentId, program_id: programId, limit, ...(teamId && { team_id: teamId }) },
     });
     return data;
+  }
+
+  async getMatch(id: string): Promise<Match> {
+    const { data } = await this.client.get<Match>(`/matches/${id}`);
+    return data;
+  }
+
+  // 404 здесь штатный (матч сыгран без -v или раньше транскриптов): null и без тоста.
+  async getMatchTranscript(id: string): Promise<MatchTranscript | null> {
+    try {
+      const { data } = await this.client.get<MatchTranscript>(`/matches/${id}/transcript`, { quiet: true });
+      return data;
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) return null;
+      throw err;
+    }
   }
 
   // Get failed matches (for admin error display)

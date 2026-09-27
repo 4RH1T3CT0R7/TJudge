@@ -335,6 +335,28 @@ export interface HeadToHeadCell {
   score_against: number;
 }
 
+// Ходы матча по итерациям из вывода tjudge-cli -v: [программа 1, программа 2].
+// Дилемма: 1 - сотрудничать, 0 - предать; аукцион: ставки по очереди, 0 - пас.
+// У упавшего матча ходы обрываются на ошибке, стороны бывают разной длины.
+export interface MatchTranscript {
+  moves: number[][];
+  /** Очки сторон за каждую итерацию; у аукциона нет. */
+  points?: number[][];
+}
+
+// Свойства стратегии команды в дилемме по Аксельроду: доли 0..1,
+// null - ситуация ни разу не возникла.
+export interface StrategyProfile {
+  team_id: string;
+  team_name: string;
+  matches: number;
+  cooperation: number | null;
+  niceness: number | null;
+  retaliation: number | null;
+  forgiveness: number | null;
+  provocability: number | null;
+}
+
 // Точка истории рейтинга программы (хронологический порядок).
 export interface RatingHistoryPoint {
   id: string;

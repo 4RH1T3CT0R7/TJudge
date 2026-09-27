@@ -12,7 +12,7 @@
 // Файл состоит только из типов - в бандл не попадает.
 
 import type { components } from './generated/openapi';
-import type { Program, Tournament, Game, User, Team } from '../types';
+import type { Program, Tournament, Game, User, Team, MatchTranscript, StrategyProfile } from '../types';
 
 type Schemas = components['schemas'];
 
@@ -31,6 +31,8 @@ export type TournamentDrift = AssertNoDrift<ExtraKeys<Tournament, Schemas['Tourn
 export type GameDrift = AssertNoDrift<ExtraKeys<Game, Schemas['Game']>>;
 export type UserDrift = AssertNoDrift<ExtraKeys<User, Schemas['User']>>;
 export type TeamDrift = AssertNoDrift<ExtraKeys<Team, Schemas['Team']>>;
+export type MatchTranscriptDrift = AssertNoDrift<ExtraKeys<MatchTranscript, Schemas['MatchTranscript']>>;
+export type StrategyProfileDrift = AssertNoDrift<ExtraKeys<StrategyProfile, Schemas['StrategyProfile']>>;
 
 // Статусы программы должны совпадать со спекой по значениям.
 type SpecProgramStatus = NonNullable<Schemas['Program']['status']>;
