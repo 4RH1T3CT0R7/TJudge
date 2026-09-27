@@ -31,18 +31,20 @@ const STATUS = {
 interface StatusLabelProps {
   entity: keyof typeof STATUS;
   status: string;
+  /** Своя подпись (счётчики во множественном числе); глиф и тон из таблицы. */
+  label?: string;
   title?: string;
   className?: string;
 }
 
 // Бейдж статуса: глиф (только визуально) + подпись. Неизвестный статус
 // выводится как есть серым, чтобы новый статус бэкенда не пропал с экрана.
-export function StatusLabel({ entity, status, title, className = '' }: StatusLabelProps) {
+export function StatusLabel({ entity, status, label, title, className = '' }: StatusLabelProps) {
   const meta: StatusMeta | undefined = (STATUS[entity] as Record<string, StatusMeta>)[status];
   return (
     <span className={`badge badge-${meta?.tone ?? 'gray'} font-mono whitespace-nowrap ${className}`} title={title}>
       {meta && <span aria-hidden="true">{meta.glyph} </span>}
-      {meta?.label ?? status}
+      {label ?? meta?.label ?? status}
     </span>
   );
 }

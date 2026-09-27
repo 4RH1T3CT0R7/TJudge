@@ -43,6 +43,16 @@ const formatAgeSeconds = (seconds: number): string => {
 // Единый порядок вывода статусов матчей/программ; неизвестные ключи — в конец по алфавиту
 const STATUS_ORDER = ['pending', 'compiling', 'ready', 'running', 'completed', 'failed', 'cancelled'];
 
+// Подписи к счётчикам статусов: множественное число от словаря StatusLabel
+const countLabel: Record<string, string> = {
+  running: 'Идут',
+  completed: 'Сыграны',
+  failed: 'С ошибкой',
+  cancelled: 'Отменены',
+  compiling: 'Компилируются',
+  ready: 'Готовы',
+};
+
 const sortStatusEntries = (record: Record<string, number>): [string, number][] =>
   Object.entries(record).sort(([a], [b]) => {
     const ia = STATUS_ORDER.indexOf(a);
@@ -314,7 +324,7 @@ export function SystemTab({
                     <div className="space-y-3 text-sm">
                       {sortStatusEntries(fullStatus.programs).map(([status, count]) => (
                         <div key={status} className="flex justify-between items-center">
-                          <StatusLabel entity="program" status={status} />
+                          <StatusLabel entity="program" status={status} label={countLabel[status]} />
                           <span className="font-mono font-medium text-gray-100">{count}</span>
                         </div>
                       ))}
@@ -392,7 +402,7 @@ export function SystemTab({
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       {matchStatusEntries.map(([status, count]) => (
                         <div key={status} className="flex justify-between items-center">
-                          <StatusLabel entity="match" status={status} />
+                          <StatusLabel entity="match" status={status} label={countLabel[status]} />
                           <span className="font-mono font-medium text-gray-100">{count}</span>
                         </div>
                       ))}
