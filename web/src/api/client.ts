@@ -593,8 +593,8 @@ class ApiClient {
     return data;
   }
 
-  async deleteGame(id: string): Promise<void> {
-    await this.client.delete(`/games/${id}`);
+  async deleteGame(id: string, quiet = false): Promise<void> {
+    await this.client.delete(`/games/${id}`, { quiet });
   }
 
   async addGameToTournament(tournamentId: string, gameId: string): Promise<void> {

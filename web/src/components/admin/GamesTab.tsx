@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import type { Game } from '../../types';
@@ -84,12 +85,19 @@ export function GamesTab({
     try {
       if (!(await confirmDeleteGame(game))) return;
       setAdminReaction('cry', '// удаляем...', 2000);
-      await api.deleteGame(game.id);
+      await api.deleteGame(game.id, true);
       await queryClient.invalidateQueries({ queryKey: queryKeys.games });
     } catch (err) {
       console.error('Failed to delete game:', err);
       setAdminReaction('dizzy', '// ошибка!', 2000);
-      useToastStore.getState().addToast(extractErrorMessage(err, 'Не удалось удалить игру'), 'error');
+      // 409 - на игру ссылаются программы (внешний ключ RESTRICT)
+      const inUse = axios.isAxiosError(err) && err.response?.status === 409;
+      useToastStore.getState().addToast(
+        inUse
+          ? `Игру «${game.display_name}» не удалить: по ней уже загружены программы`
+          : extractErrorMessage(err, 'Не удалось удалить игру'),
+        'error',
+      );
     }
   };
 
