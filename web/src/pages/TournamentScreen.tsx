@@ -446,7 +446,7 @@ export function TournamentScreen() {
                 )}
               </p>
               {/* у не идущего турнира матчей не будет */}
-              {tournament.status === 'active' && <Feed items={feed} />}
+              {tournament.status === 'active' && <Feed items={feed} tournamentId={id} />}
             </div>
             <div className="flex shrink-0 items-center gap-[1vw]">
               <p className="text-right text-gray-300 text-[clamp(14px,2vh,26px)]">
@@ -466,7 +466,7 @@ export function TournamentScreen() {
 // «$ tail -f matches.log»: последние результаты с названиями команд, свежий слева.
 // Высота в одну строку с переносом: не влезающий целиком результат уходит на
 // скрытую вторую строку, а не обрезается посередине счёта.
-function Feed({ items }: { items: FeedItem[] }) {
+function Feed({ items, tournamentId }: { items: FeedItem[]; tournamentId: string }) {
   return (
     <div className="flex h-[1.5em] min-w-0 flex-wrap items-baseline gap-x-[1vw] overflow-hidden whitespace-nowrap">
       <span className="shrink-0 text-primary-400">
@@ -477,14 +477,15 @@ function Feed({ items }: { items: FeedItem[] }) {
           <span aria-hidden="true">{'// '}</span>результаты появятся, когда пойдут матчи
         </span>
       ) : (
+        // строка ведёт к ходам матча: участники смотрят табло со своих ПК
         items.map((m) => (
-          <span key={m.id} className="shrink-0 text-gray-300">
+          <Link key={m.id} to={`/tournaments/${tournamentId}/matches/${m.id}`} className="shrink-0 text-gray-300 hover:text-gray-100">
             <span aria-hidden="true" className="text-gray-600">│ </span>
             <span className={m.winner === 1 ? 'font-bold text-gray-100' : ''}>{m.team1}</span>{' '}
             <span className="tabular-nums text-primary-300">{m.score1 ?? '?'}:{m.score2 ?? '?'}</span>{' '}
             <span className={m.winner === 2 ? 'font-bold text-gray-100' : ''}>{m.team2}</span>
             <span className="text-gray-400"> · {m.game}</span>
-          </span>
+          </Link>
         ))
       )}
     </div>

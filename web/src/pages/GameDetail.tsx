@@ -632,6 +632,17 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
 
           <p className="text-xs text-gray-500 mt-2 text-center">
             {new Date(activeMatch.created_at).toLocaleString('ru-RU')}
+            {(activeMatch.status === 'completed' || activeMatch.status === 'failed') && (
+              <>
+                {' · '}
+                <Link
+                  to={`/tournaments/${activeMatch.tournament_id}/matches/${activeMatch.id}`}
+                  className="font-mono text-primary-400 underline hover:text-primary-300"
+                >
+                  ходы матча
+                </Link>
+              </>
+            )}
           </p>
         </div>
       )}

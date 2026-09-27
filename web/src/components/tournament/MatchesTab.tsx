@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
 import { useMatchesByRounds, useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
 import { StatusLabel } from '../ui/StatusLabel';
@@ -584,12 +585,24 @@ function MatchRow({ match, myTeamId }: { match: Match; myTeamId?: string }) {
         </td>
         <td className="px-4 py-2">{name(1)}</td>
         <td className="px-4 py-2 text-center">
+          {/* счёт - ссылка на разбор матча с ходами */}
           {match.status === 'completed' ? (
-            <span className="font-mono tabular-nums">
+            <Link
+              to={`/tournaments/${match.tournament_id}/matches/${match.id}`}
+              aria-label={`Ходы матча ${names[0] ?? 'игрок 1'} — ${names[1] ?? 'игрок 2'}, счёт ${match.score1 ?? 0}:${match.score2 ?? 0}`}
+              className="inline-block border-b border-line font-mono tabular-nums hover:border-primary-400"
+            >
               <span className={scoreTone(match, 1, mySide)}>{match.score1 ?? 0}</span>
               <span className="text-gray-400 mx-1">:</span>
               <span className={scoreTone(match, 2, mySide)}>{match.score2 ?? 0}</span>
-            </span>
+            </Link>
+          ) : match.status === 'failed' ? (
+            <Link
+              to={`/tournaments/${match.tournament_id}/matches/${match.id}`}
+              className="font-mono text-xs text-primary-400 underline hover:text-primary-300"
+            >
+              ходы
+            </Link>
           ) : (
             <span className="text-gray-400">—</span>
           )}
