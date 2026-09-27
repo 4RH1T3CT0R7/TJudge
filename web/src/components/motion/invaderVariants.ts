@@ -1,74 +1,12 @@
-import type { Variants, Transition } from 'motion/react';
+import type { Variants } from 'motion/react';
 
-const springBounce: Transition = {
-  type: 'spring',
-  stiffness: 400,
-  damping: 17,
-};
-
-const springGentle: Transition = {
-  type: 'spring',
-  stiffness: 260,
-  damping: 20,
-};
-
-export const entranceVariants: Variants = {
-  hidden: { opacity: 0, scale: 0.6, y: 20 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: springBounce,
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.6,
-    y: -20,
-    transition: { duration: 0.2 },
-  },
-};
-
-export const slideLeftVariants: Variants = {
+// Маскот выезжает сбоку на единственной пружине
+export const invaderEnterVariants: Variants = {
   hidden: { opacity: 0, x: 40 },
   visible: {
     opacity: 1,
     x: 0,
-    transition: springGentle,
-  },
-  exit: {
-    opacity: 0,
-    x: 40,
-    transition: { duration: 0.15 },
-  },
-};
-
-export const peekVariants: Variants = {
-  hidden: { opacity: 0, x: 30, scale: 0.8 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    scale: 1,
-    transition: { ...springBounce, delay: 0.3 },
-  },
-  exit: {
-    opacity: 0,
-    x: 30,
-    scale: 0.8,
-    transition: { duration: 0.15 },
-  },
-};
-
-export const popVariants: Variants = {
-  hidden: { opacity: 0, scale: 0 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    transition: springBounce,
-  },
-  exit: {
-    opacity: 0,
-    scale: 0,
-    transition: { duration: 0.15 },
+    transition: { type: 'spring', stiffness: 260, damping: 20 },
   },
 };
 

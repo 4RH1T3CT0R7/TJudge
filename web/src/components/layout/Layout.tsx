@@ -256,7 +256,7 @@ export function Layout() {
 
       {/* God mode scanline overlay */}
       {godMode && (
-        <div className="fixed inset-0 z-[80] pointer-events-none animate-scanline-flash" style={{ mixBlendMode: 'overlay' }}>
+        <div className="fixed inset-0 z-[80] pointer-events-none" style={{ mixBlendMode: 'overlay' }}>
           <div className="w-full h-full" style={{
             background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139,92,246,0.03) 2px, rgba(139,92,246,0.03) 4px)',
             animation: 'scanline-flash 0.1s ease-out',

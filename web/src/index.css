@@ -83,34 +83,18 @@
 
   /* Animation durations */
   --animate-fade-in: fade-in 0.2s ease-out;
-  --animate-slide-up: slide-up 0.3s ease-out;
-  --animate-slide-down: slide-down 0.2s ease-out;
-  --animate-scale-in: scale-in 0.2s ease-out;
 }
 
 /* Glow CSS custom properties */
 :root {
   /* единое кольцо фокуса для всех элементов */
   --focus: var(--color-primary-400);
-  --glow-primary: 0 0 20px rgba(139,92,246,0.4);
-  --glow-primary-strong: 0 0 40px rgba(139,92,246,0.6);
   --glow-green: 0 0 20px rgba(74,222,128,0.3);
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes slide-down {
@@ -138,19 +122,6 @@
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
-}
-
-@keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
-/* Spring-like easing for toggle animation */
-@keyframes toggle-spring {
-  0% { transform: translateX(0); }
-  50% { transform: translateX(calc(100% + 4px)); }
-  75% { transform: translateX(calc(100% - 2px)); }
-  100% { transform: translateX(100%); }
 }
 
 /* Podium animations */
@@ -191,12 +162,6 @@
 
 .terminal-cursor {
   animation: cursor-blink 1s step-end 5;
-}
-
-/* Glow orb drift */
-@keyframes orb-drift {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(20px, -15px); }
 }
 
 @layer base {
@@ -401,11 +366,6 @@
     box-shadow: 0 0 30px rgba(139,92,246,0.12), 0 4px 20px rgba(0,0,0,0.3);
   }
 
-  /* Table styles */
-  .table-row {
-    @apply border-b border-gray-800 hover:bg-gray-800/50 transition-colors duration-100;
-  }
-
   /* Badge styles */
   .badge {
     @apply px-2 py-0.5 rounded text-xs font-medium;
@@ -426,10 +386,6 @@
 
   .badge-blue {
     @apply bg-blue-900/50 text-blue-300;
-  }
-
-  .badge-purple {
-    @apply bg-purple-900/50 text-purple-300;
   }
 
   .badge-red {
@@ -462,53 +418,6 @@
   .stat-card {
     @apply rounded-lg p-4;
     background: rgba(17,24,39,0.8);
-  }
-
-  /* Online indicator with pulse ring */
-  .online-indicator {
-    @apply flex items-center gap-2 text-sm text-green-400;
-  }
-
-  .online-indicator::before {
-    content: '';
-    @apply w-2 h-2 bg-green-500 rounded-full relative;
-  }
-
-  .online-indicator::after {
-    content: '';
-    @apply absolute w-2 h-2 bg-green-500/50 rounded-full;
-    animation: pulse-ring 1.5s infinite ease-out;
-  }
-
-  /* Nav link styles - neon glow on hover */
-  .nav-link {
-    @apply px-3 py-2 rounded-md text-sm font-medium transition-[color,text-shadow] duration-200;
-    @apply text-gray-400;
-  }
-  .nav-link:hover {
-    color: var(--color-primary-400);
-    text-shadow: 0 0 12px rgba(139,92,246,0.5);
-  }
-
-  .nav-link-active {
-    color: var(--color-primary-400);
-    text-shadow: 0 0 12px rgba(139,92,246,0.5);
-  }
-
-  /* Hero section */
-  .hero-gradient {
-    background: var(--color-primary-700);
-  }
-
-  /* Feature card */
-  .feature-card {
-    @apply rounded-lg p-6;
-    @apply hover:-translate-y-0.5;
-    @apply transition-[transform,box-shadow] duration-200 ease-out;
-    background: rgba(17,24,39,0.8);
-  }
-  .feature-card:hover {
-    box-shadow: 0 0 30px rgba(139,92,246,0.08);
   }
 
   /* Leaderboard row highlight */
@@ -545,40 +454,12 @@
     @apply bg-gray-700 text-gray-200;
   }
 
-  /* Code block */
-  .code-block {
-    @apply font-mono text-gray-100 px-2 py-0.5 rounded text-sm;
-    background: rgba(31,41,55,0.8);
-  }
-
-  /* Divider */
-  .divider {
-    @apply border-t border-gray-800 my-4;
-  }
-
-  /* Section title */
-  .section-title {
-    @apply text-xl font-bold text-gray-100 mb-2;
-  }
-
-  .section-subtitle {
-    @apply text-gray-400;
-  }
-
   .alert {
     @apply p-4 rounded-lg border flex items-start gap-3;
   }
 
   .alert-info {
     @apply bg-blue-900/30 border-blue-700 text-blue-300;
-  }
-
-  .alert-success {
-    @apply bg-green-900/30 border-green-700 text-green-300;
-  }
-
-  .alert-warning {
-    @apply bg-yellow-900/30 border-yellow-700 text-yellow-300;
   }
 
   .alert-error {
@@ -706,12 +587,6 @@ tr.row-mine > :first-child {
   75% { transform: translateX(3px); }
 }
 
-/* New animations for interactive invader */
-@keyframes neon-pulse {
-  0%, 100% { opacity: 1; filter: brightness(1); }
-  50% { opacity: 0.85; filter: brightness(1.3); }
-}
-
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   10% { transform: translateX(-6px); }
@@ -731,14 +606,6 @@ tr.row-mine > :first-child {
   100% { transform: translateY(0); }
 }
 
-@keyframes bounce-in-big {
-  0% { transform: translateY(0); }
-  25% { transform: translateY(-50px); }
-  50% { transform: translateY(-8px); }
-  75% { transform: translateY(-25px); }
-  100% { transform: translateY(0); }
-}
-
 @keyframes spin-invader {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -753,23 +620,6 @@ tr.row-mine > :first-child {
   0%, 100% { transform: translateY(0); }
   25% { transform: translateY(-4px) rotate(-3deg); }
   75% { transform: translateY(-4px) rotate(3deg); }
-}
-
-@keyframes reveal-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes eyes-close {
-  0% { transform: scaleY(1); }
-  50% { transform: scaleY(0.1); }
-  100% { transform: scaleY(1); }
 }
 
 /* --- Character burst: extracted chars fly from original position outward --- */
@@ -889,13 +739,6 @@ tr.row-mine > :first-child {
   100% { opacity: 0; transform: translateY(40px); }
 }
 
-@keyframes tear-drip {
-  0% { opacity: 0; }
-  20% { opacity: 0.9; }
-  80% { opacity: 0.9; }
-  100% { opacity: 0; }
-}
-
 /* Digital wave attack: binary digits fly outward */
 @keyframes digital-wave {
   0% {
@@ -976,24 +819,6 @@ tr.row-mine > :first-child {
 @keyframes scanline-flash {
   0% { transform: translateY(-100%); opacity: 0.6; }
   100% { transform: translateY(100%); opacity: 0; }
-}
-
-/* Achievement toast */
-@keyframes achievement-enter {
-  0% { transform: translateX(120%); opacity: 0; }
-  60% { transform: translateX(-5%); opacity: 1; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes achievement-exit {
-  0% { transform: translateX(0); opacity: 1; }
-  100% { transform: translateX(120%); opacity: 0; }
-}
-
-/* Slot machine digit roll */
-@keyframes slot-roll {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(0); }
 }
 
 /* ===== Sudo Hacker Theme ===== */
@@ -1230,53 +1055,11 @@ html[data-motion="reduced"] { scroll-behavior: auto !important; }
 [data-motion="reduced"] .skeleton { animation: none !important; }
 
 @layer utilities {
-  .animate-fade-in {
-    animation: fade-in 0.2s ease-out;
-  }
-
-  .animate-slide-up {
-    animation: slide-up 0.3s ease-out;
-  }
-
-  .animate-slide-down {
-    animation: slide-down 0.2s ease-out;
-  }
-
-  .animate-scale-in {
-    animation: scale-in 0.2s ease-out;
-  }
-
-  .animate-neon-pulse {
-    animation: neon-pulse 2s ease-in-out infinite;
-  }
-
   .animate-shake {
     animation: shake 0.5s ease-in-out;
   }
 
   .animate-bounce-in {
     animation: bounce-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
-  .animate-reveal-up {
-    animation: reveal-up 0.6s ease-out both;
-  }
-
-  /* Spring-like easing for smooth bouncy transitions */
-  .ease-spring {
-    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
-  /* Smooth opacity transitions */
-  .fade-enter {
-    @apply opacity-0;
-  }
-  .fade-enter-active {
-    @apply opacity-100 transition-opacity duration-200;
-  }
-
-  /* Hover lift effect */
-  .hover-lift {
-    @apply transition-transform duration-200 ease-out hover:-translate-y-1;
   }
 }

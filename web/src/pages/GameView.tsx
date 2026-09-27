@@ -110,7 +110,6 @@ export function GameView() {
           <div className="flex justify-end mt-3 pr-2">
             <InvaderPresence
               size="sm"
-              entrance="slideLeft"
               speechBubble="// попробуй!"
             />
           </div>
