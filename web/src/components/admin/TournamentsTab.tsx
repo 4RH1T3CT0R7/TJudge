@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
-import { confirmDialog } from '../../store/confirmStore';
+import { confirmCompleteTournament, confirmDeleteTournament, confirmResetRound, confirmRunRound } from './confirmations';
 import { getGameConfig } from '../../utils/gameConfig';
 import { mdPreview } from '../../utils/markdown';
 import { extractErrorMessage } from '../tournament/helpers';
@@ -28,8 +28,6 @@ interface TournamentsTabProps {
   setIsSavingTournament: Dispatch<SetStateAction<boolean>>;
   tournamentError: string | null;
   setTournamentError: Dispatch<SetStateAction<string | null>>;
-  deleteTournamentId: string | null;
-  setDeleteTournamentId: Dispatch<SetStateAction<string | null>>;
   actionError: string | null;
   setActionError: Dispatch<SetStateAction<string | null>>;
   managingTournamentId: string | null;
@@ -60,8 +58,6 @@ export function TournamentsTab({
   setIsSavingTournament,
   tournamentError,
   setTournamentError,
-  deleteTournamentId,
-  setDeleteTournamentId,
   actionError,
   setActionError,
   managingTournamentId,
@@ -80,13 +76,13 @@ export function TournamentsTab({
 }: TournamentsTabProps) {
   const queryClient = useQueryClient();
 
-  const handleDeleteTournament = async (id: string) => {
-    setAdminReaction('cry', '// удаляем...', 2000);
+  const handleDeleteTournament = async (tournament: Tournament) => {
+    setActionError(null);
     try {
-      await api.deleteTournament(id);
+      if (!(await confirmDeleteTournament(tournament))) return;
+      setAdminReaction('cry', '// удаляем...', 2000);
+      await api.deleteTournament(tournament.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() });
-      setDeleteTournamentId(null);
-      setActionError(null);
     } catch (err: unknown) {
       console.error('Failed to delete tournament:', err);
       setActionError(extractErrorMessage(err, 'Не удалось удалить турнир'));
@@ -253,29 +249,20 @@ export function TournamentsTab({
   };
 
   // Reset game round (delete all matches and reset ratings)
-  const handleResetGameRound = async (gameId: string, gameName: string) => {
+  const handleResetGameRound = async (game: Game) => {
     if (!managingTournamentId) return;
 
-    const confirmed = await confirmDialog({
-      title: 'Сброс раунда',
-      message:
-        `Сбросить раунд для игры "${gameName}"?\n\n` +
-        'Это действие:\n' +
-        '- удалит все матчи этой игры\n' +
-        '- сбросит рейтинги всех участников до 1000\n' +
-        '- сбросит номер раунда\n\n' +
-        'Это действие необратимо!',
-      confirmLabel: 'Сбросить',
-      danger: true,
-    });
-
-    if (!confirmed) return;
-
-    setResettingGame(gameId);
     setActionError(null);
-
     try {
-      const result = await api.resetGameRound(managingTournamentId, gameId);
+      if (!(await confirmResetRound(managingTournamentId, game))) return;
+    } catch (err: unknown) {
+      setActionError(extractErrorMessage(err, 'Не удалось подготовить сброс раунда'));
+      return;
+    }
+
+    setResettingGame(game.id);
+    try {
+      const result = await api.resetGameRound(managingTournamentId, game.id);
 
       // Сбрасываем всё поддерево турнира (статусы игр, лидерборды, программы) и статистику матчей
       await Promise.all([
@@ -300,8 +287,15 @@ export function TournamentsTab({
   const handleRunGameMatches = async (gameType: string, gameName: string) => {
     if (!managingTournamentId) return;
 
-    setRunningGameMatches(gameType);
     setActionError(null);
+    try {
+      if (!(await confirmRunRound(managingTournamentId, { name: gameType, display_name: gameName }))) return;
+    } catch (err: unknown) {
+      setActionError(extractErrorMessage(err, 'Не удалось подготовить запуск раунда'));
+      return;
+    }
+
+    setRunningGameMatches(gameType);
 
     try {
       const result = await api.runGameMatches(managingTournamentId, gameType);
@@ -652,14 +646,16 @@ export function TournamentsTab({
                                 >
                               {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
                             </button>
-                            <button
-                              onClick={() => handleResetGameRound(game.id, game.display_name)}
-                              disabled={resettingGame === game.id}
-                              className="btn btn-danger"
-                              title="Сбросить раунд (удалить все матчи и рейтинги)"
-                                >
-                              {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
-                            </button>
+                            <div className="flex border-l border-gray-700 pl-2">
+                              <button
+                                onClick={() => handleResetGameRound(game)}
+                                disabled={resettingGame === game.id}
+                                className="btn btn-danger"
+                                title="Сбросить раунд (удалить все матчи и рейтинги)"
+                              >
+                                {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
+                              </button>
+                            </div>
                           </>
                         )}
                       </div>
@@ -725,17 +721,21 @@ export function TournamentsTab({
                       </button>
                     )}
                     {tournament.status === 'active' && (
-                      <>
-                        <button
-                          onClick={() => openTournamentGamesManagement(tournament.id)}
-                          className="btn btn-primary"
-                        >
-                          Запустить раунд
-                        </button>
+                      <button
+                        onClick={() => openTournamentGamesManagement(tournament.id)}
+                        className="btn btn-primary"
+                      >
+                        Запустить раунд
+                      </button>
+                    )}
+                    {/* необратимое действие отодвинуто вправо от остальных */}
+                    <div className="ml-auto flex">
+                      {tournament.status === 'active' ? (
                         <button
                           onClick={async () => {
                             setActionError(null);
                             try {
+                              if (!(await confirmCompleteTournament(tournament))) return;
                               await api.completeTournament(tournament.id);
                               await Promise.all([
                                 queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() }),
@@ -747,39 +747,19 @@ export function TournamentsTab({
                               setActionError(extractErrorMessage(err, 'Не удалось завершить турнир'));
                             }
                           }}
-                          className="btn btn-secondary"
+                          className="btn btn-danger"
                         >
                           Завершить
                         </button>
-                      </>
-                    )}
-                    {tournament.status !== 'active' && (
-                      <>
-                        {deleteTournamentId === tournament.id ? (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleDeleteTournament(tournament.id)}
-                              className="btn btn-danger"
-                            >
-                              Подтвердить
-                            </button>
-                            <button
-                              onClick={() => setDeleteTournamentId(null)}
-                              className="btn btn-secondary"
-                            >
-                              Отмена
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteTournamentId(tournament.id)}
-                            className="btn btn-danger"
-                          >
-                            Удалить
-                          </button>
-                        )}
-                      </>
-                    )}
+                      ) : (
+                        <button
+                          onClick={() => handleDeleteTournament(tournament)}
+                          className="btn btn-danger"
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

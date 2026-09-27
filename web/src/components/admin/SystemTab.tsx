@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import api from '../../api/client';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
+import { MATCHES, confirmClearQueue, count } from './confirmations';
 import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetrics } from '../../types';
 import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
@@ -124,16 +125,15 @@ export function SystemTab({
     matchStats?.total ?? matchStatusEntries.reduce((sum, [, count]) => sum + count, 0);
 
   const handleClearQueue = async () => {
-    if (!(await confirmDialog({
-      title: 'Очистка очереди',
-      message: 'Очистить очередь? Все ожидающие матчи будут отменены.',
-      confirmLabel: 'Очистить',
-      danger: true,
-    }))) {
+    setSystemError(null);
+    try {
+      if (!(await confirmClearQueue())) return;
+    } catch (err) {
+      console.error('Failed to count pending matches:', err);
+      setSystemError('Не удалось посчитать ожидающие матчи');
       return;
     }
     setIsClearing(true);
-    setSystemError(null);
     try {
       await api.clearQueue();
       refreshSystemData();
@@ -162,12 +162,14 @@ export function SystemTab({
   };
 
   // Кнопки восстановления: прикладные поломки чинятся прямо из интерфейса.
+  // danger - только у необратимой очистки dead-letter, остальное перезапускается безопасно
   const handleRecovery = async (
     action: 'outbox' | 'compile' | 'stuck' | 'deadletter',
     confirmText: string,
-    run: () => Promise<string>
+    run: () => Promise<string>,
+    danger = false
   ) => {
-    if (!(await confirmDialog({ title: 'Восстановление', message: confirmText, confirmLabel: 'Выполнить' }))) return;
+    if (!(await confirmDialog({ title: 'Восстановление', message: confirmText, confirmLabel: 'Выполнить', danger }))) return;
     setRecoveryBusy(action);
     setSystemError(null);
     try {
@@ -475,7 +477,7 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'stuck',
-                        'Сбросить зависшие матчи (running дольше WORKER_TIMEOUT+30с) в pending? В очередь их вернёт воркер в течение минуты.',
+                        `Сбросить зависшие матчи (running дольше WORKER_TIMEOUT+30с) в pending: ${count(fullStatus?.matches?.stuck_running ?? 0, MATCHES)}? В очередь их вернёт воркер в течение минуты.`,
                         async () => {
                           const r = await api.recoveryResetStuckMatches();
                           return `Сброшено в pending: ${r.reset} матчей`;
@@ -484,7 +486,7 @@ export function SystemTab({
                     }
                     disabled={recoveryBusy !== null}
                     className={`btn ${
-                      (fullStatus?.matches?.stuck_running ?? 0) > 0 ? 'btn-danger' : 'btn-secondary'
+                      (fullStatus?.matches?.stuck_running ?? 0) > 0 ? 'btn-warning' : 'btn-secondary'
                     }`}
                   >
                     {recoveryBusy === 'stuck'
@@ -499,7 +501,7 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'outbox',
-                        'Повторить ошибочные outbox-задачи (рейтинги, которые не применились)?',
+                        `Повторить ошибочные outbox-задачи (рейтинги, которые не применились): ${count(fullStatus?.outbox?.errors ?? 0, ['задача', 'задачи', 'задач'])}?`,
                         async () => {
                           const r = await api.recoveryRetryOutbox();
                           return `Возвращено в обработку: ${r.retried} задач`;
@@ -508,7 +510,7 @@ export function SystemTab({
                     }
                     disabled={recoveryBusy !== null}
                     className={`btn ${
-                      (fullStatus?.outbox?.errors ?? 0) > 0 ? 'btn-danger' : 'btn-secondary'
+                      (fullStatus?.outbox?.errors ?? 0) > 0 ? 'btn-warning' : 'btn-secondary'
                     }`}
                   >
                     {recoveryBusy === 'outbox'
@@ -521,7 +523,7 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'compile',
-                        'Перезапустить компиляцию всех программ в статусе compiling?',
+                        `Перезапустить компиляцию всех программ в статусе compiling: ${count(fullStatus?.programs?.compiling ?? 0, ['программа', 'программы', 'программ'])}?`,
                         async () => {
                           const r = await api.recoveryRequeueCompiling();
                           return `Поставлено в очередь компиляции: ${r.requeued} программ`;
@@ -545,11 +547,12 @@ export function SystemTab({
                     onClick={() =>
                       handleRecovery(
                         'deadletter',
-                        'Очистить dead-letter очередь? Повреждённые задачи будут удалены безвозвратно.',
+                        `Очистить dead-letter очередь? Удалится безвозвратно: ${count(fullStatus?.queues?.dead_letter ?? 0, ['повреждённая задача', 'повреждённые задачи', 'повреждённых задач'])}.`,
                         async () => {
                           const r = await api.recoveryClearDeadLetter();
                           return `Удалено из dead-letter: ${r.cleared} записей`;
-                        }
+                        },
+                        true
                       )
                     }
                     disabled={recoveryBusy !== null}
@@ -817,17 +820,19 @@ export function SystemTab({
                   >
                     {isPurging ? 'Очистка...' : 'Удалить невалидные матчи'}
                   </button>
-                  <button
-                    onClick={handleClearQueue}
-                    disabled={isClearing}
-                    className="btn btn-danger"
-                  >
-                    {isClearing ? 'Очистка...' : 'Очистить всю очередь'}
-                  </button>
+                  <div className="ml-auto flex">
+                    <button
+                      onClick={handleClearQueue}
+                      disabled={isClearing}
+                      className="btn btn-danger"
+                    >
+                      {isClearing ? 'Очистка...' : 'Очистить всю очередь'}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">
                   «Удалить невалидные матчи» — удаляет из очереди матчи, которые не существуют в базе данных.
-                  «Очистить всю очередь» — удаляет все матчи из очереди (требует подтверждения).
+                  «Очистить всю очередь» — отменяет все ожидающие матчи во всех турнирах, идущие доигрывают.
                 </p>
               </div>
             </div>

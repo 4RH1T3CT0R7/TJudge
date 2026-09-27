@@ -95,10 +95,6 @@ export function AdminPanel() {
   const [isSavingTournament, setIsSavingTournament] = useState(false);
   const [tournamentError, setTournamentError] = useState<string | null>(null);
 
-  // Delete confirmation
-  const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
-  const [deleteTournamentId, setDeleteTournamentId] = useState<string | null>(null);
-
   // Admin invader state
   const [adminPose] = useState<InvaderPose>('idle');
   const [adminSpeech, setAdminSpeech] = useState<string | null>('// приветствую, admin');
@@ -418,8 +414,6 @@ export function AdminPanel() {
             setIsSavingGame={setIsSavingGame}
             gameError={gameError}
             setGameError={setGameError}
-            deleteGameId={deleteGameId}
-            setDeleteGameId={setDeleteGameId}
             setAdminReaction={setAdminReaction}
           />
         )}
@@ -439,8 +433,6 @@ export function AdminPanel() {
             setIsSavingTournament={setIsSavingTournament}
             tournamentError={tournamentError}
             setTournamentError={setTournamentError}
-            deleteTournamentId={deleteTournamentId}
-            setDeleteTournamentId={setDeleteTournamentId}
             actionError={actionError}
             setActionError={setActionError}
             managingTournamentId={managingTournamentId}

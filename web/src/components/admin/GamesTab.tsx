@@ -8,6 +8,9 @@ import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
 import { EmptyState } from '../ui/EmptyState';
 import { mdPreview } from '../../utils/markdown';
+import { useToastStore } from '../../store/toastStore';
+import { extractErrorMessage } from '../tournament/helpers';
+import { confirmDeleteGame } from './confirmations';
 
 interface GamesTabProps {
   games: Game[];
@@ -21,8 +24,6 @@ interface GamesTabProps {
   setIsSavingGame: Dispatch<SetStateAction<boolean>>;
   gameError: string | null;
   setGameError: Dispatch<SetStateAction<string | null>>;
-  deleteGameId: string | null;
-  setDeleteGameId: Dispatch<SetStateAction<string | null>>;
   setAdminReaction: AdminReactionSetter;
 }
 
@@ -38,8 +39,6 @@ export function GamesTab({
   setIsSavingGame,
   gameError,
   setGameError,
-  deleteGameId,
-  setDeleteGameId,
   setAdminReaction,
 }: GamesTabProps) {
   const queryClient = useQueryClient();
@@ -81,15 +80,16 @@ export function GamesTab({
     }
   };
 
-  const handleDeleteGame = async (id: string) => {
-    setAdminReaction('cry', '// удаляем...', 2000);
+  const handleDeleteGame = async (game: Game) => {
     try {
-      await api.deleteGame(id);
+      if (!(await confirmDeleteGame(game))) return;
+      setAdminReaction('cry', '// удаляем...', 2000);
+      await api.deleteGame(game.id);
       await queryClient.invalidateQueries({ queryKey: queryKeys.games });
-      setDeleteGameId(null);
     } catch (err) {
       console.error('Failed to delete game:', err);
       setAdminReaction('dizzy', '// ошибка!', 2000);
+      useToastStore.getState().addToast(extractErrorMessage(err, 'Не удалось удалить игру'), 'error');
     }
   };
 
@@ -217,29 +217,14 @@ export function GamesTab({
                     >
                       Редактировать
                     </button>
-                    {deleteGameId === game.id ? (
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleDeleteGame(game.id)}
-                          className="btn btn-danger"
-                        >
-                          Подтвердить
-                        </button>
-                        <button
-                          onClick={() => setDeleteGameId(null)}
-                          className="btn btn-secondary"
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    ) : (
+                    <div className="flex border-l border-gray-700 pl-2">
                       <button
-                        onClick={() => setDeleteGameId(game.id)}
+                        onClick={() => handleDeleteGame(game)}
                         className="btn btn-danger"
                       >
                         Удалить
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               ))}
