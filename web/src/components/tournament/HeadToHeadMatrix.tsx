@@ -184,7 +184,7 @@ function SmallMatrix({ teams, cellOf, colorOf, describe, metric, myTeamId }: Gri
                 return (
                   <td
                     key={col.id}
-                    className="w-12 h-10 text-center font-mono text-xs font-semibold tabular-nums rounded cursor-default"
+                    className="w-12 h-10 whitespace-nowrap px-1 text-center font-mono text-xs font-semibold tabular-nums rounded cursor-default"
                     style={{ backgroundColor: colorOf(cell), color: '#e5e7eb' }}
                     title={describe(row, col, cell)}
                   >
