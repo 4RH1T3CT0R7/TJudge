@@ -111,9 +111,13 @@ func TestCompileWorker_ProcessTask_Success(t *testing.T) {
 	// самопроверка идёт по собранному бинарнику
 	checker.On("Check", mock.Anything, "dilemma", "/data/programs/abc").
 		Return(&models.MatchResult{Score1: 500, Score2: 500}, nil)
-	repo.On("SaveCheckResult", mock.Anything, program.ID, models.CheckOK, mock.Anything).Return(nil)
+	repo.On("SaveCheckResult", mock.Anything, program.ID, models.CheckOK, mock.Anything).Return(true, nil)
 
 	w.processTask(context.Background(), 1, task)
+	// проверка ушла в свою очередь, слот сборки уже свободен
+	checker.AssertNotCalled(t, "Check", mock.Anything, mock.Anything, mock.Anything)
+	job := <-w.checks
+	w.selfCheck(context.Background(), job.program, job.execPath)
 
 	repo.AssertExpectations(t)
 	compiler.AssertExpectations(t)
@@ -129,6 +133,22 @@ func TestCompileWorker_ProcessTask_Success(t *testing.T) {
 	evt = bus.published[1].(events.ProgramCompiled)
 	assert.Equal(t, "ready", evt.Status)
 	assert.Equal(t, "ok", evt.CheckStatus)
+}
+
+// pending снят раньше, чем закончилась проверка: итог не записан, событие не уходит
+func TestCompileWorker_SelfCheck_NotApplied(t *testing.T) {
+	w, _, repo, _, bus := newTestCompileWorker(t)
+	program := compilingProgram()
+	checker := new(MockProgramChecker)
+	w.checker = checker
+	checker.On("Check", mock.Anything, "dilemma", "/data/programs/abc").
+		Return(&models.MatchResult{Score1: 500, Score2: 500}, nil)
+	repo.On("SaveCheckResult", mock.Anything, program.ID, models.CheckOK, mock.Anything).Return(false, nil)
+
+	w.selfCheck(context.Background(), program, "/data/programs/abc")
+
+	repo.AssertExpectations(t)
+	assert.Empty(t, bus.published)
 }
 
 func TestCheckVerdict(t *testing.T) {
@@ -245,7 +265,7 @@ func TestCompileWorker_RecoverStuck(t *testing.T) {
 	p1 := compilingProgram()
 	p2 := compilingProgram()
 
-	repo.On("ResetStaleChecks", mock.Anything, w.stuckOlderThan).Return(int64(0), nil)
+	repo.On("ResetStaleChecks", mock.Anything, w.staleCheckAfter).Return(int64(0), nil)
 	repo.On("GetStuckCompiling", mock.Anything, w.stuckOlderThan, w.stuckBatchSize).
 		Return([]*models.Program{p1, p2}, nil)
 	q.On("Enqueue", mock.Anything, p1.ID).Return(nil)
@@ -293,7 +313,7 @@ func TestCompileWorker_RecoverStuck_SkipsCompiling(t *testing.T) {
 	_, err := w.lock.Lock(context.Background(), compileLockKey(building.ID), time.Minute)
 	require.NoError(t, err)
 
-	repo.On("ResetStaleChecks", mock.Anything, w.stuckOlderThan).Return(int64(0), nil)
+	repo.On("ResetStaleChecks", mock.Anything, w.staleCheckAfter).Return(int64(0), nil)
 	repo.On("GetStuckCompiling", mock.Anything, w.stuckOlderThan, w.stuckBatchSize).
 		Return([]*models.Program{building, lost}, nil)
 	q.On("Enqueue", mock.Anything, lost.ID).Return(nil)

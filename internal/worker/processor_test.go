@@ -118,8 +118,9 @@ func (m *MockProgramRepository) GetStuckCompiling(ctx context.Context, olderThan
 	return args.Get(0).([]*models.Program), args.Error(1)
 }
 
-func (m *MockProgramRepository) SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) error {
-	return m.Called(ctx, id, status, message).Error(0)
+func (m *MockProgramRepository) SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) (bool, error) {
+	args := m.Called(ctx, id, status, message)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockProgramRepository) ResetStaleChecks(ctx context.Context, olderThan time.Duration) (int64, error) {

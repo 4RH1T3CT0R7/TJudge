@@ -269,18 +269,24 @@ func (r *ProgramRepository) UpdateCompileResult(ctx context.Context, id uuid.UUI
 }
 
 // SaveCheckResult пишет итог самопроверки поверх pending. пустой status -
-// проверка не состоялась (сбой окружения), программа остаётся без неё
-func (r *ProgramRepository) SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) error {
+// проверка не состоялась (сбой окружения), программа остаётся без неё.
+// false - pending уже снят (ResetStaleChecks) или программа удалена
+func (r *ProgramRepository) SaveCheckResult(ctx context.Context, id uuid.UUID, status models.CheckStatus, message *string) (bool, error) {
 	query := `
 		UPDATE programs
 		SET check_status = NULLIF($2, ''), check_message = $3,
 		    checked_at = CASE WHEN $2 = '' THEN NULL ELSE NOW() END
 		WHERE id = $1 AND check_status = 'pending'
 	`
-	if _, err := r.db.ExecWithMetrics(ctx, "program_save_check_result", query, id, string(status), message); err != nil {
-		return errors.Wrap(err, "failed to save check result")
+	result, err := r.db.ExecWithMetrics(ctx, "program_save_check_result", query, id, string(status), message)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to save check result")
 	}
-	return nil
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get rows affected")
+	}
+	return rows > 0, nil
 }
 
 // ResetStaleChecks снимает pending с самопроверок, которые не закончились за

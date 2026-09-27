@@ -348,9 +348,13 @@ func (s *ProgramRepositorySuite) TestSelfCheckLifecycle() {
 	assert.Equal(s.T(), models.CheckPending, *got.CheckStatus)
 
 	msg := "Traceback: ZeroDivisionError"
-	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, models.CheckFailed, &msg))
+	applied, err = s.repo.SaveCheckResult(ctx, program.ID, models.CheckFailed, &msg)
+	require.NoError(s.T(), err)
+	assert.True(s.T(), applied)
 	// повтор поверх готового итога ничего не меняет
-	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, models.CheckOK, nil))
+	applied, err = s.repo.SaveCheckResult(ctx, program.ID, models.CheckOK, nil)
+	require.NoError(s.T(), err)
+	assert.False(s.T(), applied)
 
 	got, err = s.repo.GetByID(ctx, program.ID)
 	require.NoError(s.T(), err)
@@ -369,7 +373,8 @@ func (s *ProgramRepositorySuite) TestSelfCheckLifecycle() {
 	// несостоявшаяся проверка оставляет программу без статуса
 	_, err = s.database.ExecContext(ctx, "UPDATE programs SET check_status = 'pending' WHERE id = $1", program.ID)
 	require.NoError(s.T(), err)
-	require.NoError(s.T(), s.repo.SaveCheckResult(ctx, program.ID, "", nil))
+	_, err = s.repo.SaveCheckResult(ctx, program.ID, "", nil)
+	require.NoError(s.T(), err)
 	got, err = s.repo.GetByID(ctx, program.ID)
 	require.NoError(s.T(), err)
 	assert.Nil(s.T(), got.CheckStatus)

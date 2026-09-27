@@ -42,8 +42,19 @@ func compileLockKey(programID uuid.UUID) string {
 	return "compile:" + programID.String()
 }
 
+// checkQueueSize - сколько самопроверок ждут своей очереди; сверх этого
+// проверка пропускается
+const checkQueueSize = 100
+
+// checkJob - самопроверка собранной программы
+type checkJob struct {
+	program  *models.Program
+	execPath string
+}
+
 // CompileWorker разбирает очередь компиляции: задача -> сборка в песочнице ->
-// статус compiling -> ready/failed, у ready затем самопроверка.
+// статус compiling -> ready/failed, у ready затем самопроверка. проверки идут
+// по одной в своей горутине и слоты сборки не занимают.
 // заодно периодически возвращает в очередь программы, зависшие в compiling
 // (задача потерялась: апи упал между созданием и enqueue, редис моргнул,
 // воркер перезапустился посреди сборки)
@@ -56,9 +67,12 @@ type CompileWorker struct {
 	notifier    events.Notifier
 	log         *logger.Logger
 
+	checks chan checkJob
+
 	workers          int
 	stuckInterval    time.Duration
 	stuckOlderThan   time.Duration
+	staleCheckAfter  time.Duration // с запасом на очередь проверок: сброс - для потерянных упавшим воркером
 	stuckBatchSize   int
 	dequeueWaitLimit time.Duration
 
@@ -85,9 +99,11 @@ func NewCompileWorker(
 		lock:             lock,
 		notifier:         notifier,
 		log:              log,
+		checks:           make(chan checkJob, checkQueueSize),
 		workers:          workers,
 		stuckInterval:    60 * time.Second,
 		stuckOlderThan:   2 * time.Minute,
+		staleCheckAfter:  10 * time.Minute,
 		stuckBatchSize:   100,
 		dequeueWaitLimit: 2 * time.Second,
 	}
@@ -106,10 +122,14 @@ func (w *CompileWorker) Start() {
 		}(i + 1)
 	}
 
-	w.wg.Add(1)
+	w.wg.Add(2)
 	go func() {
 		defer w.wg.Done()
 		w.runStuckRecovery(ctx)
+	}()
+	go func() {
+		defer w.wg.Done()
+		w.runChecks(ctx)
 	}()
 
 	w.log.Info("Compile worker started", zap.Int("workers", w.workers))
@@ -243,7 +263,25 @@ func (w *CompileWorker) compile(ctx context.Context, workerID int, task *queue.C
 	)
 
 	if status == models.ProgramReady {
-		w.selfCheck(ctx, program, codePath)
+		select {
+		case w.checks <- checkJob{program: program, execPath: codePath}:
+		default:
+			w.log.Warn("Self-check queue is full, check skipped",
+				zap.String("program_id", program.ID.String()))
+			w.saveCheck(ctx, program, "", nil)
+		}
+	}
+}
+
+// runChecks гоняет самопроверки из очереди по одной
+func (w *CompileWorker) runChecks(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-w.checks:
+			w.selfCheck(ctx, job.program, job.execPath)
+		}
 	}
 }
 
@@ -262,11 +300,20 @@ func (w *CompileWorker) selfCheck(ctx context.Context, program *models.Program, 
 				zap.String("program_id", program.ID.String()), zap.Error(err))
 		}
 	}
+	w.saveCheck(ctx, program, status, msg)
+}
 
-	if err := w.programRepo.SaveCheckResult(ctx, program.ID, status, msg); err != nil {
+// saveCheck пишет итог самопроверки и сообщает о нём, если pending ещё не снят
+func (w *CompileWorker) saveCheck(ctx context.Context, program *models.Program, status models.CheckStatus, msg *string) {
+	applied, err := w.programRepo.SaveCheckResult(ctx, program.ID, status, msg)
+	if err != nil {
 		// pending снимет ResetStaleChecks
 		w.log.LogError("Failed to save self-check result", err,
 			zap.String("program_id", program.ID.String()))
+		return
+	}
+	// pending уже снят (ResetStaleChecks, новая версия): итог не записан
+	if !applied {
 		return
 	}
 	w.publishCompiled(ctx, program, models.ProgramReady, nil, status)
@@ -325,7 +372,7 @@ func (w *CompileWorker) runStuckRecovery(ctx context.Context) {
 }
 
 func (w *CompileWorker) recoverStuck(ctx context.Context) {
-	if n, err := w.programRepo.ResetStaleChecks(ctx, w.stuckOlderThan); err != nil {
+	if n, err := w.programRepo.ResetStaleChecks(ctx, w.staleCheckAfter); err != nil {
 		w.log.LogError("Failed to reset stale self-checks", err)
 	} else if n > 0 {
 		w.log.Info("Reset stale self-checks", zap.Int64("count", n))
