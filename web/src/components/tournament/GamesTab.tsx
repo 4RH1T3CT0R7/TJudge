@@ -42,7 +42,7 @@ export function GamesTab({
   tournamentStatus?: TournamentStatus;
   onRunGameMatches?: (gameId: string, gameName: string, gameDisplayName: string) => Promise<void>;
   onSetActiveGame?: (gameId: string) => Promise<void>;
-  onResetGameRound?: (gameId: string, gameDisplayName: string) => Promise<void>;
+  onResetGameRound?: (gameId: string, gameName: string, gameDisplayName: string) => Promise<void>;
   runningGameId?: string | null;
   settingActiveGameId?: string | null;
   resettingGameId?: string | null;
@@ -71,7 +71,7 @@ export function GamesTab({
     e.preventDefault();
     e.stopPropagation();
     if (!onResetGameRound) return;
-    await onResetGameRound(game.id, game.display_name);
+    await onResetGameRound(game.id, game.name, game.display_name);
   };
 
   const handleToggleAutoRound = async (e: React.MouseEvent, gameId: string, currentStatus: TournamentGameWithDetails | undefined) => {
@@ -229,14 +229,6 @@ export function GamesTab({
                           )}
                         </button>
                         <button
-                          onClick={(e) => handleReset(e, game)}
-                          disabled={resettingGameId === game.id}
-                          className="btn btn-sm btn-danger"
-                          title="Сбросить раунд (удалить все матчи и рейтинги)"
-                        >
-                          {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
-                        </button>
-                        <button
                           onClick={(e) => handleToggleAutoRound(e, game.id, gameStatus)}
                           className={`btn btn-sm ${
                             gameStatus?.auto_round_enabled
@@ -252,6 +244,17 @@ export function GamesTab({
                             ? `Авто ✓ (${gameStatus.auto_round_interval_seconds}с)`
                             : 'Авто'}
                         </button>
+                        {/* необратимое действие отделено от запуска чертой */}
+                        <div className="flex border-l border-gray-700 pl-2">
+                          <button
+                            onClick={(e) => handleReset(e, game)}
+                            disabled={resettingGameId === game.id}
+                            className="btn btn-sm btn-danger"
+                            title="Сбросить раунд (удалить все матчи и рейтинги)"
+                          >
+                            {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -277,6 +280,10 @@ export function GamesTab({
             className="input w-full"
             autoFocus
           />
+          <p className="mt-4 text-sm text-gray-300">
+            Авто-раунд сам перезапускает игру: первый раунд может стартовать сразу после включения,
+            и каждый новый раунд удаляет результаты прошлого.
+          </p>
           <div className="flex justify-end gap-3 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setAutoRoundGameId(null)}>
               Отмена

@@ -35,7 +35,7 @@ export function TeamsTab({
   isJoining: boolean;
   joinError: string;
   setJoinError: (e: string) => void;
-  onDisqualify?: (teamId: string) => void;
+  onDisqualify?: (team: Team) => void;
   onRestore?: (teamId: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
@@ -184,7 +184,7 @@ export function TeamsTab({
                       </button>
                     ) : (
                       <button
-                        onClick={() => onDisqualify?.(team.id)}
+                        onClick={() => onDisqualify?.(team)}
                         className="btn btn-sm btn-danger"
                       >
                         Дисквалифицировать

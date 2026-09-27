@@ -141,6 +141,18 @@ export interface MatchRound {
   created_at: string;
 }
 
+// Dry-run запуска раунда игры (GET /tournaments/{id}/run-game-matches/preview)
+export interface RoundPreview {
+  game_type: string;
+  /** Матчи недоигранного раунда: запуск только вернёт их в очередь. */
+  pending: number;
+  /** Команды с готовой программой, играющие новый раунд. */
+  participants: number;
+  matches_created: number;
+  /** Матчи прошлого раунда, удалятся вместе с историей рейтинга. */
+  matches_deleted: number;
+}
+
 // Leaderboard types
 export interface LeaderboardEntry {
   rank: number;

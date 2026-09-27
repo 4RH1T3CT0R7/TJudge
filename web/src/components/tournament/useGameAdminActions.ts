@@ -3,12 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
-import { confirmDialog } from '../../store/confirmStore';
+import { confirmResetRound, confirmRunRound } from '../admin/confirmations';
 import { extractErrorMessage, waitForMatches } from './helpers';
 import type { Game, Tournament } from '../../types';
 
 // Админ-действия над играми турнира (запуск раунда, активная игра, сброс раунда).
-// Логика перенесена из TournamentDetail как есть, поведение не менялось.
+// Запуск и сброс спрашивают подтверждение с числами последствий.
 export function useGameAdminActions({
   tournamentId,
   tournament,
@@ -31,8 +31,19 @@ export function useGameAdminActions({
   const handleRunGameMatches = async (gameId: string, gameName: string, gameDisplayName: string) => {
     if (!tournament || !tournamentId) return;
 
-    setRunningGameId(gameId);
     setActionError(null);
+    const nextGame = games[games.findIndex((g) => g.id === gameId) + 1];
+    const switchNote = nextGame
+      ? `после запуска активной станет «${nextGame.display_name}»`
+      : 'это последняя игра: активных игр не останется';
+    try {
+      if (!(await confirmRunRound(tournamentId, { name: gameName, display_name: gameDisplayName }, switchNote))) return;
+    } catch (err: unknown) {
+      setActionError(extractErrorMessage(err, 'Не удалось подготовить запуск раунда'));
+      return;
+    }
+
+    setRunningGameId(gameId);
     try {
       const result = await api.runGameMatches(tournamentId, gameName);
 
@@ -89,26 +100,18 @@ export function useGameAdminActions({
   };
 
   // Reset game round (delete all matches and reset ratings)
-  const handleResetGameRound = async (gameId: string, gameDisplayName: string) => {
+  const handleResetGameRound = async (gameId: string, gameName: string, gameDisplayName: string) => {
     if (!tournamentId) return;
 
-    const confirmed = await confirmDialog({
-      title: 'Сброс раунда',
-      message:
-        `Сбросить раунд для игры "${gameDisplayName}"?\n\n` +
-        'Это действие:\n' +
-        '- удалит все матчи этой игры\n' +
-        '- сбросит рейтинги всех участников до 1000\n' +
-        '- сбросит номер раунда\n\n' +
-        'Это действие необратимо!',
-      confirmLabel: 'Сбросить',
-      danger: true,
-    });
-
-    if (!confirmed) return;
+    setActionError(null);
+    try {
+      if (!(await confirmResetRound(tournamentId, { name: gameName, display_name: gameDisplayName }))) return;
+    } catch (err: unknown) {
+      setActionError(extractErrorMessage(err, 'Не удалось подготовить сброс раунда'));
+      return;
+    }
 
     setResettingGameId(gameId);
-    setActionError(null);
     try {
       const result = await api.resetGameRound(tournamentId, gameId);
       useToastStore.getState().addToast(

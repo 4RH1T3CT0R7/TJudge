@@ -11,6 +11,7 @@ import type {
   Program,
   Match,
   MatchRound,
+  RoundPreview,
   LeaderboardEntry,
   CrossGameLeaderboardEntry,
   HeadToHeadCell,
@@ -426,6 +427,15 @@ class ApiClient {
     const { data } = await this.client.post<{ status: string; game_type: string; enqueued: number }>(
       `/tournaments/${tournamentId}/run-game-matches`,
       { game_type: gameType }
+    );
+    return data;
+  }
+
+  // Dry-run запуска раунда: те же расчёты на бэкенде, база не меняется.
+  async previewGameRound(tournamentId: string, gameType: string): Promise<RoundPreview> {
+    const { data } = await this.client.get<RoundPreview>(
+      `/tournaments/${tournamentId}/run-game-matches/preview`,
+      { params: { game_type: gameType } }
     );
     return data;
   }

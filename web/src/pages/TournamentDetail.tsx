@@ -15,6 +15,7 @@ import {
 import { useTournamentLive } from '../hooks/useTournamentLive';
 import { useToastStore } from '../store/toastStore';
 import { confirmDialog } from '../store/confirmStore';
+import { confirmCompleteTournament, confirmDisqualify } from '../components/admin/confirmations';
 import {
   UsersIcon, PlayIcon, CheckCircleIcon, XMarkIcon, UserPlusIcon, HashtagIcon,
 } from '../components/icons';
@@ -268,8 +269,15 @@ export function TournamentDetail() {
   const handleCompleteTournament = async () => {
     if (!tournament) return;
 
-    setIsCompleting(true);
     setActionError(null);
+    try {
+      if (!(await confirmCompleteTournament(tournament))) return;
+    } catch (err: unknown) {
+      setActionError(extractErrorMessage(err, 'Не удалось подготовить завершение турнира'));
+      return;
+    }
+
+    setIsCompleting(true);
     try {
       await api.completeTournament(tournament.id);
       invalidateTournamentData();
@@ -455,16 +463,6 @@ export function TournamentDetail() {
                 {isStarting ? 'Запуск...' : 'Запустить турнир'}
               </button>
             )}
-            {canComplete && (
-              <button
-                onClick={handleCompleteTournament}
-                disabled={isCompleting}
-                className="btn btn-secondary"
-              >
-                <CheckCircleIcon />
-                {isCompleting ? 'Завершение...' : 'Завершить турнир'}
-              </button>
-            )}
             {isAdmin && tournament.status === 'active' && (
               <>
                 <button
@@ -493,6 +491,19 @@ export function TournamentDetail() {
                   {isRetryingMatches ? 'Перезапуск...' : 'Перезапустить неудачные'}
                 </button>
               </>
+            )}
+            {/* необратимое действие последним и отделено чертой; на телефоне кнопки и так в столбик */}
+            {canComplete && (
+              <div className="flex sm:border-l sm:border-gray-700 sm:pl-3">
+                <button
+                  onClick={handleCompleteTournament}
+                  disabled={isCompleting}
+                  className="btn btn-danger"
+                >
+                  <CheckCircleIcon />
+                  {isCompleting ? 'Завершение...' : 'Завершить турнир'}
+                </button>
+              </div>
             )}
           </>
         }
@@ -612,16 +623,16 @@ export function TournamentDetail() {
             isJoining={isJoining}
             joinError={joinError}
             setJoinError={setJoinError}
-            onDisqualify={async (teamId) => {
-              if (!(await confirmDialog({
-                title: 'Дисквалификация',
-                message: 'Дисквалифицировать команду? Все матчи с её участием будут удалены.',
-                confirmLabel: 'Дисквалифицировать',
-                danger: true,
-              }))) return;
+            onDisqualify={async (team) => {
               try {
-                await api.disqualifyTeam(teamId);
+                if (!(await confirmDisqualify(tournament.id, team))) return;
+                const result = await api.disqualifyTeam(team.id);
                 invalidateTournamentData();
+                useToastStore.getState().addToast(
+                  `Команда «${team.name}» дисквалифицирована: матчей удалено ${result.matches_deleted}, отменено ${result.matches_cancelled}`,
+                  'success',
+                  8000
+                );
               } catch (err) {
                 console.error('Failed to disqualify team:', err);
                 useToastStore.getState().addToast('Не удалось дисквалифицировать команду. Попробуйте снова.', 'error');
