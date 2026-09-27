@@ -76,8 +76,9 @@ export function Tournaments() {
                   onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-base font-semibold text-gray-100 line-clamp-1">
+                  {/* длинное название занимает две строки, статус тогда уходит под него */}
+                  <div className="flex flex-wrap justify-between items-start gap-x-3 gap-y-2 mb-2">
+                    <h3 className="min-w-0 text-base font-semibold text-gray-100 line-clamp-2">
                       {tournament.name}
                     </h3>
                     <StatusLabel entity="tournament" status={tournament.status} />
