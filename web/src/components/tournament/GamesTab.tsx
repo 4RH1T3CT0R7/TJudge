@@ -203,7 +203,7 @@ export function GamesTab({
                       <button
                         onClick={(e) => handleSetActive(e, game.id)}
                         disabled={settingActiveGameId === game.id}
-                        className="btn btn-secondary text-xs py-1.5 px-3"
+                        className="btn btn-sm btn-secondary"
                       >
                         {settingActiveGameId === game.id ? (
                           <Spinner>Установка...</Spinner>
@@ -216,7 +216,7 @@ export function GamesTab({
                         <button
                           onClick={(e) => handleRunMatches(e, game)}
                           disabled={runningGameId === game.id || isRoundRunning}
-                          className="btn btn-primary text-xs py-1.5 px-3 flex-1"
+                          className="btn btn-sm btn-primary flex-1"
                         >
                           {runningGameId === game.id ? (
                             <Spinner>Запуск...</Spinner>
@@ -232,14 +232,14 @@ export function GamesTab({
                         <button
                           onClick={(e) => handleReset(e, game)}
                           disabled={resettingGameId === game.id}
-                          className="btn btn-danger text-xs py-1.5 px-3"
+                          className="btn btn-sm btn-danger"
                           title="Сбросить раунд (удалить все матчи и рейтинги)"
                         >
                           {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}
                         </button>
                         <button
                           onClick={(e) => handleToggleAutoRound(e, game.id, gameStatus)}
-                          className={`btn text-xs py-1.5 px-3 ${
+                          className={`btn btn-sm ${
                             gameStatus?.auto_round_enabled
                               ? 'bg-green-600 hover:bg-green-700 text-white'
                               : 'bg-gray-700 hover:bg-gray-800 text-gray-200'
