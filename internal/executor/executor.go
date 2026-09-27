@@ -374,13 +374,21 @@ var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 // maxStderrSize - сколько stderr остаётся после чистки (4кб)
 const maxStderrSize = 4096
 
-// sanitizeStderr чистит сырой stderr: снимает ansi-эскейпы и режет до 4кб
+// stderrHeadSize - сколько начала stderr остаётся при обрезке, остальное
+// бюджета отдаётся концу
+const stderrHeadSize = 1024
+
+// sanitizeStderr чистит сырой stderr: снимает ansi-эскейпы и режет до 4кб.
+// режется середина: в конце итоговая строка tjudge-cli и хвост stderr бота
+// от sandbox.sh (около 2,2кб), перед ними бывает длинный вывод (-v, ход бота
+// целиком в «unknown action»)
 func sanitizeStderr(raw string) string {
 	cleaned := ansiEscapeRe.ReplaceAllString(raw, "")
 
 	if len(cleaned) > maxStderrSize {
-		const suffix = "...(truncated)"
-		cleaned = cleaned[:maxStderrSize-len(suffix)] + suffix
+		const cut = "\n...(truncated)...\n"
+		tail := maxStderrSize - stderrHeadSize - len(cut)
+		cleaned = cleaned[:stderrHeadSize] + cut + cleaned[len(cleaned)-tail:]
 	}
 
 	return cleaned

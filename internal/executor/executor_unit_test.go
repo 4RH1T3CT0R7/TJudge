@@ -499,7 +499,17 @@ func TestSanitizeStderr_TruncateLongOutput(t *testing.T) {
 	result := sanitizeStderr(long)
 
 	assert.LessOrEqual(t, len(result), maxStderrSize)
-	assert.True(t, strings.HasSuffix(result, "...(truncated)"))
+	assert.Contains(t, result, "...(truncated)...")
+}
+
+// длинный вывод перед итогом не вытесняет хвост stderr бота от sandbox.sh
+func TestSanitizeStderr_KeepsTail(t *testing.T) {
+	tail := "left player error: subprocess terminated unexpectedly\n" +
+		"--- stderr программы (последние 2 КБ) ---\n" + strings.Repeat("t", 2048) + "\n"
+	result := sanitizeStderr(strings.Repeat("v", 50_000) + tail)
+
+	assert.LessOrEqual(t, len(result), maxStderrSize)
+	assert.True(t, strings.HasSuffix(result, tail))
 }
 
 func TestSanitizeStderr_ExactlyAtLimit(t *testing.T) {
@@ -508,7 +518,7 @@ func TestSanitizeStderr_ExactlyAtLimit(t *testing.T) {
 	result := sanitizeStderr(exact)
 
 	assert.Equal(t, maxStderrSize, len(result))
-	assert.False(t, strings.HasSuffix(result, "...(truncated)"))
+	assert.NotContains(t, result, "...(truncated)")
 }
 
 func TestSanitizeStderr_OneBeyondLimit(t *testing.T) {
@@ -517,7 +527,7 @@ func TestSanitizeStderr_OneBeyondLimit(t *testing.T) {
 	result := sanitizeStderr(input)
 
 	assert.LessOrEqual(t, len(result), maxStderrSize)
-	assert.True(t, strings.HasSuffix(result, "...(truncated)"))
+	assert.Contains(t, result, "...(truncated)...")
 }
 
 func TestSanitizeStderr_ANSIStrippedBeforeTruncation(t *testing.T) {
@@ -532,7 +542,7 @@ func TestSanitizeStderr_ANSIStrippedBeforeTruncation(t *testing.T) {
 
 	// после снятия ANSI контент помещается в лимит
 	assert.Equal(t, content, result)
-	assert.False(t, strings.HasSuffix(result, "...(truncated)"))
+	assert.NotContains(t, result, "...(truncated)")
 }
 
 func TestSanitizeStderr_MultipleANSICodes(t *testing.T) {
