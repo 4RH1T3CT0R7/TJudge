@@ -430,17 +430,24 @@
     background: rgba(17,24,39,0.8);
   }
 
-  /* Leaderboard row highlight */
+  /* Медальные строки: тон картинкой поверх фона строки, а не вместо него,
+     чтобы непрозрачный фон строки при перестановке оставался */
   .leaderboard-row-gold {
-    @apply bg-yellow-900/20;
+    --row-tone: color-mix(in oklab, var(--color-yellow-900) 20%, transparent);
   }
 
   .leaderboard-row-silver {
-    @apply bg-gray-700/50;
+    --row-tone: color-mix(in oklab, var(--color-gray-700) 50%, transparent);
   }
 
   .leaderboard-row-bronze {
-    @apply bg-orange-900/20;
+    --row-tone: color-mix(in oklab, var(--color-orange-900) 20%, transparent);
+  }
+
+  .leaderboard-row-gold,
+  .leaderboard-row-silver,
+  .leaderboard-row-bronze {
+    background-image: linear-gradient(var(--row-tone), var(--row-tone));
   }
 
   /* Rank badge */
@@ -567,11 +574,13 @@
 }
 
 /* Своя строка («> вы»): полоса primary слева и лёгкая подложка поверх медальной
-   и любой bg-утилиты карточки. Вне слоёв: иначе утилиты (bg-gray-800/50,
-   bg-amber-900/20) перебивают компонентный класс. У строки таблицы полоса
-   рисуется на первой ячейке: box-shadow у tr рисуют не все браузеры */
+   и любой bg-утилиты карточки. Подложка - картинкой над фоном строки, вне слоёв:
+   иначе утилиты (bg-gray-800/50, bg-amber-900/20) перебивают компонентный класс.
+   У строки таблицы полоса рисуется на первой ячейке: box-shadow у tr рисуют не
+   все браузеры */
 .row-mine {
-  background-color: color-mix(in oklab, var(--color-primary-900) 30%, transparent);
+  --row-mine: color-mix(in oklab, var(--color-primary-900) 30%, transparent);
+  background-image: linear-gradient(var(--row-mine), var(--row-mine));
 }
 div.row-mine,
 tr.row-mine > :first-child {

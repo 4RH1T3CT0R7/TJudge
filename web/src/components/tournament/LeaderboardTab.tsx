@@ -282,6 +282,9 @@ export function CrossGameLeaderboardTable({
             const { entry, place, total } = row;
             const key = teamKey(entry);
             const mine = !!myTeamId && entry.team_id === myTeamId;
+            // сдвинутые строки при перестановке непрозрачны и едут поверх стоящих,
+            // поднявшиеся - поверх опустившихся: тексты строк не накладываются
+            const delta = changes.get(key) ?? 0;
             return (
               <m.tr
                 key={key}
@@ -289,9 +292,9 @@ export function CrossGameLeaderboardTable({
                 transition={ROW_MOVE}
                 ref={mine ? revealMine : undefined}
                 aria-current={mine ? 'true' : undefined}
-                className={`border-b ${index === pinned - 1 ? 'border-b-4 border-double border-line' : 'border-gray-700/60'} ${
+                className={`relative border-b ${index === pinned - 1 ? 'border-b-4 border-double border-line' : 'border-gray-700/60'} ${
                   broadcast ? 'h-[max(36px,5vh)]' : rowTone(place)
-                } ${mine ? 'row-mine' : ''}`}
+                } ${delta ? `${delta > 0 ? 'z-20' : 'z-10'} ${broadcast ? 'bg-[#0a0a0b]' : 'bg-gray-900'}` : ''} ${mine ? 'row-mine' : ''}`}
               >
                 <td className={cell}>
                   <span className="inline-flex items-baseline gap-2">
