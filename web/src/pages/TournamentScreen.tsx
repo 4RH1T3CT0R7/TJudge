@@ -125,11 +125,14 @@ const onClick = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => 
   fn();
 };
 
+// тройка игры; при равенстве очков и побед место общее, как в таблице
 function topOfGame(entries: CrossGameLeaderboardEntry[], game: Game) {
-  return entries
-    .filter((e) => e.game_ratings[game.id])
-    .sort((a, b) => b.game_ratings[game.id].rating - a.game_ratings[game.id].rating || b.game_ratings[game.id].wins - a.game_ratings[game.id].wins)
+  const r = (e: CrossGameLeaderboardEntry) => e.game_ratings[game.id];
+  const top = entries
+    .filter(r)
+    .sort((a, b) => r(b).rating - r(a).rating || r(b).wins - r(a).wins)
     .slice(0, 3);
+  return top.map((e) => ({ e, place: top.findIndex((x) => r(x).rating === r(e).rating && r(x).wins === r(e).wins) + 1 }));
 }
 
 // Табло для проектора организатора: без шапки приложения, полноэкранный режим
@@ -336,9 +339,9 @@ export function TournamentScreen() {
                 <span className="bg-primary-900/40 pr-[0.6vw] shadow-[inset_4px_0_0] shadow-primary-500">
                   <span aria-hidden="true" className="pl-[0.8vw] text-primary-400">$ </span>
                   итог: игра «{getGameConfig(bannerGame.name).short ?? bannerGame.display_name}» завершена
-                  {bannerTop.map((e, i) => (
+                  {bannerTop.map(({ e, place }) => (
                     <span key={e.program_id} className="text-gray-300">
-                      {' · '}{i + 1}. <span className="font-bold text-gray-100">{e.team_name}</span>{' '}
+                      {' · '}{place}. <span className="font-bold text-gray-100">{e.team_name}</span>{' '}
                       {e.game_ratings[bannerGame.id].rating.toLocaleString('ru-RU')}
                     </span>
                   ))}
