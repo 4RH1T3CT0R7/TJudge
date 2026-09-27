@@ -11,6 +11,7 @@ import { usePlaceChanges } from '../hooks/usePlaceChanges';
 import { useAuthStore } from '../store/authStore';
 import { CrossGameLeaderboardTable } from '../components/tournament/LeaderboardTab';
 import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
+import { QrCode } from '../components/tournament/QrCode';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
 import { gameProgress, honestStandings, liveGameIds, pageCount, pageSlice } from '../utils/liveStandings';
@@ -233,6 +234,7 @@ export function TournamentScreen() {
   }
 
   const { pinned, body } = pageSlice(standings, perPage, page);
+  const shortLink = `${window.location.host}/t/${tournament.code}`;
   const bannerGame = banner && games.find((g) => g.name === banner.gameType);
   const bannerTop = bannerGame ? topOfGame(leaderboardQuery.data ?? [], bannerGame) : [];
 
@@ -319,6 +321,14 @@ export function TournamentScreen() {
             )}
           </p>
           <Feed items={feed} />
+        </div>
+        <div className="flex shrink-0 items-center gap-[1vw]">
+          <p className="text-right text-gray-300 text-[clamp(14px,2vh,26px)]">
+            таблица на своём ПК
+            <br />
+            <span className="font-bold text-gray-100">{shortLink}</span>
+          </p>
+          <QrCode text={`${window.location.origin}/t/${tournament.code}`} className="h-[13vh] w-[13vh] min-h-20 min-w-20" />
         </div>
       </footer>
     </main>

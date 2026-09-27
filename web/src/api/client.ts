@@ -388,6 +388,14 @@ class ApiClient {
     return data;
   }
 
+  /** Турнир по коду короткой ссылки /t/:code; null - такого кода нет. */
+  async getTournamentByCode(code: string): Promise<Tournament | null> {
+    const { data } = await this.client.get<Tournament[]>('/tournaments', { params: { code, limit: 1 } });
+    this.validateOrWarn(() => validateTournamentList(data), 'GET /tournaments');
+    // сервер без фильтра по коду отдал бы просто последний турнир
+    return data.find((t) => t.code.toUpperCase() === code.toUpperCase()) ?? null;
+  }
+
   async getTournament(id: string): Promise<Tournament> {
     const { data } = await this.client.get<Tournament>(`/tournaments/${id}`);
     this.validateOrWarn(() => validateTournament(data), 'GET /tournaments/{id}');
