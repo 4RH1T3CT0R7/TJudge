@@ -15,6 +15,10 @@ interface ModalProps {
   closeOnBackdrop?: boolean;
 }
 
+// Открытые модалки в порядке открытия: Escape закрывает только верхнюю,
+// подтверждение поверх формы не должно закрыть заодно и форму.
+const openStack: symbol[] = [];
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -43,7 +47,17 @@ function trapTab(e: KeyboardEvent<HTMLDivElement>) {
 // Фокус уходит в диалог и после закрытия возвращается на элемент, который его открыл.
 // Рендер в body: иначе контекст наложения страницы оставляет шапку поверх фона.
 export function Modal({ open, onClose, title, children, maxWidth = 'max-w-md', closeOnBackdrop = true }: ModalProps) {
-  useEscapeKey(onClose, open);
+  const [token] = useState(() => Symbol('modal'));
+  useEffect(() => {
+    if (!open) return;
+    openStack.push(token);
+    return () => {
+      openStack.splice(openStack.indexOf(token), 1);
+    };
+  }, [open, token]);
+  useEscapeKey(() => {
+    if (openStack[openStack.length - 1] === token) onClose();
+  }, open);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   // выделение текста в поле, отпущенное над фоном, тоже даёт click по фону

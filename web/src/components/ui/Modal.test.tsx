@@ -88,3 +88,35 @@ it('с closeOnBackdrop={false} клик по фону не закрывает', 
 
   root.unmount();
 });
+
+it('Escape закрывает только верхний из открытых диалогов', async () => {
+  function Stacked() {
+    const [outer, setOuter] = useState(true);
+    const [inner, setInner] = useState(true);
+    return (
+      <>
+        <Modal open={outer} onClose={() => setOuter(false)} title="Форма">
+          <p>форма</p>
+        </Modal>
+        <Modal open={inner} onClose={() => setInner(false)} title="Подтверждение">
+          <p>подтверждение</p>
+        </Modal>
+      </>
+    );
+  }
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => root.render(<Stacked />));
+  expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+
+  const escape = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  await act(async () => escape());
+  const left = document.querySelectorAll('[role="dialog"]');
+  expect(left).toHaveLength(1);
+  expect(left[0].textContent).toContain('форма');
+
+  await act(async () => escape());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  root.unmount();
+});
