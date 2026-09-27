@@ -232,7 +232,7 @@ export function GamesTab({
                         <button
                           onClick={(e) => handleReset(e, game)}
                           disabled={resettingGameId === game.id}
-                          className="btn text-xs py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white"
+                          className="btn btn-danger text-xs py-1.5 px-3"
                           title="Сбросить раунд (удалить все матчи и рейтинги)"
                         >
                           {resettingGameId === game.id ? 'Сброс...' : 'Сбросить'}

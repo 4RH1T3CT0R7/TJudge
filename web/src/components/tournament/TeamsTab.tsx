@@ -178,14 +178,14 @@ export function TeamsTab({
                     {team.is_disqualified ? (
                       <button
                         onClick={() => onRestore?.(team.id)}
-                        className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded-lg transition-colors"
+                        className="btn btn-sm btn-success"
                       >
                         Восстановить
                       </button>
                     ) : (
                       <button
                         onClick={() => onDisqualify?.(team.id)}
-                        className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded-lg transition-colors"
+                        className="btn btn-sm btn-danger"
                       >
                         Дисквалифицировать
                       </button>
