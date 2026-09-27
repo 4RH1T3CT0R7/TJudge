@@ -454,9 +454,11 @@ paths:
         Without parameters returns only per-round counters, `matches` is omitted.
         With `round` and `game_type` (both required together) returns that single
         round with one page of its matches (`limit` capped at 100); `total_matches`
-        is the size of the whole round.
+        is the size of the whole round. `team_id` narrows both the counters and
+        the page to the matches of that team.
       operationId: tournamentsGetMatchesByRounds
       parameters:
+        - $ref: '#/components/parameters/MatchTeamFilter'
         - name: round
           in: query
           description: Round number (together with game_type)
@@ -1008,6 +1010,7 @@ paths:
       summary: Game matches
       operationId: tournamentGameMatches
       parameters:
+        - $ref: '#/components/parameters/MatchTeamFilter'
         - name: status
           in: query
           schema:
@@ -1704,6 +1707,7 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: '#/components/parameters/MatchTeamFilter'
         - name: status
           in: query
           schema:
@@ -1866,7 +1870,7 @@ paths:
         **Server-sent messages** (`{"type": ..., "payload": {...}}`, see web/src/types/ws.ts):
         - `tournament_update` -- tournament started or completed; payload: `status`, `start_time` or `end_time`
         - `match_result` -- a match result was applied; payload: `match_id`, `program1_id`, `program2_id`, `new_rating1`, `new_rating2`, `winner`
-        - `program_update` -- compilation finished; payload: `program_id`, `team_id`, `status`
+        - `program_update` -- compilation or self-check finished; payload: `program_id`, `team_id`, `status`, `check_status` (only for a ready program: `pending` right after compilation, then `ok` or `failed`; absent if the self-check did not take place)
       operationId: wsTournament
       security:
         - BearerAuth: []
@@ -2219,6 +2223,14 @@ components:
         type: integer
         default: 0
         minimum: 0
+
+    MatchTeamFilter:
+      name: team_id
+      in: query
+      description: Only matches of this team (any version of its program, on either side)
+      schema:
+        type: string
+        format: uuid
 
   # ========== Schemas ==========
 
@@ -2780,6 +2792,24 @@ components:
         updated_at:
           type: string
           format: date-time
+        check_status:
+          type: string
+          enum: [pending, ok, failed]
+          nullable: true
+          description: >-
+            Самопроверка после сборки: матч программы (первым игроком) против
+            эталонного бота игры. pending - идёт; ok - сыграно; failed -
+            программа упала или сходила не по правилам (см. check_message).
+            Только предупреждение: в раундах программа играет в любом случае.
+            Поля нет - проверки не было (старая программа или сбой окружения).
+        check_message:
+          type: string
+          nullable: true
+          description: Счёт матча с эталоном при ok, текст ошибки с хвостом stderr программы при failed
+        checked_at:
+          type: string
+          format: date-time
+          nullable: true
 
     ProgramEnvelope:
       allOf:
@@ -2842,7 +2872,10 @@ components:
         error_message:
           type: string
           nullable: true
-          description: Filtered based on user permissions
+          description: >-
+            Filtered based on user permissions. When a program fails (error_code
+            1 or 2), ends with a line `--- stderr программы (последние 2 КБ) ---`
+            and the tail of that program's stderr; only its team and admins see it.
         started_at:
           type: string
           format: date-time
@@ -2854,6 +2887,22 @@ components:
         created_at:
           type: string
           format: date-time
+        team1_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Team of program1; absent if the team was deleted
+        team1_name:
+          type: string
+          nullable: true
+        team2_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Team of program2; absent if the team was deleted
+        team2_name:
+          type: string
+          nullable: true
 
     MatchRound:
       type: object

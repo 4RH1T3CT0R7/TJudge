@@ -19,11 +19,13 @@ export interface MatchResultPayload {
   winner: number;
 }
 
-// Текста ошибки компиляции тут нет: он виден только команде через REST.
+// Текстов ошибки компиляции и самопроверки тут нет: они видны только команде через REST.
 export interface ProgramUpdatePayload {
   program_id: string;
   team_id: string;
   status: 'compiling' | 'ready' | 'failed';
+  /** Только у ready: pending сразу после сборки, затем ok/failed; нет - самопроверки не было. */
+  check_status?: 'pending' | 'ok' | 'failed';
 }
 
 /** Discriminated union всех серверных WS-сообщений турнира. */

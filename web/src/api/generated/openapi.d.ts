@@ -282,7 +282,8 @@ export interface paths {
          * @description Without parameters returns only per-round counters, `matches` is omitted.
          *     With `round` and `game_type` (both required together) returns that single
          *     round with one page of its matches (`limit` capped at 100); `total_matches`
-         *     is the size of the whole round.
+         *     is the size of the whole round. `team_id` narrows both the counters and
+         *     the page to the matches of that team.
          */
         get: operations["tournamentsGetMatchesByRounds"];
         put?: never;
@@ -1217,7 +1218,7 @@ export interface paths {
          *     **Server-sent messages** (`{"type": ..., "payload": {...}}`, see web/src/types/ws.ts):
          *     - `tournament_update` -- tournament started or completed; payload: `status`, `start_time` or `end_time`
          *     - `match_result` -- a match result was applied; payload: `match_id`, `program1_id`, `program2_id`, `new_rating1`, `new_rating2`, `winner`
-         *     - `program_update` -- compilation finished; payload: `program_id`, `team_id`, `status`
+         *     - `program_update` -- compilation or self-check finished; payload: `program_id`, `team_id`, `status`, `check_status` (only for a ready program: `pending` right after compilation, then `ok` or `failed`; absent if the self-check did not take place)
          */
         get: operations["wsTournament"];
         put?: never;
@@ -1669,6 +1670,15 @@ export interface components {
             created_at?: string;
             /** Format: date-time */
             updated_at?: string;
+            /**
+             * @description Самопроверка после сборки: матч программы (первым игроком) против эталонного бота игры. pending - идёт; ok - сыграно; failed - программа упала или сходила не по правилам (см. check_message). Только предупреждение: в раундах программа играет в любом случае. Поля нет - проверки не было (старая программа или сбой окружения).
+             * @enum {string|null}
+             */
+            check_status?: "pending" | "ok" | "failed" | null;
+            /** @description Счёт матча с эталоном при ok, текст ошибки с хвостом stderr программы при failed */
+            check_message?: string | null;
+            /** Format: date-time */
+            checked_at?: string | null;
         };
         ProgramEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["Program"];
@@ -1696,7 +1706,7 @@ export interface components {
             /** @description 0 = draw, 1 = program1 won, 2 = program2 won */
             winner?: number | null;
             error_code?: number | null;
-            /** @description Filtered based on user permissions */
+            /** @description Filtered based on user permissions. When a program fails (error_code 1 or 2), ends with a line `--- stderr программы (последние 2 КБ) ---` and the tail of that program's stderr; only its team and admins see it. */
             error_message?: string | null;
             /** Format: date-time */
             started_at?: string | null;
@@ -1704,6 +1714,18 @@ export interface components {
             completed_at?: string | null;
             /** Format: date-time */
             created_at?: string;
+            /**
+             * Format: uuid
+             * @description Team of program1; absent if the team was deleted
+             */
+            team1_id?: string | null;
+            team1_name?: string | null;
+            /**
+             * Format: uuid
+             * @description Team of program2; absent if the team was deleted
+             */
+            team2_id?: string | null;
+            team2_name?: string | null;
         };
         MatchRound: {
             round_number?: number;
@@ -2082,6 +2104,8 @@ export interface components {
         Limit: number;
         /** @description Number of records to skip */
         Offset: number;
+        /** @description Only matches of this team (any version of its program, on either side) */
+        MatchTeamFilter: string;
     };
     requestBodies: never;
     headers: never;
@@ -2506,6 +2530,8 @@ export interface operations {
     tournamentsGetMatchesByRounds: {
         parameters: {
             query?: {
+                /** @description Only matches of this team (any version of its program, on either side) */
+                team_id?: components["parameters"]["MatchTeamFilter"];
                 /** @description Round number (together with game_type) */
                 round?: number;
                 /** @description Game type (together with round) */
@@ -3117,6 +3143,8 @@ export interface operations {
     tournamentGameMatches: {
         parameters: {
             query?: {
+                /** @description Only matches of this team (any version of its program, on either side) */
+                team_id?: components["parameters"]["MatchTeamFilter"];
                 status?: "pending" | "running" | "completed" | "failed" | "cancelled";
                 /** @description Maximum number of records to return, larger values are clamped to the maximum */
                 limit?: components["parameters"]["Limit"];
@@ -3822,6 +3850,8 @@ export interface operations {
             query?: {
                 tournament_id?: string;
                 program_id?: string;
+                /** @description Only matches of this team (any version of its program, on either side) */
+                team_id?: components["parameters"]["MatchTeamFilter"];
                 status?: "pending" | "running" | "completed" | "failed" | "cancelled";
                 game_type?: string;
                 /** @description Maximum number of records to return, larger values are clamped to the maximum */
