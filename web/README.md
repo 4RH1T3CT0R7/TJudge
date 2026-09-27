@@ -70,12 +70,11 @@ web/
 │   │   │   └── MiniGames.tsx        # Мини-игры (Pong, Typing, Strategy)
 │   │   ├── SpaceInvader.tsx    # Пиксельный маскот (CSS pixel art)
 │   │   ├── TerminalQuest.tsx   # Терминальный квест
-│   │   ├── TerminalLoader.tsx  # Терминальный лоадер
 │   │   ├── TerminalTypewriter.tsx  # Эффект печатающегося текста
 │   │   ├── CinematicOverlay.tsx # Кинематографические переходы
 │   │   ├── PixelGrid.tsx       # Пиксельная сетка
 │   │   ├── ErrorBoundary.tsx   # Обработка ошибок React
-│   │   └── PageLoader.tsx      # Лоадер для lazy-загрузки страниц
+│   │   └── ui/                 # Примитивы: Tabs, StatusLabel, Spinner, EmptyState, ErrorState, PageHeader, Field, Modal, TerminalOutput
 │   ├── hooks/                  # Кастомные хуки
 │   │   ├── useWebSocket.ts     # WebSocket для real-time обновлений
 │   │   ├── useQuestState.ts    # Состояние и логика квеста (5 уровней)
