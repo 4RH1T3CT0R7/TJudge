@@ -244,6 +244,9 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
   const first = dilemma ? firstDefection(transcript) : null;
   const [moveLabel, avgLabel] = MOVE_LABEL[gameType] ?? ['ход', 'средний ход'];
 
+  // на телефоне шаги - главный способ идти по ходам (и единственный при reduced
+  // motion), поэтому кнопки крупнее, а ползунок со счётчиком - своей строкой
+  const stepBtn = 'btn btn-sm btn-secondary min-h-10 min-w-10 text-base sm:min-h-0 sm:min-w-8';
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 font-mono text-sm">
@@ -255,29 +258,31 @@ function Replay({ transcript, gameType, names }: { transcript: MatchTranscript; 
               if (step >= n) setStep(0);
               setPlaying(true);
             }}
-            className="btn btn-sm btn-primary w-32 justify-center"
+            className="btn btn-sm btn-primary min-h-10 w-32 justify-center sm:min-h-0"
           >
             <span aria-hidden="true">{isPlaying ? '❚❚' : '▶'}</span>
             {isPlaying ? 'пауза' : 'проиграть'}
           </button>
         )}
-        <button type="button" onClick={() => seek(step - 1)} disabled={step === 0} className="btn btn-sm btn-secondary" aria-label="На ход назад">
+        <button type="button" onClick={() => seek(step - 1)} disabled={step === 0} className={stepBtn} aria-label="На ход назад">
           ‹
         </button>
-        <input
-          type="range"
-          min={0}
-          max={n}
-          value={step}
-          onChange={(e) => seek(Number(e.target.value))}
-          aria-label="Итерация"
-          aria-valuetext={`после ${step} из ${n}`}
-          className="order-last basis-full accent-primary-400 sm:order-none sm:basis-0 sm:flex-1"
-        />
-        <button type="button" onClick={() => seek(step + 1)} disabled={step === n} className="btn btn-sm btn-secondary" aria-label="На ход вперёд">
+        <button type="button" onClick={() => seek(step + 1)} disabled={step === n} className={stepBtn} aria-label="На ход вперёд">
           ›
         </button>
-        <span className="w-24 text-right tabular-nums text-gray-400">{step} / {n}</span>
+        <div className="flex basis-full items-center gap-3 sm:basis-0 sm:flex-1">
+          <input
+            type="range"
+            min={0}
+            max={n}
+            value={step}
+            onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Итерация"
+            aria-valuetext={`после ${step} из ${n}`}
+            className="min-w-0 flex-1 accent-primary-400"
+          />
+          <span className="shrink-0 tabular-nums text-gray-400">{step} / {n}</span>
+        </div>
       </div>
 
       <div className="space-y-2">
