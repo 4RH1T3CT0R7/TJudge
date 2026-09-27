@@ -534,6 +534,38 @@ func (s *MatchRepositorySuite) TestUpdateResultWithOutbox_AfterTournamentComplet
 	assert.Zero(s.T(), outboxRows)
 }
 
+// транскрипт пишется вместе с результатом, отдаётся как есть и сбрасывается
+// вместе с упавшим матчем
+func (s *MatchRepositorySuite) TestTranscript() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("trnsc")
+	played := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	crashed := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	silent := s.createMatch(tournament.ID, prog1.ID, prog2.ID, "dilemma", models.MatchRunning, models.PriorityMedium, 1)
+	ctx := context.Background()
+
+	require.NoError(s.T(), s.repo.UpdateResultWithOutbox(ctx, played.ID, &models.MatchResult{Score1: 15, Score2: 5, Winner: 1,
+		Transcript: &models.Transcript{Moves: [][]int{{1, 0}, {1, 1}}, Points: [][]int{{5, 10}, {5, 0}}}}))
+	require.NoError(s.T(), s.repo.UpdateResult(ctx, crashed.ID, &models.MatchResult{ErrorCode: 1, Winner: 2,
+		Transcript: &models.Transcript{Moves: [][]int{{1}, {}}}}))
+	require.NoError(s.T(), s.repo.UpdateResultWithOutbox(ctx, silent.ID, &models.MatchResult{Score1: 1, Score2: 1}))
+
+	raw, err := s.repo.GetTranscript(ctx, played.ID)
+	require.NoError(s.T(), err)
+	assert.JSONEq(s.T(), `{"moves":[[1,0],[1,1]],"points":[[5,10],[5,0]]}`, string(raw))
+
+	_, err = s.repo.GetTranscript(ctx, silent.ID)
+	assert.True(s.T(), errors.IsNotFound(err))
+	_, err = s.repo.GetTranscript(ctx, uuid.New())
+	assert.True(s.T(), errors.IsNotFound(err))
+
+	_, err = s.repo.GetTranscript(ctx, crashed.ID)
+	require.NoError(s.T(), err)
+	_, err = s.repo.ResetFailedMatches(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	_, err = s.repo.GetTranscript(ctx, crashed.ID)
+	assert.True(s.T(), errors.IsNotFound(err), "транскрипт упавшего матча пережил сброс")
+}
+
 func (s *MatchRepositorySuite) TestResetFailedMatches() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("rstfld")
 

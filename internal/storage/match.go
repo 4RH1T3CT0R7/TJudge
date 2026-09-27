@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"time"
@@ -640,7 +641,7 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 	query := `
 		UPDATE matches
 		SET status = $2, score1 = $3, score2 = $4, winner = $5,
-		    error_code = $6, error_message = $7, completed_at = NOW()
+		    error_code = $6, error_message = $7, transcript = $8, completed_at = NOW()
 		WHERE id = $1 AND status = 'running'
 	`
 
@@ -667,6 +668,7 @@ func (r *MatchRepository) UpdateResult(ctx context.Context, id uuid.UUID, result
 		result.Winner,
 		errorCode,
 		errorMsg,
+		transcriptJSON(result.Transcript),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to update match result")
@@ -708,11 +710,12 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 		updateQuery := `
 			UPDATE matches
 			SET status = $2, score1 = $3, score2 = $4, winner = $5,
-			    error_code = $6, error_message = $7, completed_at = NOW()
+			    error_code = $6, error_message = $7, transcript = $8, completed_at = NOW()
 			WHERE id = $1 AND status = 'running'
 		`
 		res, err := tx.ExecContext(ctx, updateQuery,
 			id, status, result.Score1, result.Score2, result.Winner, errorCode, errorMsg,
+			transcriptJSON(result.Transcript),
 		)
 		if err != nil {
 			return errors.Wrap(err, "failed to update match result")
@@ -737,6 +740,33 @@ func (r *MatchRepository) UpdateResultWithOutbox(ctx context.Context, id uuid.UU
 	})
 }
 
+// transcriptJSON кодирует транскрипт для колонки json строкой: []byte lib/pq
+// отправил бы как bytea. nil - NULL
+func transcriptJSON(t *models.Transcript) *string {
+	if t == nil {
+		return nil
+	}
+	b, _ := json.Marshal(t) // срезы чисел кодируются без ошибок
+	s := string(b)
+	return &s
+}
+
+// GetTranscript отдаёт транскрипт матча как есть, в JSON
+func (r *MatchRepository) GetTranscript(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	var transcript []byte
+	err := r.db.QueryRowContext(ctx, `SELECT transcript FROM matches WHERE id = $1`, id).Scan(&transcript)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return nil, errors.ErrNotFound.WithMessage("match not found")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get match transcript")
+	}
+	if transcript == nil {
+		return nil, errors.ErrNotFound.WithMessage("transcript not found")
+	}
+	return transcript, nil
+}
+
 // ResetToPending возвращает матч running->pending при транзиентной ошибке
 // executor'а (докер недоступен и т.п.) - программа не виновата, матч повторится
 func (r *MatchRepository) ResetToPending(ctx context.Context, id uuid.UUID) error {
@@ -756,7 +786,7 @@ func (r *MatchRepository) ResetFailedMatches(ctx context.Context, tournamentID u
 	query := `
 		UPDATE matches
 		SET status = $1, error_code = NULL, error_message = NULL, started_at = NULL, completed_at = NULL,
-		    score1 = NULL, score2 = NULL, winner = NULL
+		    score1 = NULL, score2 = NULL, winner = NULL, transcript = NULL
 		WHERE tournament_id = $2 AND status = $3
 	`
 
