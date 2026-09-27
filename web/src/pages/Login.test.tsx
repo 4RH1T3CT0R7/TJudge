@@ -65,8 +65,11 @@ describe('Login', () => {
   it('429 блокирует вход на Retry-After секунд', async () => {
     const alert = await submitWith(httpError(429, { 'retry-after': '42' }));
     expect(alert.textContent).toContain('подождите 42 с');
-    const button = screen.getByRole('button', { name: /повтор через 42 с/ }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    // кнопка остаётся в фокусе (aria-disabled), но повторно не отправляет
+    const button = screen.getByRole('button', { name: /повтор через 42 с/ });
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(button);
+    expect(api.login).toHaveBeenCalledTimes(1);
     // правка поля отсчёт не снимает
     fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'secret2' } });
     expect(alert.textContent).toContain('подождите 42 с');

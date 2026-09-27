@@ -103,7 +103,7 @@ export function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (retryAt !== null) return;
+    if (isLoading || retryAt !== null) return;
     setError('');
     setValidationError(null);
 
@@ -308,10 +308,11 @@ export function Login() {
             </div>
           </div>
 
+          {/* aria-disabled вместо disabled: иначе после отправки фокус уходит на body */}
           <button
             type="submit"
-            disabled={isLoading || retryIn > 0}
-            className="w-full btn btn-primary py-2.5"
+            aria-disabled={isLoading || retryIn > 0 || undefined}
+            className="w-full btn btn-primary py-2.5 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
             style={monoFont}
           >
             {isLoading ? '// загрузка...' : retryIn > 0 ? `// повтор через ${retryIn} с` : 'auth.login()'}
