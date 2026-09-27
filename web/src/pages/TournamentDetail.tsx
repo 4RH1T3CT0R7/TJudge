@@ -28,6 +28,7 @@ import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { useOnRoundFinished } from '../hooks/useOnRoundFinished';
 import { InfoTab } from '../components/tournament/InfoTab';
 import { LeaderboardTab } from '../components/tournament/LeaderboardTab';
+import { TournamentInsights } from '../components/tournament/TournamentInsights';
 import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
 import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
@@ -552,6 +553,9 @@ export function TournamentDetail() {
             myTeamId={myTeam?.id}
             screenHref={isAuthenticated ? `/tournaments/${tournament.id}/screen` : undefined}
           />
+        )}
+        {activeTab === 'leaderboard' && tournament.status === 'completed' && (
+          <TournamentInsights tournamentId={tournament.id} games={games} rows={standings} rounds={matchRounds} />
         )}
 
         {activeTab === 'matches' && (
