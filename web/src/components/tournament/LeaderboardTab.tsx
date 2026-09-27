@@ -5,6 +5,7 @@ import { Segmented } from '../ui/Segmented';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { YouMark } from '../ui/YouMark';
+import { PlaceHint } from './PlaceHint';
 import { useRevealOnMobile } from '../../hooks/useRevealOnMobile';
 import type { CrossGameLeaderboardEntry, Game } from '../../types';
 
@@ -84,6 +85,9 @@ export function LeaderboardTab({
         <CrossGameLeaderboardTable entries={crossGameEntries} games={games} myTeamId={myTeamId} />
       ) : (
         <GeneralLeaderboardTable entries={crossGameEntries} myTeamId={myTeamId} />
+      )}
+      {crossGameEntries.length > 0 && (
+        <PlaceHint>место — по сумме очков всех игр с множителями, а не по числу побед</PlaceHint>
       )}
     </div>
   );

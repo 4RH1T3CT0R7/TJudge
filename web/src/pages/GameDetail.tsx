@@ -29,6 +29,7 @@ import { LineChart } from '../components/ui/LineChart';
 import { GameRules } from '../components/game/GameRules';
 import { StarterKit } from '../components/game/StarterKit';
 import { YouMark } from '../components/ui/YouMark';
+import { PlaceHint } from '../components/tournament/PlaceHint';
 import { revealAndFocus, useRevealOnMobile } from '../hooks/useRevealOnMobile';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
 import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown';
@@ -258,60 +259,63 @@ export function GameDetail() {
               <div className="card">
                 <h2 className="text-lg font-semibold mb-4 text-gray-100">Таблица рейтинга</h2>
                 {leaderboard.length > 0 ? (
-                  // relative: sr-only подпись в шапке иначе вылезает из прокрутки и растягивает страницу
-                  <div className="relative overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
-                          <th className="pb-2 px-2">#</th>
-                          <th className="pb-2 pr-4">Команда</th>
-                          <th className="pb-2 pr-4 text-center" title="Сумма очков за сыгранные матчи раунда">Очки</th>
-                          <th className="pb-2 pr-4 text-center">W</th>
-                          <th className="pb-2 pr-4 text-center">L</th>
-                          <th className="pb-2 pr-4 text-center">D</th>
-                          <th className="pb-2 text-center">Игр</th>
-                          <th className="pb-2 text-center"><span className="sr-only">График ELO</span></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leaderboard.map((entry) => {
-                          const mine = !!myTeamId && entry.team_id === myTeamId;
-                          return (
-                            <tr
-                              key={entry.program_id}
-                              ref={mine ? revealMine : undefined}
-                              aria-current={mine ? 'true' : undefined}
-                              className={`border-b border-gray-800 ${mine ? 'row-mine' : ''}`}
-                            >
-                              <td className="py-2 px-2 font-mono font-medium text-gray-200">{entry.rank}</td>
-                              <td className="py-2 pr-4 text-gray-200">
-                                {entry.team_name || entry.program_name}
-                                {mine && <YouMark />}
-                                {entry.team_name && (
-                                  <div className="hidden font-mono text-xs text-gray-500 break-all sm:block">{entry.program_name}</div>
-                                )}
-                              </td>
-                              <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
-                              <td className="py-2 pr-4 text-center font-mono text-green-400">{entry.wins}</td>
-                              <td className="py-2 pr-4 text-center font-mono text-red-400">{entry.losses}</td>
-                              <td className="py-2 pr-4 text-center font-mono text-gray-400">{entry.draws}</td>
-                              <td className="py-2 text-center font-mono text-gray-200">{entry.total_games}</td>
-                              <td className="py-2 text-center">
-                                <button
-                                  onClick={() => setChartProgram({ id: entry.program_id, name: entry.team_name || entry.program_name })}
-                                  className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
-                                  title="График ELO"
-                                  aria-label={`График ELO ${entry.team_name || entry.program_name}`}
-                                >
-                                  <ChartBarIcon className="w-4 h-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    {/* relative: sr-only подпись в шапке иначе вылезает из прокрутки и растягивает страницу */}
+                    <div className="relative overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
+                            <th className="pb-2 px-2">#</th>
+                            <th className="pb-2 pr-4">Команда</th>
+                            <th className="pb-2 pr-4 text-center" title="Сумма очков за сыгранные матчи раунда">Очки</th>
+                            <th className="pb-2 pr-4 text-center">W</th>
+                            <th className="pb-2 pr-4 text-center">L</th>
+                            <th className="pb-2 pr-4 text-center">D</th>
+                            <th className="pb-2 text-center">Игр</th>
+                            <th className="pb-2 text-center"><span className="sr-only">График ELO</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leaderboard.map((entry) => {
+                            const mine = !!myTeamId && entry.team_id === myTeamId;
+                            return (
+                              <tr
+                                key={entry.program_id}
+                                ref={mine ? revealMine : undefined}
+                                aria-current={mine ? 'true' : undefined}
+                                className={`border-b border-gray-800 ${mine ? 'row-mine' : ''}`}
+                              >
+                                <td className="py-2 px-2 font-mono font-medium text-gray-200">{entry.rank}</td>
+                                <td className="py-2 pr-4 text-gray-200">
+                                  {entry.team_name || entry.program_name}
+                                  {mine && <YouMark />}
+                                  {entry.team_name && (
+                                    <div className="hidden font-mono text-xs text-gray-500 break-all sm:block">{entry.program_name}</div>
+                                  )}
+                                </td>
+                                <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
+                                <td className="py-2 pr-4 text-center font-mono text-green-400">{entry.wins}</td>
+                                <td className="py-2 pr-4 text-center font-mono text-red-400">{entry.losses}</td>
+                                <td className="py-2 pr-4 text-center font-mono text-gray-400">{entry.draws}</td>
+                                <td className="py-2 text-center font-mono text-gray-200">{entry.total_games}</td>
+                                <td className="py-2 text-center">
+                                  <button
+                                    onClick={() => setChartProgram({ id: entry.program_id, name: entry.team_name || entry.program_name })}
+                                    className="p-1.5 rounded-md text-gray-500 hover:text-primary-400 hover:bg-gray-800 transition-colors"
+                                    title="График ELO"
+                                    aria-label={`График ELO ${entry.team_name || entry.program_name}`}
+                                  >
+                                    <ChartBarIcon className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <PlaceHint>место — по сумме очков за все матчи игры, а не по числу побед</PlaceHint>
+                  </>
                 ) : (
                   <EmptyState command="рейтинг" hint="нет данных: загрузите программу и дождитесь результатов матчей" />
                 )}
