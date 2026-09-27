@@ -42,7 +42,7 @@ it('берёт вкладку из ?tab= и пишет выбор обратно
   renderAt('/t?tab=matches&x=1');
   const matches = screen.getByRole('tab', { name: /Матчи/ });
   expect(matches.getAttribute('aria-selected')).toBe('true');
-  expect(matches.textContent).toBe('> Матчи[414]');
+  expect(matches.textContent).toBe('> Матчи [414]');
   expect(screen.getByRole('tabpanel').textContent).toBe('панель matches');
 
   fireEvent.click(screen.getByRole('tab', { name: /Команды/ }));

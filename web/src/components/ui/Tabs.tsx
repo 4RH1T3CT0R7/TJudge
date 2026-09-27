@@ -21,6 +21,9 @@ interface TabsProps<T extends string> {
   children: ReactNode;
 }
 
+// ширина затухания края списка (3rem)
+const FADE_PX = 48;
+
 // Вкладки страницы: выбранная отмечена «> », на узком экране список прокручивается
 // по горизонтали. Состояние держит вызывающий, обычно через useTabParam (?tab=).
 export function Tabs<T extends string>({ items, active, onChange, label, aside, children }: TabsProps<T>) {
@@ -28,12 +31,13 @@ export function Tabs<T extends string>({ items, active, onChange, label, aside, 
   const listRef = useRef<HTMLDivElement>(null);
   const [moreRight, setMoreRight] = useState(false);
 
-  // выбранная вкладка не остаётся за краем прокручиваемого списка
+  // выбранная вкладка не остаётся за краем прокручиваемого списка и под его
+  // затуханием: пока справа есть вкладки, после неё остаётся запас в ширину маски
   useEffect(() => {
     const list = listRef.current;
     const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!list || !tab) return;
-    const right = tab.offsetLeft + tab.offsetWidth;
+    const right = tab.offsetLeft + tab.offsetWidth + (tab.nextElementSibling ? FADE_PX : 0);
     if (tab.offsetLeft < list.scrollLeft) list.scrollLeft = tab.offsetLeft;
     else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth;
   }, [active]);
@@ -84,7 +88,7 @@ export function Tabs<T extends string>({ items, active, onChange, label, aside, 
               >
                 <span aria-hidden="true" className={selected ? 'text-primary-400' : 'invisible'}>{'> '}</span>
                 {tab.label}
-                {tab.count !== undefined && <span className="ml-1.5 text-gray-500">[{tab.count}]</span>}
+                {tab.count !== undefined && <>{' '}<span className="text-gray-500">[{tab.count}]</span></>}
               </button>
             );
           })}
