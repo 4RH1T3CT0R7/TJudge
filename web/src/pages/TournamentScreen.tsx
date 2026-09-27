@@ -307,6 +307,7 @@ export function TournamentScreen() {
 
   const { pinned, body } = pageSlice(standings, perPage, page);
   const shortLink = `${window.location.host}/t/${tournament.code}`;
+  const shortUrl = `${window.location.origin}/t/${tournament.code}`;
   const bannerGame = bannerType && !ceremony ? games.find((g) => g.name === bannerType) : undefined;
   const bannerTop = bannerGame && table ? topOfGame(table.entries, bannerGame) : [];
 
@@ -386,6 +387,18 @@ export function TournamentScreen() {
         <div className="flex flex-1 items-center justify-center text-gray-400 text-[clamp(16px,2.4vh,32px)]">
           <Spinner>загрузка таблицы</Spinner>
         </div>
+      ) : standings.length === 0 ? (
+        // до первых программ табло - приглашение: крупные ссылка и QR для зала
+        <section aria-label="Табло пусто" className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[3vh] text-center font-mono">
+          <p className="text-gray-300 text-[clamp(24px,4.4vh,60px)]">
+            <span aria-hidden="true" className="text-primary-400">$ </span>
+            {tournament.status === 'pending' ? 'ждём старта турнира' : 'ждём первых результатов'}
+          </p>
+          <QrCode text={shortUrl} className="h-[34vh] w-[34vh] min-h-32 min-w-32" />
+          <p className="text-gray-300 text-[clamp(20px,3.4vh,46px)]">
+            таблица на своём ПК: <span className="font-bold text-gray-100">{shortLink}</span>
+          </p>
+        </section>
       ) : (
         <>
           <section ref={measureArea} aria-label="Таблица турнира" className="min-h-0 flex-1">
@@ -424,7 +437,7 @@ export function TournamentScreen() {
                 <br />
                 <span className="font-bold text-gray-100">{shortLink}</span>
               </p>
-              <QrCode text={`${window.location.origin}/t/${tournament.code}`} className="h-[13vh] w-[13vh] min-h-20 min-w-20" />
+              <QrCode text={shortUrl} className="h-[13vh] w-[13vh] min-h-20 min-w-20" />
             </div>
           </footer>
         </>
