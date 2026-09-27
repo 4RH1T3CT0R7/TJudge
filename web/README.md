@@ -168,7 +168,7 @@ react-markdown и remark-gfm своего чанка не имеют: Vite кл�
 
 ### Система квестов
 
-Полноценный терминальный квест из 5 уровней, где пользователь помогает инвейдеру «сбежать из кода»:
+Полноценный терминальный квест из 5 уровней, где пользователь помогает инвейдеру "сбежать из кода":
 
 1. **Разведка** -- сканирование системы, поиск скрытых файлов, чтение логов.
 2. **Файрвол** -- расшифровка ключей, атака, мини-игра Pong.
@@ -209,7 +209,7 @@ await api.uploadProgram(formData);
 
 ## WebSocket
 
-Хук для real-time событий турнира (типы сообщений — `src/types/ws.ts`: `tournament_update`, `match_result`, `program_update`). Лидерборд сервер не присылает: после `match_result` его нужно перечитать через REST, так делает `useTournamentLive`.
+Хук для real-time событий турнира (типы сообщений: `src/types/ws.ts`: `tournament_update`, `match_result`, `program_update`). Лидерборд сервер не присылает: после `match_result` его нужно перечитать через REST, так делает `useTournamentLive`.
 
 ```typescript
 import { useWebSocket } from './hooks/useWebSocket';

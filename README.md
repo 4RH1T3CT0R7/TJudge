@@ -10,7 +10,7 @@ Ruby, PHP, Lua), система компилирует их в песочниц�
 результаты в реальном времени через WebSocket.
 
 Стек: Go 1.26 / PostgreSQL 15 / Redis 7 / React 19.
-Разработка — [BMSTU ITSTech](https://github.com/bmstu-itstech) (МГТУ им. Баумана).
+Разработка: [BMSTU ITSTech](https://github.com/bmstu-itstech) (МГТУ им. Баумана).
 
 <img src="docs/media/demo.gif" width="100%" alt="Интерфейс TJudge: главная, игры, рейтинг, матчи по раундам, правила игры">
 
@@ -24,7 +24,7 @@ make docker-up        # создаёт внешнюю сеть monitoring и п�
 ```
 
 Первый запуск собирает образы (api, worker, исполнитель матчей `tjudge-cli`,
-песочница компиляции `tjudge-builder`) — несколько минут. Миграции БД
+песочница компиляции `tjudge-builder`) и занимает несколько минут. Миграции БД
 применяются автоматически.
 
 После запуска:
@@ -33,7 +33,7 @@ make docker-up        # создаёт внешнюю сеть monitoring и п�
 |--------|-----|
 | Веб-приложение и API | http://localhost:8080 |
 | Метрики api / worker | http://localhost:9090/metrics, http://localhost:9091/metrics |
-| Grafana, Prometheus | http://localhost:3000 (логин admin, пароль в `secrets/grafana_admin_password.txt`), http://localhost:9092 — после `make monitoring-up` |
+| Grafana, Prometheus | http://localhost:3000 (логин admin, пароль в `secrets/grafana_admin_password.txt`), http://localhost:9092, после `make monitoring-up` |
 
 Назначение администратора (сначала зарегистрируйтесь через веб-интерфейс):
 
@@ -41,7 +41,7 @@ make docker-up        # создаёт внешнюю сеть monitoring и п�
 make admin EMAIL=your-email@example.com
 ```
 
-После назначения — выйдите и войдите заново.
+После назначения выйдите и войдите заново.
 
 Деплой на свой сервер (профили по железу):
 
@@ -52,12 +52,12 @@ make deploy-medium       # 4 ядра, 8 ГБ RAM
 make deploy-strong       # 8+ ядер, 16+ ГБ RAM
 ```
 
-Подробнее — [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Подробнее: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Игры
 
 Пять игр, каждая исполняется через [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust).
-Правила с протоколами взаимодействия — в веб-интерфейсе и в [руководстве](docs/USER_GUIDE.md).
+Правила с протоколами взаимодействия есть в веб-интерфейсе и в [руководстве](docs/USER_GUIDE.md).
 
 | Игра | Идентификатор |
 |------|---------------|
@@ -70,39 +70,39 @@ make deploy-strong       # 8+ ядер, 16+ ГБ RAM
 ## Архитектура
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│  Frontend   │────▶│     API     │────▶│  PostgreSQL  │
-│  (React)    │◀────│    (Go)     │◀────│              │
-└─────────────┘     └──────┬──────┘     └──────────────┘
-       ▲                   │
-       │ WebSocket         │
-       └───────────────────┤
-                     ┌─────▼─────┐
-                     │   Redis   │
-                     │ (очередь  │
-                     │  + кэш)   │
-                     └─────┬─────┘
-                           │
-               ┌───────────┼───────────┐
-               ▼           ▼           ▼
-         ┌─────────┐ ┌─────────┐ ┌─────────┐
-         │ Worker  │ │ Worker  │ │ Worker  │
-         └────┬────┘ └────┬────┘ └────┬────┘
-              │           │           │
-         ┌────▼───────────▼───────────▼────┐
-         │      Docker (tjudge-cli)        │
-         └─────────────────────────────────┘
++-------------+     +-------------+     +--------------+
+|  Frontend   |---->|     API     |---->|  PostgreSQL  |
+|  (React)    |<----|    (Go)     |<----|              |
++-------------+     +------+------+     +--------------+
+       ^                   |
+       | WebSocket         |
+       +-------------------+
+                     +-----v-----+
+                     |   Redis   |
+                     | (очередь  |
+                     |  + кэш)   |
+                     +-----+-----+
+                           |
+               +-----------+-----------+
+               v           v           v
+         +---------+ +---------+ +---------+
+         | Worker  | | Worker  | | Worker  |
+         +----+----+ +----+----+ +----+----+
+              |           |           |
+         +----v-----------v-----------v----+
+         |      Docker (tjudge-cli)        |
+         +---------------------------------+
 ```
 
 | Компонент | Технологии |
 |-----------|------------|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, TanStack Query, Zustand |
 | API Server | Go 1.26, Chi Router, JWT, WebSocket |
-| Domain Events | In-process Event Bus, между репликами — Redis pub/sub `tjudge:events` |
+| Domain Events | In-process Event Bus, между репликами через Redis pub/sub `tjudge:events` |
 | Worker Pool | Go, автомасштабирование от `WORKER_MIN` до `WORKER_MAX` (по умолчанию число ядер), приоритетная очередь |
-| Database | PostgreSQL 15 (миграции 000001–000045), живые лидерборды по партиционированным `matches` |
-| Cache/Queue | Redis 7 — кэш турниров и лидерборда, очереди матчей и компиляции, распределённые локи, rate limiting |
-| Monitoring | Prometheus, Grafana, Alertmanager, Pushgateway (`make monitoring-up`); прод-стек — отдельное репо infra-monitoring |
+| Database | PostgreSQL 15 (миграции 000001-000045), живые лидерборды по партиционированным `matches` |
+| Cache/Queue | Redis 7: кэш турниров и лидерборда, очереди матчей и компиляции, распределённые локи, rate limiting |
+| Monitoring | Prometheus, Grafana, Alertmanager, Pushgateway (`make monitoring-up`); прод-стек в отдельном репо infra-monitoring |
 | Executor | Компиляция в песочнице `tjudge-builder`, матчи в [tjudge-cli](https://github.com/bmstu-itstech/tjudge-cli) (Rust), оба без сети; боты матча под разными uid |
 
 ## Разработка
@@ -141,16 +141,16 @@ cd web && npm run dev                  # фронтенд с hot reload, http://
 
 Тесты: unit рядом с кодом, integration (`-tags=integration`: репозитории
 `internal/storage` и `tests/integration`, нужны БД и Redis), e2e и security
-(`tests/e2e`, `tests/security`, нужен запущенный API). Подробнее — [docs/SETUP.md](docs/SETUP.md).
+(`tests/e2e`, `tests/security`, нужен запущенный API). Подробнее: [docs/SETUP.md](docs/SETUP.md).
 
 CI/CD (GitHub Actions): `ci` на push в main и PR (фронтенд, npm audit, vet, линт,
-govulncheck, миграции up→down→up, тесты с -race, интеграционные, e2e и security),
-`nightly` (на dev-compose: изоляция песочницы, полный цикл компиляция → матч, бэкап и restore) и `release` по тегу `v*` —
+govulncheck, миграции up -> down -> up, тесты с -race, интеграционные, e2e и security),
+`nightly` (на dev-compose: изоляция песочницы, полный цикл компиляция -> матч, бэкап и restore) и `release` по тегу `v*`:
 сборка образов, выкладка на сервер, проверка запущенной версии и пост-деплойный doctor.
 
 ## API
 
-Основные эндпоинты (полный справочник — [docs/openapi.yaml](docs/openapi.yaml)):
+Основные эндпоинты (полный справочник: [docs/openapi.yaml](docs/openapi.yaml)):
 
 | Метод | Путь | Описание |
 |-------|------|----------|
