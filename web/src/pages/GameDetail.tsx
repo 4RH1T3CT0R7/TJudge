@@ -522,7 +522,7 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
   const roleOf = (m: Match) => (mine ? `вы — игрок ${leftSide(m)}` : `«${leftName}» — игрок ${leftSide(m)}`);
   const cellColor = (m: Match) => {
     const ls = leftSide(m);
-    if (m.status === 'running') return 'bg-blue-500 animate-pulse';
+    if (m.status === 'running') return 'bg-blue-500';
     if (m.status === 'pending' || m.status === 'cancelled') return 'bg-line';
     if (m.winner === ls) return 'bg-green-600';
     if (m.winner === other(ls)) return 'bg-red-600';

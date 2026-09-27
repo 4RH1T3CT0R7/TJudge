@@ -173,7 +173,8 @@ export function SpaceInvader({
   colorOverride = null,
 }: SpaceInvaderProps) {
   const { reduced } = useMotionPref();
-  // при выключенных анимациях (useMotionPref) CSS-анимации поз не запускаются
+  // При выключенных анимациях (useMotionPref) CSS-анимации поз не запускаются.
+  // Циклы конечны и укладываются в ~5 с (WCAG 2.2.2): маскот не двигается бесконечно
   const animate = (value: string): string => (reduced ? 'none' : value);
 
   // Производные цвета - переопределяем фиолетовый переданным цветом, если указан
@@ -907,7 +908,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `e${r}a`), eyeRow(r, `e${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `a${i}a`), bodyLine(line, `a${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `m${i}a`), bodyLine(line, `m${i}b`)])}
-      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
+      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out 2') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `l${i}a`), bodyLine(line, `l${i}b`)])}
       </div>
     </>
@@ -923,7 +924,7 @@ export function SpaceInvader({
   );
 
   const renderDancePose = () => (
-    <div style={{ animation: animate('wave-hands 0.4s ease-in-out infinite') }}>
+    <div style={{ animation: animate('wave-hands 0.4s ease-in-out 12') }}>
       {renderHandsUpPose()}
     </div>
   );
@@ -934,7 +935,7 @@ export function SpaceInvader({
       {[0, 1, 2].flatMap((r) => [eyeRow(r, `re${r}a`), eyeRow(r, `re${r}b`)])}
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ra${i}a`), bodyLine(line, `ra${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `rm${i}a`), bodyLine(line, `rm${i}b`)])}
-      <div style={{ animation: animate('run-legs 0.2s ease-in-out infinite') }}>
+      <div style={{ animation: animate('run-legs 0.2s ease-in-out 25') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `rl${i}a`), bodyLine(line, `rl${i}b`)])}
       </div>
     </>
@@ -962,14 +963,14 @@ export function SpaceInvader({
             color: '#60a5fa', fontFamily: 'var(--font-mono)',
             fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
             textShadow: '0 0 6px rgba(96,165,250,0.7)',
-            animation: animate('tear-fall 1.4s ease-in infinite'),
+            animation: animate('tear-fall 1.4s ease-in 2 both'),
             animationDelay: t.delay, pointerEvents: 'none',
           }}>{t.ch}</span>
         ))}
       </div>
       {IDLE_ARM_ROWS.flatMap((line, i) => [bodyLine(line, `ca${i}a`), bodyLine(line, `ca${i}b`)])}
       {IDLE_BODY_ROWS.flatMap((line, i) => [bodyLine(line, `cm${i}a`), bodyLine(line, `cm${i}b`)])}
-      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out infinite') }}>
+      <div style={{ animation: animate('tentacle-wiggle 2s ease-in-out 2') }}>
         {IDLE_LEGS.flatMap((line, i) => [bodyLine(line, `cl${i}a`), bodyLine(line, `cl${i}b`)])}
       </div>
     </div>
@@ -991,7 +992,7 @@ export function SpaceInvader({
             fontFamily: 'var(--font-mono)',
             fontWeight: 'bold',
             opacity: 0.8,
-            animation: animate('zzz-float 2s ease-out infinite'),
+            animation: animate('zzz-float 2s ease-out 2 both'),
             animationDelay: `${i * 0.5}s`,
           }}
         >
@@ -1002,13 +1003,13 @@ export function SpaceInvader({
   );
 
   const renderFlyPose = () => (
-    <div style={{ animation: animate('fly-drift 2s ease-in-out infinite'), position: 'relative' }}>
+    <div style={{ animation: animate('fly-drift 2s ease-in-out 2'), position: 'relative' }}>
       {renderHandsUpPose()}
       {/* ASCII flame exhaust */}
       {[
-        { left: '35%', delay: '0s', ch: '^', color: '#ef4444' },
-        { left: '47%', delay: '0.15s', ch: '*', color: '#f59e0b' },
-        { left: '59%', delay: '0.3s', ch: '^', color: '#ef4444' },
+        { left: '35%', ch: '^', color: '#ef4444' },
+        { left: '47%', ch: '*', color: '#f59e0b' },
+        { left: '59%', ch: '^', color: '#ef4444' },
       ].map((f, i) => (
         <span
           key={`flame-${i}`}
@@ -1023,12 +1024,8 @@ export function SpaceInvader({
             lineHeight: 1,
             textShadow: `0 0 6px ${f.color}80`,
             opacity: 0.9,
-            animation: animate('particle-fly 0.5s ease-out infinite'),
-            animationDelay: f.delay,
-            '--px': '0px',
-            '--py': '15px',
             pointerEvents: 'none',
-          } as React.CSSProperties}
+          }}
         >
           {f.ch}
         </span>
@@ -1094,7 +1091,7 @@ export function SpaceInvader({
 
   const renderShieldPose = () => (
     <div style={{
-      animation: animate('shield-pulse 1.5s ease-in-out infinite'),
+      animation: animate('shield-pulse 1.5s ease-in-out 3 both'),
       position: 'relative',
       borderRadius: '8px',
       padding: '2px',
@@ -1118,7 +1115,7 @@ export function SpaceInvader({
         position: 'absolute', inset: '-4px', borderRadius: '8px',
         border: '1.5px solid rgba(74,222,128,0.4)',
         pointerEvents: 'none',
-        animation: animate('shield-border-pulse 1.5s ease-in-out infinite'),
+        animation: animate('shield-border-pulse 1.5s ease-in-out 3'),
       }} />
     </div>
   );
@@ -1154,7 +1151,7 @@ export function SpaceInvader({
               fontSize: effectFontSize,
               fontWeight: 'bold',
               pointerEvents: 'none',
-              animation: animate('char-confetti 1.8s ease-out infinite'),
+              animation: animate('char-confetti 1.8s ease-out 2 both'),
               animationDelay: `${i * 0.15}s`,
             }}
           >
@@ -1195,7 +1192,7 @@ export function SpaceInvader({
   );
 
   const renderDizzyPose = () => (
-    <div style={{ animation: animate('wobble 1s ease-in-out infinite'), position: 'relative' }}>
+    <div style={{ animation: animate('wobble 1s ease-in-out 5'), position: 'relative' }}>
       {renderIdlePose()}
       {/* Spinning stars */}
       {['*', '+', '*'].map((ch, i) => (
@@ -1209,7 +1206,7 @@ export function SpaceInvader({
             fontFamily: 'var(--font-mono)',
             fontSize: '10px',
             fontWeight: 'bold',
-            animation: `spin-invader ${1.5 + i * 0.3}s linear infinite`,
+            animation: animate(`spin-invader ${1.5 + i * 0.3}s linear 2`),
             opacity: 0.8,
           }}
         >
@@ -1233,7 +1230,7 @@ export function SpaceInvader({
         fontSize: effectFontSize,
         fontWeight: 'bold',
         whiteSpace: 'pre',
-        animation: animate('typing-hands 0.3s steps(2) infinite'),
+        animation: animate('typing-hands 0.3s steps(2) 16'),
         pointerEvents: 'none',
       }}>
         [====]
@@ -1321,20 +1318,28 @@ export function SpaceInvader({
         </div>
       )}
 
-      {/* Единый контейнер float-анимации - свечение через filter на контейнере, а НЕ text-shadow для каждого символа */}
+      {/* Контейнер парения и вращения: вращение длится, пока держат палец или кнопку */}
       <div ref={spinContainerRef} style={{
         animation: pose === 'spin'
           ? 'spin-invader 0.5s linear infinite'
           : pose === 'spinStop'
             ? 'none'
-            : 'invader-float 3s ease-in-out infinite',
+            : animate('invader-float 2.5s ease-in-out 2'),
         willChange: 'transform',
       }}>
-        <div style={{
-          animation: animate('invader-glow 2.5s ease-in-out infinite'),
-          willChange: 'filter',
-          position: 'relative',
-        }}>
+        <div style={{ position: 'relative' }}>
+          {/* Свечение - ореол за телом: пульсирует прозрачностью, а не filter на каждом кадре */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: '-12%',
+              pointerEvents: 'none',
+              background: `radial-gradient(closest-side, rgba(${accentRgb},0.22), transparent)`,
+              opacity: 0.6,
+              animation: animate('invader-glow 2.5s ease-in-out 2'),
+            }}
+          />
           {/* Particle container for flying character debris */}
           <div
             ref={particlesRef}
@@ -1349,6 +1354,7 @@ export function SpaceInvader({
           <div
             ref={bodyRef}
             style={{
+              position: 'relative',
               fontFamily: 'var(--font-mono)',
               fontSize: SIZE_MAP[size] || SIZE_MAP.md,
               lineHeight: 1,

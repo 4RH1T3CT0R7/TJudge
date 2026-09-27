@@ -173,12 +173,14 @@
   }
 }
 
+/* Ничего бесконечного на фоне (WCAG 2.2.2): блик на пьедестале проходит 3 раза,
+   конфетти падает один раз, курсор мигает 5 с и дальше горит */
 .animate-shine {
-  animation: shine 3s ease-in-out infinite;
+  animation: shine 3s ease-in-out 3;
 }
 
 .animate-confetti {
-  animation: confetti 2s ease-in-out infinite;
+  animation: confetti 2s ease-in-out both;
 }
 
 /* Terminal cursor blink */
@@ -188,7 +190,7 @@
 }
 
 .terminal-cursor {
-  animation: cursor-blink 1s step-end infinite;
+  animation: cursor-blink 1s step-end 5;
 }
 
 /* Glow orb drift */
@@ -697,8 +699,8 @@ tr.row-mine > :first-child {
 /* Removed invader-breathe: 3 nested animations caused layout thrashing. Float + glow is enough. */
 
 @keyframes invader-glow {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(139,92,246,0.4)); }
-  50% { filter: drop-shadow(0 0 16px rgba(139,92,246,0.7)) drop-shadow(0 0 30px rgba(109,40,217,0.2)); }
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 @keyframes tentacle-wiggle {

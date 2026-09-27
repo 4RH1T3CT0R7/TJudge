@@ -48,6 +48,8 @@ export function TerminalTypewriter() {
         break;
       }
       case 'paused':
+        // один круг по фразам: последняя остаётся на экране
+        if (phraseIndex === PHRASES.length - 1) break;
         timerRef.current = setTimeout(() => setPhase('deleting'), 2000);
         break;
       case 'deleting': {
@@ -62,14 +64,14 @@ export function TerminalTypewriter() {
       }
       case 'waiting':
         timerRef.current = setTimeout(() => {
-          setPhraseIndex((prev) => (prev + 1) % PHRASES.length);
+          setPhraseIndex((prev) => prev + 1);
           charIndex.current = 0;
           setDisplayedText('');
           setPhase('typing');
         }, 300);
         break;
     }
-  }, [phase, currentPhrase]);
+  }, [phase, currentPhrase, phraseIndex]);
 
   // Keep tickRef in sync
   useEffect(() => {

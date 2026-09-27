@@ -107,7 +107,7 @@ export function MatchesTab({
             </h2>
             {hasActiveMatches && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-blue-900/30 text-blue-400 text-xs">
-                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                <span className="w-2 h-2 bg-blue-500 rounded-full" />
                 Обновление...
               </span>
             )}
@@ -191,9 +191,9 @@ export function MatchesTab({
                 className="bg-emerald-500 transition-[width] duration-500"
                 style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
               />
-              {/* Running - blue, animated */}
+              {/* Running - blue */}
               <div
-                className="bg-blue-500 animate-pulse transition-[width] duration-500"
+                className="bg-blue-500 transition-[width] duration-500"
                 style={{ width: `${(totalStats.running / totalStats.total) * 100}%` }}
               />
               {/* Failed - red */}
@@ -210,7 +210,7 @@ export function MatchesTab({
             </span>
             {totalStats.running > 0 && (
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+                <span className="w-3 h-3 rounded-full bg-blue-500" />
                 Идёт
               </span>
             )}

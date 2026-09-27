@@ -62,7 +62,7 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
                 isVisible ? 'opacity-100' : 'opacity-0'
               } ${delay}`}
             >
-              <div className="absolute inset-0 bg-white/20 animate-pulse" style={{ animationDuration: '3s' }} />
+              <div className="absolute inset-0 bg-white/20" />
               <div className={`absolute inset-x-0 bottom-0 flex items-center justify-center pb-2 ${textColor}`}>
                 <span className="text-3xl font-black">{place}</span>
               </div>
