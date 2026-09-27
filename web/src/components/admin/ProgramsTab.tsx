@@ -7,6 +7,7 @@ import type { AdminReactionSetter } from './types';
 import { Field } from '../ui/Field';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
+import { TerminalOutput } from '../ui/TerminalOutput';
 import { EmptyState } from '../ui/EmptyState';
 import type { ProgramRow } from './programRows';
 
@@ -218,7 +219,9 @@ export function ProgramsTab({
                                           <summary className="w-fit cursor-pointer">
                                             <StatusLabel entity="program" status={program.status} />
                                           </summary>
-                                          <pre className="mt-1 max-w-md whitespace-pre-wrap break-words font-mono text-xs text-gray-300">{program.error_message}</pre>
+                                          <div className="mt-1 max-w-md">
+                                            <TerminalOutput label="вывод компилятора" text={program.error_message} maxHeight="max-h-48" />
+                                          </div>
                                         </details>
                                       ) : (
                                         <StatusLabel entity="program" status={program.status} />

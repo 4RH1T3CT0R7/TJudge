@@ -6,6 +6,7 @@ import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetric
 import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
 import { Spinner } from '../ui/Spinner';
+import { TerminalOutput } from '../ui/TerminalOutput';
 
 // Helper function to format bytes to human readable format
 const formatBytes = (bytes: number): string => {
@@ -777,9 +778,7 @@ export function SystemTab({
                           </span>
                         </div>
                         {match.error_message && (
-                          <div className="text-sm text-red-400 font-mono bg-red-900/30 p-2 rounded text-xs whitespace-pre-wrap break-words">
-                            {match.error_message}
-                          </div>
+                          <TerminalOutput label="stderr:" text={match.error_message} maxHeight="max-h-32" />
                         )}
                         <div className="mt-2 text-xs text-gray-400">
                           Код ошибки: {match.error_code || 'N/A'}

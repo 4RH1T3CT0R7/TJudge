@@ -19,6 +19,7 @@ import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
+import { TerminalOutput } from '../components/ui/TerminalOutput';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -512,8 +513,8 @@ export function GameDetail() {
                       Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
                     </p>
                     {currentProgram.error_message && (
-                      <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
-                        <strong>Ошибка:</strong> {currentProgram.error_message}
+                      <div className="mt-2">
+                        <TerminalOutput label="вывод компилятора" text={currentProgram.error_message} />
                       </div>
                     )}
                     <button
@@ -663,10 +664,10 @@ export function GameDetail() {
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-100">v{program.version}</span>
                                 <StatusLabel
-                                entity="program"
-                                status={program.status}
-                                title={program.status === 'failed' ? program.error_message || undefined : undefined}
-                              />
+                                  entity="program"
+                                  status={program.status}
+                                  title={program.status === 'failed' ? program.error_message || undefined : undefined}
+                                />
                               </div>
                               <span className="text-xs text-gray-400">
                                 {new Date(program.created_at).toLocaleDateString('ru-RU')}
@@ -909,8 +910,8 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
           )}
 
           {activeMatch.error_message && (
-            <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-xs text-red-300">
-              {activeMatch.error_message}
+            <div className="mt-2">
+              <TerminalOutput label="stderr:" text={activeMatch.error_message} />
             </div>
           )}
 
