@@ -23,7 +23,7 @@ const STATUS = {
   },
   tournament: {
     pending: { glyph: '○', label: 'Ожидание', tone: 'yellow' },
-    active: { glyph: '◐', label: 'Активный', tone: 'green' },
+    active: { glyph: '◐', label: 'Активный', tone: 'blue' },
     completed: { glyph: '■', label: 'Завершён', tone: 'gray' },
   },
 } satisfies Record<string, Record<string, StatusMeta>>;

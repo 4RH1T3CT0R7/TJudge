@@ -9,6 +9,7 @@ it('сопоставляет статус с глифом, подписью и �
   const cases = [
     ['match', 'failed', '✕ Ошибка', 'badge-red'],
     ['match', 'running', '◐ Идёт', 'badge-blue'],
+    ['tournament', 'active', '◐ Активный', 'badge-blue'],
     ['program', 'compiling', '◔ Компилируется', 'badge-yellow'],
     ['program', 'ready', '● Готова', 'badge-green'],
     ['tournament', 'completed', '■ Завершён', 'badge-gray'],
