@@ -12,15 +12,17 @@ interface MatchErrorProps {
   brief?: boolean;
 }
 
+// Обезличенные тексты, которыми бэкенд заменяет чужую ошибку (handlers/match.go redactMatchErrors).
+const REDACTED = ['Программа оппонента завершилась с ошибкой', 'Ошибка выполнения матча'];
+
 // Упавший матч: вердикт по-русски, подсказка и сам текст ошибки в терминальном окне.
-// Сырой текст показывается, только когда он есть: чужую ошибку бэкенд заменяет
-// обезличенной фразой, и повторять её под вердиктом незачем.
+// Обезличенную фразу вместо чужой ошибки под вердиктом не повторяет.
 export function MatchError({ match, mySide, names, brief = false }: MatchErrorProps) {
   const e = explainMatchError(match, mySide, names);
   if (!e) return null;
   const opponentFailed = mySide !== null && failedSide(match) !== null && failedSide(match) !== mySide;
   const text = match.error_message ?? '';
-  const hasDetails = /player error|---/.test(text);
+  const hasDetails = text !== '' && !REDACTED.includes(text);
 
   return (
     <div className="space-y-2">

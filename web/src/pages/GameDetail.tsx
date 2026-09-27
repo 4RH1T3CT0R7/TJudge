@@ -243,7 +243,8 @@ export function GameDetail() {
               <div className="card">
                 <h2 className="text-lg font-semibold mb-4 text-gray-100">Таблица рейтинга</h2>
                 {leaderboard.length > 0 ? (
-                  <div className="overflow-x-auto">
+                  // relative: sr-only подпись в шапке иначе вылезает из прокрутки и растягивает страницу
+                  <div className="relative overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="text-left text-sm text-gray-400 border-b border-gray-700">
@@ -254,7 +255,7 @@ export function GameDetail() {
                           <th className="pb-2 pr-4 text-center">L</th>
                           <th className="pb-2 pr-4 text-center">D</th>
                           <th className="pb-2 text-center">Игр</th>
-                          <th className="pb-2 text-center" aria-label="График рейтинга"></th>
+                          <th className="pb-2 text-center"><span className="sr-only">График рейтинга</span></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -522,8 +523,8 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-300 truncate">
-              {leftName}
+            <p className="flex text-sm font-medium text-gray-300">
+              <span className="truncate">{leftName}</span>
               {mine && <YouMark />}
             </p>
             <p className={`text-2xl font-bold font-mono tabular-nums ${tone}`}>{leftTotal}</p>
