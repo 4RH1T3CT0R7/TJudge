@@ -112,6 +112,13 @@ function useIdle() {
 // Кнопки и ссылки сами обрабатывают пробел и Enter.
 const ownsKey = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, a, input, select, textarea');
 
+// Кнопка панели после клика мышью не держит фокус: иначе пробел и Enter
+// нажимали бы её снова вместо паузы и раскрытия места, а панель не пряталась.
+const onClick = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => {
+  if (e.detail > 0) e.currentTarget.blur();
+  fn();
+};
+
 function topOfGame(entries: CrossGameLeaderboardEntry[], game: Game) {
   return entries
     .filter((e) => e.game_ratings[game.id])
@@ -228,6 +235,19 @@ export function TournamentScreen() {
     [setParams]
   );
 
+  // смена вида переводит фокус на новый вид, иначе кнопка «Церемония»/«К таблице»
+  // забрала бы пробел и Enter, которыми раскрываются места
+  const mainRef = useRef<HTMLElement>(null);
+  const ceremonyRef = useRef<HTMLElement>(null);
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    (ceremony ? ceremonyRef : mainRef).current?.focus();
+  }, [ceremony]);
+
   const toggleFullscreen = fullscreen.toggle;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -286,7 +306,9 @@ export function TournamentScreen() {
 
   return (
     <main
-      className={`fixed inset-0 flex flex-col gap-[1.6vh] overflow-hidden bg-[#0a0a0b] px-[2.5vw] py-[2.5vh] text-gray-100 ${idle ? 'cursor-none' : ''}`}
+      ref={mainRef}
+      tabIndex={-1}
+      className={`fixed inset-0 flex flex-col gap-[1.6vh] overflow-hidden bg-[#0a0a0b] px-[2.5vw] py-[2.5vh] text-gray-100 outline-none ${idle ? 'cursor-none' : ''}`}
     >
       <title>{`${tournament.name} — табло — TJudge`}</title>
 
@@ -300,18 +322,18 @@ export function TournamentScreen() {
         {/* панель видна при движении мыши и при фокусе с клавиатуры */}
         <nav
           aria-label="Управление табло"
-          className={`flex shrink-0 flex-wrap justify-end gap-2 transition-opacity focus-within:opacity-100 ${idle ? 'opacity-0' : 'opacity-100'}`}
+          className={`flex shrink-0 flex-wrap justify-end gap-2 transition-opacity has-[:focus-visible]:opacity-100 ${idle ? 'opacity-0' : 'opacity-100'}`}
         >
-          <button type="button" onClick={toggleFullscreen} className="btn btn-sm btn-secondary">
+          <button type="button" onClick={onClick(toggleFullscreen)} className="btn btn-sm btn-secondary">
             {fullscreen.active ? 'Выйти из полного экрана' : 'На весь экран'}
           </button>
           {!ceremony && pages > 1 && (
-            <button type="button" onClick={() => setPaused((v) => !v)} aria-pressed={paused} className="btn btn-sm btn-secondary">
+            <button type="button" onClick={onClick(() => setPaused((v) => !v))} aria-pressed={paused} className="btn btn-sm btn-secondary">
               Пауза
             </button>
           )}
           {isAdmin && (
-            <button type="button" onClick={() => setCeremony(!ceremony)} className="btn btn-sm btn-secondary">
+            <button type="button" onClick={onClick(() => setCeremony(!ceremony))} className="btn btn-sm btn-secondary">
               {ceremony ? 'К таблице' : 'Церемония'}
             </button>
           )}
@@ -346,7 +368,7 @@ export function TournamentScreen() {
       </div>
 
       {ceremony ? (
-        <Ceremony rows={placed} revealed={revealed} />
+        <Ceremony ref={ceremonyRef} rows={placed} revealed={revealed} />
       ) : !table ? (
         <div className="flex flex-1 items-center justify-center text-gray-400 text-[clamp(16px,2.4vh,32px)]">
           <Spinner>загрузка таблицы</Spinner>
@@ -434,7 +456,7 @@ const CUP = [
 ].join('\n');
 
 // Церемония: места раскрываются снизу вверх по пробелу или →, ← возвращает шаг.
-function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number }) {
+function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: number; ref: React.Ref<HTMLElement> }) {
   // раскрыты последние revealed строк списка
   const isShown = (i: number) => i >= rows.length - revealed;
   const rest = rows.slice(3);
@@ -443,7 +465,7 @@ function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number })
   const reveal = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: DUR.slow, ease: EASE_OUT } };
 
   return (
-    <section aria-label="Церемония награждения" className="flex min-h-0 flex-1 flex-col font-mono">
+    <section ref={ref} tabIndex={-1} aria-label="Церемония награждения" className="flex min-h-0 flex-1 flex-col font-mono outline-none">
       <p className="text-primary-400 text-[clamp(16px,2.6vh,34px)]">
         <span aria-hidden="true">$ </span>церемония награждения
       </p>
