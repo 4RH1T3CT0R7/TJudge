@@ -1,8 +1,9 @@
-import { ArrowsExpandIcon, ChartBarIcon } from '../icons';
+import { ArrowsExpandIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
 import { LEADERBOARD_VIEWS } from './helpers';
 import { Segmented } from '../ui/Segmented';
 import { Spinner } from '../ui/Spinner';
+import { EmptyState } from '../ui/EmptyState';
 import type { CrossGameLeaderboardEntry, Game } from '../../types';
 
 // Leaderboard Tab Component
@@ -95,15 +96,7 @@ export function GeneralLeaderboardTable({
 }) {
   if (entries.length === 0) {
     return (
-      <div className={`empty-state ${isDark ? 'text-gray-400' : ''}`}>
-        <div className="empty-state-icon">
-          <ChartBarIcon />
-        </div>
-        <h3 className="empty-state-title">Пока нет результатов</h3>
-        <p className="empty-state-description">
-          Таблица обновится после завершения матчей
-        </p>
-      </div>
+      <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
     );
   }
 
@@ -249,15 +242,7 @@ function CrossGameLeaderboardTable({
 }) {
   if (entries.length === 0) {
     return (
-      <div className={`empty-state ${isDark ? 'text-gray-400' : ''}`}>
-        <div className="empty-state-icon">
-          <ChartBarIcon />
-        </div>
-        <h3 className="empty-state-title">Пока нет результатов</h3>
-        <p className="empty-state-description">
-          Таблица обновится после завершения матчей
-        </p>
-      </div>
+      <EmptyState command="результаты" hint="пока пусто: таблица заполнится после первых сыгранных матчей" />
     );
   }
 
