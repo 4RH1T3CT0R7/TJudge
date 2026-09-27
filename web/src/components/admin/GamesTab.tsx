@@ -4,6 +4,8 @@ import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import type { Game } from '../../types';
 import type { AdminReactionSetter, GameFormState } from './types';
+import { Modal } from '../ui/Modal';
+import { Field } from '../ui/Field';
 
 interface GamesTabProps {
   games: Game[];
@@ -115,81 +117,78 @@ export function GamesTab({
             </button>
           </div>
 
-          {/* Game Form Modal */}
-          {showGameForm && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4 text-gray-100">
-                  {editingGame ? 'Редактировать игру' : 'Создать новую игру'}
-                </h2>
+          <Modal
+            open={showGameForm}
+            onClose={resetGameForm}
+            title={editingGame ? 'Редактировать игру' : 'Создать новую игру'}
+            maxWidth="max-w-2xl"
+          >
+            <div className="space-y-4">
+              <Field label="Название (уникальный идентификатор)" hint="Только строчные буквы, цифры и подчёркивания">
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    name="gameName"
+                    value={gameForm.name}
+                    onChange={(e) =>
+                      setGameForm({ ...gameForm, name: e.target.value.toLowerCase() })
+                    }
+                    disabled={!!editingGame}
+                    className="input"
+                    placeholder="game_name"
+                  />
+                )}
+              </Field>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-300">
-                      Название (уникальный идентификатор)
-                    </label>
-                    <input
-                      type="text"
-                      name="gameName"
-                      value={gameForm.name}
-                      onChange={(e) =>
-                        setGameForm({ ...gameForm, name: e.target.value.toLowerCase() })
-                      }
-                      disabled={!!editingGame}
-                      className="input"
-                      placeholder="game_name"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Только строчные буквы, цифры и подчёркивания
-                    </p>
-                  </div>
+              <Field label="Отображаемое название">
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    name="gameDisplayName"
+                    value={gameForm.display_name}
+                    onChange={(e) =>
+                      setGameForm({ ...gameForm, display_name: e.target.value })
+                    }
+                    className="input"
+                    placeholder="Название игры"
+                  />
+                )}
+              </Field>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-300">Отображаемое название</label>
-                    <input
-                      type="text"
-                      name="gameDisplayName"
-                      value={gameForm.display_name}
-                      onChange={(e) =>
-                        setGameForm({ ...gameForm, display_name: e.target.value })
-                      }
-                      className="input"
-                      placeholder="Название игры"
-                    />
-                  </div>
+              <Field label="Правила (Markdown)">
+                {(control) => (
+                  <textarea
+                    {...control}
+                    value={gameForm.rules}
+                    onChange={(e) => setGameForm({ ...gameForm, rules: e.target.value })}
+                    className="input min-h-[200px] font-mono text-sm"
+                    placeholder="# Правила игры&#10;&#10;Напишите правила в формате Markdown..."
+                  />
+                )}
+              </Field>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-300">Правила (Markdown)</label>
-                    <textarea
-                      value={gameForm.rules}
-                      onChange={(e) => setGameForm({ ...gameForm, rules: e.target.value })}
-                      className="input min-h-[200px] font-mono text-sm"
-                      placeholder="# Правила игры&#10;&#10;Напишите правила в формате Markdown..."
-                    />
-                  </div>
-
-                  {gameError && (
-                    <div className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
-                      {gameError}
-                    </div>
-                  )}
+              {gameError && (
+                <div role="alert" className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
+                  {gameError}
                 </div>
-
-                <div className="flex justify-end gap-2 mt-6">
-                  <button onClick={resetGameForm} className="btn btn-secondary">
-                    Отмена
-                  </button>
-                  <button
-                    onClick={handleCreateGame}
-                    disabled={isSavingGame}
-                    className="btn btn-primary"
-                  >
-                    {isSavingGame ? 'Сохранение...' : editingGame ? 'Обновить' : 'Создать'}
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
-          )}
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={resetGameForm} className="btn btn-secondary">
+                Отмена
+              </button>
+              <button
+                onClick={handleCreateGame}
+                disabled={isSavingGame}
+                className="btn btn-primary"
+              >
+                {isSavingGame ? 'Сохранение...' : editingGame ? 'Обновить' : 'Создать'}
+              </button>
+            </div>
+          </Modal>
 
           {/* Games List */}
           {games.length === 0 ? (

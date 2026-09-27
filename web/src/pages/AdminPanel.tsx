@@ -17,7 +17,6 @@ import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { useSequenceTyping } from '../hooks/useEasterEggs';
-import { useEscapeKey } from '../hooks/useEscapeKey';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { GamesTab } from '../components/admin/GamesTab';
@@ -232,34 +231,6 @@ export function AdminPanel() {
   const [runningGameMatches, setRunningGameMatches] = useState<string | null>(null);
   const [settingActiveGame, setSettingActiveGame] = useState<string | null>(null);
   const [resettingGame, setResettingGame] = useState<string | null>(null);
-
-  // Закрываем модалки по Escape - в порядке приоритета (сверху вниз), повторяя полный cleanup из close-хелперов
-  const anyModalOpen = showGameForm || showTournamentForm || managingTournamentId !== null;
-  useEscapeKey(useCallback(() => {
-    if (managingTournamentId !== null) {
-      // mirrors closeTournamentGamesManagement()
-      setManagingTournamentId(null);
-      setRunningGameMatches(null);
-      setSettingActiveGame(null);
-      return;
-    }
-    if (showTournamentForm) {
-      // mirrors resetTournamentForm()
-      setShowTournamentForm(false);
-      setTournamentForm({ name: '', description: '', game_type: '', max_team_size: 3, max_participants: '', is_permanent: false, start_time: '', end_time: '' });
-      setSelectedGameIds([]);
-      setTournamentError(null);
-      return;
-    }
-    if (showGameForm) {
-      // mirrors resetGameForm()
-      setShowGameForm(false);
-      setEditingGame(null);
-      setGameForm({ name: '', display_name: '', rules: '' });
-      setGameError(null);
-      return;
-    }
-  }, [managingTournamentId, showTournamentForm, showGameForm]), anyModalOpen);
 
   // Programs tab state: композитный запрос (игры турнира, команды, лидерборды и программы игр).
   // Ключ лежит в поддереве queryKeys.tournament(id), поэтому invalidate по турниру сбрасывает и его.

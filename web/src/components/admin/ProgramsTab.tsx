@@ -4,6 +4,7 @@ import { getGameConfig } from '../../utils/gameConfig';
 import type { Game, Tournament, Program } from '../../types';
 import { statusLabels } from './types';
 import type { AdminReactionSetter } from './types';
+import { Field } from '../ui/Field';
 import type { ProgramRow } from './programRows';
 
 const buildStatus: Record<Program['status'], { label: string; className: string }> = {
@@ -91,23 +92,23 @@ export function ProgramsTab({
           <h2 className="text-lg font-semibold text-gray-100 mb-4">Просмотр загруженных программ</h2>
 
           {/* Tournament selector */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-gray-300">
-              Выберите турнир
-            </label>
-            <select
-              value={selectedTournamentId || ''}
-              onChange={(e) => e.target.value && handleTournamentSelect(e.target.value)}
-              className="input max-w-md"
-            >
-              <option value="">-- Выберите турнир --</option>
-              {tournaments.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({statusLabels[t.status]})
-                </option>
-              ))}
-            </select>
-          </div>
+          <Field label="Выберите турнир" className="mb-6">
+            {(control) => (
+              <select
+                {...control}
+                value={selectedTournamentId || ''}
+                onChange={(e) => e.target.value && handleTournamentSelect(e.target.value)}
+                className="input max-w-md"
+              >
+                <option value="">-- Выберите турнир --</option>
+                {tournaments.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({statusLabels[t.status]})
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
 
           {/* Loading state - показываем только после 1s задержки */}
           {showLoadingPrograms && (

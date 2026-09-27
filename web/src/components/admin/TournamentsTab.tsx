@@ -8,6 +8,8 @@ import { getGameConfig } from '../../utils/gameConfig';
 import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
 import { statusLabels } from './types';
+import { Modal } from '../ui/Modal';
+import { Field } from '../ui/Field';
 import type { AdminReactionSetter, TournamentFormState } from './types';
 
 interface TournamentsTabProps {
@@ -326,233 +328,238 @@ export function TournamentsTab({
             </button>
           </div>
 
-          {/* Tournament Form Modal */}
-          {showTournamentForm && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4 text-gray-100">Создать турнир</h2>
+          <Modal open={showTournamentForm} onClose={resetTournamentForm} title="Создать турнир" maxWidth="max-w-lg">
+            <div className="space-y-4">
+              <Field label="Название *">
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    name="tournamentName"
+                    value={tournamentForm.name}
+                    onChange={(e) =>
+                      setTournamentForm({ ...tournamentForm, name: e.target.value })
+                    }
+                    className="input"
+                    placeholder="Название турнира"
+                  />
+                )}
+              </Field>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-300">Название *</label>
-                    <input
-                      type="text"
-                      name="tournamentName"
-                      value={tournamentForm.name}
-                      onChange={(e) =>
-                        setTournamentForm({ ...tournamentForm, name: e.target.value })
-                      }
-                      className="input"
-                      placeholder="Название турнира"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-300">Игры турнира *</label>
-                    {games.length === 0 ? (
-                      <p className="text-sm text-gray-400">
-                        Сначала создайте игры во вкладке "Игры"
-                      </p>
-                    ) : (
-                      <div className="space-y-3">
-                        {/* Available games */}
-                        <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-600 rounded-lg p-3 bg-gray-700">
-                          {games.map((game) => (
-                            <label
-                              key={game.id}
-                              className="flex items-center gap-3 p-2 hover:bg-gray-600/50 rounded cursor-pointer"
+              <fieldset className="min-w-0">
+                <legend className="block text-sm font-medium mb-2 text-gray-300">Игры турнира *</legend>
+                {games.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    Сначала создайте игры во вкладке "Игры"
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Available games */}
+                    <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-600 rounded-lg p-3 bg-gray-700">
+                      {games.map((game) => (
+                        <label
+                          key={game.id}
+                          className="flex items-center gap-3 p-2 hover:bg-gray-600/50 rounded cursor-pointer"
                             >
-                              <input
-                                type="checkbox"
-                                checked={selectedGameIds.includes(game.id)}
-                                onChange={() => toggleGameSelection(game.id)}
-                                className="w-4 h-4 text-primary-600 rounded"
-                              />
-                              <div>
-                                <span className="font-medium text-gray-100">{game.display_name}</span>
-                                <span className="text-xs text-gray-400 ml-2">({game.name})</span>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-
-                        {/* Selected games with order controls */}
-                        {selectedGameIds.length > 0 && (
+                          <input
+                            type="checkbox"
+                            checked={selectedGameIds.includes(game.id)}
+                            onChange={() => toggleGameSelection(game.id)}
+                            className="w-4 h-4 text-primary-600 rounded"
+                          />
                           <div>
-                            <p className="text-sm font-medium text-gray-300 mb-2">
-                              Порядок игр (раунды будут запускаться в этом порядке):
-                            </p>
-                            <div className="space-y-2 border border-primary-800 rounded-lg p-3 bg-primary-900/20">
-                              {selectedGameIds.map((gameId, index) => {
-                                const game = games.find(g => g.id === gameId);
-                                if (!game) return null;
-                                return (
-                                  <div
-                                    key={gameId}
-                                    className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold text-primary-400 w-6">
-                                        {index + 1}.
-                                      </span>
-                                      <span className="text-lg">{getGameConfig(game.name).icon}</span>
-                                      <span className="font-medium text-gray-100">
-                                        {game.display_name}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => moveGameUp(index)}
-                                        disabled={index === 0}
-                                        className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
-                                        title="Вверх"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => moveGameDown(index)}
-                                        disabled={index === selectedGameIds.length - 1}
-                                        className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
-                                        title="Вниз"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            <span className="font-medium text-gray-100">{game.display_name}</span>
+                            <span className="text-xs text-gray-400 ml-2">({game.name})</span>
                           </div>
-                        )}
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Selected games with order controls */}
+                    {selectedGameIds.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-300 mb-2">
+                          Порядок игр (раунды будут запускаться в этом порядке):
+                        </p>
+                        <div className="space-y-2 border border-primary-800 rounded-lg p-3 bg-primary-900/20">
+                          {selectedGameIds.map((gameId, index) => {
+                            const game = games.find(g => g.id === gameId);
+                            if (!game) return null;
+                            return (
+                              <div
+                                key={gameId}
+                                className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700"
+                                  >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-primary-400 w-6">
+                                    {index + 1}.
+                                  </span>
+                                  <span className="text-lg">{getGameConfig(game.name).icon}</span>
+                                  <span className="font-medium text-gray-100">
+                                    {game.display_name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveGameUp(index)}
+                                    disabled={index === 0}
+                                    className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
+                                    title="Вверх"
+                                      >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveGameDown(index)}
+                                    disabled={index === selectedGameIds.length - 1}
+                                    className="p-1 text-gray-400 hover:text-gray-200 disabled:opacity-30"
+                                    title="Вниз"
+                                      >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
-                    {selectedGameIds.length > 0 && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Выбрано игр: {selectedGameIds.length}
-                      </p>
-                    )}
                   </div>
+                )}
+                {selectedGameIds.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Выбрано игр: {selectedGameIds.length}
+                  </p>
+                )}
+              </fieldset>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-300">Описание</label>
-                    <textarea
-                      value={tournamentForm.description}
-                      onChange={(e) =>
-                        setTournamentForm({ ...tournamentForm, description: e.target.value })
-                      }
-                      className="input min-h-[100px]"
-                      placeholder="Описание турнира..."
-                    />
-                  </div>
+              <Field label="Описание">
+                {(control) => (
+                  <textarea
+                    {...control}
+                    value={tournamentForm.description}
+                    onChange={(e) =>
+                      setTournamentForm({ ...tournamentForm, description: e.target.value })
+                    }
+                    className="input min-h-[100px]"
+                    placeholder="Описание турнира..."
+                  />
+                )}
+              </Field>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-300">Макс. размер команды</label>
-                      <input
-                        type="number"
-                        value={tournamentForm.max_team_size}
-                        onChange={(e) =>
-                          setTournamentForm({
-                            ...tournamentForm,
-                            max_team_size: parseInt(e.target.value) || 1,
-                          })
-                        }
-                        className="input"
-                        min={1}
-                        max={10}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-300">Макс. участников</label>
-                      <input
-                        type="number"
-                        value={tournamentForm.max_participants}
-                        onChange={(e) =>
-                          setTournamentForm({
-                            ...tournamentForm,
-                            max_participants: e.target.value,
-                          })
-                        }
-                        className="input"
-                        min={2}
-                        placeholder="Без ограничений"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-300">Дата начала</label>
-                      <input
-                        type="datetime-local"
-                        value={tournamentForm.start_time}
-                        onChange={(e) =>
-                          setTournamentForm({ ...tournamentForm, start_time: e.target.value })
-                        }
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-300">Дата окончания</label>
-                      <input
-                        type="datetime-local"
-                        value={tournamentForm.end_time}
-                        onChange={(e) =>
-                          setTournamentForm({ ...tournamentForm, end_time: e.target.value })
-                        }
-                        className="input"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Макс. размер команды">
+                  {(control) => (
                     <input
-                      type="checkbox"
-                      id="is_permanent"
-                      checked={tournamentForm.is_permanent}
+                      {...control}
+                      type="number"
+                      value={tournamentForm.max_team_size}
                       onChange={(e) =>
                         setTournamentForm({
                           ...tournamentForm,
-                          is_permanent: e.target.checked,
+                          max_team_size: parseInt(e.target.value) || 1,
                         })
                       }
-                      className="w-4 h-4"
+                      className="input"
+                      min={1}
+                      max={10}
                     />
-                    <label htmlFor="is_permanent" className="text-sm text-gray-300">
-                      Постоянный турнир (всегда принимает новых участников)
-                    </label>
-                  </div>
-
-                  {tournamentError && (
-                    <div className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
-                      {tournamentError}
-                    </div>
                   )}
-                </div>
+                </Field>
 
-                <div className="flex justify-end gap-2 mt-6">
-                  <button onClick={resetTournamentForm} className="btn btn-secondary">
-                    Отмена
-                  </button>
-                  <button
-                    onClick={handleCreateTournament}
-                    disabled={isSavingTournament}
-                    className="btn btn-primary"
-                  >
-                    {isSavingTournament ? 'Создание...' : 'Создать'}
-                  </button>
-                </div>
+                <Field label="Макс. участников">
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="number"
+                      value={tournamentForm.max_participants}
+                      onChange={(e) =>
+                        setTournamentForm({
+                          ...tournamentForm,
+                          max_participants: e.target.value,
+                        })
+                      }
+                      className="input"
+                      min={2}
+                      placeholder="Без ограничений"
+                    />
+                  )}
+                </Field>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Дата начала">
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="datetime-local"
+                      value={tournamentForm.start_time}
+                      onChange={(e) =>
+                        setTournamentForm({ ...tournamentForm, start_time: e.target.value })
+                      }
+                      className="input"
+                    />
+                  )}
+                </Field>
+
+                <Field label="Дата окончания">
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="datetime-local"
+                      value={tournamentForm.end_time}
+                      onChange={(e) =>
+                        setTournamentForm({ ...tournamentForm, end_time: e.target.value })
+                      }
+                      className="input"
+                    />
+                  )}
+                </Field>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_permanent"
+                  checked={tournamentForm.is_permanent}
+                  onChange={(e) =>
+                    setTournamentForm({
+                      ...tournamentForm,
+                      is_permanent: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4"
+                />
+                <label htmlFor="is_permanent" className="text-sm text-gray-300">
+                  Постоянный турнир (всегда принимает новых участников)
+                </label>
+              </div>
+
+              {tournamentError && (
+                <div role="alert" className="p-2 bg-red-900/30 border border-red-800 rounded text-sm text-red-400">
+                  {tournamentError}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button onClick={resetTournamentForm} className="btn btn-secondary">
+                Отмена
+              </button>
+              <button
+                onClick={handleCreateTournament}
+                disabled={isSavingTournament}
+                className="btn btn-primary"
+              >
+                {isSavingTournament ? 'Создание...' : 'Создать'}
+              </button>
+            </div>
+          </Modal>
 
           {/* Action Error */}
           {actionError && (
@@ -568,122 +575,110 @@ export function TournamentsTab({
           )}
 
           {/* Tournament Games Management Modal */}
-          {managingTournamentId && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-gray-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-gray-100">
-                    Управление играми турнира
-                  </h2>
-                  <button
-                    onClick={closeTournamentGamesManagement}
-                    aria-label="Закрыть"
-                    className="text-gray-400 hover:text-gray-300"
-                  >
-                    ✕
-                  </button>
-                </div>
+          <Modal
+            open={managingTournamentId !== null}
+            onClose={closeTournamentGamesManagement}
+            title="Управление играми турнира"
+            maxWidth="max-w-lg"
+          >
+            <p className="text-sm text-gray-400 mb-4">
+              Выберите активную игру. Только активная игра может принимать загрузку программ.
+              Кнопка «Запустить раунд» запустит матчи только для активной игры.
+            </p>
 
-                <p className="text-sm text-gray-400 mb-4">
-                  Выберите активную игру. Только активная игра может принимать загрузку программ.
-                  Кнопка «Запустить раунд» запустит матчи только для активной игры.
-                </p>
-
-                {isLoadingTournamentGames && !showLoadingTournamentGames ? (
-                  null
-                ) : showLoadingTournamentGames ? (
-                  <div className="text-center py-8 text-gray-400">
-                    Загрузка игр...
-                  </div>
-                ) : managingTournamentGames.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    В этом турнире нет игр
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {managingTournamentGames.map((game) => {
-                      const gameStatus = managingTournamentGamesStatus.find(g => g.game_id === game.id);
-                      const isActive = gameStatus?.is_active || false;
-                      return (
-                        <div
-                          key={game.id}
-                          className={`p-3 border rounded-lg transition-colors ${
-                            isActive
-                              ? 'border-green-600 bg-green-900/20'
-                              : 'border-gray-700'
-                          }`}
+            {isLoadingTournamentGames && !showLoadingTournamentGames ? (
+              null
+            ) : showLoadingTournamentGames ? (
+              <div className="text-center py-8 text-gray-400">
+                Загрузка игр...
+              </div>
+            ) : managingTournamentGames.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                В этом турнире нет игр
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {managingTournamentGames.map((game) => {
+                  const gameStatus = managingTournamentGamesStatus.find(g => g.game_id === game.id);
+                  const isActive = gameStatus?.is_active || false;
+                  return (
+                    <div
+                      key={game.id}
+                      className={`p-3 border rounded-lg transition-colors ${
+                        isActive
+                          ? 'border-green-600 bg-green-900/20'
+                          : 'border-gray-700'
+                      }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-2xl">{getGameConfig(game.name).icon}</span>
-                            <div>
-                              <p className="font-medium text-gray-100">
-                                {game.display_name}
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs text-gray-400">
-                                  {game.name}
-                                </span>
-                                {isActive && (
-                                  <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
-                                    Активна
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            {!isActive && (
-                              <button
-                                onClick={() => handleSetActiveGame(game.id)}
-                                disabled={settingActiveGame === game.id}
-                                className="btn btn-secondary text-sm disabled:opacity-50"
-                              >
-                                {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
-                              </button>
-                            )}
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-2xl">{getGameConfig(game.name).icon}</span>
+                        <div>
+                          <p className="font-medium text-gray-100">
+                            {game.display_name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-400">
+                              {game.name}
+                            </span>
                             {isActive && (
-                              <>
-                                <button
-                                  onClick={() => handleRunGameMatches(game.name, game.display_name)}
-                                  disabled={runningGameMatches === game.name}
-                                  className="btn btn-primary text-sm disabled:opacity-50 flex-1"
-                                >
-                                  {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
-                                </button>
-                                <button
-                                  onClick={() => handleResetGameRound(game.id, game.display_name)}
-                                  disabled={resettingGame === game.id}
-                                  className="btn text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-                                  title="Сбросить раунд (удалить все матчи и рейтинги)"
-                                >
-                                  {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
-                                </button>
-                              </>
+                              <span className="px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full font-medium">
+                                Активна
+                              </span>
                             )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="flex justify-between mt-6">
-                  <button onClick={closeTournamentGamesManagement} className="btn btn-secondary">
-                    Закрыть
-                  </button>
-                  {managingTournamentGamesStatus.some(g => g.is_active) && (
-                    <button
-                      onClick={handleRunActiveGameRound}
-                      disabled={runningGameMatches !== null}
-                      className="btn btn-primary"
-                    >
-                      {runningGameMatches ? 'Запуск...' : 'Запустить раунд активной игры'}
-                    </button>
-                  )}
-                </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {!isActive && (
+                          <button
+                            onClick={() => handleSetActiveGame(game.id)}
+                            disabled={settingActiveGame === game.id}
+                            className="btn btn-secondary text-sm disabled:opacity-50"
+                              >
+                            {settingActiveGame === game.id ? 'Установка...' : 'Сделать активной'}
+                          </button>
+                        )}
+                        {isActive && (
+                          <>
+                            <button
+                              onClick={() => handleRunGameMatches(game.name, game.display_name)}
+                              disabled={runningGameMatches === game.name}
+                              className="btn btn-primary text-sm disabled:opacity-50 flex-1"
+                                >
+                              {runningGameMatches === game.name ? 'Запуск...' : 'Запустить раунд'}
+                            </button>
+                            <button
+                              onClick={() => handleResetGameRound(game.id, game.display_name)}
+                              disabled={resettingGame === game.id}
+                              className="btn text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                              title="Сбросить раунд (удалить все матчи и рейтинги)"
+                                >
+                              {resettingGame === game.id ? 'Сброс...' : 'Сбросить'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            )}
+
+            <div className="flex justify-between mt-6">
+              <button onClick={closeTournamentGamesManagement} className="btn btn-secondary">
+                Закрыть
+              </button>
+              {managingTournamentGamesStatus.some(g => g.is_active) && (
+                <button
+                  onClick={handleRunActiveGameRound}
+                  disabled={runningGameMatches !== null}
+                  className="btn btn-primary"
+                >
+                  {runningGameMatches ? 'Запуск...' : 'Запустить раунд активной игры'}
+                </button>
+              )}
             </div>
-          )}
+          </Modal>
 
           {/* Tournaments List */}
           {tournaments.length === 0 ? (
