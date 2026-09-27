@@ -17,8 +17,13 @@ export function useRevealOnMobile<T extends HTMLElement>() {
 // чтобы и глаз, и клавиатура, и скринридер оказались у начала раздела.
 export function revealAndFocus(el: HTMLElement | null) {
   if (!el) return;
-  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  // заголовок уже на экране (ниже шапки) - страница не дёргается
+  const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+  const r = el.getBoundingClientRect();
+  if (r.top < pad || r.bottom > window.innerHeight) {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  }
   el.tabIndex = -1;
   el.focus({ preventScroll: true });
 }
