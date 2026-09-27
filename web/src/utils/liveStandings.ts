@@ -35,11 +35,38 @@ export function gameProgress(rounds: MatchRound[]): Map<string, GameProgress> {
   return out;
 }
 
-/** Оставшееся время раунда игры в секундах по темпу с его начала; null - оценивать рано. */
-export function etaSeconds(p: GameProgress, now: number): number | null {
-  const elapsed = (now - p.startedAt) / 1000;
-  if (!p.live || p.done === 0 || !(elapsed > 0)) return null;
-  return ((p.total - p.done) * elapsed) / p.done;
+export interface RoundSummary {
+  live: GameProgress[];
+  /** Сыграно и всего по играм раунда, включая уже доигранные. */
+  done: number;
+  total: number;
+  startedAt: number;
+}
+
+/** Идущий раунд: игры, начатые не раньше самой ранней из идущих; null - раунд не идёт. */
+export function roundSummary(progress: Map<string, GameProgress>): RoundSummary | null {
+  const all = [...progress.values()];
+  const live = all.filter((p) => p.live);
+  if (live.length === 0) return null;
+  const startedAt = Math.min(...live.map((p) => p.startedAt));
+  const batch = all.filter((p) => p.startedAt >= startedAt);
+  return {
+    live,
+    done: batch.reduce((s, p) => s + p.done, 0),
+    total: batch.reduce((s, p) => s + p.total, 0),
+    startedAt,
+  };
+}
+
+/**
+ * Остаток раунда в секундах. Очередь одна и играет игры раунда друг за другом,
+ * поэтому темп общий на раунд. Темп берётся на момент данных at: между
+ * обновлениями число сыгранных стоит, а время идёт. null - сыграно меньше 10 %.
+ */
+export function etaSeconds(r: RoundSummary, at: number, now: number): number | null {
+  if (r.done === 0 || r.done < r.total / 10 || !(at > r.startedAt)) return null;
+  const left = ((r.total - r.done) * (at - r.startedAt)) / r.done - (now - at);
+  return Math.max(0, left / 1000);
 }
 
 export interface StandingRow {

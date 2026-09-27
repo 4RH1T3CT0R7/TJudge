@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaSeconds, gameProgress, honestStandings, pageCount, pageSlice } from './liveStandings';
+import { etaSeconds, gameProgress, honestStandings, pageCount, pageSlice, roundSummary } from './liveStandings';
 import type { CrossGameLeaderboardEntry, MatchRound } from '../types';
 
 const round = (game_type: string, total: number, pending: number, running = 0): MatchRound => ({
@@ -31,12 +31,24 @@ describe('gameProgress', () => {
     const p = gameProgress([round('tug', 90, 49), round('tug', 90, 0)]).get('tug')!;
     expect(p).toMatchObject({ done: 41, total: 90, perTeam: 18, live: true });
   });
+});
 
-  it('оценивает остаток по темпу с начала раунда', () => {
-    const p = gameProgress([round('tug', 90, 60)]).get('tug')!;
-    // 30 матчей за 60 с: 60 оставшихся - ещё 120 с
-    expect(etaSeconds(p, p.startedAt + 60_000)).toBe(120);
-    expect(etaSeconds({ ...p, done: 0 }, p.startedAt + 60_000)).toBeNull();
+describe('etaSeconds', () => {
+  it('считает темп по всему раунду, а не по игре, которая ждала в очереди', () => {
+    // «Запустить все»: раунды трёх игр созданы разом, очередь играет их по очереди
+    const progress = gameProgress([round('a', 90, 0), round('b', 90, 45), round('c', 90, 90)]);
+    const r = roundSummary(progress)!;
+    expect(r).toMatchObject({ done: 135, total: 270 });
+    const at = r.startedAt + 60_000;
+    // 135 матчей за 60 с: оставшиеся 135 - ещё 60 с, из них 10 с уже прошло после данных
+    expect(etaSeconds(r, at, at)).toBe(60);
+    expect(etaSeconds(r, at, at + 10_000)).toBe(50);
+    // меньше 10 % сыграно - оценивать рано
+    expect(etaSeconds({ ...r, done: 20 }, at, at)).toBeNull();
+  });
+
+  it('раунд без идущих игр не сводится', () => {
+    expect(roundSummary(gameProgress([round('a', 90, 0)]))).toBeNull();
   });
 });
 

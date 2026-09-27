@@ -478,6 +478,7 @@ export function TournamentDetail() {
       {tournament.status === 'active' && (
         <LiveStatusLine
           progress={progress}
+          progressAt={matchRoundsQuery.dataUpdatedAt}
           games={games}
           status={tournament.status}
           isConnected={isConnected}

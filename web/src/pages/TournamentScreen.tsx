@@ -318,6 +318,7 @@ export function TournamentScreen() {
 
       <LiveStatusLine
         progress={progress}
+        progressAt={roundsQuery.dataUpdatedAt}
         games={games}
         status={tournament.status}
         isConnected={live.isConnected}
