@@ -23,12 +23,15 @@ import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
 import { SystemTab } from '../components/admin/SystemTab';
-import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
+import { Tabs } from '../components/ui/Tabs';
+import type { TabItem } from '../components/ui/Tabs';
+import { useTabParam } from '../hooks/useTabParam';
 import { buildProgramRows } from '../components/admin/programRows';
 import type { ProgramRow } from '../components/admin/programRows';
 import type { Game } from '../types';
 
-type AdminTab = 'games' | 'tournaments' | 'programs' | 'system';
+const TAB_IDS = ['games', 'tournaments', 'programs', 'system'] as const;
+type AdminTab = (typeof TAB_IDS)[number];
 
 /** Интервал поллинга вкладки «Система». TanStack приостанавливает его в фоновой вкладке браузера. */
 const SYSTEM_POLL_INTERVAL = 10_000;
@@ -53,7 +56,7 @@ const SUDO_PHRASES = [
 export function AdminPanel() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<AdminTab>('games');
+  const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'games');
   const queryClient = useQueryClient();
 
   const gamesQuery = useGames();
@@ -133,7 +136,7 @@ export function AdminPanel() {
   const sudoCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Смена вкладки с реакцией захватчика (в sudo-режиме пропускается - хакерские фразы перехватывают управление)
-  const handleTabChange = useCallback((tab: AdminTab) => {
+  const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab);
     if (sudoMode) return;
     const reactions: Record<AdminTab, [InvaderPose, string]> = {
@@ -144,7 +147,7 @@ export function AdminPanel() {
     };
     const [pose, speech] = reactions[tab];
     setAdminReaction(pose, speech, 2500);
-  }, [setAdminReaction, sudoMode]);
+  };
 
   useSequenceTyping('sudo', useCallback(() => {
     if (sudoMode || sudoActivating) return;
@@ -357,9 +360,9 @@ export function AdminPanel() {
     return null;
   }
 
-  const tabs: { id: AdminTab; label: string }[] = [
-    { id: 'games', label: `Игры (${games.length})` },
-    { id: 'tournaments', label: `Турниры (${tournaments.length})` },
+  const tabs: TabItem<AdminTab>[] = [
+    { id: 'games', label: 'Игры', count: games.length },
+    { id: 'tournaments', label: 'Турниры', count: tournaments.length },
     { id: 'programs', label: 'Программы' },
     { id: 'system', label: 'Система' },
   ];
@@ -395,122 +398,102 @@ export function AdminPanel() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-700 mb-6">
-        <nav className="-mb-px flex gap-4 overflow-x-auto" role="tablist" onKeyDown={handleTabListKeyDown}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              tabIndex={activeTab === tab.id ? 0 : -1}
-              onClick={() => handleTabChange(tab.id)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      <Tabs label="Разделы админки" items={tabs} active={activeTab} onChange={handleTabChange}>
+        {/* Games Tab */}
+        {activeTab === 'games' && (
+          <GamesTab
+            games={games}
+            showGameForm={showGameForm}
+            setShowGameForm={setShowGameForm}
+            editingGame={editingGame}
+            setEditingGame={setEditingGame}
+            gameForm={gameForm}
+            setGameForm={setGameForm}
+            isSavingGame={isSavingGame}
+            setIsSavingGame={setIsSavingGame}
+            gameError={gameError}
+            setGameError={setGameError}
+            deleteGameId={deleteGameId}
+            setDeleteGameId={setDeleteGameId}
+            setAdminReaction={setAdminReaction}
+          />
+        )}
 
-      {/* Games Tab */}
-      {activeTab === 'games' && (
-        <GamesTab
-          games={games}
-          showGameForm={showGameForm}
-          setShowGameForm={setShowGameForm}
-          editingGame={editingGame}
-          setEditingGame={setEditingGame}
-          gameForm={gameForm}
-          setGameForm={setGameForm}
-          isSavingGame={isSavingGame}
-          setIsSavingGame={setIsSavingGame}
-          gameError={gameError}
-          setGameError={setGameError}
-          deleteGameId={deleteGameId}
-          setDeleteGameId={setDeleteGameId}
-          setAdminReaction={setAdminReaction}
-        />
-      )}
+        {/* Tournaments Tab */}
+        {activeTab === 'tournaments' && (
+          <TournamentsTab
+            tournaments={tournaments}
+            games={games}
+            showTournamentForm={showTournamentForm}
+            setShowTournamentForm={setShowTournamentForm}
+            tournamentForm={tournamentForm}
+            setTournamentForm={setTournamentForm}
+            selectedGameIds={selectedGameIds}
+            setSelectedGameIds={setSelectedGameIds}
+            isSavingTournament={isSavingTournament}
+            setIsSavingTournament={setIsSavingTournament}
+            tournamentError={tournamentError}
+            setTournamentError={setTournamentError}
+            deleteTournamentId={deleteTournamentId}
+            setDeleteTournamentId={setDeleteTournamentId}
+            actionError={actionError}
+            setActionError={setActionError}
+            managingTournamentId={managingTournamentId}
+            setManagingTournamentId={setManagingTournamentId}
+            managingTournamentGames={managingTournamentGames}
+            managingTournamentGamesStatus={managingTournamentGamesStatus}
+            isLoadingTournamentGames={isLoadingTournamentGames}
+            showLoadingTournamentGames={showLoadingTournamentGames}
+            runningGameMatches={runningGameMatches}
+            setRunningGameMatches={setRunningGameMatches}
+            settingActiveGame={settingActiveGame}
+            setSettingActiveGame={setSettingActiveGame}
+            resettingGame={resettingGame}
+            setResettingGame={setResettingGame}
+            setAdminReaction={setAdminReaction}
+          />
+        )}
 
-      {/* Tournaments Tab */}
-      {activeTab === 'tournaments' && (
-        <TournamentsTab
-          tournaments={tournaments}
-          games={games}
-          showTournamentForm={showTournamentForm}
-          setShowTournamentForm={setShowTournamentForm}
-          tournamentForm={tournamentForm}
-          setTournamentForm={setTournamentForm}
-          selectedGameIds={selectedGameIds}
-          setSelectedGameIds={setSelectedGameIds}
-          isSavingTournament={isSavingTournament}
-          setIsSavingTournament={setIsSavingTournament}
-          tournamentError={tournamentError}
-          setTournamentError={setTournamentError}
-          deleteTournamentId={deleteTournamentId}
-          setDeleteTournamentId={setDeleteTournamentId}
-          actionError={actionError}
-          setActionError={setActionError}
-          managingTournamentId={managingTournamentId}
-          setManagingTournamentId={setManagingTournamentId}
-          managingTournamentGames={managingTournamentGames}
-          managingTournamentGamesStatus={managingTournamentGamesStatus}
-          isLoadingTournamentGames={isLoadingTournamentGames}
-          showLoadingTournamentGames={showLoadingTournamentGames}
-          runningGameMatches={runningGameMatches}
-          setRunningGameMatches={setRunningGameMatches}
-          settingActiveGame={settingActiveGame}
-          setSettingActiveGame={setSettingActiveGame}
-          resettingGame={resettingGame}
-          setResettingGame={setResettingGame}
-          setAdminReaction={setAdminReaction}
-        />
-      )}
+        {/* Programs Tab */}
+        {activeTab === 'programs' && (
+          <ProgramsTab
+            tournaments={tournaments}
+            selectedTournamentId={selectedTournamentId}
+            setSelectedTournamentId={setSelectedTournamentId}
+            tournamentGames={tournamentGames}
+            programRows={programRows}
+            isLoadingPrograms={isLoadingPrograms}
+            showLoadingPrograms={showLoadingPrograms}
+            setActionError={setActionError}
+            setAdminReaction={setAdminReaction}
+          />
+        )}
 
-      {/* Programs Tab */}
-      {activeTab === 'programs' && (
-        <ProgramsTab
-          tournaments={tournaments}
-          selectedTournamentId={selectedTournamentId}
-          setSelectedTournamentId={setSelectedTournamentId}
-          tournamentGames={tournamentGames}
-          programRows={programRows}
-          isLoadingPrograms={isLoadingPrograms}
-          showLoadingPrograms={showLoadingPrograms}
-          setActionError={setActionError}
-          setAdminReaction={setAdminReaction}
-        />
-      )}
-
-      {/* System Tab */}
-      {activeTab === 'system' && (
-        <SystemTab
-          queueStats={queueStats}
-          matchStats={matchStats}
-          systemMetrics={systemMetrics}
-          failedMatches={failedMatches}
-          fullStatus={fullStatus}
-          fullStatusIsError={fullStatusQuery.isError}
-          isLoadingSystem={isLoadingSystem}
-          showLoadingSystem={showLoadingSystem}
-          allSystemQueriesFailed={allSystemQueriesFailed}
-          systemError={systemError}
-          setSystemError={setSystemError}
-          isClearing={isClearing}
-          setIsClearing={setIsClearing}
-          isPurging={isPurging}
-          setIsPurging={setIsPurging}
-          recoveryBusy={recoveryBusy}
-          setRecoveryBusy={setRecoveryBusy}
-          refreshSystemData={refreshSystemData}
-          setAdminReaction={setAdminReaction}
-        />
-      )}
+        {/* System Tab */}
+        {activeTab === 'system' && (
+          <SystemTab
+            queueStats={queueStats}
+            matchStats={matchStats}
+            systemMetrics={systemMetrics}
+            failedMatches={failedMatches}
+            fullStatus={fullStatus}
+            fullStatusIsError={fullStatusQuery.isError}
+            isLoadingSystem={isLoadingSystem}
+            showLoadingSystem={showLoadingSystem}
+            allSystemQueriesFailed={allSystemQueriesFailed}
+            systemError={systemError}
+            setSystemError={setSystemError}
+            isClearing={isClearing}
+            setIsClearing={setIsClearing}
+            isPurging={isPurging}
+            setIsPurging={setIsPurging}
+            recoveryBusy={recoveryBusy}
+            setRecoveryBusy={setRecoveryBusy}
+            refreshSystemData={refreshSystemData}
+            setAdminReaction={setAdminReaction}
+          />
+        )}
+      </Tabs>
     </div>
     </div>
   );

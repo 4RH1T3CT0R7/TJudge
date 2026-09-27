@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
+import { Tabs } from '../components/ui/Tabs';
+import { useTabParam } from '../hooks/useTabParam';
+
+const TAB_IDS = ['email', 'password'] as const;
 
 export function Profile() {
   const { user, updateProfile, login, isLoading } = useAuthStore();
@@ -9,7 +12,7 @@ export function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'email' | 'password'>('email');
+  const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'email');
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,147 +101,127 @@ export function Profile() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-700 mb-6" role="tablist" onKeyDown={handleTabListKeyDown}>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'email'}
-            tabIndex={activeTab === 'email' ? 0 : -1}
-            onClick={() => setActiveTab('email')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === 'email'
-                ? 'border-primary-500 text-primary-400'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Email
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'password'}
-            tabIndex={activeTab === 'password' ? 0 : -1}
-            onClick={() => setActiveTab('password')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === 'password'
-                ? 'border-primary-500 text-primary-400'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Пароль
-          </button>
-        </div>
-
-        {/* Message */}
-        {message && (
-          <div className={`p-3 rounded-lg mb-4 ${
-            message.type === 'success'
-              ? 'bg-green-900/30 text-green-400'
-              : 'bg-red-900/30 text-red-400'
-          }`}>
-            {message.text}
-          </div>
-        )}
-
-        {/* Email tab */}
-        {activeTab === 'email' && (
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="user@example.com"
-                required
-                aria-required="true"
-                aria-describedby="email-help"
-              />
-              <p id="email-help" className="mt-1 text-sm text-gray-500">
-                Email используется для уведомлений
-              </p>
+        <Tabs
+          label="Настройки профиля"
+          items={[
+            { id: 'email', label: 'Email' },
+            { id: 'password', label: 'Пароль' },
+          ]}
+          active={activeTab}
+          onChange={setActiveTab}
+        >
+          {/* Message */}
+          {message && (
+            <div className={`p-3 rounded-lg mb-4 ${
+              message.type === 'success'
+                ? 'bg-green-900/30 text-green-400'
+                : 'bg-red-900/30 text-red-400'
+            }`}>
+              {message.text}
             </div>
+          )}
 
-            <div className="flex justify-center">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="btn btn-primary"
-              >
-                {isLoading ? 'Сохранение...' : 'Сохранить email'}
-              </button>
-            </div>
-          </form>
-        )}
+          {/* Email tab */}
+          {activeTab === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input"
+                  placeholder="user@example.com"
+                  required
+                  aria-required="true"
+                  aria-describedby="email-help"
+                />
+                <p id="email-help" className="mt-1 text-sm text-gray-500">
+                  Email используется для уведомлений
+                </p>
+              </div>
 
-        {/* Password tab */}
-        {activeTab === 'password' && (
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-300 mb-1">
-                Текущий пароль
-              </label>
-              <input
-                type="password"
-                id="currentPassword"
-                name="currentPassword"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="input"
-                autoComplete="current-password"
-                required
-              />
-            </div>
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn btn-primary"
+                >
+                  {isLoading ? 'Сохранение...' : 'Сохранить email'}
+                </button>
+              </div>
+            </form>
+          )}
 
-            <div>
-              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-1">
-                Новый пароль
-              </label>
-              <input
-                type="password"
-                id="newPassword"
-                name="newPassword"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="input"
-                autoComplete="new-password"
-                required
-                minLength={6}
-              />
-            </div>
+          {/* Password tab */}
+          {activeTab === 'password' && (
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-300 mb-1">
+                  Текущий пароль
+                </label>
+                <input
+                  type="password"
+                  id="currentPassword"
+                  name="currentPassword"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="input"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
 
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1">
-                Подтвердите пароль
-              </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input"
-                autoComplete="new-password"
-                required
-              />
-            </div>
+              <div>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-1">
+                  Новый пароль
+                </label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  name="newPassword"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="input"
+                  autoComplete="new-password"
+                  required
+                  minLength={6}
+                />
+              </div>
 
-            <div className="flex justify-center">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="btn btn-primary"
-              >
-                {isLoading ? 'Сохранение...' : 'Изменить пароль'}
-              </button>
-            </div>
-          </form>
-        )}
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1">
+                  Подтвердите пароль
+                </label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn btn-primary"
+                >
+                  {isLoading ? 'Сохранение...' : 'Изменить пароль'}
+                </button>
+              </div>
+            </form>
+          )}
+        </Tabs>
       </div>
     </div>
   );
