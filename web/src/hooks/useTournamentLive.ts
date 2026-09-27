@@ -8,10 +8,11 @@
 // перечитывается редко: иначе открытая до старта вкладка так и не узнала бы,
 // что турнир пошёл, а после завершения продолжала бы поллинг.
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useWebSocket } from './useWebSocket';
 import { parseTournamentWSMessage } from '../types/ws';
+import type { MatchResultPayload } from '../types/ws';
 import type { WSMessage, Program } from '../types';
 import { queryKeys } from '../api/queryKeys';
 import { FALLBACK_POLL_INTERVAL, useTournament } from './queries';
@@ -19,6 +20,8 @@ import { FALLBACK_POLL_INTERVAL, useTournament } from './queries';
 interface UseTournamentLiveOptions {
   tournamentId: string;
   enabled?: boolean;
+  /** Каждый результат матча сразу, без throttle: лента табло. */
+  onMatchResult?: (payload: MatchResultPayload) => void;
 }
 
 export const TOURNAMENT_STATUS_POLL_INTERVAL = 30_000;
@@ -61,8 +64,12 @@ export function throttle(fn: () => void, ms: number) {
   return call;
 }
 
-export function useTournamentLive({ tournamentId, enabled = true }: UseTournamentLiveOptions) {
+export function useTournamentLive({ tournamentId, enabled = true, onMatchResult }: UseTournamentLiveOptions) {
   const queryClient = useQueryClient();
+  const onMatchResultRef = useRef(onMatchResult);
+  useEffect(() => {
+    onMatchResultRef.current = onMatchResult;
+  });
 
   const scheduleMatchInvalidation = useMemo(
     () =>
@@ -102,6 +109,7 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
           // считает сервер - редкая инвалидация дешевле и корректнее
           // ручного патча сортировки.
           scheduleMatchInvalidation();
+          onMatchResultRef.current?.(message.payload);
           break;
 
         case 'program_update': {

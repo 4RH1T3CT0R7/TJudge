@@ -17,6 +17,13 @@ export interface MatchResultPayload {
   new_rating1: number;
   new_rating2: number;
   winner: number;
+  /** Для ленты матчей; у старого бэкенда полей нет. */
+  game_type?: string;
+  score1?: number | null;
+  score2?: number | null;
+  /** null - команду удалили. */
+  team1_name?: string | null;
+  team2_name?: string | null;
 }
 
 // Текстов ошибки компиляции и самопроверки тут нет: они видны только команде через REST.
