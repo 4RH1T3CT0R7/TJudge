@@ -242,7 +242,10 @@ func (c *Compiler) Compile(ctx context.Context, program *models.Program) (*Compi
 		if len(logMsg) > compileLogLimit {
 			logMsg = logMsg[:compileLogLimit] + "..."
 		}
-		return &CompileResult{OK: false, Log: logMsg}, nil
+		// компилятор цитирует исходник, а он бывает в cp1251; обрезка тоже
+		// рвёт символ. без чистки запись в базу падала, и программа навсегда
+		// оставалась в compiling
+		return &CompileResult{OK: false, Log: sanitizeForDB(logMsg)}, nil
 	}
 
 	if plan.ArtifactName != "" {
