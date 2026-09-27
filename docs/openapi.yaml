@@ -1049,6 +1049,30 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /tournaments/{id}/games/{gameId}/strategies:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+      - $ref: '#/components/parameters/GameIDPath'
+    get:
+      tags: [games]
+      summary: Strategy profiles
+      description: >-
+        Axelrod properties of each team's strategy, computed from the transcripts of
+        played matches (both sides of every match count for their teams; matches with
+        disqualified teams are skipped). Defined for `dilemma` only: other games return
+        an empty list. Matches played without `EXECUTOR_VERBOSE` have no transcript and
+        are not counted.
+      operationId: tournamentGameStrategies
+      responses:
+        '200':
+          description: Strategy profiles sorted by team name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyProfileListEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /tournaments/{id}/games/{gameId}/matches:
     parameters:
       - $ref: '#/components/parameters/TournamentID'
@@ -1791,6 +1815,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MatchEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /matches/{id}/transcript:
+    parameters:
+      - $ref: '#/components/parameters/MatchID'
+    get:
+      tags: [matches]
+      summary: Get match transcript
+      description: >-
+        Moves and per-iteration points parsed from `tjudge-cli -v`. Contains only the
+        judge's output, never the programs' stderr, so it is public like the score.
+        Stored for matches played with `EXECUTOR_VERBOSE` (default on) and at most 1000
+        iterations; deleted together with the match when a round restarts.
+      operationId: matchesGetTranscript
+      responses:
+        '200':
+          description: Match transcript
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchTranscriptEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -3180,6 +3226,82 @@ components:
         change: { type: integer }
         match_id: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
+
+    MatchTranscript:
+      type: object
+      required: [moves]
+      properties:
+        moves:
+          type: array
+          description: >-
+            Two arrays: moves of program 1 and program 2 by iteration. Dilemma: 1 =
+            cooperate, 0 = defect; tug_of_war, travelers_dilemma, public_goods: the
+            number the program sent; dollar_auction: bids of each side, program 1
+            bids first in every round, 0 = fold. In a failed match the moves stop at the error, so
+            the arrays may differ in length.
+          minItems: 2
+          maxItems: 2
+          items:
+            type: array
+            items: { type: integer }
+        points:
+          type: array
+          description: Two arrays of points per iteration; absent for dollar_auction (final score only).
+          minItems: 2
+          maxItems: 2
+          items:
+            type: array
+            items: { type: integer }
+
+    MatchTranscriptEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/MatchTranscript'
+
+    StrategyProfile:
+      type: object
+      description: >-
+        Shares in [0, 1]; null when the situation never occurred (e.g. the opponent
+        never defected, so retaliation is undefined).
+      properties:
+        team_id: { type: string, format: uuid }
+        team_name: { type: string }
+        matches:
+          type: integer
+          description: Matches with a transcript
+        cooperation:
+          type: number
+          nullable: true
+          description: Share of cooperative moves
+        niceness:
+          type: number
+          nullable: true
+          description: Share of matches where the team never defected first (defecting in the same move as the opponent counts as first)
+        retaliation:
+          type: number
+          nullable: true
+          description: Share of defections right after an opponent's defection
+        forgiveness:
+          type: number
+          nullable: true
+          description: Share of returns to cooperation right after the opponent returned to cooperation (C after D)
+        provocability:
+          type: number
+          nullable: true
+          description: Share of defections right after an uncalled-for opponent defection (the team had cooperated on the move before)
+
+    StrategyProfileListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/StrategyProfile'
 
     HeadToHeadListEnvelope:
       allOf:

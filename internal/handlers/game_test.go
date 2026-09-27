@@ -465,6 +465,14 @@ func (m *MockGameLeaderboardRepository) GetHeadToHead(ctx context.Context, tourn
 	return args.Get(0).([]*models.HeadToHeadCell), args.Error(1)
 }
 
+func (m *MockGameLeaderboardRepository) GetStrategyProfiles(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.StrategyProfile, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.StrategyProfile), args.Error(1)
+}
+
 type MockGameMatchRepository struct {
 	mock.Mock
 }
@@ -816,4 +824,39 @@ func TestGameHandler_ResetGameRound_TransactionError(t *testing.T) {
 	var errResp map[string]string
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &errResp))
 	assert.Equal(t, "Internal server error", errResp["error"])
+}
+
+// свойства по Аксельроду есть только у дилеммы: для других игр репозиторий не трогается
+func TestGameHandler_GetStrategyProfiles(t *testing.T) {
+	handler, svc, leaderboardRepo, _, _, _ := newGameHandlerWithAllRepos(t)
+	tournamentID := uuid.New()
+	dilemma, tug := uuid.New(), uuid.New()
+	nice := 1.0
+
+	svc.On("GetByID", mock.Anything, dilemma).Return(&models.Game{ID: dilemma, Name: "dilemma"}, nil)
+	svc.On("GetByID", mock.Anything, tug).Return(&models.Game{ID: tug, Name: "tug_of_war"}, nil)
+	leaderboardRepo.On("GetStrategyProfiles", mock.Anything, tournamentID, "dilemma").
+		Return([]*models.StrategyProfile{{TeamName: "alpha", Matches: 2, Niceness: &nice}}, nil)
+
+	get := func(gameID uuid.UUID) []*models.StrategyProfile {
+		req := httptest.NewRequest("GET", "/", nil)
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", tournamentID.String())
+		rctx.URLParams.Add("gameId", gameID.String())
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+		rr := httptest.NewRecorder()
+		handler.GetStrategyProfiles(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+		var result []*models.StrategyProfile
+		decodeJSONData(t, rr.Body, &result)
+		return result
+	}
+
+	result := get(dilemma)
+	require.Len(t, result, 1)
+	assert.Equal(t, "alpha", result[0].TeamName)
+	assert.Equal(t, &nice, result[0].Niceness)
+	assert.Nil(t, result[0].Retaliation)
+	assert.Empty(t, get(tug))
+	leaderboardRepo.AssertExpectations(t)
 }

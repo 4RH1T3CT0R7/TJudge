@@ -303,6 +303,7 @@ func (s *Server) setupRoutes() {
 				// по конкретной игре турнира
 				r.Get("/{id}/games/{gameId}/leaderboard", s.gameHandler.GetGameLeaderboard)
 				r.Get("/{id}/games/{gameId}/head-to-head", s.gameHandler.GetHeadToHead)
+				r.Get("/{id}/games/{gameId}/strategies", s.gameHandler.GetStrategyProfiles)
 				r.With(s.optionalAuth()).Get("/{id}/games/{gameId}/matches", s.gameHandler.GetGameMatches)
 				r.Get("/{id}/games/status", s.gameHandler.GetTournamentGamesWithStatus)
 				r.Get("/{id}/active-game", s.gameHandler.GetActiveGame)
@@ -410,6 +411,7 @@ func (s *Server) setupRoutes() {
 					r.Get("/", s.matchHandler.List)
 					r.Get("/statistics", s.matchHandler.GetStatistics)
 					r.Get("/{id}", s.matchHandler.Get)
+					r.Get("/{id}/transcript", s.matchHandler.GetTranscript)
 				})
 
 				// управление очередью - только админ

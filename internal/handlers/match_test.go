@@ -11,6 +11,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/queue"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
+	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/bmstu-itstech/tjudge/pkg/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -51,6 +52,14 @@ func (m *MockMatchRepository) GetStatistics(ctx context.Context, tournamentID *u
 func (m *MockMatchRepository) CancelPending(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockMatchRepository) GetTranscript(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]byte), args.Error(1)
 }
 
 // MockMatchQueueManager - мок менеджера очереди
@@ -127,6 +136,25 @@ func TestMatchHandler_Get(t *testing.T) {
 
 		mockRepo.AssertExpectations(t)
 	})
+}
+
+// транскрипт отдаётся в data как есть, без него - 404
+func TestMatchHandler_GetTranscript(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	mockRepo := new(MockMatchRepository)
+	handler := NewMatchHandler(mockRepo, nil, nil, log)
+	played, old := uuid.New(), uuid.New()
+	mockRepo.On("GetTranscript", mock.Anything, played).Return([]byte(`{"moves":[[1,0],[1,1]]}`), nil)
+	mockRepo.On("GetTranscript", mock.Anything, old).Return(nil, errors.ErrNotFound.WithMessage("transcript not found"))
+
+	w := httptest.NewRecorder()
+	handler.GetTranscript(w, getWithRouteContext(played.String()))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"data":{"moves":[[1,0],[1,1]]}}`, w.Body.String())
+
+	w = httptest.NewRecorder()
+	handler.GetTranscript(w, getWithRouteContext(old.String()))
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestMatchHandler_List(t *testing.T) {

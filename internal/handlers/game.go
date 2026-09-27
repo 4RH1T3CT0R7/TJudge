@@ -35,6 +35,7 @@ type GameService interface {
 type GameLeaderboardRepository interface {
 	GetLeaderboardByGameType(ctx context.Context, tournamentID uuid.UUID, gameType string, limit int) ([]*models.LeaderboardEntry, error)
 	GetHeadToHead(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.HeadToHeadCell, error)
+	GetStrategyProfiles(ctx context.Context, tournamentID uuid.UUID, gameType string) ([]*models.StrategyProfile, error)
 }
 
 type GameMatchRepository interface {

@@ -668,6 +668,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{id}/games/{gameId}/strategies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                /** @description Game UUID (in tournament context) */
+                gameId: components["parameters"]["GameIDPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Strategy profiles
+         * @description Axelrod properties of each team's strategy, computed from the transcripts of played matches (both sides of every match count for their teams; matches with disqualified teams are skipped). Defined for `dilemma` only: other games return an empty list. Matches played without `EXECUTOR_VERBOSE` have no transcript and are not counted.
+         */
+        get: operations["tournamentGameStrategies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{id}/games/{gameId}/matches": {
         parameters: {
             query?: never;
@@ -1145,6 +1170,29 @@ export interface paths {
         };
         /** Get match */
         get: operations["matchesGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/matches/{id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Match UUID */
+                id: components["parameters"]["MatchID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get match transcript
+         * @description Moves and per-iteration points parsed from `tjudge-cli -v`. Contains only the judge's output, never the programs' stderr, so it is public like the score. Stored for matches played with `EXECUTOR_VERBOSE` (default on) and at most 1000 iterations; deleted together with the match when a round restarts.
+         */
+        get: operations["matchesGetTranscript"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1895,6 +1943,36 @@ export interface components {
             match_id?: string | null;
             /** Format: date-time */
             created_at?: string;
+        };
+        MatchTranscript: {
+            /** @description Two arrays: moves of program 1 and program 2 by iteration. Dilemma: 1 = cooperate, 0 = defect; tug_of_war, travelers_dilemma, public_goods: the number the program sent; dollar_auction: bids of each side, program 1 bids first in every round, 0 = fold. In a failed match the moves stop at the error, so the arrays may differ in length. */
+            moves: number[][];
+            /** @description Two arrays of points per iteration; absent for dollar_auction (final score only). */
+            points?: number[][];
+        };
+        MatchTranscriptEnvelope: components["schemas"]["SuccessEnvelope"] & {
+            data?: components["schemas"]["MatchTranscript"];
+        };
+        /** @description Shares in [0, 1]; null when the situation never occurred (e.g. the opponent never defected, so retaliation is undefined). */
+        StrategyProfile: {
+            /** Format: uuid */
+            team_id?: string;
+            team_name?: string;
+            /** @description Matches with a transcript */
+            matches?: number;
+            /** @description Share of cooperative moves */
+            cooperation?: number | null;
+            /** @description Share of matches where the team never defected first (defecting in the same move as the opponent counts as first) */
+            niceness?: number | null;
+            /** @description Share of defections right after an opponent's defection */
+            retaliation?: number | null;
+            /** @description Share of returns to cooperation right after the opponent returned to cooperation (C after D) */
+            forgiveness?: number | null;
+            /** @description Share of defections right after an uncalled-for opponent defection (the team had cooperated on the move before) */
+            provocability?: number | null;
+        };
+        StrategyProfileListEnvelope: components["schemas"]["SuccessEnvelope"] & {
+            data?: components["schemas"]["StrategyProfile"][];
         };
         HeadToHeadListEnvelope: components["schemas"]["SuccessEnvelope"] & {
             data?: components["schemas"]["HeadToHeadCell"][];
@@ -3211,6 +3289,32 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    tournamentGameStrategies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+                /** @description Game UUID (in tournament context) */
+                gameId: components["parameters"]["GameIDPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strategy profiles sorted by team name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyProfileListEnvelope"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     tournamentGameMatches: {
         parameters: {
             query?: {
@@ -3967,6 +4071,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MatchEnvelope"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    matchesGetTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Match UUID */
+                id: components["parameters"]["MatchID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Match transcript */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchTranscriptEnvelope"];
                 };
             };
             404: components["responses"]["NotFound"];

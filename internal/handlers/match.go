@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/bmstu-itstech/tjudge/internal/middleware"
@@ -21,6 +22,7 @@ type MatchRepository interface {
 	List(ctx context.Context, filter models.MatchFilter) ([]*models.Match, error)
 	GetStatistics(ctx context.Context, tournamentID *uuid.UUID) (*storage.MatchStatistics, error)
 	CancelPending(ctx context.Context) (int64, error)
+	GetTranscript(ctx context.Context, id uuid.UUID) ([]byte, error)
 }
 
 // управление очередью матчей
@@ -132,6 +134,28 @@ func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
 	redactMatchErrors(r.Context(), h.programLookup, []*models.Match{match})
 
 	writeJSON(w, http.StatusOK, match)
+}
+
+// GetTranscript отдаёт ходы матча по итерациям. в транскрипте только вывод
+// судьи, stderr ботов туда не попадает, поэтому он открыт всем, как и счёт
+func (h *MatchHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDParam(w, r, "id", "match")
+	if !ok {
+		return
+	}
+
+	transcript, err := h.matchRepo.GetTranscript(r.Context(), id)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			h.log.LogError("Failed to get match transcript", err,
+				zap.String("match_id", id.String()),
+			)
+		}
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, json.RawMessage(transcript))
 }
 
 // List отдаёт матчи постранично с набором необязательных фильтров

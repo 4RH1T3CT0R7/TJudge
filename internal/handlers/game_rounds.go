@@ -321,6 +321,42 @@ func (h *GameRoundHandler) GetHeadToHead(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, cells)
 }
 
+// GetStrategyProfiles возвращает свойства стратегий команд по Аксельроду.
+// они определены только для дилеммы заключённого, у остальных игр список пуст
+func (h *GameRoundHandler) GetStrategyProfiles(w http.ResponseWriter, r *http.Request) {
+	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
+	if !ok {
+		return
+	}
+
+	if h.leaderboardRepo == nil {
+		writeError(w, errors.ErrInternal.WithMessage("leaderboard repository not configured"))
+		return
+	}
+
+	g, err := h.gameService.GetByID(r.Context(), gameID)
+	if err != nil {
+		h.log.LogError("Failed to get game", err)
+		writeError(w, err)
+		return
+	}
+	if g.Name != "dilemma" {
+		writeJSON(w, http.StatusOK, []*models.StrategyProfile{})
+		return
+	}
+
+	profiles, err := h.leaderboardRepo.GetStrategyProfiles(r.Context(), tournamentID, g.Name)
+	if err != nil {
+		h.log.LogError("Failed to get strategy profiles", err,
+			zap.String("tournament_id", tournamentID.String()),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profiles)
+}
+
 // GetGameMatches возвращает матчи для конкретной игры в турнире.
 func (h *GameRoundHandler) GetGameMatches(w http.ResponseWriter, r *http.Request) {
 	tournamentID, gameID, ok := h.parseTournamentGameIDs(w, r)
