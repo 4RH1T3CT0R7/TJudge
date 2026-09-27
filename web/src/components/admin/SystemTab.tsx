@@ -3,7 +3,7 @@ import api from '../../api/client';
 import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
 import type { ConfirmOptions } from '../../store/confirmStore';
-import { confirmClearQueue, count } from './confirmations';
+import { MATCHES, confirmClearQueue, count } from './confirmations';
 import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetrics } from '../../types';
 import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
@@ -487,13 +487,13 @@ export function SystemTab({
                           message: 'Матчи, которые идут дольше таймаута воркера, сыграются заново.',
                           details: [
                             `вернёт в очередь ${count(stuckCount, ['зависший матч', 'зависших матча', 'зависших матчей'])}`,
-                            'воркер возьмёт их в течение минуты',
+                            'воркер возьмёт в работу в течение минуты',
                           ],
                           confirmLabel: 'Вернуть в очередь',
                         },
                         async () => {
                           const r = await api.recoveryResetStuckMatches();
-                          return `Сброшено в pending: ${r.reset} матчей`;
+                          return `В очередь возвращено: ${count(r.reset, MATCHES)}`;
                         }
                       )
                     }
@@ -516,7 +516,7 @@ export function SystemTab({
                         },
                         async () => {
                           const r = await api.recoveryRetryOutbox();
-                          return `Возвращено в обработку: ${r.retried} задач`;
+                          return `Возвращено в обработку: ${count(r.retried, ['задача', 'задачи', 'задач'])}`;
                         }
                       )
                     }
@@ -539,7 +539,7 @@ export function SystemTab({
                         },
                         async () => {
                           const r = await api.recoveryRequeueCompiling();
-                          return `Поставлено в очередь компиляции: ${r.requeued} программ`;
+                          return `Поставлено в очередь компиляции: ${count(r.requeued, ['программа', 'программы', 'программ'])}`;
                         }
                       )
                     }
@@ -563,7 +563,7 @@ export function SystemTab({
                         },
                         async () => {
                           const r = await api.recoveryClearDeadLetter();
-                          return `Удалено из dead-letter: ${r.cleared} записей`;
+                          return `Удалено из dead-letter: ${count(r.cleared, ['запись', 'записи', 'записей'])}`;
                         }
                       )
                     }

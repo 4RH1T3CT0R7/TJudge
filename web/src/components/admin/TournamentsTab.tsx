@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
-import { confirmCompleteTournament, confirmDeleteTournament, confirmResetRound, confirmRunRound } from './confirmations';
+import { MATCHES, confirmCompleteTournament, confirmDeleteTournament, confirmResetRound, confirmRunRound, count } from './confirmations';
 import { getGameConfig } from '../../utils/gameConfig';
 import { mdPreview } from '../../utils/markdown';
 import { extractErrorMessage } from '../tournament/helpers';
@@ -307,7 +307,7 @@ export function TournamentsTab({
         queryClient.invalidateQueries({ queryKey: queryKeys.tournamentGamesStatus(managingTournamentId) }),
       ]);
       // Show success message
-      useToastStore.getState().addToast(`Запущено ${result.enqueued} матчей для "${gameName}"`, 'success');
+      useToastStore.getState().addToast(`Запущено ${count(result.enqueued, MATCHES)} для "${gameName}"`, 'success');
     } catch (err: unknown) {
       console.error('Failed to run game matches:', err);
       setActionError(extractErrorMessage(err, 'Не удалось запустить матчи'));

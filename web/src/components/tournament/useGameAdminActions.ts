@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { useToastStore } from '../../store/toastStore';
-import { confirmResetRound, confirmRunRound } from '../admin/confirmations';
+import { MATCHES, confirmResetRound, confirmRunRound, count } from '../admin/confirmations';
 import { extractErrorMessage, waitForMatches } from './helpers';
 import type { Game, Tournament } from '../../types';
 
@@ -55,11 +55,11 @@ export function useGameAdminActions({
         // Switch to the next game
         const nextGame = games[currentIndex + 1];
         await api.setActiveGame(tournamentId, nextGame.id);
-        useToastStore.getState().addToast(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}". Ожидание завершения матчей...`, 'success', 8000);
+        useToastStore.getState().addToast(`Запущено ${count(result.enqueued, MATCHES)} для "${gameDisplayName}". Активная игра переключена на "${nextGame.display_name}". Ожидание завершения матчей...`, 'success', 8000);
       } else {
         // Last game - deactivate all games
         await api.deactivateAllGames(tournamentId);
-        useToastStore.getState().addToast(`Запущено ${result.enqueued} матчей для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы. Ожидание завершения матчей...`, 'success', 8000);
+        useToastStore.getState().addToast(`Запущено ${count(result.enqueued, MATCHES)} для "${gameDisplayName}". Это была последняя игра в турнире. Все игры деактивированы. Ожидание завершения матчей...`, 'success', 8000);
       }
 
       // Wait for matches to complete and auto-retry if needed (runs in background)
