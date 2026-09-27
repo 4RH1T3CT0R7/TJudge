@@ -515,15 +515,19 @@ function MatchGroupCard({ matches, me }: { matches: Match[]; me: Me }) {
     <div className={`bg-gray-800/50 rounded-lg p-4 border border-gray-700 ${mine ? 'row-mine' : ''}`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <div className="flex items-center gap-4 min-w-0">
-          <div className="min-w-0">
-            <p className="flex items-baseline text-sm font-medium text-gray-300">
-              <span className="truncate">{leftName}</span>
-              {mine && <YouMark />}
-            </p>
+          {/* своё имя участник знает: слева только «вы», место - названию соперника */}
+          <div className={mine ? 'shrink-0' : 'min-w-0'}>
+            {mine ? (
+              <p className="text-sm font-medium">
+                <YouMark className="text-sm" />
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-gray-300 truncate">{leftName}</p>
+            )}
             <p className={`text-2xl font-bold font-mono tabular-nums ${tone}`}>{leftTotal}</p>
           </div>
           <span aria-hidden="true" className="text-lg text-gray-500">:</span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-300 truncate">{rightName}</p>
             <p className="text-2xl font-bold font-mono tabular-nums text-gray-100">{rightTotal}</p>
           </div>
