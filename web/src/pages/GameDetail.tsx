@@ -436,7 +436,7 @@ export function GameDetail() {
             {(ratingHistoryQuery.data?.length ?? 0) > 0 && (
               <p className="text-xs text-gray-500 mt-3">
                 Последние {ratingHistoryQuery.data!.length} изменений ELO в этом турнире. ELO начинается с 1500
-                и растёт от побед над сильными соперниками; это не сумма очков из таблицы
+                и меняется после каждого матча с учётом силы соперника; это не сумма очков из таблицы
               </p>
             )}
           </>
