@@ -62,11 +62,12 @@ function ToastItem({ toast }: { toast: Toast }) {
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
 
-  // контейнер есть всегда: live-регион должен существовать до появления сообщений
+  // контейнер есть всегда: live-регион должен существовать до появления сообщений.
+  // Ниже шапки: ошибка висит до закрытия и не должна закрывать «Выйти»
   return (
     <div
       aria-live="polite"
-      className="fixed top-4 right-4 z-[9999] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 pointer-events-none"
+      className="fixed top-20 right-4 z-[9999] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 pointer-events-none"
     >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
