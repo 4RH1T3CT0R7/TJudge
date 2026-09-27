@@ -1,3 +1,4 @@
+import { sharePct } from './transcript';
 import type { HeadToHeadCell, MatchRound, StrategyProfile } from '../types';
 
 export interface Insight {
@@ -17,7 +18,6 @@ interface InsightInput {
   strategies?: StrategyProfile[];
 }
 
-const pct = (x: number) => `${Math.round(x * 100)}%`;
 // обыграла ли команда строки соперника по сумме встреч пары
 const beat = (c: HeadToHeadCell) => c.wins > c.losses;
 
@@ -105,7 +105,7 @@ export function tournamentInsights({ places, games, headToHead, rounds, strategi
     const [top, bottom] = [sorted[0], sorted.at(-1)!];
     out.push({
       label: 'самая кооперативная',
-      text: `«${top.team_name}» сотрудничала в ${pct(top.cooperation!)} ходов дилеммы, меньше всех — «${bottom.team_name}», ${pct(bottom.cooperation!)}`,
+      text: `«${top.team_name}» сотрудничала в ${sharePct(top.cooperation!)} ходов дилеммы, меньше всех — «${bottom.team_name}», ${sharePct(bottom.cooperation!)}`,
     });
   }
 
@@ -123,7 +123,7 @@ export function tournamentInsights({ places, games, headToHead, rounds, strategi
   if (seat && Math.abs(seat.share - 0.5) >= 0.1) {
     out.push({
       label: 'очерёдность',
-      text: `в игре «${title(seat.type)}» игрок ${seat.share > 0.5 ? 1 : 2} выигрывает ${pct(Math.max(seat.share, 1 - seat.share))} решённых матчей`,
+      text: `в игре «${title(seat.type)}» игрок ${seat.share > 0.5 ? 1 : 2} выигрывает ${sharePct(Math.max(seat.share, 1 - seat.share))} решённых матчей`,
     });
   }
 
@@ -134,7 +134,7 @@ export function tournamentInsights({ places, games, headToHead, rounds, strategi
   if (draws && draws.share >= 0.3) {
     out.push({
       label: 'ничьи',
-      text: `больше всего ничьих в игре «${title(draws.type)}»: ${pct(draws.share)} сыгранных матчей`,
+      text: `больше всего ничьих в игре «${title(draws.type)}»: ${sharePct(draws.share)} сыгранных матчей`,
     });
   }
 

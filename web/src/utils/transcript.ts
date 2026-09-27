@@ -31,6 +31,14 @@ export function firstDefection(t: MatchTranscript): FirstDefection | null {
   return null;
 }
 
+/** Доля в процентах: 0% и 100% только для точных значений, рядом с ними - «<1%» и «>99%». */
+export function sharePct(x: number): string {
+  const r = Math.round(x * 100);
+  if (r === 100 && x < 1) return '>99%';
+  if (r === 0 && x > 0) return '<1%';
+  return `${r}%`;
+}
+
 /** Доля сотрудничества стороны в дилемме; null - ходов нет. */
 export function cooperationShare(moves: number[] = []): number | null {
   if (moves.length === 0) return null;

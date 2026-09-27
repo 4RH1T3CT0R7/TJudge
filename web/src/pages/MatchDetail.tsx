@@ -23,6 +23,7 @@ import {
   firstDefection,
   iterationsOf,
   runningTotal,
+  sharePct,
 } from '../utils/transcript';
 import type { Side } from '../utils/explainError';
 import type { Match, MatchTranscript } from '../types';
@@ -41,7 +42,7 @@ const SIDE_COLOR = { 1: '#3987e5', 2: '#d95926' } as const;
 const TICK_MS = 60;
 const TICKS_PER_REPLAY = 150;
 
-const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`);
+const pct = (x: number | null) => (x === null ? '—' : sharePct(x));
 const num = (x: number | null) => (x === null ? '—' : x.toLocaleString('ru-RU', { maximumFractionDigits: 1 }));
 
 // Разбор матча: счёт, ходы обеих сторон по итерациям, график счёта и проигрывание.

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { YouMark } from '../ui/YouMark';
+import { sharePct } from '../../utils/transcript';
 import type { StrategyProfile } from '../../types';
 
 type Trait = 'cooperation' | 'niceness' | 'retaliation' | 'forgiveness' | 'provocability';
@@ -38,12 +39,13 @@ function Share({ value }: { value: number | null }) {
       </span>
     );
   }
-  const filled = Math.round(value * 5);
+  // полная шкала и пустая - только у точных 100% и 0%
+  const filled = value === 0 ? 0 : value === 1 ? 5 : Math.min(4, Math.max(1, Math.round(value * 5)));
   return (
     <>
       <span aria-hidden="true" className="text-primary-400">{'█'.repeat(filled)}</span>
       <span aria-hidden="true" className="text-gray-700">{'░'.repeat(5 - filled)}</span>
-      <span className="ml-2 inline-block w-[4ch] text-right text-gray-200">{Math.round(value * 100)}%</span>
+      <span className="ml-2 inline-block w-[4ch] text-right text-gray-200">{sharePct(value)}</span>
     </>
   );
 }
