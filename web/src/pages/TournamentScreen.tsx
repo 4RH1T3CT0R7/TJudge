@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { m } from 'motion/react';
 import { DUR, EASE_OUT } from '../components/motion/tokens';
@@ -466,9 +466,20 @@ export function TournamentScreen() {
 // «$ tail -f matches.log»: последние результаты с названиями команд, свежий слева.
 // Высота в одну строку с переносом: не влезающий целиком результат уходит на
 // скрытую вторую строку, а не обрезается посередине счёта.
+// Ссылки со скрытой строки выпадают из порядка Tab: фокус на невидимом элементе не
+// виден. overflow-clip - чтобы фокус не прокручивал строку вверх.
 function Feed({ items, tournamentId }: { items: FeedItem[]; tournamentId: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const bottom = box.getBoundingClientRect().bottom;
+    box.querySelectorAll('a').forEach((a) => {
+      a.tabIndex = a.getBoundingClientRect().top >= bottom - 1 ? -1 : 0;
+    });
+  });
   return (
-    <div className="flex h-[1.5em] min-w-0 flex-wrap items-baseline gap-x-[1vw] overflow-hidden whitespace-nowrap">
+    <div ref={ref} className="flex h-[1.5em] min-w-0 flex-wrap items-baseline gap-x-[1vw] overflow-clip whitespace-nowrap">
       <span className="shrink-0 text-primary-400">
         <span aria-hidden="true">$ </span>tail -f matches.log
       </span>
