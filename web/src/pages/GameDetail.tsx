@@ -1,7 +1,6 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import api from '../api/client';
 import { queryKeys } from '../api/queryKeys';
 import {
@@ -10,18 +9,17 @@ import {
   useTournamentGamesStatus,
   useGameLeaderboard,
   useMyTeam,
+  useMatchesByRounds,
 } from '../hooks/queries';
 import { useTournamentLive } from '../hooks/useTournamentLive';
 import { useAuthStore } from '../store/authStore';
-import { useToastStore } from '../store/toastStore';
-import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
 import { StatusLabel } from '../components/ui/StatusLabel';
 import { Spinner } from '../components/ui/Spinner';
-import { TerminalOutput } from '../components/ui/TerminalOutput';
 import { Segmented } from '../components/ui/Segmented';
 import { MatchError } from '../components/tournament/MatchError';
+import { ProgramPanel } from '../components/tournament/ProgramPanel';
 import type { Side } from '../utils/explainError';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -46,22 +44,9 @@ const MATCH_VIEWS = [
 export function GameDetail() {
   const { tournamentId, gameId } = useParams<{ tournamentId: string; gameId: string }>();
   const { isAuthenticated } = useAuthStore();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'rules');
 
   const matchesPerPage = 20;
-
-  // Upload state
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  // id загруженной версии: сообщение об успехе снимается, если её сборка упала
-  const [uploadedId, setUploadedId] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadInvaderBubble, setUploadInvaderBubble] = useState<string | null>('// жду код...');
-  const [uploadInvaderShake, setUploadInvaderShake] = useState(false);
-  const [uploadInvaderJump, setUploadInvaderJump] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Живые обновления, как на странице турнира: WS-события инвалидируют ключи
   // игры, без WS (аноним, обрыв) у идущего турнира работает поллинг.
@@ -159,23 +144,17 @@ export function GameDetail() {
   // играет последняя версия команды, а не последняя своя. Поллинг каждые 10с,
   // пока какая-то версия компилируется (бейдж статуса обновится сам)
   const revealMine = useRevealOnMobile<HTMLTableRowElement>();
+  const roundsQuery = useMatchesByRounds(tournamentId ?? '', { pollInterval: live.pollInterval, enabled: isAuthenticated });
   const programsQuery = useQuery({
     queryKey: queryKeys.programVersions(myTeamId ?? '', gameId ?? ''),
     queryFn: () => api.getProgramVersions(myTeamId!, gameId!),
     enabled: isAuthenticated && !!myTeamId && !!gameId,
+    // без WS (обрыв) итог сборки и самопроверки иначе не пришёл бы
     refetchInterval: (query) =>
-      query.state.data?.some((p) => p.status === 'compiling') ? 10000 : false,
+      query.state.data?.some((p) => p.status === 'compiling' || p.check_status === 'pending') ? 5000 : false,
   });
   const programs = useMemo(() => programsQuery.data ?? [], [programsQuery.data]);
   const myProgramIds = useMemo(() => new Set(programs.map((p) => p.id)), [programs]);
-  const currentProgram = useMemo(
-    () =>
-      programs.length > 0
-        ? programs.reduce((a, b) => (a.version > b.version ? a : b))
-        : null,
-    [programs]
-  );
-
   const isLoading =
     tournamentQuery.isPending ||
     gameQuery.isPending ||
@@ -186,134 +165,6 @@ export function GameDetail() {
     (isAuthenticated && !!myTeamId && programsQuery.isPending);
 
   const error = tournamentQuery.isError || gameQuery.isError;
-
-  const canUpload = tournament?.status === 'active' && !gameStatus?.round_completed && !isUploading;
-
-  const handleFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Как detectLanguage в internal/handlers/program.go
-  const supportedExtensions = ['.py', '.cpp', '.cc', '.cxx', '.c', '.go', '.rs', '.java', '.js', '.rb', '.php', '.lua'];
-
-  const isValidFile = (file: File) => {
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-    return supportedExtensions.includes(ext);
-  };
-
-  // Process uploaded file (used by both input and drag-drop)
-  const processFile = async (file: File) => {
-    setUploadedId(null);
-    if (!tournamentId || !gameId || !myTeam) {
-      setUploadError('Не удалось загрузить: отсутствуют данные команды');
-      return;
-    }
-
-    if (!isValidFile(file)) {
-      setUploadError(`Неподдерживаемый формат файла. Используйте: ${supportedExtensions.join(', ')}`);
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError(null);
-    setUploadInvaderBubble('// загружаю...');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('team_id', myTeam.id);
-      formData.append('tournament_id', tournamentId);
-      formData.append('game_id', gameId);
-      formData.append('name', file.name);
-
-      const program = await api.uploadProgram(formData);
-      // Кэш программ обновится сам - текущая версия и список пересчитаются
-      queryClient.invalidateQueries({ queryKey: queryKeys.programs });
-
-      // Check for syntax errors in uploaded program
-      if (program.error_message) {
-        // Program uploaded but has syntax error - show warning
-        setUploadError(`Программа загружена, но обнаружена ошибка синтаксиса:\n${program.error_message}`);
-      } else {
-        setUploadedId(program.id);
-        setUploadInvaderBubble('{ загружено: true }');
-        setUploadInvaderJump(true);
-        setTimeout(() => setUploadInvaderJump(false), 100);
-        // сообщение об успехе держится до следующей загрузки или провала сборки, реплика маскота - 3 с
-        setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
-      }
-
-      // Clear file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (err: unknown) {
-      console.error('Upload failed:', err);
-      setUploadInvaderBubble('// ошибка!');
-      setUploadInvaderShake(true);
-      setTimeout(() => setUploadInvaderShake(false), 100);
-      setTimeout(() => setUploadInvaderBubble('// жду код...'), 3000);
-      // Extract error message from API response
-      if (axios.isAxiosError(err)) {
-        setUploadError(err.response?.data?.error || err.response?.data?.message || 'Не удалось загрузить программу');
-      } else {
-        setUploadError('Не удалось загрузить программу');
-      }
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Drag and drop handlers
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-    setUploadInvaderBubble('// давай сюда!');
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set dragging to false if we're leaving the drop zone entirely
-    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-      setUploadInvaderBubble('// жду код...');
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    setUploadedId(null);
-
-    if (tournament?.status === 'completed') {
-      setUploadError('Турнир завершён, загрузка программ закрыта');
-      return;
-    }
-
-    if (gameStatus?.round_completed) {
-      setUploadError('Раунд для этой игры завершён, загрузка новых версий закрыта');
-      return;
-    }
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      processFile(files[0]);
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    processFile(file);
-  };
 
   if (isLoading) {
     return (
@@ -517,260 +368,15 @@ export function GameDetail() {
           {/* Program Upload Section */}
           <div className="lg:col-span-1 min-w-0">
             {isAuthenticated && myTeam ? (
-              <div className="card">
-                <h2 className="text-lg font-semibold mb-4 text-gray-100">Ваша программа</h2>
-
-                {/* Show warning if tournament is completed or not accepting submissions */}
-                {tournament?.status === 'completed' && (
-                  <div className="mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
-                    <div className="flex items-center gap-2 text-gray-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                      </svg>
-                      <span className="text-sm font-medium">Турнир завершён</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Загрузка программ больше не доступна
-                    </p>
-                  </div>
-                )}
-
-                {tournament?.status === 'pending' && (
-                  <div className="mb-4 p-3 bg-yellow-900/30 rounded-lg border border-yellow-700">
-                    <div className="flex items-center gap-2 text-yellow-300">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                      </svg>
-                      <span className="text-sm font-medium">Турнир ещё не начался</span>
-                    </div>
-                    <p className="text-xs text-yellow-400 mt-1">
-                      Загрузка программ будет доступна после начала турнира
-                    </p>
-                  </div>
-                )}
-
-                {gameStatus?.round_completed && (
-                  <div className="mb-4 p-3 bg-orange-900/30 rounded-lg border border-orange-700">
-                    <div className="flex items-center gap-2 text-orange-300">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-                      </svg>
-                      <span className="text-sm font-medium">Раунд завершён</span>
-                    </div>
-                    <p className="text-xs text-orange-400 mt-1">
-                      Раунд для этой игры завершён, загрузка новых версий закрыта
-                    </p>
-                    {gameStatus.round_completed_at && (
-                      <p className="text-xs text-orange-500 mt-1">
-                        Завершён: {new Date(gameStatus.round_completed_at).toLocaleString('ru-RU')}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Current Program */}
-                {currentProgram && (
-                  <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                    <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
-                      <p className="min-w-0 break-all font-medium text-gray-200">{currentProgram.name}</p>
-                      <div className="flex items-center gap-2">
-                        <StatusLabel entity="program" status={currentProgram.status} />
-                        <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
-                          v{currentProgram.version}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-400">
-                      Загружена: {new Date(currentProgram.created_at).toLocaleString('ru-RU')}
-                    </p>
-                    {currentProgram.error_message && (
-                      <div className="mt-2">
-                        <TerminalOutput label="вывод компилятора" text={currentProgram.error_message} />
-                      </div>
-                    )}
-                    <button
-                      onClick={async () => {
-                        try {
-                          const blob = await api.downloadProgram(currentProgram.id);
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = currentProgram.name || 'program';
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(url);
-                          document.body.removeChild(a);
-                        } catch (err) {
-                          console.error('Download failed:', err);
-                          useToastStore.getState().addToast('Не удалось скачать программу', 'error');
-                        }
-                      }}
-                      className="btn btn-secondary w-full mt-2"
-                    >
-                      Скачать программу
-                    </button>
-                  </div>
-                )}
-
-                {/* Upload Form with Drag & Drop */}
-                <div className="space-y-3">
-                  {/* Upload invader */}
-                  <div className="flex justify-center pt-6">
-                    <SpaceInvader
-                      size="sm"
-                      speechBubble={uploadInvaderBubble}
-                      shake={uploadInvaderShake}
-                      jump={uploadInvaderJump}
-                      eyeOverride={isDragging ? 'wide' : null}
-                    />
-                  </div>
-
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    accept={supportedExtensions.join(',')}
-                    aria-label="Загрузить файл программы"
-                  />
-
-                  {/* Drop Zone */}
-                  <div
-                    ref={dropZoneRef}
-                    role="button"
-                    tabIndex={canUpload ? 0 : -1}
-                    aria-label="Загрузить файл программы"
-                    aria-disabled={!canUpload || undefined}
-                    onKeyDown={(e) => {
-                      if (canUpload && (e.key === 'Enter' || e.key === ' ')) {
-                        e.preventDefault();
-                        handleFileSelect();
-                      }
-                    }}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                    onClick={canUpload ? handleFileSelect : undefined}
-                    className={`
-                      relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
-                      ${!canUpload ? 'cursor-not-allowed opacity-50' : ''}
-                      ${isDragging
-                        ? 'border-primary-500 bg-primary-900/20'
-                        : 'border-line hover:border-primary-500 hover:bg-gray-800/50'
-                      }
-                    `}
-                  >
-                    {isDragging ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-primary-500">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                        </svg>
-                        <p className="text-sm font-medium text-primary-400">
-                          Отпустите файл для загрузки
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-gray-500">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                        </svg>
-                        <div>
-                          <p className="text-sm font-medium text-gray-300">
-                            {isUploading ? 'Загрузка...' : tournament?.status === 'completed' ? 'Загрузка закрыта' : gameStatus?.round_completed ? 'Раунд завершён' : 'Перетащите файл сюда'}
-                          </p>
-                          {tournament?.status !== 'completed' && !gameStatus?.round_completed && !isUploading && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              или <span className="text-primary-400 underline">выберите файл</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {isUploading && (
-                      <div className="absolute inset-0 bg-gray-900/50 rounded-lg flex items-center justify-center">
-                        <Spinner className="text-lg" />
-                      </div>
-                    )}
-                  </div>
-
-                  {uploadedId && programs.find((p) => p.id === uploadedId)?.status !== 'failed' && (
-                    <div role="status" className="p-2 bg-green-900/30 border border-green-700 rounded text-sm text-green-300 flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                      </svg>
-                      Программа успешно загружена!
-                    </div>
-                  )}
-
-                  {uploadError && (
-                    <div role="alert" className="p-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300 flex items-center gap-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                      </svg>
-                      {uploadError}
-                    </div>
-                  )}
-
-                  <p className="text-xs text-gray-400 text-center">
-                    Поддерживаемые форматы: {supportedExtensions.join(', ')}
-                  </p>
-                </div>
-
-                {/* Previous Versions */}
-                {programs.length > 1 && (
-                  <div className="mt-6">
-                    <h3 className="font-medium mb-2 text-gray-100">Предыдущие версии</h3>
-                    <div className="space-y-2">
-                      {programs
-                        .filter((p) => p.id !== currentProgram?.id)
-                        .sort((a, b) => b.version - a.version)
-                        .map((program) => (
-                          <div
-                            key={program.id}
-                            className="flex justify-between items-center text-sm p-2 bg-gray-800 rounded"
-                          >
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-100">v{program.version}</span>
-                                <StatusLabel
-                                  entity="program"
-                                  status={program.status}
-                                  title={program.status === 'failed' ? program.error_message || undefined : undefined}
-                                />
-                              </div>
-                              <span className="text-xs text-gray-400">
-                                {new Date(program.created_at).toLocaleDateString('ru-RU')}
-                              </span>
-                            </div>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const blob = await api.downloadProgram(program.id);
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = program.name || `program_v${program.version}`;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
-                                } catch (err) {
-                                  console.error('Download failed:', err);
-                                  useToastStore.getState().addToast('Не удалось скачать программу', 'error');
-                                }
-                              }}
-                              className="text-primary-400 hover:text-primary-300 text-xs font-medium"
-                            >
-                              Скачать
-                            </button>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ProgramPanel
+                tournament={tournament}
+                gameId={game.id}
+                gameStatus={gameStatus}
+                gamesStatus={gamesStatusQuery.data ?? []}
+                rounds={roundsQuery.data ?? []}
+                myTeam={myTeam}
+                programs={programs}
+              />
             ) : (
               <div className="card">
                 <h2 className="text-lg font-semibold mb-4 text-gray-100">Отправить программу</h2>

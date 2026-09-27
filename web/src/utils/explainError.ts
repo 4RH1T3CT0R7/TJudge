@@ -152,7 +152,7 @@ const COMPILE_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
   ],
   [/is not in std|cannot find package|no required module provides package/, () => 'внешние модули Go недоступны, только стандартная библиотека'],
   [/declared and not used|imported and not used/, () => 'Go не собирает код с неиспользуемыми переменными и импортами: удалите их'],
-  [/mismatched types/, () => 'типы не совпадают: приведите явно (as u32, try_into, int(...))'],
+  [/mismatched types/, () => 'типы не совпадают: приведите явно (as u32, try_into)'],
   [/Missing parentheses in call to 'print'/, () => 'это синтаксис Python 2, а сборка идёт в Python 3.12: print(...)'],
   [/IndentationError|TabError/, () => 'отступы: не смешивайте табы и пробелы'],
   [/не найдено объявление class/, () => 'объявите class с методом public static void main(String[] args)'],

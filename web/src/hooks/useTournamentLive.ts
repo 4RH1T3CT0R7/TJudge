@@ -108,10 +108,10 @@ export function useTournamentLive({ tournamentId, enabled = true }: UseTournamen
           // Статус компиляции патчится в кэш сразу. Текста ошибки в WS нет
           // (рассылка идёт всему турниру), а свежей версии сокомандника в кэше
           // ещё нет, поэтому программы перечитываются всегда: события редкие.
-          const { program_id, status } = message.payload;
+          const { program_id, status, check_status } = message.payload;
           queryClient.setQueriesData<Program[]>(
             { queryKey: queryKeys.programs },
-            (old) => old?.map((p) => (p.id === program_id ? { ...p, status } : p))
+            (old) => old?.map((p) => (p.id === program_id ? { ...p, status, check_status: check_status ?? p.check_status } : p))
           );
           // ['programs'] - префикс и списка, и версий.
           void queryClient.invalidateQueries({ queryKey: queryKeys.programs });

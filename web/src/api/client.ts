@@ -734,6 +734,14 @@ class ApiClient {
     return data;
   }
 
+  // Матчи одной версии программы в турнире (здоровье программы); потолок бэкенда - 100.
+  async getProgramMatches(tournamentId: string, programId: string, limit = 100): Promise<Match[]> {
+    const { data } = await this.client.get<Match[]>('/matches', {
+      params: { tournament_id: tournamentId, program_id: programId, limit },
+    });
+    return data;
+  }
+
   // Get failed matches (for admin error display)
   async getFailedMatches(limit: number = 20): Promise<Match[]> {
     const { data } = await this.client.get<Match[]>('/matches', {
