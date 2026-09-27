@@ -215,11 +215,6 @@
     font-weight: 700;
   }
 
-  /* цифры в колонках не прыгают по ширине */
-  table {
-    font-variant-numeric: tabular-nums;
-  }
-
   *:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;

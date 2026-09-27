@@ -371,13 +371,13 @@ export function GameDetail() {
                       <tbody>
                         {leaderboard.map((entry) => (
                           <tr key={entry.program_id} className="border-b border-gray-800">
-                            <td className="py-2 pr-4 font-medium text-gray-200">{entry.rank}</td>
+                            <td className="py-2 pr-4 font-mono font-medium text-gray-200">{entry.rank}</td>
                             <td className="py-2 pr-4 text-gray-200">{entry.program_name}</td>
-                            <td className="py-2 pr-4 text-center font-medium text-gray-200">{entry.rating}</td>
-                            <td className="py-2 pr-4 text-center text-green-400">{entry.wins}</td>
-                            <td className="py-2 pr-4 text-center text-red-400">{entry.losses}</td>
-                            <td className="py-2 pr-4 text-center text-gray-400">{entry.draws}</td>
-                            <td className="py-2 text-center text-gray-200">{entry.total_games}</td>
+                            <td className="py-2 pr-4 text-center font-mono font-medium text-gray-200">{entry.rating}</td>
+                            <td className="py-2 pr-4 text-center font-mono text-green-400">{entry.wins}</td>
+                            <td className="py-2 pr-4 text-center font-mono text-red-400">{entry.losses}</td>
+                            <td className="py-2 pr-4 text-center font-mono text-gray-400">{entry.draws}</td>
+                            <td className="py-2 text-center font-mono text-gray-200">{entry.total_games}</td>
                             <td className="py-2 text-center">
                               <button
                                 onClick={() => setChartProgram({ id: entry.program_id, name: entry.program_name })}
