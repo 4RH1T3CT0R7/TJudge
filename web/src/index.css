@@ -197,11 +197,6 @@
     outline-offset: -2px;
   }
 
-  /* на залитой выбранной вкладке фиолетовое кольцо сливается с фоном */
-  .tab-active:focus-visible {
-    outline-color: var(--color-gray-100);
-  }
-
   /* текстовые поля показывают фокус рамкой и фоном, кольцо им не нужно */
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]):focus-visible,
   textarea:focus-visible {
@@ -402,19 +397,6 @@
     @apply bg-red-900/50 text-red-300;
   }
 
-  /* Tab styles - pill buttons */
-  .tab-active {
-    @apply text-white;
-    background: var(--color-primary-600);
-  }
-
-  .tab-inactive {
-    @apply bg-transparent text-gray-400 hover:text-gray-100;
-  }
-  .tab-inactive:hover {
-    background: rgba(55,65,81,0.5);
-  }
-
   /* Modal backdrop */
   .modal-backdrop {
     @apply fixed inset-0 bg-black/60 flex items-center justify-center z-50;
@@ -581,11 +563,6 @@
 
   .alert-error {
     @apply bg-red-900/30 border-red-700 text-red-300;
-  }
-
-  /* Tab pill buttons */
-  .tab {
-    @apply py-2 px-4 font-medium text-sm rounded-lg transition-[color,background-color] duration-200;
   }
 }
 
@@ -1121,7 +1098,7 @@
     transition-duration: 0.01ms !important;
   }
 
-  .btn, .input, .nav-link, .tab, .badge, .table-row,
+  .btn, .input, .nav-link, .badge, .table-row,
   .card-hover, .card-interactive, .feature-card {
     transition-duration: 150ms !important;
     transition-property: color, background-color, border-color, opacity !important;

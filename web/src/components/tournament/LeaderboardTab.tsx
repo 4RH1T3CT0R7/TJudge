@@ -1,5 +1,8 @@
 import { ArrowsExpandIcon, ChartBarIcon } from '../icons';
 import { WinnersPodium } from './WinnersPodium';
+import { LEADERBOARD_VIEWS } from './helpers';
+import { Segmented } from '../ui/Segmented';
+import { Spinner } from '../ui/Spinner';
 import type { CrossGameLeaderboardEntry, Game } from '../../types';
 
 // Leaderboard Tab Component
@@ -44,9 +47,7 @@ export function LeaderboardTab({
               Обновление...
             </span>
           )}
-          {isRefreshing && (
-            <div className="w-4 h-4 border-2 border-primary-800 border-t-primary-400 rounded-full animate-spin" />
-          )}
+          {isRefreshing && <Spinner />}
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -56,20 +57,12 @@ export function LeaderboardTab({
           >
             Обновить
           </button>
-          <button
-            onClick={() => onShowCrossGameChange(true)}
-            aria-pressed={showCrossGame}
-            className={`btn ${showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            По играм
-          </button>
-          <button
-            onClick={() => onShowCrossGameChange(false)}
-            aria-pressed={!showCrossGame}
-            className={`btn ${!showCrossGame ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            Общий
-          </button>
+          <Segmented
+            label="Вид таблицы"
+            options={LEADERBOARD_VIEWS}
+            value={showCrossGame ? 'games' : 'total'}
+            onChange={(v) => onShowCrossGameChange(v === 'games')}
+          />
           <button onClick={onToggleFullscreen} className="btn btn-secondary">
             <ArrowsExpandIcon />
             На весь экран

@@ -2,7 +2,6 @@ import axios from 'axios';
 import type { QueryClient } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
-import type { TournamentStatus } from '../../types';
 
 export function extractErrorMessage(err: unknown, fallback: string): string {
   if (axios.isAxiosError(err)) {
@@ -11,23 +10,11 @@ export function extractErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
-export const statusConfig: Record<TournamentStatus, {
-  badge: string;
-  label: string;
-}> = {
-  pending: {
-    badge: 'badge badge-yellow',
-    label: 'Ожидание',
-  },
-  active: {
-    badge: 'badge badge-green',
-    label: 'Активный',
-  },
-  completed: {
-    badge: 'badge badge-gray',
-    label: 'Завершён',
-  },
-};
+// Вид таблицы рейтинга: по играм или только сумма.
+export const LEADERBOARD_VIEWS = [
+  { value: 'games', label: 'По играм' },
+  { value: 'total', label: 'Общий' },
+] as const;
 
 // Ждёт, пока матчи турнира доиграют, и обновляет лидерборд с раундами по ходу.
 // Упавшие матчи автоматически не перезапускаются: ошибка программы

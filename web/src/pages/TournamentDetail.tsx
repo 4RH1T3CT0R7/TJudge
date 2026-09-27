@@ -16,15 +16,12 @@ import { useTournamentLive } from '../hooks/useTournamentLive';
 import { useToastStore } from '../store/toastStore';
 import { confirmDialog } from '../store/confirmStore';
 import {
-  InfoCircleIcon, ChartBarIcon, PuzzlePieceIcon, UsersIcon, PlayIcon,
-  CheckCircleIcon, XMarkIcon, UserPlusIcon,
-  ArrowLeftIcon, HashtagIcon, FolderIcon,
+  UsersIcon, PlayIcon, CheckCircleIcon, XMarkIcon, UserPlusIcon, HashtagIcon,
 } from '../components/icons';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { CinematicOverlay } from '../components/CinematicOverlay';
-import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { useOnRoundFinished } from '../hooks/useOnRoundFinished';
 import { InfoTab } from '../components/tournament/InfoTab';
@@ -37,9 +34,15 @@ import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
 import { MatchesTab } from '../components/tournament/MatchesTab';
 import { JoinTournamentModal } from '../components/tournament/JoinTournamentModal';
-import { extractErrorMessage, statusConfig } from '../components/tournament/helpers';
+import { extractErrorMessage, LEADERBOARD_VIEWS } from '../components/tournament/helpers';
 import { useGameAdminActions } from '../components/tournament/useGameAdminActions';
-import { handleTabListKeyDown } from '../components/ui/tabKeyboard';
+import { Tabs } from '../components/ui/Tabs';
+import { Segmented } from '../components/ui/Segmented';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StatusLabel } from '../components/ui/StatusLabel';
+import { Spinner } from '../components/ui/Spinner';
+import { ErrorState } from '../components/ui/ErrorState';
+import { useTabParam } from '../hooks/useTabParam';
 import type {
   Tournament,
   TournamentStatus,
@@ -50,7 +53,7 @@ import type {
   TournamentGameWithDetails,
 } from '../types';
 
-type TabType = 'info' | 'leaderboard' | 'matches' | 'games' | 'teams';
+const TAB_IDS = ['info', 'leaderboard', 'matches', 'games', 'teams'] as const;
 
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +85,7 @@ export function TournamentDetail() {
   const gamesStatus: TournamentGameWithDetails[] = gamesStatusQuery.data ?? [];
   const myTeam: Team | null = myTeamQuery.data ?? null;
 
-  const [activeTab, setActiveTab] = useState<TabType>('info');
+  const [activeTab, setActiveTab] = useTabParam(TAB_IDS, 'info');
   // Первичная загрузка всех данных страницы (раньше - единый ручной флаг).
   // isLoading у disabled-запросов (myTeam без авторизации) - false.
   const isLoading =
@@ -301,7 +304,11 @@ export function TournamentDetail() {
   const isRefreshingLeaderboard = leaderboardQuery.isRefetching;
 
   if (showLoading) {
-    return <TerminalLoader />;
+    return (
+      <div className="flex justify-center py-24 text-sm text-gray-400">
+        <Spinner>загрузка турнира</Spinner>
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -310,15 +317,18 @@ export function TournamentDetail() {
 
   if (error || !tournament) {
     return (
-      <div className="text-center py-24">
-        <div className="flex justify-center mb-4">
+      <div className="py-12">
+        <div className="flex justify-center">
           <SpaceInvader size="sm" controlledPose="cry" speechBubble="// ошибка" eyeOverride="sad" />
         </div>
-        <p className="text-red-500 text-lg mb-4">{error || 'Турнир не найден'}</p>
-        <Link to="/tournaments" className="btn btn-secondary">
-          <ArrowLeftIcon />
-          Назад к турнирам
-        </Link>
+        <ErrorState
+          message={error || 'Турнир не найден'}
+          onRetry={error ? () => void tournamentQuery.refetch() : undefined}
+        >
+          <Link to="/tournaments" className="btn btn-secondary">
+            К списку турниров
+          </Link>
+        </ErrorState>
       </div>
     );
   }
@@ -328,12 +338,12 @@ export function TournamentDetail() {
   const activeGameHasRunningMatches = activeGame && matchRounds.some(
     r => r.game_type === activeGame.game_name && (r.pending_count > 0 || r.running_count > 0)
   );
-  const tabs: { id: TabType; label: string; icon: React.FC; count?: number }[] = [
-    { id: 'info', label: 'Информация', icon: InfoCircleIcon },
-    { id: 'leaderboard', label: 'Таблица', icon: ChartBarIcon },
-    { id: 'matches', label: 'Матчи', icon: FolderIcon, count: totalMatches },
-    { id: 'games', label: 'Игры', icon: PuzzlePieceIcon, count: games.length },
-    { id: 'teams', label: 'Команды', icon: UsersIcon, count: teams.length },
+  const tabs = [
+    { id: 'info' as const, label: 'Информация' },
+    { id: 'leaderboard' as const, label: 'Таблица' },
+    { id: 'matches' as const, label: 'Матчи', count: totalMatches },
+    { id: 'games' as const, label: 'Игры', count: games.length },
+    { id: 'teams' as const, label: 'Команды', count: teams.length },
   ];
 
   const isCreator = user?.id === tournament.creator_id;
@@ -341,7 +351,6 @@ export function TournamentDetail() {
   const canManage = isCreator || isAdmin;
   const canStart = canManage && tournament.status === 'pending';
   const canComplete = canManage && tournament.status === 'active';
-  const config = statusConfig[tournament.status];
 
   // Fullscreen leaderboard view
   if (isFullscreen) {
@@ -357,28 +366,18 @@ export function TournamentDetail() {
               </p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCrossGameLeaderboard(true)}
-                  aria-pressed={showCrossGameLeaderboard}
-                  className={`btn text-sm ${showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
-                >
-                  По играм
-                </button>
-                <button
-                  onClick={() => setShowCrossGameLeaderboard(false)}
-                  aria-pressed={!showCrossGameLeaderboard}
-                  className={`btn text-sm ${!showCrossGameLeaderboard ? 'bg-primary-600 hover:bg-primary-700' : 'bg-gray-700 hover:bg-gray-600'} text-white`}
-                >
-                  Общий
-                </button>
-              </div>
+              <Segmented
+                label="Вид таблицы"
+                options={LEADERBOARD_VIEWS}
+                value={showCrossGameLeaderboard ? 'games' : 'total'}
+                onChange={(v) => setShowCrossGameLeaderboard(v === 'games')}
+              />
               {isConnected && (
                 <span className="online-indicator text-green-400">
                   Обновления в реальном времени
                 </span>
               )}
-              <button onClick={toggleFullscreen} className="btn bg-gray-700 hover:bg-gray-600 text-white">
+              <button onClick={toggleFullscreen} className="btn btn-secondary">
                 <XMarkIcon />
                 Закрыть
               </button>
@@ -414,37 +413,22 @@ export function TournamentDetail() {
         )}
       </div>
 
-      {/* Header */}
-      <div className="mb-8">
-        <Link to="/tournaments" className="inline-flex items-center gap-2 text-gray-400 hover:text-primary-400 mb-4 transition-colors">
-          <ArrowLeftIcon />
-          <span>Назад к турнирам</span>
-        </Link>
-
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-              <title>{`${tournament.name} — TJudge`}</title>
-              <h1 className="text-3xl font-bold text-gray-100">{tournament.name}</h1>
-              <span className={config.badge}>
-                {config.label}
-              </span>
-              {tournament.is_permanent && (
-                <span className="badge badge-blue">
-                  Постоянный
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-gray-300">
-              <HashtagIcon className="w-4 h-4" />
-              <span>Код:</span>
-              <code className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-100">
-                {tournament.code}
-              </code>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+      <PageHeader
+        crumbs={[{ label: 'турниры', to: '/tournaments' }, { label: tournament.name }]}
+        title={
+          <>
+            <title>{`${tournament.name} — TJudge`}</title>
+            {tournament.name}
+          </>
+        }
+        status={
+          <>
+            <StatusLabel entity="tournament" status={tournament.status} />
+            {tournament.is_permanent && <span className="badge badge-blue">Постоянный</span>}
+          </>
+        }
+        actions={
+          <>
             {isAuthenticated && !myTeam && tournament.status === 'pending' && (
               <button onClick={() => setShowJoinModal(true)} className="btn btn-primary">
                 <UserPlusIcon />
@@ -500,9 +484,17 @@ export function TournamentDetail() {
                 </button>
               </>
             )}
-          </div>
+          </>
+        }
+      >
+        <div className="flex items-center gap-2 text-gray-300">
+          <HashtagIcon className="w-4 h-4" />
+          <span>Код:</span>
+          <code className="bg-gray-800 px-3 py-1 rounded-lg font-mono text-gray-100">
+            {tournament.code}
+          </code>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Action Error */}
       {actionError && (
@@ -521,55 +513,28 @@ export function TournamentDetail() {
               Ваша команда: <strong>{myTeam.name}</strong>
             </p>
           </div>
-          <Link to={`/teams/${myTeam.id}`} className="btn btn-primary text-sm">
+          <Link to={`/teams/${myTeam.id}`} className="btn btn-primary">
             Управление командой
           </Link>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="relative bg-gray-900 rounded-lg border border-gray-800 mb-6 p-1.5">
-        <nav className="flex gap-1 overflow-x-auto items-center" role="tablist" onKeyDown={handleTabListKeyDown}>
-          {tabs.map((tab) => {
-            const TabIcon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                tabIndex={activeTab === tab.id ? 0 : -1}
-                onClick={() => setActiveTab(tab.id)}
-                className={`tab flex items-center gap-2 whitespace-nowrap ${
-                  activeTab === tab.id ? 'tab-active' : 'tab-inactive'
-                }`}
-              >
-                <TabIcon />
-                {tab.label}
-                {tab.count !== undefined && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    activeTab === tab.id
-                      ? 'bg-white/20 text-white'
-                      : 'bg-gray-700 text-gray-300'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-        {/* маскот живых обновлений вне потока: появление не сдвигает вкладки.
-            Только с lg, где справа от вкладок есть место, уменьшен до высоты
-            панели и без реплики: иначе заходил на вкладки и баннер команды */}
-        {isConnected && wsInvaderPose !== 'idle' && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 scale-50 origin-right pointer-events-none hidden lg:block">
-            <SpaceInvader size="sm" controlledPose={wsInvaderPose} />
-          </div>
-        )}
-      </div>
-
-      {/* Tab Content */}
-      <div className="animate-fade-in">
+      <Tabs
+        label="Разделы турнира"
+        items={tabs}
+        active={activeTab}
+        onChange={setActiveTab}
+        aside={
+          /* маскот живых обновлений вне потока: появление не сдвигает вкладки.
+             Только с lg, где справа от вкладок есть место, уменьшен до высоты
+             панели и без реплики: иначе заходил на вкладки и баннер команды */
+          isConnected && wsInvaderPose !== 'idle' && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 scale-50 origin-right pointer-events-none hidden lg:block">
+              <SpaceInvader size="sm" controlledPose={wsInvaderPose} />
+            </div>
+          )
+        }
+      >
         {activeTab === 'info' && (
           <InfoTab tournament={tournament} />
         )}
@@ -662,7 +627,7 @@ export function TournamentDetail() {
             }}
           />
         )}
-      </div>
+      </Tabs>
 
       {/* Join Modal */}
       <JoinTournamentModal

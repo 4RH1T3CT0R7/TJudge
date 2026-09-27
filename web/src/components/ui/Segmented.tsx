@@ -1,5 +1,5 @@
 interface SegmentedProps<T extends string> {
-  options: { value: T; label: string }[];
+  options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
   /** Имя группы для скринридера. */
