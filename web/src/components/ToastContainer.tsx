@@ -1,85 +1,73 @@
 import { useEffect, useState } from 'react';
 import { useToastStore, type Toast } from '../store/toastStore';
+import { XMarkIcon } from './icons';
 
-function ToastIcon({ type }: { type: Toast['type'] }) {
-  switch (type) {
-    case 'error':
-      return (
-        <svg className="w-5 h-5 shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-    case 'success':
-      return (
-        <svg className="w-5 h-5 shrink-0 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-    case 'info':
-      return (
-        <svg className="w-5 h-5 shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      );
-  }
-}
-
-const borderColors: Record<Toast['type'], string> = {
-  error: 'border-red-500/60',
-  success: 'border-green-500/60',
-  info: 'border-blue-500/60',
+// Тоны сообщений — та же шкала, что у бейджей статусов: красный, зелёный, синий.
+const TONE: Record<Toast['type'], { tag: string; text: string; border: string }> = {
+  error: { tag: '✕ ERR', text: 'text-red-400', border: 'border-l-red-500' },
+  success: { tag: '✓ OK', text: 'text-green-400', border: 'border-l-green-500' },
+  info: { tag: '· NOTE', text: 'text-blue-300', border: 'border-l-blue-500' },
 };
 
 function ToastItem({ toast }: { toast: Toast }) {
   const removeToast = useToastStore((s) => s.removeToast);
   const [visible, setVisible] = useState(false);
+  const tone = TONE[toast.type];
 
   useEffect(() => {
-    // Trigger slide-in on next frame
+    // выезд со следующего кадра
     const raf = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(raf);
   }, []);
 
   const handleDismiss = () => {
     setVisible(false);
-    // Wait for exit animation to finish before removing from store
+    // удаление из стора после анимации ухода
     setTimeout(() => removeToast(toast.id), 200);
   };
 
   return (
+    // ошибка — alert (озвучивается сразу), остальное читается вежливым live-регионом контейнера
     <div
+      role={toast.type === 'error' ? 'alert' : undefined}
       className={`
-        flex items-start gap-3 w-80 px-4 py-3
-        bg-gray-900 border ${borderColors[toast.type]}
-        rounded-lg shadow-lg shadow-black/40
-        text-gray-100 text-sm
-        transition-all duration-200 ease-out
+        pointer-events-auto px-3 py-2 rounded
+        bg-gray-950/95 border border-gray-800 border-l-2 ${tone.border}
+        shadow-lg shadow-black/40 text-sm
+        transition-[translate,opacity] duration-200 ease-out
         ${visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
-      role="alert"
     >
-      <ToastIcon type={toast.type} />
-      <p className="flex-1 break-words leading-snug pt-px">{toast.message}</p>
-      <button
-        onClick={handleDismiss}
-        className="shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
-        aria-label="Dismiss"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      <div className="flex items-center gap-2 font-mono text-xs">
+        <span className={`font-bold ${tone.text}`}>{tone.tag}</span>
+        <time className="text-gray-500" dateTime={new Date(toast.at).toISOString()}>
+          {new Date(toast.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+        </time>
+        {toast.count > 1 && <span className="text-gray-300">×{toast.count}</span>}
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="Закрыть уведомление"
+          className="ml-auto -mr-1 p-1 rounded text-gray-500 hover:text-gray-200 transition-colors"
+        >
+          <XMarkIcon className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="mt-0.5 break-words leading-snug text-gray-100">{toast.message}</p>
     </div>
   );
 }
 
+// Тосты как строки лога: метка тона, время, счётчик повторов «×N»; не больше трёх (toastStore).
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
 
-  if (toasts.length === 0) return null;
-
+  // контейнер есть всегда: live-регион должен существовать до появления сообщений
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-auto">
+    <div
+      aria-live="polite"
+      className="fixed top-4 right-4 z-[9999] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2 pointer-events-none"
+    >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}
