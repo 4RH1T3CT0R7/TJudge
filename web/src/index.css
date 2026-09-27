@@ -219,9 +219,11 @@
 }
 
 @layer components {
-  /* Buttons - ghost/outline style (moshi-like) */
+  /* Кнопки: контурные, три размера — .btn-sm (строки таблиц, вторичные действия),
+     .btn (по умолчанию), .btn-lg (главное действие экрана). Залитый .btn-danger-fill
+     только у подтверждения необратимого действия в ConfirmDialog */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium inline-flex items-center justify-center gap-2;
+    @apply px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2;
     @apply disabled:opacity-50 disabled:cursor-not-allowed;
     @apply transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 ease-out;
     @apply active:scale-[0.98];
@@ -241,6 +243,14 @@
 
   .btn:active::after {
     opacity: 0.08;
+  }
+
+  .btn-sm {
+    @apply px-2.5 py-1 text-xs gap-1.5;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
   }
 
   .btn-primary {
@@ -280,15 +290,14 @@
     box-shadow: 0 0 20px rgba(248,113,113,0.3);
   }
 
-  .btn-warning {
-    background: transparent;
-    color: #fbbf24;
-    border: 1px solid #92400e;
+  .btn-danger-fill {
+    background: var(--color-red-600);
+    color: #fff;
+    border: 1px solid var(--color-red-600);
   }
-  .btn-warning:hover {
-    background: rgba(251,191,36,0.08);
-    border-color: #d97706;
-    box-shadow: 0 0 20px rgba(251,191,36,0.3);
+  .btn-danger-fill:hover {
+    background: var(--color-red-700);
+    border-color: var(--color-red-700);
   }
 
   .btn-success {

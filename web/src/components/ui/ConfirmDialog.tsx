@@ -27,7 +27,7 @@ export function ConfirmDialogHost() {
               {pending.cancelLabel ?? 'Отмена'}
             </button>
             <button
-              className={`btn ${pending.danger ? 'btn-danger' : 'btn-primary'}`}
+              className={`btn ${pending.danger ? 'btn-danger-fill' : 'btn-primary'}`}
               onClick={() => settle(true)}
             >
               {pending.confirmLabel ?? 'Подтвердить'}
