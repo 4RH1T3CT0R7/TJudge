@@ -171,3 +171,20 @@ func TestSandbox_BotStderr(t *testing.T) {
 		assert.NotContains(t, res.ErrorMessage, "SECRET", "в ошибку попал stderr соперника")
 	}
 }
+
+// самопроверка: программа играет против эталонного бота из образа
+func TestSandbox_Check(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	writeBots(t, dir, map[string]string{"crash.py": crashBot, "coop": cooperatorBot})
+
+	res, err := e.Check(context.Background(), "dilemma", filepath.Join(dir, "coop"))
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
+	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2}, "эталон дилеммы - tit for tat")
+
+	res, err = e.Check(context.Background(), "dilemma", filepath.Join(dir, "crash.py"))
+	require.NoError(t, err)
+	assert.Equal(t, 1, res.ErrorCode)
+	assert.Contains(t, res.ErrorMessage, "ZeroDivisionError")
+}

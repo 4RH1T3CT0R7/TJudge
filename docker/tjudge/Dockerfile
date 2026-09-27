@@ -62,6 +62,15 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python && \
 COPY --from=builder /usr/local/bin/tjudge-cli /usr/local/bin/tjudge-cli
 COPY --chmod=0755 docker/tjudge/sandbox.sh /usr/local/bin/sandbox
 
+# эталонные боты игр из tjudge-cli (того же коммита, что и правила): против
+# них программа проходит самопроверку после сборки. имя файла - игра
+ARG REFBOTS=/usr/local/lib/tjudge/refbots
+COPY --from=builder --chmod=0755 /build/resources/dilemma/tit_for_tat.py ${REFBOTS}/dilemma
+COPY --from=builder --chmod=0755 /build/resources/tug_of_war/p1.py ${REFBOTS}/tug_of_war
+COPY --from=builder --chmod=0755 /build/resources/travelers_dilemma/cooperative.py ${REFBOTS}/travelers_dilemma
+COPY --from=builder --chmod=0755 /build/resources/public_goods/generous.py ${REFBOTS}/public_goods
+COPY --from=builder --chmod=0755 /build/resources/dollar_auction/cautious.py ${REFBOTS}/dollar_auction
+
 # Сюда executor монтирует файлы программ матча, ботам сюда хода нет.
 # /programs - tmpfs с копиями программ под uid ботов
 RUN mkdir -m 0700 /mnt/programs

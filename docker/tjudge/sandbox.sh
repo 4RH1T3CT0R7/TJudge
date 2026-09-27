@@ -26,6 +26,9 @@
 # убивает бота сигналом. Проигравшая по ошибке сторона (код 1 или 2) получает
 # хвост своего stderr после сообщения tjudge-cli: он уходит в текст ошибки
 # матча, а его видят только админ и команда этой программы.
+#
+# Программа /refbots/<игра> - эталонный бот игры из образа, против него
+# executor гоняет самопроверку программы после сборки.
 set -eEuo pipefail
 
 fail() {
@@ -68,15 +71,20 @@ for i in 0 1; do
         continue
     fi
 
+    src=/mnt/programs
+    if [[ $prog == /refbots/* ]]; then
+        src=/usr/local/lib/tjudge/refbots
+        prog=/programs/${prog#/refbots/}
+    fi
     name=${prog#/programs/}
     [[ $prog == /programs/$name && $name =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] || fail "bad program path: $prog"
-    [[ -f /mnt/programs/$name ]] || fail "program not mounted: $name"
+    [[ -f $src/$name ]] || fail "program not mounted: $name"
 
     uid=$((base + i))
-    cp /mnt/programs/"$name" "$prog" || copy_failed
+    cp "$src/$name" "$prog" || copy_failed
     chmod 0500 "$prog"
-    if [[ -d /mnt/programs/${name}_classes ]]; then
-        cp -R /mnt/programs/"${name}_classes" "${prog}_classes" || copy_failed
+    if [[ -d $src/${name}_classes ]]; then
+        cp -R "$src/${name}_classes" "${prog}_classes" || copy_failed
         chmod -R u=rX,go= "${prog}_classes"
         chown -R "$uid:$uid" "${prog}_classes"
     fi

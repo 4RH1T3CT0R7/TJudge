@@ -119,6 +119,16 @@ func (e *Executor) Execute(ctx context.Context, match *models.Match, program1Pat
 	return result, nil
 }
 
+// Check - самопроверка программы: матч первым игроком против эталонного бота
+// игры, который лежит в образе (см. docker/tjudge/sandbox.sh)
+func (e *Executor) Check(ctx context.Context, gameType, programPath string) (*models.MatchResult, error) {
+	programs, binds, err := e.programMounts(programPath)
+	if err != nil {
+		return nil, err
+	}
+	return e.runInDocker(ctx, gameType, programs[0], sandboxRefBots+gameType, binds)
+}
+
 // runInDocker поднимает контейнер, ждёт матч и разбирает результат
 func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2 string, binds []string) (*models.MatchResult, error) {
 	// формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
@@ -226,6 +236,8 @@ const (
 	sandboxMountPath = "/mnt/programs"
 	// код выхода точки входа при сбое подготовки песочницы
 	sandboxSetupFailed = 125
+	// путь эталонного бота игры: /refbots/<игра>
+	sandboxRefBots = "/refbots/"
 )
 
 // buildMatchHostConfig собирает докер-hostConfig для матч-контейнера. вынесено
