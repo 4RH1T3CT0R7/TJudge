@@ -109,7 +109,7 @@ export function HeadToHeadMatrix({ cells, myTeamId, order }: HeadToHeadMatrixPro
         <p className="mt-2 font-mono text-xs text-gray-500">
           <span aria-hidden="true">{'// '}</span>
           {metric === 'wins'
-            ? 'победы–поражения команды из строки над командой из колонки; цвет — доля побед, ничья — половина победы'
+            ? 'победы–поражения команды из строки над командой из колонки, третье число — ничьи; цвет — доля побед, ничья — половина победы'
             : `средние очки команды из строки за матч против колонки: ярче — больше, от ${Math.round(range.lo)} до ${Math.round(range.hi)}`}
           {order && ' · команды по месту в таблице игры'}
         </p>
@@ -188,7 +188,7 @@ function SmallMatrix({ teams, cellOf, colorOf, describe, metric, myTeamId }: Gri
                     style={{ backgroundColor: colorOf(cell), color: '#e5e7eb' }}
                     title={describe(row, col, cell)}
                   >
-                    {metric === 'wins' ? `${cell.wins}–${cell.losses}` : avg(cell.score_for, cell)}
+                    {metric === 'wins' ? `${cell.wins}–${cell.losses}${cell.draws ? `–${cell.draws}` : ''}` : avg(cell.score_for, cell)}
                   </td>
                 );
               })}
