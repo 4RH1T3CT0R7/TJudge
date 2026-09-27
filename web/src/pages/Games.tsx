@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useGames } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
-import { TerminalLoader } from '../components/TerminalLoader';
+import { Spinner } from '../components/ui/Spinner';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { getGameConfig } from '../utils/gameConfig';
 
@@ -11,7 +11,7 @@ export function Games() {
   const games = data ?? [];
 
   if (showLoading) {
-    return <TerminalLoader />;
+    return <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка игр</Spinner></div>;
   }
 
   if (isPending) {

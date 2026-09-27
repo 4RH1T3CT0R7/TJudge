@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useGame } from '../hooks/queries';
 import { InvaderPresence } from '../components/motion/InvaderPresence';
 import { SpaceInvader } from '../components/SpaceInvader';
-import { TerminalLoader } from '../components/TerminalLoader';
+import { Spinner } from '../components/ui/Spinner';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { Markdown } from '../components/ui/Markdown';
 
@@ -13,7 +13,7 @@ export function GameView() {
   const showLoading = useDelayedLoading(isPending);
 
   if (showLoading) {
-    return <TerminalLoader />;
+    return <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка игры</Spinner></div>;
   }
 
   if (isPending) {

@@ -4,6 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import api from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { SpaceInvader } from '../SpaceInvader';
+import { Spinner } from '../ui/Spinner';
 import type { Team, TournamentStatus } from '../../types';
 
 // Teams Tab Component
@@ -155,7 +156,7 @@ export function TeamsTab({
                 {isAdmin && membersExpanded && (
                   <div className="mt-3 pt-3 border-t border-gray-700">
                     {loadingMembers ? (
-                      <p className="text-xs text-gray-500">Загрузка...</p>
+                      <Spinner className="text-xs text-gray-500">загрузка</Spinner>
                     ) : (teamMembers[team.id] || []).length === 0 ? (
                       <p className="text-xs text-gray-500">Нет участников</p>
                     ) : (

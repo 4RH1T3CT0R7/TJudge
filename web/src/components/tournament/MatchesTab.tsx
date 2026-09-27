@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
 import { useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
 import { StatusLabel } from '../ui/StatusLabel';
+import { Spinner } from '../ui/Spinner';
 import type { Match, MatchRound } from '../../types';
 
 // Matches Tab Component - отображает матчи, сгруппированные по раундам.
@@ -102,9 +103,7 @@ export function MatchesTab({
                 Обновление...
               </span>
             )}
-            {isRefreshing && (
-              <div className="w-4 h-4 border-2 border-primary-800 border-t-primary-400 rounded-full animate-spin" />
-            )}
+            {isRefreshing && <Spinner />}
           </div>
           <div className="flex flex-wrap gap-3 text-sm">
             <span className="text-gray-300">
@@ -435,7 +434,7 @@ function RoundMatches({
             ))}
           </tbody>
         </table>
-        {isPending && <p className="px-4 py-3 text-sm text-gray-400">Загрузка...</p>}
+        {isPending && <p className="px-4 py-3 text-sm text-gray-400"><Spinner>загрузка матчей</Spinner></p>}
       </div>
       {pageCount > 1 && (
         <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-gray-800">

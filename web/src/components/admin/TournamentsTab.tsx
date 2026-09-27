@@ -8,6 +8,7 @@ import { getGameConfig } from '../../utils/gameConfig';
 import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
 import { StatusLabel } from '../ui/StatusLabel';
+import { Spinner } from '../ui/Spinner';
 import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
 import type { AdminReactionSetter, TournamentFormState } from './types';
@@ -589,8 +590,8 @@ export function TournamentsTab({
             {isLoadingTournamentGames && !showLoadingTournamentGames ? (
               null
             ) : showLoadingTournamentGames ? (
-              <div className="text-center py-8 text-gray-400">
-                Загрузка игр...
+              <div className="flex justify-center py-8 text-sm text-gray-400">
+                <Spinner>загрузка игр</Spinner>
               </div>
             ) : managingTournamentGames.length === 0 ? (
               <div className="text-center py-8 text-gray-400">

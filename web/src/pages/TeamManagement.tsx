@@ -6,7 +6,7 @@ import { queryKeys } from '../api/queryKeys';
 import { useTeam } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
-import { TerminalLoader } from '../components/TerminalLoader';
+import { Spinner } from '../components/ui/Spinner';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 export function TeamManagement() {
@@ -136,7 +136,7 @@ export function TeamManagement() {
   };
 
   if (showLoading) {
-    return <TerminalLoader />;
+    return <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка команды</Spinner></div>;
   }
 
   if (isPending) {

@@ -17,7 +17,7 @@ import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import type { InvaderPose } from '../components/SpaceInvader';
 import { useSequenceTyping } from '../hooks/useEasterEggs';
-import { TerminalLoader } from '../components/TerminalLoader';
+import { Spinner } from '../components/ui/Spinner';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
@@ -353,7 +353,7 @@ export function AdminPanel() {
   }
 
   if (showLoading) {
-    return <TerminalLoader />;
+    return <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка админки</Spinner></div>;
   }
 
   if (isLoading) {

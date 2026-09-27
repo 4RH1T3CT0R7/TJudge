@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTournaments } from '../hooks/queries';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
-import { TerminalLoader } from '../components/TerminalLoader';
+import { Spinner } from '../components/ui/Spinner';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { UsersIcon } from '../components/icons';
 import { StatusLabel } from '../components/ui/StatusLabel';
@@ -43,7 +43,7 @@ export function Tournaments() {
 
       {/* Content */}
       {showLoading ? (
-        <TerminalLoader />
+        <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка турниров</Spinner></div>
       ) : isPending ? null : isError && !data ? (
         <div className="text-center py-12">
           <div className="flex justify-center mb-4">

@@ -2,7 +2,8 @@ import { Suspense, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocation, useOutlet } from 'react-router-dom';
 import { pageTransitionVariants } from './invaderVariants';
-import { PageLoader } from '../PageLoader';
+import { Spinner } from '../ui/Spinner';
+import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 
 const EDITABLE = 'input, textarea, select, [contenteditable="true"]';
 
@@ -44,6 +45,13 @@ function useFocusHeadingOnNavigate(pathname: string) {
   }, [pathname]);
 }
 
+// Чанк страницы грузится: спиннер только если дольше секунды, иначе мелькал бы
+function ChunkFallback() {
+  const show = useDelayedLoading(true);
+  if (!show) return null;
+  return <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка страницы</Spinner></div>;
+}
+
 export function AnimatedOutlet() {
   const location = useLocation();
   const outlet = useOutlet();
@@ -59,7 +67,7 @@ export function AnimatedOutlet() {
         animate="animate"
         exit="exit"
       >
-        <Suspense fallback={<PageLoader />}>
+        <Suspense fallback={<ChunkFallback />}>
           {outlet}
         </Suspense>
       </motion.div>

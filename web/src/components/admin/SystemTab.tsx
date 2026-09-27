@@ -5,6 +5,7 @@ import { confirmDialog } from '../../store/confirmStore';
 import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetrics } from '../../types';
 import type { AdminReactionSetter } from './types';
 import { StatusLabel } from '../ui/StatusLabel';
+import { Spinner } from '../ui/Spinner';
 
 // Helper function to format bytes to human readable format
 const formatBytes = (bytes: number): string => {
@@ -191,8 +192,8 @@ export function SystemTab({
           {isLoadingSystem && !queueStats && !matchStats && !fullStatus && !showLoadingSystem ? (
             null
           ) : showLoadingSystem && !queueStats && !matchStats && !fullStatus ? (
-            <div className="text-center py-8 text-gray-400">
-              Загрузка данных системы...
+            <div className="flex justify-center py-8 text-sm text-gray-400">
+              <Spinner>загрузка данных системы</Spinner>
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2">

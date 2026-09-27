@@ -6,6 +6,7 @@ import { statusLabels } from './types';
 import type { AdminReactionSetter } from './types';
 import { Field } from '../ui/Field';
 import { StatusLabel } from '../ui/StatusLabel';
+import { Spinner } from '../ui/Spinner';
 import type { ProgramRow } from './programRows';
 
 const playingLabel: Record<ProgramRow['playing'], string> = {
@@ -107,8 +108,8 @@ export function ProgramsTab({
 
           {/* Loading state - показываем только после 1s задержки */}
           {showLoadingPrograms && (
-            <div className="text-center py-8 text-gray-400">
-              Загрузка программ...
+            <div className="flex justify-center py-8 text-sm text-gray-400">
+              <Spinner>загрузка программ</Spinner>
             </div>
           )}
 

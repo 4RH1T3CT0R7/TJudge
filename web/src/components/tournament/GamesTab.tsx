@@ -7,6 +7,7 @@ import { useToastStore } from '../../store/toastStore';
 import { PlayIcon, PuzzlePieceIcon } from '../icons';
 import { AutoRoundCountdown } from './AutoRoundCountdown';
 import { Modal } from '../ui/Modal';
+import { Spinner } from '../ui/Spinner';
 import type {
   Team,
   Game,
@@ -212,10 +213,7 @@ export function GamesTab({
                         className="btn btn-secondary text-xs py-1.5 px-3"
                       >
                         {settingActiveGameId === game.id ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-gray-400/30 border-t-gray-600 rounded-full animate-spin" />
-                            Установка...
-                          </>
+                          <Spinner>Установка...</Spinner>
                         ) : (
                           'Сделать активной'
                         )}
@@ -228,15 +226,9 @@ export function GamesTab({
                           className="btn btn-primary text-xs py-1.5 px-3 flex-1"
                         >
                           {runningGameId === game.id ? (
-                            <>
-                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Запуск...
-                            </>
+                            <Spinner>Запуск...</Spinner>
                           ) : isRoundRunning ? (
-                            <>
-                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Выполняется...
-                            </>
+                            <Spinner>Выполняется...</Spinner>
                           ) : (
                             <>
                               <PlayIcon />

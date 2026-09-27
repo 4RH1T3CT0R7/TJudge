@@ -6,6 +6,7 @@ import { Layout } from './components/layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
+import { Spinner } from './components/ui/Spinner';
 import { useAuthStore } from './store/authStore';
 import { queryClient } from './api/queryClient';
 
@@ -81,8 +82,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // подменяло всю страницу на «Загрузка...» и обратно — видимое промаргивание.
   if (!isInitialized) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Загрузка...</p>
+      <div className="flex items-center justify-center min-h-screen text-sm text-gray-400">
+        <Spinner>загрузка</Spinner>
       </div>
     );
   }
@@ -121,8 +122,8 @@ function AppContent() {
   // Show loading while initializing auth
   if (!isInitialized && isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Загрузка...</p>
+      <div className="flex items-center justify-center min-h-screen text-sm text-gray-400">
+        <Spinner>загрузка</Spinner>
       </div>
     );
   }

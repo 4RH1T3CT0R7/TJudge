@@ -18,6 +18,7 @@ import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
 import { StatusLabel } from '../components/ui/StatusLabel';
+import { Spinner } from '../components/ui/Spinner';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
@@ -274,10 +275,7 @@ export function GameDetail() {
 
   if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <SpaceInvader size="sm" />
-        <p className="text-gray-500 mt-3 font-mono text-sm">// загрузка...</p>
-      </div>
+      <div className="flex justify-center py-24 text-sm text-gray-400"><Spinner>загрузка игры</Spinner></div>
     );
   }
 
@@ -627,7 +625,7 @@ export function GameDetail() {
 
                     {isUploading && (
                       <div className="absolute inset-0 bg-gray-900/50 rounded-lg flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                        <Spinner className="text-lg" />
                       </div>
                     )}
                   </div>
