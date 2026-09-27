@@ -17,6 +17,9 @@ FROM alpine:3.22
 
 # Компиляторы: gcc/g++ (c, cpp), go, rust, openjdk (java).
 # Интерпретаторы для проверки синтаксиса: python3, nodejs, ruby, php, lua.
+# Версии показаны участникам («Среда исполнения» на странице игры): при смене
+# образа обновить LANGUAGES в web/src/utils/starters.ts, шаблоны ботов под
+# новые версии проверяет TestE2E_Starters (nightly).
 RUN apk --no-cache add \
     gcc g++ musl-dev \
     go \

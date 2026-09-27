@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git musl-tools 
 RUN rustup target add $(uname -m)-unknown-linux-musl
 
 # tjudge-cli на зафиксированном коммите: в нём правила и подсчёт очков игр,
-# сборка из HEAD меняла бы их между релизами. Обновляется отдельным коммитом.
+# сборка из HEAD меняла бы их между релизами. Обновляется отдельным коммитом
+# вместе с TJUDGE_CLI_REV в web/src/utils/starters.ts: тот же коммит участник
+# ставит у себя для локального прогона.
 ARG TJUDGE_CLI_REF=600879b5e81f86cdd06b877227e2c1ef9e6dca1c
 WORKDIR /build
 RUN git init -q . \
