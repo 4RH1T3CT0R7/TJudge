@@ -90,7 +90,9 @@ export function starterLoader(game: string, lang: Language): (() => Promise<stri
 export function localRunScript(game: string, lang: Language): string {
   return [
     '# судья той же версии, что на сервере (нужен Rust: https://rustup.rs)',
-    `cargo install --git https://github.com/bmstu-itstech/tjudge-cli --rev ${TJUDGE_CLI_REV}`,
+    // перенос строки: иначе хеш коммита уходит за край блока даже на широком экране
+    'cargo install --git https://github.com/bmstu-itstech/tjudge-cli \\',
+    `  --rev ${TJUDGE_CLI_REV}`,
     '',
     `# сборка ${lang.file}`,
     lang.build,
