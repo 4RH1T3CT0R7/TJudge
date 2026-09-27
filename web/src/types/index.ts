@@ -93,6 +93,10 @@ export interface Program {
   version: number;
   created_at: string;
   updated_at: string;
+  /** Самопроверка против эталонного бота игры, только предупреждение; нет - проверки не было. */
+  check_status?: 'pending' | 'ok' | 'failed' | null;
+  /** Счёт с эталоном при ok, текст ошибки с хвостом stderr при failed; видит только своя команда. */
+  check_message?: string | null;
 }
 
 // Match types
@@ -114,6 +118,11 @@ export interface Match {
   started_at?: string;
   completed_at?: string;
   created_at: string;
+  /** Команды сторон; нет - команда удалена. */
+  team1_id?: string | null;
+  team1_name?: string | null;
+  team2_id?: string | null;
+  team2_name?: string | null;
 }
 
 // MatchRound - группа матчей одного раунда для конкретной игры
