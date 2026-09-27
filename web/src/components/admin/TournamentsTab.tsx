@@ -7,7 +7,7 @@ import { confirmDialog } from '../../store/confirmStore';
 import { getGameConfig } from '../../utils/gameConfig';
 import { extractErrorMessage } from '../tournament/helpers';
 import type { Game, Tournament, TournamentGameWithDetails } from '../../types';
-import { statusLabels } from './types';
+import { StatusLabel } from '../ui/StatusLabel';
 import { Modal } from '../ui/Modal';
 import { Field } from '../ui/Field';
 import type { AdminReactionSetter, TournamentFormState } from './types';
@@ -702,22 +702,8 @@ export function TournamentsTab({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          tournament.status === 'pending'
-                            ? 'bg-yellow-900/50 text-yellow-300'
-                            : tournament.status === 'active'
-                            ? 'bg-green-900/50 text-green-300'
-                            : 'bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        {statusLabels[tournament.status]}
-                      </span>
-                      {tournament.is_permanent && (
-                        <span className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs font-medium">
-                          Постоянный
-                        </span>
-                      )}
+                      <StatusLabel entity="tournament" status={tournament.status} />
+                      {tournament.is_permanent && <span className="badge badge-blue">Постоянный</span>}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">

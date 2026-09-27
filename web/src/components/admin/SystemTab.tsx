@@ -4,6 +4,7 @@ import { useToastStore } from '../../store/toastStore';
 import { confirmDialog } from '../../store/confirmStore';
 import type { FullSystemStatus, Match, MatchStatistics, QueueStats, SystemMetrics } from '../../types';
 import type { AdminReactionSetter } from './types';
+import { StatusLabel } from '../ui/StatusLabel';
 
 // Helper function to format bytes to human readable format
 const formatBytes = (bytes: number): string => {
@@ -49,25 +50,6 @@ const sortStatusEntries = (record: Record<string, number>): [string, number][] =
     if (ib === -1) return -1;
     return ia - ib;
   });
-
-// Метки и бейджи статусов матчей (matches.by_status); неизвестный ключ выводится как есть, серым
-const matchStatusMeta: Record<string, { label: string; badge: string }> = {
-  pending: { label: 'Ожидают', badge: 'bg-yellow-900/30 text-yellow-400' },
-  running: { label: 'Выполняются', badge: 'bg-blue-900/30 text-blue-400' },
-  completed: { label: 'Завершены', badge: 'bg-green-900/30 text-green-400' },
-  failed: { label: 'С ошибкой', badge: 'bg-red-900/30 text-red-400' },
-  cancelled: { label: 'Отменены', badge: 'bg-gray-700 text-gray-300' },
-};
-
-// Метки и бейджи статусов программ (programs)
-const programStatusMeta: Record<string, { label: string; badge: string }> = {
-  pending: { label: 'Ожидают', badge: 'bg-gray-700 text-gray-300' },
-  compiling: { label: 'Компилируются', badge: 'bg-yellow-900/30 text-yellow-400' },
-  ready: { label: 'Готовы', badge: 'bg-green-900/30 text-green-400' },
-  failed: { label: 'С ошибкой', badge: 'bg-red-900/30 text-red-400' },
-};
-
-const unknownStatusBadge = 'bg-gray-700 text-gray-300';
 
 interface SystemTabProps {
   queueStats: QueueStats | null;
@@ -331,15 +313,12 @@ export function SystemTab({
                     <p className="text-gray-400">Программы ещё не загружены</p>
                   ) : (
                     <div className="space-y-3 text-sm">
-                      {sortStatusEntries(fullStatus.programs).map(([status, count]) => {
-                        const meta = programStatusMeta[status] ?? { label: status, badge: unknownStatusBadge };
-                        return (
-                          <div key={status} className="flex justify-between items-center">
-                            <span className="text-gray-400">{meta.label}</span>
-                            <span className={`px-2 py-1 rounded font-medium ${meta.badge}`}>{count}</span>
-                          </div>
-                        );
-                      })}
+                      {sortStatusEntries(fullStatus.programs).map(([status, count]) => (
+                        <div key={status} className="flex justify-between items-center">
+                          <StatusLabel entity="program" status={status} />
+                          <span className="font-mono font-medium text-gray-100">{count}</span>
+                        </div>
+                      ))}
                     </div>
                   )
                 ) : (
@@ -414,15 +393,12 @@ export function SystemTab({
                       <span className="text-2xl font-bold text-gray-100">{matchesTotal}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3 pt-2">
-                      {matchStatusEntries.map(([status, count]) => {
-                        const meta = matchStatusMeta[status] ?? { label: status, badge: unknownStatusBadge };
-                        return (
-                          <div key={status} className="flex justify-between items-center">
-                            <span className="text-gray-400">{meta.label}</span>
-                            <span className={`px-2 py-1 rounded font-medium ${meta.badge}`}>{count}</span>
-                          </div>
-                        );
-                      })}
+                      {matchStatusEntries.map(([status, count]) => (
+                        <div key={status} className="flex justify-between items-center">
+                          <StatusLabel entity="match" status={status} />
+                          <span className="font-mono font-medium text-gray-100">{count}</span>
+                        </div>
+                      ))}
                     </div>
                     {fullStatus?.matches.last_completed_at && (
                       <p className="text-xs text-gray-400 pt-2 border-t border-gray-700">

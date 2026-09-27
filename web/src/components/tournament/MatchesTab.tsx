@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FolderIcon, ChevronDownIcon, ChevronRightIcon } from '../icons';
 import { useRoundMatches, ROUND_PAGE_SIZE } from '../../hooks/queries';
+import { StatusLabel } from '../ui/StatusLabel';
 import type { Match, MatchRound } from '../../types';
 
 // Matches Tab Component - отображает матчи, сгруппированные по раундам.
@@ -463,23 +464,6 @@ function RoundMatches({
 
 // Компонент строки матча
 function MatchRow({ match }: { match: Match }) {
-  const getStatusBadge = () => {
-    switch (match.status) {
-      case 'completed':
-        return <span className="badge badge-green text-xs">Завершён</span>;
-      case 'running':
-        return <span className="badge badge-blue text-xs">Выполняется</span>;
-      case 'pending':
-        return <span className="badge badge-yellow text-xs">В очереди</span>;
-      case 'failed':
-        return <span className="badge badge-red text-xs">Ошибка</span>;
-      case 'cancelled':
-        return <span className="badge badge-gray text-xs">Отменён</span>;
-      default:
-        return <span className="badge badge-gray text-xs">{match.status}</span>;
-    }
-  };
-
   const getScoreDisplay = () => {
     if (match.status !== 'completed') {
       return <span className="text-gray-400">—</span>;
@@ -510,7 +494,7 @@ function MatchRow({ match }: { match: Match }) {
   return (
     <tr className="border-b border-gray-700 hover:bg-gray-800/30">
       <td className="px-4 py-2">
-        {getStatusBadge()}
+        <StatusLabel entity="match" status={match.status} />
       </td>
       <td className={`px-4 py-2 ${getProgram1Class()}`}>
         <code className="text-xs bg-gray-800 px-1.5 py-0.5 rounded">

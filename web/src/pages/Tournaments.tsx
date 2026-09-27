@@ -6,13 +6,8 @@ import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { TerminalLoader } from '../components/TerminalLoader';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { UsersIcon } from '../components/icons';
+import { StatusLabel } from '../components/ui/StatusLabel';
 import type { TournamentStatus } from '../types';
-
-const statusLabels: Record<TournamentStatus, { label: string; className: string }> = {
-  pending: { label: 'Ожидание', className: 'badge badge-yellow' },
-  active: { label: 'Активный', className: 'badge badge-green' },
-  completed: { label: 'Завершён', className: 'badge badge-gray' },
-};
 
 export function Tournaments() {
   const [filter, setFilter] = useState<TournamentStatus | ''>('');
@@ -73,8 +68,6 @@ export function Tournaments() {
       ) : (
         <StaggerList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {tournaments.map((tournament) => {
-            const status = statusLabels[tournament.status];
-
             return (
               <StaggerItem key={tournament.id}>
                 <Link
@@ -87,7 +80,7 @@ export function Tournaments() {
                     <h3 className="text-base font-semibold text-gray-100 line-clamp-1">
                       {tournament.name}
                     </h3>
-                    <span className={status.className}>{status.label}</span>
+                    <StatusLabel entity="tournament" status={tournament.status} />
                   </div>
 
                   {tournament.description && (

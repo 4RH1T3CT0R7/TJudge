@@ -17,6 +17,7 @@ import { useToastStore } from '../store/toastStore';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
+import { StatusLabel } from '../components/ui/StatusLabel';
 import { LineChart } from '../components/ui/LineChart';
 import { Markdown } from '../components/ui/Markdown';
 import { HeadToHeadMatrix } from '../components/tournament/HeadToHeadMatrix';
@@ -24,7 +25,7 @@ import { AutoRoundCountdown } from '../components/tournament/AutoRoundCountdown'
 import { ChartBarIcon } from '../components/icons';
 import { getGameConfig } from '../utils/gameConfig';
 import { useTabParam } from '../hooks/useTabParam';
-import type { Program, Match } from '../types';
+import type { Match } from '../types';
 
 const TAB_IDS = ['rules', 'leaderboard', 'matches'] as const;
 
@@ -510,7 +511,7 @@ export function GameDetail() {
                     <div className="flex justify-between items-start mb-2">
                       <p className="font-medium text-gray-200">{currentProgram.name}</p>
                       <div className="flex items-center gap-2">
-                        <ProgramStatusBadge program={currentProgram} />
+                        <StatusLabel entity="program" status={currentProgram.status} />
                         <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">
                           v{currentProgram.version}
                         </span>
@@ -670,7 +671,11 @@ export function GameDetail() {
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-100">v{program.version}</span>
-                                <ProgramStatusBadge program={program} />
+                                <StatusLabel
+                                entity="program"
+                                status={program.status}
+                                title={program.status === 'failed' ? program.error_message || undefined : undefined}
+                              />
                               </div>
                               <span className="text-xs text-gray-400">
                                 {new Date(program.created_at).toLocaleDateString('ru-RU')}
@@ -893,7 +898,7 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
             <span className="text-sm font-medium text-gray-300">
               Итерация {activeIteration + 1}
             </span>
-            <MatchStatusBadge status={activeMatch.status} />
+            <StatusLabel entity="match" status={activeMatch.status} />
           </div>
 
           <div className="flex items-center justify-center gap-4 py-2">
@@ -926,43 +931,3 @@ function MatchGroupCard({ matches }: { matches: Match[] }) {
     </div>
   );
 }
-
-// Program status badge component
-function ProgramStatusBadge({ program }: { program: Program }) {
-  switch (program.status) {
-    case 'compiling':
-      return <span className="text-xs bg-yellow-900/50 text-yellow-300 px-2 py-0.5 rounded">Компилируется…</span>;
-    case 'ready':
-      return <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">Готова</span>;
-    case 'failed':
-      return (
-        <span
-          className="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded"
-          title={program.error_message || 'Ошибка компиляции'}
-        >
-          Ошибка компиляции
-        </span>
-      );
-    default:
-      return null;
-  }
-}
-
-// Match status badge component
-function MatchStatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case 'pending':
-      return <span className="text-xs bg-yellow-900/50 text-yellow-300 px-2 py-0.5 rounded">Ожидание</span>;
-    case 'running':
-      return <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded">Выполняется</span>;
-    case 'completed':
-      return <span className="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded">Завершён</span>;
-    case 'failed':
-      return <span className="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded">Ошибка</span>;
-    case 'cancelled':
-      return <span className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded">Отменён</span>;
-    default:
-      return null;
-  }
-}
-

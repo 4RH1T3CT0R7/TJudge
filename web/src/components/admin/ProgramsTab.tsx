@@ -5,13 +5,8 @@ import type { Game, Tournament, Program } from '../../types';
 import { statusLabels } from './types';
 import type { AdminReactionSetter } from './types';
 import { Field } from '../ui/Field';
+import { StatusLabel } from '../ui/StatusLabel';
 import type { ProgramRow } from './programRows';
-
-const buildStatus: Record<Program['status'], { label: string; className: string }> = {
-  compiling: { label: 'компилируется', className: 'bg-yellow-900/30 text-yellow-400' },
-  ready: { label: 'готова', className: 'bg-green-900/30 text-green-400' },
-  failed: { label: 'ошибка сборки', className: 'bg-red-900/30 text-red-400' },
-};
 
 const playingLabel: Record<ProgramRow['playing'], string> = {
   this: 'да',
@@ -202,7 +197,6 @@ export function ProgramsTab({
                             </thead>
                             <tbody>
                               {rows.map(({ program, teamName, stats, playing }) => {
-                                const status = buildStatus[program.status];
                                 return (
                                   <tr key={program.id} className="border-b border-gray-800 align-top">
                                     <td className="py-2 pr-4 font-medium text-gray-400">{stats?.rank ?? '–'}</td>
@@ -223,15 +217,13 @@ export function ProgramsTab({
                                     <td className="py-2 pr-4">
                                       {program.status === 'failed' && program.error_message ? (
                                         <details>
-                                          <summary className={`w-fit px-2 py-1 text-xs rounded cursor-pointer whitespace-nowrap ${status.className}`}>
-                                            {status.label}
+                                          <summary className="w-fit cursor-pointer">
+                                            <StatusLabel entity="program" status={program.status} />
                                           </summary>
                                           <pre className="mt-1 max-w-md whitespace-pre-wrap break-words font-mono text-xs text-gray-300">{program.error_message}</pre>
                                         </details>
                                       ) : (
-                                        <span className={`px-2 py-1 text-xs rounded whitespace-nowrap ${status.className}`}>
-                                          {status.label}
-                                        </span>
+                                        <StatusLabel entity="program" status={program.status} />
                                       )}
                                     </td>
                                     <td className={`py-2 pr-4 text-sm whitespace-nowrap ${playing === 'none' ? 'text-gray-500' : 'text-gray-300'}`}>
