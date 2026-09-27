@@ -81,7 +81,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
             >
               <p className="flex items-baseline justify-between gap-3 text-sm">
                 <span className="min-w-0 break-words text-gray-200">
-                  {mine && <YouMark className="mr-2 text-xs" />}
+                  {mine && <><YouMark className="mr-1 text-xs" />{' '}</>}
                   {p.team_name}
                 </span>
                 <span className="shrink-0 font-mono text-gray-400">

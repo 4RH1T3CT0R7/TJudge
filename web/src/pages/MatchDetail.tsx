@@ -172,7 +172,8 @@ function Scoreboard({ match, names, mySide }: { match: Match; names: [string, st
     <div className={`min-w-0 ${s === 2 ? 'text-right' : ''}`}>
       <p className="break-words text-sm text-gray-300">
         {/* метка в начале, как в матрице встреч: не теряется с хвостом длинного названия */}
-        {mySide === s && <YouMark className="mr-2 text-xs" />}
+        {/* пробел после метки - место переноса перед названием */}
+        {mySide === s && <><YouMark className="mr-1 text-xs" />{' '}</>}
         {names[s - 1]}
       </p>
       <p className="font-mono text-xs text-gray-500">игрок {s}</p>
