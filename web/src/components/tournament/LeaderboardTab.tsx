@@ -186,10 +186,12 @@ export function GeneralLeaderboardTable({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className={`font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
-                      {entry.team_name || entry.program_name}
+                    <div className="flex items-baseline">
+                      <h3 className={`min-w-0 font-bold truncate ${isDark ? 'text-sm text-white' : 'text-lg text-gray-100'}`}>
+                        {entry.team_name || entry.program_name}
+                      </h3>
                       {mine && <YouMark />}
-                    </h3>
+                    </div>
                     {!isDark && (
                       <div className="flex items-center gap-3 text-sm text-gray-400">
                         <span>{entry.total_games} игр</span>
