@@ -25,6 +25,11 @@ export function mdPreview(md: string): string {
     .trim();
 }
 
+/** Есть ли в тексте разметка Markdown (заголовки, списки, таблицы, выделение, ссылки, код). */
+export function hasMarkup(md: string): boolean {
+  return /(^|\n) {0,3}(#{1,6} |[-*+] |\d+[.)] |>|```|~~~|\|)|[*_`[\]]|https?:\/\//.test(md);
+}
+
 // Узел hast: только то, что нужно плагину.
 interface HastNode {
   type: string;

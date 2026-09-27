@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { ioTone, mdPreview } from './markdown';
+import { hasMarkup, ioTone, mdPreview } from './markdown';
 
 it('превью - первый абзац без заголовков и разметки', () => {
   const rules = [
@@ -21,4 +21,11 @@ it('строки протокола окрашены по направлению
   expect(ioTone('← 100   # итерации')).toBe('text-cyan-300');
   expect(ioTone('  → COOPERATE')).toBe('text-primary-300');
   expect(ioTone('...')).toBeUndefined();
+});
+
+it('разметка находится, обычный текст с тире и дефисами - нет', () => {
+  expect(hasMarkup('Основной турнир. Пять игр, round-robin в обе стороны, итог - сумма очков.\n\nВторой абзац.')).toBe(false);
+  for (const md of ['## Правила', '- пункт', '1. пункт', '> цитата', '| a | b |', '**жирный**', 'поле `x`', '[ссылка](/help)', 'см. https://example.org']) {
+    expect(hasMarkup(md)).toBe(true);
+  }
 });

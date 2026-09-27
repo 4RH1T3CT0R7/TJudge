@@ -1,6 +1,26 @@
+import { lazy, Suspense } from 'react';
 import { CalendarIcon, ClockIcon, UsersIcon } from '../icons';
-import { Markdown } from '../ui/Markdown';
+import { hasMarkup } from '../../utils/markdown';
 import type { Tournament } from '../../types';
+
+// react-markdown ~50 КБ gzip: грузится, только если в описании есть разметка
+const Markdown = lazy(() => import('../ui/Markdown').then((m) => ({ default: m.Markdown })));
+
+function Description({ text }: { text: string }) {
+  const plain = (
+    <div className="md">
+      {text.split(/\n\s*\n/).map((para, i) => (
+        <p key={i}>{para.trim()}</p>
+      ))}
+    </div>
+  );
+  if (!hasMarkup(text)) return plain;
+  return (
+    <Suspense fallback={plain}>
+      <Markdown>{text}</Markdown>
+    </Suspense>
+  );
+}
 
 // Вкладка «Информация»: описание турнира в Markdown, как правила игр, и параметры.
 export function InfoTab({ tournament }: { tournament: Tournament }) {
@@ -8,7 +28,7 @@ export function InfoTab({ tournament }: { tournament: Tournament }) {
     <div className="card">
       {tournament.description ? (
         <div className="mb-8">
-          <Markdown>{tournament.description}</Markdown>
+          <Description text={tournament.description} />
         </div>
       ) : (
         <p className="text-gray-400 mb-8">Описание не указано.</p>
