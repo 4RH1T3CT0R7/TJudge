@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Tabs } from '../ui/Tabs';
 import { Spinner } from '../ui/Spinner';
 import { ErrorState } from '../ui/ErrorState';
@@ -63,15 +63,18 @@ export function StarterKit({ game }: { game: string }) {
   const langs = LANGUAGES.filter((l) => starterLoader(game, l));
   const lang: Language | undefined = langs.find((l) => l.id === langId) ?? langs[0];
   const load = lang && starterLoader(game, lang);
+  // код вместе с языком: пока грузится новый язык, на месте остаётся прежний
+  // шаблон целиком (подпись, комментарии, скачивание), а блок не схлопывается в спиннер
   const query = useQuery({
     queryKey: ['starter', game, lang?.id ?? ''],
-    queryFn: () => load!(),
+    queryFn: async () => ({ lang: lang!, code: await load!() }),
     enabled: !!load,
     staleTime: Infinity,
+    placeholderData: keepPreviousData,
   });
 
   if (!lang) return null;
-  const code = query.data;
+  const shown = query.data;
 
   return (
     <div className="card space-y-8">
@@ -87,22 +90,24 @@ export function StarterKit({ game }: { game: string }) {
           active={lang.id}
           onChange={setLangId}
         >
-          {code !== undefined ? (
-            <TerminalOutput
-              text={code.trimEnd()}
-              label={`${lang.file} · ${lang.version}`}
-              maxHeight="max-h-[32rem]"
-              renderLine={codeLine(lang.comment)}
-              actions={
-                <button
-                  type="button"
-                  onClick={() => saveFile(new Blob([code], { type: 'text/plain' }), lang.file)}
-                  className="btn btn-sm btn-secondary"
-                >
-                  скачать {lang.file}
-                </button>
-              }
-            />
+          {shown ? (
+            <div aria-busy={query.isPlaceholderData}>
+              <TerminalOutput
+                text={shown.code.trimEnd()}
+                label={`${shown.lang.file} · ${shown.lang.version}`}
+                maxHeight="max-h-[32rem]"
+                renderLine={codeLine(shown.lang.comment)}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => saveFile(new Blob([shown.code], { type: 'text/plain' }), shown.lang.file)}
+                    className="btn btn-sm btn-secondary"
+                  >
+                    скачать {shown.lang.file}
+                  </button>
+                }
+              />
+            </div>
           ) : query.isError ? (
             <ErrorState message="Не удалось загрузить шаблон" onRetry={() => void query.refetch()} />
           ) : (
