@@ -170,6 +170,7 @@ var adminEndpoints = []struct {
 	{"POST", secTournament + "/games/deactivate-all"},
 	{"POST", secTournament + "/run-matches"},
 	{"POST", secTournament + "/run-game-matches"},
+	{"GET", secTournament + "/run-game-matches/preview?game_type=dilemma"},
 	{"POST", secTournament + "/retry-matches"},
 	{"POST", secTournament + "/programs/clear-errors"},
 	{"POST", "/api/v1/games"},
