@@ -218,7 +218,8 @@ function GeneralLeaderboardTable({
 }
 
 // Таблица по играм. broadcast - плотность табло: кегль и высота строк от высоты
-// экрана, без подстрок; pinned - сколько первых строк закреплено над страницей.
+// экрана (rowHeight считает табло), без подстрок; pinned - сколько первых строк
+// закреплено над страницей.
 export function CrossGameLeaderboardTable({
   rows,
   games,
@@ -228,6 +229,7 @@ export function CrossGameLeaderboardTable({
   myTeamId,
   broadcast = false,
   pinned = 0,
+  rowHeight,
 }: {
   rows: StandingRow[];
   games: Game[];
@@ -237,6 +239,7 @@ export function CrossGameLeaderboardTable({
   myTeamId?: string;
   broadcast?: boolean;
   pinned?: number;
+  rowHeight?: number;
 }) {
   const revealMine = useRevealOnMobile<HTMLTableRowElement>();
   if (rows.length === 0) {
@@ -252,29 +255,45 @@ export function CrossGameLeaderboardTable({
 
   return (
     <div className={broadcast ? '' : 'overflow-x-auto card p-0'}>
-      <table className={`w-full ${broadcast ? 'table-fixed text-[clamp(20px,3.2vh,44px)] text-gray-100' : 'text-gray-100'}`}>
+      <table className={`w-full ${broadcast ? 'table-fixed text-[clamp(20px,3.2vh,44px)] leading-tight text-gray-100' : 'text-gray-100'}`}>
         <thead className={broadcast ? 'border-b border-line' : 'bg-gray-800/50'}>
           <tr>
-            <th className={`${head} text-left ${broadcast ? 'w-[9%]' : ''}`}>Место</th>
+            <th className={`${head} text-left ${broadcast ? 'w-[7%]' : ''}`}>Место</th>
             <th className={`${head} text-left ${broadcast ? 'w-[30%]' : ''}`}>Команда</th>
             {games.map((game) => {
               const isLive = live.has(game.id);
               const p = progress.get(game.name);
               return (
                 <th key={game.id} className={`${head} text-center`}>
-                  <span className={broadcast ? 'block truncate' : ''}>
-                    {isLive && <span aria-hidden="true" className="text-blue-400">◐ </span>}
-                    {broadcast ? (getGameConfig(game.name).short ?? game.display_name) : game.display_name}
-                  </span>
-                  {isLive && (
-                    <span className="block font-mono font-normal normal-case tracking-normal text-[0.8em] text-gray-400">
-                      {broadcast && p ? `предв. ${p.done}/${p.total}` : 'предварительно'}
-                    </span>
+                  {broadcast ? (
+                    // на табло ◐ и счётчик - отдельной строкой не мельче 14 px: название целиком
+                    <>
+                      <span className="block truncate">{getGameConfig(game.name).short ?? game.display_name}</span>
+                      {isLive && p && (
+                        <span className="block truncate font-mono font-normal text-[clamp(14px,1.6vh,22px)] text-gray-300">
+                          <span aria-hidden="true" className="text-blue-400">◐ </span>
+                          <span className="sr-only">предварительно, сыграно </span>
+                          {p.done}/{p.total}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        {isLive && <span aria-hidden="true" className="text-blue-400">◐ </span>}
+                        {game.display_name}
+                      </span>
+                      {isLive && (
+                        <span className="block font-mono font-normal normal-case tracking-normal text-[0.8em] text-gray-400">
+                          предварительно
+                        </span>
+                      )}
+                    </>
                   )}
                 </th>
               );
             })}
-            <th className={`${head} text-right ${broadcast ? 'w-[13%]' : ''}`}>Сумма</th>
+            <th className={`${head} text-right ${broadcast ? 'w-[11%]' : ''}`}>Сумма</th>
           </tr>
         </thead>
         <tbody>
@@ -292,8 +311,9 @@ export function CrossGameLeaderboardTable({
                 transition={ROW_MOVE}
                 ref={mine ? revealMine : undefined}
                 aria-current={mine ? 'true' : undefined}
+                style={broadcast ? { height: rowHeight } : undefined}
                 className={`relative border-b ${index === pinned - 1 ? 'border-b-4 border-double border-line' : 'border-gray-700/60'} ${
-                  broadcast ? 'h-[max(36px,5vh)]' : rowTone(place)
+                  broadcast ? '' : rowTone(place)
                 } ${delta ? `${delta > 0 ? 'z-20' : 'z-10'} ${broadcast ? 'bg-[#0a0a0b]' : 'bg-gray-900'}` : ''} ${mine ? 'row-mine' : ''}`}
               >
                 <td className={cell}>

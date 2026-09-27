@@ -207,8 +207,14 @@ export function TournamentScreen() {
     return () => ro.disconnect();
   }, []);
   const vh = window.innerHeight / 100;
-  // те же высоты, что у шапки и строк broadcast-таблицы
-  const perPage = areaH > 0 ? Math.max(4, Math.floor((areaH - Math.max(40, 7 * vh) - 4) / Math.max(36, 5 * vh))) : 10;
+  // высоты шапки и строки broadcast-таблицы; кегль строки - clamp(20px,3.2vh,44px)
+  const avail = areaH - Math.max(40, 7 * vh) - 4;
+  const rowH = Math.max(36, 5 * vh);
+  const minRowH = Math.ceil(1.3 * Math.min(44, Math.max(20, 3.2 * vh)));
+  // если все строки влезают ужатыми, страница одна: лучше, чем почти пустая вторая
+  const fitAll = areaH > 0 && standings.length * minRowH <= avail;
+  const perPage = areaH === 0 ? 10 : fitAll ? Math.max(standings.length, 1) : Math.max(4, Math.floor(avail / rowH));
+  const rowHeight = fitAll ? Math.min(rowH, avail / Math.max(standings.length, 1)) : rowH;
   const pages = pageCount(standings.length, perPage);
   const [pageRaw, setPage] = useState(0);
   const page = pageRaw % pages;
@@ -304,6 +310,9 @@ export function TournamentScreen() {
   const bannerGame = bannerType && !ceremony ? games.find((g) => g.name === bannerType) : undefined;
   const bannerTop = bannerGame && table ? topOfGame(table.entries, bannerGame) : [];
 
+  // Раскладка из слоёв постоянной высоты: строка шапки (приглашение или итог),
+  // строка состояния, подпись и лента в подвале. Что бы ни шло в раунде,
+  // область таблицы не меняет размер, и число строк на странице не прыгает.
   return (
     <main
       ref={mainRef}
@@ -312,17 +321,36 @@ export function TournamentScreen() {
     >
       <title>{`${tournament.name} — табло — TJudge`}</title>
 
-      <header className="flex items-start justify-between gap-[2vw]">
+      <header className="relative">
         <div className="min-w-0">
-          <p className="font-mono text-primary-400 text-[clamp(14px,1.9vh,26px)]">
-            <span aria-hidden="true">$ </span>tjudge watch {tournament.code}
+          <p className="truncate font-mono text-[clamp(16px,2.4vh,32px)]">
+            <span role="status">
+              {bannerGame && (
+                <span className="bg-primary-900/40 pr-[0.6vw] shadow-[inset_4px_0_0] shadow-primary-500">
+                  <span aria-hidden="true" className="pl-[0.8vw] text-primary-400">$ </span>
+                  итог: игра «{getGameConfig(bannerGame.name).short ?? bannerGame.display_name}» завершена
+                  {bannerTop.map((e, i) => (
+                    <span key={e.program_id} className="text-gray-300">
+                      {' · '}{i + 1}. <span className="font-bold text-gray-100">{e.team_name}</span>{' '}
+                      {e.game_ratings[bannerGame.id].rating.toLocaleString('ru-RU')}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+            {!bannerGame && (
+              <span className="text-primary-400">
+                <span aria-hidden="true">$ </span>tjudge watch {tournament.code}
+              </span>
+            )}
           </p>
           <h1 className="truncate font-bold leading-tight text-[clamp(28px,5.2vh,68px)]">{tournament.name}</h1>
         </div>
-        {/* панель видна при движении мыши и при фокусе с клавиатуры */}
+        {/* панель видна при движении мыши и при фокусе с клавиатуры; поверх
+            шапки, чтобы строка итога и название занимали всю ширину */}
         <nav
           aria-label="Управление табло"
-          className={`flex shrink-0 flex-wrap justify-end gap-2 transition-opacity has-[:focus-visible]:opacity-100 ${idle ? 'opacity-0' : 'opacity-100'}`}
+          className={`absolute right-0 top-0 flex max-w-[45vw] flex-wrap justify-end gap-2 bg-[#0a0a0b] pb-2 pl-2 transition-opacity has-[:focus-visible]:opacity-100 ${idle ? 'opacity-0' : 'opacity-100'}`}
         >
           <button type="button" onClick={onClick(toggleFullscreen)} className="btn btn-sm btn-secondary">
             {fullscreen.active ? 'Выйти из полного экрана' : 'На весь экран'}
@@ -352,21 +380,6 @@ export function TournamentScreen() {
         className="text-[clamp(16px,2.4vh,32px)]"
       />
 
-      <div role="status">
-        {bannerGame && !ceremony && (
-          <p className="truncate border-l-4 border-primary-500 bg-primary-900/30 px-[1vw] py-[0.8vh] font-mono text-[clamp(16px,2.4vh,34px)]">
-            <span aria-hidden="true" className="text-primary-400">$ </span>
-            итог: игра «{getGameConfig(bannerGame.name).short ?? bannerGame.display_name}» завершена
-            {bannerTop.map((e, i) => (
-              <span key={e.program_id} className="text-gray-300">
-                {' · '}{i + 1}. <span className="font-bold text-gray-100">{e.team_name}</span>{' '}
-                {bannerGame && e.game_ratings[bannerGame.id].rating.toLocaleString('ru-RU')}
-              </span>
-            ))}
-          </p>
-        )}
-      </div>
-
       {ceremony ? (
         <Ceremony ref={ceremonyRef} rows={placed} revealed={revealed} />
       ) : !table ? (
@@ -384,11 +397,12 @@ export function TournamentScreen() {
               changes={changes}
               broadcast
               pinned={pinned.length}
+              rowHeight={rowHeight}
             />
           </section>
           <footer className="flex items-end justify-between gap-[2vw] font-mono">
             <div className="min-w-0 flex-1 text-[clamp(14px,2vh,26px)]">
-              <p className="mb-[0.6vh] text-gray-400">
+              <p className="mb-[0.6vh] h-[1.5em] truncate text-gray-400">
                 {pages > 1 && (
                   <span className="text-gray-300">
                     стр. {page + 1}/{pages}{paused ? ' · пауза' : ''}
@@ -420,9 +434,11 @@ export function TournamentScreen() {
 }
 
 // «$ tail -f matches.log»: последние результаты с названиями команд, свежий слева.
+// Высота в одну строку с переносом: не влезающий целиком результат уходит на
+// скрытую вторую строку, а не обрезается посередине счёта.
 function Feed({ items }: { items: FeedItem[] }) {
   return (
-    <div className="flex min-w-0 items-baseline gap-[1vw] overflow-hidden whitespace-nowrap">
+    <div className="flex h-[1.5em] min-w-0 flex-wrap items-baseline gap-x-[1vw] overflow-hidden whitespace-nowrap">
       <span className="shrink-0 text-primary-400">
         <span aria-hidden="true">$ </span>tail -f matches.log
       </span>
