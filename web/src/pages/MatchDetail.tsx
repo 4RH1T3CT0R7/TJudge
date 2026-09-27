@@ -165,7 +165,11 @@ export function MatchDetail() {
         ) : !transcriptQuery.data || iterationsOf(transcriptQuery.data) === 0 ? (
           <EmptyState
             command="ходы"
-            hint="ходы этого матча не записаны: он сыгран до включения записи или с числом итераций больше 1000"
+            hint={
+              match.status === 'failed'
+                ? 'ходов нет: матч прерван до первого хода или целиком, например по общему таймауту'
+                : 'ходы этого матча не записаны: он сыгран до включения записи или с числом итераций больше 1000'
+            }
           />
         ) : match.game_type === 'dollar_auction' ? (
           <AuctionBids transcript={transcriptQuery.data} names={names} culprit={failedSide(match)} />
