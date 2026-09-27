@@ -66,11 +66,12 @@ function MatchesLink({ p, children }: { p: StrategyProfile; children: ReactNode 
 }
 
 // Паспорт стратегий дилеммы: свойства каждой команды по транскриптам её матчей.
-// На узком экране пять свойств в строку таблицы не помещаются: там карточка на команду.
+// Пять свойств в строку таблицы помещаются только на широком экране: колонка
+// рядом с программой на десктопе уже таблицы, поэтому ниже xl - карточка на команду.
 export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyProfile[]; myTeamId?: string }) {
   return (
     <div>
-      <ul className="space-y-3 md:hidden">
+      <ul className="space-y-3 xl:hidden">
         {profiles.map((p) => {
           const mine = p.team_id === myTeamId;
           return (
@@ -102,7 +103,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
           );
         })}
       </ul>
-      <div tabIndex={0} role="region" aria-label="Паспорт стратегий" className="relative hidden overflow-x-auto md:block">
+      <div tabIndex={0} role="region" aria-label="Паспорт стратегий" className="relative hidden overflow-x-auto xl:block">
         <table className="w-full whitespace-nowrap text-sm">
           <thead>
             <tr className="border-b border-gray-700 text-left text-gray-400">
@@ -120,7 +121,7 @@ export function StrategyPassport({ profiles, myTeamId }: { profiles: StrategyPro
               const mine = p.team_id === myTeamId;
               return (
                 <tr key={p.team_id} aria-current={mine ? 'true' : undefined} className={`border-b border-gray-800 ${mine ? 'row-mine' : ''}`}>
-                  <td className="py-2 pr-4 text-gray-200">
+                  <td className="whitespace-normal py-2 pr-4 text-gray-200">
                     {p.team_name}
                     {mine && <YouMark />}
                   </td>
