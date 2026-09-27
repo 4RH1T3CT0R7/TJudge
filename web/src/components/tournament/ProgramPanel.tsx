@@ -433,6 +433,17 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
                       )}
                     </div>
                     <span className="text-xs text-gray-400">{new Date(program.created_at).toLocaleDateString('ru-RU')}</span>
+                    {program.status === 'failed' && program.error_message && (
+                      <details className="mt-1">
+                        <summary className="w-fit cursor-pointer font-mono text-xs text-gray-400">вывод компилятора</summary>
+                        <div className="mt-1 space-y-1">
+                          {explainCompileError(program.error_message) && (
+                            <Note tone="text-amber-300">{explainCompileError(program.error_message)}</Note>
+                          )}
+                          <TerminalOutput label={`компиляция · ${program.language}`} text={program.error_message} maxHeight="max-h-48" />
+                        </div>
+                      </details>
+                    )}
                   </div>
                   <button
                     onClick={() => void download(program)}
@@ -449,14 +460,3 @@ export function ProgramPanel({ tournament, gameId, gameStatus, gamesStatus, roun
     </div>
   );
 }
-                    {program.status === 'failed' && program.error_message && (
-                      <details className="mt-1">
-                        <summary className="w-fit cursor-pointer font-mono text-xs text-gray-400">вывод компилятора</summary>
-                        <div className="mt-1 space-y-1">
-                          {explainCompileError(program.error_message) && (
-                            <Note tone="text-amber-300">{explainCompileError(program.error_message)}</Note>
-                          )}
-                          <TerminalOutput label={`компиляция · ${program.language}`} text={program.error_message} maxHeight="max-h-48" />
-                        </div>
-                      </details>
-                    )}
