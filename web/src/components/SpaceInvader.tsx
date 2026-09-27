@@ -513,7 +513,7 @@ export function SpaceInvader({
       span.textContent = ec.char;
       span.style.cssText = [
         `position:absolute;left:${ec.x}px;top:${ec.y}px`,
-        `color:${color};font-family:'Courier New',monospace;font-size:${pFontSize}`,
+        `color:${color};font-family:var(--font-mono);font-size:${pFontSize}`,
         'font-weight:bold;line-height:1',
         `text-shadow:0 0 8px ${color},0 0 16px ${color}80`,
         'pointer-events:none;z-index:25',
@@ -577,7 +577,7 @@ export function SpaceInvader({
             regen.textContent = ec.char;
             regen.style.cssText = [
               `position:absolute;left:${ec.x}px;top:${ec.y}px`,
-              `color:${startColor};font-family:'Courier New',monospace;font-size:${pFontSize}`,
+              `color:${startColor};font-family:var(--font-mono);font-size:${pFontSize}`,
               'font-weight:bold;line-height:1',
               `text-shadow:0 0 10px ${startColor},0 0 20px ${startColor}60`,
               'pointer-events:none;z-index:20',
@@ -969,7 +969,7 @@ export function SpaceInvader({
         ].map((t, i) => (
           <span key={`tear-${i}`} style={{
             position: 'absolute', top: 0, left: t.left,
-            color: '#60a5fa', fontFamily: "'Courier New', Consolas, monospace",
+            color: '#60a5fa', fontFamily: 'var(--font-mono)',
             fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
             textShadow: '0 0 6px rgba(96,165,250,0.7)',
             animation: animate('tear-fall 1.4s ease-in infinite'),
@@ -998,7 +998,7 @@ export function SpaceInvader({
             right: `${5 - i * 8}%`,
             fontSize: `${14 - i * 2}px`,
             color: accentColor,
-            fontFamily: 'monospace',
+            fontFamily: 'var(--font-mono)',
             fontWeight: 'bold',
             opacity: 0.8,
             animation: animate('zzz-float 2s ease-out infinite'),
@@ -1027,7 +1027,7 @@ export function SpaceInvader({
             bottom: '-0.8em',
             left: f.left,
             color: f.color,
-            fontFamily: "'Courier New', Consolas, monospace",
+            fontFamily: 'var(--font-mono)',
             fontSize: effectFontSize,
             fontWeight: 'bold',
             lineHeight: 1,
@@ -1063,7 +1063,7 @@ export function SpaceInvader({
               right: '-12px',
               top: `${15 + i * 9}%`,
               color: i % 2 === 0 ? '#00ff41' : '#22d3ee',
-              fontFamily: "'Courier New', Consolas, monospace",
+              fontFamily: 'var(--font-mono)',
               fontSize: `${efs}px`,
               fontWeight: 'bold',
               lineHeight: 1,
@@ -1086,7 +1086,7 @@ export function SpaceInvader({
               left: `${10 + i * 11}%`,
               top: `${25 + (i % 3) * 20}%`,
               color: '#00ff41',
-              fontFamily: "'Courier New', Consolas, monospace",
+              fontFamily: 'var(--font-mono)',
               fontSize: `${efs * 0.7}px`,
               fontWeight: 'bold',
               opacity: 0,
@@ -1113,13 +1113,13 @@ export function SpaceInvader({
       {/* ASCII shield brackets */}
       <span style={{
         position: 'absolute', top: '50%', left: '-1.5em', transform: 'translateY(-50%)',
-        color: '#4ade80', fontFamily: "'Courier New', Consolas, monospace",
+        color: '#4ade80', fontFamily: 'var(--font-mono)',
         fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
         textShadow: '0 0 8px rgba(74,222,128,0.7)', pointerEvents: 'none',
       }}>[</span>
       <span style={{
         position: 'absolute', top: '50%', right: '-1.5em', transform: 'translateY(-50%)',
-        color: '#4ade80', fontFamily: "'Courier New', Consolas, monospace",
+        color: '#4ade80', fontFamily: 'var(--font-mono)',
         fontSize: effectFontSize, fontWeight: 'bold', lineHeight: 1,
         textShadow: '0 0 8px rgba(74,222,128,0.7)', pointerEvents: 'none',
       }}>]</span>
@@ -1160,7 +1160,7 @@ export function SpaceInvader({
               top: '-0.5em',
               left: `${10 + (i / 12) * 80}%`,
               color: colors[i % colors.length],
-              fontFamily: "'Courier New', Consolas, monospace",
+              fontFamily: 'var(--font-mono)',
               fontSize: effectFontSize,
               fontWeight: 'bold',
               pointerEvents: 'none',
@@ -1216,7 +1216,7 @@ export function SpaceInvader({
             top: `${5 + i * 8}%`,
             right: `${-5 + i * 12}%`,
             color: '#fbbf24',
-            fontFamily: 'monospace',
+            fontFamily: 'var(--font-mono)',
             fontSize: '10px',
             fontWeight: 'bold',
             animation: `spin-invader ${1.5 + i * 0.3}s linear infinite`,
@@ -1239,7 +1239,7 @@ export function SpaceInvader({
         left: '50%',
         transform: 'translateX(-50%)',
         color: '#6b7280',
-        fontFamily: "'Courier New', Consolas, monospace",
+        fontFamily: 'var(--font-mono)',
         fontSize: effectFontSize,
         fontWeight: 'bold',
         whiteSpace: 'pre',
@@ -1359,7 +1359,7 @@ export function SpaceInvader({
           <div
             ref={bodyRef}
             style={{
-              fontFamily: "'Courier New', Consolas, 'Liberation Mono', monospace",
+              fontFamily: 'var(--font-mono)',
               fontSize: SIZE_MAP[size] || SIZE_MAP.md,
               lineHeight: 1,
               whiteSpace: 'pre',

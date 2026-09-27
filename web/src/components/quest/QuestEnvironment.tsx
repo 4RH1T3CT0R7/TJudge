@@ -8,7 +8,7 @@ interface QuestEnvironmentProps {
 }
 
 const MONO: React.CSSProperties = {
-  fontFamily: "'Courier New', Consolas, 'Liberation Mono', monospace",
+  fontFamily: 'var(--font-mono)',
   fontSize: '10px',
   lineHeight: 1.4,
   whiteSpace: 'pre',
