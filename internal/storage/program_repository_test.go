@@ -359,6 +359,12 @@ func (s *ProgramRepositorySuite) TestSelfCheckLifecycle() {
 	require.NotNil(s.T(), got.CheckMessage)
 	assert.Equal(s.T(), msg, *got.CheckMessage)
 	assert.NotNil(s.T(), got.CheckedAt)
+	// GetByIDs читает те же столбцы через sqlx: на нём держится каждый матч воркера
+	byIDs, err := s.repo.GetByIDs(ctx, []uuid.UUID{program.ID})
+	require.NoError(s.T(), err)
+	require.Len(s.T(), byIDs, 1)
+	require.NotNil(s.T(), byIDs[0].CheckStatus)
+	assert.Equal(s.T(), models.CheckFailed, *byIDs[0].CheckStatus)
 
 	// несостоявшаяся проверка оставляет программу без статуса
 	_, err = s.database.ExecContext(ctx, "UPDATE programs SET check_status = 'pending' WHERE id = $1", program.ID)
