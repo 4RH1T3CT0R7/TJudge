@@ -527,7 +527,7 @@
     background-color: color-mix(in oklab, var(--color-primary-900) 30%, transparent);
   }
   div.row-mine,
-  .row-mine > :first-child {
+  tr.row-mine > :first-child {
     box-shadow: inset 2px 0 0 var(--color-primary-400);
   }
 
