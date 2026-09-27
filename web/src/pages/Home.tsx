@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, lazy, Suspense } from 'react';
+import { useRef, lazy, Suspense } from 'react';
 import { SpaceInvader } from '../components/SpaceInvader';
 import { TerminalTypewriter } from '../components/TerminalTypewriter';
 import { TerminalQuest } from '../components/TerminalQuest';
-import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { GameShowcase } from '../components/game/GameShowcase';
 import { TrophyIcon, ArrowRightIcon } from '../components/icons';
 
@@ -44,24 +43,6 @@ function ConceptCard({
 
 export function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
-  // Scroll reveal observer
-  const sectionsRef = useRef<(HTMLDivElement | null)[]>([]);
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('revealed');
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-    sectionsRef.current.forEach((el) => {
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <div className="space-y-16">
@@ -149,12 +130,12 @@ export function Home() {
       </div>
 
       {/* Interactive Terminal Quest */}
-      <div ref={(el) => { sectionsRef.current[0] = el; }} className="reveal-on-scroll">
+      <div>
         <TerminalQuest />
       </div>
 
       {/* Key Concepts */}
-      <div ref={(el) => { sectionsRef.current[1] = el; }} className="reveal-on-scroll">
+      <div>
         <h2 className="text-2xl font-bold text-gray-100 mb-2 text-center">
           Ключевые концепции
         </h2>
@@ -163,36 +144,30 @@ export function Home() {
           между рациональными агентами
         </p>
 
-        <StaggerList className="grid md:grid-cols-3 gap-6">
-          <StaggerItem>
-            <ConceptCard
-              title="Равновесие Нэша"
-              author="Джон Нэш"
-              year="1950"
-              description="Состояние, при котором ни один игрок не может улучшить свой результат, изменив только свою стратегию."
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <ConceptCard
-              title="Оптимальность по Парето"
-              author="Вильфредо Парето"
-              year="1896"
-              description="Состояние, при котором невозможно улучшить положение одного игрока, не ухудшив положение другого."
-            />
-          </StaggerItem>
-          <StaggerItem>
-            <ConceptCard
-              title="Доминирующая стратегия"
-              author="Теория игр"
-              year="XX век"
-              description="Стратегия, которая приносит лучший результат независимо от действий других игроков."
-            />
-          </StaggerItem>
-        </StaggerList>
+        <div className="grid md:grid-cols-3 gap-6">
+          <ConceptCard
+            title="Равновесие Нэша"
+            author="Джон Нэш"
+            year="1950"
+            description="Состояние, при котором ни один игрок не может улучшить свой результат, изменив только свою стратегию."
+          />
+          <ConceptCard
+            title="Оптимальность по Парето"
+            author="Вильфредо Парето"
+            year="1896"
+            description="Состояние, при котором невозможно улучшить положение одного игрока, не ухудшив положение другого."
+          />
+          <ConceptCard
+            title="Доминирующая стратегия"
+            author="Теория игр"
+            year="XX век"
+            description="Стратегия, которая приносит лучший результат независимо от действий других игроков."
+          />
+        </div>
       </div>
 
       {/* CTA Section */}
-      <div ref={(el) => { sectionsRef.current[2] = el; }} className="reveal-on-scroll text-center py-8">
+      <div className="text-center py-8">
         <h2 className="text-2xl font-bold text-gray-100 mb-4">
           Готовы проверить свою стратегию?
         </h2>

@@ -44,7 +44,7 @@ export function GameView() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div>
       <PageHeader
         crumbs={[{ label: 'игры', to: '/games' }, { label: game.display_name }]}
         title={

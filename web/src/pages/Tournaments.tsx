@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useTournaments } from '../hooks/queries';
 import { useAuthStore } from '../store/authStore';
 import { SpaceInvader } from '../components/SpaceInvader';
-import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -69,48 +68,47 @@ export function Tournaments() {
           />
         </div>
       ) : (
-        <StaggerList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {tournaments.map((tournament) => {
             return (
-              <StaggerItem key={tournament.id}>
-                <Link
-                  to={`/tournaments/${tournament.id}`}
-                  className="card card-hover block h-full"
-                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  {/* длинное название занимает две строки, статус тогда уходит под него */}
-                  <div className="flex flex-wrap justify-between items-start gap-x-3 gap-y-2 mb-2">
-                    <h3 className="min-w-0 text-base font-semibold text-gray-100 line-clamp-2">
-                      {tournament.name}
-                    </h3>
-                    <StatusLabel entity="tournament" status={tournament.status} />
+              <Link
+                key={tournament.id}
+                to={`/tournaments/${tournament.id}`}
+                className="card card-hover block h-full"
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1), 0 4px 20px rgba(0,0,0,0.3)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                {/* длинное название занимает две строки, статус тогда уходит под него */}
+                <div className="flex flex-wrap justify-between items-start gap-x-3 gap-y-2 mb-2">
+                  <h3 className="min-w-0 text-base font-semibold text-gray-100 line-clamp-2">
+                    {tournament.name}
+                  </h3>
+                  <StatusLabel entity="tournament" status={tournament.status} />
+                </div>
+
+                {tournament.description && (
+                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">{mdPreview(tournament.description)}</p>
+                )}
+
+                <div className="flex items-center justify-between text-sm text-gray-400">
+                  <div className="flex items-center gap-1">
+                    <UsersIcon className="w-4 h-4" />
+                    <span>До {tournament.max_team_size} чел.</span>
                   </div>
-
-                  {tournament.description && (
-                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">{mdPreview(tournament.description)}</p>
+                  {isAdmin && (
+                    <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
+                      {tournament.code}
+                    </code>
                   )}
+                </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-400">
-                    <div className="flex items-center gap-1">
-                      <UsersIcon className="w-4 h-4" />
-                      <span>До {tournament.max_team_size} чел.</span>
-                    </div>
-                    {isAdmin && (
-                      <code className="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-300">
-                        {tournament.code}
-                      </code>
-                    )}
-                  </div>
-
-                  {tournament.is_permanent && (
-                    <span className="badge badge-blue mt-3 text-xs">Постоянный</span>
-                  )}
-                </Link>
-              </StaggerItem>
+                {tournament.is_permanent && (
+                  <span className="badge badge-blue mt-3 text-xs">Постоянный</span>
+                )}
+              </Link>
             );
           })}
-        </StaggerList>
+        </div>
       )}
     </div>
   );

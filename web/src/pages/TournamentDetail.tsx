@@ -367,7 +367,7 @@ export function TournamentDetail() {
   const canComplete = canManage && tournament.status === 'active';
 
   return (
-    <div className="animate-fade-in">
+    <div>
       {/* Cinematic overlay for tournament victory */}
       {cinematicType && (
         <CinematicOverlay
@@ -489,7 +489,7 @@ export function TournamentDetail() {
 
       {/* Action Error */}
       {actionError && (
-        <div className="alert alert-error mb-6 animate-slide-up">
+        <div className="alert alert-error mb-6">
           <XMarkIcon />
           <p>{actionError}</p>
         </div>
@@ -497,7 +497,7 @@ export function TournamentDetail() {
 
       {/* My Team Badge */}
       {myTeam && (
-        <div className="alert alert-info mb-6 animate-slide-up">
+        <div className="alert alert-info mb-6">
           <UsersIcon />
           <div className="flex-1">
             <p>
