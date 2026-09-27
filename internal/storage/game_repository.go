@@ -568,6 +568,17 @@ func (r *GameRepository) ResetGameRoundFull(ctx context.Context, tournamentID uu
 	return
 }
 
+// PreviewGameReset - dry-run сброса игры для диалога подтверждения: тот же resetGame
+// в транзакции, которая всегда откатывается
+func (r *GameRepository) PreviewGameReset(ctx context.Context, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to begin transaction")
+	}
+	defer func() { _ = tx.Rollback() }()
+	return resetGame(ctx, tx, tournamentID, gameType)
+}
+
 // StartNewRound одной транзакцией сбрасывает результаты перечисленных игр турнира
 // (матчи, rating_history, статистику участников, статус раунда) и вставляет матчи
 // нового раунда: либо раунд создан целиком, либо прошлые результаты не тронуты.

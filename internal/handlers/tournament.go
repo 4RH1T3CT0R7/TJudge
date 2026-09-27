@@ -36,6 +36,7 @@ type TournamentService interface {
 type SchedulingService interface {
 	RunAllMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 	RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error)
+	PreviewGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (*tournament.RoundPreview, error)
 	RetryFailedMatches(ctx context.Context, tournamentID uuid.UUID) (int, error)
 }
 
@@ -424,6 +425,33 @@ func (h *TournamentHandler) RunGameMatches(w http.ResponseWriter, r *http.Reques
 		"game_type": req.GameType,
 		"enqueued":  enqueued,
 	})
+}
+
+// PreviewGameRound - dry-run RunGameMatches для диалога подтверждения: сколько
+// матчей запуск раунда удалит и создаст. GET и без записи в базу, поэтому не аудитится
+func (h *TournamentHandler) PreviewGameRound(w http.ResponseWriter, r *http.Request) {
+	tournamentID, ok := parseUUIDParam(w, r, "id", "tournament")
+	if !ok {
+		return
+	}
+
+	gameType := r.URL.Query().Get("game_type")
+	if gameType == "" {
+		writeError(w, errors.ErrInvalidInput.WithMessage("game_type is required"))
+		return
+	}
+
+	preview, err := h.schedulingService.PreviewGameRound(r.Context(), tournamentID, gameType)
+	if err != nil {
+		h.log.LogError("Failed to preview game round", err,
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", gameType),
+		)
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, preview)
 }
 
 // RetryFailedMatches перекидывает упавшие матчи (failed) обратно в очередь.

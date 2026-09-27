@@ -123,6 +123,14 @@ func (m *MockSchedulingService) RunGameMatches(ctx context.Context, tournamentID
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockSchedulingService) PreviewGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (*tournament.RoundPreview, error) {
+	args := m.Called(ctx, tournamentID, gameType)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*tournament.RoundPreview), args.Error(1)
+}
+
 // withTournamentID кладёт id турнира в chi-контекст запроса.
 func withTournamentID(req *http.Request, id string) *http.Request {
 	rctx := chi.NewRouteContext()
@@ -515,6 +523,31 @@ func TestTournamentHandler_RunGameMatches(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+}
+
+func TestTournamentHandler_PreviewGameRound(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	mockScheduling := new(MockSchedulingService)
+	handler := NewTournamentHandler(new(MockTournamentService), mockScheduling, nil, log)
+	tournamentID := uuid.New()
+	mockScheduling.On("PreviewGameRound", mock.Anything, tournamentID, "dilemma").
+		Return(&tournament.RoundPreview{GameType: "dilemma", Participants: 5, MatchesCreated: 20, MatchesDeleted: 12}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/run-game-matches/preview?game_type=dilemma", nil)
+	w := httptest.NewRecorder()
+	handler.PreviewGameRound(w, withTournamentID(req, tournamentID.String()))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var response map[string]any
+	decodeJSONData(t, w.Body, &response)
+	assert.Equal(t, float64(20), response["matches_created"])
+	assert.Equal(t, float64(12), response["matches_deleted"])
+
+	// без game_type считать нечего
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/"+tournamentID.String()+"/run-game-matches/preview", nil)
+	w = httptest.NewRecorder()
+	handler.PreviewGameRound(w, withTournamentID(req, tournamentID.String()))
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestTournamentHandler_RetryFailedMatches(t *testing.T) {

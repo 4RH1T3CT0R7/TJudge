@@ -337,6 +337,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{id}/run-game-matches/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Dry-run of run-game-matches (admin)
+         * @description What run-game-matches would do right now, without changing anything: requeue the
+         *     pending matches of an unfinished round, or delete the previous round of the game and
+         *     create a new round-robin. Uses the same planning code; the deletion is counted by the
+         *     same reset in a rolled-back transaction. Errors are the same as the real run
+         *     (400 fewer than 2 participants, 409 tournament not active or matches running).
+         */
+        get: operations["tournamentsRunGameMatchesPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{id}/retry-matches": {
         parameters: {
             query?: never;
@@ -1594,6 +1621,16 @@ export interface components {
             participants_reset?: number;
             rating_history_reset?: number;
         };
+        RoundPreview: {
+            game_type?: string;
+            /** @description Pending matches of an unfinished round; the run only requeues them */
+            pending?: number;
+            /** @description Teams with a ready program that play the new round */
+            participants?: number;
+            matches_created?: number;
+            /** @description Matches of the previous round deleted together with their rating history */
+            matches_deleted?: number;
+        };
         Team: {
             /** Format: uuid */
             id?: string;
@@ -2636,6 +2673,38 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    tournamentsRunGameMatchesPreview: {
+        parameters: {
+            query: {
+                /** @description The system name of the game */
+                game_type: string;
+            };
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Round preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessEnvelope"] & {
+                        data?: components["schemas"]["RoundPreview"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     tournamentsRetryFailedMatches: {

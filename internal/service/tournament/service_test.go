@@ -150,6 +150,10 @@ func (m *MockGameRepository) ResetGameRoundFull(ctx context.Context, id uuid.UUI
 	args := m.Called(ctx, id, gameType)
 	return int64(args.Int(0)), int64(args.Int(1)), int64(args.Int(2)), args.Error(3)
 }
+func (m *MockGameRepository) PreviewGameReset(ctx context.Context, id uuid.UUID, gameType string) (int64, int64, int64, error) {
+	args := m.Called(ctx, id, gameType)
+	return int64(args.Int(0)), int64(args.Int(1)), int64(args.Int(2)), args.Error(3)
+}
 func (m *MockGameRepository) UpdateAutoRoundLastRun(ctx context.Context, id, gameID uuid.UUID) error {
 	return m.Called(ctx, id, gameID).Error(0)
 }
@@ -772,6 +776,46 @@ func TestService_RunGameMatches(t *testing.T) {
 		require.NotNil(t, appErr)
 		assert.Equal(t, 409, appErr.Code)
 		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
+	})
+}
+
+// dry-run раунда считает тем же planGameRound, что и настоящий запуск, и ничего не пишет
+func TestScheduling_PreviewGameRound(t *testing.T) {
+	gameType := "prisoners_dilemma"
+
+	t.Run("new_round", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+		ctx := context.Background()
+		id := uuid.New()
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentActive}, nil)
+		matchRepo.On("GetPendingByTournamentAndGame", ctx, id, gameType).Return([]*models.Match{}, nil)
+		tournamentRepo.On("GetLatestParticipantsByGame", ctx, id, gameType).Return([]*models.TournamentParticipant{
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+			{ID: uuid.New(), TournamentID: id, ProgramID: uuid.New()},
+		}, nil)
+		gameRepo.On("PreviewGameReset", ctx, id, gameType).Return(12, 3, 24, nil)
+
+		preview, err := service.PreviewGameRound(ctx, id, gameType)
+		require.NoError(t, err)
+		assert.Equal(t, &RoundPreview{GameType: gameType, Participants: 3, MatchesCreated: 6, MatchesDeleted: 12}, preview)
+		distLock.AssertNotCalled(t, "WithLock", anyLock()...)
+		gameRepo.AssertNotCalled(t, "StartNewRound", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		queueManager.AssertNotCalled(t, "EnqueueBatch", mock.Anything, mock.Anything)
+	})
+
+	// недоигранный раунд запуск только возвращает в очередь: удалять нечего
+	t.Run("pending_round", func(t *testing.T) {
+		service, tournamentRepo, matchRepo, _, _, gameRepo := newTestSchedulingService(t)
+		ctx := context.Background()
+		id := uuid.New()
+		tournamentRepo.On("GetByID", ctx, id).Return(&models.Tournament{ID: id, Status: models.TournamentActive}, nil)
+		matchRepo.On("GetPendingByTournamentAndGame", ctx, id, gameType).Return([]*models.Match{{ID: uuid.New()}, {ID: uuid.New()}}, nil)
+
+		preview, err := service.PreviewGameRound(ctx, id, gameType)
+		require.NoError(t, err)
+		assert.Equal(t, &RoundPreview{GameType: gameType, Pending: 2}, preview)
+		gameRepo.AssertNotCalled(t, "PreviewGameReset", mock.Anything, mock.Anything, mock.Anything)
 	})
 }
 

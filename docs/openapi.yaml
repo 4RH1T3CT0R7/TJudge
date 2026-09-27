@@ -576,6 +576,49 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /tournaments/{id}/run-game-matches/preview:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    get:
+      tags: [tournaments]
+      summary: Dry-run of run-game-matches (admin)
+      description: |
+        What run-game-matches would do right now, without changing anything: requeue the
+        pending matches of an unfinished round, or delete the previous round of the game and
+        create a new round-robin. Uses the same planning code; the deletion is counted by the
+        same reset in a rolled-back transaction. Errors are the same as the real run
+        (400 fewer than 2 participants, 409 tournament not active or matches running).
+      operationId: tournamentsRunGameMatchesPreview
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: game_type
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The system name of the game
+      responses:
+        '200':
+          description: Round preview
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RoundPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /tournaments/{id}/retry-matches:
     parameters:
       - $ref: '#/components/parameters/TournamentID'
@@ -2635,6 +2678,23 @@ components:
           type: integer
         rating_history_reset:
           type: integer
+
+    RoundPreview:
+      type: object
+      properties:
+        game_type:
+          type: string
+        pending:
+          type: integer
+          description: Pending matches of an unfinished round; the run only requeues them
+        participants:
+          type: integer
+          description: Teams with a ready program that play the new round
+        matches_created:
+          type: integer
+        matches_deleted:
+          type: integer
+          description: Matches of the previous round deleted together with their rating history
 
     # ---------- Team ----------
 

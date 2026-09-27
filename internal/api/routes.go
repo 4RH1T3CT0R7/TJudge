@@ -339,6 +339,7 @@ func (s *Server) setupRoutes() {
 						r.Post("/{id}/games/deactivate-all", s.gameHandler.DeactivateAllGames)
 						r.Post("/{id}/run-matches", s.tournamentHandler.RunAllMatches)
 						r.Post("/{id}/run-game-matches", s.tournamentHandler.RunGameMatches)
+						r.Get("/{id}/run-game-matches/preview", s.tournamentHandler.PreviewGameRound)
 						r.Post("/{id}/retry-matches", s.tournamentHandler.RetryFailedMatches)
 						r.Post("/{id}/programs/clear-errors", s.programHandler.ClearProgramErrors)
 					})

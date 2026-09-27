@@ -131,15 +131,9 @@ func (ss *SchedulingService) RunGameMatches(ctx context.Context, tournamentID uu
 }
 
 func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
-	tournament, err := ss.getActiveTournament(ctx, tournamentID)
+	pending, matches, _, err := ss.planGameRound(ctx, tournamentID, gameType)
 	if err != nil {
 		return 0, err
-	}
-
-	// pending именно этой игры - просто в очередь заново
-	pending, err := ss.matchRepo.GetPendingByTournamentAndGame(ctx, tournamentID, gameType)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get pending matches: %w", err)
 	}
 	if len(pending) > 0 {
 		return ss.enqueue(ctx, tournamentID, pending)
@@ -150,22 +144,76 @@ func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamen
 		zap.String("game_type", gameType),
 	)
 
-	// участники - последние готовые версии прог каждой команды по этой игре
-	participants, err := ss.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)
+	return ss.startRound(ctx, tournamentID, []string{gameType}, matches)
+}
+
+// planGameRound - общий расчёт запуска раунда игры для RunGameMatches и его dry-run:
+// висящие pending этой игры уходят в очередь как есть, иначе новый round-robin по
+// последним готовым программам команд
+func (ss *SchedulingService) planGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (pending, matches []*models.Match, participants int, err error) {
+	tournament, err := ss.getActiveTournament(ctx, tournamentID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get participants: %w", err)
+		return nil, nil, 0, err
 	}
-	if len(participants) < 2 {
-		return 0, errors.ErrValidation.WithMessage("need at least 2 participants with programs for this game")
+
+	pending, err = ss.matchRepo.GetPendingByTournamentAndGame(ctx, tournamentID, gameType)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("failed to get pending matches: %w", err)
+	}
+	if len(pending) > 0 {
+		return pending, nil, 0, nil
+	}
+
+	list, err := ss.tournamentRepo.GetLatestParticipantsByGame(ctx, tournamentID, gameType)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("failed to get participants: %w", err)
+	}
+	if len(list) < 2 {
+		return nil, nil, 0, errors.ErrValidation.WithMessage("need at least 2 participants with programs for this game")
 	}
 
 	// ручной запуск - высокий приоритет
-	matches, err := ss.generateRoundRobinMatchesForGame(tournament, participants, gameType, models.PriorityHigh)
+	matches, err = ss.generateRoundRobinMatchesForGame(tournament, list, gameType, models.PriorityHigh)
 	if err != nil {
-		return 0, fmt.Errorf("failed to generate matches: %w", err)
+		return nil, nil, 0, fmt.Errorf("failed to generate matches: %w", err)
+	}
+	return nil, matches, len(list), nil
+}
+
+// RoundPreview - dry-run запуска раунда игры для диалога подтверждения
+type RoundPreview struct {
+	GameType string `json:"game_type"`
+	// Pending - матчи недоигранного раунда: запуск только вернёт их в очередь,
+	// новый раунд не создаётся и прошлые результаты не трогаются
+	Pending int `json:"pending"`
+	// Participants - команды с готовой программой, играющие новый раунд
+	Participants   int   `json:"participants"`
+	MatchesCreated int   `json:"matches_created"`
+	MatchesDeleted int64 `json:"matches_deleted"` // матчи прошлого раунда вместе с историей рейтинга
+}
+
+// PreviewGameRound - dry-run RunGameMatches: тот же расчёт раунда, а число удаляемых
+// матчей даёт сброс игры в откатываемой транзакции (с той же проверкой идущих матчей).
+// лок планирования не берётся: база не меняется, а занятый лок мешал бы настоящему запуску
+func (ss *SchedulingService) PreviewGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (*RoundPreview, error) {
+	pending, matches, participants, err := ss.planGameRound(ctx, tournamentID, gameType)
+	if err != nil {
+		return nil, err
 	}
 
-	return ss.startRound(ctx, tournamentID, []string{gameType}, matches)
+	preview := &RoundPreview{
+		GameType:       gameType,
+		Pending:        len(pending),
+		Participants:   participants,
+		MatchesCreated: len(matches),
+	}
+	if len(pending) == 0 {
+		preview.MatchesDeleted, _, _, err = ss.gameRepo.PreviewGameReset(ctx, tournamentID, gameType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return preview, nil
 }
 
 // startRound одной транзакцией заменяет прошлые результаты игр новым раундом и ставит

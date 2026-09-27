@@ -67,6 +67,7 @@ var routeGuards = map[string]string{
 	"POST /api/v1/tournaments/{id}/games/deactivate-all":               guardAdmin,
 	"POST /api/v1/tournaments/{id}/run-matches":                        guardAdmin,
 	"POST /api/v1/tournaments/{id}/run-game-matches":                   guardAdmin,
+	"GET /api/v1/tournaments/{id}/run-game-matches/preview":            guardAdmin,
 	"POST /api/v1/tournaments/{id}/retry-matches":                      guardAdmin,
 	"POST /api/v1/tournaments/{id}/programs/clear-errors":              guardAdmin,
 

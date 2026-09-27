@@ -227,6 +227,43 @@ func (s *MatchRepositorySuite) TestStartNewRound() {
 	assert.Equal(s.T(), int64(2), deleted)
 }
 
+// dry-run сброса считает тем же resetGame, но откатывает его: числа совпадают
+// с настоящим сбросом, а до него матчи на месте
+func (s *MatchRepositorySuite) TestPreviewGameReset() {
+	tournament, prog1, prog2 := s.setupMatchPrerequisites("pgr")
+	ctx := context.Background()
+
+	gameRepo := storage.NewGameRepository(s.database)
+	game := &models.Game{ID: uuid.New(), Name: "test_pgr_" + uuid.New().String()[:8], DisplayName: "PGR"}
+	require.NoError(s.T(), gameRepo.Create(ctx, game))
+	s.T().Cleanup(func() { _, _ = s.database.ExecContext(ctx, "DELETE FROM games WHERE id = $1", game.ID) })
+	require.NoError(s.T(), gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+
+	played := s.createMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, models.MatchCompleted, models.PriorityMedium, 1)
+	s.createMatch(tournament.ID, prog2.ID, prog1.ID, game.Name, models.MatchFailed, models.PriorityMedium, 1)
+	// матч другой игры сброс не трогает
+	s.createMatch(tournament.ID, prog1.ID, prog2.ID, "prisoners_dilemma", models.MatchCompleted, models.PriorityMedium, 1)
+
+	deleted, reset, history, err := gameRepo.PreviewGameReset(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), deleted)
+	_, err = s.repo.GetByID(ctx, played.ID)
+	require.NoError(s.T(), err, "dry-run не должен удалять матчи")
+
+	realDeleted, realReset, realHistory, err := gameRepo.ResetGameRoundFull(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), []int64{realDeleted, realReset, realHistory}, []int64{deleted, reset, history})
+
+	// идущий матч: dry-run отказывает так же, как настоящий сброс
+	running := s.createMatch(tournament.ID, prog1.ID, prog2.ID, game.Name, models.MatchRunning, models.PriorityMedium, 1)
+	_, _, _, err = gameRepo.PreviewGameReset(ctx, tournament.ID, game.Name)
+	appErr := errors.GetAppError(err)
+	require.NotNil(s.T(), appErr)
+	assert.Equal(s.T(), 409, appErr.Code)
+	_, err = s.repo.GetByID(ctx, running.ID)
+	require.NoError(s.T(), err)
+}
+
 func (s *MatchRepositorySuite) TestGetByTournamentID() {
 	tournament, prog1, prog2 := s.setupMatchPrerequisites("gettid")
 
