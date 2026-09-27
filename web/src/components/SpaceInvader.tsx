@@ -1303,7 +1303,7 @@ export function SpaceInvader({
             whiteSpace: 'nowrap',
             background: lastSpeechIsImpactRef.current ? 'rgba(127,29,29,0.92)' : 'rgba(17,24,39,0.92)',
             color: lastSpeechIsImpactRef.current ? '#fca5a5' : accentColor,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontFamily: 'var(--font-mono)',
             fontSize: '11px',
             padding: '4px 10px',
             borderRadius: '6px',

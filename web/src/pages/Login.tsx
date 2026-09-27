@@ -49,7 +49,7 @@ export function Login() {
   // ProtectedRoute кладёт сюда страницу, с которой отправил на логин
   const from = (useLocation().state as { from?: string } | null)?.from ?? '/';
 
-  const monoFont = { fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace" } as const;
+  const monoFont = { fontFamily: 'var(--font-mono)' } as const;
 
   // Greeting on mount
   useEffect(() => {

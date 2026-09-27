@@ -4,6 +4,11 @@
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* Шрифты self-host (@fontsource в main.tsx): моно — терминальный хром,
+     заголовки, таблицы, числа и статусы; Onest — основной текст */
+  --font-sans: 'Onest Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
   /* Violet/purple primary palette (deep purple, not pink) */
   --color-primary-50: #f5f3ff;
   --color-primary-100: #ede9fe;
@@ -141,8 +146,6 @@
   body {
     @apply text-gray-100 min-h-screen;
     background-color: #0a0a0b;
-    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    letter-spacing: -0.01em;
     overflow-x: hidden;
   }
 
@@ -154,9 +157,14 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    letter-spacing: -0.025em;
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
     font-weight: 700;
+  }
+
+  /* цифры в колонках не прыгают по ширине */
+  table {
+    font-variant-numeric: tabular-nums;
   }
 
   *:focus-visible {
@@ -192,11 +200,6 @@
       text-decoration: underline 2px;
       text-underline-offset: 4px;
     }
-  }
-
-  /* JetBrains Mono for code/mono */
-  code, .font-mono, .code-block {
-    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   }
 }
 
@@ -495,7 +498,7 @@
 
   /* Code block */
   .code-block {
-    @apply text-gray-100 px-2 py-0.5 rounded text-sm;
+    @apply font-mono text-gray-100 px-2 py-0.5 rounded text-sm;
     background: rgba(31,41,55,0.8);
   }
 
@@ -925,7 +928,7 @@
 .sudo-theme th,
 .sudo-theme label,
 .sudo-theme div {
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .sudo-theme .text-gray-100,

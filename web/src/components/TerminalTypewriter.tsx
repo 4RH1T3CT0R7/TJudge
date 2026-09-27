@@ -92,7 +92,7 @@ export function TerminalTypewriter() {
       {/* Terminal body */}
       <div
         className="bg-gray-900/80 rounded-b-xl px-6 py-8 border border-gray-700/50 border-t-0"
-        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+        style={{ fontFamily: 'var(--font-mono)' }}
       >
         <div className="flex items-center text-lg min-h-[1.75rem]">
           <span className="text-green-400 mr-3">$</span>
