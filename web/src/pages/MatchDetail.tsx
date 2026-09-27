@@ -21,6 +21,7 @@ import {
   averageMove,
   cooperationShare,
   firstDefection,
+  isLoneMove,
   iterationsOf,
   runningTotal,
   sharePct,
@@ -455,25 +456,23 @@ function MoveStrip({
         />
       ));
     }
-    // на длинном матче клетка уже пикселя: предательство получает обводку постоянной
-    // толщины, иначе одиночное на телефоне не видно, и рисуется поверх сотрудничества,
-    // чтобы обводку не перекрыла соседняя клетка
+    // на длинном матче клетка уже пикселя: одиночный ход среди ходов другого вида
+    // получает обводку постоянной толщины, иначе на телефоне его не видно, и рисуется
+    // последним, чтобы обводку не перекрыли соседи. Чередование обводки не получает:
+    // с ней полоса целиком выглядела бы предательством
     const at = moves.map((_, i) => i);
-    return [...at.filter((i) => moves[i] === COOPERATE), ...at.filter((i) => moves[i] !== COOPERATE)].map((i) =>
-      moves[i] === COOPERATE ? (
-        <rect key={i} x={i} width={w} height={1} className="fill-primary-500" />
-      ) : (
-        <rect
-          key={i}
-          x={i}
-          width={w}
-          height={1}
-          className="fill-red-500 stroke-red-500"
-          strokeWidth={long ? 1.5 : 0}
-          vectorEffect="non-scaling-stroke"
-        />
-      )
-    );
+    const lone = new Set(long ? at.filter((i) => isLoneMove(moves, i)) : []);
+    return [...at.filter((i) => !lone.has(i)), ...lone].map((i) => (
+      <rect
+        key={i}
+        x={i}
+        width={w}
+        height={1}
+        className={moves[i] === COOPERATE ? 'fill-primary-500 stroke-primary-500' : 'fill-red-500 stroke-red-500'}
+        strokeWidth={lone.has(i) ? 1.5 : 0}
+        vectorEffect="non-scaling-stroke"
+      />
+    ));
   }, [moves, dilemma, range, w, long]);
   const summary = dilemma
     ? `${name}: сотрудничество ${moves.filter((m) => m === COOPERATE).length}, предательство ${moves.filter((m) => m !== COOPERATE).length}`

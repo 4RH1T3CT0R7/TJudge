@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auctionTurns, cooperationShare, firstDefection, iterationsOf, runningTotal, sharePct } from './transcript';
+import { auctionTurns, cooperationShare, firstDefection, isLoneMove, iterationsOf, runningTotal, sharePct } from './transcript';
 
 describe('transcript', () => {
   it('счёт по ходу матча - нарастающий итог очков', () => {
@@ -19,6 +19,14 @@ describe('transcript', () => {
     expect(firstDefection(t)).toEqual({ iteration: 0, sides: [2] });
     expect(cooperationShare(t.moves[0])).toBe(0.5);
     expect(cooperationShare([])).toBeNull();
+  });
+
+  it('одиночный ход среди ходов другого вида, чередование - нет', () => {
+    const lone = (m: number[]) => m.map((_, i) => i).filter((i) => isLoneMove(m, i));
+    expect(lone([1, 1, 1, 0, 1, 1, 1])).toEqual([3]);
+    expect(lone([1, 0, 0, 0, 0])).toEqual([0]);
+    expect(lone([1, 0, 1, 0, 1, 0])).toEqual([]);
+    expect(lone([0, 0, 1, 1, 0, 0])).toEqual([]);
   });
 
   it('100% и 0% - только точные доли', () => {

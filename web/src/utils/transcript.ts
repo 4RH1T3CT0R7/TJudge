@@ -31,6 +31,9 @@ export function firstDefection(t: MatchTranscript): FirstDefection | null {
   return null;
 }
 
+/** Одиночный ход: на два хода в обе стороны только ходы другого вида. */
+export const isLoneMove = (moves: number[], i: number) => [-2, -1, 1, 2].every((d) => moves[i + d] !== moves[i]);
+
 /** Доля в процентах: 0% и 100% только для точных значений, рядом с ними - «<1%» и «>99%». */
 export function sharePct(x: number): string {
   const r = Math.round(x * 100);
