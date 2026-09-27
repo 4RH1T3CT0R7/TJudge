@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
   useCrossGameLeaderboard,
   useMatchesByRounds,
@@ -14,7 +15,7 @@ import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
 import { QrCode } from '../components/tournament/QrCode';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/ui/ErrorState';
-import { gameProgress, honestStandings, liveGameIds, pageCount, pageSlice } from '../utils/liveStandings';
+import { gameProgress, honestStandings, liveGameIds, pageCount, pageSlice, type StandingRow } from '../utils/liveStandings';
 import { getGameConfig } from '../utils/gameConfig';
 import type { MatchResultPayload } from '../types/ws';
 import type { CrossGameLeaderboardEntry, Game } from '../types';
@@ -23,6 +24,7 @@ const DEFAULT_ROTATE_S = 15;
 const BANNER_MS = 20_000;
 const IDLE_MS = 3000;
 const FEED_SIZE = 12;
+const CEREMONY_PLACES = 10;
 
 interface FeedItem {
   id: string;
@@ -114,9 +116,11 @@ function topOfGame(entries: CrossGameLeaderboardEntry[], game: Game) {
 // первые три закреплены; ←/→ листают, пробел ставит на паузу.
 export function TournamentScreen() {
   const { id = '' } = useParams<{ id: string }>();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const rotateS = Math.max(5, Number(params.get('rotate')) || DEFAULT_ROTATE_S);
+  const ceremony = isAdmin && params.get('view') === 'ceremony';
 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const gamesQuery = useTournamentGames(id);
@@ -188,10 +192,25 @@ export function TournamentScreen() {
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (paused || pages <= 1) return;
+    if (paused || pages <= 1 || ceremony) return;
     const t = setInterval(() => setPage((p) => (p + 1) % pages), rotateS * 1000);
     return () => clearInterval(t);
-  }, [paused, pages, rotateS, page]);
+  }, [paused, pages, ceremony, rotateS, page]);
+
+  const placed = useMemo(() => standings.filter((r) => r.place !== null).slice(0, CEREMONY_PLACES), [standings]);
+  const [revealed, setRevealed] = useState(0);
+  const setCeremony = useCallback(
+    (on: boolean) => {
+      setRevealed(0);
+      setParams((p) => {
+        const next = new URLSearchParams(p);
+        if (on) next.set('view', 'ceremony');
+        else next.delete('view');
+        return next;
+      }, { replace: true });
+    },
+    [setParams]
+  );
 
   const toggleFullscreen = fullscreen.toggle;
   useEffect(() => {
@@ -202,6 +221,17 @@ export function TournamentScreen() {
         return;
       }
       if ((e.key === ' ' || e.key === 'Enter') && ownsKey(e.target)) return;
+      if (ceremony) {
+        if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          setRevealed((n) => Math.min(n + 1, placed.length));
+        } else if (e.key === 'ArrowLeft') {
+          setRevealed((n) => Math.max(n - 1, 0));
+        } else if (e.key === 'Escape' && !document.fullscreenElement) {
+          setCeremony(false);
+        }
+        return;
+      }
       if (e.key === 'ArrowRight') setPage((p) => (p % pages + 1) % pages);
       else if (e.key === 'ArrowLeft') setPage((p) => (p % pages - 1 + pages) % pages);
       else if (e.key === ' ') {
@@ -211,7 +241,7 @@ export function TournamentScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pages, toggleFullscreen]);
+  }, [ceremony, pages, placed.length, setCeremony, toggleFullscreen]);
 
   const tournament = tournamentQuery.data;
   if (tournamentQuery.isError) {
@@ -259,9 +289,14 @@ export function TournamentScreen() {
           <button type="button" onClick={toggleFullscreen} className="btn btn-sm btn-secondary">
             {fullscreen.active ? 'Выйти из полного экрана' : 'На весь экран'}
           </button>
-          {pages > 1 && (
+          {!ceremony && pages > 1 && (
             <button type="button" onClick={() => setPaused((v) => !v)} aria-pressed={paused} className="btn btn-sm btn-secondary">
               Пауза
+            </button>
+          )}
+          {isAdmin && (
+            <button type="button" onClick={() => setCeremony(!ceremony)} className="btn btn-sm btn-secondary">
+              {ceremony ? 'К таблице' : 'Церемония'}
             </button>
           )}
           <Link to={`/tournaments/${tournament.id}`} className="btn btn-sm btn-secondary">Закрыть</Link>
@@ -279,7 +314,7 @@ export function TournamentScreen() {
       />
 
       <div role="status">
-        {bannerGame && (
+        {bannerGame && !ceremony && (
           <p className="truncate border-l-4 border-primary-500 bg-primary-900/30 px-[1vw] py-[0.8vh] font-mono text-[clamp(16px,2.4vh,34px)]">
             <span aria-hidden="true" className="text-primary-400">$ </span>
             итог: игра «{getGameConfig(bannerGame.name).short ?? bannerGame.display_name}» завершена
@@ -293,44 +328,50 @@ export function TournamentScreen() {
         )}
       </div>
 
-      <section ref={measureArea} aria-label="Таблица турнира" className="min-h-0 flex-1">
-        <CrossGameLeaderboardTable
-          rows={[...pinned, ...body]}
-          games={games}
-          live={liveGames}
-          progress={progress}
-          changes={changes}
-          broadcast
-          pinned={pinned.length}
-        />
-      </section>
-      <footer className="flex items-end justify-between gap-[2vw] font-mono">
-        <div className="min-w-0 flex-1 text-[clamp(14px,2vh,26px)]">
-          <p className="mb-[0.6vh] text-gray-400">
-            {pages > 1 && (
-              <span className="text-gray-300">
-                стр. {page + 1}/{pages}{paused ? ' · пауза' : ''}
-              </span>
-            )}
-            {pages > 1 && liveGames.size > 0 && ' · '}
-            {liveGames.size > 0 && (
-              <span>
-                <span aria-hidden="true">{'// '}</span>
-                место — по доигранным играм, очки идущей (◐) предварительные
-              </span>
-            )}
-          </p>
-          <Feed items={feed} />
-        </div>
-        <div className="flex shrink-0 items-center gap-[1vw]">
-          <p className="text-right text-gray-300 text-[clamp(14px,2vh,26px)]">
-            таблица на своём ПК
-            <br />
-            <span className="font-bold text-gray-100">{shortLink}</span>
-          </p>
-          <QrCode text={`${window.location.origin}/t/${tournament.code}`} className="h-[13vh] w-[13vh] min-h-20 min-w-20" />
-        </div>
-      </footer>
+      {ceremony ? (
+        <Ceremony rows={placed} revealed={revealed} />
+      ) : (
+        <>
+          <section ref={measureArea} aria-label="Таблица турнира" className="min-h-0 flex-1">
+            <CrossGameLeaderboardTable
+              rows={[...pinned, ...body]}
+              games={games}
+              live={liveGames}
+              progress={progress}
+              changes={changes}
+              broadcast
+              pinned={pinned.length}
+            />
+          </section>
+          <footer className="flex items-end justify-between gap-[2vw] font-mono">
+            <div className="min-w-0 flex-1 text-[clamp(14px,2vh,26px)]">
+              <p className="mb-[0.6vh] text-gray-400">
+                {pages > 1 && (
+                  <span className="text-gray-300">
+                    стр. {page + 1}/{pages}{paused ? ' · пауза' : ''}
+                  </span>
+                )}
+                {pages > 1 && liveGames.size > 0 && ' · '}
+                {liveGames.size > 0 && (
+                  <span>
+                    <span aria-hidden="true">{'// '}</span>
+                    место — по доигранным играм, очки идущей (◐) предварительные
+                  </span>
+                )}
+              </p>
+              <Feed items={feed} />
+            </div>
+            <div className="flex shrink-0 items-center gap-[1vw]">
+              <p className="text-right text-gray-300 text-[clamp(14px,2vh,26px)]">
+                таблица на своём ПК
+                <br />
+                <span className="font-bold text-gray-100">{shortLink}</span>
+              </p>
+              <QrCode text={`${window.location.origin}/t/${tournament.code}`} className="h-[13vh] w-[13vh] min-h-20 min-w-20" />
+            </div>
+          </footer>
+        </>
+      )}
     </main>
   );
 }
@@ -361,3 +402,80 @@ function Feed({ items }: { items: FeedItem[] }) {
   );
 }
 
+const CUP = [
+  '╔═══════╗',
+  '║   1   ║',
+  '╚╗     ╔╝',
+  ' ╚═╗ ╔═╝ ',
+  '   ║ ║   ',
+  ' ╔═╝ ╚═╗ ',
+  ' ╚═════╝ ',
+].join('\n');
+
+// Церемония: места раскрываются снизу вверх по пробелу или →, ← возвращает шаг.
+function Ceremony({ rows, revealed }: { rows: StandingRow[]; revealed: number }) {
+  // раскрыты последние revealed строк списка
+  const isShown = (i: number) => i >= rows.length - revealed;
+  const rest = rows.slice(3);
+  const podium = [1, 0, 2].filter((i) => i < rows.length);
+  const heights = ['h-[22vh]', 'h-[15vh]', 'h-[10vh]'];
+  const reveal = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4 } };
+
+  return (
+    <section aria-label="Церемония награждения" className="flex min-h-0 flex-1 flex-col font-mono">
+      <p className="text-primary-400 text-[clamp(16px,2.6vh,34px)]">
+        <span aria-hidden="true">$ </span>церемония награждения
+      </p>
+      {/* две колонки, заполняются сверху вниз */}
+      <ol
+        className="mt-[1vh] grid grid-flow-col grid-cols-2 gap-x-[4vw] text-[clamp(16px,2.8vh,36px)]"
+        style={{ gridTemplateRows: `repeat(${Math.ceil(rest.length / 2)}, auto)` }}
+      >
+        {rest.map((r, i) => (
+          <li key={r.entry.program_id} className="flex gap-[1vw] py-[0.4vh] text-gray-300">
+            <span className="w-[3ch] text-right tabular-nums text-gray-400">{r.place}.</span>
+            {isShown(i + 3) ? (
+              <motion.span {...reveal} className="flex flex-1 justify-between gap-[1vw]">
+                <span className="truncate">{r.entry.team_name}</span>
+                <span className="tabular-nums">{r.total.toLocaleString('ru-RU')}</span>
+              </motion.span>
+            ) : (
+              <span className="text-gray-600">[ ? ]</span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="flex min-h-0 flex-1 items-end justify-center gap-[2vw]">
+        {podium.map((i) => {
+          const r = rows[i];
+          return (
+            <div key={i} className="flex w-[26vw] flex-col items-center text-center">
+              {isShown(i) && (
+                <motion.div {...reveal} className="mb-[1vh] w-full">
+                  {i === 0 && (
+                    <pre aria-hidden="true" className="mb-[1vh] leading-none text-amber-400 text-[clamp(10px,1.8vh,24px)]">{CUP}</pre>
+                  )}
+                  <p className="truncate font-sans font-bold text-[clamp(22px,4vh,56px)]">{r.entry.team_name}</p>
+                  <p className="tabular-nums text-gray-300 text-[clamp(16px,2.6vh,34px)]">{r.total.toLocaleString('ru-RU')}</p>
+                </motion.div>
+              )}
+              <div
+                className={`flex w-full items-start justify-center border-t-4 pt-[1vh] font-bold text-[clamp(28px,6vh,80px)] ${heights[i]} ${
+                  i === 0 ? 'border-amber-400 bg-amber-900/20 text-amber-400' : i === 1 ? 'border-gray-300 bg-gray-700/30 text-gray-300' : 'border-orange-400 bg-orange-900/20 text-orange-400'
+                }`}
+              >
+                {isShown(i) ? r.place : '?'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-[1vh] text-center text-gray-400 text-[clamp(14px,1.9vh,24px)]">
+        <span aria-hidden="true">{'// '}</span>
+        {revealed < rows.length
+          ? `пробел или → — следующее место, ← — назад · раскрыто ${revealed} из ${rows.length}`
+          : 'все места раскрыты · Esc — к таблице'}
+      </p>
+    </section>
+  );
+}
