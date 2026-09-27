@@ -205,7 +205,7 @@ export function Layout() {
               href="https://itsbmstu.ru"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex gap-3 items-center opacity-70 hover:opacity-100 transition-opacity duration-300"
+              className="group flex gap-3 items-center opacity-80 hover:opacity-100 transition-opacity duration-300"
             >
               <div className="relative">
                 <div className="absolute inset-0 bg-primary-500/50 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
