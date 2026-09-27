@@ -69,7 +69,7 @@ export function TerminalOutput({ text, label, maxHeight = 'max-h-64', wrap = fal
         tabIndex={scrollable ? 0 : undefined}
         role={scrollable ? 'group' : undefined}
         aria-label={scrollable ? label || 'вывод' : undefined}
-        className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
+        className={`${maxHeight} overflow-auto ${wrap ? 'whitespace-pre-wrap wrap-anywhere' : 'whitespace-pre'} p-3 leading-relaxed text-gray-300`}
       >
         {text.split('\n').map((line, i) => (
           <span key={i} className={lineTone(line)}>
