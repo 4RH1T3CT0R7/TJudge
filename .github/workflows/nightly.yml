@@ -52,8 +52,8 @@ jobs:
           E2E_FULL_CYCLE: 'true'
         run: go test -count=1 -v -tags=e2e -run TestE2E_FullCycle ./tests/e2e/
 
-      # шаблоны ботов со страницы игры: сборка каждого в tjudge-builder и
-      # самопроверка против эталонного бота игры
+      # шаблоны ботов со страницы игры: сборка каждого в tjudge-builder,
+      # самопроверка против эталонного бота и раунд шаблонов в обеих ролях
       - name: starters
         env:
           E2E_FULL_CYCLE: 'true'
