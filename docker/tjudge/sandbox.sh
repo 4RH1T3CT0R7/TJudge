@@ -95,8 +95,10 @@ for i in 0 1; do
     drop=(setpriv --reuid="$uid" --regid="$uid" --clear-groups --inh-caps=-all)
     "${drop[@]}" test -x "$prog" || fail "program $name is not executable as uid $uid"
     launcher=/programs/.bot$i
-    # >>: при игре с собой обе стороны пишут в файл первой
-    printf '#!/bin/sh\numask 077\nulimit -f %d\ntrap "" XFSZ\nexec %s %s 2>>%s\n' \
+    # >>: при игре с собой обе стороны пишут в файл первой.
+    # ruby без RubyGems: с ним запуск занимает 50-400 мс и съедает 200 мс
+    # судьи на первый ход; гемов в образе нет, стандартная библиотека работает
+    printf '#!/bin/sh\numask 077\nulimit -f %d\ntrap "" XFSZ\nexport RUBYOPT=--disable-gems\nexec %s %s 2>>%s\n' \
         $((err_limit / 512)) "${drop[*]}" "$prog" "$launcher.err" >"$launcher"
     chmod 0700 "$launcher"
     bots+=("$launcher")

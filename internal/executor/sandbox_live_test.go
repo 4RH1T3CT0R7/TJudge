@@ -202,3 +202,27 @@ func TestSandbox_Check(t *testing.T) {
 	assert.Equal(t, 1, res.ErrorCode)
 	assert.Contains(t, res.ErrorMessage, "ZeroDivisionError")
 }
+
+// бот на ruby сотрудничает, только если RubyGems не загружен
+const rubyNoGemsBot = `#!/usr/bin/env ruby
+abort "RubyGems загружен" if defined?(Gem)
+STDOUT.sync = true
+gets.to_i.times do
+  puts "COOPERATE"
+  gets
+end
+`
+
+// ruby стартует без RubyGems: с ним первый ход занимает 50-400 мс и на
+// холодном или загруженном хосте не укладывается в 200 мс судьи
+func TestSandbox_RubyWithoutGems(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	writeBots(t, dir, map[string]string{"bot.rb": rubyNoGemsBot, "coop": cooperatorBot})
+
+	res, err := e.Execute(context.Background(), &models.Match{ID: uuid.New(), GameType: "dilemma"},
+		filepath.Join(dir, "coop"), filepath.Join(dir, "bot.rb"))
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
+	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
+}
