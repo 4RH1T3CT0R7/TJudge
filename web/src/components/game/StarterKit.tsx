@@ -6,7 +6,7 @@ import { ErrorState } from '../ui/ErrorState';
 import { TerminalOutput } from '../ui/TerminalOutput';
 import { ioTone } from '../../utils/markdown';
 import { saveFile } from '../../utils/saveFile';
-import { LANGUAGES, localRunScript, starterLoader, type Language } from '../../utils/starters';
+import { LANGUAGES, starterLoader, type Language } from '../../utils/starters';
 
 const LANG_KEY = 'starter_lang';
 
@@ -46,8 +46,6 @@ function codeLine(marker: string) {
 }
 
 // в скрипте комментарий - только целая строка: # встречается и внутри команд
-const scriptLine = (line: string) => (line.startsWith('#') ? <span className="text-gray-500">{line}</span> : line);
-
 const Heading = ({ id, children }: { id: string; children: string }) => (
   <h2 id={id} className="font-mono text-base font-semibold text-gray-100">
     <span aria-hidden="true" className="text-primary-400">$ </span>
@@ -55,8 +53,8 @@ const Heading = ({ id, children }: { id: string; children: string }) => (
   </h2>
 );
 
-// Блоки «$ начать» (шаблон бота на выбранном языке: копировать, скачать) и
-// «$ проверить у себя» (tjudge-cli локально). У игры без шаблонов ничего не выводит.
+// Блок «$ начать»: шаблон бота на выбранном языке (копировать, скачать).
+// У игры без шаблонов ничего не выводит.
 // id заголовка «starter» - цель перехода из карточки программы.
 export function StarterKit({ game }: { game: string }) {
   const [langId, setLangId] = useStoredLang();
@@ -118,14 +116,6 @@ export function StarterKit({ game }: { game: string }) {
         </Tabs>
       </section>
 
-      <section aria-labelledby="starter-check">
-        <Heading id="starter-check">проверить у себя</Heading>
-        <p className="mt-1 mb-4 text-sm text-gray-400">
-          Судья tjudge-cli ставится одной командой и проводит матч прямо на вашем компьютере. В конце он печатает очки первой и
-          второй программы; код выхода 1 или 2 — ошибка программы с этой стороны. На Windows — через WSL.
-        </p>
-        <TerminalOutput text={localRunScript(game, lang)} label="терминал" renderLine={scriptLine} />
-      </section>
     </div>
   );
 }
