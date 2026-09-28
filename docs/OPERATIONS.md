@@ -49,7 +49,7 @@ nginx публикуется на `${NGINX_BIND:-127.0.0.1}:8080` и берёт 
 
 ## 3. Первый запуск и выкладка (prod)
 
-Штатный путь — пуш тега `v*`. `release.yml` собирает образы `ghcr.io/4rh1t3ct0r7/tjudge-{api,worker,migrate,executor,builder}:<версия>` и по ssh выполняет на сервере в `~/TJudge`:
+Штатный путь — пуш тега `v*`. `release.yml` собирает образы `ghcr.io/4rh1t3ct0r7/tjudge-{api,worker,migrate,executor,builder}:<версия>`, создаёт запись в разделе Releases на GitHub (список коммитов с прошлого тега `v*`) и по ssh выполняет на сервере в `~/TJudge`:
 
 1. `git fetch --tags --force origin && git checkout --detach <тег>`: compose, скрипты и конфиги той же версии, что и образы. Сервер всегда в detached HEAD, `git pull` там не работает.
 2. `docker login ghcr.io`, затем дописывает в `.env` недостающие `DOCKER_SOCK_GID` и `HOST_PROGRAMS_PATH=$PWD/data/programs` и перезаписывает `VERSION=<версия>`.

@@ -61,6 +61,29 @@ jobs:
             docker push "$REG/$img:latest"
           done
 
+  # запись в разделе Releases: список коммитов с прошлого тега версии
+  github-release:
+    runs-on: ubuntu-latest
+    needs: images
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          git log --no-merges --format='- %s' "${prev:+$prev..}$TAG" > notes.md
+          pre=""
+          case "$TAG" in *alpha*|*beta*|*rc*) pre="--prerelease" ;; esac
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md $pre
+
   deploy:
     runs-on: ubuntu-latest
     needs: images
