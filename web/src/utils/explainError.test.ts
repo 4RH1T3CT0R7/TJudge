@@ -14,7 +14,7 @@ const header = (side: 1 | 2) =>
 describe('explainMatchError', () => {
   it('таймаут своей программы: вердикт от лица «вы» и подсказка про flush', () => {
     const e = explainMatchError(failed(2, header(2) + 'timed out waiting for fd to be ready'), 2);
-    expect(e?.verdict).toBe('Ваша программа не ответила за 200 мс');
+    expect(e?.verdict).toBe('Ваша программа не ответила вовремя (200 мс на ход, 2 с на первый)');
     expect(e?.hint).toContain('flush');
   });
 

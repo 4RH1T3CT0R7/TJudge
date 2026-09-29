@@ -32,7 +32,7 @@ interface Reason {
 
 // Причины из tjudge-cli (games/*.rs, subprocess_player.rs): фраза без подлежащего.
 const REASONS: [RegExp, (m: RegExpMatchArray) => Reason][] = [
-  [/timed out/i, () => ({ phrase: 'не ответила за 200 мс', hint: FLUSH_HINT })],
+  [/timed out/i, () => ({ phrase: 'не ответила вовремя (200 мс на ход, 2 с на первый)', hint: FLUSH_HINT })],
   [
     /terminated unexpectedly|broken pipe/i,
     () => ({ phrase: 'завершилась посреди матча', hint: 'она упала или вышла из цикла раньше конца игры: читайте ходы, пока идёт ввод' }),
