@@ -226,3 +226,28 @@ func TestSandbox_RubyWithoutGems(t *testing.T) {
 	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
 	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
 }
+
+// бот, которому на запуск нужно 0,5 с (JVM или интерпретатор на загруженной
+// машине): первый ход ждёт запуска до 2 с, дальше ходы по 200 мс
+const slowStartBot = `#!/bin/sh
+sleep 0.5
+read -r n
+i=0
+while [ "$i" -lt "$n" ]; do
+    echo COOPERATE
+    read -r _
+    i=$((i + 1))
+done
+`
+
+func TestSandbox_SlowStart(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	writeBots(t, dir, map[string]string{"slow": slowStartBot, "coop": cooperatorBot})
+
+	res, err := e.Execute(context.Background(), &models.Match{ID: uuid.New(), GameType: "dilemma"},
+		filepath.Join(dir, "slow"), filepath.Join(dir, "coop"))
+	require.NoError(t, err)
+	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
+	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
+}
