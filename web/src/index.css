@@ -66,15 +66,17 @@
   /* рамки и заливки: прежний gray-600 */
   --color-line: oklch(44.6% 0.03 256.802);
 
-  /* Скругления 2px везде, круглыми (rounded-full) остаются только точки-индикаторы */
-  --radius: 2px;
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 2px;
-  --radius-xl: 2px;
-  --radius-2xl: 2px;
-  --radius-3xl: 2px;
-  --radius-4xl: 2px;
+  /* Скругления мягкие, но меньше дефолтных Tailwind: кнопки, поля и карточки
+     (rounded-lg) 6px, бейджи и код (rounded) 4px; круглыми (rounded-full)
+     остаются только точки-индикаторы */
+  --radius: 4px;
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+  --radius-4xl: 14px;
 
   /* Green accent */
   --color-accent-400: #4ade80;
@@ -186,6 +188,9 @@
     /* прокрутка к разделу (scrollIntoView, якоря) не прячет его под фиксированной шапкой h-16 */
     scroll-padding-top: 5rem;
     color-scheme: dark;
+    /* без лигатур JetBrains Mono: иначе *** в маске пароля и ->, !=, >= в коде
+       рисуются склеенными глифами, не так, как их набирают */
+    font-variant-ligatures: none;
     /* Fluid base font-size: 16px on ≤1440, scales to ~18.5px on 2K (2560px) */
     font-size: clamp(1rem, calc(0.75rem + 0.25vw), 1.25rem);
   }
