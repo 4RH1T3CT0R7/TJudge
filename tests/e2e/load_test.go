@@ -124,27 +124,33 @@ func TestE2E_Load(t *testing.T) {
 		requireStatus(t, resp, http.StatusOK)
 	}
 
-	// дедлайна на весь раунд нет, его длина зависит от N и числа воркеров:
-	// тест падает, только если матчи перестали завершаться
 	want := len(gameIDs) * n * (n - 1)
 	var st struct{ Total, Pending, Running, Completed, Failed int }
-	for last, moved := -1, time.Now(); ; time.Sleep(5 * time.Second) {
+	getJSON(t, admin, "/api/v1/matches/statistics?tournament_id="+id, &st)
+	require.Equal(t, want, st.Total, "матчей в раундах")
+
+	// раунд окончен, когда ждать нечего: матчи дисквалифицированной команды
+	// или очищенной очереди отменяются и до want не доигрываются. дедлайна на
+	// весь раунд нет, его длина зависит от N и числа воркеров: тест падает,
+	// только если матчи перестали завершаться
+	done := 0
+	for last, moved := -1, time.Now(); st.Pending+st.Running > 0; {
+		time.Sleep(5 * time.Second)
 		getJSON(t, admin, "/api/v1/matches/statistics?tournament_id="+id, &st)
-		done := st.Completed + st.Failed
+		done = st.Completed + st.Failed
 		if done != last {
 			t.Logf("сыграно %d/%d, в очереди %d, идёт %d, с ошибкой %d", done, want, st.Pending, st.Running, st.Failed)
 			last, moved = done, time.Now()
-		}
-		if done >= want {
-			break
 		}
 		if time.Since(moved) > 5*time.Minute {
 			t.Fatalf("5 минут без завершённых матчей: сыграно %d/%d, worker жив?", done, want)
 		}
 	}
 	elapsed := time.Since(phase)
-	t.Logf("раунды: %d матчей за %s, %.1f матча/с", st.Total, elapsed.Round(time.Second), float64(st.Total)/elapsed.Seconds())
-	require.Equal(t, want, st.Total, "матчей в раундах")
+	t.Logf("раунды: %d матчей за %s, %.1f матча/с", done, elapsed.Round(time.Second), float64(done)/elapsed.Seconds())
+	if done < want {
+		t.Logf("не сыграно %d: матчи отменены или удалены (дисквалификация, очистка очереди)", want-done)
+	}
 	if st.Failed > 0 {
 		t.Errorf("матчей с ошибкой: %d, тексты ошибок во вкладке Матчи турнира", st.Failed)
 	}
