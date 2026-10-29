@@ -404,7 +404,8 @@ func buildBuilderHostConfig(hostBuildDir string) *container.HostConfig {
 			MemorySwap: 1 << 30,
 			PidsLimit:  &pidsLimit,
 			// одно ядро: шаблонная бомба на 120с не должна съедать весь хост
-			NanoCPUs: 1e9,
+			NanoCPUs:  1e9,
+			CPUShares: sandboxCPUShares,
 			Ulimits: []*container.Ulimit{
 				// файл больше 64мб компилятор не запишет (бинарник-бомба на диск хоста)
 				{Name: "fsize", Soft: 64 << 20, Hard: 64 << 20},

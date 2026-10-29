@@ -279,6 +279,7 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 		Resources: container.Resources{
 			CPUQuota:       cfg.CPUQuota,
 			CPUPeriod:      100000, // период cpu 100мс (из доки docker)
+			CPUShares:      sandboxCPUShares,
 			Memory:         cfg.MemoryLimit,
 			MemorySwap:     cfg.MemoryLimit, // == Memory: swap запрещён, лимит памяти не обойти
 			PidsLimit:      &cfg.PidsLimit,  // защита от fork-bomb
@@ -575,9 +576,15 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 	return result, nil
 }
 
+// sandboxCPUShares - вес CPU песочниц матча и сборки, вдвое ниже обычного 1024.
+// при переподписке хоста они уступают dockerd, postgres и api, которых иначе
+// душили сотни ботов, а между собой делят ядра поровну. на неперегруженном
+// хосте вес ни на что не влияет: квоту CPUQuota он не меняет
+const sandboxCPUShares = 512
+
 // removeTimeout - сколько ждать удаления контейнера. на перегруженном демоне
-// (сотни параллельных матчей) удаление шло дольше 10 с, запрос отваливался, и
-// контейнер оставался висеть до рестарта воркера. дольше 30 с нельзя: пока
+// (сотни параллельных матчей) удаление шло дольше 10 с, и запрос отваливался по
+// таймауту с ошибкой в логе, не дождавшись результата. дольше 30 с нельзя: пока
 // контейнер удаляется, матч числится running, а recovery сбрасывает running
 // старше WORKER_TIMEOUT + 30s, то есть не раньше EXECUTOR_TIMEOUT + 50s
 const removeTimeout = 30 * time.Second

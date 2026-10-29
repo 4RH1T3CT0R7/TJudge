@@ -38,6 +38,7 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	assert.False(t, *hc.OomKillDisable, "oom-killer должен быть включён")
 	assert.Equal(t, int64(100000), hc.CPUPeriod)
 	assert.Equal(t, cfg.CPUQuota, hc.CPUQuota)
+	assert.Equal(t, int64(sandboxCPUShares), hc.CPUShares)
 	assert.False(t, hc.AutoRemove, "автоудаление off - сперва логи, потом cleanup")
 
 	// tmpfs /tmp писабельный, но без setuid и с лимитом
@@ -139,6 +140,7 @@ func TestProgramMounts_OnlyMatchPrograms(t *testing.T) {
 // builder жирнее матча (память/pids/tmpfs), но так же изолирован
 func TestBuildBuilderHostConfig_SandboxFlags(t *testing.T) {
 	hc := buildBuilderHostConfig("/host/build/xyz")
+	assert.Equal(t, int64(sandboxCPUShares), hc.CPUShares)
 
 	assert.Equal(t, []string{"ALL"}, []string(hc.CapDrop))
 	assert.Equal(t, "none", string(hc.NetworkMode))
