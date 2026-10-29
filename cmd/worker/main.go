@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -43,6 +44,16 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = log.Sync() }()
+
+	// реплики не знают друг о друге: потолок у каждой свой, по ядрам хоста
+	if slots := worker.MatchSlots(cfg.Executor.CPUQuota, runtime.NumCPU()); cfg.Worker.MaxWorkers > slots {
+		log.Warn("WORKER_MAX больше, чем матчей помещается в ядра хоста: снижен",
+			zap.Int("requested", cfg.Worker.MaxWorkers),
+			zap.Int("max_workers", slots),
+		)
+		cfg.Worker.MaxWorkers = slots
+		cfg.Worker.MinWorkers = min(cfg.Worker.MinWorkers, slots)
+	}
 
 	log.Info("Starting TJudge Worker",
 		zap.Int("min_workers", cfg.Worker.MinWorkers),
