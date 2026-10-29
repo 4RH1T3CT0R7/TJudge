@@ -81,7 +81,7 @@ export function LeaderboardTab({
 
       {/* Show animated podium for completed tournaments */}
       {isCompleted && rows.length >= 3 && (
-        <WinnersPodium entries={rows.map((r) => r.entry)} />
+        <WinnersPodium rows={rows} />
       )}
 
       {showCrossGame ? (
@@ -175,7 +175,7 @@ function GeneralLeaderboardTable({
                       </h3>
                       {mine && <YouMark />}
                     </div>
-                    {/* тот же срез, что у очков: доигранные итоги */}
+                    {/* тот же срез, что у суммы мест: доигранные итоги */}
                     <div className="flex items-center gap-3 text-sm text-gray-400">
                       <span>{row.games} игр</span>
                       <span>•</span>
@@ -343,34 +343,51 @@ export function CrossGameLeaderboardTable({
                   const gamePlace = gamePlaces[game.id];
                   const isLive = live.has(game.id);
                   const perTeam = progress.get(game.name)?.perTeam;
-                  // место в игре - то, что входит в сумму; очки игры мельче под ним
-                  const score = gameRating && (
-                    <span
-                      className={isLive ? 'text-gray-500' : 'text-gray-400'}
-                      title={`побед ${gameRating.wins}, поражений ${gameRating.losses}, ничьих ${gameRating.draws || 0}`}
-                    >
-                      <CountUp value={Math.round(gameRating.rating)} />
+                  // место в игре - то, что входит в сумму. не сыгравшая игру команда
+                  // стоит после последнего: место в сумме, но приглушено
+                  const missed = !gameRating || gameRating.total_games === 0;
+                  const placeMark = (
+                    <span className={`font-bold ${missed ? 'text-gray-500' : ''}`} title={missed ? 'Не играла: место после последнего' : 'Место в игре'}>
+                      {gamePlace ?? '–'}
                     </span>
                   );
+                  const score = gameRating && <CountUp value={Math.round(gameRating.rating)} />;
                   return (
                     <td key={game.id} className={`${cell} text-center font-mono tabular-nums`}>
                       {gamePlace === undefined && !gameRating ? (
                         <span className="text-gray-400">-</span>
                       ) : broadcast ? (
+                        // место и очки фиксированной ширины: столбец мест ровный при любой длине очков
                         <span className="block truncate">
-                          <span className="font-bold">{gamePlace ?? '–'}</span>
-                          {score && <span className="ml-[0.4em] text-[0.55em]">{score}</span>}
+                          <span className="inline-block w-[2.5ch] text-right">{placeMark}</span>{' '}
+                          <span className={`inline-block w-[9ch] truncate text-left align-baseline text-[max(14px,0.55em)] ${isLive ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {score}
+                          </span>
                         </span>
                       ) : (
                         <div>
-                          <span className="font-bold" title="Место в игре">{gamePlace ?? '–'}</span>
-                          <div className="text-xs">
-                            {score ?? <span className="text-gray-400">–</span>}
-                            {isLive && gameRating && (
-                              <span className="text-gray-400" title="Сыграно матчей из раунда">
+                          {placeMark}
+                          <div className="text-xs text-gray-400">
+                            {gameRating ? (
+                              <>
+                                <span className={isLive ? 'text-gray-500' : ''} title="Очки в игре">{score}</span>
                                 {' · '}
-                                {gameRating.total_games}/{perTeam || '?'}
-                              </span>
+                                {isLive ? (
+                                  <span title="Сыграно матчей из раунда">
+                                    {gameRating.total_games}/{perTeam || '?'}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
+                                    <span className="mx-0.5">/</span>
+                                    <span className="text-red-400" title="Поражений">{gameRating.losses}</span>
+                                    <span className="mx-0.5">/</span>
+                                    <span title="Ничьих">{gameRating.draws || 0}</span>
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              '–'
                             )}
                           </div>
                         </div>

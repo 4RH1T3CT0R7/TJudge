@@ -111,8 +111,7 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 // GetCrossGameLeaderboard - агрегированный рейтинг по всем играм турнира.
 // место команды - по сумме её мест в играх турнира (меньше лучше), место в игре -
 // по сумме очков её матчей. масштаб очков игр поэтому не важен, score_multiplier
-// не нужен
-// TODO: тяжёлый запрос, закэшировать бы
+// не нужен. кэшируется в сервисе турниров
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	// берутся все команды и программы в турнире со статистикой по каждой игре
 	// team_id используется для связи матчей (чтобы учитывать все версии программ команды)
@@ -231,8 +230,10 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			GROUP BY t.team_id
 		)
 		SELECT
-			ROW_NUMBER() OVER (
-				ORDER BY a.total_games > 0 DESC, COALESCE(tp.total_places, 0) ASC, a.total_wins DESC, a.earliest_upload ASC
+			-- RANK, а не ROW_NUMBER: при равных сумме мест и победах место общее,
+			-- и баннер «#1» получают все первые. порядок строк - по загрузке
+			RANK() OVER (
+				ORDER BY a.total_games > 0 DESC, COALESCE(tp.total_places, 0) ASC, a.total_wins DESC
 			) as rank,
 			a.team_id,
 			a.team_name,
@@ -246,7 +247,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			a.total_games
 		FROM aggregated a
 		LEFT JOIN team_places tp ON tp.team_id = a.team_id
-		ORDER BY rank
+		ORDER BY rank, a.earliest_upload ASC
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -363,7 +364,9 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			LEFT JOIN match_stats ms ON lp.team_id = ms.team_id
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY total_score DESC, wins DESC, earliest_upload ASC) as rank,
+			-- то же место, что входит в сумму мест общей таблицы: при равных очках
+			-- и победах общее, не сыгравшие игру - после всех сыгравших
+			RANK() OVER (ORDER BY total_games > 0 DESC, total_score DESC, wins DESC) as rank,
 			program_id,
 			program_name,
 			team_id,
@@ -374,7 +377,7 @@ func (r *TournamentRepository) GetLeaderboardByGameType(ctx context.Context, tou
 			draws,
 			total_games
 		FROM combined
-		ORDER BY total_score DESC, wins DESC, earliest_upload ASC
+		ORDER BY total_games > 0 DESC, total_score DESC, wins DESC, earliest_upload ASC
 		LIMIT $3
 	`
 

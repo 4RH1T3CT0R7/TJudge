@@ -128,8 +128,9 @@ const onClick = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => 
 // тройка игры; при равенстве очков и побед место общее, как в таблице
 function topOfGame(entries: CrossGameLeaderboardEntry[], game: Game) {
   const r = (e: CrossGameLeaderboardEntry) => e.game_ratings[game.id];
+  // без сыгранных матчей команда в игре после всех: в тройку не попадает
   const top = entries
-    .filter(r)
+    .filter((e) => r(e)?.total_games > 0)
     .sort((a, b) => r(b).rating - r(a).rating || r(b).wins - r(a).wins)
     .slice(0, 3);
   return top.map((e) => ({ e, place: top.findIndex((x) => r(x).rating === r(e).rating && r(x).wins === r(e).wins) + 1 }));

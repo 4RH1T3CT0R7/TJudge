@@ -618,6 +618,43 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard_PlaceSum() {
 	assert.Greater(s.T(), entries[1].TotalRating, entries[0].TotalRating, "у A очков больше, но сумма мест хуже")
 }
 
+// при равных сумме мест и победах место общее и в общей таблице, и в таблице
+// игры: «#1» получают обе команды
+func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard_SharedRank() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_cgs")
+	tournament := s.createTrackedTournament("TPCGS1", user.ID)
+	var games []*models.Game
+	for _, name := range []string{"cgs_one", "cgs_two", "cgs_draw"} {
+		g := s.createTrackedGame(name)
+		require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, g.ID))
+		games = append(games, g)
+	}
+	x := []*models.Program{s.createTeamEntrant(tournament.ID, games[0].ID, "TCGSX1")}
+	y := []*models.Program{s.createTeamEntrant(tournament.ID, games[0].ID, "TCGSY1")}
+	for _, g := range games[1:] {
+		x = append(x, s.createTrackedProgram(x[0].UserID, x[0].TeamID, &tournament.ID, &g.ID, x[0].Name+g.Name, 1))
+		y = append(y, s.createTrackedProgram(y[0].UserID, y[0].TeamID, &tournament.ID, &g.ID, y[0].Name+g.Name, 1))
+	}
+	// по победе в первых двух играх и ничья в третьей: суммы 1+2+1 = 2+1+1
+	s.completeMatch(tournament.ID, x[0].ID, y[0].ID, games[0].Name, 10, 5, 1)
+	s.completeMatch(tournament.ID, y[1].ID, x[1].ID, games[1].Name, 10, 5, 1)
+	s.completeMatch(tournament.ID, x[2].ID, y[2].ID, games[2].Name, 7, 7, 0)
+
+	entries, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), entries, 2)
+	for _, e := range entries {
+		assert.Equal(s.T(), 1, e.Rank)
+		assert.Equal(s.T(), 4, e.TotalPlaces)
+	}
+
+	draw, err := s.repo.GetLeaderboardByGameType(ctx, tournament.ID, games[2].Name, 10)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), draw, 2)
+	assert.Equal(s.T(), []int{1, 1}, []int{draw[0].Rank, draw[1].Rank})
+}
+
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 	user := s.createTrackedUser("tp_lpg")
 	tournament := s.createTrackedTournament("TPLPG1", user.ID)

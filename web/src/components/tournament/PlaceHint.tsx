@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-// Пояснение под таблицей: место решает сумма очков, подробности в справке.
+// Пояснение под таблицей: как считается место, подробности в справке.
 export function PlaceHint({ children }: { children: ReactNode }) {
   return (
     <p className="mt-3 font-mono text-xs text-gray-500">

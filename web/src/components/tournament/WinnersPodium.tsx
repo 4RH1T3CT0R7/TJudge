@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { CrossGameLeaderboardEntry } from '../../types';
+import type { StandingRow } from '../../utils/liveStandings';
 
-// Animated Podium Component for Tournament Winners
-export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[] }) {
+// Animated Podium Component for Tournament Winners: первые три строки таблицы,
+// место и сумма мест как в ней (места могут быть общими)
+export function WinnersPodium({ rows }: { rows: StandingRow[] }) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -11,16 +12,14 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
     return () => clearTimeout(timer);
   }, []);
 
-  if (entries.length < 3) return null;
+  if (rows.length < 3) return null;
 
-  const first = entries[0];
-  const second = entries[1];
-  const third = entries[2];
+  const [first, second, third] = rows;
 
   const podiumData = [
-    { entry: second, place: 2, height: 'h-28', delay: 'delay-300', bgGradient: 'from-gray-300 via-gray-200 to-gray-400', textColor: 'text-gray-700' },
-    { entry: first, place: 1, height: 'h-40', delay: 'delay-100', bgGradient: 'from-yellow-400 via-amber-300 to-yellow-500', textColor: 'text-amber-900' },
-    { entry: third, place: 3, height: 'h-20', delay: 'delay-500', bgGradient: 'from-orange-400 via-orange-300 to-orange-500', textColor: 'text-orange-900' },
+    { row: second, slot: 2, height: 'h-28', delay: 'delay-300', bgGradient: 'from-gray-300 via-gray-200 to-gray-400', textColor: 'text-gray-700' },
+    { row: first, slot: 1, height: 'h-40', delay: 'delay-100', bgGradient: 'from-yellow-400 via-amber-300 to-yellow-500', textColor: 'text-amber-900' },
+    { row: third, slot: 3, height: 'h-20', delay: 'delay-500', bgGradient: 'from-orange-400 via-orange-300 to-orange-500', textColor: 'text-orange-900' },
   ];
 
   return (
@@ -33,9 +32,9 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
       </div>
 
       <div className="flex items-end justify-center gap-2 sm:gap-4 max-w-2xl mx-auto">
-        {podiumData.map(({ entry, place, height, delay, bgGradient, textColor }) => (
+        {podiumData.map(({ row, slot, height, delay, bgGradient, textColor }) => (
           <div
-            key={place}
+            key={slot}
             className={`flex-1 min-w-0 max-w-48 transition-[transform,opacity] duration-(--dur-slow) ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
             } ${delay}`}
@@ -45,14 +44,14 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
               isVisible ? 'scale-100' : 'scale-0'
             } ${delay}`}>
               {/* на телефоне колонка узкая: название переносится, а не обрезается */}
-              <div className="font-bold text-sm sm:text-lg text-gray-100 line-clamp-3 break-words hyphens-auto sm:px-2" title={entry.team_name || entry.program_name}>
-                {entry.team_name || entry.program_name}
+              <div className="font-bold text-sm sm:text-lg text-gray-100 line-clamp-3 break-words hyphens-auto sm:px-2" title={row.entry.team_name || row.entry.program_name}>
+                {row.entry.team_name || row.entry.program_name}
               </div>
               <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-400 bg-clip-text text-transparent">
-                {entry.total_rating.toLocaleString()}
+                {row.placeSum}
               </div>
               <div className="text-xs text-gray-400">
-                {entry.total_wins}W / {entry.total_losses}L
+                сумма мест · {row.wins}W / {row.losses}L
               </div>
             </div>
 
@@ -64,7 +63,7 @@ export function WinnersPodium({ entries }: { entries: CrossGameLeaderboardEntry[
             >
               <div className="absolute inset-0 bg-white/20" />
               <div className={`absolute inset-x-0 bottom-0 flex items-center justify-center pb-2 ${textColor}`}>
-                <span className="text-3xl font-black">{place}</span>
+                <span className="text-3xl font-black">{row.place ?? slot}</span>
               </div>
               {/* Shine effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shine" />
