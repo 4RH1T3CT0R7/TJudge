@@ -36,6 +36,24 @@ tests:
               summary: "Открыто > 85% от max_connections Postgres"
               description: "При исчерпании Postgres отвечает too many clients: уменьшить DB_MAX_CONNECTIONS или реплики."
 
+  # Docker завис: воркеры заняты, матчи падают по таймауту воркера, успешных нет.
+  - interval: 1m
+    input_series:
+      - series: 'tjudge_active_workers{job="tjudge-worker",instance="w1"}'
+        values: '8x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="completed",game_type="pd"}'
+        values: '10x30'
+      - series: 'tjudge_matches_total{job="tjudge-worker",instance="w1",status="failed",game_type="pd"}'
+        values: '0+5x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: QueueStuck
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "Воркеры заняты, но ни один матч не завершился за 10 минут"
+              description: "Матчи не разбираются: проверь worker и Docker daemon."
+
   # Штатный большой раунд: очередь огромная, но матчи завершаются.
   - interval: 1m
     input_series:

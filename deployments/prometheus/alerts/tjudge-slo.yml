@@ -48,12 +48,14 @@ groups:
   - name: tjudge-queue
     rules:
       # Большая очередь на старте раунда - штатная ситуация, тревожно только
-      # когда воркеры заняты матчами, а завершений (включая failed) нет.
-      # WORKER_TIMEOUT 90s, так что 10 минут без завершений - зависание.
+      # когда воркеры заняты матчами, а успешных завершений нет. failed не в
+      # счёт: при зависшем docker воркер раз в WORKER_TIMEOUT пишет failed по
+      # таймауту, и алерт молчал бы. WORKER_TIMEOUT 90s, так что 10 минут без
+      # завершений - зависание.
       - alert: QueueStuck
         expr: |
           sum(tjudge_active_workers) > 0
-            unless on() sum(increase(tjudge_matches_total[10m])) > 0
+            unless on() sum(increase(tjudge_matches_total{status="completed"}[10m])) > 0
         for: 5m
         labels:
           severity: critical
