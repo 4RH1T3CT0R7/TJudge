@@ -205,18 +205,20 @@ test-load:
 # То же на сервере из ~/TJudge: go не нужен, тест идёт в контейнере golang и
 # ходит в api через nginx; админ - ADMIN_USER/ADMIN_PASSWORD из .env, как у status.
 # Турнир и пользователи e2e_load* остаются в БД. Образ golang удаляется, если его
-# не было до запуска. Прогон долгий: запускать в tmux, Ctrl-C останавливает и контейнер
+# не было до запуска. Прогон долгий: запускать в tmux. docker run идёт в фоне под
+# wait: go test в контейнере ловит SIGINT и не останавливает тест, а wait сразу
+# отдаёт Ctrl-C ловушке, и та удаляет контейнер
 test-load-server:
 	@set -a; . ./.env; set +a; \
-	[ -n "$$ADMIN_USER" ] || { echo "в .env нет ADMIN_USER и ADMIN_PASSWORD (учётка админа, как для make status)"; exit 1; }; \
+	[ -n "$$ADMIN_USER" ] && [ -n "$$ADMIN_PASSWORD" ] || { echo "в .env нет ADMIN_USER и ADMIN_PASSWORD (учётка админа, как для make status)"; exit 1; }; \
 	img=golang:1.26.10-alpine; had=$$(docker images -q $$img); \
 	trap 'docker rm -f tjudge-load >/dev/null 2>&1; [ -n "$$had" ] || docker rmi $$img >/dev/null 2>&1; exit 130' INT TERM HUP; \
 	E2E_ADMIN_USER="$$ADMIN_USER" E2E_ADMIN_PASSWORD="$$ADMIN_PASSWORD" \
 	docker run --rm --name tjudge-load --network host -v "$$PWD":/src -w /src/tests/e2e \
 		-e E2E_API_URL=$(or $(API_URL),http://127.0.0.1:8080) -e E2E_LOAD_TEAMS=$(or $(TEAMS),25) \
 		-e E2E_ADMIN_USER -e E2E_ADMIN_PASSWORD \
-		$$img go test -v -count=1 -timeout 3h -tags=e2e -run TestE2E_Load .; \
-	code=$$?; [ -n "$$had" ] || docker rmi $$img >/dev/null; exit $$code
+		$$img go test -v -count=1 -timeout 3h -tags=e2e -run TestE2E_Load . & \
+	wait $$!; code=$$?; [ -n "$$had" ] || docker rmi $$img >/dev/null; exit $$code
 
 # Security scan.
 # у github.com/docker/docker фикса в этом пути модуля нет, обе уязвимости про демон,

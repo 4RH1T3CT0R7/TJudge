@@ -10,6 +10,7 @@ const row = (team: string, place: number | null): StandingRow => ({
   place,
   placeSum: 0,
   gamePlaces: {},
+  missedGames: new Set(),
   wins: 0,
   losses: 0,
   games: 0,

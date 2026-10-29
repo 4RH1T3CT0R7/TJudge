@@ -576,7 +576,8 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 	return result, nil
 }
 
-// sandboxCPUShares - вес CPU песочниц матча и сборки, вдвое ниже обычного 1024.
+// sandboxCPUShares - вес CPU песочниц матча и сборки, ниже обычного 1024 (на
+// cgroup v2 docker переводит его в cpu.weight, тоже ниже стандартного 100).
 // при переподписке хоста они уступают dockerd, postgres и api, которых иначе
 // душили сотни ботов, а между собой делят ядра поровну. на неперегруженном
 // хосте вес ни на что не влияет: квоту CPUQuota он не меняет

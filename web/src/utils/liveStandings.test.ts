@@ -116,6 +116,8 @@ describe('honestStandings', () => {
       ['В', 3, 6],
     ]);
     expect(rows[2].gamePlaces).toEqual({ a: 3, b: 3 });
+    expect([...rows[2].missedGames]).toEqual(['b']);
+    expect(rows[0].missedGames.size).toBe(0);
   });
 
   it('частичные суммы идущей игры без прошлого итога в место не входят', () => {

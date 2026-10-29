@@ -79,6 +79,8 @@ export interface StandingRow {
   placeSum: number;
   /** Место в каждой учтённой игре: id игры -> место. Не сыгравшая игру команда - после последнего. */
   gamePlaces: Record<string, number>;
+  /** Игры, где место поставлено «после последнего»: команда в них не играла. */
+  missedGames: Set<string>;
   /** Победы, поражения и матчи доигранных итогов. */
   wins: number;
   losses: number;
@@ -114,6 +116,7 @@ export function honestStandings(
     index,
     placeSum: 0,
     gamePlaces: {} as Record<string, number>,
+    missedGames: new Set<string>(),
     wins: 0,
     losses: 0,
     games: 0,
@@ -140,7 +143,10 @@ export function honestStandings(
     });
     // не сыгравшая игру команда - после последнего: иначе пропуск игры уменьшал бы сумму
     for (const row of rows) {
-      row.gamePlaces[gameId] ??= played.length + 1;
+      if (row.gamePlaces[gameId] === undefined) {
+        row.gamePlaces[gameId] = played.length + 1;
+        row.missedGames.add(gameId);
+      }
       row.placeSum += row.gamePlaces[gameId];
     }
   }
@@ -158,6 +164,7 @@ export function honestStandings(
       place: s.games > 0 ? place : null,
       placeSum: s.placeSum,
       gamePlaces: s.gamePlaces,
+      missedGames: s.missedGames,
       wins: s.wins,
       losses: s.losses,
       games: s.games,

@@ -300,7 +300,7 @@ export function CrossGameLeaderboardTable({
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const { entry, place, placeSum, gamePlaces } = row;
+            const { entry, place, placeSum, gamePlaces, missedGames } = row;
             const key = teamKey(entry);
             const mine = !!myTeamId && entry.team_id === myTeamId;
             // сдвинутые строки при перестановке непрозрачны и едут поверх стоящих,
@@ -344,8 +344,9 @@ export function CrossGameLeaderboardTable({
                   const isLive = live.has(game.id);
                   const perTeam = progress.get(game.name)?.perTeam;
                   // место в игре - то, что входит в сумму. не сыгравшая игру команда
-                  // стоит после последнего: место в сумме, но приглушено
-                  const missed = !gameRating || gameRating.total_games === 0;
+                  // стоит после последнего: место в сумме, но приглушено. признак -
+                  // из того же итога, что и место: у идущей игры это прошлый раунд
+                  const missed = missedGames.has(game.id);
                   const placeMark = (
                     <span className={`font-bold ${missed ? 'text-gray-500' : ''}`} title={missed ? 'Не играла: место после последнего' : 'Место в игре'}>
                       {gamePlace ?? '–'}
