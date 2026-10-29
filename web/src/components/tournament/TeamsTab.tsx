@@ -135,8 +135,9 @@ export function TeamsTab({
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
+                    {/* плашки переносятся под название: в узкой карточке иначе от него остаётся «…» */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <h3 className="min-w-0 max-w-full font-semibold text-gray-100 truncate">{team.name}</h3>
                       {team.is_disqualified && (
                         <span className="shrink-0 rounded bg-red-600 px-2.5 py-1 text-sm font-bold text-white">Дисквалифицирована</span>
                       )}

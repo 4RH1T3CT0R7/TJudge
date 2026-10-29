@@ -57,7 +57,7 @@ import type { GameProgress } from '../utils/liveStandings';
 const TAB_IDS = ['info', 'leaderboard', 'matches', 'games', 'teams'] as const;
 const NO_PROGRESS = new Map<string, GameProgress>();
 const NO_LIVE = new Set<string>();
-const RUN_ROUND_LABELS = ['Запустить раунд', 'Запуск...', 'Раунд выполняется...', 'Нет активной игры'];
+const RUN_ROUND_LABELS = ['Запустить раунд', 'Запуск...', 'Раунд выполняется...', 'Нет активной игры'] as const;
 
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -516,10 +516,10 @@ export function TournamentDetail() {
 
       {myTeam?.is_disqualified && (
         <div className="mb-6 rounded-lg border-2 border-red-400 bg-red-700 px-5 py-4 text-white">
-          <p className="text-2xl font-bold">
+          <h2 className="text-2xl font-bold">
             <span aria-hidden="true">✕ </span>
             Команда дисквалифицирована
-          </p>
+          </h2>
           <p className="mt-1 text-red-50">В матчах и таблицах турнира команда не участвует. Вопросы — к организатору.</p>
         </div>
       )}
