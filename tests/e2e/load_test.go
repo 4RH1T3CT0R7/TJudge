@@ -41,7 +41,7 @@ func TestE2E_Load(t *testing.T) {
 	langs := slices.Sorted(maps.Keys(starters[starterGame(files[0])]))
 
 	// на сервере БД закрыта, поэтому вход готовым админом (make test-load-server).
-	// его токен живёт JWT_ACCESS_TTL (час): прогон дольше упадёт на опросе
+	// токен нужен до старта раундов: статистику матчей можно читать и без него
 	admin := NewTestClient()
 	if user := os.Getenv("E2E_ADMIN_USER"); user != "" {
 		field := "username"
@@ -133,7 +133,7 @@ func TestE2E_Load(t *testing.T) {
 	// или очищенной очереди отменяются и до want не доигрываются. дедлайна на
 	// весь раунд нет, его длина зависит от N и числа воркеров: тест падает,
 	// только если матчи перестали завершаться
-	done := 0
+	done := st.Completed + st.Failed
 	for last, moved := -1, time.Now(); st.Pending+st.Running > 0; {
 		time.Sleep(5 * time.Second)
 		getJSON(t, admin, "/api/v1/matches/statistics?tournament_id="+id, &st)
