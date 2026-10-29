@@ -30,6 +30,7 @@ import { InfoTab } from '../components/tournament/InfoTab';
 import { LeaderboardTab } from '../components/tournament/LeaderboardTab';
 import { TournamentInsights } from '../components/tournament/TournamentInsights';
 import { LiveStatusLine } from '../components/tournament/LiveStatusLine';
+import { StableLabel } from '../components/ui/StableLabel';
 import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
 import { MatchesTab } from '../components/tournament/MatchesTab';
@@ -56,6 +57,7 @@ import type { GameProgress } from '../utils/liveStandings';
 const TAB_IDS = ['info', 'leaderboard', 'matches', 'games', 'teams'] as const;
 const NO_PROGRESS = new Map<string, GameProgress>();
 const NO_LIVE = new Set<string>();
+const RUN_ROUND_LABELS = ['Запустить раунд', 'Запуск...', 'Раунд выполняется...', 'Нет активной игры'];
 
 export function TournamentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -423,7 +425,7 @@ export function TournamentDetail() {
                 className="btn btn-success"
               >
                 <PlayIcon />
-                {isStarting ? 'Запуск...' : 'Запустить турнир'}
+                <StableLabel options={['Запустить турнир', 'Запуск...']} value={isStarting ? 'Запуск...' : 'Запустить турнир'} />
               </button>
             )}
             {isAdmin && tournament.status === 'active' && (
@@ -438,20 +440,28 @@ export function TournamentDetail() {
                   className="btn btn-primary"
                 >
                   <PlayIcon />
-                  {runningGameId
-                    ? 'Запуск...'
-                    : activeGameHasRunningMatches
-                      ? 'Раунд выполняется...'
-                      : activeGame
-                        ? 'Запустить раунд'
-                        : 'Нет активной игры'}
+                  <StableLabel
+                    options={RUN_ROUND_LABELS}
+                    value={
+                      runningGameId
+                        ? 'Запуск...'
+                        : activeGameHasRunningMatches
+                          ? 'Раунд выполняется...'
+                          : activeGame
+                            ? 'Запустить раунд'
+                            : 'Нет активной игры'
+                    }
+                  />
                 </button>
                 <button
                   onClick={handleRetryFailedMatches}
                   disabled={isRetryingMatches}
                   className="btn btn-warning"
                 >
-                  {isRetryingMatches ? 'Перезапуск...' : 'Перезапустить неудачные'}
+                  <StableLabel
+                    options={['Перезапустить неудачные', 'Перезапуск...']}
+                    value={isRetryingMatches ? 'Перезапуск...' : 'Перезапустить неудачные'}
+                  />
                 </button>
               </>
             )}
@@ -464,7 +474,7 @@ export function TournamentDetail() {
                   className="btn btn-danger"
                 >
                   <CheckCircleIcon />
-                  {isCompleting ? 'Завершение...' : 'Завершить турнир'}
+                  <StableLabel options={['Завершить турнир', 'Завершение...']} value={isCompleting ? 'Завершение...' : 'Завершить турнир'} />
                 </button>
               </div>
             )}
