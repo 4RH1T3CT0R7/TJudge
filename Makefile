@@ -208,7 +208,7 @@ test-load:
 # не было до запуска
 test-load-server:
 	@set -a; . ./.env; set +a; \
-	img=golang:1.26.8-alpine; had=$$(docker images -q $$img); \
+	img=golang:1.26.10-alpine; had=$$(docker images -q $$img); \
 	E2E_ADMIN_USER="$$ADMIN_USER" E2E_ADMIN_PASSWORD="$$ADMIN_PASSWORD" \
 	docker run --rm --network host -v "$$PWD":/src -w /src/tests/e2e \
 		-e E2E_API_URL=$(or $(API_URL),http://127.0.0.1:8080) -e E2E_LOAD_TEAMS=$(or $(TEAMS),25) \
