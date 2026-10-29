@@ -124,7 +124,7 @@ export function TeamsTab({
                   myTeam?.id === team.id
                     ? 'border-2 border-primary-500 bg-primary-900/20'
                     : team.is_disqualified
-                    ? 'border border-red-800/50 opacity-60'
+                    ? 'border-2 border-red-600 bg-red-950/40'
                     : ''
                 }`}
               >
@@ -138,7 +138,7 @@ export function TeamsTab({
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-100 truncate">{team.name}</h3>
                       {team.is_disqualified && (
-                        <span className="px-2 py-0.5 bg-red-900/50 text-red-400 text-xs rounded">Дисквалификация</span>
+                        <span className="shrink-0 rounded bg-red-600 px-2.5 py-1 text-sm font-bold text-white">Дисквалифицирована</span>
                       )}
                       {myTeam?.id === team.id && (
                         <span className="badge badge-blue text-xs">Ваша</span>

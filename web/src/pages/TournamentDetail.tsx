@@ -504,6 +504,16 @@ export function TournamentDetail() {
         </div>
       )}
 
+      {myTeam?.is_disqualified && (
+        <div className="mb-6 rounded-lg border-2 border-red-400 bg-red-700 px-5 py-4 text-white">
+          <p className="text-2xl font-bold">
+            <span aria-hidden="true">✕ </span>
+            Команда дисквалифицирована
+          </p>
+          <p className="mt-1 text-red-50">В матчах и таблицах турнира команда не участвует. Вопросы — к организатору.</p>
+        </div>
+      )}
+
       {/* My Team Badge */}
       {myTeam && (
         <div className="alert alert-info mb-6">
