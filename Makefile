@@ -1,4 +1,4 @@
-.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list security vulncheck test-security test-load
+.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list security vulncheck test-security test-load test-load-server
 
 # Default target
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
 	@echo "  make test-load     - Load test: tournament of TEAMS teams (default 25)"
+	@echo "  make test-load-server - Same on the server via docker, admin from .env"
 	@echo "  make test-security - Run security tests against E2E_API_URL"
 	@echo "  make security      - gosec + vulncheck"
 	@echo "  make vulncheck     - govulncheck with allowlist (used by CI)"
@@ -200,6 +201,20 @@ test-e2e:
 # Нагрузочный турнир на TEAMS команд против запущенного стенда (api, worker, песочницы)
 test-load:
 	E2E_LOAD_TEAMS=$(or $(TEAMS),25) go test -v -count=1 -timeout 3h -tags=e2e -run TestE2E_Load ./tests/e2e/
+
+# То же на сервере из ~/TJudge: go не нужен, тест идёт в контейнере golang и
+# ходит в api через nginx; админ - ADMIN_USER/ADMIN_PASSWORD из .env, как у status.
+# Турнир и пользователи e2e_load* остаются в БД. Образ golang удаляется, если его
+# не было до запуска
+test-load-server:
+	@set -a; . ./.env; set +a; \
+	img=golang:1.26.8-alpine; had=$$(docker images -q $$img); \
+	E2E_ADMIN_USER="$$ADMIN_USER" E2E_ADMIN_PASSWORD="$$ADMIN_PASSWORD" \
+	docker run --rm --network host -v "$$PWD":/src -w /src/tests/e2e \
+		-e E2E_API_URL=$(or $(API_URL),http://127.0.0.1:8080) -e E2E_LOAD_TEAMS=$(or $(TEAMS),25) \
+		-e E2E_ADMIN_USER -e E2E_ADMIN_PASSWORD \
+		$$img go test -v -count=1 -timeout 3h -tags=e2e -run TestE2E_Load .; \
+	code=$$?; [ -n "$$had" ] || docker rmi $$img >/dev/null; exit $$code
 
 # Security scan.
 # у github.com/docker/docker фикса в этом пути модуля нет, обе уязвимости про демон,

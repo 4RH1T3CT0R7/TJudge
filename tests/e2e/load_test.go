@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +40,25 @@ func TestE2E_Load(t *testing.T) {
 	}
 	langs := slices.Sorted(maps.Keys(starters[starterGame(files[0])]))
 
+	// на сервере БД закрыта, поэтому вход готовым админом (make test-load-server).
+	// его токен живёт JWT_ACCESS_TTL (час): прогон дольше упадёт на опросе
 	admin := NewTestClient()
-	registerAndAuthAsAdmin(t, admin, "load_admin")
+	if user := os.Getenv("E2E_ADMIN_USER"); user != "" {
+		field := "username"
+		if strings.Contains(user, "@") {
+			field = "email"
+		}
+		resp, err := admin.doRequest("POST", "/api/v1/auth/login", map[string]string{field: user, "password": os.Getenv("E2E_ADMIN_PASSWORD")})
+		require.NoError(t, err)
+		if resp.StatusCode != http.StatusOK {
+			requireStatus(t, resp, http.StatusOK)
+		}
+		var auth AuthResponse
+		require.NoError(t, admin.parseResponse(resp, &auth))
+		admin.SetToken(auth.AccessToken)
+	} else {
+		registerAndAuthAsAdmin(t, admin, "load_admin")
+	}
 
 	// createTournamentHelper ограничивает турнир 20 командами
 	resp, err := admin.doRequest("POST", "/api/v1/tournaments", CreateTournamentRequest{
