@@ -575,10 +575,17 @@ func (e *Executor) parseResult(exitCode int64, stdout, stderr string) (*models.M
 	return result, nil
 }
 
+// removeTimeout - сколько ждать удаления контейнера. на перегруженном демоне
+// (сотни параллельных матчей) удаление шло дольше 10 с, запрос отваливался, и
+// контейнер оставался висеть до рестарта воркера. дольше 30 с нельзя: пока
+// контейнер удаляется, матч числится running, а recovery сбрасывает running
+// старше WORKER_TIMEOUT + 30s, то есть не раньше EXECUTOR_TIMEOUT + 50s
+const removeTimeout = 30 * time.Second
+
 // cleanup force-удаляет контейнер (живой убивается сразу, без SIGTERM и
 // 10с ожидания stop), ошибку только логирует
 func (e *Executor) cleanup(containerID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), removeTimeout)
 	defer cancel()
 
 	err := e.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{

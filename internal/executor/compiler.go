@@ -358,7 +358,7 @@ func (c *Compiler) runBuilder(ctx context.Context, cmd []string, buildDir string
 	}
 	containerID := resp.ID
 	defer func() {
-		removeCtx, removeCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		removeCtx, removeCancel := context.WithTimeout(context.Background(), removeTimeout)
 		defer removeCancel()
 		_ = c.dockerClient.ContainerRemove(removeCtx, containerID, container.RemoveOptions{Force: true})
 	}()
