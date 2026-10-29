@@ -22,7 +22,7 @@ import { getGameConfig } from '../utils/gameConfig';
 import type { MatchResultPayload } from '../types/ws';
 import type { CrossGameLeaderboardEntry, Game } from '../types';
 
-const DEFAULT_ROTATE_S = 15;
+const DEFAULT_ROTATE_S = 7;
 const BANNER_MS = 20_000;
 // игры раунда доигрываются с шагом в несколько секунд: итоги встают в очередь
 const BANNER_QUEUED_MS = 8000;
@@ -137,7 +137,7 @@ function topOfGame(entries: CrossGameLeaderboardEntry[], game: Game) {
 
 // Табло для проектора организатора: без шапки приложения, полноэкранный режим
 // по F (выход по Esc), экран не гаснет. Строки таблицы листаются страницами,
-// первые три закреплены; ←/→ листают, пробел ставит на паузу.
+// первые три закреплены; ←/→ и кнопки ‹ › листают, пробел ставит на паузу.
 export function TournamentScreen() {
   const { id = '' } = useParams<{ id: string }>();
   const [params, setParams] = useSearchParams();
@@ -229,6 +229,9 @@ export function TournamentScreen() {
   const page = pageRaw % pages;
   const [paused, setPaused] = useState(false);
 
+  const nextPage = useCallback(() => setPage((p) => (p % pages + 1) % pages), [pages]);
+  const prevPage = useCallback(() => setPage((p) => (p % pages - 1 + pages) % pages), [pages]);
+
   useEffect(() => {
     if (paused || pages <= 1 || ceremony) return;
     const t = setInterval(() => setPage((p) => (p + 1) % pages), rotateS * 1000);
@@ -283,8 +286,8 @@ export function TournamentScreen() {
         }
         return;
       }
-      if (e.key === 'ArrowRight') setPage((p) => (p % pages + 1) % pages);
-      else if (e.key === 'ArrowLeft') setPage((p) => (p % pages - 1 + pages) % pages);
+      if (e.key === 'ArrowRight') nextPage();
+      else if (e.key === 'ArrowLeft') prevPage();
       else if (e.key === ' ') {
         e.preventDefault();
         setPaused((v) => !v);
@@ -292,7 +295,7 @@ export function TournamentScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ceremony, pages, placed.length, setCeremony, toggleFullscreen]);
+  }, [ceremony, nextPage, prevPage, placed.length, setCeremony, toggleFullscreen]);
 
   const tournament = tournamentQuery.data;
   if (tournamentQuery.isError) {
@@ -366,9 +369,17 @@ export function TournamentScreen() {
             {fullscreen.active ? 'Выйти из полного экрана' : 'На весь экран'}
           </button>
           {!ceremony && pages > 1 && (
-            <button type="button" onClick={onClick(() => setPaused((v) => !v))} aria-pressed={paused} className="btn btn-sm btn-secondary">
-              Пауза
-            </button>
+            <>
+              <button type="button" onClick={onClick(prevPage)} aria-label="Предыдущая страница" className="btn btn-sm btn-secondary">
+                ‹
+              </button>
+              <button type="button" onClick={onClick(() => setPaused((v) => !v))} aria-pressed={paused} className="btn btn-sm btn-secondary">
+                Пауза
+              </button>
+              <button type="button" onClick={onClick(nextPage)} aria-label="Следующая страница" className="btn btn-sm btn-secondary">
+                ›
+              </button>
+            </>
           )}
           {isAdmin && (
             <button type="button" onClick={onClick(() => setCeremony(!ceremony))} className="btn btn-sm btn-secondary">
@@ -434,7 +445,11 @@ export function TournamentScreen() {
               <p className="mb-[0.6vh] h-[1.5em] truncate text-gray-400">
                 {pages > 1 && (
                   <span className="text-gray-300">
-                    стр. {page + 1}/{pages}{paused ? ' · пауза' : ''}
+                    стр. {page + 1}/{pages}{' '}
+                    <span aria-hidden="true" className="text-primary-400">
+                      {Array.from({ length: pages }, (_, i) => (i === page ? '●' : '○')).join('')}
+                    </span>
+                    {paused ? ' · пауза' : ''}
                   </span>
                 )}
                 {pages > 1 && liveGames.size > 0 && ' · '}
