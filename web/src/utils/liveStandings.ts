@@ -1,8 +1,9 @@
-// Честный live: место - по сумме последних доигранных итогов каждой игры.
-// Частичная сумма идущей игры зависит от того, чьи матчи очередь сыграла раньше,
-// и дала бы ложные смены лидера. Поэтому пока игра идёт, в место входит её
-// прошлый итог (если страница его застала), а новые очки видны в таблице с
-// пометкой «предварительно». Объяснение для участников - в /help#place.
+// Место в турнире - по сумме мест команды в играх, меньше лучше. Честный live:
+// места в игре считаются по её последнему доигранному итогу. Частичные очки
+// идущей игры зависят от того, чьи матчи очередь сыграла раньше, и дали бы
+// ложные смены лидера. Поэтому пока игра идёт, в место входит её прошлый итог
+// (если страница его застала), а новые очки видны в таблице с пометкой
+// «предварительно». Объяснение для участников - в /help#place.
 import type { CrossGameLeaderboardEntry, Game, GameRatingInfo, MatchRound } from '../types';
 
 export interface GameProgress {
@@ -74,8 +75,11 @@ export interface StandingRow {
   entry: CrossGameLeaderboardEntry;
   /** Место по доигранным итогам; null - у команды нет ни одного доигранного матча. */
   place: number | null;
-  /** Сумма, победы, поражения и матчи доигранных итогов: то, по чему место. */
-  total: number;
+  /** Сумма мест в играх по доигранным итогам, меньше лучше: по ней место. */
+  placeSum: number;
+  /** Место в каждой учтённой игре: id игры -> место. Не сыгравшая игру команда - после последнего. */
+  gamePlaces: Record<string, number>;
+  /** Победы, поражения и матчи доигранных итогов. */
   wins: number;
   losses: number;
   games: number;
@@ -105,28 +109,59 @@ export function honestStandings(
   live: Set<string>,
   settled: Settled = new Map()
 ): StandingRow[] {
-  const scored = entries.map((entry, index) => {
-    const row = { entry, index, total: 0, wins: 0, losses: 0, games: 0 };
-    for (const [gameId, current] of Object.entries(entry.game_ratings)) {
-      const r = live.has(gameId) ? settled.get(gameId)?.get(teamKey(entry)) : current;
-      if (!r) continue;
-      row.total += r.rating;
+  const rows = entries.map((entry, index) => ({
+    entry,
+    index,
+    placeSum: 0,
+    gamePlaces: {} as Record<string, number>,
+    wins: 0,
+    losses: 0,
+    games: 0,
+  }));
+  // итог игры, по которому место: у идущей - прошлый доигранный, если он был
+  const result = (e: CrossGameLeaderboardEntry, gameId: string) => {
+    const r = live.has(gameId) ? settled.get(gameId)?.get(teamKey(e)) : e.game_ratings[gameId];
+    return r && r.total_games > 0 ? r : undefined;
+  };
+  for (const gameId of new Set(entries.flatMap((e) => Object.keys(e.game_ratings)))) {
+    const played = rows.flatMap((row) => {
+      const r = result(row.entry, gameId);
+      return r ? [{ row, r }] : [];
+    });
+    // игра без доигранного итога в место не входит
+    if (played.length === 0) continue;
+    played.sort((a, b) => b.r.rating - a.r.rating || b.r.wins - a.r.wins);
+    played.forEach(({ row, r }, i) => {
+      const prev = played[i - 1];
+      row.gamePlaces[gameId] = prev && prev.r.rating === r.rating && prev.r.wins === r.wins ? prev.row.gamePlaces[gameId] : i + 1;
       row.wins += r.wins;
       row.losses += r.losses;
       row.games += r.total_games;
+    });
+    // не сыгравшая игру команда - после последнего: иначе пропуск игры уменьшал бы сумму
+    for (const row of rows) {
+      row.gamePlaces[gameId] ??= played.length + 1;
+      row.placeSum += row.gamePlaces[gameId];
     }
-    return row;
-  });
-  // при равенстве суммы и побед место общее, а порядок - как у сервера:
-  // иначе строки менялись бы местами от частичных сумм
-  scored.sort(
-    (a, b) => Number(b.games > 0) - Number(a.games > 0) || b.total - a.total || b.wins - a.wins || a.index - b.index
+  }
+  // при равенстве суммы мест и побед место общее, а порядок - как у сервера:
+  // иначе строки менялись бы местами от частичных итогов
+  rows.sort(
+    (a, b) => Number(b.games > 0) - Number(a.games > 0) || a.placeSum - b.placeSum || b.wins - a.wins || a.index - b.index
   );
   let place = 0;
-  return scored.map((s, i) => {
-    const prev = scored[i - 1];
-    if (!prev || prev.total !== s.total || prev.wins !== s.wins) place = i + 1;
-    return { entry: s.entry, place: s.games > 0 ? place : null, total: s.total, wins: s.wins, losses: s.losses, games: s.games };
+  return rows.map((s, i) => {
+    const prev = rows[i - 1];
+    if (!prev || prev.placeSum !== s.placeSum || prev.wins !== s.wins) place = i + 1;
+    return {
+      entry: s.entry,
+      place: s.games > 0 ? place : null,
+      placeSum: s.placeSum,
+      gamePlaces: s.gamePlaces,
+      wins: s.wins,
+      losses: s.losses,
+      games: s.games,
+    };
   });
 }
 

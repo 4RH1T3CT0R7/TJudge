@@ -109,7 +109,9 @@ func (r *TournamentRepository) GetLeaderboard(ctx context.Context, tournamentID 
 }
 
 // GetCrossGameLeaderboard - агрегированный рейтинг по всем играм турнира.
-// рейтинг команды это сумма очков из всех матчей, очки масштабируются на score_multiplier игры
+// место команды - по сумме её мест в играх турнира (меньше лучше), место в игре -
+// по сумме очков её матчей. масштаб очков игр поэтому не важен, score_multiplier
+// не нужен
 // TODO: тяжёлый запрос, закэшировать бы
 func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	// берутся все команды и программы в турнире со статистикой по каждой игре
@@ -149,7 +151,6 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 		),
 		match_stats AS (
 			-- Статистика матчей для каждой программы (любой версии)
-			-- Очки умножаются на score_multiplier игры для балансировки между играми
 			SELECT
 				p.team_id,
 				g.id as game_id,
@@ -158,7 +159,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				COUNT(*) FILTER (WHERE s.lost) as losses,
 				COUNT(*) FILTER (WHERE s.draw) as draws,
 				COUNT(*) as total_games,
-				COALESCE(SUM(s.score * COALESCE(g.score_multiplier, 1.0)), 0)::bigint as total_score
+				COALESCE(SUM(s.score), 0)::bigint as total_score
 			FROM match_sides s
 			JOIN programs p ON p.id = s.program_id AND p.team_id IS NOT NULL
 			JOIN games g ON s.game_type = g.name
@@ -207,20 +208,45 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 				MIN(program_created_at) as earliest_upload
 			FROM game_stats
 			GROUP BY team_id
+		),
+		game_places AS (
+			-- место в игре среди сыгравших её команд турнира: по очкам, при
+			-- равных очках и победах место общее
+			SELECT team_id, game_id,
+				RANK() OVER (PARTITION BY game_id ORDER BY total_score DESC, wins DESC) as place
+			FROM game_stats
+			WHERE total_games > 0
+		),
+		played_games AS (
+			SELECT game_id, COUNT(*) as teams FROM game_places GROUP BY game_id
+		),
+		team_places AS (
+			-- общий рейтинг - сумма мест по играм, меньше лучше. не сыгравшая
+			-- игру команда получает место после последнего: иначе пропуск игры
+			-- уменьшал бы сумму
+			SELECT t.team_id, SUM(COALESCE(gp.place, pg.teams + 1))::int as total_places
+			FROM (SELECT DISTINCT team_id FROM game_stats) t
+			CROSS JOIN played_games pg
+			LEFT JOIN game_places gp ON gp.team_id = t.team_id AND gp.game_id = pg.game_id
+			GROUP BY t.team_id
 		)
 		SELECT
-			ROW_NUMBER() OVER (ORDER BY total_rating DESC, total_wins DESC, earliest_upload ASC) as rank,
-			team_id,
-			team_name,
-			program_id,
-			program_name,
-			game_ratings,
-			total_rating,
-			total_wins,
-			total_losses,
-			total_games
-		FROM aggregated
-		ORDER BY total_rating DESC, total_wins DESC, earliest_upload ASC
+			ROW_NUMBER() OVER (
+				ORDER BY a.total_games > 0 DESC, COALESCE(tp.total_places, 0) ASC, a.total_wins DESC, a.earliest_upload ASC
+			) as rank,
+			a.team_id,
+			a.team_name,
+			a.program_id,
+			a.program_name,
+			a.game_ratings,
+			a.total_rating,
+			COALESCE(tp.total_places, 0),
+			a.total_wins,
+			a.total_losses,
+			a.total_games
+		FROM aggregated a
+		LEFT JOIN team_places tp ON tp.team_id = a.team_id
+		ORDER BY rank
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, tournamentID)
@@ -242,6 +268,7 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			&entry.ProgramName,
 			&gameRatingsJSON,
 			&entry.TotalRating,
+			&entry.TotalPlaces,
 			&entry.TotalWins,
 			&entry.TotalLosses,
 			&entry.TotalGames,

@@ -568,10 +568,54 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard() {
 	// две записи - по одной на команду
 	assert.Len(s.T(), entries, 2)
 
-	// команда с большим счётом должна быть выше
+	// команда с большим счётом первая в игре и в общем рейтинге
 	if len(entries) >= 2 {
-		assert.GreaterOrEqual(s.T(), entries[0].TotalRating, entries[1].TotalRating)
+		assert.Equal(s.T(), team.ID, *entries[0].TeamID)
+		assert.Equal(s.T(), []int{1, 2}, []int{entries[0].TotalPlaces, entries[1].TotalPlaces})
 	}
+}
+
+// общий рейтинг - сумма мест в играх, а не очков: крупные очки одной игры не
+// перевешивают остальные. не сыгравшая игру команда получает место после последнего
+func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard_PlaceSum() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_cgp")
+	tournament := s.createTrackedTournament("TPCGP1", user.ID)
+	big, small := s.createTrackedGame("cgp_big"), s.createTrackedGame("cgp_small")
+	for _, g := range []*models.Game{big, small} {
+		require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, g.ID))
+	}
+	// A, B, C играют обе игры, D только большую
+	aBig := s.createTeamEntrant(tournament.ID, big.ID, "TCGPA1")
+	bBig := s.createTeamEntrant(tournament.ID, big.ID, "TCGPB1")
+	cBig := s.createTeamEntrant(tournament.ID, big.ID, "TCGPC1")
+	dBig := s.createTeamEntrant(tournament.ID, big.ID, "TCGPD1")
+	inSmall := func(p *models.Program) *models.Program {
+		return s.createTrackedProgram(p.UserID, p.TeamID, &tournament.ID, &small.ID, p.Name+"S", 1)
+	}
+	aSmall, bSmall, cSmall := inSmall(aBig), inSmall(bBig), inSmall(cBig)
+
+	// большая: A 1000, B 900, C 10, D 0 - места 1, 2, 3, 4
+	s.completeMatch(tournament.ID, aBig.ID, bBig.ID, big.Name, 1000, 900, 1)
+	s.completeMatch(tournament.ID, cBig.ID, dBig.ID, big.Name, 10, 0, 1)
+	// малая: B 9, C 5, A 1 - места 1, 2, 3; D не играла - 4
+	s.completeMatch(tournament.ID, bSmall.ID, cSmall.ID, small.Name, 9, 5, 1)
+	s.completeMatch(tournament.ID, aSmall.ID, cSmall.ID, small.Name, 1, 0, 1)
+
+	entries, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), entries, 4)
+	var teams []uuid.UUID
+	var places, ranks []int
+	for _, e := range entries {
+		teams = append(teams, *e.TeamID)
+		places = append(places, e.TotalPlaces)
+		ranks = append(ranks, e.Rank)
+	}
+	assert.Equal(s.T(), []uuid.UUID{*bBig.TeamID, *aBig.TeamID, *cBig.TeamID, *dBig.TeamID}, teams)
+	assert.Equal(s.T(), []int{3, 4, 5, 8}, places)
+	assert.Equal(s.T(), []int{1, 2, 3, 4}, ranks)
+	assert.Greater(s.T(), entries[1].TotalRating, entries[0].TotalRating, "у A очков больше, но сумма мест хуже")
 }
 
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {

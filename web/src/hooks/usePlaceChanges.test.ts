@@ -8,7 +8,8 @@ import type { CrossGameLeaderboardEntry } from '../types';
 const row = (team: string, place: number | null): StandingRow => ({
   entry: { team_id: team, team_name: team, program_id: team } as CrossGameLeaderboardEntry,
   place,
-  total: 0,
+  placeSum: 0,
+  gamePlaces: {},
   wins: 0,
   losses: 0,
   games: 0,

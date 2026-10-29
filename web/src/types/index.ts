@@ -187,6 +187,8 @@ export interface CrossGameLeaderboardEntry {
   program_name: string;
   game_ratings: Record<string, GameRatingInfo>;
   total_rating: number;
+  /** Сумма мест в играх турнира, меньше лучше: по ней место. */
+  total_places: number;
   total_wins: number;
   total_losses: number;
   total_games: number;

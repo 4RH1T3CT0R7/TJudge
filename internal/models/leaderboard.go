@@ -37,6 +37,7 @@ type CrossGameLeaderboardEntry struct {
 	ProgramName string                    `json:"program_name"`
 	GameRatings map[string]GameRatingInfo `json:"game_ratings"` // game_id -> rating info
 	TotalRating int                       `json:"total_rating"`
+	TotalPlaces int                       `json:"total_places"` // сумма мест по играм, по ней место
 	TotalWins   int                       `json:"total_wins"`
 	TotalLosses int                       `json:"total_losses"`
 	TotalGames  int                       `json:"total_games"`

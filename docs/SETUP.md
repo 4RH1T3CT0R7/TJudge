@@ -74,7 +74,7 @@ IP клиента для лимитов, аудита и логов опреде
 PostgreSQL 15. Основные таблицы (полная схема — в `migrations/`):
 
 - `users` — аккаунты (username, email, password_hash, role, password_changed_at).
-- `games` — игры (name, display_name, rules в Markdown, score_multiplier).
+- `games` — игры (name, display_name, rules в Markdown; score_multiplier не используется: общий рейтинг считается по сумме мест).
 - `tournaments` — турниры (status: pending/active/completed, optimistic lock через `version`).
 - `tournament_games` — связь турнир-игра (round_status, `config` JSONB, `auto_round_*`).
 - `tournament_participants` — программы в турнире (ELO rating, wins/losses/draws).

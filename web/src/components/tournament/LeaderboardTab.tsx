@@ -92,8 +92,8 @@ export function LeaderboardTab({
       {rows.length > 0 && (
         <PlaceHint>
           {live.size > 0
-            ? 'место и сумма — по последним итогам игр: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
-            : 'место — по сумме очков всех игр с множителями, а не по числу побед'}
+            ? 'место — по сумме мест в последних итогах игр: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
+            : 'место — по сумме мест в играх, чем меньше, тем выше; место в игре — по её очкам'}
         </PlaceHint>
       )}
     </div>
@@ -124,7 +124,7 @@ const rowTone = (place: number | null) =>
       : place === 3 ? 'leaderboard-row-bronze'
         : '';
 
-// General Leaderboard Table: место, команда, сумма доигранных игр и полоса
+// General Leaderboard Table: место, команда, сумма мест и полоса (у лучшей суммы полная)
 function GeneralLeaderboardTable({
   rows,
   changes,
@@ -141,12 +141,14 @@ function GeneralLeaderboardTable({
     );
   }
 
-  const maxScore = Math.max(...rows.map(r => r.total), 1);
+  const sums = rows.filter((r) => r.place !== null).map((r) => r.placeSum);
+  const best = Math.min(...sums);
+  const worst = Math.max(...sums);
 
   return (
     <div className="space-y-2">
       {rows.map((row) => {
-        const { entry, place, total } = row;
+        const { entry, place, placeSum } = row;
         const key = teamKey(entry);
         const mine = !!myTeamId && entry.team_id === myTeamId;
         return (
@@ -189,10 +191,10 @@ function GeneralLeaderboardTable({
                       place === 3 ? 'text-orange-500' :
                       'text-primary-400'
                     }`}>
-                      {place === null ? '–' : <CountUp value={total} />}
+                      {place === null ? '–' : <CountUp value={placeSum} />}
                     </div>
                     <div className="text-xs text-gray-400">
-                      очков
+                      сумма мест
                     </div>
                   </div>
                 </div>
@@ -205,7 +207,7 @@ function GeneralLeaderboardTable({
                       place === 3 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
                       'bg-gradient-to-r from-primary-400 to-primary-500'
                     }`}
-                    style={{ width: `${(Math.max(total, 0) / maxScore) * 100}%` }}
+                    style={{ width: `${place === null ? 0 : ((worst - placeSum + 1) / (worst - best + 1)) * 100}%` }}
                   />
                 </div>
               </div>
@@ -293,12 +295,12 @@ export function CrossGameLeaderboardTable({
                 </th>
               );
             })}
-            <th className={`${head} text-right ${broadcast ? 'w-[11%]' : ''}`}>Сумма</th>
+            <th className={`${head} text-right ${broadcast ? 'w-[11%]' : ''}`}>Сумма мест</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const { entry, place, total } = row;
+            const { entry, place, placeSum, gamePlaces } = row;
             const key = teamKey(entry);
             const mine = !!myTeamId && entry.team_id === myTeamId;
             // сдвинутые строки при перестановке непрозрачны и едут поверх стоящих,
@@ -338,42 +340,47 @@ export function CrossGameLeaderboardTable({
                 </td>
                 {games.map((game) => {
                   const gameRating = entry.game_ratings[game.id];
+                  const gamePlace = gamePlaces[game.id];
                   const isLive = live.has(game.id);
                   const perTeam = progress.get(game.name)?.perTeam;
+                  // место в игре - то, что входит в сумму; очки игры мельче под ним
+                  const score = gameRating && (
+                    <span
+                      className={isLive ? 'text-gray-500' : 'text-gray-400'}
+                      title={`побед ${gameRating.wins}, поражений ${gameRating.losses}, ничьих ${gameRating.draws || 0}`}
+                    >
+                      <CountUp value={Math.round(gameRating.rating)} />
+                    </span>
+                  );
                   return (
                     <td key={game.id} className={`${cell} text-center font-mono tabular-nums`}>
-                      {gameRating ? (
-                        <div>
-                          <span className={isLive ? 'text-gray-400' : broadcast ? '' : 'font-bold'}>
-                            <CountUp value={Math.round(gameRating.rating)} />
-                          </span>
-                          {!broadcast && (
-                            <div className="text-xs text-gray-400">
-                              {isLive ? (
-                                <span title="Сыграно матчей из раунда">
-                                  {gameRating.total_games}/{perTeam || '?'}
-                                </span>
-                              ) : (
-                                <>
-                                  <span className="text-emerald-500" title="Побед">{gameRating.wins}</span>
-                                  <span className="mx-0.5">/</span>
-                                  <span className="text-red-400" title="Поражений">{gameRating.losses}</span>
-                                  <span className="mx-0.5">/</span>
-                                  <span title="Ничьих">{gameRating.draws || 0}</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
+                      {gamePlace === undefined && !gameRating ? (
                         <span className="text-gray-400">-</span>
+                      ) : broadcast ? (
+                        <span className="block truncate">
+                          <span className="font-bold">{gamePlace ?? '–'}</span>
+                          {score && <span className="ml-[0.4em] text-[0.55em]">{score}</span>}
+                        </span>
+                      ) : (
+                        <div>
+                          <span className="font-bold" title="Место в игре">{gamePlace ?? '–'}</span>
+                          <div className="text-xs">
+                            {score ?? <span className="text-gray-400">–</span>}
+                            {isLive && gameRating && (
+                              <span className="text-gray-400" title="Сыграно матчей из раунда">
+                                {' · '}
+                                {gameRating.total_games}/{perTeam || '?'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </td>
                   );
                 })}
                 <td className={`${cell} text-right`}>
                   <span className={`font-mono font-bold tabular-nums text-primary-400 ${broadcast ? '' : 'text-lg'}`}>
-                    {place === null ? '–' : <CountUp value={total} />}
+                    {place === null ? '–' : <CountUp value={placeSum} />}
                   </span>
                 </td>
               </m.tr>

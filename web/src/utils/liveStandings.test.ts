@@ -34,11 +34,11 @@ const entry = (name: string, rank: number, games: Record<string, [number, number
     ])
   );
   const sum = Object.values(games).reduce((s, [r]) => s + r, 0);
-  return { rank, team_id: name, team_name: name, program_id: name, program_name: name, game_ratings, total_rating: sum, total_wins: 0, total_losses: 0, total_games: 0 };
+  return { rank, team_id: name, team_name: name, program_id: name, program_name: name, game_ratings, total_rating: sum, total_places: 0, total_wins: 0, total_losses: 0, total_games: 0 };
 };
 
-const places = (rows: { entry: CrossGameLeaderboardEntry; place: number | null; total: number }[]) =>
-  rows.map((r) => [r.entry.team_name, r.place, r.total]);
+const places = (rows: { entry: CrossGameLeaderboardEntry; place: number | null; placeSum: number }[]) =>
+  rows.map((r) => [r.entry.team_name, r.place, r.placeSum]);
 
 describe('gameProgress', () => {
   it('берёт последний раунд игры и считает матчи команды', () => {
@@ -74,34 +74,76 @@ describe('honestStandings', () => {
     entry('Гамма', 3, { b: [50, 0, 2] }),
   ];
 
-  it('без идущих игр держит порядок сервера', () => {
-    expect(honestStandings(entries, new Set()).map((r) => r.place)).toEqual([1, 2, 3]);
+  it('без идущих игр: сумма мест, при равной сумме выше та, у кого больше побед', () => {
+    // a: Альфа 1, Бета 2, Гамма не играла - 3; b: Бета 1, Альфа 2, Гамма 3
+    expect(places(honestStandings(entries, new Set()))).toEqual([
+      ['Бета', 1, 3],
+      ['Альфа', 2, 3],
+      ['Гамма', 3, 6],
+    ]);
+  });
+
+  it('место - по сумме мест в играх, а не по очкам: 2+2+2 выше 5+1+1', () => {
+    // в игре a очки на порядки крупнее, по сумме очков первой была бы П1
+    const rows = honestStandings(
+      [
+        entry('П1', 1, { a: [300000, 0, 4], b: [10, 0, 4], c: [1, 0, 4] }),
+        entry('Ровный', 2, { a: [200000, 0, 4], b: [80, 0, 4], c: [8, 0, 4] }),
+        entry('П2', 3, { a: [100000, 0, 4], b: [30, 0, 4], c: [3, 0, 4] }),
+        entry('П3', 4, { a: [50000, 0, 4], b: [20, 0, 4], c: [2, 0, 4] }),
+        entry('Рывок', 5, { a: [10, 0, 4], b: [90, 0, 4], c: [9, 0, 4] }),
+      ],
+      new Set()
+    );
+    expect(places(rows)).toEqual([
+      ['Ровный', 1, 6],
+      ['Рывок', 2, 7],
+      ['П2', 3, 9],
+      ['П1', 4, 11],
+      ['П3', 5, 12],
+    ]);
+    expect(rows[1].gamePlaces).toEqual({ a: 5, b: 1, c: 1 });
+  });
+
+  it('не сыгравшая игру команда - место после последнего', () => {
+    const rows = honestStandings(
+      [entry('А', 1, { a: [10, 1, 2], b: [5, 1, 2] }), entry('Б', 2, { a: [5, 0, 2], b: [10, 1, 2] }), entry('В', 3, { a: [1, 0, 2] })],
+      new Set()
+    );
+    expect(places(rows)).toEqual([
+      ['А', 1, 3],
+      ['Б', 2, 3],
+      ['В', 3, 6],
+    ]);
+    expect(rows[2].gamePlaces).toEqual({ a: 3, b: 3 });
   });
 
   it('частичные суммы идущей игры без прошлого итога в место не входят', () => {
     expect(places(honestStandings(entries, new Set(['b'])))).toEqual([
-      ['Альфа', 1, 300],
-      ['Бета', 2, 100],
-      ['Гамма', null, 0],
+      ['Альфа', 1, 1],
+      ['Бета', 2, 2],
+      ['Гамма', null, 3],
     ]);
   });
 
   it('у идущей игры в место входит её прошлый итог', () => {
     const before = [entry('Бета', 1, { a: [100, 1, 18], b: [50, 1, 18] }), entry('Альфа', 2, { a: [300, 3, 18], b: [10, 0, 18] }), entry('Гамма', 3, { b: [900, 9, 18] })];
     const settled = settleGames(new Map(), before, new Set());
+    // a: Альфа 1, Бета 2, Гамма 3 (не играла); b по прошлому итогу: Гамма 1, Бета 2, Альфа 3.
+    // суммы равны (4), выше та, у кого больше побед
     expect(places(honestStandings(entries, new Set(['b']), settled))).toEqual([
-      ['Гамма', 1, 900],
-      ['Альфа', 2, 310],
-      ['Бета', 3, 150],
+      ['Гамма', 1, 4],
+      ['Альфа', 2, 4],
+      ['Бета', 3, 4],
     ]);
   });
 
   it('равным - общее место и порядок сервера', () => {
     const rows = honestStandings([entry('Я', 1, { a: [0, 0, 2] }), entry('А', 2, { a: [0, 0, 2] }), entry('Б', 3, { a: [-5, 0, 2] })], new Set());
     expect(places(rows)).toEqual([
-      ['Я', 1, 0],
-      ['А', 1, 0],
-      ['Б', 3, -5],
+      ['Я', 1, 1],
+      ['А', 1, 1],
+      ['Б', 3, 3],
     ]);
   });
 });
@@ -113,23 +155,24 @@ describe('nextLiveTable', () => {
   it('раунд, повтор упавших и итог: места меняются только по доигранным итогам', () => {
     // до раунда: обе игры доиграны, лидер Альфа
     const t0 = nextLiveTable(null, games, [entry('Альфа', 1, { a: [300, 3, 18], b: [300, 3, 18] }), entry('Бета', 2, { a: [200, 2, 18], b: [200, 2, 18] })], [round('a', 90, 0), round('b', 90, 0)], 0);
-    expect(places(t0.standings)).toEqual([['Альфа', 1, 600], ['Бета', 2, 400]]);
+    expect(places(t0.standings)).toEqual([['Альфа', 1, 2], ['Бета', 2, 4]]);
     expect(t0.finished).toEqual([]);
 
     // новый раунд b: очки b сброшены, у Беты частично больше - место держит прошлый итог
     const t1 = nextLiveTable(t0, games, [entry('Бета', 1, { a: [200, 2, 18], b: [90, 1, 2] }), entry('Альфа', 2, { a: [300, 3, 18], b: [10, 0, 2] })], [round('b', 90, 80, 0, T1), round('a', 90, 0)], 1);
-    expect(places(t1.standings)).toEqual([['Альфа', 1, 600], ['Бета', 2, 400]]);
+    expect(places(t1.standings)).toEqual([['Альфа', 1, 2], ['Бета', 2, 4]]);
     expect(t1.finished).toEqual([]);
 
     // b доиграна: новые очки b входят в место, итог игры - один раз
     const final = [entry('Бета', 1, { a: [200, 2, 18], b: [900, 9, 18] }), entry('Альфа', 2, { a: [300, 3, 18], b: [100, 1, 18] })];
     const t2 = nextLiveTable(t1, games, final, [round('b', 90, 0, 0, T1), round('a', 90, 0)], 2);
-    expect(places(t2.standings)).toEqual([['Бета', 1, 1100], ['Альфа', 2, 400]]);
+    // сумма мест равна (3), у Беты больше побед
+    expect(places(t2.standings)).toEqual([['Бета', 1, 3], ['Альфа', 2, 3]]);
     expect(t2.finished).toEqual(['b']);
 
     // повтор упавших матчей того же раунда: место не трогается, второго итога нет
     const t3 = nextLiveTable(t2, games, final, [round('b', 90, 5, 0, T1), round('a', 90, 0)], 3);
-    expect(places(t3.standings)).toEqual([['Бета', 1, 1100], ['Альфа', 2, 400]]);
+    expect(places(t3.standings)).toEqual([['Бета', 1, 3], ['Альфа', 2, 3]]);
     const t4 = nextLiveTable(t3, games, final, [round('b', 90, 0, 0, T1), round('a', 90, 0)], 4);
     expect(t4.finished).toEqual([]);
   });

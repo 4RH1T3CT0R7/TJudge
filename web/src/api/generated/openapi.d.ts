@@ -1901,7 +1901,10 @@ export interface components {
             game_ratings?: {
                 [key: string]: components["schemas"]["GameRatingInfo"];
             };
+            /** @description Sum of game scores, for display */
             total_rating?: number;
+            /** @description Sum of the team places in tournament games, lower is better. Rank is ordered by it; a game the team did not play counts as the place after the last */
+            total_places?: number;
             total_wins?: number;
             total_losses?: number;
             total_games?: number;

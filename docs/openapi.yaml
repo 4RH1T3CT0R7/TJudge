@@ -3177,6 +3177,10 @@ components:
           description: Map of game_id to rating info
         total_rating:
           type: integer
+          description: Sum of game scores, for display
+        total_places:
+          type: integer
+          description: Sum of the team places in tournament games, lower is better. Rank is ordered by it; a game the team did not play counts as the place after the last
         total_wins:
           type: integer
         total_losses:

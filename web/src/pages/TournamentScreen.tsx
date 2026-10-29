@@ -513,6 +513,8 @@ const CUP = [
   ' ╚═════╝ ',
 ].join('\n');
 
+const placeSumLabel = (n: number) => `сумма мест ${n}`;
+
 // Церемония: места раскрываются снизу вверх по пробелу или →, ← возвращает шаг.
 function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: number; ref: React.Ref<HTMLElement> }) {
   // раскрыты последние revealed строк списка
@@ -538,7 +540,7 @@ function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: numb
             {isShown(i + 3) ? (
               <m.span {...reveal} className="flex flex-1 justify-between gap-[1vw]">
                 <span className="truncate">{r.entry.team_name}</span>
-                <span className="tabular-nums">{r.total.toLocaleString('ru-RU')}</span>
+                <span className="tabular-nums">{placeSumLabel(r.placeSum)}</span>
               </m.span>
             ) : (
               <span className="text-gray-600">[ ? ]</span>
@@ -557,7 +559,7 @@ function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: numb
                     <pre aria-hidden="true" className="mb-[1vh] leading-none text-amber-400 text-[clamp(10px,1.8vh,24px)]">{CUP}</pre>
                   )}
                   <p className="truncate font-sans font-bold text-[clamp(22px,4vh,56px)]">{r.entry.team_name}</p>
-                  <p className="tabular-nums text-gray-300 text-[clamp(16px,2.6vh,34px)]">{r.total.toLocaleString('ru-RU')}</p>
+                  <p className="tabular-nums text-gray-300 text-[clamp(16px,2.6vh,34px)]">{placeSumLabel(r.placeSum)}</p>
                 </m.div>
               )}
               <div
