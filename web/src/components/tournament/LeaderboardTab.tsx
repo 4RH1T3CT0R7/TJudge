@@ -266,7 +266,7 @@ export function CrossGameLeaderboardTable({
               const isLive = live.has(game.id);
               const p = progress.get(game.name);
               return (
-                <th key={game.id} className={`${head} text-center`}>
+                <th key={game.id} className={`${head} ${broadcast ? 'text-left' : 'text-center'}`}>
                   {broadcast ? (
                     // на табло ◐ и счётчик - отдельной строкой не мельче 14 px: название целиком
                     <>
@@ -353,21 +353,20 @@ export function CrossGameLeaderboardTable({
                   );
                   const score = gameRating && <CountUp value={Math.round(gameRating.rating)} />;
                   return (
-                    <td key={game.id} className={`${cell} text-center font-mono tabular-nums`}>
+                    <td key={game.id} className={`${cell} ${broadcast ? 'text-left' : 'text-center'} font-mono tabular-nums`}>
                       {gamePlace === undefined && !gameRating ? (
                         <span className="text-gray-400">-</span>
                       ) : broadcast ? (
-                        // место и очки фиксированной ширины: столбец мест ровный при любой длине очков
+                        // ячейка прижата влево, место фиксированной ширины: столбец мест
+                        // ровный при любой длине очков, а очки обрезаются у края ячейки
                         <span className="block truncate">
                           <span className="inline-block w-[2.5ch] text-right">{placeMark}</span>{' '}
-                          <span className={`inline-block w-[9ch] truncate text-left align-baseline text-[max(14px,0.55em)] ${isLive ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {score}
-                          </span>
+                          <span className={`text-[max(14px,0.55em)] ${isLive ? 'text-gray-500' : 'text-gray-400'}`}>{score}</span>
                         </span>
                       ) : (
                         <div>
                           {placeMark}
-                          <div className="text-xs text-gray-400">
+                          <div className="whitespace-nowrap text-xs text-gray-400">
                             {gameRating ? (
                               <>
                                 <span className={isLive ? 'text-gray-500' : ''} title="Очки в игре">{score}</span>
