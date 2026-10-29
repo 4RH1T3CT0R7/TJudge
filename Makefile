@@ -1,4 +1,4 @@
-.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list security vulncheck test-security
+.PHONY: status doctor monitoring-up monitoring-down help build test lint run-api run-worker docker-build docker-build-executor docker-up docker-down migrate-up migrate-down clean admin create-user deploy deploy-weak deploy-medium deploy-strong detect-profile backup restore backup-list security vulncheck test-security test-load
 
 # Default target
 help:
@@ -31,6 +31,7 @@ help:
 	@echo "  make test-race     - Run tests with race detector"
 	@echo "  make test-coverage - Run tests with coverage"
 	@echo "  make test-e2e      - Run end-to-end tests"
+	@echo "  make test-load     - Load test: tournament of TEAMS teams (default 25)"
 	@echo "  make test-security - Run security tests against E2E_API_URL"
 	@echo "  make security      - gosec + vulncheck"
 	@echo "  make vulncheck     - govulncheck with allowlist (used by CI)"
@@ -195,6 +196,10 @@ test-integration:
 test-e2e:
 	@echo "Running E2E tests..."
 	go test -v -tags=e2e ./tests/e2e/...
+
+# Нагрузочный турнир на TEAMS команд против запущенного стенда (api, worker, песочницы)
+test-load:
+	E2E_LOAD_TEAMS=$(or $(TEAMS),25) go test -v -count=1 -timeout 3h -tags=e2e -run TestE2E_Load ./tests/e2e/
 
 # Security scan.
 # у github.com/docker/docker фикса в этом пути модуля нет, обе уязвимости про демон,
