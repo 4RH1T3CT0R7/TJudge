@@ -559,6 +559,12 @@ class ApiClient {
     return data;
   }
 
+  // админ: пользователь переходит в команду из прежней команды турнира.
+  // ошибку показывает вызывающий
+  async moveTeamMember(teamId: string, userId: string): Promise<void> {
+    await this.client.post(`/teams/${teamId}/members`, { user_id: userId }, { quiet: true });
+  }
+
   async getTeam(id: string): Promise<TeamWithMembers> {
     const { data } = await this.client.get<TeamWithMembers>(`/teams/${id}`);
     return data;
@@ -573,8 +579,8 @@ class ApiClient {
     await this.client.post(`/teams/${id}/leave`);
   }
 
-  async removeMember(teamId: string, userId: string): Promise<void> {
-    await this.client.delete(`/teams/${teamId}/members/${userId}`);
+  async removeMember(teamId: string, userId: string, quiet = false): Promise<void> {
+    await this.client.delete(`/teams/${teamId}/members/${userId}`, { quiet });
   }
 
   async getInviteLink(teamId: string): Promise<{ code: string; link: string }> {

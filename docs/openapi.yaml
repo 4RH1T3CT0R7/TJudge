@@ -1453,6 +1453,41 @@ paths:
                 $ref: '#/components/schemas/UserListEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
+    post:
+      tags: [teams]
+      summary: Move user into team (admin)
+      description: >-
+        Adds the user to this team. If the user is in another team of the same tournament, they leave it first
+        the same way as leaving a team: leadership passes to another member, an emptied team of a pending tournament
+        is deleted, the last member of an active tournament's team is not moved (409). The team size limit is not checked.
+        Not allowed in a completed tournament (409).
+      operationId: teamsMoveMember
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: User is in the team
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /teams/{id}/members/{userId}:
     parameters:
@@ -1467,7 +1502,7 @@ paths:
     delete:
       tags: [teams]
       summary: Remove team member
-      description: Only the team leader can remove members.
+      description: The team leader removes members. An admin can remove anyone; for the member it works like leaving the team (leadership passes on, see moving members).
       operationId: teamsRemoveMember
       security:
         - BearerAuth: []

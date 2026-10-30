@@ -20,6 +20,7 @@ type TeamService interface {
 	CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*models.Team, error)
 	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error)
 	JoinTeam(ctx context.Context, teamID, userID uuid.UUID) (*models.Team, error)
+	MoveMember(ctx context.Context, teamID, userID uuid.UUID) error
 	LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 	RemoveMember(ctx context.Context, teamID, memberUserID, leaderID uuid.UUID) error
 	UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error)
@@ -129,6 +130,40 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, t)
+}
+
+type MoveMemberRequest struct {
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// MoveMember админ переносит пользователя в команду из прежней команды турнира
+func (h *TeamHandler) MoveMember(w http.ResponseWriter, r *http.Request) {
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
+	if !ok {
+		return
+	}
+
+	var req MoveMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == uuid.Nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("user_id is required"))
+		return
+	}
+
+	if err := h.teamService.MoveMember(r.Context(), teamID, req.UserID); err != nil {
+		h.log.LogError("Failed to move team member", err)
+		writeError(w, err)
+		return
+	}
+
+	// в audit_log только метод и путь, кого перенесли - здесь
+	adminID, _ := middleware.GetUserID(r.Context())
+	h.log.Info("Team member moved by admin",
+		zap.String("team_id", teamID.String()),
+		zap.String("user_id", req.UserID.String()),
+		zap.String("admin_id", adminID.String()),
+	)
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Join вступление в команду из списка команд турнира, без кода приглашения
@@ -288,8 +323,15 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// сервис сам проверит, что leaderID — лидер этой команды, иначе учасник останется (forbidden)
-	if err := h.teamService.RemoveMember(r.Context(), teamID, memberID, leaderID); err != nil {
+	// админ убирает кого угодно: для участника это выход из команды, с передачей
+	// лидерства. иначе сервис проверит, что leaderID - лидер этой команды
+	var err error
+	if isAdmin(r.Context()) {
+		err = h.teamService.LeaveTeam(r.Context(), teamID, memberID)
+	} else {
+		err = h.teamService.RemoveMember(r.Context(), teamID, memberID, leaderID)
+	}
+	if err != nil {
 		h.log.LogError("Failed to remove team member", err)
 		writeError(w, err)
 		return

@@ -49,6 +49,10 @@ func (m *MockTeamService) JoinTeam(ctx context.Context, teamID, userID uuid.UUID
 	return args.Get(0).(*models.Team), args.Error(1)
 }
 
+func (m *MockTeamService) MoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
+	return m.Called(ctx, teamID, userID).Error(0)
+}
+
 func (m *MockTeamService) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error {
 	return m.Called(ctx, teamID, userID).Error(0)
 }
@@ -251,6 +255,41 @@ func TestTeamHandler_Join(t *testing.T) {
 	h.Join(rr, withChiParam(httptest.NewRequest("POST", "/", nil), "id", teamID.String()))
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	svc.AssertNumberOfCalls(t, "JoinTeam", 2)
+}
+
+func TestTeamHandler_MoveMember(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	teamID, userID := uuid.New(), uuid.New()
+	svc.On("MoveMember", mock.Anything, teamID, userID).Return(nil)
+
+	body, _ := json.Marshal(MoveMemberRequest{UserID: userID})
+	rr := httptest.NewRecorder()
+	h.MoveMember(rr, withChiParam(httptest.NewRequest("POST", "/", bytes.NewReader(body)), "id", teamID.String()))
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+
+	rr = httptest.NewRecorder()
+	h.MoveMember(rr, withChiParam(httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{}`))), "id", teamID.String()))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	svc.AssertNumberOfCalls(t, "MoveMember", 1)
+}
+
+// админ убирает участника как его выход из команды, без проверки лидерства
+func TestTeamHandler_RemoveMember_Admin(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	teamID, memberID := uuid.New(), uuid.New()
+	svc.On("LeaveTeam", mock.Anything, teamID, memberID).Return(nil)
+
+	req := withUserID(httptest.NewRequest("DELETE", "/", nil), uuid.New())
+	req = req.WithContext(context.WithValue(req.Context(), middleware.RoleKey, models.RoleAdmin))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", teamID.String())
+	rctx.URLParams.Add("userId", memberID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rr := httptest.NewRecorder()
+	h.RemoveMember(rr, req)
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+	svc.AssertNotCalled(t, "RemoveMember", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // --- Get ---

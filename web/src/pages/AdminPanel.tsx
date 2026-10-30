@@ -25,6 +25,7 @@ import { useMotionPref } from '../hooks/useMotionPref';
 import { GamesTab } from '../components/admin/GamesTab';
 import { TournamentsTab } from '../components/admin/TournamentsTab';
 import { ProgramsTab } from '../components/admin/ProgramsTab';
+import { TeamsAdminTab } from '../components/admin/TeamsAdminTab';
 import { SystemTab } from '../components/admin/SystemTab';
 import { Tabs } from '../components/ui/Tabs';
 import type { TabItem } from '../components/ui/Tabs';
@@ -33,7 +34,7 @@ import { buildProgramRows } from '../components/admin/programRows';
 import type { ProgramRow } from '../components/admin/programRows';
 import type { Game } from '../types';
 
-const TAB_IDS = ['games', 'tournaments', 'programs', 'system'] as const;
+const TAB_IDS = ['games', 'tournaments', 'teams', 'programs', 'system'] as const;
 type AdminTab = (typeof TAB_IDS)[number];
 
 /** Интервал поллинга вкладки «Система». TanStack приостанавливает его в фоновой вкладке браузера. */
@@ -142,6 +143,7 @@ export function AdminPanel() {
     const reactions: Record<AdminTab, [InvaderPose, string]> = {
       games: ['idle', '// game manager'],
       tournaments: ['idle', '// tournaments loaded'],
+      teams: ['idle', '// составы команд'],
       programs: ['typing', '// сканирую код...'],
       system: ['idle', '// мониторинг...'],
     };
@@ -361,6 +363,7 @@ export function AdminPanel() {
   const tabs: TabItem<AdminTab>[] = [
     { id: 'games', label: 'Игры', count: games.length },
     { id: 'tournaments', label: 'Турниры', count: tournaments.length },
+    { id: 'teams', label: 'Команды' },
     { id: 'programs', label: 'Программы' },
     { id: 'system', label: 'Система' },
   ];
@@ -452,6 +455,8 @@ export function AdminPanel() {
             setAdminReaction={setAdminReaction}
           />
         )}
+
+        {activeTab === 'teams' && <TeamsAdminTab tournaments={tournaments} />}
 
         {/* Programs Tab */}
         {activeTab === 'programs' && (

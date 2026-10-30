@@ -341,6 +341,48 @@ func (s *Service) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 	return nil
 }
 
+// MoveMember - админ переносит пользователя в команду: из прежней команды того же
+// турнира он уходит как при LeaveTeam (лидерство передаётся, опустевшая команда
+// pending-турнира удаляется, последнего участника идущего не отпустит).
+// лимит размера команды админу не помеха
+func (s *Service) MoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+	if err != nil {
+		return err
+	}
+	// составы завершённого турнира - часть итогов, как в LeaveTeam
+	if tournament.Status == models.TournamentCompleted {
+		return errors.ErrConflict.WithMessage("cannot change teams of completed tournament")
+	}
+
+	return s.lock.WithLock(ctx, membershipLockKey(team.TournamentID, userID), 10*time.Second, func(ctx context.Context) error {
+		current, err := s.teamRepo.GetUserTeamInTournament(ctx, team.TournamentID, userID)
+		if err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		if current != nil {
+			if current.ID == teamID {
+				return nil
+			}
+			// ponytail: уход и вступление - два запроса без общей транзакции. если
+			// вступление упадёт (команду удалили в ту же секунду), пользователь
+			// останется без команды и админ повторит перенос
+			if err := s.LeaveTeam(ctx, current.ID, userID); err != nil {
+				return err
+			}
+		}
+		if err := s.teamRepo.AddMember(ctx, &models.TeamMember{ID: uuid.New(), TeamID: teamID, UserID: userID}); err != nil {
+			return errors.Wrap(err, "failed to add team member")
+		}
+		s.log.Info("Member moved by admin", zap.String("team_id", teamID.String()), zap.String("user_id", userID.String()))
+		return nil
+	})
+}
+
 // RemoveMember — лидер выкидывает участника из команды
 func (s *Service) RemoveMember(ctx context.Context, teamID, memberUserID, leaderID uuid.UUID) error {
 	team, err := s.teamRepo.GetByID(ctx, teamID)

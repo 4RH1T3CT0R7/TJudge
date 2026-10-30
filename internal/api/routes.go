@@ -380,13 +380,15 @@ func (s *Server) setupRoutes() {
 				r.Put("/{id}", s.teamHandler.UpdateName)
 				r.Get("/{id}/members", s.teamHandler.GetMembers)
 				r.Post("/{id}/leave", s.teamHandler.Leave)
-				r.Delete("/{id}/members/{userId}", s.teamHandler.RemoveMember)
+				// лидер или админ, в аудит попадает только админ
+				r.With(s.auditMiddleware()).Delete("/{id}/members/{userId}", s.teamHandler.RemoveMember)
 				r.Get("/{id}/invite", s.teamHandler.GetInviteLink)
 
 				r.Group(func(r chi.Router) {
 					r.Use(s.requireAdmin())
 					r.Use(s.auditMiddleware())
 					r.Delete("/{id}", s.teamHandler.Delete)
+					r.Post("/{id}/members", s.teamHandler.MoveMember)
 					r.Post("/{id}/disqualify", s.teamHandler.Disqualify)
 					r.Post("/{id}/restore", s.teamHandler.Restore)
 				})

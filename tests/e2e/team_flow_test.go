@@ -343,6 +343,71 @@ func TestE2E_TeamJoinFromList(t *testing.T) {
 	requireStatus(t, resp, http.StatusConflict)
 }
 
+// TestE2E_AdminMoveMember: админ переносит капитана в другую команду - капитаном
+// прежней становится оставшийся участник; убирает последнего - команда турнира в
+// регистрации удаляется
+func TestE2E_AdminMoveMember(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	userID := func(c *TestClient) string {
+		var u struct {
+			ID string `json:"id"`
+		}
+		getJSON(t, c, "/api/v1/auth/me", &u)
+		return u.ID
+	}
+	type teamRow struct {
+		ID          string `json:"id"`
+		LeaderID    string `json:"leader_id"`
+		MemberCount int    `json:"member_count"`
+	}
+
+	admin, leaderA, memberA, leaderC := NewTestClient(), NewTestClient(), NewTestClient(), NewTestClient()
+	registerAndAuthAsAdmin(t, admin, "move_admin")
+	tournamentID := createTournamentHelper(t, admin)
+	registerAndAuth(t, leaderA, "move_leader_a")
+	teamA := createTeamHelper(t, leaderA, tournamentID).ID
+	registerAndAuth(t, memberA, "move_member_a")
+	resp, err := memberA.doRequest("POST", "/api/v1/teams/"+teamA+"/join", nil)
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusOK)
+	registerAndAuth(t, leaderC, "move_leader_c")
+	teamC := createTeamHelper(t, leaderC, tournamentID).ID
+	leaderAID, memberAID := userID(leaderA), userID(memberA)
+
+	teams := func() map[string]teamRow {
+		var list []teamRow
+		getJSON(t, admin, "/api/v1/tournaments/"+tournamentID+"/teams", &list)
+		out := map[string]teamRow{}
+		for _, x := range list {
+			out[x.ID] = x
+		}
+		return out
+	}
+
+	// обычному пользователю перенос недоступен
+	resp, err = leaderC.doRequest("POST", "/api/v1/teams/"+teamC+"/members", map[string]string{"user_id": leaderAID})
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusForbidden)
+
+	resp, err = admin.doRequest("POST", "/api/v1/teams/"+teamC+"/members", map[string]string{"user_id": leaderAID})
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusNoContent)
+	got := teams()
+	assert.Equal(t, memberAID, got[teamA].LeaderID, "капитанство перешло к оставшемуся")
+	assert.Equal(t, 1, got[teamA].MemberCount)
+	assert.Equal(t, 2, got[teamC].MemberCount)
+
+	resp, err = admin.doRequest("DELETE", "/api/v1/teams/"+teamA+"/members/"+memberAID, nil)
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusNoContent)
+	got = teams()
+	assert.NotContains(t, got, teamA, "опустевшая команда удалена")
+	assert.Len(t, got, 1)
+}
+
 // =============================================================================
 // E2E Test: Team Leave
 // =============================================================================

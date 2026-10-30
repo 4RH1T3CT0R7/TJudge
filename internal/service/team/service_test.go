@@ -380,6 +380,48 @@ func TestService_JoinTeam(t *testing.T) {
 	teamRepo.AssertNumberOfCalls(t, "AddMember", 1)
 }
 
+// перенос админом: из чужой команды уходит как при выходе, в свою - ничего,
+// без команды - просто вступает, лимит размера не проверяется
+func TestService_MoveMember(t *testing.T) {
+	ctx := context.Background()
+	tID, target, old, userID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	setup := func(status models.TournamentStatus, current *models.Team) (*Service, *MockTeamRepository) {
+		svc, teamRepo, tournamentRepo := newTestTeamService(t)
+		teamRepo.On("GetByID", ctx, target).Return(&models.Team{ID: target, TournamentID: tID}, nil)
+		teamRepo.On("GetByID", ctx, old).Return(&models.Team{ID: old, TournamentID: tID, LeaderID: uuid.New()}, nil)
+		tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: status, MaxTeamSize: 1}, nil)
+		if current == nil {
+			teamRepo.On("GetUserTeamInTournament", ctx, tID, userID).Return(nil, errors.ErrNotFound)
+		} else {
+			teamRepo.On("GetUserTeamInTournament", ctx, tID, userID).Return(current, nil)
+		}
+		teamRepo.On("IsUserInTeam", ctx, old, userID).Return(true, nil)
+		teamRepo.On("RemoveMember", ctx, old, userID).Return(nil)
+		teamRepo.On("AddMember", ctx, mock.MatchedBy(func(m *models.TeamMember) bool { return m.TeamID == target && m.UserID == userID })).Return(nil)
+		return svc, teamRepo
+	}
+
+	svc, repo := setup(models.TournamentActive, &models.Team{ID: old, TournamentID: tID})
+	require.NoError(t, svc.MoveMember(ctx, target, userID))
+	repo.AssertCalled(t, "RemoveMember", ctx, old, userID)
+	repo.AssertNumberOfCalls(t, "AddMember", 1)
+
+	svc, repo = setup(models.TournamentPending, nil)
+	require.NoError(t, svc.MoveMember(ctx, target, userID))
+	repo.AssertNotCalled(t, "RemoveMember", mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNumberOfCalls(t, "AddMember", 1)
+
+	svc, repo = setup(models.TournamentPending, &models.Team{ID: target, TournamentID: tID})
+	require.NoError(t, svc.MoveMember(ctx, target, userID))
+	repo.AssertNotCalled(t, "AddMember", mock.Anything, mock.Anything)
+
+	svc, repo = setup(models.TournamentCompleted, &models.Team{ID: old, TournamentID: tID})
+	appErr := errors.GetAppError(svc.MoveMember(ctx, target, userID))
+	require.NotNil(t, appErr)
+	assert.Equal(t, 409, appErr.Code)
+	repo.AssertNotCalled(t, "AddMember", mock.Anything, mock.Anything)
+}
+
 // --- LeaveTeam ---
 
 func TestService_LeaveTeam_RegularMember(t *testing.T) {

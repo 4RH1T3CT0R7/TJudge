@@ -922,7 +922,11 @@ export interface paths {
         /** List team members */
         get: operations["teamsGetMembers"];
         put?: never;
-        post?: never;
+        /**
+         * Move user into team (admin)
+         * @description Adds the user to this team. If the user is in another team of the same tournament, they leave it first the same way as leaving a team: leadership passes to another member, an emptied team of a pending tournament is deleted, the last member of an active tournament's team is not moved (409). The team size limit is not checked. Not allowed in a completed tournament (409).
+         */
+        post: operations["teamsMoveMember"];
         delete?: never;
         options?: never;
         head?: never;
@@ -946,7 +950,7 @@ export interface paths {
         post?: never;
         /**
          * Remove team member
-         * @description Only the team leader can remove members.
+         * @description The team leader removes members. An admin can remove anyone; for the member it works like leaving the team (leadership passes on, see moving members).
          */
         delete: operations["teamsRemoveMember"];
         options?: never;
@@ -3749,6 +3753,39 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    teamsMoveMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Team UUID */
+                id: components["parameters"]["TeamID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    user_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description User is in the team */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     teamsRemoveMember: {
