@@ -3,7 +3,8 @@
 // идущей игры зависят от того, чьи матчи очередь сыграла раньше, и дали бы
 // ложные смены лидера. Поэтому пока игра идёт, в место входит её прошлый итог
 // (если страница его застала), а новые очки видны в таблице с пометкой
-// «предварительно». Объяснение для участников - в /help#place.
+// «предварительно». Без прошлого итога (первый раунд) место в игре
+// предварительное: по очкам за сыгранный матч. Объяснение - в /help#place.
 import type { CrossGameLeaderboardEntry, Game, GameRatingInfo, MatchRound } from '../types';
 
 export interface GameProgress {
@@ -73,15 +74,15 @@ export function etaSeconds(r: RoundSummary, at: number, now: number): number | n
 
 export interface StandingRow {
   entry: CrossGameLeaderboardEntry;
-  /** Место по доигранным итогам; null - у команды нет ни одного доигранного матча. */
+  /** Место по итогам игр (у идущей без прошлого итога - предварительно); null - матчей нет. */
   place: number | null;
-  /** Сумма мест в играх по доигранным итогам, меньше лучше: по ней место. */
+  /** Сумма мест в играх по тем же итогам, что и место, меньше лучше. */
   placeSum: number;
   /** Место в каждой учтённой игре: id игры -> место. Не сыгравшая игру команда - после последнего. */
   gamePlaces: Record<string, number>;
   /** Игры, где место поставлено «после последнего»: команда в них не играла. */
   missedGames: Set<string>;
-  /** Победы, поражения и матчи доигранных итогов. */
+  /** Победы, поражения и матчи итогов, по которым место. */
   wins: number;
   losses: number;
   games: number;
@@ -101,6 +102,12 @@ export function settleGames(prev: Settled, entries: CrossGameLeaderboardEntry[],
   const next = new Map(prev);
   for (const id of new Set(entries.flatMap((e) => Object.keys(e.game_ratings)))) {
     if (live.has(id)) continue;
+    // таблица отдаёт и нули у не игравших программ. снимок до первого раунда
+    // итогом не считается: иначе с ним первый раунд шёл бы без мест
+    if (!entries.some((e) => (e.game_ratings[id]?.total_games ?? 0) > 0)) {
+      next.delete(id);
+      continue;
+    }
     next.set(id, new Map(entries.filter((e) => e.game_ratings[id]).map((e) => [teamKey(e), e.game_ratings[id]])));
   }
   return next;
@@ -118,47 +125,59 @@ export function honestStandings(
     gamePlaces: {} as Record<string, number>,
     missedGames: new Set<string>(),
     wins: 0,
+    // победы для равных сумм: у неполной игры - доля побед, число зависело бы
+    // от того, сколько матчей команды очередь уже сыграла
+    tieWins: 0,
     losses: 0,
     games: 0,
   }));
-  // итог игры, по которому место: у идущей - прошлый доигранный, если он был
-  const result = (e: CrossGameLeaderboardEntry, gameId: string) => {
-    const r = live.has(gameId) ? settled.get(gameId)?.get(teamKey(e)) : e.game_ratings[gameId];
-    return r && r.total_games > 0 ? r : undefined;
-  };
   for (const gameId of new Set(entries.flatMap((e) => Object.keys(e.game_ratings)))) {
+    // итог, по которому место: у идущей игры - прошлый доигранный, если он был.
+    // без него - текущий неполный, и сравниваются очки и победы за матч: у
+    // команд к этому моменту сыграно разное число матчей
+    const prevResult = live.has(gameId) ? settled.get(gameId) : undefined;
+    const partial = live.has(gameId) && !prevResult;
     const played = rows.flatMap((row) => {
-      const r = result(row.entry, gameId);
-      return r ? [{ row, r }] : [];
+      const r = prevResult ? prevResult.get(teamKey(row.entry)) : row.entry.game_ratings[gameId];
+      if (!r || r.total_games === 0) return [];
+      const per = partial ? r.total_games : 1;
+      return [{ row, r, score: r.rating / per, winsKey: r.wins / per }];
     });
-    // игра без доигранного итога в место не входит
     if (played.length === 0) continue;
-    played.sort((a, b) => b.r.rating - a.r.rating || b.r.wins - a.r.wins);
-    played.forEach(({ row, r }, i) => {
+    played.sort((a, b) => b.score - a.score || b.winsKey - a.winsKey);
+    played.forEach(({ row, r, score, winsKey }, i) => {
       const prev = played[i - 1];
-      row.gamePlaces[gameId] = prev && prev.r.rating === r.rating && prev.r.wins === r.wins ? prev.row.gamePlaces[gameId] : i + 1;
+      row.gamePlaces[gameId] = prev && prev.score === score && prev.winsKey === winsKey ? prev.row.gamePlaces[gameId] : i + 1;
       row.wins += r.wins;
+      row.tieWins += winsKey;
       row.losses += r.losses;
       row.games += r.total_games;
     });
-    // не сыгравшая игру команда - после последнего: иначе пропуск игры уменьшал бы сумму
+    // не сыгравшая игру команда - после последнего: иначе пропуск игры уменьшал бы сумму.
+    // в неполной игре это ещё не сыгравшая, а не пропустившая
     for (const row of rows) {
       if (row.gamePlaces[gameId] === undefined) {
         row.gamePlaces[gameId] = played.length + 1;
-        row.missedGames.add(gameId);
+        if (!partial) row.missedGames.add(gameId);
       }
       row.placeSum += row.gamePlaces[gameId];
     }
   }
   // при равенстве суммы мест и побед место общее, а порядок - как у сервера:
   // иначе строки менялись бы местами от частичных итогов
+  // доли побед двух неполных игр складываются с погрешностью float
+  const sameWins = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   rows.sort(
-    (a, b) => Number(b.games > 0) - Number(a.games > 0) || a.placeSum - b.placeSum || b.wins - a.wins || a.index - b.index
+    (a, b) =>
+      Number(b.games > 0) - Number(a.games > 0) ||
+      a.placeSum - b.placeSum ||
+      (sameWins(a.tieWins, b.tieWins) ? 0 : b.tieWins - a.tieWins) ||
+      a.index - b.index
   );
   let place = 0;
   return rows.map((s, i) => {
     const prev = rows[i - 1];
-    if (!prev || prev.placeSum !== s.placeSum || prev.wins !== s.wins) place = i + 1;
+    if (!prev || prev.placeSum !== s.placeSum || !sameWins(prev.tieWins, s.tieWins)) place = i + 1;
     return {
       entry: s.entry,
       place: s.games > 0 ? place : null,

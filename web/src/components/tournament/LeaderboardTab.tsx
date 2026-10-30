@@ -35,7 +35,7 @@ export function LeaderboardTab({
 }: {
   rows: StandingRow[];
   games: Game[];
-  /** id идущих игр: их очки предварительные и в место не входят. */
+  /** id идущих игр: их очки предварительные. */
   live: Set<string>;
   progress: Map<string, GameProgress>;
   showCrossGame: boolean;
@@ -92,7 +92,7 @@ export function LeaderboardTab({
       {rows.length > 0 && (
         <PlaceHint>
           {live.size > 0
-            ? 'место — по сумме мест в последних итогах игр: очки идущей игры (◐) предварительные и войдут в место, когда она доиграет'
+            ? 'место — по сумме мест в последних итогах игр: очки идущей игры (◐) войдут в место, когда она доиграет; без прошлого итога место в ней предварительное, по очкам за матч'
             : 'место — по сумме мест в играх, чем меньше, тем выше; место в игре — по её очкам'}
         </PlaceHint>
       )}
@@ -175,7 +175,7 @@ function GeneralLeaderboardTable({
                       </h3>
                       {mine && <YouMark />}
                     </div>
-                    {/* тот же срез, что у суммы мест: доигранные итоги */}
+                    {/* тот же срез, что у суммы мест */}
                     <div className="flex items-center gap-3 text-sm text-gray-400">
                       <span>{row.games} игр</span>
                       <span>•</span>
