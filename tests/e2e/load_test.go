@@ -4,11 +4,8 @@ package e2e
 
 import (
 	"fmt"
-	"maps"
 	"net/http"
 	"os"
-	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,28 +14,58 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// loadBots - стратегии нагрузочного теста на python. у команды i своя доля P
+// от 0 до 1 (щедрость, готовность сотрудничать, предел ставки) и своё зерно
+// случайности, поэтому матчи не сводятся к ничьим одинаковых шаблонов
+var loadBots = map[string]string{
+	"dilemma": `
+n = int(input())
+for _ in range(n):
+    print("COOPERATE" if random.random() < P else "DEFECT", flush=True)
+    input()
+`,
+	"tug_of_war": `
+energy = int(input())
+n = int(input())
+for i in range(n):
+    spend = energy if i == n - 1 else min(energy, int(energy / (n - i) * random.uniform(1 - P, 1 + P)))
+    energy -= spend
+    print(spend, flush=True)
+    input()
+`,
+	"travelers_dilemma": `
+low, high, bonus, n = (int(input()) for _ in range(4))
+for _ in range(n):
+    print(max(low, min(high, round(low + (high - low) * P) + random.randint(-2, 2))), flush=True)
+    input()
+`,
+	"public_goods": `
+capital = int(input())
+input()
+n = int(input())
+for _ in range(n):
+    print(max(0, min(capital, round(capital * P) + random.randint(-1, 1))), flush=True)
+    input()
+`,
+	"dollar_auction": `
+prize = int(input())
+input()
+limit = max(1, round(prize * P))
+for line in sys.stdin:
+    bid = int(line) + 1
+    print(bid if bid <= limit else 0, flush=True)
+`,
+}
+
 // TestE2E_Load: нагрузочный прогон турнира на E2E_LOAD_TEAMS команд. каждая
-// команда загружает шаблоны ботов во все игры (языки по кругу), после сборки
-// раунды всех игр запускаются разом: N·(N-1) матчей на игру. турнир остаётся
-// в БД, ход раундов видно в интерфейсе по ссылке из лога
+// команда загружает во все игры ботов из loadBots, после сборки раунды всех
+// игр запускаются разом: N·(N-1) матчей на игру. турнир остаётся в БД, ход
+// раундов видно в интерфейсе по ссылке из лога
 func TestE2E_Load(t *testing.T) {
 	n, _ := strconv.Atoi(os.Getenv("E2E_LOAD_TEAMS"))
 	if n < 2 {
 		t.Skip("нагрузка: задать E2E_LOAD_TEAMS (например 25), нужны api, worker и образы песочниц")
 	}
-
-	files, err := filepath.Glob(filepath.Join(startersDir, "*", "*", "[^.]*"))
-	require.NoError(t, err)
-	require.NotEmpty(t, files, "шаблоны не найдены в %s", startersDir)
-	starters := map[string]map[string]string{} // игра -> язык -> файл
-	for _, f := range files {
-		game := starterGame(f)
-		if starters[game] == nil {
-			starters[game] = map[string]string{}
-		}
-		starters[game][filepath.Base(filepath.Dir(f))] = f
-	}
-	langs := slices.Sorted(maps.Keys(starters[starterGame(files[0])]))
 
 	// на сервере БД закрыта, поэтому вход готовым админом (make test-load-server).
 	// токен нужен до старта раундов: статистику матчей можно читать и без него
@@ -76,7 +103,7 @@ func TestE2E_Load(t *testing.T) {
 	id := tournament.ID
 
 	gameIDs := map[string]string{}
-	for game := range starters {
+	for game := range loadBots {
 		var g GameResponse
 		getJSON(t, admin, "/api/v1/games/name/"+game, &g)
 		resp, err := admin.doRequest("POST", "/api/v1/tournaments/"+id+"/games", map[string]string{"game_id": g.ID})
@@ -104,12 +131,9 @@ func TestE2E_Load(t *testing.T) {
 	phase = time.Now()
 	programs := map[string]*TestClient{}
 	for i := range n {
-		lang := langs[i%len(langs)]
+		head := fmt.Sprintf("import random, sys\nP = %.3f\nrandom.seed(%d)\n", float64(i)/float64(n-1), i)
 		for game, gameID := range gameIDs {
-			f := starters[game][lang]
-			src, err := os.ReadFile(f)
-			require.NoError(t, err)
-			programs[uploadProgram(t, clients[i], id, gameID, teams[i], filepath.Base(f), string(src))] = clients[i]
+			programs[uploadProgram(t, clients[i], id, gameID, teams[i], "main.py", head+loadBots[game])] = clients[i]
 		}
 	}
 	for prog, c := range programs {
