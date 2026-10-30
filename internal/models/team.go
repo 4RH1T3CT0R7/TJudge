@@ -14,6 +14,7 @@ type Team struct {
 	LeaderID       uuid.UUID  `json:"leader_id" db:"leader_id"`
 	IsDisqualified bool       `json:"is_disqualified" db:"is_disqualified"`
 	DisqualifiedAt *time.Time `json:"disqualified_at,omitempty" db:"disqualified_at"`
+	MemberCount    int        `json:"member_count,omitempty" db:"-"` // только в списке команд турнира
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 }

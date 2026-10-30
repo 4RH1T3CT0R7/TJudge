@@ -309,6 +309,40 @@ func TestE2E_TeamJoinByCode(t *testing.T) {
 	})
 }
 
+// TestE2E_TeamJoinFromList: вступление кнопкой из списка команд турнира, без
+// кода; число участников в списке растёт, второй раз вступить нельзя
+func TestE2E_TeamJoinFromList(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	leader, member := NewTestClient(), NewTestClient()
+	registerAndAuthAsAdmin(t, leader, "teamlist_leader")
+	tournamentID := createTournamentHelper(t, leader)
+	teamID := createTeamHelper(t, leader, tournamentID).ID
+	registerAndAuth(t, member, "teamlist_member")
+
+	memberCount := func() int {
+		var teams []struct {
+			ID          string `json:"id"`
+			MemberCount int    `json:"member_count"`
+		}
+		getJSON(t, member, "/api/v1/tournaments/"+tournamentID+"/teams", &teams)
+		require.Len(t, teams, 1)
+		return teams[0].MemberCount
+	}
+	require.Equal(t, 1, memberCount())
+
+	resp, err := member.doRequest("POST", "/api/v1/teams/"+teamID+"/join", nil)
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusOK)
+	assert.Equal(t, 2, memberCount())
+
+	resp, err = member.doRequest("POST", "/api/v1/teams/"+teamID+"/join", nil)
+	require.NoError(t, err)
+	requireStatus(t, resp, http.StatusConflict)
+}
+
 // =============================================================================
 // E2E Test: Team Leave
 // =============================================================================

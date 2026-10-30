@@ -553,6 +553,12 @@ class ApiClient {
     return data;
   }
 
+  // ошибку показывает вызывающий: у него понятный текст вместо «team is full»
+  async joinTeam(teamId: string): Promise<Team> {
+    const { data } = await this.client.post<Team>(`/teams/${teamId}/join`, undefined, { quiet: true });
+    return data;
+  }
+
   async getTeam(id: string): Promise<TeamWithMembers> {
     const { data } = await this.client.get<TeamWithMembers>(`/teams/${id}`);
     return data;

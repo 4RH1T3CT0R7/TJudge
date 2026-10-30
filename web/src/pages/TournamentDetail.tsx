@@ -35,7 +35,7 @@ import { GamesTab } from '../components/tournament/GamesTab';
 import { TeamsTab } from '../components/tournament/TeamsTab';
 import { MatchesTab } from '../components/tournament/MatchesTab';
 import { JoinTournamentModal } from '../components/tournament/JoinTournamentModal';
-import { extractErrorMessage } from '../components/tournament/helpers';
+import { extractErrorMessage, joinErrorMessage, joinableTeams } from '../components/tournament/helpers';
 import { useGameAdminActions } from '../components/tournament/useGameAdminActions';
 import { Tabs } from '../components/ui/Tabs';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -249,6 +249,24 @@ export function TournamentDetail() {
     } catch {
       setJoinError('Неверный код');
     } finally {
+      setIsJoining(false);
+    }
+  };
+
+  // ошибка вступления из списка - тостом: поле ошибки в окне и вкладке принадлежит коду
+  const handleJoinTeamById = async (teamId: string) => {
+    setIsJoining(true);
+    try {
+      const team = await api.joinTeam(teamId);
+      queryClient.setQueryData<Team | null>(queryKeys.myTeam(tournamentId), team);
+      setShowJoinModal(false);
+    } catch (err) {
+      useToastStore.getState().addToast(joinErrorMessage(err), 'error');
+      // 409: уже вступил, например из другой вкладки - кнопки должны пропасть
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myTeam(tournamentId) });
+    } finally {
+      // и после ошибки: число участников в списке могло устареть
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournamentTeams(tournamentId) });
       setIsJoining(false);
     }
   };
@@ -617,6 +635,8 @@ export function TournamentDetail() {
             myTeam={myTeam}
             tournamentStatus={tournament.status}
             onJoinByCode={handleJoinTeam}
+            onJoinTeam={handleJoinTeamById}
+            maxTeamSize={tournament.max_team_size}
             joinCode={joinCode}
             setJoinCode={setJoinCode}
             isJoining={isJoining}
@@ -668,6 +688,9 @@ export function TournamentDetail() {
         isJoining={isJoining}
         onCreateTeam={handleCreateTeam}
         onJoinTeam={handleJoinTeam}
+        teams={joinableTeams(teams, tournament.max_team_size)}
+        maxTeamSize={tournament.max_team_size}
+        onJoinTeamById={handleJoinTeamById}
       />
     </div>
   );

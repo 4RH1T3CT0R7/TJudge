@@ -356,6 +356,30 @@ func TestService_JoinTeamByCode_UserAlreadyInTeam(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// вступление из списка проходит те же проверки, что по коду: здесь - статус турнира
+func TestService_JoinTeam(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, tID, userID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentPending, MaxTeamSize: 5}, nil).Once()
+	teamRepo.On("GetMemberCount", ctx, teamID).Return(2, nil)
+	teamRepo.On("IsUserInAnyTeamInTournament", ctx, tID, userID).Return(false, nil)
+	teamRepo.On("AddMember", ctx, mock.MatchedBy(func(m *models.TeamMember) bool { return m.TeamID == teamID && m.UserID == userID })).Return(nil)
+
+	result, err := svc.JoinTeam(ctx, teamID, userID)
+	require.NoError(t, err)
+	assert.Equal(t, teamID, result.ID)
+
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, Status: models.TournamentActive}, nil)
+	_, err = svc.JoinTeam(ctx, teamID, userID)
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 400, appErr.Code)
+	teamRepo.AssertNumberOfCalls(t, "AddMember", 1)
+}
+
 // --- LeaveTeam ---
 
 func TestService_LeaveTeam_RegularMember(t *testing.T) {

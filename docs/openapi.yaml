@@ -1481,6 +1481,32 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /teams/{id}/join:
+    parameters:
+      - $ref: '#/components/parameters/TeamID'
+    post:
+      tags: [teams]
+      summary: Join team from the tournament team list
+      description: Same checks as joining by invite code (tournament pending, team not full, user not in another team of the tournament), without the code.
+      operationId: teamsJoin
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Joined team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /teams/{id}/leave:
     parameters:
       - $ref: '#/components/parameters/TeamID'
@@ -2770,6 +2796,9 @@ components:
           type: string
           format: date-time
           nullable: true
+        member_count:
+          type: integer
+          description: Number of members; only in the tournament team list
         created_at:
           type: string
           format: date-time

@@ -112,7 +112,8 @@ func (r *TeamRepository) GetByCode(ctx context.Context, code string) (*models.Te
 
 func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error) {
 	query := `
-		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at
+		SELECT id, tournament_id, name, code, leader_id, is_disqualified, disqualified_at, created_at, updated_at,
+			(SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = teams.id)
 		FROM teams
 		WHERE tournament_id = $1
 		ORDER BY created_at ASC
@@ -138,6 +139,7 @@ func (r *TeamRepository) GetByTournamentID(ctx context.Context, tournamentID uui
 			&team.DisqualifiedAt,
 			&team.CreatedAt,
 			&team.UpdatedAt,
+			&team.MemberCount,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan team")

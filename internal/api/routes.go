@@ -373,6 +373,9 @@ func (s *Server) setupRoutes() {
 				// вступление по ip, как логин: по user id каждый новый аккаунт давал
 				// бы перебору инвайт-кодов свой счётчик
 				r.With(s.rateLimit("join", nil)).Post("/join", s.teamHandler.JoinByCode)
+				// из списка команд турнира: перебирать нечего, лимит по ip бил бы
+				// зал за одним NAT
+				r.Post("/{id}/join", s.teamHandler.Join)
 				r.Get("/{id}", s.teamHandler.Get)
 				r.Put("/{id}", s.teamHandler.UpdateName)
 				r.Get("/{id}/members", s.teamHandler.GetMembers)

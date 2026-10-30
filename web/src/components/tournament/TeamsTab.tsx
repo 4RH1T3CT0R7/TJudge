@@ -6,6 +6,7 @@ import { queryKeys } from '../../api/queryKeys';
 import { SpaceInvader } from '../SpaceInvader';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
+import { joinableTeams } from './helpers';
 import type { Team, TournamentStatus } from '../../types';
 
 // Teams Tab Component
@@ -16,6 +17,8 @@ export function TeamsTab({
   myTeam,
   tournamentStatus,
   onJoinByCode,
+  onJoinTeam,
+  maxTeamSize,
   joinCode,
   setJoinCode,
   isJoining,
@@ -30,6 +33,8 @@ export function TeamsTab({
   myTeam: Team | null;
   tournamentStatus: TournamentStatus;
   onJoinByCode: () => void;
+  onJoinTeam: (teamId: string) => void;
+  maxTeamSize: number;
   joinCode: string;
   setJoinCode: (code: string) => void;
   isJoining: boolean;
@@ -39,6 +44,7 @@ export function TeamsTab({
   onRestore?: (teamId: string) => void;
 }) {
   const showJoinSection = isAuthenticated && !myTeam && tournamentStatus === 'pending';
+  const joinable = new Set(showJoinSection ? joinableTeams(teams, maxTeamSize).map((t) => t.id) : []);
   const [membersExpanded, setMembersExpanded] = useState(false);
 
   // Составы команд: запросы выполняются только после раскрытия (enabled),
@@ -70,7 +76,9 @@ export function TeamsTab({
         <div className="card mb-6 bg-blue-900/30 border-blue-700">
           <h3 className="font-semibold mb-3 text-blue-200">Присоединиться к команде</h3>
           <p className="text-sm text-blue-300 mb-3">
-            Введите код приглашения, полученный от капитана команды
+            {joinable.size > 0
+              ? 'Нажмите «Вступить» у команды в списке ниже или введите код приглашения от капитана'
+              : 'Введите код приглашения, полученный от капитана команды'}
           </p>
           <div className="flex gap-2">
             <input
@@ -147,9 +155,29 @@ export function TeamsTab({
                     </div>
                     <p className="text-sm text-gray-400">
                       {new Date(team.created_at).toLocaleDateString('ru-RU')}
+                      {team.member_count !== undefined && (
+                        <>
+                          {' · '}
+                          <span className="tabular-nums">
+                            участников {team.member_count}{maxTeamSize > 0 && ` из ${maxTeamSize}`}
+                          </span>
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
+
+                {joinable.has(team.id) && (
+                  <button
+                    type="button"
+                    onClick={() => onJoinTeam(team.id)}
+                    disabled={isJoining}
+                    aria-label={`Вступить в команду ${team.name}`}
+                    className="btn btn-sm btn-primary mt-3"
+                  >
+                    Вступить
+                  </button>
+                )}
 
                 {/* Admin: team members */}
                 {isAdmin && membersExpanded && (

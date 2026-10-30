@@ -81,6 +81,7 @@ var routeGuards = map[string]string{
 
 	"POST /api/v1/teams/":                        guardUser,
 	"POST /api/v1/teams/join":                    guardUser,
+	"POST /api/v1/teams/{id}/join":               guardUser,
 	"GET /api/v1/teams/{id}":                     guardUser,
 	"PUT /api/v1/teams/{id}":                     guardUser,
 	"GET /api/v1/teams/{id}/members":             guardUser,

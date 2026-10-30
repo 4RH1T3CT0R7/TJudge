@@ -167,14 +167,27 @@ func (s *Service) CreateTeam(ctx context.Context, req *CreateTeamRequest) (*mode
 	return result, nil
 }
 
-// JoinTeamByCode добавляет юзера в команду по коду.
-// лок нужен чтобы параллельные вступления не пробили лимит участников
+// JoinTeamByCode добавляет юзера в команду по коду приглашения
 func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*models.Team, error) {
 	team, err := s.teamRepo.GetByCode(ctx, req.Code)
 	if err != nil {
 		return nil, err
 	}
+	return s.join(ctx, team, req.UserID)
+}
 
+// JoinTeam добавляет юзера в команду, выбранную из списка команд турнира
+func (s *Service) JoinTeam(ctx context.Context, teamID, userID uuid.UUID) (*models.Team, error) {
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	return s.join(ctx, team, userID)
+}
+
+// join - общая часть вступления. лок нужен чтобы параллельные вступления не
+// пробили лимит участников
+func (s *Service) join(ctx context.Context, team *models.Team, userID uuid.UUID) (*models.Team, error) {
 	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
 	if err != nil {
 		return nil, err
@@ -189,9 +202,9 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*mo
 	// в несколько команд турнира (общий с CreateTeam), лок команды не даёт
 	// параллельным вступлениям разных людей перепрыгнуть MaxTeamSize.
 	// порядок взятия всегда один, поэтому взаимной блокировки нет
-	lockErr := s.lock.WithLock(ctx, membershipLockKey(team.TournamentID, req.UserID), 10*time.Second, func(ctx context.Context) error {
+	lockErr := s.lock.WithLock(ctx, membershipLockKey(team.TournamentID, userID), 10*time.Second, func(ctx context.Context) error {
 		return s.lock.WithLock(ctx, "team:join:"+team.ID.String(), 10*time.Second, func(ctx context.Context) error {
-			return s.joinLocked(ctx, team, tournament, req.UserID)
+			return s.joinLocked(ctx, team, tournament, userID)
 		})
 	})
 
@@ -199,12 +212,12 @@ func (s *Service) JoinTeamByCode(ctx context.Context, req *JoinTeamRequest) (*mo
 		return nil, lockErr
 	}
 
-	s.log.Info("User joined team", zap.String("team_id", team.ID.String()), zap.String("user_id", req.UserID.String()))
+	s.log.Info("User joined team", zap.String("team_id", team.ID.String()), zap.String("user_id", userID.String()))
 
 	return team, nil
 }
 
-// joinLocked - проверки лимита и членства и сама вставка, зовётся под локами JoinTeamByCode
+// joinLocked - проверки лимита и членства и сама вставка, зовётся под локами join
 func (s *Service) joinLocked(ctx context.Context, team *models.Team, tournament *models.Tournament, userID uuid.UUID) error {
 	// лимит считается под локом команды, поэтому он честный
 	memberCount, err := s.teamRepo.GetMemberCount(ctx, team.ID)

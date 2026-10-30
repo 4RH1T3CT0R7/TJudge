@@ -954,6 +954,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/teams/{id}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Team UUID */
+                id: components["parameters"]["TeamID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join team from the tournament team list
+         * @description Same checks as joining by invite code (tournament pending, team not full, user not in another team of the tournament), without the code.
+         */
+        post: operations["teamsJoin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teams/{id}/leave": {
         parameters: {
             query?: never;
@@ -1690,6 +1713,8 @@ export interface components {
             is_disqualified?: boolean;
             /** Format: date-time */
             disqualified_at?: string | null;
+            /** @description Number of members; only in the tournament team list */
+            member_count?: number;
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -3750,6 +3775,33 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    teamsJoin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Team UUID */
+                id: components["parameters"]["TeamID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Joined team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     teamsLeave: {

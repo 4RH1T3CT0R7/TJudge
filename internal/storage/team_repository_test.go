@@ -168,6 +168,7 @@ func (s *TeamRepositorySuite) TestGetByTournamentID() {
 
 	team1 := s.createTeam("Test Team ByTID 1", "BTID01", tournament.ID, user.ID)
 	team2 := s.createTeam("Test Team ByTID 2", "BTID02", tournament.ID, user.ID)
+	s.addMember(team1.ID, s.createTeamUser("gettid2").ID)
 
 	ctx := context.Background()
 	teams, err := s.repo.GetByTournamentID(ctx, tournament.ID)
@@ -175,12 +176,14 @@ func (s *TeamRepositorySuite) TestGetByTournamentID() {
 
 	assert.Len(s.T(), teams, 2)
 
-	ids := make(map[uuid.UUID]bool)
+	byID := make(map[uuid.UUID]*models.Team)
 	for _, t := range teams {
-		ids[t.ID] = true
+		byID[t.ID] = t
 	}
-	assert.True(s.T(), ids[team1.ID])
-	assert.True(s.T(), ids[team2.ID])
+	require.Contains(s.T(), byID, team1.ID)
+	require.Contains(s.T(), byID, team2.ID)
+	// список команд турнира несёт число участников: по нему фронт прячет полные
+	assert.Equal(s.T(), byID[team2.ID].MemberCount+1, byID[team1.ID].MemberCount)
 }
 
 func (s *TeamRepositorySuite) TestGetByTournamentID_Empty() {

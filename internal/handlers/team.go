@@ -19,6 +19,7 @@ import (
 type TeamService interface {
 	CreateTeam(ctx context.Context, req *team.CreateTeamRequest) (*models.Team, error)
 	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error)
+	JoinTeam(ctx context.Context, teamID, userID uuid.UUID) (*models.Team, error)
 	LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 	RemoveMember(ctx context.Context, teamID, memberUserID, leaderID uuid.UUID) error
 	UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error)
@@ -126,6 +127,29 @@ func (h *TeamHandler) JoinByCode(w http.ResponseWriter, r *http.Request) {
 		zap.String("team_id", t.ID.String()),
 		zap.String("user_id", userID.String()),
 	)
+
+	writeJSON(w, http.StatusOK, t)
+}
+
+// Join вступление в команду из списка команд турнира, без кода приглашения
+func (h *TeamHandler) Join(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeError(w, errors.ErrUnauthorized)
+		return
+	}
+
+	teamID, ok := parseUUIDParam(w, r, "id", "team")
+	if !ok {
+		return
+	}
+
+	t, err := h.teamService.JoinTeam(r.Context(), teamID, userID)
+	if err != nil {
+		h.log.LogError("Failed to join team", err)
+		writeError(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, t)
 }

@@ -41,6 +41,14 @@ func (m *MockTeamService) JoinTeamByCode(ctx context.Context, req *team.JoinTeam
 	return args.Get(0).(*models.Team), args.Error(1)
 }
 
+func (m *MockTeamService) JoinTeam(ctx context.Context, teamID, userID uuid.UUID) (*models.Team, error) {
+	args := m.Called(ctx, teamID, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Team), args.Error(1)
+}
+
 func (m *MockTeamService) LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error {
 	return m.Called(ctx, teamID, userID).Error(0)
 }
@@ -220,6 +228,29 @@ func TestTeamHandler_JoinByCode_NotFound(t *testing.T) {
 	h.JoinByCode(rr, req)
 
 	assert.Equal(t, http.StatusNotFound, rr.Code)
+}
+
+func TestTeamHandler_Join(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	userID, teamID := uuid.New(), uuid.New()
+
+	svc.On("JoinTeam", mock.Anything, teamID, userID).Return(&models.Team{ID: teamID}, nil)
+	rr := httptest.NewRecorder()
+	h.Join(rr, withChiParam(withUserID(httptest.NewRequest("POST", "/", nil), userID), "id", teamID.String()))
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// полная команда
+	full := uuid.New()
+	svc.On("JoinTeam", mock.Anything, full, userID).Return(nil, errors.ErrBadRequest.WithMessage("team is full"))
+	rr = httptest.NewRecorder()
+	h.Join(rr, withChiParam(withUserID(httptest.NewRequest("POST", "/", nil), userID), "id", full.String()))
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+
+	// без авторизации до сервиса не доходит
+	rr = httptest.NewRecorder()
+	h.Join(rr, withChiParam(httptest.NewRequest("POST", "/", nil), "id", teamID.String()))
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	svc.AssertNumberOfCalls(t, "JoinTeam", 2)
 }
 
 // --- Get ---

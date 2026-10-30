@@ -42,6 +42,8 @@ export interface Team {
   leader_id: string;
   is_disqualified: boolean;
   disqualified_at: string | null;
+  /** Число участников, только в списке команд турнира. */
+  member_count?: number;
   created_at: string;
   updated_at: string;
 }
