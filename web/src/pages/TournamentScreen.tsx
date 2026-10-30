@@ -241,6 +241,8 @@ export function TournamentScreen() {
 
   const placed = useMemo(() => standings.filter((r) => r.place !== null).slice(0, CEREMONY_PLACES), [standings]);
   const [revealed, setRevealed] = useState(0);
+  const revealNext = useCallback(() => setRevealed((n) => Math.min(n + 1, placed.length)), [placed.length]);
+  const revealPrev = useCallback(() => setRevealed((n) => Math.max(n - 1, 0)), []);
   const setCeremony = useCallback(
     (on: boolean) => {
       setRevealed(0);
@@ -276,19 +278,26 @@ export function TournamentScreen() {
         return;
       }
       if ((e.key === ' ' || e.key === 'Enter') && ownsKey(e.target)) return;
+      // PageDown и PageUp шлют пульты для презентаций
       if (ceremony) {
-        if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+        if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight' || e.key === 'PageDown') {
           e.preventDefault();
-          setRevealed((n) => Math.min(n + 1, placed.length));
-        } else if (e.key === 'ArrowLeft') {
-          setRevealed((n) => Math.max(n - 1, 0));
+          revealNext();
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          revealPrev();
         } else if (e.key === 'Escape' && !document.fullscreenElement) {
           setCeremony(false);
         }
         return;
       }
-      if (e.key === 'ArrowRight') nextPage();
-      else if (e.key === 'ArrowLeft') prevPage();
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextPage();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevPage();
+      }
       else if (e.key === ' ') {
         e.preventDefault();
         setPaused((v) => !v);
@@ -296,7 +305,7 @@ export function TournamentScreen() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ceremony, nextPage, prevPage, placed.length, setCeremony, toggleFullscreen]);
+  }, [ceremony, nextPage, prevPage, revealNext, revealPrev, setCeremony, toggleFullscreen]);
 
   const tournament = tournamentQuery.data;
   if (tournamentQuery.isError) {
@@ -364,7 +373,7 @@ export function TournamentScreen() {
             шапки, чтобы строка итога и название занимали всю ширину */}
         <nav
           aria-label="Управление табло"
-          className={`absolute right-0 top-0 flex max-w-[45vw] flex-wrap justify-end gap-2 bg-[#0a0a0b] pb-2 pl-2 transition-opacity has-[:focus-visible]:opacity-100 ${idle ? 'opacity-0' : 'opacity-100'}`}
+          className={`absolute right-0 top-0 flex max-w-[45vw] flex-wrap justify-end gap-2 bg-[#0a0a0b] pb-2 pl-2 transition-opacity has-[:focus-visible]:opacity-100 ${idle ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
         >
           <button type="button" onClick={onClick(toggleFullscreen)} className="btn btn-sm btn-secondary">
             {fullscreen.active ? 'Выйти из полного экрана' : 'На весь экран'}
@@ -379,6 +388,19 @@ export function TournamentScreen() {
               </button>
               <button type="button" onClick={onClick(nextPage)} aria-label="Следующая страница" className="btn btn-sm btn-secondary">
                 ›
+              </button>
+            </>
+          )}
+          {ceremony && (
+            <>
+              <button type="button" onClick={onClick(revealPrev)} aria-label="Скрыть последнее раскрытое место" className="btn btn-sm btn-secondary">
+                ‹
+              </button>
+              <button type="button" onClick={onClick(revealNext)} aria-label="Раскрыть следующее место" className="btn btn-sm btn-secondary">
+                ›
+              </button>
+              <button type="button" onClick={onClick(() => setRevealed(placed.length))} className="btn btn-sm btn-secondary">
+                Показать всех
               </button>
             </>
           )}
@@ -410,7 +432,7 @@ export function TournamentScreen() {
       />
 
       {ceremony ? (
-        <Ceremony ref={ceremonyRef} rows={placed} revealed={revealed} />
+        <Ceremony ref={ceremonyRef} rows={placed} revealed={revealed} onClick={revealNext} />
       ) : !table ? (
         <div className="flex flex-1 items-center justify-center text-gray-400 text-[clamp(16px,2.4vh,32px)]">
           <Spinner>загрузка таблицы</Spinner>
@@ -531,8 +553,9 @@ const CUP = [
 
 const placeSumLabel = (n: number) => `сумма мест ${n}`;
 
-// Церемония: места раскрываются снизу вверх по пробелу или →, ← возвращает шаг.
-function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: number; ref: React.Ref<HTMLElement> }) {
+// Церемония: места раскрываются снизу вверх кликом, пробелом, → или пультом,
+// ← возвращает шаг.
+function Ceremony({ rows, revealed, onClick, ref }: { rows: StandingRow[]; revealed: number; onClick: () => void; ref: React.Ref<HTMLElement> }) {
   // раскрыты последние revealed строк списка
   const isShown = (i: number) => i >= rows.length - revealed;
   const rest = rows.slice(3);
@@ -541,7 +564,8 @@ function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: numb
   const reveal = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: DUR.slow, ease: EASE_OUT } };
 
   return (
-    <section ref={ref} tabIndex={-1} aria-label="Церемония награждения" className="flex min-h-0 flex-1 flex-col font-mono outline-none">
+    // клик - дубль кнопки «›» в панели и пробела, поэтому без роли кнопки
+    <section ref={ref} tabIndex={-1} onClick={onClick} aria-label="Церемония награждения" className="flex min-h-0 flex-1 cursor-pointer select-none flex-col font-mono outline-none">
       <p className="text-primary-400 text-[clamp(16px,2.6vh,34px)]">
         <span aria-hidden="true">$ </span>церемония награждения
       </p>
@@ -592,7 +616,7 @@ function Ceremony({ rows, revealed, ref }: { rows: StandingRow[]; revealed: numb
       <p className="mt-[1vh] text-center text-gray-400 text-[clamp(14px,1.9vh,24px)]">
         <span aria-hidden="true">{'// '}</span>
         {revealed < rows.length
-          ? `пробел или → — следующее место, ← — назад · раскрыто ${revealed} из ${rows.length}`
+          ? `клик, пробел или → — следующее место, ← — назад · раскрыто ${revealed} из ${rows.length}`
           : 'все места раскрыты · Esc — к таблице'}
       </p>
     </section>
