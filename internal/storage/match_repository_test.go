@@ -227,8 +227,9 @@ func (s *MatchRepositorySuite) TestStartNewRound() {
 	assert.Equal(s.T(), int64(2), deleted)
 }
 
-// раунд авто-режима: доигранные пары текущих программ остаются вместе с историей
-// рейтинга, матчи старой версии и упавшие удаляются, вставляются только недостающие пары
+// раунд авто-режима: сыгранные пары текущих программ (и форфейты) остаются вместе с
+// историей рейтинга, матчи старой версии и сбои без победителя удаляются, вставляются
+// только недостающие пары
 func (s *MatchRepositorySuite) TestUpdateRound() {
 	tournament, a, b := s.setupMatchPrerequisites("upr")
 	cOld := s.createProgram(a.UserID, "Bot3old_upr")
@@ -242,7 +243,12 @@ func (s *MatchRepositorySuite) TestUpdateRound() {
 	require.NoError(s.T(), gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
 
 	kept := s.createMatch(tournament.ID, a.ID, b.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
-	failed := s.createMatch(tournament.ID, b.ID, a.ID, game.Name, models.MatchFailed, models.PriorityHigh, 1)
+	// форфейт: программа b упала, победа у a - сыгранный результат
+	forfeit := s.createMatch(tournament.ID, b.ID, a.ID, game.Name, models.MatchFailed, models.PriorityHigh, 1)
+	_, err := s.database.ExecContext(ctx, "UPDATE matches SET winner = 2 WHERE id = $1", forfeit.ID)
+	require.NoError(s.T(), err)
+	// сбой без победителя - не результат
+	failed := s.createMatch(tournament.ID, a.ID, cNew.ID, game.Name, models.MatchFailed, models.PriorityHigh, 1)
 	stale := s.createMatch(tournament.ID, a.ID, cOld.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
 	s.createMatch(tournament.ID, cOld.ID, b.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
 	for _, m := range []*models.Match{kept, stale} {
@@ -273,18 +279,19 @@ func (s *MatchRepositorySuite) TestUpdateRound() {
 
 	added, err := gameRepo.UpdateRound(ctx, tournament.ID, game.Name, newRound())
 	require.NoError(s.T(), err)
-	// 6 пар раунда минус доигранная a-b; упавшая b-a переигрывается
-	require.Len(s.T(), added, 5)
+	// 6 пар раунда минус сыгранные a-b и b-a; сбой a-c переигрывается
+	require.Len(s.T(), added, 4)
 	for _, m := range added {
-		assert.False(s.T(), m.Program1ID == a.ID && m.Program2ID == b.ID, "доигранная пара не переигрывается")
+		assert.True(s.T(), m.Program1ID == cNew.ID || m.Program2ID == cNew.ID, "сыгранные пары не переигрываются")
 	}
 
-	got, err := s.repo.GetByID(ctx, kept.ID)
-	require.NoError(s.T(), err)
-	assert.Equal(s.T(), models.MatchCompleted, got.Status)
+	for _, id := range []uuid.UUID{kept.ID, forfeit.ID} {
+		_, err = s.repo.GetByID(ctx, id)
+		require.NoError(s.T(), err, "сыгранный матч и форфейт остаются")
+	}
 	for _, id := range []uuid.UUID{failed.ID, stale.ID} {
 		_, err = s.repo.GetByID(ctx, id)
-		assert.True(s.T(), errors.IsNotFound(err), "упавший матч и матчи старой версии удаляются")
+		assert.True(s.T(), errors.IsNotFound(err), "сбой без победителя и матчи старой версии удаляются")
 	}
 	var total, history int
 	require.NoError(s.T(), s.database.GetContext(ctx, &total,
