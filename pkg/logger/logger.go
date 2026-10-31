@@ -1,7 +1,10 @@
 package logger
 
 import (
+	"context"
+	"errors"
 	"os"
+	"strings"
 	"time"
 
 	apperrors "github.com/bmstu-itstech/tjudge/pkg/errors"
@@ -83,6 +86,13 @@ func (l *Logger) LogError(msg string, err error, fields ...zap.Field) {
 	fields = append(fields, zap.Error(err))
 	// caller - место вызова LogError, а не сама обёртка
 	log := l.WithOptions(zap.AddCallerSkip(1))
+	// отменённый контекст: чаще всего клиент ушёл раньше ответа (закрыл вкладку,
+	// поллинг отменил запрос), реже остановка worker'а или отмена запроса в бд.
+	// это warn, а не error: в логах видно, но в счёт ошибок доктора не идёт
+	if err != nil && (errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "canceling statement due to user request")) {
+		log.Warn(msg, fields...)
+		return
+	}
 	if appErr := apperrors.ToAppError(err); appErr != nil && appErr.Code < 500 {
 		log.Warn(msg, fields...)
 		return

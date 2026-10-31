@@ -1,6 +1,9 @@
 package logger
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -86,11 +89,16 @@ func TestLogger_LogErrorLevelAndCaller(t *testing.T) {
 
 	log.LogError("client", apperrors.ErrValidation)
 	log.LogError("server", assert.AnError)
+	log.LogError("gone", fmt.Errorf("failed to get matches: %w", context.Canceled))
+	log.LogError("gone pq", errors.New("pq: canceling statement due to user request"))
 
 	entries := logs.All()
-	require.Len(t, entries, 2)
+	require.Len(t, entries, 4)
 	assert.Equal(t, zap.WarnLevel, entries[0].Level)
 	assert.Equal(t, zap.ErrorLevel, entries[1].Level)
+	// отменённый контекст (ушедший клиент) - не ошибка сервера
+	assert.Equal(t, zap.WarnLevel, entries[2].Level)
+	assert.Equal(t, zap.WarnLevel, entries[3].Level)
 	assert.True(t, strings.HasSuffix(entries[1].Caller.File, "logger_test.go"), entries[1].Caller.File)
 }
 

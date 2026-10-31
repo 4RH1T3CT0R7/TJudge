@@ -15,8 +15,8 @@ set -uo pipefail
 #   3. Health-эндпоинты API и worker'а
 #   4. Полный статус /system/status (ADMIN_TOKEN): БД и версия миграций против
 #      migrations/, Redis, dead-letter, outbox рейтингов, зависшая компиляция
-#   5. Prometheus: целевые up-метрики, 5xx-rate, активные алерты
-#      (firing-алерты попадают в отчёт как есть - с их описаниями)
+#   5. Prometheus: целевые up-метрики, 5xx-rate, число активных алертов
+#      (сами алерты присылает Alertmanager, доктор их не дублирует)
 #   6. Логи api/worker за DOCTOR_LOG_WINDOW: количество error/panic,
 #      топ повторяющихся сообщений
 #   7. Диск
@@ -24,8 +24,10 @@ set -uo pipefail
 #
 # Куда отчитывается:
 #   - терминал (всегда), exit-код: 0 здорово/предупреждения, 1 критично
-#   - Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID): при проблемах,
-#     или всегда при DOCTOR_TELEGRAM=always; never - отключить
+#   - Telegram (TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID): когда набор проблем
+#     изменился (появилась, ушла, сменила уровень), напоминанием раз в
+#     DOCTOR_REMIND_HOURS, пока не ушли, и один раз «всё в порядке» после них.
+#     DOCTOR_TELEGRAM=always - каждый запуск, never - отключить
 #   - Pushgateway (PUSHGATEWAY_URL): метрики чеков для дашборда
 #     «TJudge - Doctor» в Grafana и алертов Prometheus
 #
@@ -39,6 +41,8 @@ set -uo pipefail
 #   ADMIN_TOKEN=<jwt>                          # альтернатива: готовый токен
 #                                              # (истекает за JWT_ACCESS_TTL)
 #   DOCTOR_TELEGRAM=auto|always|never          # default auto
+#   DOCTOR_REMIND_HOURS=24                     # повтор тех же проблем в Telegram
+#   DOCTOR_STATE_FILE=~/.cache/tjudge-doctor.state  # прошлый набор проблем
 #   DOCTOR_LOG_WINDOW=15m
 #   DOCTOR_LOG_ERROR_THRESHOLD=5               # ошибок в окне до warn
 #   DOCTOR_MAX_RESTARTS=0                      # рестартов контейнера до warn
@@ -58,6 +62,8 @@ PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9092}"
 # если его нет (dev-машина), push тихо скипается с одной строчкой в выводе.
 PUSHGATEWAY_URL="${PUSHGATEWAY_URL:-http://localhost:9094}"
 DOCTOR_TELEGRAM="${DOCTOR_TELEGRAM:-auto}"
+DOCTOR_REMIND_HOURS="${DOCTOR_REMIND_HOURS:-24}"
+DOCTOR_STATE_FILE="${DOCTOR_STATE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/tjudge-doctor.state}"
 DOCTOR_LOG_WINDOW="${DOCTOR_LOG_WINDOW:-15m}"
 DOCTOR_LOG_ERROR_THRESHOLD="${DOCTOR_LOG_ERROR_THRESHOLD:-5}"
 DOCTOR_MAX_RESTARTS="${DOCTOR_MAX_RESTARTS:-0}"
@@ -289,24 +295,13 @@ check_prometheus() {
         fi
     fi
 
-    # Активные алерты Prometheus - готовые «на что обратить внимание».
-    # Doctor* исключены: они строятся из метрик самого доктора, и их учёт
-    # зацикливает вердикт (DEGRADED -> алерт DoctorDegraded -> следующий
-    # прогон видит алерт -> снова DEGRADED, даже когда всё уже здорово).
-    local alerts
-    alerts=$(curl -sf --max-time 5 "$PROMETHEUS_URL/api/v1/alerts" 2>/dev/null \
-        | jq -r '.data.alerts[]? | select(.state=="firing")
-                 | select(.labels.alertname | startswith("Doctor") | not)
-                 | "\(.labels.alertname)|\(.labels.severity // "warning")|\(.annotations.summary // "")"' 2>/dev/null)
-    if [ -n "$alerts" ]; then
-        while IFS='|' read -r aname asev asum; do
-            [ -z "$aname" ] && continue
-            local sev=warn; [ "$asev" = "critical" ] && sev=crit
-            add "$sev" "alert:$aname" "${asum:-алерт активен}" "Prometheus → Alerts; описание порога в deployments/prometheus/alerts/"
-        done <<< "$alerts"
-    else
-        add ok prom-alerts "активных алертов нет"
-    fi
+    # активные алерты присылает в Telegram Alertmanager: здесь только их число,
+    # иначе каждый алерт приходил бы дважды. Doctor* не считаются: они строятся
+    # из метрик самого доктора
+    local firing
+    firing=$(curl -sf --max-time 5 "$PROMETHEUS_URL/api/v1/alerts" 2>/dev/null \
+        | jq '[.data.alerts[]? | select(.state=="firing") | select(.labels.alertname | startswith("Doctor") | not)] | length' 2>/dev/null)
+    add ok prom-alerts "активных алертов: ${firing:-?} (их присылает Alertmanager)"
 }
 
 # ----------------------------------------------------------------------- 6. логи
@@ -320,11 +315,13 @@ check_logs() {
         local logs errors panics
         logs=$(docker logs --since "$DOCTOR_LOG_WINDOW" "$ctr" 2>&1 || true)
         errors=$(echo "$logs" | grep -c '"level":"error"' || true)
-        panics=$(echo "$logs" | grep -ciE 'panic:|fatal' || true)
+        # панику самого сервиса: строка рантайма Go с начала строки или zap-уровень.
+        # panic внутри текста ошибки программы участника (её stderr) не в счёт
+        panics=$(echo "$logs" | grep -cE '^(panic: |fatal error: )|"level":"(dpanic|panic|fatal)"' || true)
 
         if [ "${panics:-0}" -gt 0 ]; then
             local sample
-            sample=$(echo "$logs" | grep -iE 'panic:|fatal' | head -1 | cut -c1-160)
+            sample=$(echo "$logs" | grep -E '^(panic: |fatal error: )|"level":"(dpanic|panic|fatal)"' | head -1 | cut -c1-160)
             add crit "logs:$ctr" "panic/fatal за $DOCTOR_LOG_WINDOW: $panics («$sample»)" "docker logs --tail=300 $ctr"
         elif [ "${errors:-0}" -gt "$DOCTOR_LOG_ERROR_THRESHOLD" ]; then
             local top
@@ -432,11 +429,29 @@ fi
 send_telegram() {
     [ "$DOCTOR_TELEGRAM" = "never" ] && return 0
     [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ] && return 0
-    if [ "$DOCTOR_TELEGRAM" = "auto" ] && [ "$VERDICT" = "HEALTHY" ]; then return 0; fi
 
+    # набор проблем без текстов: «ошибок 15» и «ошибок 14» - одна и та же проблема
+    # LC_ALL=C: у cron и ручного запуска разные локали, а с ними порядок sort
+    local now fp last_ts="" last_fp="" remind_h="$DOCTOR_REMIND_HOURS"
+    now=$(date +%s)
+    fp=$(for i in "${!SEVERITIES[@]}"; do
+        [ "${SEVERITIES[$i]}" = "ok" ] || echo "${SEVERITIES[$i]}:${CHECKS[$i]}"
+    done | LC_ALL=C sort | paste -sd, -)
+    [ -f "$DOCTOR_STATE_FILE" ] && read -r last_ts last_fp < "$DOCTOR_STATE_FILE"
+    # испорченный файл или переменная не должны ронять доктора на арифметике
+    [[ "$last_ts" =~ ^[0-9]+$ ]] || last_ts=0
+    [[ "$remind_h" =~ ^[0-9]+$ ]] || remind_h=24
+    if [ "$DOCTOR_TELEGRAM" = "auto" ] && [ "$fp" = "$last_fp" ]; then
+        # ничего не изменилось: здоровье - молчание, проблемы - напоминание раз в N часов
+        [ -z "$fp" ] && return 0
+        [ $((now - last_ts)) -lt $((remind_h * 3600)) ] && return 0
+    fi
+
+    # обычный текст, без parse_mode: «<» или «&» в тексте проблемы ломали HTML,
+    # и Telegram отвечал 400
     local icon="✅"; [ "$VERDICT" = "DEGRADED" ] && icon="⚠️"; [ "$VERDICT" = "CRITICAL" ] && icon="🔥"
     local msg
-    msg="$icon <b>TJudge Doctor: $VERDICT</b> ($(hostname), $(date '+%Y-%m-%d %H:%M'))"
+    msg="$icon TJudge Doctor: $VERDICT ($(hostname), $(date '+%Y-%m-%d %H:%M'))"
     msg="$msg
 ok: $OKS, warn: $WARNS, crit: $CRITS"
 
@@ -445,20 +460,25 @@ ok: $OKS, warn: $WARNS, crit: $CRITS"
         [ "$s" = "ok" ] && continue
         local mark="⚠️"; [ "$s" = "crit" ] && mark="❌"
         msg="$msg
-$mark <b>${CHECKS[$i]}</b>: ${MESSAGES[$i]}"
+$mark ${CHECKS[$i]}: ${MESSAGES[$i]}"
         [ -n "${HINTS[$i]}" ] && msg="$msg
    → ${HINTS[$i]}"
     done
 
-    # Telegram режет сообщения > 4096 символов.
-    msg=$(printf '%s' "$msg" | head -c 3900)
+    # Telegram режет сообщения > 4096 символов; iconv -c выбрасывает русскую
+    # букву, разрезанную head пополам, иначе Telegram отверг бы текст целиком
+    msg=$(printf '%s' "$msg" | head -c 3900 | iconv -f UTF-8 -t UTF-8 -c)
 
-    curl -sS --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+    # состояние пишется только после доставки: иначе неотправленные проблемы
+    # молчали бы до напоминания. -f: ответ 4xx/5xx Telegram - тоже неудача
+    if curl -sSf --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
         -d "chat_id=${TELEGRAM_CHAT_ID}" \
-        --data-urlencode "text=${msg}" \
-        -d "parse_mode=HTML" >/dev/null 2>&1 \
-        && { $JSON_MODE || echo "  отчёт отправлен в Telegram"; } \
-        || { $JSON_MODE || echo "  не удалось отправить в Telegram"; }
+        --data-urlencode "text=${msg}" >/dev/null 2>&1; then
+        mkdir -p "$(dirname "$DOCTOR_STATE_FILE")" && echo "$now $fp" > "$DOCTOR_STATE_FILE"
+        $JSON_MODE || echo "  отчёт отправлен в Telegram"
+    else
+        $JSON_MODE || echo "  не удалось отправить в Telegram"
+    fi
 }
 send_telegram
 

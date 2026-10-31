@@ -104,8 +104,11 @@ func (c *Client) ReadPump() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				c.log.LogError("WebSocket read error", err,
+			// закрытие вкладки, уход со страницы, обрыв сети - обычная жизнь клиента.
+			// необычный код закрытия тоже проблема клиента, а не сервера: info
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway,
+				websocket.CloseNoStatusReceived, websocket.CloseAbnormalClosure) {
+				c.log.Info("WebSocket closed unexpectedly", zap.Error(err),
 					zap.String("tournament_id", c.tournamentID.String()),
 					zap.String("user_id", c.userID.String()),
 				)

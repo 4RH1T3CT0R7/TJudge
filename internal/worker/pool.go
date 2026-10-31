@@ -287,13 +287,24 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 
 	err = p.processWithRetry(processCtx, match)
 
-	if err != nil {
+	switch {
+	case errors.Is(err, ErrProgramFailed):
+		// ошибка программы участника - обычный исход матча, текст уже в матче.
+		// error-уровнем бот с багом засыпал бы доктора, а его stderr с panic
+		// выглядел бы падением сервера
+		p.matchesFailed.Add(1)
+		p.log.Info("Match finished with program error",
+			zap.Int32("worker_id", workerID),
+			zap.String("match_id", match.ID.String()),
+			zap.Error(err),
+		)
+	case err != nil:
 		p.matchesFailed.Add(1)
 		p.log.LogError("Match processing failed", err,
 			zap.Int32("worker_id", workerID),
 			zap.String("match_id", match.ID.String()),
 		)
-	} else {
+	default:
 		status = "completed"
 		p.matchesProcessed.Add(1)
 	}
