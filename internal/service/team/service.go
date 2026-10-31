@@ -22,6 +22,7 @@ type TeamRepository interface {
 	GetByTournamentID(ctx context.Context, tournamentID uuid.UUID) ([]*models.Team, error)
 	List(ctx context.Context, filter models.TeamFilter) ([]*models.Team, error)
 	Update(ctx context.Context, team *models.Team) error
+	UpdateName(ctx context.Context, team *models.Team) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	AddMember(ctx context.Context, member *models.TeamMember) error
 	RemoveMember(ctx context.Context, teamID, userID uuid.UUID) error
@@ -460,8 +461,8 @@ func (s *Service) RenameTeam(ctx context.Context, teamID uuid.UUID, name string)
 func (s *Service) rename(ctx context.Context, team *models.Team, name string) (*models.Team, error) {
 	team.Name = name
 
-	if err := s.teamRepo.Update(ctx, team); err != nil {
-		return nil, errors.Wrap(err, "failed to update team")
+	if err := s.teamRepo.UpdateName(ctx, team); err != nil {
+		return nil, err
 	}
 
 	s.log.Info("Team name updated", zap.String("team_id", team.ID.String()), zap.String("new_name", name))

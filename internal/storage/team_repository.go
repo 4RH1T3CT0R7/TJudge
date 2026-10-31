@@ -223,6 +223,20 @@ func (r *TeamRepository) List(ctx context.Context, filter models.TeamFilter) ([]
 	return teams, nil
 }
 
+// UpdateName меняет только название: полный Update записал бы и прочитанный
+// раньше leader_id, откатив параллельную передачу лидерства
+func (r *TeamRepository) UpdateName(ctx context.Context, team *models.Team) error {
+	err := r.db.QueryRowContext(ctx, `UPDATE teams SET name = $2 WHERE id = $1 RETURNING updated_at`,
+		team.ID, team.Name).Scan(&team.UpdatedAt)
+	if stderrors.Is(err, sql.ErrNoRows) {
+		return errors.ErrNotFound.WithMessage("team not found")
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to update team name")
+	}
+	return nil
+}
+
 func (r *TeamRepository) Update(ctx context.Context, team *models.Team) error {
 	query := `
 		UPDATE teams

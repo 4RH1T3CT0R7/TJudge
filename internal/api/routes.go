@@ -378,7 +378,8 @@ func (s *Server) setupRoutes() {
 				// зал за одним NAT
 				r.Post("/{id}/join", s.teamHandler.Join)
 				r.Get("/{id}", s.teamHandler.Get)
-				r.Put("/{id}", s.teamHandler.UpdateName)
+				// лидер или админ (переименование при запрете), в аудит попадает только админ
+				r.With(s.auditMiddleware()).Put("/{id}", s.teamHandler.UpdateName)
 				r.Get("/{id}/members", s.teamHandler.GetMembers)
 				r.Post("/{id}/leave", s.teamHandler.Leave)
 				// лидер или админ, в аудит попадает только админ

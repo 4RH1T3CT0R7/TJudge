@@ -160,6 +160,31 @@ func (s *TeamRepositorySuite) TestGetByCode_NotFound() {
 	assert.True(s.T(), errors.IsNotFound(err))
 }
 
+// UpdateName меняет только название: лидер, сменённый после чтения команды,
+// не откатывается
+func (s *TeamRepositorySuite) TestUpdateName() {
+	user := s.createTeamUser("updname1")
+	other := s.createTeamUser("updname2")
+	tournament := s.createTeamTournament("TTEAMUN", user.ID)
+	team := s.createTeam("Old Name", "UPDN01", tournament.ID, user.ID)
+	ctx := context.Background()
+
+	stale := *team
+	team.LeaderID = other.ID
+	require.NoError(s.T(), s.repo.Update(ctx, team))
+
+	stale.Name = "New Name"
+	require.NoError(s.T(), s.repo.UpdateName(ctx, &stale))
+
+	got, err := s.repo.GetByID(ctx, team.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), "New Name", got.Name)
+	assert.Equal(s.T(), other.ID, got.LeaderID)
+
+	missing := models.Team{ID: uuid.New(), Name: "x"}
+	assert.True(s.T(), errors.IsNotFound(s.repo.UpdateName(ctx, &missing)))
+}
+
 // --- GetByTournamentID ---
 
 func (s *TeamRepositorySuite) TestGetByTournamentID() {

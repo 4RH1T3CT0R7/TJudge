@@ -57,6 +57,10 @@ func (m *MockTeamRepository) List(ctx context.Context, filter models.TeamFilter)
 	return args.Get(0).([]*models.Team), args.Error(1)
 }
 
+func (m *MockTeamRepository) UpdateName(ctx context.Context, team *models.Team) error {
+	return m.Called(ctx, team).Error(0)
+}
+
 func (m *MockTeamRepository) Update(ctx context.Context, team *models.Team) error {
 	return m.Called(ctx, team).Error(0)
 }
@@ -629,7 +633,7 @@ func TestService_UpdateTeamName_Success(t *testing.T) {
 
 	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID, Name: "Old"}, nil)
 	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID}, nil)
-	teamRepo.On("Update", ctx, mock.MatchedBy(func(t *models.Team) bool {
+	teamRepo.On("UpdateName", ctx, mock.MatchedBy(func(t *models.Team) bool {
 		return t.Name == "New Name"
 	})).Return(nil)
 
@@ -646,13 +650,13 @@ func TestService_TeamNamesLocked(t *testing.T) {
 
 	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID, Name: "Old"}, nil)
 	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, TeamNamesLocked: true}, nil)
-	teamRepo.On("Update", ctx, mock.Anything).Return(nil)
+	teamRepo.On("UpdateName", ctx, mock.Anything).Return(nil)
 
 	_, err := svc.UpdateTeamName(ctx, teamID, "New", leaderID)
 	appErr := errors.GetAppError(err)
 	require.NotNil(t, appErr)
 	assert.Equal(t, 403, appErr.Code)
-	teamRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+	teamRepo.AssertNotCalled(t, "UpdateName", mock.Anything, mock.Anything)
 
 	team, err := svc.RenameTeam(ctx, teamID, "  Admin Name ")
 	require.NoError(t, err)
