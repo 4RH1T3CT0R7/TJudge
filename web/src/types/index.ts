@@ -27,6 +27,8 @@ export interface Tournament {
   max_participants?: number;
   max_team_size: number;
   is_permanent: boolean;
+  /** Капитаны не могут переименовывать команды, включает админ. */
+  team_names_locked: boolean;
   start_time?: string;
   end_time?: string;
   creator_id?: string;

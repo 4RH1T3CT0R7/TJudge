@@ -327,6 +327,7 @@ func (s *Server) setupRoutes() {
 						r.With(s.idempotency()).Post("/", s.tournamentHandler.Create)
 						r.Post("/{id}/start", s.tournamentHandler.Start)
 						r.Post("/{id}/complete", s.tournamentHandler.Complete)
+						r.Post("/{id}/team-names-lock", s.tournamentHandler.SetTeamNamesLock)
 						r.Post("/{id}/matches", s.tournamentHandler.CreateMatch)
 						r.Delete("/{id}", s.tournamentHandler.Delete)
 						r.Delete("/{id}/games/{gameId}", s.gameHandler.RemoveGameFromTournament)

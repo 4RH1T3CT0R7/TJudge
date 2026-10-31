@@ -25,6 +25,7 @@ type TournamentService interface {
 	Start(ctx context.Context, tournamentID uuid.UUID) error
 	Complete(ctx context.Context, tournamentID uuid.UUID) error
 	Delete(ctx context.Context, tournamentID uuid.UUID) error
+	SetTeamNamesLocked(ctx context.Context, tournamentID uuid.UUID, locked bool) error
 	GetLeaderboard(ctx context.Context, tournamentID uuid.UUID, limit int) ([]*models.LeaderboardEntry, error)
 	GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error)
 	CreateMatch(ctx context.Context, tournamentID, program1ID, program2ID uuid.UUID, priority models.MatchPriority) (*models.Match, error)
@@ -165,6 +166,30 @@ func (h *TournamentHandler) Start(w http.ResponseWriter, r *http.Request) {
 	)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "started"})
+}
+
+type TeamNamesLockRequest struct {
+	Locked *bool `json:"locked"`
+}
+
+// SetTeamNamesLock включает или снимает запрет переименования команд капитанами
+func (h *TournamentHandler) SetTeamNamesLock(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDParam(w, r, "id", "tournament")
+	if !ok {
+		return
+	}
+	// без поля locked (опечатка, пустое тело) запрет молча снялся бы
+	var req TeamNamesLockRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Locked == nil {
+		writeError(w, errors.ErrInvalidInput.WithMessage("locked is required"))
+		return
+	}
+	if err := h.tournamentService.SetTeamNamesLocked(r.Context(), id, *req.Locked); err != nil {
+		h.log.LogError("Failed to set team names lock", err)
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *TournamentHandler) Complete(w http.ResponseWriter, r *http.Request) {

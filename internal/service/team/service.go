@@ -433,13 +433,38 @@ func (s *Service) UpdateTeamName(ctx context.Context, teamID uuid.UUID, name str
 		return nil, errors.ErrForbidden.WithMessage("only team leader can update team name")
 	}
 
+	tournament, err := s.tournamentRepo.GetByID(ctx, team.TournamentID)
+	if err != nil {
+		return nil, err
+	}
+	if tournament.TeamNamesLocked {
+		return nil, errors.ErrForbidden.WithMessage("team names are locked by the organizer")
+	}
+
+	return s.rename(ctx, team, name)
+}
+
+// RenameTeam - переименование админом: без проверки лидерства и запрета
+func (s *Service) RenameTeam(ctx context.Context, teamID uuid.UUID, name string) (*models.Team, error) {
+	name, err := normalizeTeamName(name)
+	if err != nil {
+		return nil, err
+	}
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	return s.rename(ctx, team, name)
+}
+
+func (s *Service) rename(ctx context.Context, team *models.Team, name string) (*models.Team, error) {
 	team.Name = name
 
 	if err := s.teamRepo.Update(ctx, team); err != nil {
 		return nil, errors.Wrap(err, "failed to update team")
 	}
 
-	s.log.Info("Team name updated", zap.String("team_id", teamID.String()), zap.String("new_name", name))
+	s.log.Info("Team name updated", zap.String("team_id", team.ID.String()), zap.String("new_name", name))
 
 	return team, nil
 }

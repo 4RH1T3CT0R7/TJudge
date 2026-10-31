@@ -559,6 +559,10 @@ class ApiClient {
     return data;
   }
 
+  async setTeamNamesLock(tournamentId: string, locked: boolean): Promise<void> {
+    await this.client.post(`/tournaments/${tournamentId}/team-names-lock`, { locked });
+  }
+
   // админ: пользователь переходит в команду из прежней команды турнира.
   // ошибку показывает вызывающий
   async moveTeamMember(teamId: string, userId: string): Promise<void> {

@@ -623,11 +623,12 @@ func TestService_RemoveMember_TargetNotInTeam(t *testing.T) {
 // --- UpdateTeamName ---
 
 func TestService_UpdateTeamName_Success(t *testing.T) {
-	svc, teamRepo, _ := newTestTeamService(t)
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
 	ctx := context.Background()
-	teamID, leaderID := uuid.New(), uuid.New()
+	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
 
-	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, LeaderID: leaderID, Name: "Old"}, nil)
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID, Name: "Old"}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID}, nil)
 	teamRepo.On("Update", ctx, mock.MatchedBy(func(t *models.Team) bool {
 		return t.Name == "New Name"
 	})).Return(nil)
@@ -635,6 +636,27 @@ func TestService_UpdateTeamName_Success(t *testing.T) {
 	team, err := svc.UpdateTeamName(ctx, teamID, "New Name", leaderID)
 	require.NoError(t, err)
 	assert.Equal(t, "New Name", team.Name)
+}
+
+// при запрете капитан не переименовывает, админ (RenameTeam) - да
+func TestService_TeamNamesLocked(t *testing.T) {
+	svc, teamRepo, tournamentRepo := newTestTeamService(t)
+	ctx := context.Background()
+	teamID, leaderID, tID := uuid.New(), uuid.New(), uuid.New()
+
+	teamRepo.On("GetByID", ctx, teamID).Return(&models.Team{ID: teamID, TournamentID: tID, LeaderID: leaderID, Name: "Old"}, nil)
+	tournamentRepo.On("GetByID", ctx, tID).Return(&models.Tournament{ID: tID, TeamNamesLocked: true}, nil)
+	teamRepo.On("Update", ctx, mock.Anything).Return(nil)
+
+	_, err := svc.UpdateTeamName(ctx, teamID, "New", leaderID)
+	appErr := errors.GetAppError(err)
+	require.NotNil(t, appErr)
+	assert.Equal(t, 403, appErr.Code)
+	teamRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+
+	team, err := svc.RenameTeam(ctx, teamID, "  Admin Name ")
+	require.NoError(t, err)
+	assert.Equal(t, "Admin Name", team.Name)
 }
 
 func TestService_UpdateTeamName_NotLeader(t *testing.T) {

@@ -49,6 +49,14 @@ func (m *MockTeamService) JoinTeam(ctx context.Context, teamID, userID uuid.UUID
 	return args.Get(0).(*models.Team), args.Error(1)
 }
 
+func (m *MockTeamService) RenameTeam(ctx context.Context, teamID uuid.UUID, name string) (*models.Team, error) {
+	args := m.Called(ctx, teamID, name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Team), args.Error(1)
+}
+
 func (m *MockTeamService) MoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
 	return m.Called(ctx, teamID, userID).Error(0)
 }
@@ -290,6 +298,21 @@ func TestTeamHandler_RemoveMember_Admin(t *testing.T) {
 	h.RemoveMember(rr, req)
 	assert.Equal(t, http.StatusNoContent, rr.Code)
 	svc.AssertNotCalled(t, "RemoveMember", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+// админ переименовывает через RenameTeam: без проверки лидерства и запрета
+func TestTeamHandler_UpdateName_Admin(t *testing.T) {
+	h, svc := newTestTeamHandler()
+	teamID := uuid.New()
+	svc.On("RenameTeam", mock.Anything, teamID, "Новое").Return(&models.Team{ID: teamID, Name: "Новое"}, nil)
+
+	body, _ := json.Marshal(UpdateNameRequest{Name: "Новое"})
+	req := withUserID(httptest.NewRequest("PUT", "/", bytes.NewReader(body)), uuid.New())
+	req = req.WithContext(context.WithValue(req.Context(), middleware.RoleKey, models.RoleAdmin))
+	rr := httptest.NewRecorder()
+	h.UpdateName(rr, withChiParam(req, "id", teamID.String()))
+	assert.Equal(t, http.StatusOK, rr.Code)
+	svc.AssertNotCalled(t, "UpdateTeamName", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 // --- Get ---

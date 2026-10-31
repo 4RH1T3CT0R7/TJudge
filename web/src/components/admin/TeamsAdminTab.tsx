@@ -20,12 +20,14 @@ function moveErrorMessage(err: unknown): string {
   return raw || 'Не удалось изменить состав';
 }
 
-// Составы команд турнира: админ переносит участника в другую команду или
-// убирает из команды. Уход капитана передаёт капитанство другому участнику,
-// опустевшая команда турнира в регистрации удаляется - как при выходе.
+// Команды турнира: админ переименовывает их, запрещает капитанам переименование,
+// переносит участника в другую команду или убирает из команды. Уход капитана
+// передаёт капитанство другому участнику, опустевшая команда турнира в
+// регистрации удаляется - как при выходе.
 export function TeamsAdminTab({ tournaments }: { tournaments: Tournament[] }) {
   const [tournamentId, setTournamentId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const queryClient = useQueryClient();
   const tournament = tournaments.find((t) => t.id === tournamentId);
   const teamsQuery = useTournamentTeams(tournamentId);
@@ -55,6 +57,40 @@ export function TeamsAdminTab({ tournaments }: { tournaments: Tournament[] }) {
     }
   };
 
+  const toggleNamesLock = async () => {
+    if (!tournament) return;
+    const lock = !tournament.team_names_locked;
+    setBusy(true);
+    try {
+      await api.setTeamNamesLock(tournament.id, lock);
+      useToastStore.getState().addToast(lock ? 'Капитаны больше не могут переименовывать команды' : 'Капитаны снова могут переименовывать команды', 'success');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournaments() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournament.id) });
+    } catch {
+      // текст ошибки показал клиент API
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rename = async (team: Team) => {
+    const name = renaming?.name.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      await api.updateTeamName(team.id, name);
+      setRenaming(null);
+      useToastStore.getState().addToast(`«${team.name}» теперь «${name}»`, 'success');
+      // название есть и в списке команд, и в таблицах турнира: все они под ключом турнира
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tournament(tournamentId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.team(team.id) });
+    } catch {
+      // текст ошибки показал клиент API
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // последний участник команды в регистрации уводит её с собой: это подтверждается
   const confirmEmptied = (team: Team, members: User[], message: string) =>
     members.length > 1 || tournament?.status !== 'pending'
@@ -78,7 +114,15 @@ export function TeamsAdminTab({ tournaments }: { tournaments: Tournament[] }) {
       <h2 className="mb-4 text-lg font-semibold text-gray-100">Составы команд</h2>
       <Field label="Выберите турнир" className="mb-6">
         {(control) => (
-          <select {...control} value={tournamentId} onChange={(e) => setTournamentId(e.target.value)} className="input max-w-md">
+          <select
+            {...control}
+            value={tournamentId}
+            onChange={(e) => {
+              setTournamentId(e.target.value);
+              setRenaming(null);
+            }}
+            className="input max-w-md"
+          >
             <option value="">-- Выберите турнир --</option>
             {tournaments.map((t) => (
               <option key={t.id} value={t.id}>
@@ -89,6 +133,25 @@ export function TeamsAdminTab({ tournaments }: { tournaments: Tournament[] }) {
         )}
       </Field>
 
+      {tournament && (
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void toggleNamesLock()}
+            disabled={busy}
+            aria-pressed={tournament.team_names_locked}
+            className={`btn btn-sm ${tournament.team_names_locked ? 'btn-warning' : 'btn-secondary'}`}
+          >
+            {tournament.team_names_locked ? 'Разрешить капитанам переименование' : 'Запретить капитанам переименование'}
+          </button>
+          <span className="text-sm text-gray-400">
+            {tournament.team_names_locked
+              ? 'Сейчас капитаны не могут менять названия. Админ может переименовать любую команду.'
+              : 'Сейчас капитаны могут менять названия своих команд.'}
+          </span>
+        </div>
+      )}
+
       {tournamentId && teamsQuery.isLoading && <Spinner className="text-sm text-gray-400">загрузка команд</Spinner>}
       {tournamentId && !teamsQuery.isLoading && teams.length === 0 && <p className="text-sm text-gray-400">В турнире нет команд</p>}
       {locked && <p className="mb-4 text-sm text-gray-400">Турнир завершён: составы только для просмотра.</p>}
@@ -98,11 +161,45 @@ export function TeamsAdminTab({ tournaments }: { tournaments: Tournament[] }) {
           const members = teamQueries[i]?.data?.members ?? [];
           return (
             <section key={team.id} aria-label={`Команда ${team.name}`} className={`card ${team.is_disqualified ? 'border-red-600' : ''}`}>
-              <h3 className="flex flex-wrap items-center gap-2 font-semibold text-gray-100">
-                <span className="min-w-0 truncate">{team.name}</span>
-                {team.is_disqualified && <span className="badge badge-red">дисквалифицирована</span>}
-                <span className="text-sm font-normal text-gray-400">участников {team.member_count ?? members.length}</span>
-              </h3>
+              {renaming?.id === team.id ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void rename(team);
+                  }}
+                  className="flex flex-wrap gap-2"
+                >
+                  <input
+                    aria-label={`Новое название команды ${team.name}`}
+                    value={renaming.name}
+                    onChange={(e) => setRenaming({ id: team.id, name: e.target.value })}
+                    maxLength={255}
+                    autoFocus
+                    className="input min-w-0 flex-1 py-1 text-sm"
+                  />
+                  <button type="submit" disabled={busy || !renaming.name.trim()} className="btn btn-sm btn-primary">
+                    Сохранить
+                  </button>
+                  <button type="button" onClick={() => setRenaming(null)} className="btn btn-sm btn-secondary">
+                    Отмена
+                  </button>
+                </form>
+              ) : (
+                <h3 className="flex flex-wrap items-center gap-2 font-semibold text-gray-100">
+                  <span className="min-w-0 truncate">{team.name}</span>
+                  {team.is_disqualified && <span className="badge badge-red">дисквалифицирована</span>}
+                  <span className="text-sm font-normal text-gray-400">участников {team.member_count ?? members.length}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRenaming({ id: team.id, name: team.name })}
+                    disabled={busy}
+                    aria-label={`Переименовать команду ${team.name}`}
+                    className="btn btn-sm btn-secondary ml-auto font-normal"
+                  >
+                    Переименовать
+                  </button>
+                </h3>
+              )}
               {teamQueries[i]?.isLoading ? (
                 <Spinner className="mt-3 text-xs text-gray-500">загрузка</Spinner>
               ) : (

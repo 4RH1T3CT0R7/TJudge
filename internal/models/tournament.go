@@ -25,6 +25,7 @@ type Tournament struct {
 	MaxParticipants *int             `json:"max_participants,omitempty" db:"max_participants"`
 	MaxTeamSize     int              `json:"max_team_size" db:"max_team_size"`
 	IsPermanent     bool             `json:"is_permanent" db:"is_permanent"`
+	TeamNamesLocked bool             `json:"team_names_locked" db:"team_names_locked"` // капитаны не переименовывают команды
 	CreatorID       *uuid.UUID       `json:"creator_id,omitempty" db:"creator_id"`
 	StartTime       *time.Time       `json:"start_time,omitempty" db:"start_time"`
 	EndTime         *time.Time       `json:"end_time,omitempty" db:"end_time"`

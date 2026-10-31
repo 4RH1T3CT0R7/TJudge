@@ -21,6 +21,7 @@ type TeamService interface {
 	JoinTeamByCode(ctx context.Context, req *team.JoinTeamRequest) (*models.Team, error)
 	JoinTeam(ctx context.Context, teamID, userID uuid.UUID) (*models.Team, error)
 	MoveMember(ctx context.Context, teamID, userID uuid.UUID) error
+	RenameTeam(ctx context.Context, teamID uuid.UUID, name string) (*models.Team, error)
 	LeaveTeam(ctx context.Context, teamID, userID uuid.UUID) error
 	RemoveMember(ctx context.Context, teamID, memberUserID, leaderID uuid.UUID) error
 	UpdateTeamName(ctx context.Context, teamID uuid.UUID, name string, leaderID uuid.UUID) (*models.Team, error)
@@ -263,7 +264,14 @@ func (h *TeamHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, err := h.teamService.UpdateTeamName(r.Context(), id, req.Name, userID)
+	// админ переименовывает любую команду, в том числе при запрете для капитанов
+	var t *models.Team
+	var err error
+	if isAdmin(r.Context()) {
+		t, err = h.teamService.RenameTeam(r.Context(), id, req.Name)
+	} else {
+		t, err = h.teamService.UpdateTeamName(r.Context(), id, req.Name, userID)
+	}
 	if err != nil {
 		h.log.LogError("Failed to update team name", err)
 		writeError(w, err)

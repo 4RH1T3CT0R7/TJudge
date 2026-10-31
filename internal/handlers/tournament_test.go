@@ -87,6 +87,10 @@ func (m *MockTournamentService) Delete(ctx context.Context, tournamentID uuid.UU
 	return args.Error(0)
 }
 
+func (m *MockTournamentService) SetTeamNamesLocked(ctx context.Context, tournamentID uuid.UUID, locked bool) error {
+	return m.Called(ctx, tournamentID, locked).Error(0)
+}
+
 func (m *MockTournamentService) GetCrossGameLeaderboard(ctx context.Context, tournamentID uuid.UUID) ([]*models.CrossGameLeaderboardEntry, error) {
 	args := m.Called(ctx, tournamentID)
 	if args.Get(0) == nil {
@@ -880,4 +884,23 @@ func TestGameHandler_GetHeadToHead_Success(t *testing.T) {
 	assert.Equal(t, 2, result[0].Wins)
 	svc.AssertExpectations(t)
 	leaderboardRepo.AssertExpectations(t)
+}
+
+func TestTournamentHandler_SetTeamNamesLock(t *testing.T) {
+	log, _ := logger.New("error", "json")
+	svc := new(MockTournamentService)
+	handler := NewTournamentHandler(svc, new(MockSchedulingService), nil, log)
+	id := uuid.New()
+	svc.On("SetTeamNamesLocked", mock.Anything, id, true).Return(nil)
+
+	rr := httptest.NewRecorder()
+	handler.SetTeamNamesLock(rr, withTournamentID(httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{"locked":true}`))), id.String()))
+	assert.Equal(t, http.StatusNoContent, rr.Code)
+
+	for _, body := range []string{`{`, `{}`, `{"lock":true}`} {
+		rr = httptest.NewRecorder()
+		handler.SetTeamNamesLock(rr, withTournamentID(httptest.NewRequest("POST", "/", bytes.NewReader([]byte(body))), id.String()))
+		assert.Equal(t, http.StatusBadRequest, rr.Code, body)
+	}
+	svc.AssertNumberOfCalls(t, "SetTeamNamesLocked", 1)
 }

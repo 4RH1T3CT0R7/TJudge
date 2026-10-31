@@ -79,7 +79,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 
 	query := `
 		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
-		       metadata, version, created_at, updated_at
+		       metadata, version, created_at, updated_at, team_names_locked
 		FROM tournaments
 		WHERE id = $1
 	`
@@ -101,6 +101,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 		&tournament.Version,
 		&tournament.CreatedAt,
 		&tournament.UpdatedAt,
+		&tournament.TeamNamesLocked,
 	)
 
 	if stderrors.Is(err, sql.ErrNoRows) {
@@ -122,7 +123,7 @@ func (r *TournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*mode
 func (r *TournamentRepository) List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error) {
 	query := `
 		SELECT id, code, name, description, game_type, status, max_participants, max_team_size, is_permanent, creator_id, start_time, end_time,
-		       metadata, version, created_at, updated_at
+		       metadata, version, created_at, updated_at, team_names_locked
 		FROM tournaments
 		WHERE 1=1
 	`
@@ -187,6 +188,7 @@ func (r *TournamentRepository) List(ctx context.Context, filter models.Tournamen
 			&tournament.Version,
 			&tournament.CreatedAt,
 			&tournament.UpdatedAt,
+			&tournament.TeamNamesLocked,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to scan tournament")
@@ -282,6 +284,22 @@ func (r *TournamentRepository) Complete(ctx context.Context, tournament *models.
 		return err
 	})
 	return cancelled, err
+}
+
+// SetTeamNamesLocked включает или снимает запрет переименования команд турнира
+func (r *TournamentRepository) SetTeamNamesLocked(ctx context.Context, id uuid.UUID, locked bool) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE tournaments SET team_names_locked = $2, updated_at = NOW() WHERE id = $1`, id, locked)
+	if err != nil {
+		return errors.Wrap(err, "failed to set team names lock")
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return errors.Wrap(err, "failed to check team names lock update")
+	}
+	if n == 0 {
+		return errors.ErrNotFound.WithMessage("tournament not found")
+	}
+	return nil
 }
 
 func (r *TournamentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error {

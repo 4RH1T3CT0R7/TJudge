@@ -408,6 +408,42 @@ func TestE2E_AdminMoveMember(t *testing.T) {
 	assert.Len(t, got, 1)
 }
 
+// TestE2E_TeamNamesLock: при запрете капитан не переименовывает команду, админ
+// переименовывает; после снятия запрета капитан снова может
+func TestE2E_TeamNamesLock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	admin, leader := NewTestClient(), NewTestClient()
+	registerAndAuthAsAdmin(t, admin, "lock_admin")
+	tournamentID := createTournamentHelper(t, admin)
+	registerAndAuth(t, leader, "lock_leader")
+	teamID := createTeamHelper(t, leader, tournamentID).ID
+
+	setLock := func(locked bool) {
+		resp, err := admin.doRequest("POST", "/api/v1/tournaments/"+tournamentID+"/team-names-lock", map[string]bool{"locked": locked})
+		require.NoError(t, err)
+		requireStatus(t, resp, http.StatusNoContent)
+		var tr struct {
+			TeamNamesLocked bool `json:"team_names_locked"`
+		}
+		getJSON(t, admin, "/api/v1/tournaments/"+tournamentID, &tr)
+		require.Equal(t, locked, tr.TeamNamesLocked)
+	}
+	rename := func(c *TestClient, name string, want int) {
+		resp, err := c.doRequest("PUT", "/api/v1/teams/"+teamID, map[string]string{"name": name})
+		require.NoError(t, err)
+		requireStatus(t, resp, want)
+	}
+
+	setLock(true)
+	rename(leader, "Капитанское", http.StatusForbidden)
+	rename(admin, "Админское", http.StatusOK)
+	setLock(false)
+	rename(leader, "Капитанское", http.StatusOK)
+}
+
 // =============================================================================
 // E2E Test: Team Leave
 // =============================================================================

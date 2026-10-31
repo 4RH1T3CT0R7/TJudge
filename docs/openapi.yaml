@@ -336,6 +336,38 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /tournaments/{id}/team-names-lock:
+    parameters:
+      - $ref: '#/components/parameters/TournamentID'
+    post:
+      tags: [tournaments]
+      summary: Lock or unlock team renaming (admin)
+      description: While locked, team leaders cannot rename their teams; admins still can.
+      operationId: tournamentsSetTeamNamesLock
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locked]
+              properties:
+                locked:
+                  type: boolean
+      responses:
+        '204':
+          description: Lock updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /tournaments/{id}/complete:
     parameters:
       - $ref: '#/components/parameters/TournamentID'
@@ -1392,7 +1424,7 @@ paths:
     put:
       tags: [teams]
       summary: Update team name
-      description: Only the team leader can rename the team.
+      description: The team leader renames the team unless the tournament has team_names_locked (then 403). An admin can rename any team regardless of the lock.
       operationId: teamsUpdateName
       security:
         - BearerAuth: []
@@ -2566,6 +2598,9 @@ components:
           type: integer
         is_permanent:
           type: boolean
+        team_names_locked:
+          type: boolean
+          description: Team leaders cannot rename teams (set by an admin)
         creator_id:
           type: string
           format: uuid
@@ -3241,7 +3276,7 @@ components:
           description: Map of game_id to rating info
         total_rating:
           type: integer
-          description: Sum of game scores, for display
+          description: Sum of game scores; breaks ties between equal total_places (higher is better)
         total_places:
           type: integer
           description: Sum of the team places in tournament games, lower is better. Rank is ordered by it; a game the team did not play counts as the place after the last

@@ -39,6 +39,7 @@ type TournamentRepository interface {
 	Create(ctx context.Context, tournament *models.Tournament) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error)
 	List(ctx context.Context, filter models.TournamentFilter) ([]*models.Tournament, error)
+	SetTeamNamesLocked(ctx context.Context, id uuid.UUID, locked bool) error
 	Update(ctx context.Context, tournament *models.Tournament) error
 	Complete(ctx context.Context, tournament *models.Tournament) (int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status models.TournamentStatus) error
@@ -394,6 +395,19 @@ func (s *Service) Delete(ctx context.Context, tournamentID uuid.UUID) error {
 	// событие, кэш чистится в обработчиках
 	s.notifier.TournamentDeleted(ctx, events.TournamentDeleted{Version: 1, TournamentID: tournamentID})
 
+	return nil
+}
+
+// SetTeamNamesLocked включает или снимает запрет переименования команд капитанами
+func (s *Service) SetTeamNamesLocked(ctx context.Context, tournamentID uuid.UUID, locked bool) error {
+	if err := s.tournamentRepo.SetTeamNamesLocked(ctx, tournamentID, locked); err != nil {
+		return err
+	}
+	// турнир в кэше со старым флагом: страницы команд показывали бы переименование
+	if err := s.tournamentCache.Invalidate(ctx, tournamentID); err != nil {
+		s.log.Error("Failed to invalidate tournament cache", zap.Error(err))
+	}
+	s.log.Info("Team names lock changed", zap.String("tournament_id", tournamentID.String()), zap.Bool("locked", locked))
 	return nil
 }
 

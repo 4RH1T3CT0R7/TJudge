@@ -177,6 +177,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tournaments/{id}/team-names-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lock or unlock team renaming (admin)
+         * @description While locked, team leaders cannot rename their teams; admins still can.
+         */
+        post: operations["tournamentsSetTeamNamesLock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tournaments/{id}/complete": {
         parameters: {
             query?: never;
@@ -898,7 +921,7 @@ export interface paths {
         get: operations["teamsGet"];
         /**
          * Update team name
-         * @description Only the team leader can rename the team.
+         * @description The team leader renames the team unless the tournament has team_names_locked (then 403). An admin can rename any team regardless of the lock.
          */
         put: operations["teamsUpdateName"];
         post?: never;
@@ -1589,6 +1612,8 @@ export interface components {
             max_participants?: number | null;
             max_team_size?: number;
             is_permanent?: boolean;
+            /** @description Team leaders cannot rename teams (set by an admin) */
+            team_names_locked?: boolean;
             /** Format: uuid */
             creator_id?: string | null;
             /** Format: date-time */
@@ -1930,7 +1955,7 @@ export interface components {
             game_ratings?: {
                 [key: string]: components["schemas"]["GameRatingInfo"];
             };
-            /** @description Sum of game scores, for display */
+            /** @description Sum of game scores; breaks ties between equal total_places (higher is better) */
             total_rating?: number;
             /** @description Sum of the team places in tournament games, lower is better. Rank is ordered by it; a game the team did not play counts as the place after the last */
             total_places?: number;
@@ -2540,6 +2565,37 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    tournamentsSetTeamNamesLock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tournament UUID */
+                id: components["parameters"]["TournamentID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    locked: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Lock updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     tournamentsComplete: {

@@ -19,7 +19,10 @@ export function TeamManagement() {
   const { data: teamData, isPending, isError, refetch } = useTeam(id ?? '');
   const showLoading = useDelayedLoading(isPending);
   // название турнира для крошки
-  const tournamentName = useTournament(teamData?.tournament_id ?? '').data?.name;
+  const tournamentQuery = useTournament(teamData?.tournament_id ?? '');
+  const tournamentName = tournamentQuery.data?.name;
+  // организатор запретил переименование: кнопка капитану не нужна
+  const namesLocked = tournamentQuery.data?.team_names_locked ?? false;
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -185,11 +188,13 @@ export function TeamManagement() {
         }
         status={isLeader && <span className="text-xs bg-primary-900/50 text-primary-300 px-2 py-0.5 rounded">Вы капитан</span>}
         actions={
-          isLeader && !isEditing && (
+          isLeader && !isEditing && (namesLocked ? (
+            <span className="text-sm text-gray-400">Организатор запретил переименование команд</span>
+          ) : (
             <button onClick={() => { setNewName(teamData.name); setIsEditing(true); }} className="btn btn-secondary">
               Изменить название
             </button>
-          )
+          ))
         }
       />
 

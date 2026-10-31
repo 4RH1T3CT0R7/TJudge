@@ -42,6 +42,10 @@ func (m *MockTournamentRepository) Delete(ctx context.Context, id uuid.UUID) err
 	return m.Called(ctx, id).Error(0)
 }
 
+func (m *MockTournamentRepository) SetTeamNamesLocked(ctx context.Context, id uuid.UUID, locked bool) error {
+	return m.Called(ctx, id, locked).Error(0)
+}
+
 func (m *MockTournamentRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Tournament, error) {
 	args := m.Called(ctx, id)
 	v, _ := args.Get(0).(*models.Tournament)
