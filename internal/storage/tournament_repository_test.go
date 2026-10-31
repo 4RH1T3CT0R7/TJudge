@@ -655,6 +655,33 @@ func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard_SharedRank() {
 	assert.Equal(s.T(), []int{1, 1}, []int{draw[0].Rank, draw[1].Rank})
 }
 
+// равная сумма мест и победы: выше та, у кого больше сумма очков всех игр
+func (s *TournamentRepositorySuite) TestGetCrossGameLeaderboard_PointsTieBreak() {
+	ctx := context.Background()
+	user := s.createTrackedUser("tp_cgp")
+	tournament := s.createTrackedTournament("TPCGP1", user.ID)
+	var games []*models.Game
+	for _, name := range []string{"cgp_one", "cgp_two"} {
+		g := s.createTrackedGame(name)
+		require.NoError(s.T(), s.gameRepo.AddToTournament(ctx, tournament.ID, g.ID))
+		games = append(games, g)
+	}
+	x := []*models.Program{s.createTeamEntrant(tournament.ID, games[0].ID, "TCGPX1")}
+	y := []*models.Program{s.createTeamEntrant(tournament.ID, games[0].ID, "TCGPY1")}
+	x = append(x, s.createTrackedProgram(x[0].UserID, x[0].TeamID, &tournament.ID, &games[1].ID, x[0].Name+games[1].Name, 1))
+	y = append(y, s.createTrackedProgram(y[0].UserID, y[0].TeamID, &tournament.ID, &games[1].ID, y[0].Name+games[1].Name, 1))
+	// по победе у каждой, суммы мест 1+2 = 2+1, очков у y больше: 5+100 против 10+1
+	s.completeMatch(tournament.ID, x[0].ID, y[0].ID, games[0].Name, 10, 5, 1)
+	s.completeMatch(tournament.ID, y[1].ID, x[1].ID, games[1].Name, 100, 1, 1)
+
+	entries, err := s.repo.GetCrossGameLeaderboard(ctx, tournament.ID)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), entries, 2)
+	assert.Equal(s.T(), y[0].TeamID, entries[0].TeamID)
+	assert.Equal(s.T(), []int{1, 2}, []int{entries[0].Rank, entries[1].Rank})
+	assert.Equal(s.T(), []int{3, 3}, []int{entries[0].TotalPlaces, entries[1].TotalPlaces})
+}
+
 func (s *TournamentRepositorySuite) TestGetLatestParticipantsByGame() {
 	user := s.createTrackedUser("tp_lpg")
 	tournament := s.createTrackedTournament("TPLPG1", user.ID)

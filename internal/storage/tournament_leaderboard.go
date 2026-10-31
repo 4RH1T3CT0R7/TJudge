@@ -230,10 +230,11 @@ func (r *TournamentRepository) GetCrossGameLeaderboard(ctx context.Context, tour
 			GROUP BY t.team_id
 		)
 		SELECT
-			-- RANK, а не ROW_NUMBER: при равных сумме мест и победах место общее,
-			-- и баннер «#1» получают все первые. порядок строк - по загрузке
+			-- при равной сумме мест выше большая сумма очков всех игр. RANK, а не
+			-- ROW_NUMBER: при равных сумме мест и очках место общее, и баннер «#1»
+			-- получают все первые. порядок строк - по загрузке
 			RANK() OVER (
-				ORDER BY a.total_games > 0 DESC, COALESCE(tp.total_places, 0) ASC, a.total_wins DESC
+				ORDER BY a.total_games > 0 DESC, COALESCE(tp.total_places, 0) ASC, a.total_rating DESC
 			) as rank,
 			a.team_id,
 			a.team_name,

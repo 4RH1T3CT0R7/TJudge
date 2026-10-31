@@ -125,9 +125,9 @@ export function honestStandings(
     gamePlaces: {} as Record<string, number>,
     missedGames: new Set<string>(),
     wins: 0,
-    // победы для равных сумм: у неполной игры - доля побед, число зависело бы
-    // от того, сколько матчей команды очередь уже сыграла
-    tieWins: 0,
+    // очки для равных сумм мест: сумма по играм, у неполной игры - очки за
+    // матч, сумма зависела бы от того, сколько матчей очередь уже сыграла
+    tieScore: 0,
     losses: 0,
     games: 0,
   }));
@@ -149,7 +149,7 @@ export function honestStandings(
       const prev = played[i - 1];
       row.gamePlaces[gameId] = prev && prev.score === score && prev.winsKey === winsKey ? prev.row.gamePlaces[gameId] : i + 1;
       row.wins += r.wins;
-      row.tieWins += winsKey;
+      row.tieScore += score;
       row.losses += r.losses;
       row.games += r.total_games;
     });
@@ -163,21 +163,21 @@ export function honestStandings(
       row.placeSum += row.gamePlaces[gameId];
     }
   }
-  // при равенстве суммы мест и побед место общее, а порядок - как у сервера:
-  // иначе строки менялись бы местами от частичных итогов
-  // доли побед двух неполных игр складываются с погрешностью float
-  const sameWins = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  // при равной сумме мест выше большая сумма очков; при равенстве и очков место
+  // общее, а порядок - как у сервера: иначе строки менялись бы местами от
+  // частичных итогов. очки за матч неполных игр складываются с погрешностью float
+  const sameScore = (a: number, b: number) => Math.abs(a - b) < 1e-9;
   rows.sort(
     (a, b) =>
       Number(b.games > 0) - Number(a.games > 0) ||
       a.placeSum - b.placeSum ||
-      (sameWins(a.tieWins, b.tieWins) ? 0 : b.tieWins - a.tieWins) ||
+      (sameScore(a.tieScore, b.tieScore) ? 0 : b.tieScore - a.tieScore) ||
       a.index - b.index
   );
   let place = 0;
   return rows.map((s, i) => {
     const prev = rows[i - 1];
-    if (!prev || prev.placeSum !== s.placeSum || !sameWins(prev.tieWins, s.tieWins)) place = i + 1;
+    if (!prev || prev.placeSum !== s.placeSum || !sameScore(prev.tieScore, s.tieScore)) place = i + 1;
     return {
       entry: s.entry,
       place: s.games > 0 ? place : null,
