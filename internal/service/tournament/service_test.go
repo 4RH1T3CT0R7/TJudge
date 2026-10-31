@@ -150,6 +150,11 @@ func (m *MockGameRepository) SetActiveGame(ctx context.Context, id, gameID uuid.
 func (m *MockGameRepository) StartNewRound(ctx context.Context, id uuid.UUID, gameTypes []string, matches []*models.Match) error {
 	return m.Called(ctx, id, gameTypes, matches).Error(0)
 }
+func (m *MockGameRepository) UpdateRound(ctx context.Context, id uuid.UUID, gameType string, matches []*models.Match) ([]*models.Match, error) {
+	args := m.Called(ctx, id, gameType, matches)
+	v, _ := args.Get(0).([]*models.Match)
+	return v, args.Error(1)
+}
 func (m *MockGameRepository) ResetGameRoundFull(ctx context.Context, id uuid.UUID, gameType string) (int64, int64, int64, error) {
 	args := m.Called(ctx, id, gameType)
 	return int64(args.Int(0)), int64(args.Int(1)), int64(args.Int(2)), args.Error(3)

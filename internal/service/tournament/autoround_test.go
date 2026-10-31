@@ -104,6 +104,55 @@ func TestAutoRoundScheduler_processGame_RunErrorKeepsLastRun(t *testing.T) {
 	gameRepo.AssertNotCalled(t, "UpdateAutoRoundLastRun", mock.Anything, mock.Anything, mock.Anything)
 }
 
+// первый авто-раунд после включения полный (StartNewRound), следующие переигрывают
+// только пары, которые вернул UpdateRound, и в очередь уходят только они
+func TestAutoRoundScheduler_processGame_FullThenPartial(t *testing.T) {
+	old := time.Now().Add(-time.Hour)
+	for _, tt := range []struct {
+		name      string
+		lastRunAt *time.Time
+	}{
+		{name: "first_run_full"},
+		{name: "next_run_partial", lastRunAt: &old},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ss, tournamentRepo, matchRepo, queueManager, distLock, gameRepo := newTestSchedulingService(t)
+			log, _ := logger.New("error", "json")
+			s := NewAutoRoundScheduler(ss, gameRepo, log, time.Second)
+			ctx := context.Background()
+
+			g := &models.AutoRoundGameInfo{TournamentID: uuid.New(), GameID: uuid.New(), GameType: "dilemma", IntervalSeconds: 60, LastRunAt: tt.lastRunAt}
+			participants := []*models.TournamentParticipant{
+				{ID: uuid.New(), TournamentID: g.TournamentID, ProgramID: uuid.New()},
+				{ID: uuid.New(), TournamentID: g.TournamentID, ProgramID: uuid.New()},
+				{ID: uuid.New(), TournamentID: g.TournamentID, ProgramID: uuid.New()},
+			}
+			added := []*models.Match{{ID: uuid.New()}, {ID: uuid.New()}}
+
+			gameRepo.On("HasActiveMatchesForGame", ctx, g.TournamentID, g.GameType).Return(false, nil)
+			gameRepo.On("HasNewProgramsSince", ctx, g.TournamentID, g.GameType, mock.AnythingOfType("time.Time")).Return(true, nil)
+			distLock.On("WithLock", anyLock()...).Return(nil)
+			tournamentRepo.On("GetByID", ctx, g.TournamentID).Return(activeTournament(g.TournamentID), nil)
+			matchRepo.On("GetPendingByTournamentAndGame", ctx, g.TournamentID, g.GameType).Return([]*models.Match{}, nil)
+			tournamentRepo.On("GetLatestParticipantsByGame", ctx, g.TournamentID, g.GameType).Return(participants, nil)
+			fullRound := mock.MatchedBy(func(m []*models.Match) bool { return len(m) == 6 })
+			if tt.lastRunAt == nil {
+				gameRepo.On("StartNewRound", ctx, g.TournamentID, []string{g.GameType}, fullRound).Return(nil)
+				queueManager.On("EnqueueBatch", mock.Anything, fullRound).Return(nil)
+			} else {
+				gameRepo.On("UpdateRound", ctx, g.TournamentID, g.GameType, fullRound).Return(added, nil)
+				queueManager.On("EnqueueBatch", mock.Anything, added).Return(nil)
+			}
+			gameRepo.On("UpdateAutoRoundLastRun", ctx, g.TournamentID, g.GameID).Return(nil)
+
+			s.processGame(ctx, g)
+
+			gameRepo.AssertExpectations(t)
+			queueManager.AssertExpectations(t)
+		})
+	}
+}
+
 // меньше двух готовых программ: раунд не стартует, и таймер говорит почему
 func TestAutoRoundScheduler_processGame_NotEnoughParticipants(t *testing.T) {
 	ss, tournamentRepo, matchRepo, _, distLock, gameRepo := newTestSchedulingService(t)

@@ -120,23 +120,48 @@ func (ss *SchedulingService) runAllMatchesLocked(ctx context.Context, tournament
 
 // RunGameMatches - запускает матчи для одной конкретной игры турнира
 func (ss *SchedulingService) RunGameMatches(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	return ss.runGame(ctx, tournamentID, gameType, false)
+}
+
+// UpdateGameRound - раунд авто-режима: переигрываются только пары, где сменилась
+// программа, доигранные матчи остальных пар остаются (GameRepository.UpdateRound)
+func (ss *SchedulingService) UpdateGameRound(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+	return ss.runGame(ctx, tournamentID, gameType, true)
+}
+
+func (ss *SchedulingService) runGame(ctx context.Context, tournamentID uuid.UUID, gameType string, partial bool) (int, error) {
 	var enqueued int
 	lockErr := ss.distributedLock.WithLock(ctx, scheduleLockKey(tournamentID), 60*time.Second, func(ctx context.Context) error {
 		var err error
-		enqueued, err = ss.runGameMatchesLocked(ctx, tournamentID, gameType)
+		enqueued, err = ss.runGameMatchesLocked(ctx, tournamentID, gameType, partial)
 		return err
 	})
 
 	return enqueued, lockErr
 }
 
-func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UUID, gameType string) (int, error) {
+func (ss *SchedulingService) runGameMatchesLocked(ctx context.Context, tournamentID uuid.UUID, gameType string, partial bool) (int, error) {
 	pending, matches, _, err := ss.planGameRound(ctx, tournamentID, gameType)
 	if err != nil {
 		return 0, err
 	}
 	if len(pending) > 0 {
 		return ss.enqueue(ctx, tournamentID, pending)
+	}
+
+	if partial {
+		added, err := ss.gameRepo.UpdateRound(ctx, tournamentID, gameType, matches)
+		if err != nil {
+			return 0, fmt.Errorf("failed to update round: %w", err)
+		}
+		ss.log.Info("Updated round: replaying pairs with new programs",
+			zap.String("tournament_id", tournamentID.String()),
+			zap.String("game_type", gameType),
+			zap.Int("matches_count", len(added)),
+			zap.Int("round_size", len(matches)),
+		)
+		ss.enqueueCommitted(ctx, tournamentID, added)
+		return len(added), nil
 	}
 
 	ss.log.Info("No pending matches for game, resetting and generating new round",
@@ -229,10 +254,18 @@ func (ss *SchedulingService) startRound(ctx context.Context, tournamentID uuid.U
 		zap.Int("matches_count", len(matches)),
 	)
 
-	// раунд уже в бд: отмена запроса (клиент ушёл, таймаут) не должна оборвать
-	// постановку в очередь. при сбое очереди матчи не откатываются: сброс прошлых
-	// результатов уже закоммичен, и откат оставил бы игру пустой. pending-матчи
-	// поставит в очередь периодический recovery воркера
+	ss.enqueueCommitted(ctx, tournamentID, matches)
+	return len(matches), nil
+}
+
+// enqueueCommitted ставит в очередь матчи уже закоммиченного раунда. Отмена запроса
+// (клиент ушёл, таймаут) не должна оборвать постановку в очередь. При сбое очереди
+// матчи не откатываются: сброс прошлых результатов уже закоммичен, и откат оставил бы
+// игру пустой. pending-матчи поставит в очередь периодический recovery воркера
+func (ss *SchedulingService) enqueueCommitted(ctx context.Context, tournamentID uuid.UUID, matches []*models.Match) {
+	if len(matches) == 0 {
+		return
+	}
 	if _, err := ss.enqueue(context.WithoutCancel(ctx), tournamentID, matches); err != nil {
 		ss.log.Error("Round created but not enqueued, worker recovery will enqueue it",
 			zap.Error(err),
@@ -240,7 +273,6 @@ func (ss *SchedulingService) startRound(ctx context.Context, tournamentID uuid.U
 			zap.Int("matches_count", len(matches)),
 		)
 	}
-	return len(matches), nil
 }
 
 // enqueue ставит матчи в очередь батчем (один pipeline)

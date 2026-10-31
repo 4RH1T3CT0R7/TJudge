@@ -5,6 +5,7 @@ package storage_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bmstu-itstech/tjudge/internal/models"
 	"github.com/bmstu-itstech/tjudge/internal/storage"
@@ -559,4 +560,28 @@ func (s *GameRepositorySuite) TestDeactivateAllGames() {
 		require.NoError(s.T(), err)
 		assert.False(s.T(), tg.IsActive)
 	}
+}
+
+// включение авто-раунда стирает время прошлого запуска (первый раунд после него
+// полный), повторное включение и выключение его не трогают
+func (s *GameRepositorySuite) TestSetAutoRound_EnableResetsLastRun() {
+	game := s.createGame("auto_rst")
+	tournament := s.createTournamentForGame("02")
+	ctx := context.Background()
+	require.NoError(s.T(), s.repo.AddToTournament(ctx, tournament.ID, game.ID))
+
+	lastRun := func() *time.Time {
+		tg, err := s.repo.GetTournamentGame(ctx, tournament.ID, game.ID)
+		require.NoError(s.T(), err)
+		return tg.AutoRoundLastRunAt
+	}
+
+	require.NoError(s.T(), s.repo.SetAutoRound(ctx, tournament.ID, game.ID, true, 60))
+	require.NoError(s.T(), s.repo.UpdateAutoRoundLastRun(ctx, tournament.ID, game.ID))
+	require.NoError(s.T(), s.repo.SetAutoRound(ctx, tournament.ID, game.ID, true, 120))
+	assert.NotNil(s.T(), lastRun(), "смена интервала у включённого авто-раунда")
+	require.NoError(s.T(), s.repo.SetAutoRound(ctx, tournament.ID, game.ID, false, 120))
+	assert.NotNil(s.T(), lastRun(), "выключение")
+	require.NoError(s.T(), s.repo.SetAutoRound(ctx, tournament.ID, game.ID, true, 120))
+	assert.Nil(s.T(), lastRun(), "включение")
 }

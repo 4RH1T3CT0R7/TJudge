@@ -162,8 +162,14 @@ func (s *AutoRoundScheduler) processGame(ctx context.Context, g *models.AutoRoun
 		return // новых прог нет, перезапускать нечего
 	}
 
-	// 4. запуск раунда через RunGameMatches, лок планирования турнира он берёт сам
-	enqueued, err := s.schedulingService.RunGameMatches(ctx, g.TournamentID, g.GameType)
+	// 4. запуск раунда, лок планирования турнира берётся внутри. первый после включения
+	// раунд полный, дальше переигрываются только пары с новыми программами: полный раунд
+	// на каждую загрузку (N(N-1) матчей) при 12 командах в 3 играх не успевал за загрузками
+	run := s.schedulingService.UpdateGameRound
+	if g.LastRunAt == nil {
+		run = s.schedulingService.RunGameMatches
+	}
+	enqueued, err := run(ctx, g.TournamentID, g.GameType)
 	if err != nil {
 		// 4xx - штатные ситуации (лок занят, не хватает участников, идут матчи),
 		// остальное - реальная поломка, её должно быть видно в логах

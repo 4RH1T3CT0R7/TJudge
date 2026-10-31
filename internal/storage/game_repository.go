@@ -11,6 +11,7 @@ import (
 	"github.com/bmstu-itstech/tjudge/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 // GameRepository - репозиторий для работы с играми
@@ -594,20 +595,118 @@ func (r *GameRepository) StartNewRound(ctx context.Context, tournamentID uuid.UU
 	})
 }
 
+// UpdateRound - раунд авто-режима без полного сброса. matches - полный round-robin по
+// текущим программам игры: доигранные матчи этих пар остаются, остальные матчи игры
+// (старые версии, дисквалифицированные команды, упавшие) удаляются вместе с
+// rating_history, недостающие пары вставляются. После новой версии одной команды из
+// N переигрываются 2(N-1) матчей вместо N(N-1). Возвращает вставленные матчи.
+// если в игре идут матчи - ErrConflict.
+// ponytail: ELO не пересчитывается, дельты удалённых матчей остаются в рейтинге
+// участников; ELO вспомогательный и на места не влияет, точный пересчёт - заново
+// по оставшимся матчам
+func (r *GameRepository) UpdateRound(ctx context.Context, tournamentID uuid.UUID, gameType string, matches []*models.Match) ([]*models.Match, error) {
+	var programs []uuid.UUID
+	seen := make(map[uuid.UUID]bool)
+	for _, m := range matches {
+		for _, id := range []uuid.UUID{m.Program1ID, m.Program2ID} {
+			if !seen[id] {
+				seen[id] = true
+				programs = append(programs, id)
+			}
+		}
+	}
+
+	var added []*models.Match
+	err := r.db.RunInTx(ctx, func(tx *sqlx.Tx) error {
+		if err := checkNoRunning(ctx, tx, tournamentID, gameType); err != nil {
+			return err
+		}
+
+		// матчи вне текущего раунда: не доигранные или с программой не из раунда
+		const stale = `tournament_id = $1 AND game_type = $2
+			AND NOT (status = 'completed' AND program1_id = ANY($3) AND program2_id = ANY($3))`
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM rating_history
+			WHERE tournament_id = $1 AND match_id IN (SELECT id FROM matches WHERE `+stale+`)
+		`, tournamentID, gameType, pq.Array(programs)); err != nil {
+			return errors.Wrap(err, "failed to delete rating history")
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM matches WHERE `+stale,
+			tournamentID, gameType, pq.Array(programs)); err != nil {
+			return errors.Wrap(err, "failed to delete matches")
+		}
+
+		var kept []struct {
+			Program1ID uuid.UUID `db:"program1_id"`
+			Program2ID uuid.UUID `db:"program2_id"`
+		}
+		if err := tx.SelectContext(ctx, &kept, `
+			SELECT program1_id, program2_id FROM matches WHERE tournament_id = $1 AND game_type = $2
+		`, tournamentID, gameType); err != nil {
+			return errors.Wrap(err, "failed to get kept matches")
+		}
+		played := make(map[[2]uuid.UUID]bool, len(kept))
+		for _, k := range kept {
+			played[[2]uuid.UUID{k.Program1ID, k.Program2ID}] = true
+		}
+		for _, m := range matches {
+			if !played[[2]uuid.UUID{m.Program1ID, m.Program2ID}] {
+				added = append(added, m)
+			}
+		}
+
+		if err := insertMatches(ctx, tx, added); err != nil {
+			return err
+		}
+		return reopenRound(ctx, tx, tournamentID, gameType)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return added, nil
+}
+
+// checkNoRunning - ErrConflict, если в игре идут матчи: их результат лёг бы поверх
+// изменённого раунда
+func checkNoRunning(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameType string) error {
+	var runningCount int
+	if err := tx.GetContext(ctx, &runningCount, `
+		SELECT COUNT(*) FROM matches
+		WHERE tournament_id = $1 AND game_type = $2 AND status = 'running'
+	`, tournamentID, gameType); err != nil {
+		return errors.Wrap(err, "failed to check running matches")
+	}
+	if runningCount > 0 {
+		return errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
+	}
+	return nil
+}
+
+// reopenRound - сброс отметки «раунд завершён» у игры турнира
+func reopenRound(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameType string) error {
+	result, err := tx.ExecContext(ctx, `
+		UPDATE tournament_games tg
+		SET round_completed = false, round_completed_at = NULL
+		FROM games g
+		WHERE tg.tournament_id = $1
+		AND tg.game_id = g.id
+		AND g.name = $2
+	`, tournamentID, gameType)
+	if err != nil {
+		return errors.Wrap(err, "failed to reset game round status")
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament game not found for type: %s", gameType))
+	}
+	return nil
+}
+
 // resetGame - полный сброс матчей и рейтингов игры по типу (name) внутри транзакции.
 // возвращает число удалённых матчей, сброшенных участников и удалённых записей
 // rating_history. если в игре идут матчи - ErrConflict
 func resetGame(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameType string) (matchesDeleted, participantsReset, ratingHistoryDeleted int64, err error) {
-	// проверка что нет запущенных матчей
-	var runningCount int
-	if err = tx.GetContext(ctx, &runningCount, `
-		SELECT COUNT(*) FROM matches
-		WHERE tournament_id = $1 AND game_type = $2 AND status = 'running'
-	`, tournamentID, gameType); err != nil {
-		return 0, 0, 0, errors.Wrap(err, "failed to check running matches")
-	}
-	if runningCount > 0 {
-		return 0, 0, 0, errors.ErrConflict.WithMessage("cannot reset: there are matches currently running")
+	if err = checkNoRunning(ctx, tx, tournamentID, gameType); err != nil {
+		return 0, 0, 0, err
 	}
 
 	// снос истории рейтингов по матчам этой игры
@@ -648,22 +747,9 @@ func resetGame(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameTyp
 	}
 	participantsReset, _ = result.RowsAffected()
 
-	// сброс статуса раунда
-	result, err = tx.ExecContext(ctx, `
-		UPDATE tournament_games tg
-		SET round_completed = false, round_completed_at = NULL
-		FROM games g
-		WHERE tg.tournament_id = $1
-		AND tg.game_id = g.id
-		AND g.name = $2
-	`, tournamentID, gameType)
-	if err != nil {
-		return 0, 0, 0, errors.Wrap(err, "failed to reset game round status")
+	if err = reopenRound(ctx, tx, tournamentID, gameType); err != nil {
+		return 0, 0, 0, err
 	}
-	if rows, _ := result.RowsAffected(); rows == 0 {
-		return 0, 0, 0, errors.ErrNotFound.WithMessage(fmt.Sprintf("tournament game not found for type: %s", gameType))
-	}
-
 	return matchesDeleted, participantsReset, ratingHistoryDeleted, nil
 }
 
@@ -718,10 +804,15 @@ func (r *GameRepository) UpdateAutoRoundLastRun(ctx context.Context, tournamentI
 	return nil
 }
 
+// SetAutoRound - включение и выключение авто-раунда. Включение стирает время прошлого
+// запуска: первый авто-раунд после него полный, тот, что показывает dry-run в диалоге
+// включения, следующие переигрывают только пары с новыми программами
 func (r *GameRepository) SetAutoRound(ctx context.Context, tournamentID, gameID uuid.UUID, enabled bool, intervalSecs int) error {
 	query := `
 		UPDATE tournament_games
-		SET auto_round_enabled = $3, auto_round_interval_seconds = $4
+		SET auto_round_enabled = $3, auto_round_interval_seconds = $4,
+		    auto_round_last_run_at = CASE WHEN $3 AND NOT COALESCE(auto_round_enabled, false)
+		                                  THEN NULL ELSE auto_round_last_run_at END
 		WHERE tournament_id = $1 AND game_id = $2
 	`
 

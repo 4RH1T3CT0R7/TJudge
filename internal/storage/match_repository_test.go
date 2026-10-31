@@ -227,6 +227,87 @@ func (s *MatchRepositorySuite) TestStartNewRound() {
 	assert.Equal(s.T(), int64(2), deleted)
 }
 
+// раунд авто-режима: доигранные пары текущих программ остаются вместе с историей
+// рейтинга, матчи старой версии и упавшие удаляются, вставляются только недостающие пары
+func (s *MatchRepositorySuite) TestUpdateRound() {
+	tournament, a, b := s.setupMatchPrerequisites("upr")
+	cOld := s.createProgram(a.UserID, "Bot3old_upr")
+	cNew := s.createProgram(a.UserID, "Bot3new_upr")
+	ctx := context.Background()
+
+	gameRepo := storage.NewGameRepository(s.database)
+	game := &models.Game{ID: uuid.New(), Name: "test_upr_" + uuid.New().String()[:8], DisplayName: "UPR"}
+	require.NoError(s.T(), gameRepo.Create(ctx, game))
+	s.T().Cleanup(func() { _, _ = s.database.ExecContext(ctx, "DELETE FROM games WHERE id = $1", game.ID) })
+	require.NoError(s.T(), gameRepo.AddToTournament(ctx, tournament.ID, game.ID))
+
+	kept := s.createMatch(tournament.ID, a.ID, b.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
+	failed := s.createMatch(tournament.ID, b.ID, a.ID, game.Name, models.MatchFailed, models.PriorityHigh, 1)
+	stale := s.createMatch(tournament.ID, a.ID, cOld.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
+	s.createMatch(tournament.ID, cOld.ID, b.ID, game.Name, models.MatchCompleted, models.PriorityHigh, 1)
+	for _, m := range []*models.Match{kept, stale} {
+		_, err := s.database.ExecContext(ctx, `
+			INSERT INTO rating_history (id, program_id, tournament_id, old_rating, new_rating, change, match_id, created_at)
+			VALUES ($1, $2, $3, 1500, 1510, 10, $4, NOW())`, uuid.New(), m.Program1ID, tournament.ID, m.ID)
+		require.NoError(s.T(), err)
+	}
+
+	progs := []uuid.UUID{a.ID, b.ID, cNew.ID}
+	newRound := func() []*models.Match {
+		var round []*models.Match
+		for _, p1 := range progs {
+			for _, p2 := range progs {
+				if p1 == p2 {
+					continue
+				}
+				m := &models.Match{
+					ID: uuid.New(), TournamentID: tournament.ID, Program1ID: p1, Program2ID: p2, GameType: game.Name,
+					Status: models.MatchPending, Priority: models.PriorityHigh, RoundNumber: 1, CreatedAt: time.Now(),
+				}
+				round = append(round, m)
+				s.matchIDs = append(s.matchIDs, m.ID)
+			}
+		}
+		return round
+	}
+
+	added, err := gameRepo.UpdateRound(ctx, tournament.ID, game.Name, newRound())
+	require.NoError(s.T(), err)
+	// 6 пар раунда минус доигранная a-b; упавшая b-a переигрывается
+	require.Len(s.T(), added, 5)
+	for _, m := range added {
+		assert.False(s.T(), m.Program1ID == a.ID && m.Program2ID == b.ID, "доигранная пара не переигрывается")
+	}
+
+	got, err := s.repo.GetByID(ctx, kept.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), models.MatchCompleted, got.Status)
+	for _, id := range []uuid.UUID{failed.ID, stale.ID} {
+		_, err = s.repo.GetByID(ctx, id)
+		assert.True(s.T(), errors.IsNotFound(err), "упавший матч и матчи старой версии удаляются")
+	}
+	var total, history int
+	require.NoError(s.T(), s.database.GetContext(ctx, &total,
+		"SELECT COUNT(*) FROM matches WHERE tournament_id = $1 AND game_type = $2", tournament.ID, game.Name))
+	assert.Equal(s.T(), 6, total)
+	require.NoError(s.T(), s.database.GetContext(ctx, &history,
+		"SELECT COUNT(*) FROM rating_history WHERE match_id = ANY(ARRAY[$1, $2]::uuid[])", kept.ID, stale.ID))
+	assert.Equal(s.T(), 1, history, "история рейтинга остаётся только у доигранной пары")
+
+	// running-матч: 409, раунд не тронут
+	_, err = s.database.ExecContext(ctx, "UPDATE matches SET status = 'running' WHERE id = $1", added[0].ID)
+	require.NoError(s.T(), err)
+	_, err = gameRepo.UpdateRound(ctx, tournament.ID, game.Name, newRound())
+	appErr := errors.GetAppError(err)
+	require.NotNil(s.T(), appErr)
+	assert.Equal(s.T(), 409, appErr.Code)
+	require.NoError(s.T(), s.database.GetContext(ctx, &total,
+		"SELECT COUNT(*) FROM matches WHERE tournament_id = $1 AND game_type = $2", tournament.ID, game.Name))
+	assert.Equal(s.T(), 6, total)
+
+	_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE tournament_id = $1", tournament.ID)
+}
+
 // dry-run сброса считает тем же resetGame, но откатывает его: числа совпадают
 // с настоящим сбросом, а до него матчи на месте
 func (s *MatchRepositorySuite) TestPreviewGameReset() {
