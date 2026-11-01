@@ -705,12 +705,18 @@ func resetGame(ctx context.Context, tx *sqlx.Tx, tournamentID uuid.UUID, gameTyp
 		return 0, 0, 0, err
 	}
 
-	// снос истории рейтингов по матчам этой игры
+	// снос истории рейтингов игры: по её матчам и по её программам. частичный
+	// раунд (UpdateRound) оставляет историю удалённых матчей, по матчам её уже
+	// не найти, а без неё график ELO после сброса показывал бы старые точки
 	result, err := tx.ExecContext(ctx, `
 		DELETE FROM rating_history
 		WHERE tournament_id = $1
-		AND match_id IN (
-			SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2
+		AND (
+			match_id IN (SELECT id FROM matches WHERE tournament_id = $1 AND game_type = $2)
+			OR program_id IN (
+				SELECT p.id FROM programs p JOIN games g ON g.id = p.game_id
+				WHERE p.tournament_id = $1 AND g.name = $2
+			)
 		)
 	`, tournamentID, gameType)
 	if err != nil {

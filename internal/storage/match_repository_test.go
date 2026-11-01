@@ -312,7 +312,19 @@ func (s *MatchRepositorySuite) TestUpdateRound() {
 		"SELECT COUNT(*) FROM matches WHERE tournament_id = $1 AND game_type = $2", tournament.ID, game.Name))
 	assert.Equal(s.T(), 6, total)
 
-	_, _ = s.database.ExecContext(ctx, "DELETE FROM rating_history WHERE tournament_id = $1", tournament.ID)
+	// полный сброс сносит и историю матчей, удалённых частичным раундом: её
+	// находит по программам игры
+	_, err = s.database.ExecContext(ctx, "UPDATE matches SET status = 'pending' WHERE id = $1", added[0].ID)
+	require.NoError(s.T(), err)
+	_, err = s.database.ExecContext(ctx, "UPDATE programs SET game_id = $1, tournament_id = $2 WHERE id = ANY(ARRAY[$3, $4, $5, $6]::uuid[])",
+		game.ID, tournament.ID, a.ID, b.ID, cOld.ID, cNew.ID)
+	require.NoError(s.T(), err)
+	_, _, historyDeleted, err := gameRepo.ResetGameRoundFull(ctx, tournament.ID, game.Name)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2), historyDeleted)
+	require.NoError(s.T(), s.database.GetContext(ctx, &history,
+		"SELECT COUNT(*) FROM rating_history WHERE tournament_id = $1", tournament.ID))
+	assert.Equal(s.T(), 0, history)
 }
 
 // dry-run сброса считает тем же resetGame, но откатывает его: числа совпадают

@@ -635,7 +635,9 @@ func (r *TeamRepository) DisqualifyTeamFull(ctx context.Context, teamID, tournam
 	// сдвигаются на сумму удалённых дельт. wins/losses/draws участников нигде не
 	// читаются (лидерборды считаются живым запросом по matches), пересчёт не нужен.
 	// ограничение: снимается только прямой вклад матчей, последующие дельты не
-	// пересчитываются заново; точный вариант - replay ELO по оставшимся матчам
+	// пересчитываются заново; точный вариант - replay ELO по оставшимся матчам.
+	// вклад матчей, уже удалённых частичным раундом (UpdateRound), не снимается:
+	// соперника по одной строке rating_history не узнать
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
 		WITH removed AS (
 			SELECT rh.program_id, rh.change, rh.created_at
