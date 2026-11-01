@@ -227,9 +227,9 @@ func (s *MatchRepositorySuite) TestStartNewRound() {
 	assert.Equal(s.T(), int64(2), deleted)
 }
 
-// раунд авто-режима: сыгранные пары текущих программ (и форфейты) остаются вместе с
-// историей рейтинга, матчи старой версии и сбои без победителя удаляются, вставляются
-// только недостающие пары
+// раунд авто-режима: сыгранные пары текущих программ (и форфейты) остаются, матчи
+// старой версии и сбои без победителя удаляются, вставляются только недостающие пары.
+// история рейтинга не удаляется: ELO между полными раундами накопительный
 func (s *MatchRepositorySuite) TestUpdateRound() {
 	tournament, a, b := s.setupMatchPrerequisites("upr")
 	cOld := s.createProgram(a.UserID, "Bot3old_upr")
@@ -299,7 +299,7 @@ func (s *MatchRepositorySuite) TestUpdateRound() {
 	assert.Equal(s.T(), 6, total)
 	require.NoError(s.T(), s.database.GetContext(ctx, &history,
 		"SELECT COUNT(*) FROM rating_history WHERE match_id = ANY(ARRAY[$1, $2]::uuid[])", kept.ID, stale.ID))
-	assert.Equal(s.T(), 1, history, "история рейтинга остаётся только у доигранной пары")
+	assert.Equal(s.T(), 2, history, "история рейтинга удалённого матча остаётся")
 
 	// running-матч: 409, раунд не тронут
 	_, err = s.database.ExecContext(ctx, "UPDATE matches SET status = 'running' WHERE id = $1", added[0].ID)

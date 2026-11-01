@@ -598,14 +598,13 @@ func (r *GameRepository) StartNewRound(ctx context.Context, tournamentID uuid.UU
 // UpdateRound - раунд авто-режима без полного сброса. matches - полный round-robin по
 // текущим программам игры: сыгранные матчи этих пар (playedMatch, как в лидербордах,
 // вместе с форфейтами) остаются, остальные матчи игры (старые версии,
-// дисквалифицированные команды, сбои без победителя) удаляются вместе с
-// rating_history, недостающие пары вставляются. Форфейт не переигрывается: иначе бот,
-// падающий при проигрыше, получал бы новую попытку на свои поражения. После новой версии одной команды из
-// N переигрываются 2(N-1) матчей вместо N(N-1). Возвращает вставленные матчи.
+// дисквалифицированные команды, сбои без победителя) удаляются, недостающие пары
+// вставляются. Форфейт не переигрывается: иначе бот, падающий при проигрыше, получал
+// бы новую попытку на свои поражения. После новой версии одной команды из N
+// переигрываются 2(N-1) матчей вместо N(N-1). Возвращает вставленные матчи.
 // если в игре идут матчи - ErrConflict.
-// ponytail: ELO не пересчитывается, дельты удалённых матчей остаются в рейтинге
-// участников; ELO вспомогательный и на места не влияет, точный пересчёт - заново
-// по оставшимся матчам
+// ELO между полными раундами накопительный: rating_history удалённых матчей остаётся,
+// поэтому рейтинг участника сходится с его графиком. Полный раунд сбрасывает и то, и другое
 func (r *GameRepository) UpdateRound(ctx context.Context, tournamentID uuid.UUID, gameType string, matches []*models.Match) ([]*models.Match, error) {
 	var programs []uuid.UUID
 	seen := make(map[uuid.UUID]bool)
@@ -626,16 +625,10 @@ func (r *GameRepository) UpdateRound(ctx context.Context, tournamentID uuid.UUID
 
 		// матчи вне текущего раунда: не сыгранные или с программой не из раунда.
 		// IS NOT TRUE, а не NOT: у сбоя winner NULL, и NOT (NULL) строку бы не отобрал
-		const stale = `m.tournament_id = $1 AND m.game_type = $2
-			AND (` + playedMatch + ` AND m.program1_id = ANY($3) AND m.program2_id = ANY($3)) IS NOT TRUE`
 		if _, err := tx.ExecContext(ctx, `
-			DELETE FROM rating_history
-			WHERE tournament_id = $1 AND match_id IN (SELECT m.id FROM matches m WHERE `+stale+`)
+			DELETE FROM matches m WHERE m.tournament_id = $1 AND m.game_type = $2
+			AND (`+playedMatch+` AND m.program1_id = ANY($3) AND m.program2_id = ANY($3)) IS NOT TRUE
 		`, tournamentID, gameType, pq.Array(programs)); err != nil {
-			return errors.Wrap(err, "failed to delete rating history")
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM matches m WHERE `+stale,
-			tournamentID, gameType, pq.Array(programs)); err != nil {
 			return errors.Wrap(err, "failed to delete matches")
 		}
 
