@@ -72,8 +72,9 @@ COPY --from=builder --chmod=0755 /build/resources/public_goods/generous.py ${REF
 COPY --from=builder --chmod=0755 /build/resources/dollar_auction/cautious.py ${REFBOTS}/dollar_auction
 
 # Сюда executor монтирует файлы программ матча, ботам сюда хода нет.
-# /programs - tmpfs с копиями программ под uid ботов
-RUN mkdir -m 0700 /mnt/programs
+# /programs - tmpfs с копиями программ под uid ботов, /mnt/results - tmpfs
+# пачки для итогов матчей (sandbox.sh --batch), тоже только для root
+RUN mkdir -m 0700 /mnt/programs /mnt/results
 WORKDIR /programs
 
 # executor запускает точку входа от root с минимумом capabilities, и она

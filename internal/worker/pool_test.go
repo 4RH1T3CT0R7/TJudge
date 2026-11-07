@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -53,6 +54,12 @@ func (m *MockQueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	return args.Get(0).(*models.Match), args.Error(1)
 }
 
+func (m *MockQueueManager) DequeueMore(ctx context.Context, n int) ([]*models.Match, error) {
+	args := m.Called(ctx, n)
+	v, _ := args.Get(0).([]*models.Match)
+	return v, args.Error(1)
+}
+
 func (m *MockQueueManager) GetTotalQueueSize(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
@@ -83,6 +90,12 @@ func (m *MockMatchProcessor) Process(ctx context.Context, match *models.Match) e
 		m.failCount.Add(1)
 	}
 	return args.Error(0)
+}
+
+func (m *MockMatchProcessor) ProcessBatch(ctx context.Context, matches []*models.Match) []error {
+	args := m.Called(ctx, matches)
+	v, _ := args.Get(0).([]error)
+	return v
 }
 
 func (m *MockMatchProcessor) GetProcessedCount() int32 {
@@ -489,4 +502,48 @@ func TestPool_ProcessWithRetry_ContextCancelled(t *testing.T) {
 	err := pool.processWithRetry(ctx, match)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// при длинной очереди воркер добирает матчи в пачку, а не сыгранные в ней
+// доигрывает по одному
+func TestPool_ProcessNext_Batch(t *testing.T) {
+	cfg := testConfig()
+	cfg.BatchSize = 8
+	pool, queue, processor := newTestPool(t, cfg)
+	m1, m2, m3 := testMatch(), testMatch(), testMatch()
+
+	queue.On("Dequeue", mock.Anything).Return(m1, nil).Once()
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(20), nil)
+	// воркеров ещё нет, делитель 1: до BatchSize-1 сверх взятого
+	queue.On("DequeueMore", mock.Anything, 7).Return([]*models.Match{m2, m3}, nil)
+	processor.On("ProcessBatch", mock.Anything, []*models.Match{m1, m2, m3}).
+		Return([]error{nil, fmt.Errorf("failed to run match: %w", ErrProgramFailed), fmt.Errorf("not played")})
+	processor.On("Process", mock.Anything, m3).Return(nil).Once()
+
+	idle := pool.processNext(context.Background(), 1)
+
+	assert.False(t, idle)
+	processor.AssertExpectations(t)
+	processor.AssertNotCalled(t, "Process", mock.Anything, m1)
+	assert.Equal(t, int64(2), pool.GetStats().MatchesProcessed)
+	assert.Equal(t, int64(1), pool.GetStats().MatchesFailed)
+}
+
+// короткая очередь: матчи раздаются по одному, пачки нет
+func TestPool_ProcessNext_ShortQueueNoBatch(t *testing.T) {
+	cfg := testConfig()
+	cfg.BatchSize = 8
+	pool, queue, processor := newTestPool(t, cfg)
+	pool.totalWorkers.Store(4)
+	m := testMatch()
+
+	queue.On("Dequeue", mock.Anything).Return(m, nil).Once()
+	queue.On("GetTotalQueueSize", mock.Anything).Return(int64(3), nil)
+	processor.On("Process", mock.Anything, m).Return(nil).Once()
+
+	pool.processNext(context.Background(), 1)
+
+	processor.AssertExpectations(t)
+	queue.AssertNotCalled(t, "DequeueMore", mock.Anything, mock.Anything)
+	processor.AssertNotCalled(t, "ProcessBatch", mock.Anything, mock.Anything)
 }

@@ -157,6 +157,9 @@ type WorkerConfig struct {
 	RetryAttempts     int
 	RetryDelay        time.Duration
 	AutoScaleInterval time.Duration // как часто проверяется пул, 0 = 2s
+	// BatchSize - сколько матчей воркер играет в одном контейнере, когда в очереди
+	// их много (см. Pool.extraMatches). 0 и 1 - каждый матч в своём контейнере
+	BatchSize int
 }
 
 // StuckThreshold - после скольких секунд в running матч считается брошенным.
@@ -250,6 +253,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Worker.Timeout <= 0 {
 		return fmt.Errorf("WORKER_TIMEOUT must be positive")
+	}
+	if c.Worker.BatchSize < 0 {
+		return fmt.Errorf("WORKER_BATCH_SIZE must not be negative")
 	}
 
 	if c.Executor.Timeout <= 0 {
@@ -356,6 +362,7 @@ func Load() (*Config, error) {
 			RetryAttempts:     env.Int("WORKER_RETRY_ATTEMPTS", 3),
 			RetryDelay:        env.Duration("WORKER_RETRY_DELAY", 5*time.Second),
 			AutoScaleInterval: env.Duration("WORKER_AUTOSCALE_INTERVAL", 2*time.Second),
+			BatchSize:         env.Int("WORKER_BATCH_SIZE", 8),
 		},
 		Executor: ExecutorConfig{
 			DockerImage:       getEnv("EXECUTOR_DOCKER_IMAGE", "tjudge-cli:latest"),

@@ -3,7 +3,9 @@ package executor
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -139,15 +141,41 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	// формат: tjudge-cli <game_type> [OPTIONS] <PROGRAM1> <PROGRAM2>
 	cmd := e.buildCommand(gameType, program1, program2)
 
+	exitCode, stdout, stderrRaw, err := e.runContainer(ctx, cmd, buildMatchHostConfig(e.config, binds), e.config.Timeout, maxLogSize)
+	if errors.Is(err, errContainerTimeout) {
+		// истёк собственный лимит матча - зависшая/медленная программа, это её
+		// вина, поэтому ошибка терминальная (fmt.Errorf), не infra
+		return nil, fmt.Errorf("match execution timeout")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	transcript, stderrRaw := splitTranscript(stderrRaw)
+	result, err := e.parseResult(exitCode, stdout, sanitizeStderr(stderrRaw))
+	if result != nil {
+		result.Transcript = transcript
+	}
+	return result, err
+}
+
+// errContainerTimeout - контейнер не уложился в свой лимит при живом ctx воркера
+var errContainerTimeout = errors.New("container timeout")
+
+// runContainer поднимает матч-контейнер с аргументами точки входа cmd и ждёт его
+// выхода не дольше timeout. Возвращает код выхода и логи. Сбои окружения - infra,
+// отмена ctx воркера - тоже infra (матч повторится), свой лимит - errContainerTimeout
+// вместе с логами, что успели набраться (пачке они нужны для сыгранных матчей)
+func (e *Executor) runContainer(ctx context.Context, cmd []string, hostConfig *container.HostConfig, timeout time.Duration, maxLog int) (int64, string, string, error) {
 	e.log.Debug("Creating container",
 		zap.Strings("cmd", cmd),
-		zap.Strings("binds", binds),
+		zap.Strings("binds", hostConfig.Binds),
 		zap.String("image", e.config.DockerImage),
 	)
 
 	// у матча свой дедлайн поверх ctx воркера: по тому, какой из них истёк,
 	// видно, виновата программа или окружение
-	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	containerConfig := &container.Config{
@@ -162,8 +190,6 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		Labels:     containerLabels(),
 	}
 
-	hostConfig := buildMatchHostConfig(e.config, binds)
-
 	resp, err := e.dockerClient.ContainerCreate(
 		execCtx,
 		containerConfig,
@@ -173,7 +199,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		"",
 	)
 	if err != nil {
-		return nil, infraErrorf("failed to create container: %w", err)
+		return 0, "", "", infraErrorf("failed to create container: %w", err)
 	}
 
 	containerID := resp.ID
@@ -182,7 +208,7 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	defer e.cleanup(containerID)
 
 	if err := e.dockerClient.ContainerStart(execCtx, containerID, container.StartOptions{}); err != nil {
-		return nil, infraErrorf("failed to start container: %w", err)
+		return 0, "", "", infraErrorf("failed to start container: %w", err)
 	}
 
 	statusCh, errCh := e.dockerClient.ContainerWait(execCtx, containerID, container.WaitConditionNotRunning)
@@ -192,40 +218,32 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 		if execCtx.Err() == nil {
 			if err != nil {
 				// логи забираются даже при ошибке
-				_, stderr, logErr := e.getContainerLogs(ctx, containerID)
+				_, stderr, logErr := e.getContainerLogs(ctx, containerID, maxLogSize)
 				if logErr == nil && stderr != "" {
 					_, stderr = splitTranscript(stderr)
-					return nil, fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
+					return 0, "", "", fmt.Errorf("container error: %s", strings.TrimSpace(sanitizeStderr(stderr)))
 				}
-				return nil, infraErrorf("error waiting for container: %w", err)
+				return 0, "", "", infraErrorf("error waiting for container: %w", err)
 			}
 			// errCh с nil - так быть не должно, считается инфра-ошибкой
-			return nil, infraErrorf("container %s: wait returned nil error without status", containerID)
+			return 0, "", "", infraErrorf("container %s: wait returned nil error without status", containerID)
 		}
 	case status := <-statusCh:
-		stdout, stderrRaw, err := e.getContainerLogs(ctx, containerID)
+		stdout, stderr, err := e.getContainerLogs(ctx, containerID, maxLog)
 		if err != nil {
 			// логи недоступны из-за docker api - это окружение, а не программа,
 			// матч можно спокойно повторить
-			return nil, infraErrorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
+			return 0, "", "", infraErrorf("container exited with code %d, failed to get logs: %w", status.StatusCode, err)
 		}
 
-		transcript, stderrRaw := splitTranscript(stderrRaw)
-		stderr := sanitizeStderr(stderrRaw)
-
-		// stdout до 1мб в лог не идёт, только размер
+		// логи целиком в лог не идут, только размеры
 		e.log.Debug("Container finished",
 			zap.String("container_id", containerID),
 			zap.Int64("exit_code", status.StatusCode),
-			zap.String("stderr", stderr),
 			zap.Int("stdout_len", len(stdout)),
+			zap.Int("stderr_len", len(stderr)),
 		)
-
-		result, err := e.parseResult(status.StatusCode, stdout, stderr)
-		if result != nil {
-			result.Transcript = transcript
-		}
-		return result, err
+		return status.StatusCode, stdout, stderr, nil
 	case <-execCtx.Done():
 	}
 
@@ -233,11 +251,160 @@ func (e *Executor) runInDocker(ctx context.Context, gameType, program1, program2
 	if ctx.Err() != nil {
 		// отменён ctx воркера (shutdown, общий таймаут обработки) - программа
 		// тут ни при чём, матч надо повторить, а не записывать ей таймаут
-		return nil, infraErrorf("match interrupted: %w", ctx.Err())
+		return 0, "", "", infraErrorf("match interrupted: %w", ctx.Err())
 	}
-	// истёк собственный лимит матча - зависшая/медленная программа, это её
-	// вина, поэтому ошибка терминальная (fmt.Errorf), не infra
-	return nil, fmt.Errorf("match execution timeout")
+	// логи до удаления контейнера, ошибка чтения тут не важна
+	stdout, stderr, _ := e.getContainerLogs(ctx, containerID, maxLog)
+	return 0, stdout, stderr, errContainerTimeout
+}
+
+// BatchItem - матч пачки и пути его программ
+type BatchItem struct {
+	Match        *models.Match
+	Program1Path string
+	Program2Path string
+}
+
+// BatchResult - итог матча пачки, как у Execute: результат или ошибка.
+// InfraError - матч не сыгран, его повторяют
+type BatchResult struct {
+	Result *models.MatchResult
+	Err    error
+}
+
+// batchMargin - запас контейнеру пачки сверх лимита матча. Время на сами матчи
+// точка входа держит в лимите одного матча (sandbox.sh --batch), запас уходит
+// на старт контейнера, уборку за ботами и вывод итогов
+const batchMargin = 10 * time.Second
+
+// ExecuteBatch играет матчи по очереди в одном контейнере (sandbox.sh --batch):
+// создание и удаление контейнера стоит дороже самого матча. Ошибка - сбой всей
+// пачки (infra, все матчи повторяются), иначе итоги матчей в порядке items
+func (e *Executor) ExecuteBatch(ctx context.Context, items []BatchItem) ([]BatchResult, error) {
+	start := time.Now()
+	results := make([]BatchResult, len(items))
+	cmd := append([]string{"--batch", strconv.Itoa(max(1, int(e.config.Timeout/time.Second)))}, e.commandOptions()...)
+	cmd = append(cmd, "--")
+	var binds []string
+	// индексы items, ушедших в контейнер, по порядку записей точки входа
+	var played []int
+	for i, it := range items {
+		programs, b, err := e.programMounts(it.Program1Path, it.Program2Path)
+		if err != nil {
+			// как у Execute: программы нет на диске - ошибка матча, а не пачки
+			results[i].Err = fmt.Errorf("failed to run match: %w", err)
+			continue
+		}
+		for _, bind := range b {
+			if !slices.Contains(binds, bind) {
+				binds = append(binds, bind)
+			}
+		}
+		cmd = append(cmd, it.Match.GameType, programs[0], programs[1])
+		played = append(played, i)
+	}
+	if len(played) == 0 {
+		return results, nil
+	}
+
+	_, stdout, _, err := e.runContainer(ctx, cmd, batchHostConfig(e.config, binds), e.config.Timeout+batchMargin, len(played)*maxLogSize)
+	if err != nil && !errors.Is(err, errContainerTimeout) {
+		// сбой окружения: итогов нет, все матчи повторяются
+		return nil, infraErrorf("batch failed: %w", err)
+	}
+	// контейнер, не уложившийся в лимит, успел записать итоги части матчей:
+	// они в силе, остальные без записи повторяются
+	records := parseBatchOutput(stdout)
+	share := time.Since(start) / time.Duration(len(played))
+	for k, i := range played {
+		results[i] = e.batchResult(records[k], items[i].Match, share)
+	}
+	return results, nil
+}
+
+// batchResult переводит запись точки входа в итог матча. Нет записи - матч не
+// сыгран (контейнер упал раньше, старый образ без --batch), его повторят
+func (e *Executor) batchResult(rec *batchRecord, match *models.Match, d time.Duration) BatchResult {
+	if rec == nil {
+		return BatchResult{Err: infraErrorf("failed to run match: no result in batch output")}
+	}
+	switch rec.status {
+	case "done":
+		transcript, stderr := splitTranscript(rec.stderr)
+		result, err := e.parseResult(rec.code, rec.stdout, sanitizeStderr(stderr))
+		if err != nil {
+			return BatchResult{Err: fmt.Errorf("failed to run match: %w", err)}
+		}
+		result.Transcript = transcript
+		result.MatchID = match.ID
+		result.Duration = d
+		return BatchResult{Result: result}
+	case "timeout":
+		// свой полный лимит, как у одиночного матча - вина программы
+		return BatchResult{Err: fmt.Errorf("failed to run match: match execution timeout")}
+	default:
+		return BatchResult{Err: infraErrorf("failed to run match: not played in batch (%s)", rec.status)}
+	}
+}
+
+// batchRecord - итог матча из вывода sandbox.sh --batch
+type batchRecord struct {
+	status string
+	code   int64
+	stdout string
+	stderr string
+}
+
+// parseBatchOutput разбирает записи sandbox.sh --batch по номерам матчей:
+// @@begin <номер> <статус> <код>, stdout в base64, @@stderr, stderr в base64,
+// @@end. Битая запись пропускается, её матч считается несыгранным, как и матч
+// с двумя записями: точка входа пишет по одной, вторая - признак подделки
+func parseBatchOutput(out string) map[int]*batchRecord {
+	records := make(map[int]*batchRecord)
+	seen := make(map[int]bool)
+	var (
+		cur  *batchRecord
+		idx  int
+		part int
+		body [2]strings.Builder
+	)
+	for line := range strings.SplitSeq(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "@@begin "):
+			cur = nil
+			f := strings.Fields(line)
+			if len(f) != 4 {
+				continue
+			}
+			n, err1 := strconv.Atoi(f[1])
+			code, err2 := strconv.ParseInt(f[3], 10, 64)
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			if seen[n] {
+				delete(records, n)
+				continue
+			}
+			seen[n] = true
+			cur, idx, part = &batchRecord{status: f[2], code: code}, n, 0
+			body[0].Reset()
+			body[1].Reset()
+		case cur == nil:
+		case line == "@@stderr":
+			part = 1
+		case line == "@@end":
+			stdout, err1 := base64.StdEncoding.DecodeString(body[0].String())
+			stderr, err2 := base64.StdEncoding.DecodeString(body[1].String())
+			if err1 == nil && err2 == nil {
+				cur.stdout, cur.stderr = string(stdout), string(stderr)
+				records[idx] = cur
+			}
+			cur = nil
+		default:
+			body[part].WriteString(line)
+		}
+	}
+	return records
 }
 
 // раскладка матч-контейнера, общая с docker/tjudge/sandbox.sh
@@ -320,8 +487,34 @@ func buildMatchHostConfig(cfg config.ExecutorConfig, binds []string) *container.
 	}
 }
 
-// getContainerLogs читает stdout/stderr контейнера
-func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (string, string, error) {
+// batchHostConfig - hostConfig контейнера пачки (sandbox.sh --batch): тот же, что
+// у матча, плюс то, что не даёт боту оставить состояние следующему матчу пачки.
+// У одиночного матча этого нет: если среда не примет sysctl (rootless docker),
+// упадут только пачки, и воркер доиграет их матчи по одному
+func batchHostConfig(cfg config.ExecutorConfig, binds []string) *container.HostConfig {
+	hc := buildMatchHostConfig(cfg, binds)
+	// FOWNER: уборка от root удаляет файлы ботов и в их sticky-каталогах
+	hc.CapAdd = append(hc.CapAdd, "FOWNER")
+	// итоги матчей: боты могут забить /tmp и /programs, а сюда им хода нет
+	hc.Tmpfs["/mnt/results"] = "rw,noexec,nosuid,nodev,size=2m,mode=0700"
+	// SysV IPC и POSIX-очереди переживают процесс: очередей и семафоров нет
+	// вовсе, сегмент общей памяти живёт, пока к нему подключён процесс. своё
+	// пространство IPC - условие этих sysctl
+	hc.IpcMode = container.IPCModePrivate
+	hc.Sysctls = map[string]string{
+		"kernel.msgmni":          "0",
+		"kernel.sem":             "0 0 0 0",
+		"kernel.shm_rmid_forced": "1",
+		"fs.mqueue.queues_max":   "0",
+	}
+	return hc
+}
+
+// maxLogSize - сколько логов матча читается с каждого потока. у пачки - на матч
+const maxLogSize = 1 << 20
+
+// getContainerLogs читает stdout/stderr контейнера, не больше maxSize с потока
+func (e *Executor) getContainerLogs(ctx context.Context, containerID string, maxSize int) (string, string, error) {
 	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -335,12 +528,11 @@ func (e *Executor) getContainerLogs(ctx context.Context, containerID string) (st
 	defer logs.Close()
 
 	// демультиплексирование через stdcopy. на stdout и stderr - отдельные лимитчики
-	// по 1мб: общий LimitReader при большом stdout молча обрезал stderr до нуля и
+	// по maxSize: общий LimitReader при большом stdout молча обрезал stderr до нуля и
 	// терял сообщение об ошибке
-	const maxLogSize = 1 << 20
 	var stdoutBuf, stderrBuf bytes.Buffer
-	stdoutW := &limitWriter{w: &stdoutBuf, n: maxLogSize}
-	stderrW := &limitWriter{w: &stderrBuf, n: maxLogSize}
+	stdoutW := &limitWriter{w: &stdoutBuf, n: maxSize}
+	stderrW := &limitWriter{w: &stderrBuf, n: maxSize}
 	if _, err := stdcopy.StdCopy(stdoutW, stderrW, logs); err != nil {
 		return "", "", fmt.Errorf("failed to read container logs: %w", err)
 	}
@@ -669,19 +861,20 @@ func (e *Executor) hostToContainerPath(hostPath string) (string, error) {
 // точка входа передаёт их tjudge-cli как есть, заменив две последние
 // программы лаунчерами. игры: см. github.com/bmstu-itstech/tjudge-cli
 func (e *Executor) buildCommand(gameType, program1, program2 string) []string {
-	cmd := []string{gameType}
+	cmd := append([]string{gameType}, e.commandOptions()...)
+	return append(cmd, program1, program2)
+}
 
+// commandOptions - опции tjudge-cli, общие для всех матчей: итерации и -v
+func (e *Executor) commandOptions() []string {
+	var opts []string
 	if e.config.DefaultIterations > 0 {
-		cmd = append(cmd, "-i", strconv.Itoa(e.config.DefaultIterations))
+		opts = append(opts, "-i", strconv.Itoa(e.config.DefaultIterations))
 	}
-
 	if e.verbose() {
-		cmd = append(cmd, "-v")
+		opts = append(opts, "-v")
 	}
-
-	cmd = append(cmd, program1, program2)
-
-	return cmd
+	return opts
 }
 
 // maxTranscriptIters - потолок итераций для транскрипта. -v пишет около 100

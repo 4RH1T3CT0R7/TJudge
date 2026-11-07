@@ -251,3 +251,127 @@ func TestSandbox_SlowStart(t *testing.T) {
 	assert.Equal(t, 0, res.ErrorCode, res.ErrorMessage)
 	assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2})
 }
+
+// оставляет следы, которые пережили бы матч в общем контейнере: файлы в /tmp
+// и /dev/shm (в каталоге без прав и в sticky-каталоге), объекты SysV IPC и
+// отвязанные неотслеживаемые процессы, которые выбирают весь RLIMIT_NPROC
+// своего uid: так команда уборки от этого uid не смогла бы даже запуститься.
+// потом обычный кооператор
+const planterBot = `#!/usr/bin/env python3
+import ctypes, os
+for d in ("/tmp", "/dev/shm"):
+    with open(d + "/planted", "w") as f:
+        f.write("secret")
+    os.chmod(d + "/planted", 0o666)
+os.mkdir("/tmp/locked")
+open("/tmp/locked/planted", "w").close()
+os.chmod("/tmp/locked", 0)
+os.mkdir("/tmp/sticky")
+open("/tmp/sticky/planted", "w").close()
+os.chmod("/tmp/sticky", 0o1777)
+libc = ctypes.CDLL(None, use_errno=True)
+libc.msgget(4242, 0o1666)
+libc.semget(4242, 1, 0o1666)
+libc.shmget(4242, 4096, 0o1666)
+if os.fork() == 0:
+    os.setsid()
+    libc.prctl(4, 0)  # PR_SET_DUMPABLE: /proc процесса переходит к root
+    while True:
+        try:
+            if os.fork() == 0:
+                libc.prctl(4, 0)
+                os.execvp("sleep", ["sleep", "300"])
+        except OSError:
+            break
+    os.execvp("sleep", ["sleep", "300"])
+n = int(input())
+for _ in range(n):
+    print("COOPERATE", flush=True)
+    input()
+`
+
+// предаёт, если нашёл следы прошлого матча пачки: счёт это покажет
+const finderBot = `#!/usr/bin/env python3
+import ctypes, os
+found = False
+for d in ("/tmp", "/dev/shm"):
+    if os.listdir(d):
+        found = True
+for pid in os.listdir("/proc"):
+    try:
+        if pid.isdigit() and b"sleep" in open("/proc/%s/cmdline" % pid, "rb").read():
+            found = True
+    except OSError:
+        pass
+libc = ctypes.CDLL(None, use_errno=True)
+if libc.msgget(4242, 0) >= 0 or libc.semget(4242, 0, 0) >= 0 or libc.shmget(4242, 0, 0) >= 0:
+    found = True
+move = "DEFECT" if found else "COOPERATE"
+n = int(input())
+for _ in range(n):
+    print(move, flush=True)
+    input()
+`
+
+// пачка в одном контейнере: следы бота не доживают до следующего матча, а
+// падение программы касается только её матча
+func TestSandbox_BatchIsolated(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	writeBots(t, dir, map[string]string{"planter.py": planterBot, "finder.py": finderBot, "crash.py": crashBot, "coop": cooperatorBot})
+
+	pairs := [][2]string{{"planter.py", "coop"}, {"finder.py", "coop"}, {"crash.py", "coop"}, {"coop", "finder.py"}}
+	var items []BatchItem
+	for _, p := range pairs {
+		items = append(items, BatchItem{Match: &models.Match{ID: uuid.New(), GameType: "dilemma"},
+			Program1Path: filepath.Join(dir, p[0]), Program2Path: filepath.Join(dir, p[1])})
+	}
+	results, err := e.ExecuteBatch(context.Background(), items)
+	require.NoError(t, err)
+
+	for i, want := range []int{0, 0, 1, 0} {
+		require.NoError(t, results[i].Err, "матч %d", i)
+		res := results[i].Result
+		assert.Equal(t, want, res.ErrorCode, "матч %d: %s", i, res.ErrorMessage)
+		if want == 0 {
+			assert.Equal(t, [2]int{50, 50}, [2]int{res.Score1, res.Score2}, "матч %d: бот нашёл следы прошлого матча", i)
+			require.NotNil(t, res.Transcript, "матч %d", i)
+		}
+	}
+	assert.Contains(t, results[2].Result.ErrorMessage, "ZeroDivisionError")
+}
+
+// отвечает в срок каждого хода (200 мс), но матч длиннее лимита
+const slowMovesBot = `#!/bin/sh
+read -r n
+i=0
+while [ "$i" -lt "$n" ]; do
+    sleep 0.15
+    echo COOPERATE
+    read -r _
+    i=$((i + 1))
+done
+`
+
+// первый матч пачки получает весь лимит и по нему проигрывает таймаут, на
+// следующий времени пачки не осталось: он не сыгран и повторится
+func TestSandbox_BatchTimeout(t *testing.T) {
+	dir := t.TempDir()
+	e := newLiveExecutor(t, dir)
+	e.config.Timeout = 2 * time.Second
+	e.config.DefaultIterations = 100
+	writeBots(t, dir, map[string]string{"slow": slowMovesBot, "coop": cooperatorBot})
+
+	match := func(p1, p2 string) BatchItem {
+		return BatchItem{Match: &models.Match{ID: uuid.New(), GameType: "dilemma"},
+			Program1Path: filepath.Join(dir, p1), Program2Path: filepath.Join(dir, p2)}
+	}
+	results, err := e.ExecuteBatch(context.Background(), []BatchItem{match("slow", "coop"), match("coop", "coop")})
+	require.NoError(t, err)
+
+	require.Error(t, results[0].Err)
+	assert.False(t, IsInfraError(results[0].Err), results[0].Err.Error())
+	assert.Contains(t, results[0].Err.Error(), "timeout")
+	require.Error(t, results[1].Err)
+	assert.True(t, IsInfraError(results[1].Err), results[1].Err.Error())
+}

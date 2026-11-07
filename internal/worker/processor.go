@@ -42,9 +42,10 @@ type RatingService interface {
 	ProcessMatchResult(ctx context.Context, match *models.Match) error
 }
 
-// Executor гоняет матч в докере
+// Executor гоняет матч в докере, по одному или пачкой в одном контейнере
 type Executor interface {
 	Execute(ctx context.Context, match *models.Match, program1Path, program2Path string) (*models.MatchResult, error)
+	ExecuteBatch(ctx context.Context, items []executor.BatchItem) ([]executor.BatchResult, error)
 }
 
 type ProgramRepository interface {
@@ -88,22 +89,8 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		zap.String("tournament_id", match.TournamentID.String()),
 	)
 
-	// перевод в running, причём только из pending - если из очереди прилетел
-	// дубль, второй перевод не пройдёт и матч просто пропускается
-	if err := p.matchRepo.UpdateStatus(ctx, match.ID, models.MatchRunning); err != nil {
-		if stderrors.Is(err, models.ErrMatchAlreadyProcessed) {
-			p.log.Debug("Match already processed or in progress, skipping duplicate",
-				zap.String("match_id", match.ID.String()),
-			)
-			return nil
-		}
-		if isNotFoundError(err) {
-			p.log.Warn("Match not found in database, skipping (likely deleted)",
-				zap.String("match_id", match.ID.String()),
-			)
-			return ErrMatchNotFound
-		}
-		return fmt.Errorf("failed to update match status: %w", err)
+	if claimed, err := p.claim(ctx, match); !claimed {
+		return err
 	}
 
 	// дальше матч running. любая ошибка, кроме терминальной ошибки программы,
@@ -117,6 +104,99 @@ func (p *Processor) Process(ctx context.Context, match *models.Match) error {
 		return err
 	}
 	return nil
+}
+
+// claim переводит матч в running, причём только из pending - если из очереди
+// прилетел дубль, второй перевод не пройдёт и матч просто пропускается.
+// false - матч не взят: nil (дубль), ErrMatchNotFound или ошибка базы
+func (p *Processor) claim(ctx context.Context, match *models.Match) (bool, error) {
+	err := p.matchRepo.UpdateStatus(ctx, match.ID, models.MatchRunning)
+	switch {
+	case err == nil:
+		return true, nil
+	case stderrors.Is(err, models.ErrMatchAlreadyProcessed):
+		p.log.Debug("Match already processed or in progress, skipping duplicate",
+			zap.String("match_id", match.ID.String()),
+		)
+		return false, nil
+	case isNotFoundError(err):
+		p.log.Warn("Match not found in database, skipping (likely deleted)",
+			zap.String("match_id", match.ID.String()),
+		)
+		return false, ErrMatchNotFound
+	default:
+		return false, fmt.Errorf("failed to update match status: %w", err)
+	}
+}
+
+// ProcessBatch играет матчи пачкой в одном контейнере (Executor.ExecuteBatch).
+// Ошибка по каждому матчу - как у Process: nil - итог записан или матч уже не
+// наш, ErrProgramFailed - терминальная ошибка программы, остальное - матч не
+// сыгран и возвращён в pending, его доигрывают по одному
+func (p *Processor) ProcessBatch(ctx context.Context, matches []*models.Match) []error {
+	errs := make([]error, len(matches))
+	var claimed []int
+	var ids []uuid.UUID
+	for i, m := range matches {
+		ok, err := p.claim(ctx, m)
+		if !ok {
+			if !stderrors.Is(err, ErrMatchNotFound) {
+				errs[i] = err
+			}
+			continue
+		}
+		claimed = append(claimed, i)
+		ids = append(ids, m.Program1ID, m.Program2ID)
+	}
+	if len(claimed) == 0 {
+		return errs
+	}
+	// сбой до записи итога: взятые матчи возвращаются в pending
+	release := func(idx []int, err error) []error {
+		for _, i := range idx {
+			p.resetToPending(ctx, matches[i].ID)
+			errs[i] = err
+		}
+		return errs
+	}
+
+	programs, err := p.programRepo.GetByIDs(ctx, ids)
+	if err != nil {
+		return release(claimed, fmt.Errorf("failed to get programs: %w", err))
+	}
+	paths := make(map[uuid.UUID]string, len(programs))
+	for _, prog := range programs {
+		paths[prog.ID] = prog.CodePath
+	}
+	var items []executor.BatchItem
+	var inBatch []int
+	for _, i := range claimed {
+		m := matches[i]
+		path1, ok1 := paths[m.Program1ID]
+		path2, ok2 := paths[m.Program2ID]
+		if !ok1 || !ok2 {
+			release([]int{i}, fmt.Errorf("programs of match %s not found", m.ID))
+			continue
+		}
+		items = append(items, executor.BatchItem{Match: m, Program1Path: path1, Program2Path: path2})
+		inBatch = append(inBatch, i)
+	}
+	if len(items) == 0 {
+		return errs
+	}
+
+	results, err := p.executor.ExecuteBatch(ctx, items)
+	if err != nil {
+		return release(inBatch, fmt.Errorf("transient executor error: %w", err))
+	}
+	for k, i := range inBatch {
+		err := p.record(ctx, matches[i], results[k].Result, results[k].Err)
+		if err != nil && !stderrors.Is(err, ErrProgramFailed) {
+			p.resetToPending(ctx, matches[i].ID)
+		}
+		errs[i] = err
+	}
+	return errs
 }
 
 // play гоняет матч, уже переведённый в running, и пишет результат
@@ -142,6 +222,11 @@ func (p *Processor) play(ctx context.Context, match *models.Match) error {
 	}
 
 	result, err := p.executor.Execute(ctx, match, program1.CodePath, program2.CodePath)
+	return p.record(ctx, match, result, err)
+}
+
+// record пишет итог матча, сыгранного по одному или в пачке
+func (p *Processor) record(ctx context.Context, match *models.Match, result *models.MatchResult, err error) error {
 	// итог пишется и при истёкшем ctx матча (shutdown, таймаут воркера),
 	// иначе готовый результат теряется, а матч остаётся running до recovery
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)

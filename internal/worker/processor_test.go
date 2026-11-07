@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // MockMatchRepository - мок MatchRepository
@@ -82,6 +83,12 @@ func (m *MockExecutor) Execute(ctx context.Context, match *models.Match, program
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.MatchResult), args.Error(1)
+}
+
+func (m *MockExecutor) ExecuteBatch(ctx context.Context, items []executor.BatchItem) ([]executor.BatchResult, error) {
+	args := m.Called(ctx, items)
+	v, _ := args.Get(0).([]executor.BatchResult)
+	return v, args.Error(1)
 }
 
 // MockProgramRepository - мок ProgramRepository
@@ -409,4 +416,67 @@ func TestIsNotFoundError(t *testing.T) {
 			assert.Equal(t, tc.expected, isNotFoundError(tc.err))
 		})
 	}
+}
+
+// пачка: дубль пропускается, итоги пишутся как у одиночных, несыгранный
+// возвращается в pending
+func TestProcessor_ProcessBatch(t *testing.T) {
+	p, matchRepo, programRepo, ratingService, executorMock := newTestProcessor(t)
+	dup, ok, failed, notPlayed := testProcessorMatch(), testProcessorMatch(), testProcessorMatch(), testProcessorMatch()
+	matches := []*models.Match{dup, ok, failed, notPlayed}
+
+	matchRepo.On("UpdateStatus", mock.Anything, dup.ID, models.MatchRunning).Return(models.ErrMatchAlreadyProcessed)
+	var programs []*models.Program
+	for _, m := range matches[1:] {
+		matchRepo.On("UpdateStatus", mock.Anything, m.ID, models.MatchRunning).Return(nil)
+		programs = append(programs, twoPrograms(m)...)
+	}
+	programRepo.On("GetByIDs", mock.Anything, mock.Anything).Return(programs, nil)
+	okResult := &models.MatchResult{MatchID: ok.ID, Score1: 3, Score2: 1, Winner: 1}
+	executorMock.On("ExecuteBatch", mock.Anything, mock.MatchedBy(func(items []executor.BatchItem) bool {
+		return len(items) == 3 && items[0].Match == ok && items[0].Program1Path == "/path/p1"
+	})).Return([]executor.BatchResult{
+		{Result: okResult},
+		{Err: fmt.Errorf("failed to run match: match execution timeout")},
+		{Err: &executor.InfraError{Err: fmt.Errorf("not played in batch")}},
+	}, nil)
+	matchRepo.On("UpdateResultWithOutbox", mock.Anything, ok.ID, okResult).Return(nil)
+	ratingService.On("ProcessMatchResult", mock.Anything, ok).Return(nil)
+	matchRepo.On("UpdateResult", mock.Anything, failed.ID, mock.AnythingOfType("*models.MatchResult")).Return(nil)
+	matchRepo.On("ResetToPending", mock.Anything, notPlayed.ID).Return(nil)
+
+	errs := p.ProcessBatch(context.Background(), matches)
+
+	require.Len(t, errs, 4)
+	assert.NoError(t, errs[0])
+	assert.NoError(t, errs[1])
+	assert.ErrorIs(t, errs[2], ErrProgramFailed)
+	assert.Error(t, errs[3])
+	assert.NotErrorIs(t, errs[3], ErrProgramFailed)
+	matchRepo.AssertExpectations(t)
+	matchRepo.AssertNotCalled(t, "ResetToPending", mock.Anything, failed.ID)
+}
+
+// сбой всей пачки: все взятые матчи возвращаются в pending
+func TestProcessor_ProcessBatch_ExecutorFailure(t *testing.T) {
+	p, matchRepo, programRepo, _, executorMock := newTestProcessor(t)
+	matches := []*models.Match{testProcessorMatch(), testProcessorMatch()}
+	var programs []*models.Program
+	for _, m := range matches {
+		matchRepo.On("UpdateStatus", mock.Anything, m.ID, models.MatchRunning).Return(nil)
+		matchRepo.On("ResetToPending", mock.Anything, m.ID).Return(nil)
+		programs = append(programs, twoPrograms(m)...)
+	}
+	programRepo.On("GetByIDs", mock.Anything, mock.Anything).Return(programs, nil)
+	executorMock.On("ExecuteBatch", mock.Anything, mock.Anything).
+		Return(nil, &executor.InfraError{Err: fmt.Errorf("daemon unreachable")})
+
+	errs := p.ProcessBatch(context.Background(), matches)
+
+	for _, err := range errs {
+		assert.Error(t, err)
+		assert.NotErrorIs(t, err, ErrProgramFailed)
+	}
+	matchRepo.AssertExpectations(t)
+	matchRepo.AssertNotCalled(t, "UpdateResult", mock.Anything, mock.Anything, mock.Anything)
 }

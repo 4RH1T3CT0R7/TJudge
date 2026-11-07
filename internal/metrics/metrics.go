@@ -197,6 +197,12 @@ func (m *Metrics) RecordMatchStart() {
 	m.MatchesInProgress.Inc()
 }
 
+// RecordMatchAbandoned - матч снят с обработки без итога (не сыгран в пачке и
+// пойдёт по одному): только гейдж in-progress, без счётчика и длительности
+func (m *Metrics) RecordMatchAbandoned() {
+	m.MatchesInProgress.Dec()
+}
+
 func (m *Metrics) RecordMatchComplete(gameType string, status string, duration time.Duration) {
 	m.MatchesInProgress.Dec()
 	// осторожно: тут аргументы (gameType, status), а лейблы (status, game_type) -

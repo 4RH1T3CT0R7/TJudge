@@ -230,11 +230,50 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 	ctx = context.WithoutCancel(ctx)
 
 	// result[0] - имя очереди, result[1] - данные
+	match, err := qm.take(ctx, result[0], result[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// обновление метрик
+	qm.updateQueueSizeMetrics(ctx)
+	return match, nil
+}
+
+// DequeueMore - до n матчей без ожидания, в пачку к матчу из Dequeue. Очереди
+// по приоритету, без ротации: low не голодает, её очередь берёт сам Dequeue
+func (qm *QueueManager) DequeueMore(ctx context.Context, n int) ([]*models.Match, error) {
+	var matches []*models.Match
+	defer qm.updateQueueSizeMetrics(ctx)
+	for _, priority := range []models.MatchPriority{models.PriorityHigh, models.PriorityMedium, models.PriorityLow} {
+		key := qm.getQueueKey(priority)
+		for len(matches) < n {
+			raw, err := qm.cache.RPop(ctx, key)
+			if err != nil {
+				return matches, fmt.Errorf("failed to dequeue match: %w", err)
+			}
+			if raw == "" {
+				break
+			}
+			// снятый элемент учитывается до конца, как в Dequeue
+			match, err := qm.take(context.WithoutCancel(ctx), key, raw)
+			if err != nil {
+				continue // битый - уже в dead-letter
+			}
+			matches = append(matches, match)
+		}
+	}
+	return matches, nil
+}
+
+// take разбирает элемент, уже снятый из очереди key: битый уходит в dead-letter,
+// у целого снимается dedup-ключ и пишется время ожидания
+func (qm *QueueManager) take(ctx context.Context, key, raw string) (*models.Match, error) {
 	var entry queuedMatch
-	if err := json.Unmarshal([]byte(result[1]), &entry); err != nil {
+	if err := json.Unmarshal([]byte(raw), &entry); err != nil {
 		// битый json - в dead-letter, разбор руками потом
 		deadLetterKey := "queue:dead_letter"
-		if dlErr := qm.cache.LPush(ctx, deadLetterKey, result[1]); dlErr != nil {
+		if dlErr := qm.cache.LPush(ctx, deadLetterKey, raw); dlErr != nil {
 			qm.log.Error("Failed to push to dead-letter queue", zap.Error(dlErr))
 		} else {
 			qm.metrics.RecordQueueDeadLetterPush("unmarshal_error")
@@ -256,14 +295,14 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 			}
 		}
 		// сырые данные в логе обрезаются, а то мало ли что там (log injection)
-		rawData := result[1]
+		rawData := raw
 		if len(rawData) > 1024 {
 			rawData = rawData[:1024] + "...(truncated)"
 		}
 		qm.log.Error("Failed to unmarshal match, moved to dead-letter queue",
 			zap.Error(err),
 			zap.String("raw_data", rawData),
-			zap.String("queue_key", result[0]),
+			zap.String("queue_key", key),
 		)
 		return nil, fmt.Errorf("failed to unmarshal match: %w", err)
 	}
@@ -278,9 +317,6 @@ func (qm *QueueManager) Dequeue(ctx context.Context) (*models.Match, error) {
 			zap.String("match_id", match.ID.String()),
 		)
 	}
-
-	// обновление метрик
-	qm.updateQueueSizeMetrics(ctx)
 
 	qm.log.Debug("Match dequeued",
 		zap.String("match_id", match.ID.String()),

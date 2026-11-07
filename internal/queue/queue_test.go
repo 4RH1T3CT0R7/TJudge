@@ -410,6 +410,34 @@ func TestQueueManager_Dequeue_RemovesFromDedupSet(t *testing.T) {
 	assert.Equal(t, int64(1), size)
 }
 
+// добор в пачку: без ожидания, high раньше medium, не больше n, дедуп снимается
+func TestQueueManager_DequeueMore(t *testing.T) {
+	qm := setupTestQueueManager(t)
+	ctx := context.Background()
+
+	medium := testMatch(models.PriorityMedium)
+	high1, high2 := testMatch(models.PriorityHigh), testMatch(models.PriorityHigh)
+	for _, m := range []*models.Match{medium, high1, high2} {
+		require.NoError(t, qm.Enqueue(ctx, m))
+	}
+
+	got, err := qm.DequeueMore(ctx, 3)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, []uuid.UUID{high1.ID, high2.ID, medium.ID}, []uuid.UUID{got[0].ID, got[1].ID, got[2].ID})
+
+	// очередь пуста - пустой ответ сразу, без ожидания
+	got, err = qm.DequeueMore(ctx, 3)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	// дедуп снят: матч можно поставить заново
+	require.NoError(t, qm.Enqueue(ctx, medium))
+	size, err := qm.GetTotalQueueSize(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), size)
+}
+
 // go-redis не прерывает BRPOP по отмене ctx: воркер, снятый во время ожидания,
 // получает матч, и его dedup-ключ всё равно снимается, иначе повторная
 // постановка молча отсекается до истечения dedupTTL

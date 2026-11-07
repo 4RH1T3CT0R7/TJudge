@@ -19,12 +19,14 @@ import (
 type QueueManager interface {
 	EnqueueBatch(ctx context.Context, matches []*models.Match) error
 	Dequeue(ctx context.Context) (*models.Match, error)
+	DequeueMore(ctx context.Context, n int) ([]*models.Match, error)
 	GetTotalQueueSize(ctx context.Context) (int64, error)
 }
 
-// MatchProcessor обрабатывает один матч
+// MatchProcessor обрабатывает матч или пачку матчей в одном контейнере
 type MatchProcessor interface {
 	Process(ctx context.Context, match *models.Match) error
+	ProcessBatch(ctx context.Context, matches []*models.Match) []error
 }
 
 // Pool - пул воркеров для обработки матчей
@@ -265,6 +267,104 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	p.activeWorkers.Add(1)
 	defer p.activeWorkers.Add(-1)
 
+	single := []*models.Match{match}
+	if extra := p.extraMatches(ctx, workerID); len(extra) > 0 {
+		single = p.runBatch(workerID, append(single, extra...))
+	}
+	// по одному: матч без пачки и матчи, не сыгранные в пачке
+	for _, m := range single {
+		p.runOne(workerID, m)
+	}
+	return false
+}
+
+// extraMatches добирает матчи в пачку к уже взятому, только при очереди длиннее
+// пула: при короткой матчи раздаются по одному, иначе свободные воркеры
+// простаивали бы, пока один играет их подряд
+func (p *Pool) extraMatches(ctx context.Context, workerID int32) []*models.Match {
+	if p.config.BatchSize <= 1 {
+		return nil
+	}
+	size, err := p.queue.GetTotalQueueSize(ctx)
+	if err != nil {
+		p.log.LogError("Failed to get queue size for batch", err, zap.Int32("worker_id", workerID))
+		return nil
+	}
+	n := min(p.config.BatchSize-1, int(size)/max(1, int(p.totalWorkers.Load())))
+	if n <= 0 {
+		return nil
+	}
+	// снятые до ошибки матчи тоже играются: в очереди их уже нет
+	extra, err := p.queue.DequeueMore(ctx, n)
+	if err != nil {
+		p.log.LogError("Failed to dequeue matches for batch", err, zap.Int32("worker_id", workerID))
+	}
+	return extra
+}
+
+// runBatch играет пачку в одном контейнере. Возвращает матчи, не сыгранные в
+// пачке (сбой окружения, кончилось время пачки): они уже в pending, и воркер
+// доигрывает их по одному с обычными повторами
+func (p *Pool) runBatch(workerID int32, batch []*models.Match) []*models.Match {
+	start := time.Now()
+	for range batch {
+		p.metrics.RecordMatchStart()
+	}
+	// через defer: паника в обработке не оставит гейдж in-progress завышенным
+	settled := 0
+	defer func() {
+		for ; settled < len(batch); settled++ {
+			p.metrics.RecordMatchAbandoned()
+		}
+	}()
+
+	// тот же лимит, что у одиночного матча: время на матчи пачки точка входа
+	// держит в лимите одного матча (sandbox.sh --batch)
+	processCtx, processCancel := context.WithTimeout(p.shutdownCtx, p.config.Timeout)
+	defer processCancel()
+
+	errs := p.processor.ProcessBatch(processCtx, batch)
+	duration := time.Since(start) / time.Duration(len(batch))
+	var single []*models.Match
+	for i, m := range batch {
+		status := "failed"
+		switch err := errs[i]; {
+		case errors.Is(err, ErrProgramFailed):
+			p.matchesFailed.Add(1)
+			p.log.Info("Match finished with program error",
+				zap.Int32("worker_id", workerID),
+				zap.String("match_id", m.ID.String()),
+				zap.Error(err),
+			)
+		case err != nil:
+			p.log.Debug("Match not played in batch, will run alone",
+				zap.Int32("worker_id", workerID),
+				zap.String("match_id", m.ID.String()),
+				zap.Error(err),
+			)
+			single = append(single, m)
+			p.metrics.RecordMatchAbandoned()
+			settled++
+			continue
+		default:
+			status = "completed"
+			p.matchesProcessed.Add(1)
+		}
+		p.metrics.RecordMatchComplete(m.GameType, status, duration)
+		settled++
+	}
+
+	p.log.Debug("Batch processed",
+		zap.Int32("worker_id", workerID),
+		zap.Int("matches", len(batch)),
+		zap.Int("not_played", len(single)),
+		zap.Duration("duration", time.Since(start)),
+	)
+	return single
+}
+
+// runOne играет матч в своём контейнере, с повторами
+func (p *Pool) runOne(workerID int32, match *models.Match) {
 	p.log.Debug("Processing match",
 		zap.Int32("worker_id", workerID),
 		zap.String("match_id", match.ID.String()),
@@ -285,7 +385,7 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 	processCtx, processCancel := context.WithTimeout(p.shutdownCtx, p.config.Timeout)
 	defer processCancel()
 
-	err = p.processWithRetry(processCtx, match)
+	err := p.processWithRetry(processCtx, match)
 
 	switch {
 	case errors.Is(err, ErrProgramFailed):
@@ -315,8 +415,6 @@ func (p *Pool) processNext(workerCtx context.Context, workerID int32) (idle bool
 		zap.String("status", status),
 		zap.Duration("duration", time.Since(start)),
 	)
-
-	return false
 }
 
 // processWithRetry гоняет матч с повторами

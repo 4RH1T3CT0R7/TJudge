@@ -57,6 +57,9 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	// монтируются только переданные файлы программ, на чтение
 	assert.Equal(t, binds, hc.Binds)
 
+	// sysctl только у пачки: одиночный матч от них не зависит
+	assert.Empty(t, hc.Sysctls)
+
 	// без профилей в конфиге - только no-new-privileges
 	assert.Equal(t, []string{"no-new-privileges:true"}, hc.SecurityOpt)
 
@@ -71,6 +74,29 @@ func TestBuildMatchHostConfig_SandboxFlags(t *testing.T) {
 	assert.Equal(t, [2]int64{0, 0}, limits["core"])
 	// точка входа копирует артефакт любого допустимого сборкой размера
 	assert.Equal(t, [2]int64{maxArtifactSize, maxArtifactSize}, limits["fsize"])
+}
+
+// контейнер пачки: всё от одиночного матча плюс то, что не даёт боту оставить
+// состояние следующему матчу
+func TestBatchHostConfig(t *testing.T) {
+	cfg := config.ExecutorConfig{CPUQuota: 100000, MemoryLimit: 536870912, PidsLimit: 100}
+	single := buildMatchHostConfig(cfg, nil)
+	hc := batchHostConfig(cfg, nil)
+
+	assert.ElementsMatch(t, append(single.CapAdd, "FOWNER"), []string(hc.CapAdd))
+	assert.Equal(t, single.CapDrop, hc.CapDrop)
+	assert.Equal(t, single.ReadonlyRootfs, hc.ReadonlyRootfs)
+	assert.Equal(t, single.NetworkMode, hc.NetworkMode)
+	assert.Equal(t, single.Tmpfs["/programs"], hc.Tmpfs["/programs"])
+	assert.Contains(t, hc.Tmpfs["/mnt/results"], "mode=0700")
+	assert.Equal(t, "private", string(hc.IpcMode))
+	assert.Equal(t, map[string]string{
+		"kernel.msgmni":          "0",
+		"kernel.sem":             "0 0 0 0",
+		"kernel.shm_rmid_forced": "1",
+		"fs.mqueue.queues_max":   "0",
+	}, hc.Sysctls)
+	assert.NotContains(t, single.Tmpfs, "/mnt/results", "одиночный матч не меняется")
 }
 
 // seccomp/apparmor добавляются в SecurityOpt только когда профиль задан env-ом.

@@ -39,12 +39,12 @@ jobs:
           docker compose up -d --build
           curl -sf --retry 60 --retry-all-errors --retry-delay 2 http://localhost:8080/health
 
-      # живой матч бота-разведчика в собранном образе: атаки на соперника и
-      # tjudge-cli не должны проходить
+      # живые матчи в собранном образе: атаки бота на соперника и tjudge-cli не
+      # проходят, в пачке следы бота не доживают до следующего матча
       - name: sandbox isolation
         env:
           TJUDGE_SANDBOX_IMAGE: tjudge-cli:latest
-        run: go test -count=1 -v -tags=integration -run TestSandbox_BotsIsolated ./internal/executor/
+        run: go test -count=1 -v -tags=integration -run TestSandbox_ ./internal/executor/
 
       # DB_* по умолчанию смотрят в postgres dev-compose (5433/tjudge)
       - name: full cycle
